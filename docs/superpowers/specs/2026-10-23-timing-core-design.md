@@ -17,6 +17,9 @@ and fills.
 The work is split into three stages. Each stage gets its own spec, plan and implementation:
 
 1. **Timing core, sync and bug fixes** (this document).
+1b. **Emulator for macOS**, built from the same sources:
+   - a headless renderer that writes WAV files, also used for golden-render tests in CI
+   - a standalone app with a virtual panel, using CoreAudio and CoreMIDI
 2. **Groove features:**
    - per-track swing with templates
    - track delay in ms and full-resolution microtiming
@@ -684,6 +687,15 @@ been running since step 0.
 
 ## 15. Later stages (context only, not part of this spec)
 
+- **Stage 1b (emulator, own spec)** follows directly after stage 1:
+  - It reuses `seq_core` unchanged and supplies its own platform layer instead of `seq_platform.c`:
+    time comes from the audio callback, and sync events come from CoreMIDI.
+  - The DSP engine is built for the host with C shims for the CMSIS intrinsics it uses. The panel
+    drivers (`lcd.c`, `DIO.c`, `adcPots.c`, `encoder.c`) are replaced by virtual ones, so the real
+    `menu.c` and `buttonHandler.c` run unchanged.
+  - It comes in two tiers: a headless WAV renderer, then a standalone app. A browser (WASM) build or an
+    AU/VST3 plugin may follow later.
+  - It doesn't model the device's CPU budget, so the CPU meter (H12) stays the reference for stage 3.
 - **Stage 2** builds on `seq_core`:
   - per-track swing and groove templates
   - track delay in ms
