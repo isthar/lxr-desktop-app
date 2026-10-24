@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 13:20",
+    "updated": "2026-10-24 15:52",
     "phase": "Etap 1 — implementacja",
     "focus": "Rusza implementacja etapu 1: najpierw E3.2 i rdzeń E1.1–E1.14 (15 zadań). Każde zadanie: implementacja TDD z check.sh i commitem, przegląd zgodności ze specyfikacją, przegląd jakości.",
     "branch": "timing-core",
-    "head": "acd4c58",
+    "head": "a8a8bbf",
     "next": "Po rdzeniu: integracja E2.1–E2.8, potem narzędzia i wydanie (E3.1, E3.3–E3.5, E4.1–E4.3). Push na Twój fork po każdym zadaniu.",
-    "updated_at": "2026-10-24T13:20:00+02:00"
+    "updated_at": "2026-10-24T15:52:00+02:00"
   },
   "epics": [
     {
@@ -119,30 +119,30 @@
     {
       "id": "E1.1",
       "epic": "E1",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Harness testów na hoście (tests/, fake host)",
       "updated": "2026-10-24"
     },
     {
       "id": "E1.2",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Wydzielenie SeqStepTypes.h bez zmiany układu",
-      "updated": ""
+      "updated": "2026-10-24"
     },
     {
       "id": "E1.3",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Szkielet seq_core i zegar master (T1)",
-      "updated": ""
+      "updated": "2026-10-24"
     },
     {
       "id": "E1.4",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Granice kroków, liczniki torów, koniec patternu (T10)",
-      "updated": ""
+      "updated": "2026-10-24"
     },
     {
       "id": "E1.5",
@@ -795,6 +795,21 @@
       "n": 49,
       "at": "2026-10-24 13:20",
       "text": "E3.2 gotowe (6d3e247, acd4c58): linker przerywa build, gdy obraz nie mieści się we FLASH; przegląd zgodności znalazł błędny komentarz o .data, poprawiony; przegląd jakości przeszedł (2 drobne uwagi na później). Wypchnięte na fork. Teraz E1.1: zestaw testów rdzenia."
+    },
+    {
+      "n": 50,
+      "at": "2026-10-24 14:19",
+      "text": "E1.1 gotowe (f05daf5, 227eac2, decc874): interfejs seq_core.h, sztuczny host do testów, zestaw testów na hoście. Recenzent wzmocnił 6 testów sprawdzianem mutacyjnym (celowo wprowadzane błędy w kodzie); przegląd jakości przeszedł (6 drobnych uwag na później). Reguła przeglądów: drobne uwagi blokują już tylko w pierwszej rundzie, żeby same drobiazgi nie zatrzymały workflowu. Teraz E1.2."
+    },
+    {
+      "n": 51,
+      "at": "2026-10-24 14:34",
+      "text": "E1.2 gotowe (dcb981d): Step i StepTiming przeniesione do SeqStepTypes.h bez zależności od HAL; obraz firmware bajt w bajt taki sam jak wcześniej; oba przeglądy bez blokujących uwag. Teraz E1.3: szkielet rdzenia i zegar wewnętrzny (test T1: dokładność tempa)."
+    },
+    {
+      "n": 52,
+      "at": "2026-10-24 15:52",
+      "text": "E1.3 gotowe (0b95fe4, 61b2cf4, 3c01114): zegar wewnętrzny rdzenia, granice kroków i transport; 12 testów T1 (dokładność tempa, brak dryfu, zmiany tempa). Przeglądy z celowo wprowadzanymi błędami wzmocniły 7 testów. Znalazły też subtelny przypadek zaokrąglenia, gdy wywołanie trafia dokładnie w granicę kroku: poprawka w kroku 0 zadania E1.4. Teraz E1.4."
     }
   ]
 }
