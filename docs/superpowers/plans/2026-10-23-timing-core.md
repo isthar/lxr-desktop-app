@@ -19,11 +19,11 @@ Paths are relative to the repository root.
 
 | File | Responsibility | Tasks |
 |---|---|---|
-| `Core/Inc/Soundengine/Sequencer/seq_core.h` (new) | Interface of the timing core: types, the `seqc_host_t` callbacks, commands, queries, and the rules of context, time, processing order, generation and firing | E1.1 (the API, with two rules added by the plan review), E1.14 (comments: N15, N16, N17, N18.1), E2.4 (execution-context comment) |
-| `Core/Src/Soundengine/Sequencer/seq_core.c` (new) | The timing core: clock, track counters, event generation and queue, choke, note-offs, clock outputs, slave sync, transport, recording phase, statistics | E1.1 (skeleton), E1.3–E1.12 |
+| `Core/Inc/Soundengine/Sequencer/seq_core.h` (new) | Interface of the timing core: types, the `seqc_host_t` callbacks, commands, queries, and the rules of context, time, processing order, generation and firing | E1.1 (the API, with two rules added by the plan review), E1.14 (the N16 restart counts, `seqc_stats_t.tempoRestarts`, and comments: N10, N15, N16, N17, N18.1), E2.4 (execution-context comment) |
+| `Core/Src/Soundengine/Sequencer/seq_core.c` (new) | The timing core: clock, track counters, event generation and queue, choke, note-offs, clock outputs, slave sync, transport, recording phase, statistics | E1.1 (skeleton), E1.3–E1.12, E1.14 |
 | `Core/Inc/Preset/SeqStepTypes.h` (new) | `Step` and `StepTiming` without the HAL | E1.1 |
 | `Core/Inc/Preset/SeqStep.h` | Includes `SeqStepTypes.h` instead of defining the two types; layout unchanged | E1.2 |
-| `tests/CMakeLists.txt` (new) | Host test project: one ctest test per id, and a 16-entry core for T19 | E1.1, E1.12, E2.1, E3.3 |
+| `tests/CMakeLists.txt` (new) | Host test project: one ctest test per id, and a 16-entry core for T19 | E1.1, E1.12, E2.1, E2.7, E2.8, E3.3 |
 | `tests/seqc_test.h` (new) | Test runner and asserts | E1.1 |
 | `tests/fake_host.h`, `tests/fake_host.c` (new) | Fake host: pattern data, song mode, the glue's rules, RNG, callback recorder | E1.1 |
 | `tests/test_harness.c` (new) | Self-test of the runner and the fake host (`harness`) | E1.1 |
@@ -34,14 +34,17 @@ Paths are relative to the repository root.
 | `tests/test_fire.c` (new) | Per-track choke, mutes, note-offs (T7, T9, T15) | E1.6 |
 | `tests/test_lookahead.c` (new) | Pattern change and edits before the boundary (T11, T12) | E1.7 |
 | `tests/test_clockout.c` (new) | MIDI clock out and clock out pulses (T5, T6) | E1.8 |
-| `tests/test_roll.c` (new) | Roll, recording phase, skip-once (T13, T14) | E1.9 |
-| `tests/test_slave.c` (new) | MIDI and jack slave, tempo estimate, dropout (T16, T18) | E1.10 |
+| `tests/test_roll.c` (new) | Roll, recording phase, skip-once with one marker per track (T13, T14) | E1.9, E1.14 |
+| `tests/test_slave.c` (new) | MIDI and jack slave, tempo estimate and its restart after a tempo jump, dropout (T16, T18) | E1.10, E1.14 |
 | `tests/test_transport.c` (new) | Start, Continue, Stop, the run gate, SPP, song mode (T17) | E1.11 |
 | `tests/test_overflow.c` (new) | Queue overflow, statistics, calls from callbacks (T19) | E1.12 |
 | `tests/fw17_adapter.h`, `tests/fw17_adapter.c` (new) | Plain-type interface to the fw 1.7 replica | E1.13 |
 | `tests/test_fw17.c` (new) | Equivalence with the fw 1.7 replica (T20) | E1.13 |
 | `tests/reference/fw17_replica.c` | Host replica of the fw 1.7 timing; `FW17_REPLICA_NO_MAIN` leaves out its report | E1.13 |
 | `tests/test_syncq.c` (new) | Sync queues and MIDI decoding (`syncq`) | E2.1 |
+| `tests/test_buttons.c` (new) | Front-panel buttons in the global menu and on the Last Step page (`buttons`) | E2.7 |
+| `tests/stubs/*.h` (new) | Host stand-ins for the HAL, FatFs and the FX bus, for `test_buttons` | E2.7 |
+| `tests/test_usbtx.c` (new) | USB MIDI out packets and ring (`usbtx`) | E2.8 |
 | `tests/test_cpumeter.c` (new) | CPU meter (`cpumeter`) | E3.3 |
 
 **Firmware integration**
@@ -54,21 +57,24 @@ Paths are relative to the repository root.
 | `Core/Inc/Soundengine/Sequencer/sequencer.h` | Public sequencer API: new `seq_recordNoteAtStep()`, `seq_setClockInPpq()`, `seq_sendVoiceNoteOn/Off()`; the pulse-machine prototypes go | E2.2, E2.3, E2.6 |
 | `Core/Src/Soundengine/Sequencer/clockSync.c`, `Core/Inc/Soundengine/Sequencer/clockSync.h` | Deleted: the fw 1.7 MIDI clock sync | E2.6 |
 | `Core/Src/Soundengine/MIDI/MidiVoiceControl.c` | No MIDI in `voiceControl_noteOn()`; Note Offs per voice | E2.3 |
-| `Core/Src/Soundengine/MIDI/MidiParser.c` | MIDI parser: echo per voice, realtime messages only routed, realtime bytes inside DIN messages | E2.3, E2.4 |
+| `Core/Src/Soundengine/MIDI/MidiParser.c` | MIDI parser: echo per voice, realtime messages only routed, realtime bytes inside DIN messages, a Song Select that waits for its song number | E2.3, E2.4, E2.8 |
 | `Core/Src/Soundengine/MIDI/Uart.c`, `Core/Inc/Soundengine/MIDI/Uart.h` | DIN stamp and intercept in the USART3 receive interrupt, the parse budget; `midi_process_block` goes | E2.4, E2.6 |
-| `Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c` | USB stamp and intercept in `USBD_CDC_DataOut()`; a full message queue drops the new message | E2.4 |
+| `Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c`, `Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h` | USB stamp and intercept in `USBD_CDC_DataOut()`; a full message queue drops the new message; the old USB MIDI transmit ring goes, and `USBD_CDC_DataIn()` starts the next transfer | E2.4, E2.8 |
 | `Core/Src/main.c` | Main loop without MIDI parsing; the LICHOMAT start-up screen | E2.4, E3.1 |
 | `Core/Src/Soundengine/Soundengine.c`, `Core/Inc/Soundengine/Soundengine.h` | `soundengine_process()` without MIDI parsing; the CPU meter hooks `soundengine_cpuBegin()` and `soundengine_cpuEnd()` | E2.4, E3.3 |
 | `Core/Src/stm32f7xx_it.c` | `TIM2_IRQHandler()` without MIDI parsing, with the CPU meter hooks | E2.4, E3.3 |
 | `Core/Src/Soundengine/TriggerOut.c`, `Core/Inc/Soundengine/TriggerOut.h` | `trigger_setClockPhase()` keeps the clock out jack on the step grid; clock in and reset jack interrupts push to the jack sync queue; dead timing code goes | E2.2, E2.5, E2.6 |
 | `Core/Src/Soundengine/MIDI/CortexParser.c` | Posts the clock in PPQ to the core | E2.5 |
-| `tools/fw_checks.sh` (new) | ELF and source checks that stand in for unit tests of the firmware glue | E2.2–E2.6 |
+| `Core/Src/buttonHandler.c` | SHIFT + step 12 sets `SELECT_MODE_MENU`, the global menu's own button mode | E2.7 |
+| `Core/Inc/Soundengine/USB/usb_midiTx.h`, `Core/Src/Soundengine/USB/usb_midiTx.c` (new) | USB-MIDI event packets and the transmit ring; plain C, host-tested | E2.8 |
+| `Core/Src/Soundengine/USB/usb_manager.c`, `Core/Inc/Soundengine/USB/usb_manager.h` | USB MIDI transmit glue: each packet waits in the ring until the IN endpoint is free | E2.8 |
+| `tools/fw_checks.sh` (new) | ELF and source checks that stand in for unit tests of the firmware glue | E2.2–E2.8 |
 
 **Build, tooling, branding and documents**
 
 | File | Responsibility | Tasks |
 |---|---|---|
-| `Core/CMakeLists.txt` | Firmware library lists (`lxr_sequencer`, `lxr_engine`, `LXR_ITCM_SOURCES`) and the start-up screen defines | E1.3, E2.1, E2.6, E3.1, E3.3 |
+| `Core/CMakeLists.txt` | Firmware library lists (`lxr_sequencer`, `lxr_usb_app`, `lxr_engine`, `LXR_ITCM_SOURCES`) and the start-up screen defines | E1.3, E2.1, E2.6, E2.8, E3.1, E3.3 |
 | `CMakeLists.txt` | `LICHOMAT_NAME`, `project(VERSION 0.1)`, `LXR_BASE_VERSION`, the update file name | E3.1 |
 | `tools/check_image.py` (new) | Checks the update file: name, header, start-up screen strings | E3.1 |
 | `tools/check.sh` | Runs `check_image.py` and works from any directory | E3.1 |
@@ -79,10 +85,10 @@ Paths are relative to the repository root.
 | `tools/ci_dry_run.rb` (new) | Checks the workflow and runs its steps locally | E3.4 |
 | `tools/env.sh` | Puts the repo-local tools on `PATH` in bash and zsh | E3.5 Steps 1–6, already done in commit `5911417` |
 | `docs/lichomat/HANDOFF.md` | The tool list of the handoff guide | E2.2, E3.4 (the E3.5 line is already done in `5911417`) |
-| `README.md` | LICHOMAT section, the new file names, the module table, the link to the release notes | E2.6, E3.5, E4.3 |
+| `README.md` | LICHOMAT section, the new file names, the module table, the link to the release notes | E2.6, E2.8, E3.5, E4.3 |
 | `docs/lichomat/reports/stage1-review.md` (new) | Stage 1 review: checklist, findings, result | E4.1 |
 | `docs/lichomat/reports/stage1-report.md` (new) | Stage 1 report: each deviation from the spec with the note or decision that allows it, and the intended changes against fw 1.7 | E4.1 |
-| `docs/lichomat/hardware-checklist.md` (new) | H1–H13 procedures and the run sheet for the owner | E4.2 |
+| `docs/lichomat/hardware-checklist.md` (new) | H1–H13 procedures, the checks U1 (E2.7) and X4 (E2.8), and the run sheet for the owner | E4.2 |
 | `docs/lichomat/release-notes-v0.1.md` (new) | Draft of the v0.1 release text | E4.3 |
 
 Not committed: the scratch check scripts under `build/` (`build/e3-ldcheck/relink_small.sh` in E3.2,
@@ -116,44 +122,48 @@ the one before it.
     (T16, T18).
 12. **E1.11**: Start, Continue, Stop, the jack run gate and Song Position Pointer (T17).
 13. **E1.12**: queue overflow, statistics and calls from callbacks, with a 16-entry test core (T19).
-14. **E1.13**: equivalence with the fw 1.7 replica (T20). The core is complete.
-15. **E2.1**: `seq_syncq` (host-tested SPSC queues and MIDI decoding) and `seq_platform` (DWT time
+14. **E1.13**: equivalence with the fw 1.7 replica (T20).
+15. **E1.14**: N16, N17 and N18.1: the slave tempo estimate restarts after a tempo jump beyond the
+    ±50% band of the clock intervals, a slave dropout sends the pending note-offs, and each track
+    has its own skip-once marker (T14, T16, T18); the `seq_core.h` comments describe the code again.
+    The core is complete. E2 relies on it: the mailbox of E2.2 keeps one skip-once marker per track
+    and passes each to `seqc_skipOnce()`.
+16. **E2.1**: `seq_syncq` (host-tested SPSC queues and MIDI decoding) and `seq_platform` (DWT time
     base, queue instances), built but not linked yet (`syncq`). Needs all of E1.
-16. **E2.2**: `sequencer.c` becomes the glue: host callbacks, mailbox, copies, the new `seq_tick()`;
+17. **E2.2**: `sequencer.c` becomes the glue: host callbacks, mailbox, copies, the new `seq_tick()`;
     the pulse machine goes; `tools/fw_checks.sh`.
-17. **E2.3**: D4: one MIDI Note On per trigger, Note Offs per voice, the echo once.
-18. **E2.4**: D7 and D8: realtime messages and SPP stamped in the receive interrupts, MIDI parsed
+18. **E2.3**: D4: one MIDI Note On per trigger, Note Offs per voice, the echo once.
+19. **E2.4**: D7 and D8: realtime messages and SPP stamped in the receive interrupts, MIDI parsed
     only in `seq_tick()`.
-19. **E2.5**: clock in and reset jacks through the jack sync queue; the clock in PPQ goes to the core.
-20. **E2.6**: `clockSync` and the dead timing code go; `sequencer.c` leaves ITCM.
-21. **E3.1**: LICHOMAT name, version 0.1, start-up screen, `LXR_V2_LICHOMAT_0.1.img`, and
+20. **E2.5**: clock in and reset jacks through the jack sync queue; the clock in PPQ goes to the core.
+21. **E2.6**: `clockSync` and the dead timing code go; `sequencer.c` leaves ITCM.
+22. **E2.7**: SHIFT + step 12 gives the global menu its own button mode, `SELECT_MODE_MENU`; host
+    test `buttons` (`tests/test_buttons.c` with the stand-in headers in `tests/stubs/`) and
+    `tools/fw_checks.sh E2.7`.
+23. **E2.8**: USB MIDI out: packets with the CIN of USB MIDI 1.0 that wait in a ring until the IN
+    endpoint is free (`usb_midiTx.c`, host test `usbtx`; `tools/fw_checks.sh E2.8`), and the MIDI
+    parser waits for the data byte of a Song Select.
+24. **E3.1**: LICHOMAT name, version 0.1, start-up screen, `LXR_V2_LICHOMAT_0.1.img`, and
     `tools/check_image.py` in `tools/check.sh`. It runs here and not first, because the expected
     outputs of E1 and E2 show the fw 1.7 update file `LXR_V2_V1.7.img` and the fw 1.7 image size.
-22. **E3.3**: CPU meter (`cpuMeter.c`, host-tested), its hooks in both render paths, and the CPU
+25. **E3.3**: CPU meter (`cpuMeter.c`, host-tested), its hooks in both render paths, and the CPU
     page. Needs E2: `seqc_stats()` in the firmware, `TIM2_IRQHandler()` as E2.4 left it, and the
     `test_syncq` line of E2.1 in `tests/CMakeLists.txt`.
-23. **E3.4**: CI workflow (host tests and firmware build) and its local dry run. Needs E3.1 (the
+26. **E3.4**: CI workflow (host tests and firmware build) and its local dry run. Needs E3.1 (the
     update file check), E3.3 (`cpumeter`) and every host test file.
-24. **E3.5**: the README's LICHOMAT section and the new file names. Steps 1–6 (`tools/env.sh` for
+27. **E3.5**: the README's LICHOMAT section and the new file names. Steps 1–6 (`tools/env.sh` for
     zsh) are already done, in commit `5911417`: start at Step 7. Needs E2.6 (the module table row)
     and E3.1–E3.4 (what the README describes).
-25. **E4.1**: multi-dimension review of all of stage 1; findings fixed test-first, one commit each.
-26. **E4.2**: hardware checklist H1–H13 and the two update files for the owner. Needs E3.1 and E3.3.
-27. **E4.3**: draft v0.1 release notes; nothing is pushed. Needs E4.1 (the accepted findings), E4.2
+28. **E4.1**: multi-dimension review of all of stage 1; findings fixed test-first, one commit each.
+29. **E4.2**: hardware checklist H1–H13, with U1 (E2.7) and X4 (E2.8), and the two update files for
+    the owner. Needs E3.1 and E3.3.
+30. **E4.3**: draft v0.1 release notes; nothing is pushed. Needs E4.1 (the accepted findings), E4.2
     (the checks it cites) and E3.5 (the README section that links to it).
 
-Tracker tasks whose sections are written and reviewed on their own and inserted into this plan
-after its review (implementation notes, end of N17):
-- **E1.14** (`build/plan/40-E1.14.md`): N16 (the tempo estimate restarts after a tempo jump beyond
-  the ±50% band of the clock intervals), N17 (a slave dropout sends the pending note-offs) and N18.1
-  (one skip-once marker per track). It goes between items 14 and 15 above, after E1.13 and before
-  E2.1. E2 relies on it: the mailbox of E2.2 keeps one skip-once marker per track and passes each
-  to `seqc_skipOnce()`.
-- **E2.7** (`build/plan/41-E2.7.md`, fw 1.7: a step button without SHIFT in the global menu sets
-  every track length) and **E2.8** (`build/plan/42-E2.8.md`, the fw 1.7 USB MIDI out defects): their
-  sections give their place in this order.
-- N18.2, N18.3 and N18.4 are applied where they belong: E2.2 (`seq_cbTransport()`), E2.3
-  (`seq_triggerVoice()`) and E2.1 (`seqq_usbMessage()`).
+E1.14, E2.7 and E2.8 were written and reviewed on their own and inserted into this plan after its
+review (implementation notes, end of N17), so every tracker task of stage 1 has its section here.
+N18.2, N18.3 and N18.4 are applied where they belong: E2.2 (`seq_cbTransport()`), E2.3
+(`seq_triggerVoice()`) and E2.1 (`seqq_usbMessage()`).
 
 **Line endings, in every part.** 155 of the 157 files in `Core/` use CRLF; `tests/`, `tools/`,
 `docs/`, `.github/`, the CMake files and `README.md` use LF. A task that writes or edits a CRLF file
@@ -189,16 +199,18 @@ fake host (`tests/fake_host.c`) that implements every callback the way `sequence
 
 **Authoritative documents:**
 - the spec, `docs/superpowers/specs/2026-10-23-timing-core-design.md`;
-- the implementation notes N1–N18, `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md`.
-  They win over the spec where the two differ. N12–N18 were added during planning:
+- the implementation notes N1–N20, `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md`.
+  They win over the spec where the two differ. N12–N20 were added during planning:
   - N12: the main-loop execution context;
   - N13: the API decisions, already in `seq_core.h`;
   - N14: SPP travels in the sync queues (E2);
   - N15: the dropout threshold, implemented in E1.10;
   - N16, N17 and N18.1: the restart of the tempo estimate after a large tempo jump, the note-offs at
-    a dropout and one skip-once marker per track, implemented in E1.14 (its section is inserted
-    after E1.13, see "Task order and dependencies");
+    a dropout and one skip-once marker per track, implemented in E1.14;
   - N18.2–N18.5: defaults for the glue, applied in E2.1–E2.3;
+  - N19: the global menu fix of E2.7, its two visible changes and its host test build;
+  - N20: the USB MIDI out of E2.8: the CIN, the transmit ring, no old messages, the Song Select,
+    and its files and RAM beyond the spec;
 - the interface (API phase of this plan), reproduced verbatim in Task E1.1;
 - `docs/lichomat/HANDOFF.md` for the tooling and the working rules.
 
@@ -260,17 +272,17 @@ fake host (`tests/fake_host.c`) that implements every callback the way `sequence
 
 | File | Created / changed in | Responsibility |
 |---|---|---|
-| `Core/Inc/Soundengine/Sequencer/seq_core.h` | E1.1 (the API, final but for comments), E1.14 (comments) | The interface: types, callbacks (`seqc_host_t`), commands, queries, and the rules of execution context, time, processing order, generation and firing. |
+| `Core/Inc/Soundengine/Sequencer/seq_core.h` | E1.1 (the API), E1.14 (the N16 restart counts, `seqc_stats_t.tempoRestarts`, and the comments) | The interface: types, callbacks (`seqc_host_t`), commands, queries, and the rules of execution context, time, processing order, generation and firing. |
 | `Core/Inc/Preset/SeqStepTypes.h` | E1.1 (verbatim API) | `Step` and `StepTiming` without the HAL, so `seq_core.h` builds on the host. |
 | `Core/Inc/Preset/SeqStep.h` | E1.2 | Includes `SeqStepTypes.h` instead of defining the two types; the layout is unchanged. |
-| `Core/Src/Soundengine/Sequencer/seq_core.c` | E1.1 skeleton, E1.3 core, then every task up to E1.12 | The timing core. |
+| `Core/Src/Soundengine/Sequencer/seq_core.c` | E1.1 skeleton, E1.3 core, then every task up to E1.12, and E1.14 | The timing core. |
 | `Core/CMakeLists.txt` | E1.3 | `seq_core.c` joins `lxr_sequencer`, compiled with `-Wextra` like on the host. |
 | `tests/CMakeLists.txt` | E1.1 (verbatim API), E1.12 | The host test project, with one ctest test per spec id. |
 | `tests/seqc_test.h` | E1.1 (verbatim API) | Test runner and asserts. |
 | `tests/fake_host.h`, `tests/fake_host.c` | E1.1 (the API; `cb_seekPosition()` as the plan review changed it) | The fake host. It holds the pattern data, song mode, the glue's erase and recording, an RNG and a callback recorder. |
 | `tests/test_harness.c` | E1.1 | Self-test of the runner and the fake host. |
 | `tests/test_layout.c` | E1.2 | `Step`/`StepTiming`/`seqc_event_t` layout. |
-| `tests/test_clock.c` … `tests/test_overflow.c` | E1.3–E1.12 | T1–T19, one file per task, as listed in `tests/CMakeLists.txt`. |
+| `tests/test_clock.c` … `tests/test_overflow.c` | E1.3–E1.12; E1.14 adds tests to `test_roll.c` and `test_slave.c` | T1–T19, one file per task, as listed in `tests/CMakeLists.txt`. |
 | `tests/fw17_adapter.h`, `tests/fw17_adapter.c`, `tests/test_fw17.c` | E1.13 | T20 against the fw 1.7 replica. |
 | `tests/reference/fw17_replica.c` | E1.13 | `#ifndef FW17_REPLICA_NO_MAIN` around the report, so T20 can link the replica's logic. |
 
@@ -305,7 +317,8 @@ These are deliberate. They are repeated where they apply and listed again in the
 1. **The N10 early exit stores the time.** When nothing is due, `seqc_process()` returns after the
    `now < nextDue` compare. Before returning it also records `now`, because the header defines the
    core's current time as "the time of the last seqc_process() call". Without it,
-   `seqc_position()` and `seqc_stepPhase()` would lag by up to 4 ticks.
+   `seqc_position()` and `seqc_stepPhase()` would lag by up to 4 ticks. E1.14 updates the header
+   comment.
 2. **The internal timeline is anchored at the first call.** It starts at the first `seqc_process()`
    or `seqc_syncEvent()` call and runs from then on. A start re-anchors it at tick 0, so while the
    transport runs the position *is* the timeline. That makes the MIDI clock re-phase exact.
@@ -316,7 +329,7 @@ These are deliberate. They are repeated where they apply and listed again in the
    events are pending. The core therefore takes `SEQC_QUEUE_CAPACITY` (default `SEQC_QUEUE_SIZE`),
    and `tests/CMakeLists.txt` builds a 16-entry copy for `test_overflow`.
 5. **`seqc_masterTrack()` after a song position** returns the master track of the seeked pattern,
-   not 0.
+   not 0. E1.14 updates the header comment.
 6. **T12 already passes before E1.7.** The late part of a step is generated at its boundary from
    E1.5 on. In E1.7, T11 is the failing test and T12 stays as the regression test for edits.
 7. **Interface functions arrive task by task.** Until its task, an interface function keeps a
@@ -960,9 +973,10 @@ _Static_assert(sizeof(StepTiming) == 1, "StepTiming is stored and copied as one 
 
 - [ ] **Step 6: Create `Core/Inc/Soundengine/Sequencer/seq_core.h`**
 
-The functions, types and constants are final. Only comments change later: E1.14 brings them in
-line with N15–N18.1 (among them the per-track skip-once marker), and E2.4 Step 8 corrects the
-execution-context comment.
+The functions are final. E1.14 adds what N16 needs, the constants `SEQC_TEMPO_RESTART` and
+`SEQC_TEMPO_RESTART_4PPQ` and the counter `seqc_stats_t.tempoRestarts` at the end of the struct,
+and brings the comments in line with N10, N15–N17 and N18.1 (among them the per-track skip-once
+marker). E2.4 Step 8 corrects the execution-context comment.
 
 ```c
 /*
@@ -2751,7 +2765,8 @@ Add the seq_core interface and the host test harness (E1.1)
 tests/ is a CMake project of its own, built with the host compiler: the
 runner seqc_test.h, the fake host that implements the seqc_host_t callbacks
 like sequencer.c will, and one ctest test per spec id. seq_core.h and
-SeqStepTypes.h are the final interface; seq_core.c is a skeleton until E1.3.
+SeqStepTypes.h are the interface (E1.14 adds the N16 restart counts and a
+statistics counter to seq_core.h); seq_core.c is a skeleton until E1.3.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
@@ -9560,7 +9575,8 @@ void seqc_resetStats(void)
 }
 ```
 
-This completes `seq_core.c`. It now matches the final file the verification section refers to.
+This completes `seq_core.c` for T1–T20 (E1.13 leaves it as it is); E1.14 extends it for N16, N17
+and N18.1. It now matches the E1.12 file the verification section refers to.
 
 - [ ] **Step 5: Convert `seq_core.c` to CRLF**
 
@@ -9628,8 +9644,9 @@ pinned by tests of their own and listed in the stage 1 report and the release no
   −1 is "previous" to step 0. The core has no step before step 0, so those replica hits are filtered
   out. `T20_no_spill_over_of_the_last_step_at_the_start` shows the difference on step 15 at x2 +7.
 
-The core is complete after E1.12. The failing steps here are the build failures that the adapter
-and the refactor resolve.
+E1.13 changes neither `seq_core.c` nor `seq_core.h`: the core is the one of E1.12 until E1.14 adds
+N16, N17 and N18.1. The failing steps here are the build failures that the adapter and the
+refactor resolve.
 
 **Files:**
 - Modify: `tests/reference/fw17_replica.c:13` (comment), `:230` and `:313` (the `#ifndef` around the report)
@@ -10127,6 +10144,987 @@ EOF
 
 ---
 
+### Task E1.14: Tempo jumps, note-offs at a dropout, one skip-once marker per track (N16, N17, N18.1)
+
+Notes N16, N17 and N18.1 were written after E1.9 and E1.10. This task brings the finished core in
+line with them, test first, and updates the `seq_core.h` comments that no longer describe the code.
+It runs after E1.13, so every E1 test file exists. E1.13 changes neither `seq_core.c` nor
+`seq_core.h`. Line numbers are those of `seq_core.h` as E1.13 leaves it. In `seq_core.c` the text
+names the functions and types instead, as the E1 conventions do: below the top comment (`:9-10`),
+its line numbers depend on the blank lines kept between blocks.
+
+**N16: the slave tempo estimate follows a jump beyond the band.**
+- `seqc_tempoInterval()` leaves out every interval more than 50% off the mean of the window (the
+  test `dev * 100u > seqc_sl.intervalSum * SEQC_TEMPO_OUTLIER_PCT`). After a jump beyond that band,
+  every new interval is an outlier and the estimate keeps the old tempo for good. The position still
+  follows each clock, but between two clocks it moves at the old tempo: after a jump up the hits
+  between clocks come late, after a jump down they come too early.
+- The band is on intervals, as in the spec (§5), N9 and `seq_core.h`. In tempo it takes in
+  everything from two thirds of the estimate to twice the estimate. The example in N16, 120 to
+  190 BPM, lies inside it: a 190 BPM interval is 37% shorter than a 120 BPM one, so the window takes
+  it in and reaches 190 BPM within 24 clocks. That works without a restart. The tests therefore use
+  jumps outside the band:
+  - 90 to 200 BPM, intervals 55% shorter;
+  - 200 to 90 BPM, intervals 122% longer;
+  - 100 to 225 BPM at 4 PPQ, intervals 56% shorter.
+- The rule:
+  - The core counts the outliers in a row that lie on the same side of the mean.
+  - After `SEQC_TEMPO_RESTART` of them (4), or `SEQC_TEMPO_RESTART_4PPQ` (2) for the jack at
+    4 PPQ, the window restarts from those intervals alone, as after a dropout.
+  - An interval inside the band ends the row. So does an outlier on the other side, which starts a
+    new row of one.
+- Details settled here:
+  - Every outlier that is left out is counted in `intervalsExcluded`, as before. The one that
+    completes a row is not left out: the restart uses it.
+  - The restart is counted in a new counter, `seqc_stats_t.tempoRestarts`, at the end of the
+    struct.
+  - An interval of 0 is still left out and counted in `intervalsExcluded`, as before, and it ends
+    the row without starting one. E2.4 gives all the clocks of one USB packet one stamp, so a late
+    packet brings a long interval and then intervals of 0. The 0 shows that the long interval came
+    from a late packet, not from a new tempo. The two other rules would fail:
+    - if the intervals of 0 counted as outliers, four of them would restart the window at a mean
+      of 0, an infinite tempo;
+    - if they left the row as it is, four late packets of 2 clocks in a row would restart it at
+      half the tempo: the intervals are then 2 clocks long and 0 by turns.
+
+    `T16_bunched_clocks_are_not_a_tempo_jump` and `T16_bunched_pairs_are_not_a_tempo_jump` guard
+    this. They pass before this task as well, because the old core never restarts.
+  - The two counts are constants in `seq_core.h`, next to `SEQC_TEMPO_WINDOW`.
+
+**N17: a dropout sends the pending note-offs.**
+- At a dropout, `seqc_runSlave()` holds the position and clears the estimate, but leaves the
+  pending note-offs. They wait for the next clock or a Stop.
+- A note-off is pending there whenever a hit fired at the clamp or less than 4 ticks before it. The
+  interpolation runs up to the clamp, the clamp included (N9), and a note-off comes 4 ticks after
+  its hit. So when the clamp is a step boundary, that step's hit plays and its note-off lies beyond
+  the clamp.
+- With a hit on every step, that is every dropout at 4 PPQ, where the clamp is always a boundary.
+  With MIDI clock it is every dropout after the last clock of a step. `T16_dropout_and_resume`
+  (E1.10) leaves the note-off of tick 772 pending this way.
+- The fix: at the dropout, `seqc_runSlave()` calls `seqc_flushNoteOffs()`, the function a stop
+  uses (`seqc_stopTransport()`).
+- `T18_dropout_note_off_is_sent` uses the clock in jack at 4 PPQ, like the other T18 tests. The
+  dropout code is the same for MIDI clock.
+
+**N18.1: one skip-once marker per track.**
+- `seqc_skip` is a single marker (the type `seqc_skip_t` and the state variable
+  `static seqc_skip_t seqc_skip;`), and `seqc_skipOnce()` overwrites it. Suppose notes are recorded
+  on two tracks in the second half of one step, a chord for example. The first track then loses its
+  marker and plays its recorded note twice (D6).
+- E2's glue already keeps one marker per track:
+  - E2.2 Step 6: `skipMask` and `skipStep[]` in the mailbox;
+  - E2.2 Step 20: `seq_addNote()` posts a marker;
+  - E2.2 Step 22: `seq_applyMailbox()` calls `seqc_skipOnce()` for each track.
+
+  Only the core still keeps a single marker.
+- `seqc_skip` becomes an array of markers indexed by track. `seqc_skipOnce()` keeps its signature
+  and replaces the marker of its own track only.
+- Rewind and seek clear every marker (`seqc_clearRun()`), as they cleared the one marker. A stop
+  keeps them, together with the queue.
+- `T14_skip_once_replaces_only_its_track` marks track 2 first and then track 0 twice:
+  - a single marker would lose the one of track 2;
+  - a track that kept every marker would skip a step that its last call no longer names.
+
+**`seq_core.h` comments.**
+- These no longer describe the code:
+  - `SEQC_DROPOUT_MS` as a plain 500 ms (`:206`), in `seqc_stats_t.dropouts` (`:306`) and under
+    "Slave position" (`:508-510`): N15 made the dropout time longer for slow clocks;
+  - the early exit of `seqc_process()` as "one 64-bit compare" (`:547-548`): it also keeps `now`
+    (decision 1 of this epic);
+  - `seqc_masterTrack()` as 0 before the first boundary (`:578`): after a song position it is the
+    master track of the seeked pattern (decision 5);
+  - `seqc_skipOnce()` (`:554-564`).
+- The task brings them up to date, together with the comments on the new rules (`:156-158`,
+  `:205`, `:503-507`).
+- In both files the top comment cites the notes as N1-N11, and the core now follows N1-N18.
+- The execution-context comment (`:39-57`) stays as it is. E2.4 Step 8 quotes it.
+
+No firmware behaviour changes yet: nothing calls the core before E2, so the image stays
+274 688 bytes. The core object grows by 268 B of `text` and 80 B of `bss`.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
+  - the top comment (`:9-10`);
+  - `seqc_skip_t`, `seqc_slave_t` and the state variables;
+  - `seqc_flushNoteOffs()`, `seqc_skipLate()`, `seqc_skipEarly()`, `seqc_clearRun()`,
+    `seqc_clearEstimate()`, `seqc_tempoInterval()`, `seqc_runSlave()` and `seqc_skipOnce()`;
+  - a new `seqc_windowAdd()`.
+- Modify: `Core/Inc/Soundengine/Sequencer/seq_core.h:12`, `:21-22`, `:158`, `:205-206`, `:306-308`,
+  `:467-469`, `:503-511`, `:547-548`, `:559-563`, `:578`
+- Test: `tests/test_slave.c` (ctest ids `T16`, `T18`), `tests/test_roll.c` (ctest id `T14`)
+
+- [ ] **Step 1: Write the failing tests in `tests/test_slave.c`**
+
+In `tests/test_slave.c` (LF), replace the description at the top:
+
+```c
+ * Slave modes (spec 5, N4, N9):
+ * - T16: MIDI clock: a steady clock, USB-like jitter of +-1 ms, a tempo ramp
+ *   from 120 to 140 BPM, early, late and bunched clocks without a lost event,
+ *   the clamp to the next clock, outliers, a dropout and the resume, the local
+ *   start on the master's step grid, and the sync mode switches;
+ * - T18: the clock in jack at 4 and 24 PPQ.
+```
+
+with:
+
+```c
+ * Slave modes (spec 5, N4, N9, N15, N16, N17):
+ * - T16: MIDI clock: a steady clock, USB-like jitter of +-1 ms, a tempo ramp
+ *   from 120 to 140 BPM, early, late and bunched clocks without a lost event,
+ *   the clamp to the next clock, outliers, a dropout and the resume, the local
+ *   start on the master's step grid, the sync mode switches, tempo jumps beyond
+ *   the outlier band, and bunched clocks that are no tempo jump (N16);
+ * - T18: the clock in jack at 4 and 24 PPQ, a tempo jump at 4 PPQ (N16), and the
+ *   pending note-off sent at a dropout (N17).
+```
+
+Then insert the helpers and the tests below right before the last line of the file, `TEST_MAIN()`:
+
+```c
+/* append count clock stamps, period cycles apart, to stamps[] from index n on:
+ * the first one a period after stamps[n - 1], or at 10 ms if n is 0. Returns
+ * the new number of stamps. */
+static size_t appendClocks(size_t n, double period, size_t count)
+{
+	double t = n > 0 ? (double)stamps[n - 1] : (double)fake_msToCycles(10.0) - period;
+	for (size_t i = 0; i < count && n < MAX_CLOCKS; i++)
+	{
+		t += period;
+		stamps[n++] = (seqc_time_t)(t + 0.5);
+	}
+	return n;
+}
+
+/* N16: a MIDI slave settles at from BPM (a full window), then gets clocks at
+ * to BPM, outside the band. The first SEQC_TEMPO_RESTART - 1 of them are left
+ * out, the next one restarts the estimate, and every clock moves the position. */
+static void checkTempoJump(double from, double to)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const size_t settled = appendClocks(0, fake_clockCycles(from), SEQC_TEMPO_WINDOW + 1);
+	const size_t n = appendClocks(settled, fake_clockCycles(to), SEQC_TEMPO_RESTART + 24);
+	deliver(h, SEQC_EV_CLOCK, stamps, settled + SEQC_TEMPO_RESTART - 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), from, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART - 1);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	deliver(h, SEQC_EV_CLOCK, stamps + settled + SEQC_TEMPO_RESTART - 1, 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), to, 1e-3);	/* from the SEQC_TEMPO_RESTART outliers alone */
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	deliver(h, SEQC_EV_CLOCK, stamps + settled + SEQC_TEMPO_RESTART, 24, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), to, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART - 1);
+	/* the position followed every clock: no step lost or doubled */
+	const size_t steps = (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1;
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), steps);
+	for (size_t k = 0; k < steps; k++)
+		ASSERT_EQ(trig[k]->ev.absStep, k);
+}
+
+TEST(T16_tempo_jump_up_is_followed)
+{
+	/* 90 to 200 BPM: the intervals get 55% shorter. A jump up must more than
+	 * double the tempo to leave the band; 120 to 190 BPM (-37%) stays inside
+	 * it and the window follows on its own. */
+	checkTempoJump(90.0, 200.0);
+}
+
+TEST(T16_tempo_jump_down_is_followed)
+{
+	/* 200 to 90 BPM: the intervals get 122% longer */
+	checkTempoJump(200.0, 90.0);
+}
+
+TEST(T16_alternating_outliers_do_not_restart)
+{
+	/* at 120 BPM, 8 outliers alternately 60% longer and 60% shorter: no jump.
+	 * Then SEQC_TEMPO_RESTART longer ones in a row, 1.6 to 1.9 times the
+	 * interval, are one: the estimate restarts from all of them, at their mean
+	 * of 1.75 times the interval. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	for (int k = 0; k < 8; k++)
+		n = appendClocks(n, per * (k % 2 == 0 ? 1.6 : 0.4), 1);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 8);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	const size_t before = n;
+	for (unsigned k = 0; k < SEQC_TEMPO_RESTART; k++)
+		n = appendClocks(n, per * (1.6 + 0.1 * k), 1);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0 / 1.75, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, 8 + SEQC_TEMPO_RESTART - 1);
+}
+
+TEST(T16_inlier_resets_the_outlier_run)
+{
+	/* at 120 BPM: 3 outliers at 270 BPM (intervals 56% shorter), 1 interval at
+	 * 120, 3 more outliers: no restart, the estimate stays. The count started
+	 * again at the inlier, so the next outlier is the 4th in a row. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0), fast = fake_clockCycles(270.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	n = appendClocks(n, fast, 3);
+	n = appendClocks(n, per, 1);
+	n = appendClocks(n, fast, 3);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 6);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	const size_t before = n;
+	n = appendClocks(n, fast, 1);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 270.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	seqc_resetStats();
+	ASSERT_EQ(stats().tempoRestarts, 0);
+}
+
+TEST(T16_bunched_clocks_are_not_a_tempo_jump)
+{
+	/* USB: a late packet brings 6 clocks with one stamp. The first interval is
+	 * an outlier and starts a row, and the 5 intervals of 0 are left out; the
+	 * first of them ends the row (N16). The estimate stays, and the position
+	 * follows every clock. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	const seqc_time_t packet = stamps[n - 1] + (seqc_time_t)(6.0 * per + 0.5);
+	for (int k = 0; k < 6; k++)
+		stamps[n++] = packet;
+	n = appendClocks(n, per, 12);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 6);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+}
+
+TEST(T16_bunched_pairs_are_not_a_tempo_jump)
+{
+	/* USB: 2 * SEQC_TEMPO_RESTART late packets in a row, each with 2 clocks
+	 * and one stamp, so the intervals are 2 clocks long and 0 by turns. The
+	 * long ones are outliers on the same side, but each 0 ends their row (N16):
+	 * the estimate does not restart at half the tempo. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const unsigned pairs = 2 * SEQC_TEMPO_RESTART;
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	for (unsigned k = 0; k < pairs; k++)
+	{
+		n = appendClocks(n, 2.0 * per, 1);
+		stamps[n] = stamps[n - 1];		/* the second clock of the packet */
+		n++;
+	}
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 2 * pairs);	/* both intervals of each packet */
+	const size_t before = n;
+	n = appendClocks(n, per, 12);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 2 * pairs);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+}
+
+TEST(T18_tempo_jump_4ppq_restarts_after_2)
+{
+	/* N16 at 4 PPQ: 100 to 225 BPM, pulses 56% closer. The estimate restarts
+	 * after SEQC_TEMPO_RESTART_4PPQ outliers in a row. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_start();
+	const size_t settled = appendClocks(0, fake_stepCycles(100.0), SEQC_TEMPO_WINDOW_4PPQ + 1);
+	const size_t n = appendClocks(settled, fake_stepCycles(225.0), SEQC_TEMPO_RESTART_4PPQ + 4);
+	deliver(h, SEQC_EV_PULSE, stamps, settled + SEQC_TEMPO_RESTART_4PPQ - 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	deliver(h, SEQC_EV_PULSE, stamps + settled + SEQC_TEMPO_RESTART_4PPQ - 1, 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 225.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART_4PPQ - 1);
+	deliver(h, SEQC_EV_PULSE, stamps + settled + SEQC_TEMPO_RESTART_4PPQ, 4, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 225.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), n);	/* one step per pulse */
+	for (size_t k = 0; k < n; k++)
+		ASSERT_EQ(trig[k]->ev.absStep, k);
+}
+
+TEST(T18_dropout_note_off_is_sent)
+{
+	/* N17, with the jack at 4 PPQ at 120 BPM. After the last pulse (step 4) the
+	 * interpolation reaches the clamp and plays step 5 at tick 480; its note-off,
+	 * due at 484, waits for a pulse that does not come. At the dropout, 500 ms
+	 * after the last pulse, it goes out at once. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_start();
+	const double per = fake_stepCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_PULSE, t0, per, 5, fake_msToCycles(0.1));
+	const seqc_time_t limit = t0 + (seqc_time_t)(4.0 * per + 0.5) + fake_msToCycles(SEQC_DROPOUT_MS);
+	fake_runUntil(h, limit, fake_msToCycles(1.0));
+	ASSERT_EQ(stats().dropouts, 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 6);
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 5);	/* the one of step 5 is pending */
+	fake_runUntil(h, limit + fake_msToCycles(1.0), fake_msToCycles(1.0));
+	ASSERT_EQ(stats().dropouts, 1);
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 6);
+	size_t pos = 0;
+	const fake_rec_t *r, *off = NULL;
+	while ((r = fake_next(h, FAKE_NOTE_OFF, &pos)) != NULL)
+		off = r;
+	ASSERT_EQ(off->track, 0);
+	ASSERT_TRUE(off->time > limit && off->time <= limit + fake_msToCycles(1.0));
+	ASSERT_NEAR(off->tick, 480.0, 1e-9);		/* the position holds at the clamp */
+	/* none later: not while the position holds, and not when the pulses resume */
+	fake_runUntil(h, limit + fake_msToCycles(1000.0), fake_msToCycles(1.0));
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 6);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + fake_msToCycles(1.0), per, 2, fake_msToCycles(0.1));
+	fake_runUntil(h, h->now + fake_msToCycles(10.0), fake_msToCycles(0.1));	/* past 580 */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 7);	/* step 6 at the second pulse */
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 7);	/* one note-off per trigger */
+}
+```
+
+- [ ] **Step 2: Write the failing tests in `tests/test_roll.c`**
+
+In `tests/test_roll.c` (LF), replace:
+
+```c
+ * - T14: the recording phase (spec 6.7, swing-aware) and the skip-once rule
+ *   (D6): a note recorded at half a step or later goes to the next step, which
+ *   then does not play again in that occurrence.
+```
+
+with:
+
+```c
+ * - T14: the recording phase (spec 6.7, swing-aware) and the skip-once rule
+ *   (D6): a note recorded at half a step or later goes to the next step, which
+ *   then does not play again in that occurrence. Each track has its own marker
+ *   (N18.1).
+```
+
+Then insert right before the last line of the file, `TEST_MAIN()`:
+
+```c
+TEST(T14_skip_once_per_track_two_tracks)
+{
+	/* N18.1: a chord recorded on tracks 0 and 2 in the second half of step 3
+	 * goes to step 4 of both tracks, and neither plays it again at 4 */
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	start(h);
+	runToTick(h, 3 * 96 + 60);			/* phase 0.625 in step 3 */
+	fake_addNote(h, 0, 100, 64);
+	fake_addNote(h, 2, 90, 67);
+	ASSERT_TRUE((h->mainSteps[0][0] >> 4) & 1u);	/* recorded on step 4 */
+	ASSERT_TRUE((h->mainSteps[0][2] >> 4) & 1u);
+	runToTick(h, 21 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);	/* at 20, not at 4 */
+	ASSERT_EQ(trig[0]->ev.absStep, 20);
+	ASSERT_EQ(trig[0]->ev.note, 64);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 20);
+	ASSERT_EQ(trig[0]->ev.note, 67);
+	ASSERT_EQ(stats().skipDrops, 2);
+}
+
+TEST(T14_skip_once_replaces_only_its_track)
+{
+	/* N18.1: a call replaces the marker of its own track, and no other */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 4, true);
+	fake_setStep(h, 0, 2, 4, true);
+	start(h);
+	runToTick(h, 3 * 96 + 50);
+	seqc_skipOnce(2, 4);
+	seqc_skipOnce(0, 4);
+	seqc_skipOnce(0, 9);				/* replaces (0, 4): track 0 plays 4 */
+	runToTick(h, 21 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.absStep, 4);
+	ASSERT_EQ(trig[1]->ev.absStep, 20);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 1);	/* track 2 kept its marker */
+	ASSERT_EQ(trig[0]->ev.absStep, 20);
+	ASSERT_EQ(stats().skipDrops, 1);
+}
+```
+
+- [ ] **Step 3: Run them to verify they fail**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: the test build fails, because `seq_core.h` has neither the restart counts nor the new
+counter. The firmware still builds:
+
+```
+== host tests
+host test build FAILED
+/Library/Developer/CommandLineTools/usr/bin/cc ... (the compile command of test_slave.c)
+.../tests/test_slave.c:548:63: error: use of undeclared identifier 'SEQC_TEMPO_RESTART'; did you mean 'SEQC_EV_START'?
+...
+.../tests/test_slave.c:552:20: error: no member named 'tempoRestarts' in 'struct seqc_stats'
+...
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+20 errors generated.
+== firmware build (release)
+memory: ITCM 15000/16384 B (91.6%, free 1384)  ...  image 274688/1015808 B (27.0%)
+...
+== compiler warnings: 0
+exit 1
+```
+
+- [ ] **Step 4: Add the restart counts, `tempoRestarts` and the comments to `seq_core.h`**
+
+`Core/Inc/Soundengine/Sequencer/seq_core.h` is CRLF. Convert it to LF first:
+`perl -pi -e 's/\r\n/\n/' Core/Inc/Soundengine/Sequencer/seq_core.h`. Then make these ten
+replacements. Each "before" text occurs once in the file.
+
+**1. The list of what the core holds (line 12).** Replace:
+
+```c
+ * - the recording phase and the skip-once marker.
+```
+
+with:
+
+```c
+ * - the recording phase and the skip-once markers.
+```
+
+**2. The notes it follows (lines 21-22).** Replace:
+
+```c
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N11;
+ * they win where the two differ).
+```
+
+with:
+
+```c
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N18;
+ * they win where the two differ).
+```
+
+**3. "Firing": the note-offs at a dropout, N17 (line 158).** Replace:
+
+```c
+ *   new trigger(). Stopping and rewinding send all pending note-offs at once.
+```
+
+with:
+
+```c
+ *   new trigger(). Stopping, rewinding and a slave dropout (N17) send all
+ *   pending note-offs at once.
+```
+
+**4. The tempo constants: the outlier band, the restart counts, N16, and the dropout time, N15 (lines 205-206).** Replace:
+
+```c
+#define SEQC_TEMPO_OUTLIER_PCT      50u   /**< an interval off the estimate by more than this is left out */
+#define SEQC_DROPOUT_MS            500u   /**< no clock for this long: the estimate is cleared */
+```
+
+with:
+
+```c
+#define SEQC_TEMPO_OUTLIER_PCT      50u   /**< an interval off the mean by more than this is an outlier */
+#define SEQC_TEMPO_RESTART           4u   /**< outliers in a row on one side that restart the estimate (N16) */
+#define SEQC_TEMPO_RESTART_4PPQ      2u   /**< the same for the jack at 4 PPQ */
+#define SEQC_DROPOUT_MS            500u   /**< the shortest dropout time; slow clocks get longer (N15) */
+```
+
+**5. `seqc_stats_t`: `dropouts`, and `tempoRestarts` at the end (lines 306-308).** Replace:
+
+```c
+	uint32_t dropouts;		/**< slave clock dropouts (SEQC_DROPOUT_MS without a clock) */
+	uint32_t reentries;		/**< calls ignored because they came from inside a callback */
+} seqc_stats_t;
+```
+
+with:
+
+```c
+	uint32_t dropouts;		/**< slave clock dropouts: no clock for the dropout time (N15) */
+	uint32_t reentries;		/**< calls ignored because they came from inside a callback */
+	uint32_t tempoRestarts;		/**< slave tempo estimates restarted after a tempo jump (N16) */
+} seqc_stats_t;
+```
+
+**6. `seqc_rewind()` under "Transport": every marker (lines 467-469).** Replace:
+
+```c
+ *   position was not at the start). The queue, the pending note-offs, the
+ *   probability draws and the skip-once marker are cleared. Ignored while
+ *   running.
+```
+
+with:
+
+```c
+ *   position was not at the start). The queue, the pending note-offs, the
+ *   probability draws and the skip-once markers are cleared. Ignored while
+ *   running.
+```
+
+**7. "Slave position": the estimate with the restart, N16, and the dropout, N15 and N17 (lines 503-511).** Replace:
+
+```c
+ * - The estimate is the mean of the last SEQC_TEMPO_WINDOW intervals
+ *   (SEQC_TEMPO_WINDOW_4PPQ for the jack at 4 PPQ). Intervals more than
+ *   SEQC_TEMPO_OUTLIER_PCT off the estimate are left out, and the estimate is
+ *   clamped to SEQC_SLAVE_BPM_MIN..MAX. Without a measured interval, the last
+ *   known tempo is used.
+ * - After SEQC_DROPOUT_MS without a clock, the estimate is cleared and the
+ *   position holds. The next clock resumes playback, and its interval is not
+ *   used for the estimate.
+ */
+```
+
+with:
+
+```c
+ * - The estimate is the mean of the last SEQC_TEMPO_WINDOW intervals
+ *   (SEQC_TEMPO_WINDOW_4PPQ for the jack at 4 PPQ), clamped to
+ *   SEQC_SLAVE_BPM_MIN..MAX. An interval more than SEQC_TEMPO_OUTLIER_PCT
+ *   longer or shorter than the mean is an outlier and is left out, unless it
+ *   completes a tempo jump. Without a measured interval, the last known tempo
+ *   is used.
+ * - A tempo jump (N16): after SEQC_TEMPO_RESTART outliers in a row on the same
+ *   side of the mean, all longer or all shorter (SEQC_TEMPO_RESTART_4PPQ for
+ *   the jack at 4 PPQ), the estimate restarts from those intervals alone. An
+ *   interval inside the band, or an outlier on the other side, ends the row. In
+ *   tempo, the band takes in anything from two thirds of the estimate up to
+ *   twice it.
+ * - An interval of 0 (the clocks of one USB packet share a stamp) is left out
+ *   and ends the row: the packet came late, so the interval before the 0 is no
+ *   sign of a new tempo either.
+ * - The dropout time is SEQC_DROPOUT_MS, or two expected clock intervals if
+ *   that is longer (N15). The interval comes from the estimate, or from
+ *   SEQC_SLAVE_BPM_MIN while there is none, so a slow jack clock at 4 PPQ can
+ *   build its first estimate. After the dropout time without a clock, the
+ *   estimate is cleared, the pending note-offs are sent (N17) and the position
+ *   holds. The next clock resumes playback, and its interval is not used for
+ *   the estimate.
+ */
+```
+
+**8. `seqc_process()`: the early exit, N10 (lines 547-548).** Replace:
+
+```c
+/** Advance to now and handle everything due up to there, see Processing order.
+ * When nothing is due it returns after one 64-bit compare (N10). */
+```
+
+with:
+
+```c
+/** Advance to now and handle everything due up to there, see Processing order.
+ * When nothing is due yet it returns at once (N10): a 64-bit compare, and now
+ * is kept as the core's current time for the queries. */
+```
+
+**9. `seqc_skipOnce()`: one marker per track, N18.1 (lines 559-563).** Replace:
+
+```c
+ * - At the track's next step boundary, if the track arrives at (pattern, step),
+ *   the occurrence is not generated. The marker is cleared at that boundary
+ *   whether or not it matched.
+ * - A new call replaces the marker. Ignored while stopped, or with track >= 7 or
+ *   step >= 64. It may be called from a callback. */
+```
+
+with:
+
+```c
+ * - At the track's next step boundary, if the track arrives at (pattern, step),
+ *   the occurrence is not generated. The marker is cleared at that boundary
+ *   whether or not it matched.
+ * - Each track has its own marker (N18.1), so notes recorded on several tracks
+ *   in the same step, a chord for example, each skip once. A new call replaces
+ *   the marker of its own track only.
+ * - Ignored while stopped, or with track >= 7 or step >= 64. It may be called
+ *   from a callback. */
+```
+
+**10. `seqc_masterTrack()` after a song position (line 578).** Replace:
+
+```c
+/** The master track chosen at the last step boundary (0 before the first) */
+```
+
+with:
+
+```c
+/** The master track chosen at the last step boundary. After a song position it
+ * is the master track of the pattern that the song position activated. 0 after
+ * seqc_init() and after a rewind, until the first boundary. */
+```
+
+Convert it back and check:
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Inc/Soundengine/Sequencer/seq_core.h && file Core/Inc/Soundengine/Sequencer/seq_core.h`
+
+Expected: `... with CRLF line terminators`
+
+- [ ] **Step 5: Run the tests to verify they fail for the reasons named**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `86% tests passed, 3 tests failed out of 22`, `17 - T14 (Failed)`, `18 - T16 (Failed)`,
+`19 - T18 (Failed)`, `exit 1`.
+
+Run: `build/host-tests/test_slave; build/host-tests/test_roll`
+
+Expected: the old tests pass. The new ones fail because nothing restarts the estimate, nothing
+sends the note-off at the dropout, and the second marker replaces the first.
+`T16_bunched_clocks_are_not_a_tempo_jump` and `T16_bunched_pairs_are_not_a_tempo_jump` pass
+already (see above). The output, without the `PASS` lines:
+
+```
+.../tests/test_slave.c:554: ASSERT_NEAR(seqc_currentBpm(), to, 1e-3) failed: 90 vs 200
+FAIL T16_tempo_jump_up_is_followed
+.../tests/test_slave.c:554: ASSERT_NEAR(seqc_currentBpm(), to, 1e-3) failed: 200 vs 90
+FAIL T16_tempo_jump_down_is_followed
+.../tests/test_slave.c:601: ASSERT_NEAR(seqc_currentBpm(), 120.0 / 1.75, 1e-3) failed: 120 vs 68.5714286
+FAIL T16_alternating_outliers_do_not_restart
+.../tests/test_slave.c:625: ASSERT_NEAR(seqc_currentBpm(), 270.0, 1e-3) failed: 120 vs 270
+FAIL T16_inlier_resets_the_outlier_run
+.../tests/test_slave.c:693: ASSERT_NEAR(seqc_currentBpm(), 225.0, 1e-3) failed: 100 vs 225
+FAIL T18_tempo_jump_4ppq_restarts_after_2
+.../tests/test_slave.c:722: ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 6) failed: 5 != 6
+FAIL T18_dropout_note_off_is_sent
+23 of 29 tests passed
+.../tests/test_roll.c:270: ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1) failed: 2 != 1
+FAIL T14_skip_once_per_track_two_tracks
+.../tests/test_roll.c:294: ASSERT_EQ(fake_triggers(h, 2, trig, 8), 1) failed: 2 != 1
+FAIL T14_skip_once_replaces_only_its_track
+14 of 16 tests passed
+```
+
+- [ ] **Step 6: Implement N16, N17 and N18.1 in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+In the top comment, replace:
+
+```c
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N11;
+ * they win where the two differ).
+```
+
+with:
+
+```c
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N18;
+ * they win where the two differ).
+```
+
+Replace `seqc_skip_t` with:
+
+```c
+/** a skip-once marker (D6); each track has one (N18.1) */
+typedef struct
+{
+	bool		valid;
+	uint8_t		pattern;
+	uint8_t		step;
+	uint32_t	absStep;	/**< the occurrence it applies to */
+} seqc_skip_t;
+```
+
+Replace `seqc_slave_t` with:
+
+```c
+/** slave modes: clock count, tempo estimate and the interpolation (N9) */
+typedef struct
+{
+	uint8_t		ppq;		/**< clock in jack: 4 or 24 */
+	seqc_arm_t	arm;
+	uint32_t	clockCount;	/**< clocks since the last reset of the count */
+	bool		haveStamp;
+	seqc_time_t	lastStamp;	/**< stamp of the last clock, in any state */
+	double		lastClockPos;	/**< position of the last clock while running, ticks */
+	seqc_time_t	lastClockTime;	/**< its stamp */
+	bool		droppedOut;	/**< no clock for the dropout time (N15): the position holds */
+	double		bpm;		/**< the estimate, or the last known tempo */
+	double		ticksPerCycle;	/**< of bpm */
+	double		cyclesPerTick;
+	uint32_t	interval[SEQC_TEMPO_WINDOW];	/**< clock intervals, cycles */
+	uint8_t		intervalCount;
+	uint8_t		intervalNext;
+	uint64_t	intervalSum;
+	uint32_t	run[SEQC_TEMPO_RESTART];	/**< N16: the outliers in a row, cycles */
+	uint8_t		runCount;
+	bool		runLonger;	/**< they are longer than the mean (else shorter) */
+} seqc_slave_t;
+```
+
+Replace the state variables block (`/* the state, one part per area */`) with:
+
+```c
+/* the state, one part per area */
+static seqc_core_t seqc;
+static seqc_tracks_t seqc_trk;
+static seqc_gen_t seqc_gen;
+static seqc_queue_t seqc_queue;
+static seqc_fire_t seqc_fire;
+static seqc_outputs_t seqc_out;
+static seqc_skip_t seqc_skip[SEQC_NUM_TRACKS];
+static seqc_slave_t seqc_sl;
+```
+
+Replace `seqc_flushNoteOffs()` with:
+
+```c
+/** send every pending note-off now (stop, rewind, seek, slave dropout) */
+static void seqc_flushNoteOffs(void)
+{
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		if (seqc_fire.offPending[t])
+		{
+			seqc_fire.offPending[t] = false;
+			seqc.host.noteOff(seqc.host.ctx, t);
+		}
+	}
+}
+```
+
+Replace `seqc_skipLate()` with:
+
+```c
+/** true if the track's skip-once marker drops occurrence (track, n) at its
+ * boundary. A marker for n is cleared here, whether it matches or not. */
+static bool seqc_skipLate(uint8_t track, uint32_t n, uint8_t pattern, uint8_t step)
+{
+	seqc_skip_t *m = &seqc_skip[track];
+	if (!m->valid || m->absStep > n)
+		return false;
+	m->valid = false;
+	if (m->absStep != n || m->pattern != pattern || m->step != step)
+		return false;
+	seqc.stats.skipDrops++;
+	return true;
+}
+```
+
+Replace `seqc_skipEarly()` with:
+
+```c
+/** true if the track's skip-once marker drops the early part of occurrence
+ * (track, n) */
+static bool seqc_skipEarly(uint8_t track, uint32_t n, uint8_t pattern, uint8_t step)
+{
+	const seqc_skip_t *m = &seqc_skip[track];
+	return m->valid && m->absStep == n && m->pattern == pattern && m->step == step;
+}
+```
+
+Replace `seqc_clearRun()` with:
+
+```c
+/** clear what belongs to the current run: queue, note-offs, draws, same-tick
+ * state and the skip-once markers (rewind and seek) */
+static void seqc_clearRun(void)
+{
+	seqc_queue.count = 0;
+	seqc_flushNoteOffs();
+	memset(seqc_gen.draw, 0, sizeof seqc_gen.draw);
+	memset(seqc_fire.fired, 0, sizeof seqc_fire.fired);
+	memset(seqc_skip, 0, sizeof seqc_skip);
+}
+```
+
+Replace `seqc_clearEstimate()` with:
+
+```c
+/** forget the measured intervals and the outliers in a row (the last known
+ * tempo stays) */
+static void seqc_clearEstimate(void)
+{
+	seqc_sl.intervalCount = 0;
+	seqc_sl.intervalNext = 0;
+	seqc_sl.intervalSum = 0;
+	seqc_sl.runCount = 0;
+}
+```
+
+Insert after `seqc_clearEstimate()` (`seqc_windowAdd()`):
+
+```c
+//------------------------------------------------------------------------------
+/** add a clock interval to the window of the estimate */
+static void seqc_windowAdd(uint32_t dt, uint8_t window)
+{
+	if (seqc_sl.intervalCount < window)
+		seqc_sl.intervalCount++;
+	else
+		seqc_sl.intervalSum -= seqc_sl.interval[seqc_sl.intervalNext];
+	seqc_sl.interval[seqc_sl.intervalNext] = dt;
+	seqc_sl.intervalSum += dt;
+	seqc_sl.intervalNext = (uint8_t)((seqc_sl.intervalNext + 1u) % window);
+}
+```
+
+Replace `seqc_tempoInterval()` with:
+
+```c
+/** a measured clock interval, in cycles (N9, N16):
+ * - an interval more than SEQC_TEMPO_OUTLIER_PCT off the mean is an outlier and
+ *   is left out, unless it completes a tempo jump;
+ * - a tempo jump is SEQC_TEMPO_RESTART outliers in a row on the same side of
+ *   the mean (SEQC_TEMPO_RESTART_4PPQ for the jack at 4 PPQ): the estimate
+ *   restarts from them alone. An inlier, or an outlier on the other side, ends
+ *   the row;
+ * - an interval of 0 (clocks of one USB packet share a stamp) is left out and
+ *   ends the row: the packet came late, so the interval before the 0 is no
+ *   sign of a new tempo either. */
+static void seqc_tempoInterval(uint32_t dt)
+{
+	const bool jack4 = seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24;
+	const uint8_t window = jack4 ? SEQC_TEMPO_WINDOW_4PPQ : SEQC_TEMPO_WINDOW;
+	if (dt == 0)
+	{
+		seqc.stats.intervalsExcluded++;
+		seqc_sl.runCount = 0;
+		return;
+	}
+	/* |dt - mean| > mean * pct / 100, with mean = sum / count */
+	const uint64_t scaled = (uint64_t)dt * seqc_sl.intervalCount;
+	const bool longer = scaled > seqc_sl.intervalSum;
+	const uint64_t dev = longer ? scaled - seqc_sl.intervalSum : seqc_sl.intervalSum - scaled;
+	if (seqc_sl.intervalCount > 0 && dev * 100u > seqc_sl.intervalSum * SEQC_TEMPO_OUTLIER_PCT)
+	{
+		if (seqc_sl.runCount > 0 && longer != seqc_sl.runLonger)
+			seqc_sl.runCount = 0;
+		seqc_sl.runLonger = longer;
+		seqc_sl.run[seqc_sl.runCount++] = dt;
+		if (seqc_sl.runCount < (jack4 ? SEQC_TEMPO_RESTART_4PPQ : SEQC_TEMPO_RESTART))
+		{
+			seqc.stats.intervalsExcluded++;
+			return;
+		}
+		/* a tempo jump: restart from the row alone, as after a dropout */
+		const uint8_t count = seqc_sl.runCount;
+		seqc_clearEstimate();
+		for (uint8_t i = 0; i < count; i++)
+			seqc_windowAdd(seqc_sl.run[i], window);
+		seqc.stats.tempoRestarts++;
+	}
+	else
+	{
+		seqc_sl.runCount = 0;
+		seqc_windowAdd(dt, window);
+	}
+	const double mean = (double)seqc_sl.intervalSum / seqc_sl.intervalCount;
+	seqc_setSlaveBpm(seqc_ticksPerClock() / mean * (double)seqc.cyclesPerSecond * 60.0 / SEQC_TICKS_PER_BEAT);
+}
+```
+
+Replace `seqc_runSlave()` with:
+
+```c
+/** slave modes: while running, the position follows the interpolation (N9).
+ * After the dropout time (N15) without a clock it holds, the estimate is
+ * cleared and the pending note-offs are sent (N17). */
+static void seqc_runSlave(void)
+{
+	if (seqc.state != SEQC_RUNNING)
+		return;
+	const seqc_time_t limit = seqc_sl.lastClockTime + seqc_dropoutCycles();
+	if (!seqc_sl.droppedOut && seqc.now > limit)
+	{
+		seqc_runTo(seqc_slaveTarget(limit));
+		seqc_sl.droppedOut = true;
+		seqc_clearEstimate();
+		seqc.stats.dropouts++;
+		seqc_flushNoteOffs();
+		return;
+	}
+	seqc_runTo(seqc_slaveTarget(seqc.now));
+}
+```
+
+Replace `seqc_skipOnce()` with:
+
+```c
+void seqc_skipOnce(uint8_t track, uint8_t step)
+{
+	if (seqc.state == SEQC_STOPPED || track >= SEQC_NUM_TRACKS || step >= SEQC_NUM_STEPS)
+		return;
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+	const uint32_t n = seqc_nextBoundaryStep();
+	seqc_skip_t *m = &seqc_skip[track];	/* N18.1: only this track's marker */
+
+	m->valid = true;
+	m->pattern = pattern;
+	m->step = step;
+	m->absStep = n;
+	seqc_queueRemoveStep(track, n, pattern, step);
+}
+```
+
+- [ ] **Step 7: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `... with CRLF line terminators`
+
+- [ ] **Step 8: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 22`, image `274688/1015808 B`,
+`== compiler warnings: 0`, `exit 0`.
+
+Run: `build/host-tests/test_slave | tail -n 1; build/host-tests/test_roll | tail -n 1`
+
+Expected:
+```
+29 of 29 tests passed
+16 of 16 tests passed
+```
+
+Run: `bash -c 'source tools/env.sh && arm-none-eabi-size build/release/Core/CMakeFiles/lxr_sequencer.dir/Src/Soundengine/Sequencer/seq_core.c.obj'`
+
+Expected: `text` 15690 and `bss` 7053 with Arm GNU 14.3.rel1. After E1.13 the same command
+prints `text` 15422 and `bss` 6973. The `bss` grows by the six extra markers and the row of
+outliers.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c Core/Inc/Soundengine/Sequencer/seq_core.h tests/test_slave.c tests/test_roll.c
+git commit -F - <<'EOF'
+seq_core: follow tempo jumps, note-offs at a dropout, skip-once per track (E1.14)
+
+N16: after 4 outliers in a row on one side of the mean (2 for the jack at
+4 PPQ) the slave tempo estimate restarts from them, so it follows a jump
+beyond the +-50% interval band. An interval of 0 (bunched USB clocks) is
+left out and ends the row. N17: a slave dropout sends the pending
+note-offs, as a stop does.
+N18.1: one skip-once marker per track, so a chord recorded on several tracks
+skips once on each. seq_core.h gains SEQC_TEMPO_RESTART(_4PPQ) and
+seqc_stats_t.tempoRestarts, and its comments now describe the N15 dropout
+time, the N10 early exit and seqc_masterTrack() after a song position.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
 ### Coverage of the spec and the notes
 
 **Host tests (spec §13.1).** Every test name starts with its id, so `ctest` and
@@ -10147,11 +11145,11 @@ EOF
 | T11 | `T11_early_hit_of_the_next_pattern`, `T11_late_change_of_the_pending_pattern`, `T11_restart_takes_step_0_of_every_track`, `T11_same_pattern_keeps_the_indices`, `T11_no_early_hits_after_the_song_end`, `T11_late_hits_of_the_old_pattern_after_the_switch` (spec §6.5, D5) | E1.7 |
 | T12 | `T12_step_switched_on_before_its_boundary_plays`, `T12_step_switched_off_before_its_boundary_does_not_play`, `T12_early_hits_use_the_state_one_step_earlier`, `T12_erase_at_the_boundary_wins`, `T12_track_length_change_before_the_boundary` | E1.7 |
 | T13 | `T13_roll_at_every_rate`, `T13_roll_is_swung`, `T13_roll_follows_the_track_step`, `T13_roll_plays_on_a_muted_track`, `T13_note_wins_over_a_roll_at_the_same_tick`, `T13_roll_hit_is_recorded_at_its_own_step` | E1.9 |
-| T14 | `T14_phase_is_linear_without_shuffle`, `T14_phase_with_shuffle_is_half_between_the_swung_hits`, `T14_phase_is_zero_when_stopped`, `T14_late_note_goes_to_the_next_step_and_plays_once` (D6), `T14_early_note_stays_on_the_current_step`, `T14_skip_once_removes_the_queued_early_hits`, `T14_marker_is_cleared_at_the_next_boundary`, `T14_skip_once_is_ignored_when_stopped_or_out_of_range`; one marker per track (N18.1) in E1.14 | E1.9, E1.14 |
+| T14 | `T14_phase_is_linear_without_shuffle`, `T14_phase_with_shuffle_is_half_between_the_swung_hits`, `T14_phase_is_zero_when_stopped`, `T14_late_note_goes_to_the_next_step_and_plays_once` (D6), `T14_early_note_stays_on_the_current_step`, `T14_skip_once_removes_the_queued_early_hits`, `T14_marker_is_cleared_at_the_next_boundary`, `T14_skip_once_is_ignored_when_stopped_or_out_of_range`; one marker per track (N18.1): `T14_skip_once_per_track_two_tracks`, `T14_skip_once_replaces_only_its_track` | E1.9, E1.14 |
 | T15 | `T15_note_off_4_ticks_after_the_trigger`, `T15_note_off_comes_right_before_a_retrigger`, `T15_stop_sends_the_pending_note_offs` | E1.6 |
-| T16 | `T16_steady_clock`, `T16_usb_like_jitter`, `T16_tempo_ramp_120_to_140`, `T16_bunched_clocks_lose_no_event`, `T16_position_is_clamped_to_the_next_clock`, `T16_outlier_interval_is_left_out`, `T16_dropout_and_resume`, `T16_local_start_waits_for_the_masters_step`, `T16_tempo_estimate_is_clamped`, `T16_clock_only_in_midi_sync`, `T16_switch_from_internal_while_running`, `T16_switch_to_internal_starts_an_armed_transport`, `T16_swung_ratchet_spills_past_the_next_clock` and `T16_swung_ratchet_spills_past_bunched_clocks` (D7); the tempo jumps of N16 in E1.14 | E1.10, E1.14 |
+| T16 | `T16_steady_clock`, `T16_usb_like_jitter`, `T16_tempo_ramp_120_to_140`, `T16_bunched_clocks_lose_no_event`, `T16_position_is_clamped_to_the_next_clock`, `T16_outlier_interval_is_left_out`, `T16_dropout_and_resume`, `T16_local_start_waits_for_the_masters_step`, `T16_tempo_estimate_is_clamped`, `T16_clock_only_in_midi_sync`, `T16_switch_from_internal_while_running`, `T16_switch_to_internal_starts_an_armed_transport`, `T16_swung_ratchet_spills_past_the_next_clock` and `T16_swung_ratchet_spills_past_bunched_clocks` (D7); the tempo jumps of N16: `T16_tempo_jump_up_is_followed`, `T16_tempo_jump_down_is_followed`, `T16_alternating_outliers_do_not_restart`, `T16_inlier_resets_the_outlier_run`, `T16_bunched_clocks_are_not_a_tempo_jump`, `T16_bunched_pairs_are_not_a_tempo_jump` | E1.10, E1.14 |
 | T17 | `T17_midi_start_arms_and_the_next_clock_starts`, `T17_midi_start_while_running_restarts`, `T17_stop_and_continue_resume_in_place`, `T17_continue_at_the_start_is_a_start`, `T17_events_that_do_nothing_are_counted`, `T17_transport_events_are_ignored_in_internal_sync`, `T17_spp_in_pattern_mode`, `T17_spp_in_song_mode_with_identical_entries`, `T17_spp_with_song_loop`, `T17_spp_past_the_song_end_stops_at_the_next_pattern_end`, `T17_spp_within_the_active_pattern_does_not_reload_it`, `T17_spp_while_running_is_ignored`, `T17_spp_while_armed_seeks`, `T17_spp_clears_the_queue_and_restarts_the_count`, `T17_midi_start_in_analog_sync_starts_with_the_next_pulse` (N13.10), `T17_jack_run_gate` | E1.11 |
-| T18 | `T18_jack_4ppq_one_pulse_per_step`, `T18_jack_4ppq_estimate_uses_4_intervals`, `T18_jack_24ppq_six_pulses_per_step`, `T18_ppq_change_restarts_the_count`, `T18_slow_4ppq_clock_is_not_a_dropout` (N15), `T18_pulse_only_in_analog_sync`, `T18_ppq_change_in_midi_sync_keeps_the_count` (decision 11); the 4 PPQ tempo jump (N16) and the note-off at a dropout (N17) in E1.14 | E1.10, E1.14 |
+| T18 | `T18_jack_4ppq_one_pulse_per_step`, `T18_jack_4ppq_estimate_uses_4_intervals`, `T18_jack_24ppq_six_pulses_per_step`, `T18_ppq_change_restarts_the_count`, `T18_slow_4ppq_clock_is_not_a_dropout` (N15), `T18_pulse_only_in_analog_sync`, `T18_ppq_change_in_midi_sync_keeps_the_count` (decision 11); `T18_tempo_jump_4ppq_restarts_after_2` (N16) and `T18_dropout_note_off_is_sent` (N17) | E1.10, E1.14 |
 | T19 | `T19_full_queue_rejects_and_counts`, `T19_queue_depth_is_live`, `T19_calls_from_a_callback_are_ignored_and_counted`, `T19_reset_stats_clears_every_counter` | E1.12 |
 | T20 | `T20_every_ratchet_and_shift`, `T20_random_patterns`, `T20_d2_scenario_matches_per_track_flags`, `T20_global_choke_flags_of_fw17_drop_hits`; the two intended differences: `T20_spill_over_after_a_newer_step_is_choked`, `T20_no_spill_over_of_the_last_step_at_the_start` | E1.13 |
 
@@ -10178,19 +11176,19 @@ EOF
 | N12, main-loop context | No core change. `seqc_process()` runs at least once per audio block, and the `nextDue` early exit stays. The nesting guard is in E2's `seq_tick()`. |
 | N13, API decisions | `seq_core.h` (E1.1). Items 1, 2, 4, 5, 6, 7, 8 and 9 are tested in T17, T14, T13, `test_layout`, T15 and T19; item 10 in `T17_midi_start_in_analog_sync_starts_with_the_next_pulse`; item 11 in the fake host and T10. |
 | N14, SPP in the sync queues | E2.4. The core side is `seqc_songPosition()` while stopped or armed (T17). |
-| N15, dropout threshold | E1.10: `seqc_dropoutCycles()`, `T18_slow_4ppq_clock_is_not_a_dropout` |
-| N16, N17, N18.1 | E1.14 (its section is inserted after E1.13) |
+| N15, dropout threshold | E1.10: `seqc_dropoutCycles()`, `T18_slow_4ppq_clock_is_not_a_dropout`; E1.14: the header comments (`SEQC_DROPOUT_MS`, `seqc_stats_t.dropouts`, "Slave position") |
+| N16, N17, N18.1 | E1.14: `seqc_tempoInterval()` with `seqc_windowAdd()` (T16, T18), the note-offs in `seqc_runSlave()` (T18), one marker per track in `seqc_skip[]` (T14) |
 | N18.2, N18.3, N18.4 | E2.2 `seq_cbTransport()`, E2.3 `seq_triggerVoice()`, E2.1 `seqq_usbMessage()` |
 | Spec §6.1–6.7 | the T2–T15 rows above |
 | Spec §11: queue full, dropout, intervals that don't fit, late stamps, 64-bit time | T19; T16 (dropout, outliers, bunched clocks); the 64-bit `seqc_time_t` everywhere |
-| Spec §10 budget | E1.12 Step 6: `text` 15422 B, `bss` 6973 B (Arm GNU 14.3.rel1, darwin-arm64) |
+| Spec §10 budget | E1.12 Step 6: `text` 15422 B, `bss` 6973 B; E1.14 Step 8: `text` 15690 B, `bss` 7053 B (Arm GNU 14.3.rel1, darwin-arm64) |
 | Spec §9.1, host tests: C11, `-Wall -Wextra -Werror`, fake host, runner, ctest, replica for T20 | E1.1, E1.13 |
 | G5, the firmware builds after every task with zero warnings | every task's last run of `tools/check.sh` |
 
 ### How this section was verified (2026-10-24, on the reference Mac)
 
-- **Every version of `seq_core.c`.** The final file and every intermediate version (E1.1, E1.3–E1.12)
-  were generated from one template. Each version compiles without a warning with:
+- **Every version of `seq_core.c` up to E1.12.** The E1.12 file and every version before it (E1.1,
+  E1.3–E1.11) were generated from one template. Each version compiles without a warning with:
   - Apple clang 17: `-std=c11 -Wall -Wextra -Werror -ffast-math -freciprocal-math`;
   - Arm GNU 14.3.rel1: `-std=gnu11 -O3 -Wall -Wextra -Werror` with the firmware's MCU and math flags.
 - **The diffs.** For every task, a tool applied the listed replace and insert operations to the
@@ -10218,6 +11216,13 @@ EOF
   so) and every test passed after it. The final core compiles without a warning with the firmware's
   flags, and the new tests fail against the core of the plan before the review (the probes of the
   review: a shuffle change after the early part played a hit twice, an edit into the past lost it).
+- **E1.14 (inserted after the plan review).** Its section was written, reviewed and fixed on its
+  own, then replayed in a scratch copy on top of E1.1–E1.13 as this plan gives them: the new tests
+  failed as its Step 5 shows (the two `T16_bunched_*` tests pass before it, as it says), every test
+  passed after Step 6, the warning count stayed 0 and the image 274 688 B, and the outputs and
+  object sizes quoted there are the captured ones. The two test files it changes also compile with
+  arm-none-eabi-gcc 14.3 at `-O0` and `-O2`. A replay of E2.1–E2.6, as the E2 section first gave
+  them, on top of E1.14 passed every task, with 80 B more RAM than on E1.13.
 
 ### Open issues of this section
 
@@ -10232,12 +11237,12 @@ EOF
 3. **T19 needs a knob beyond the API.** It uses a test-only `SEQC_QUEUE_CAPACITY` in `seq_core.c`,
    and `tests/CMakeLists.txt` changes beyond its API version.
 4. **The N10 early exit does a little more than one compare.** It also keeps `now` for the queries,
-   as decision 1 describes.
+   as decision 1 describes. E1.14 updates the header comment.
 5. **T12 passes before E1.7.** It is a regression test there, not the failing test (decision 6).
 6. **A start right after a free-running MIDI clock** sends the next clock less than 16 ticks later.
    This is the re-phase of N8, and fw 1.7 did the same.
 7. **`seqc_masterTrack()` after a song position** returns the seeked pattern's master track instead
-   of 0 (decision 5).
+   of 0 (decision 5). E1.14 updates the header comment.
 8. **Note-offs wait during a dropout.** While the position holds after a dropout, a pending
    note-off, due 4 ticks after its trigger, waits for the next clock or a Stop. Settled by N17: a
    dropout sends the pending note-offs, as a stop does. Task E1.14 implements it.
@@ -10260,7 +11265,7 @@ EOF
 
 ---
 
-## Epic E2: firmware integration (tasks E2.1-E2.6)
+## Epic E2: firmware integration (tasks E2.1-E2.8)
 
 **Goal:** the firmware runs on `seq_core` (E1): DWT time base, timestamped sync input, the glue in
 `sequencer.c`, the MIDI fixes D4, D7 and D8, and the clock jacks. Every task leaves a firmware that
@@ -10279,7 +11284,8 @@ builds with zero warnings.
 ### Before you start
 
 E2 builds on E1. It needs:
-- `Core/Inc/Soundengine/Sequencer/seq_core.h`, as E1.1 created it and E1.14 updated its comments (CRLF);
+- `Core/Inc/Soundengine/Sequencer/seq_core.h` (CRLF), as E1.1 created it and E1.14 extended it with
+  the N16 restart counts and `seqc_stats_t.tempoRestarts` and updated its comments;
 - a `seq_core.c` that passes T1-T20;
 - the host test project in `tests/` (`seqc_add_test()`, `seqc_test.h`, `fake_host.c`);
 - the `SeqStepTypes.h` split (E1.2).
@@ -10290,10 +11296,10 @@ Line numbers in this section are those of the fw 1.7 sources on branch `timing-c
 not change between `851cf88` and `1179a1f`, the HEAD when this section was written. E1 changes only
 one of the fw 1.7 files that E2 edits, `Core/CMakeLists.txt`, and E2.1 quotes E1's version of it.
 Each "before" block was copied from those texts, and the whole section was checked on a scratch copy
-of the repository (see the end of the section). Implementation notes N12-N15 apply as well; this
+of the repository (see the end of the section). Implementation notes N12-N20 apply as well; this
 section follows them.
 
-Order: E2.1 → E2.2 → E2.3 → E2.4 → E2.5 → E2.6. Each task needs the one before it:
+Order: E2.1 → E2.2 → E2.3 → E2.4 → E2.5 → E2.6 → E2.7 → E2.8. Each task needs the one before it:
 
 | Task | Firmware state after the task |
 |---|---|
@@ -10302,7 +11308,9 @@ Order: E2.1 → E2.2 → E2.3 → E2.4 → E2.5 → E2.6. Each task needs the on
 | E2.3 | MIDI notes fixed (D4). |
 | E2.4 | MIDI slave over DIN and USB works, with SPP (D7, D8). |
 | E2.5 | Clock jack slave works. |
-| E2.6 | Dead code gone; the final E2 image. |
+| E2.6 | Dead code gone. |
+| E2.7 | The global menu has a button mode of its own: its step buttons leave the track lengths alone. |
+| E2.8 | USB MIDI out: the right CIN; nothing sent past the ring, lost while the endpoint is busy, or kept for a host that does not read. |
 
 ### Files
 
@@ -10313,13 +11321,20 @@ Order: E2.1 → E2.2 → E2.3 → E2.4 → E2.5 → E2.6. Each task needs the on
 | `tests/test_syncq.c` (new) | Host tests of `seq_syncq` (ctest id `syncq`). | E2.1 |
 | `Core/Src/Soundengine/Sequencer/sequencer.c` | The glue: mailbox, copies for other contexts, host callbacks, `seq_tick()`, per-voice MIDI note bookkeeping. | E2.2-E2.4, E2.6 |
 | `Core/Inc/Soundengine/Sequencer/sequencer.h` | Public API: `seq_recordNoteAtStep()`, `seq_setClockInPpq()` and `seq_sendVoiceNoteOn/Off()` are new; the pulse-machine prototypes go. | E2.2, E2.3, E2.6 |
-| `tools/fw_checks.sh` (new) | ELF and source checks that stand in for unit tests of the firmware glue. | E2.2-E2.6 |
+| `tools/fw_checks.sh` (new) | ELF and source checks that stand in for unit tests of the firmware glue. | E2.2-E2.8 |
 | `Core/Src/Soundengine/MIDI/MidiVoiceControl.c` | No MIDI in `voiceControl_noteOn()`; Note Offs per voice. | E2.3 |
-| `Core/Src/Soundengine/MIDI/MidiParser.c` | Echo per voice; realtime cases only route; realtime bytes inside DIN messages. | E2.3, E2.4 |
+| `Core/Src/Soundengine/MIDI/MidiParser.c` | Echo per voice; realtime cases only route; realtime bytes inside DIN messages; a Song Select waits for its song number. | E2.3, E2.4, E2.8 |
 | `Core/Src/Soundengine/MIDI/Uart.c/.h`, `usbd_cdc.c` | Stamps and the realtime and SPP intercept in the receive interrupts; the DIN parse budget; the USB queue full check. | E2.4 |
 | `Core/Src/main.c`, `Soundengine.c`, `stm32f7xx_it.c` | MIDI parsing calls removed. | E2.4 |
 | `Core/Src/Soundengine/TriggerOut.c/.h`, `CortexParser.c` | Jack interrupts into the jack queue; the clock-in PPQ posted to the core. | E2.5 |
 | `clockSync.c/.h` | Deleted. | E2.6 |
+| `Core/Src/buttonHandler.c` | SHIFT + step 12 sets `SELECT_MODE_MENU`, the global menu's own button mode. | E2.7 |
+| `tests/test_buttons.c` (new) | Host test of the front-panel buttons in the global menu and on the Last Step page (ctest id `buttons`). | E2.7 |
+| `tests/stubs/*.h` (new) | Host stand-ins for the HAL, FatFs and the FX bus, which `test_buttons` compiles `buttonHandler.c` against. | E2.7 |
+| `Core/Inc/Soundengine/USB/usb_midiTx.h`, `Core/Src/Soundengine/USB/usb_midiTx.c` (new) | USB-MIDI event packets and the transmit ring. Plain C, host-tested. | E2.8 |
+| `tests/test_usbtx.c` (new) | Host tests of `usb_midiTx` (ctest id `usbtx`). | E2.8 |
+| `Core/Src/Soundengine/USB/usb_manager.c`, `Core/Inc/Soundengine/USB/usb_manager.h` | USB MIDI transmit glue: each packet waits in the ring until the IN endpoint is free. | E2.8 |
+| `usbd_cdc.c`, `usbd_cdc.h` | The old USB MIDI transmit ring goes; the end of a transfer starts the next. | E2.8 |
 
 ### Conventions for every task
 
@@ -10383,7 +11398,7 @@ The others go beyond the spec and the notes:
    - in the slave modes it sends no Start, Stop or Continue (N18.2): MIDI thru, when on, forwards
      what arrives, so downstream gear gets no duplicates. A resume, which only the slave modes do,
      therefore sends nothing. `seq_coreSyncMode` is the mode the core runs in; `seq_isSyncExternal`
-     changes one `seq_tick()` earlier. Question Q7 for the owner.
+     changes one `seq_tick()` earlier. The owner confirmed this (Q7, 2026-10-24): stay MIDI-compliant, the existing MIDI handling needs no change.
 8. **`tools/fw_checks.sh`.** The glue needs the hardware, so each firmware task's failing test is a
    set of checks on the release ELF (symbols, calls from the disassembly, ITCM contents) and on the
    sources.
@@ -13190,7 +14205,8 @@ PASS E2.2
 - ITCM drops from 15000 B to 13128 B.
 - RAM and the image grow by the core's queue and state, and by the sync queues. With the E1 core
   of this plan (E1.1–E1.13, Arm GNU 14.3.rel1): RAM 279516 B (+8484 B), image 289868 B (+15180 B);
-  after E2.6, RAM 279492 B (+8460 B) and image 290436 B (+15748 B).
+  after E2.6, RAM 279492 B (+8460 B) and image 290436 B (+15748 B). E1.14, which runs before E2,
+  adds 80 B of RAM and about 250 B of image to these figures.
   The spec budgets about 7.5 KB of RAM (§10). With the 24-byte events of N2 the event queue alone
   is 6 KB, so expect about 8.5 KB.
 - If a warning shows up, fix it: the count must be 0.
@@ -13245,7 +14261,7 @@ Intended changes, for the stage 1 report (spec §12; E4.1 collects them):
   change. fw 1.7 did this only for MTC, so the button got out of step after a MIDI or song-end stop.
 - **MIDI transport out as a slave (N18.2):** none. fw 1.7 answered a received Start with Stop and
   Start, and a received Continue with Start, also with thru on. In internal sync Start and Stop go
-  out as before; a resume, which only the slave modes do, sends nothing. Question Q7.
+  out as before; a resume, which only the slave modes do, sends nothing. Confirmed by the owner (Q7).
 - **Clock out after a Continue or a song position:** the jack pulses follow the position, on the
   step grid. fw 1.7 always restarted from step 1, where its divider restarted too.
 - **Song position in song mode inside the active pattern:** nothing reloads (no lost edits, no kit
@@ -15229,6 +16245,2546 @@ image is the one to run H2-H11 on (E4.2).
 
 ---
 
+### Task E2.7: the global menu gets its own button mode (fw 1.7: a step button there set every track length)
+
+A fw 1.7 bug outside D1-D8 (tracker E2.7). SHIFT + step 12 opens the global menu, and the code
+stores the number of the step button in the button mode (`Core/Src/buttonHandler.c:900-905`):
+
+```c
+		case SEQ_CONFIG: //config
+			buttonHandler_stateMemory.selectButtonMode = SEQ_CONFIG;
+```
+
+`SEQ_CONFIG` is a step button number, 11 in `enum SeqButtonFunctions`
+(`Core/Inc/buttonHandler.h:80-98`). The mode is a 4-bit field (`buttonHandler.c:49`) that holds
+`enum SelectModes` values (`buttonHandler.h:58-78`), and there 11 is `SELECT_MODE_LAST_STEP_ALL`, the
+"all tracks" mode of the Last Step page (SHIFT + step 14). So the open global menu behaves like that
+page:
+- **A step button without SHIFT sets the length of all seven tracks** to its number
+  (`buttonHandler.c:1114-1115`, `case SELECT_MODE_LAST_STEP_ALL` at `:1242-1260`). The display keeps
+  showing the global menu, so nothing tells the user that the pattern has changed.
+- **The page buttons redraw the LEDs of the Last Step page** (`:1660-1672`, `:1714-1726`):
+  `led_clearAllBlinkLeds()` stops step 12 blinking, the LED that marks the open menu, and the last
+  step of the active track blinks instead when it lies on the shown bar.
+
+No other reader of the mode does anything different for 11 than for 7, the value of the fix below:
+the select buttons (`:529`, `:585`), the step button release (`:1300`, `:1335`), the select and
+voice buttons (`:1376`, `:1417`, `:1441`, `:1453`, `:1545`, `:1558`), the bank switch of the page
+buttons (`:1598`, `:1681`), SHIFT (`:1831`, `:2152`, `:2187`), COPY (`:1936`, `:1967`), the LOAD and
+SAVE LEDs (`:2106`, `:2113`), and the other files through `buttonHandler_getMode()`:
+`frontPanelParser.c:450`, `ledHandler.c:406`, the `SELECT_MODE_PATTERN` and `SELECT_MODE_SONG` tests
+in `sequencer.c`, and `menu.c:1104` and `:2771-2795`, which only run while `MENU_LAST_STEP_PAGE` is
+shown. Nothing relies on 11 meaning the global menu: the Last Step page sets its mode itself
+(`buttonHandler.c:920-922`).
+
+**The fix: `SELECT_MODE_MENU`**, the mode the code has for this menu and no longer sets:
+- `buttonHandler.c:480-482`, in the mode buttons' handler: `case SELECT_MODE_MENU: //Config Menu`
+  with a commented-out `//menu_switchPage(MENU_MIDI_PAGE);`. The comment on the menu table still says
+  "MENU_MIDI_PAGE - hold shift and load/save" (`Core/Inc/menu/menuPages.h:370`): on the original LXR
+  the menu was SHIFT + mode button 4, which gives mode (3 + 4) & 7 = 7 (`buttonHandler.c:401`), and
+  `led_setMode2()` still has a commented-out blink of mode LED 4 for mode 7
+  (`Core/Src/ledHandler.c:522-524`).
+- On the LXR-02, LOAD and SAVE are left out of that mapping (`buttonHandler.c:397`), so the mode
+  buttons give only 0, 1, 4 and 5, and `buttonHandler_setMode()` is only called with
+  `SELECT_MODE_VOICE` (`menu.c:993`). Nothing sets 7. The menu moved to SHIFT + step 12, where the
+  button number took the place of the mode.
+- What the code does in `SELECT_MODE_MENU` is what the menu needs, without new code: the select
+  buttons do nothing (`buttonHandler.c:685`), a step button reaches `default` (`:1282`), and so does
+  its release (`:1365`); the page buttons show the step view (`led_updateSeqLeds()`, `:1673-1676`,
+  `:1727-1730`) as on the FX page, and SHIFT does what it does in every other mode (`:1887`,
+  `:2182`).
+
+A new `SelectModes` value would behave exactly like `SELECT_MODE_MENU` and needs more code, so the
+fix is one line.
+
+Unchanged, as in fw 1.7:
+- The two other `case SEQ_CONFIG` (`:1017-1019` LOAD + step 12, `:1106-1108` SAVE + step 12) switch
+  on the step button number, where `SEQ_CONFIG` is right, and do nothing.
+- The ways out of the menu: the mode buttons (`:397-413`), SHIFT + step 10, 14, 15 or 16 (`:850-874`,
+  `:908-923`), LOAD or SAVE + a step (`:946-1113`). SHIFT + step 14 from the menu still opens the Last
+  Step page for the active track first: any mode but `SELECT_MODE_LAST_STEP_TRACK` gives that one
+  (`:920-922`).
+- A voice button in the menu selects the voice and stays in the menu (`:1545`).
+- `:1293` compares the mode with `SEQ_LAST_STEP` (13), another step button number. Its body is empty
+  and the mode is never 13, so it has no effect; the fix leaves it alone.
+
+**E3.3** (the CPU page) and this task touch different files: E3.3 changes `menu.c`, `menu.h` and
+`menuPages.h`, this task `buttonHandler.c`. The CPU page is the third sub-page of `MENU_MIDI_PAGE`,
+reached with more presses of SHIFT + step 12, and each press sets `SELECT_MODE_MENU` again, so the
+step buttons do nothing on the CPU page either; without this task they would set every track length
+there too. For E3.3 this means: none of its before-texts change; button handling it may add for
+the CPU page has to test the page (`menu_isCpuPage()`), not a mode value; and its Step 6 counts 26
+test ids, `buttons` and E2.8's `usbtx` among them (see "Changes to other tasks of this plan"
+below).
+
+**How it is tested.** `buttonHandler.c` includes `main.h` and through it the HAL, but it only calls
+other modules (menu, LEDs, sequencer, presets) and reads `din_inputData`; it touches no hardware
+register itself. So a host test compiles the real file, unchanged:
+- `tests/stubs/` has stand-ins for the headers that need the HAL, FatFs or the ARM-only `__fp16`
+  (`stm32f7xx_hal.h`, `stm32f7xx.h`, `fatfs.h`, `Soundengine/FxBus.h`), first on the test's include
+  path. `main.h` itself cannot be replaced: the headers next to it in `Core/Inc` find it before any
+  include path. The HAL stand-in also turns the DTCM placement of `main.h` and
+  `Soundengine/config.h` (`__attribute__ ((section(".dtcm")))`) into `unused`, because macOS rejects
+  that section name.
+- `tests/test_buttons.c` defines every function and variable of other files that `buttonHandler.c`
+  uses. Those the test looks at record what they are asked to do: track lengths, step toggles,
+  blinking LEDs, the page.
+- For this target `Core/Inc` is a system include directory, because GCC's `-Wextra` reports
+  `const extern` in `Preset/InitKit.h:21` and the tests build with `-Werror`. `buttonHandler.c` is
+  built with `-w`: it is fw 1.7 code whose warning gate is the firmware build (`-Wall`); GCC's
+  `-Wextra` reports a fall-through at `buttonHandler.c:613` and `volatile static` at `:57`.
+  Apple clang reports none of the three. So for this target spec §9.1 (`tests/` builds with
+  `-Wall -Wextra -Werror`) holds for the test's own files only: `test_buttons.c` and the stand-ins
+  keep all three flags, while `buttonHandler.c` and the `Core/Inc` headers it reads, `sequencer.h`
+  with E2's prototypes among them, rely on the firmware build's `-Wall`. Item 8 under "Changes to
+  other tasks of this plan" adds this to note N19.
+
+The firmware side has the plan's check: `tools/fw_checks.sh E2.7` fails while a step button number is
+assigned to the mode, and passes once `case SEQ_CONFIG` sets `SELECT_MODE_MENU`.
+
+**Files:**
+- Create: `tests/stubs/stm32f7xx_hal.h`, `tests/stubs/stm32f7xx.h`, `tests/stubs/fatfs.h`,
+  `tests/stubs/Soundengine/FxBus.h`
+- Create: `tests/test_buttons.c`
+- Modify: `tests/CMakeLists.txt` (after the `test_syncq` line of E2.1)
+- Modify: `tools/fw_checks.sh` (line 2, and the E2.7 checks before the task list)
+- Modify: `Core/Src/buttonHandler.c:900-901` (the `SEQ_CONFIG` case of the SHIFT branch)
+- Test: `tests/test_buttons.c` (ctest id `buttons`), `tools/fw_checks.sh E2.7`
+
+- [ ] **Step 1: The stand-in headers**
+
+LF line endings, like everything in `tests/`.
+
+Create `tests/stubs/stm32f7xx_hal.h`:
+
+```c
+/*
+ * stm32f7xx_hal.h
+ *
+ * Host stand-in for the STM32 HAL, for host tests that compile firmware user
+ * interface code (test_buttons.c compiles Core/Src/buttonHandler.c). It has only
+ * what the headers of buttonHandler.c need: the handle types that main.h and
+ * IO/DIO.h name, the DWT and clock calls of the inline functions in delay.h, and
+ * the TIM2 calls of buttonHandler.c.
+ *
+ * It also takes the DTCM placement out of the firmware's declarations: INDTCM and
+ * INDTCMZ (main.h, Soundengine/config.h) are __attribute__ ((section(".dtcm"))),
+ * which macOS rejects and which means nothing on the host. main.h includes this
+ * header before it defines them, and the system headers that the firmware headers
+ * include come first, so the macro below only meets the firmware's attribute.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#ifndef HOST_STM32F7XX_HAL_H_
+#define HOST_STM32F7XX_HAL_H_
+
+#include <math.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* __attribute__ ((section(".dtcm"))) becomes __attribute__ ((unused)) */
+#define section(name) unused
+
+#define __STATIC_INLINE static inline
+
+typedef enum { HAL_OK = 0, HAL_ERROR = 1 } HAL_StatusTypeDef;
+typedef struct { int unused_; } I2S_HandleTypeDef;
+typedef struct { int unused_; } SPI_HandleTypeDef;
+typedef struct { int unused_; } TIM_HandleTypeDef;
+typedef struct { int unused_; } UART_HandleTypeDef;
+typedef struct { volatile uint32_t CTRL; volatile uint32_t CYCCNT; } DWT_Type;
+
+extern DWT_Type host_dwt;
+#define DWT (&host_dwt)
+
+uint32_t HAL_RCC_GetHCLKFreq(void);
+HAL_StatusTypeDef HAL_TIM_Base_Start_IT(TIM_HandleTypeDef *htim);
+HAL_StatusTypeDef HAL_TIM_Base_Stop_IT(TIM_HandleTypeDef *htim);
+
+#endif /* HOST_STM32F7XX_HAL_H_ */
+```
+
+Create `tests/stubs/stm32f7xx.h`:
+
+```c
+/*
+ * stm32f7xx.h
+ *
+ * Host stand-in for the STM32F7 device header (Soundengine/globals.h includes
+ * it); everything it needs is in the HAL stand-in, stm32f7xx_hal.h.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "stm32f7xx_hal.h"
+```
+
+Create `tests/stubs/fatfs.h`:
+
+```c
+/*
+ * fatfs.h
+ *
+ * Host stand-in for the FatFs application header: Preset/PresetManager.h only
+ * needs the result type of its file functions.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#ifndef HOST_FATFS_H_
+#define HOST_FATFS_H_
+
+typedef enum { FR_OK = 0, FR_DISK_ERR = 1 } FRESULT;
+
+#endif /* HOST_FATFS_H_ */
+```
+
+Create `tests/stubs/Soundengine/FxBus.h`:
+
+```c
+/*
+ * FxBus.h
+ *
+ * Host stand-in for Core/Inc/Soundengine/FxBus.h, whose effect headers use the
+ * ARM-only __fp16 type. buttonHandler.c only reads the selected effect.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#ifndef HOST_FXBUS_H_
+#define HOST_FXBUS_H_
+
+#include <stdint.h>
+
+typedef struct { uint8_t fxType; } FxBus;
+extern FxBus fxBus;
+
+#endif /* HOST_FXBUS_H_ */
+```
+
+- [ ] **Step 2: Write the failing test**
+
+Create `tests/test_buttons.c`:
+
+```c
+/*
+ * test_buttons.c
+ *
+ * Host test of the front-panel button logic (Core/Src/buttonHandler.c, task
+ * E2.7). The firmware file is compiled as it is, against the stand-in headers in
+ * tests/stubs/ and the stand-in functions below, which record what it asks the
+ * menu, the LEDs and the sequencer to do. The test presses buttons the way the
+ * panel scan (IO/DIO.c) does: the input bit first, then the handler call.
+ *
+ * fw 1.7 put SEQ_CONFIG (11, a step button number) into the button mode when
+ * SHIFT + step 12 opened the global menu. 11 is also SELECT_MODE_LAST_STEP_ALL,
+ * so a step button pressed without SHIFT there set the length of every track.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "seqc_test.h"
+
+#include "buttonHandler.h"
+#include "frontPanelParser_ui.h"
+#include "IO/DIO.h"
+#include "ledHandler.h"
+#include "menu/copyClearTools.h"
+#include "menu/menu.h"
+#include "menu/screensaver.h"
+#include "Preset/PresetManager.h"
+#include "Soundengine/FxBus.h"
+#include "Soundengine/globals.h"
+#include "Soundengine/Sequencer/sequencer.h"
+
+//------------------------------------------------------------------------------
+// What the test looks at
+//------------------------------------------------------------------------------
+static uint8_t trackLength[NUM_TRACKS];	/* seq_setTrackLength() / seq_getTrackLength() */
+static int setTrackLengthCalls;
+static int toggleMainStepCalls;
+static int updateSeqLedsCalls;
+static uint8_t blinking[256];		/* led_setBlinkLed() per LED number */
+
+//------------------------------------------------------------------------------
+// Firmware state that buttonHandler.c reads and writes
+//------------------------------------------------------------------------------
+uint8_t din_inputData[NUM_INPUTS / 8];
+volatile uint32_t systick_ticks;
+uint8_t activeParameters[NUM_PARAMS];
+uint8_t menu_activePage;
+uint8_t menu_activeVoice;
+uint8_t menu_activeBar;
+uint8_t menu_activePatternBank;
+uint8_t menu_muteModeActive;
+uint8_t menu_selectedPresetNr[NUM_PRESET_LOCATIONS];
+uint32_t sucessTimer;
+uint8_t copyClear_Mode;
+uint8_t seq_activePattern;
+PatternSet seq_patternSet;
+FxBus fxBus;
+TIM_HandleTypeDef htim2;
+DWT_Type host_dwt;
+
+//------------------------------------------------------------------------------
+// Stand-ins for the functions it calls
+//------------------------------------------------------------------------------
+void seq_setTrackLength(uint8_t trackNr, uint8_t length)
+{
+	setTrackLengthCalls++;
+	if (trackNr < NUM_TRACKS)
+		trackLength[trackNr] = length;
+}
+uint8_t seq_getTrackLength(uint8_t trackNr) { return trackNr < NUM_TRACKS ? trackLength[trackNr] : 16; }
+void seq_toggleMainStep(uint8_t voice, uint8_t stepNr, uint8_t patternNr)
+{
+	(void)voice; (void)stepNr; (void)patternNr;
+	toggleMainStepCalls++;
+}
+uint8_t seq_isMainStepActive(uint8_t voice, uint8_t mainStepNr, uint8_t pattern)
+{
+	(void)voice; (void)mainStepNr; (void)pattern;
+	return 0;
+}
+uint8_t seq_getStepIndex(uint8_t trackNr) { (void)trackNr; return 255; }
+void seq_addPatternToSong(uint8_t patternNr) { (void)patternNr; }
+void seq_deleteRow(void) {}
+void seq_insertRow(void) {}
+void seq_setSongModeEnabled(uint8_t onOff) { (void)onOff; }
+PatternSet *get_seq_patternSet_p(void) { return &seq_patternSet; }
+
+void menu_switchPage(uint8_t pageNr) { menu_activePage = pageNr; }
+void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle) { (void)subPageNr; (void)toggle; }
+uint8_t menu_getSubPage(void) { return 0; }
+uint8_t menu_getActivePage(void) { return menu_activePage; }
+uint8_t menu_getActiveVoice(void) { return menu_activeVoice; }
+void menu_setActiveVoice(uint8_t voiceNr) { menu_activeVoice = voiceNr; }
+uint8_t menu_getViewedPattern(void) { return 0; }
+void menu_setShownPattern(uint8_t patternNr) { (void)patternNr; }
+void menu_setLoadSaveCategory(uint8_t cat) { (void)cat; }
+void menu_parseGlobalParam(uint16_t paramNr, uint8_t value) { (void)paramNr; (void)value; }
+void menu_repaint(void) {}
+void menu_repaintAll(void) {}
+void menu_resetActiveParameter(void) {}
+
+void led_setBlinkLed(const uint8_t ledNr, const uint8_t onOff) { blinking[ledNr] = onOff; }
+void led_clearAllBlinkLeds(void) { memset(blinking, 0, sizeof blinking); }
+void led_updateSeqLeds(void) { updateSeqLedsCalls++; }
+uint8_t led_idx2StepLed(uint8_t idx)
+{
+	static const uint8_t leds[16] = { LED_STEP1, LED_STEP2, LED_STEP3, LED_STEP4, LED_STEP5, LED_STEP6,
+		LED_STEP7, LED_STEP8, LED_STEP9, LED_STEP10, LED_STEP11, LED_STEP12, LED_STEP13, LED_STEP14,
+		LED_STEP15, LED_STEP16 };
+	return leds[idx % 16];
+}
+void led_clearSelectLeds(void) {}
+void led_clearSequencerLeds(void) {}
+void led_clearVoiceLeds(void) {}
+void led_initPatternSelectLeds(void) {}
+void led_setActiveSelectButton(uint8_t butNr) { (void)butNr; }
+void led_setActiveVoice(uint8_t voiceNr) { (void)voiceNr; }
+void led_setActiveVoiceLeds(uint8_t pattern) { (void)pattern; }
+void led_setMode2(uint8_t status) { (void)status; }
+void led_setValue(uint8_t val, uint8_t ledNr) { (void)val; (void)ledNr; }
+void led_updateBarLeds(void) {}
+
+void frontPanel_sendData(uint8_t status, uint8_t data1, uint8_t data2) { (void)status; (void)data1; (void)data2; }
+void copyClear_armClearMenu(uint8_t isShown) { (void)isShown; }
+void copyClear_copyTrack(void) {}
+void copyClear_executeClear(void) {}
+void copyClear_reset(void) {}
+void copyClear_setDst(int8_t dst, uint8_t type) { (void)dst; (void)type; }
+void copyClear_setSrc(int8_t src, uint8_t type) { (void)src; (void)type; }
+uint8_t copyClear_srcSet(void) { return 0; }
+void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmediate)
+{
+	(void)presetNr; (void)isMorph; (void)sendImmediate;
+}
+FRESULT preset_savePatternRAM(uint8_t presetNr) { (void)presetNr; return FR_OK; }
+FRESULT preset_savePatternSD(uint8_t presetNr) { (void)presetNr; return FR_OK; }
+void preset_touchTimer(PresetTimer type) { (void)type; }
+void screensaver_touch(void) {}
+HAL_StatusTypeDef HAL_TIM_Base_Start_IT(TIM_HandleTypeDef *htim) { (void)htim; return HAL_OK; }
+HAL_StatusTypeDef HAL_TIM_Base_Stop_IT(TIM_HandleTypeDef *htim) { (void)htim; return HAL_OK; }
+uint32_t HAL_RCC_GetHCLKFreq(void) { return 216000000u; }
+
+//------------------------------------------------------------------------------
+// Pressing buttons
+//------------------------------------------------------------------------------
+/** voice mode on the page of voice 1, every track 16 steps, nothing pressed */
+static void reset(void)
+{
+	memset(din_inputData, 0, sizeof din_inputData);
+	memset(trackLength, 16, sizeof trackLength);
+	memset(blinking, 0, sizeof blinking);
+	setTrackLengthCalls = 0;
+	toggleMainStepCalls = 0;
+	updateSeqLedsCalls = 0;
+	menu_activePage = VOICE1_PAGE;
+	menu_activeVoice = 0;
+	menu_activeBar = 0;
+	copyClear_Mode = MODE_NONE;
+	buttonHandler_setMode(SELECT_MODE_VOICE);
+}
+
+/* the panel scan updates din_inputData first; BUT_PAGE_DOWN has no input bit */
+static void down(uint8_t button)
+{
+	if (button < NUM_INPUTS)
+		din_inputData[button / 8] |= (uint8_t)(1u << (button & 7));
+	buttonHandler_buttonPressed(button);
+}
+
+static void up(uint8_t button)
+{
+	if (button < NUM_INPUTS)
+		din_inputData[button / 8] &= (uint8_t)~(1u << (button & 7));
+	buttonHandler_buttonReleased(button);
+}
+
+static void press(uint8_t button)
+{
+	down(button);
+	up(button);
+}
+
+/** press `button` while `modifier` (SHIFT, LOAD or SAVE) is held */
+static void pressWith(uint8_t modifier, uint8_t button)
+{
+	down(modifier);
+	press(button);
+	up(modifier);
+}
+
+//------------------------------------------------------------------------------
+// The global menu (SHIFT + step 12)
+//------------------------------------------------------------------------------
+TEST(buttons_global_menu_step_keeps_track_lengths)
+{
+	reset();
+	pressWith(BUT_SHIFT, BUT_SEQ12);
+	ASSERT_EQ(menu_activePage, MENU_MIDI_PAGE);
+	ASSERT_TRUE(blinking[LED_STEP12]);
+
+	press(BUT_SEQ5);			/* fw 1.7: every track became 5 steps long */
+	ASSERT_EQ(setTrackLengthCalls, 0);
+	for (int t = 0; t < NUM_TRACKS; t++)
+		ASSERT_EQ(trackLength[t], 16);
+	ASSERT_EQ(toggleMainStepCalls, 0);	/* and no step is set either */
+	ASSERT_EQ(menu_activePage, MENU_MIDI_PAGE);
+	ASSERT_TRUE(blinking[LED_STEP12]);
+	ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_MENU);
+}
+
+TEST(buttons_global_menu_page_buttons_keep_the_menu_led)
+{
+	reset();
+	pressWith(BUT_SHIFT, BUT_SEQ12);
+	press(BUT_PAGE_UP);			/* fw 1.7 redrew the LEDs of the Last Step page */
+	ASSERT_EQ(menu_activeBar, 1);
+	ASSERT_EQ(updateSeqLedsCalls, 1);
+	ASSERT_TRUE(blinking[LED_STEP12]);
+	press(BUT_PAGE_DOWN);
+	ASSERT_EQ(menu_activeBar, 0);
+	ASSERT_EQ(updateSeqLedsCalls, 2);
+	ASSERT_TRUE(blinking[LED_STEP12]);
+	ASSERT_EQ(menu_activePage, MENU_MIDI_PAGE);
+	ASSERT_EQ(setTrackLengthCalls, 0);
+}
+
+TEST(buttons_global_menu_other_buttons_stay_in_the_menu)
+{
+	reset();
+	pressWith(BUT_SHIFT, BUT_SEQ12);
+	press(BUT_SELECT1);			/* select buttons do nothing here */
+	ASSERT_EQ(menu_activePage, MENU_MIDI_PAGE);
+	press(BUT_VOICE_3);			/* a voice button selects the voice, the menu stays */
+	ASSERT_EQ(menu_activeVoice, 2);
+	ASSERT_EQ(menu_activePage, MENU_MIDI_PAGE);
+	pressWith(BUT_SHIFT, BUT_SEQ12);	/* the next page of the menu (menu.c) */
+	ASSERT_EQ(menu_activePage, MENU_MIDI_PAGE);
+	ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_MENU);
+	press(BUT_SEQ16);
+	ASSERT_EQ(setTrackLengthCalls, 0);
+	ASSERT_EQ(toggleMainStepCalls, 0);
+}
+
+TEST(buttons_voice_mode_after_the_global_menu)
+{
+	reset();
+	press(BUT_SEQ5);			/* voice mode: a step button sets a step */
+	ASSERT_EQ(toggleMainStepCalls, 1);
+	pressWith(BUT_SHIFT, BUT_SEQ12);
+	press(BUT_MODE1);			/* back to the voice pages */
+	ASSERT_EQ(menu_activePage, VOICE1_PAGE);
+	ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_VOICE);
+	press(BUT_SEQ5);
+	ASSERT_EQ(toggleMainStepCalls, 2);
+	ASSERT_EQ(setTrackLengthCalls, 0);
+}
+
+TEST(buttons_load_or_save_with_step_12_does_nothing)
+{
+	reset();
+	pressWith(BUT_MODE3, BUT_SEQ12);	/* LOAD + step 12 */
+	pressWith(BUT_MODE4, BUT_SEQ12);	/* SAVE + step 12 */
+	ASSERT_EQ(menu_activePage, VOICE1_PAGE);
+	ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_VOICE);
+	ASSERT_EQ(setTrackLengthCalls, 0);
+	ASSERT_EQ(toggleMainStepCalls, 0);
+}
+
+//------------------------------------------------------------------------------
+// The Last Step page (SHIFT + step 14) keeps its two modes
+//------------------------------------------------------------------------------
+TEST(buttons_last_step_track_sets_the_active_track)
+{
+	reset();
+	menu_activeVoice = 2;
+	pressWith(BUT_SHIFT, BUT_SEQ14);
+	ASSERT_EQ(menu_activePage, MENU_LAST_STEP_PAGE);
+	ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_LAST_STEP_TRACK);
+	press(BUT_SEQ5);
+	ASSERT_EQ(setTrackLengthCalls, 1);
+	for (int t = 0; t < NUM_TRACKS; t++)
+		ASSERT_EQ(trackLength[t], t == 2 ? 5 : 16);
+}
+
+TEST(buttons_last_step_all_sets_every_track)
+{
+	reset();
+	pressWith(BUT_SHIFT, BUT_SEQ14);
+	pressWith(BUT_SHIFT, BUT_SEQ14);	/* the second press: all tracks */
+	ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_LAST_STEP_ALL);
+	press(BUT_SEQ5);
+	ASSERT_EQ(setTrackLengthCalls, NUM_TRACKS);
+	for (int t = 0; t < NUM_TRACKS; t++)
+		ASSERT_EQ(trackLength[t], 5);
+}
+
+TEST(buttons_last_step_from_the_global_menu_starts_with_one_track)
+{
+	reset();
+	pressWith(BUT_SHIFT, BUT_SEQ12);
+	pressWith(BUT_SHIFT, BUT_SEQ14);	/* as in fw 1.7: the active track first */
+	ASSERT_EQ(menu_activePage, MENU_LAST_STEP_PAGE);
+	ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_LAST_STEP_TRACK);
+	press(BUT_SEQ3);
+	ASSERT_EQ(setTrackLengthCalls, 1);
+	ASSERT_EQ(trackLength[0], 3);
+	ASSERT_EQ(trackLength[1], 16);
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 3: Register the test**
+
+`tests/CMakeLists.txt`, replace:
+
+```cmake
+seqc_add_test(test_syncq     IDS syncq EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/seq_syncq.c)  # E2.1  sync input queues (seq_platform)
+```
+
+with:
+
+```cmake
+seqc_add_test(test_syncq     IDS syncq EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/seq_syncq.c)  # E2.1  sync input queues (seq_platform)
+
+# The front-panel buttons (E2.7): test_buttons compiles the firmware's
+# buttonHandler.c as it is. The headers in stubs/ come first on its include path
+# and stand in for the HAL, FatFs and the FX bus. Core/Inc is a system directory
+# for it, so that -Wextra warnings in fw 1.7 headers do not stop -Werror, and
+# buttonHandler.c, fw 1.7 code that the firmware build checks, is compiled
+# without warnings.
+seqc_add_test(test_buttons   IDS buttons EXTRA ${LXR_ROOT}/Core/Src/buttonHandler.c)  # E2.7  buttons of the global menu
+if(TARGET test_buttons)
+    target_include_directories(test_buttons BEFORE PRIVATE stubs)
+    target_include_directories(test_buttons SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+    set_source_files_properties(${LXR_ROOT}/Core/Src/buttonHandler.c PROPERTIES COMPILE_OPTIONS -w)
+endif()
+```
+
+- [ ] **Step 4: Run it to see it fail**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected:
+
+```
+96% tests passed, 1 tests failed out of 24
+...
+The following tests FAILED:
+	 24 - buttons (Failed)
+Errors while running CTest
+== firmware build (release)
+memory: ITCM 13128/16384 B (80.1%, free 3256)  DTCM 107388/131072 B (81.9%, rest is stack)  RAM <n>/393216 B (...)  image <n>/1015808 B (...)
+image: <repo>/build/release/LXR_V2_V1.7.img
+== compiler warnings: 0
+exit 1
+```
+
+RAM and image (`<n>`) are the sizes after E2.6; they depend on E1's core. The firmware still
+builds; only `buttons` fails. Run: `build/host-tests/test_buttons`
+
+Expected (the path before `tests/` is absolute):
+
+```
+.../tests/test_buttons.c:205: ASSERT_EQ(setTrackLengthCalls, 0) failed: 7 != 0
+FAIL buttons_global_menu_step_keeps_track_lengths
+.../tests/test_buttons.c:220: ASSERT_EQ(updateSeqLedsCalls, 1) failed: 0 != 1
+FAIL buttons_global_menu_page_buttons_keep_the_menu_led
+.../tests/test_buttons.c:241: ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_MENU) failed: 11 != 7
+FAIL buttons_global_menu_other_buttons_stay_in_the_menu
+PASS buttons_voice_mode_after_the_global_menu
+PASS buttons_load_or_save_with_step_12_does_nothing
+PASS buttons_last_step_track_sets_the_active_track
+PASS buttons_last_step_all_sets_every_track
+PASS buttons_last_step_from_the_global_menu_starts_with_one_track
+5 of 8 tests passed
+```
+
+The first line is the bug: the step button set all seven track lengths.
+
+- [ ] **Step 5: Write the failing firmware check**
+
+`tools/fw_checks.sh`, replace:
+
+```bash
+# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.6), on the
+```
+
+with:
+
+```bash
+# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.7), on the
+```
+
+Then add the E2.7 checks before the task list. `tools/fw_checks.sh`, replace:
+
+```bash
+check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6"
+```
+
+with:
+
+```bash
+# ---- E2.7: the global menu has a button mode of its own (SELECT_MODE_MENU) ---
+check_E2_7() {
+	no_source '^[^/]*selectButtonMode[[:space:]]*=[[:space:]]*SEQ_' Core/Src/buttonHandler.c
+	sed -n '/case SEQ_CONFIG:/,/break;/p' Core/Src/buttonHandler.c | grep -q 'selectButtonMode = SELECT_MODE_MENU;' \
+		|| fail "case SEQ_CONFIG (SHIFT + step 12) does not set SELECT_MODE_MENU"
+}
+
+check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7"
+```
+
+The first check skips lines with a `/` before the mode, because a comment at `buttonHandler.c:921`
+assigns `SEQ_LAST_STEP_SINGLE_TRACK`.
+
+- [ ] **Step 6: Run it to see it fail**
+
+Run: `tools/fw_checks.sh E2.7`
+
+Expected (tabs after `901:`):
+
+```
+FAIL E2.7: '^[^/]*selectButtonMode[[:space:]]*=[[:space:]]*SEQ_' found: 901:			buttonHandler_stateMemory.selectButtonMode = SEQ_CONFIG;
+FAIL E2.7: case SEQ_CONFIG (SHIFT + step 12) does not set SELECT_MODE_MENU
+```
+
+- [ ] **Step 7: Give the global menu its own mode**
+
+`Core/Src/buttonHandler.c`, replace:
+
+```c
+		case SEQ_CONFIG: //config
+			buttonHandler_stateMemory.selectButtonMode = SEQ_CONFIG;
+			led_clearAllBlinkLeds();
+```
+
+with:
+
+```c
+		case SEQ_CONFIG: //config
+			//the global menu's own mode (E2.7). fw 1.7 stored SEQ_CONFIG here, a step button
+			//number: 11 is also SELECT_MODE_LAST_STEP_ALL, so a step button without SHIFT set
+			//the length of all tracks.
+			buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_MENU;
+			led_clearAllBlinkLeds();
+```
+
+- [ ] **Step 8: Give `buttonHandler.c` CRLF line endings**
+
+The Edit tool keeps the line endings of a file, but text it inserts may come out as LF:
+
+```bash
+python3 - Core/Src/buttonHandler.c <<'EOF'
+import sys
+for path in sys.argv[1:]:
+    with open(path, 'rb') as f:
+        data = f.read()
+    data = data.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+    with open(path, 'wb') as f:
+        f.write(data)
+    print('CRLF', path)
+EOF
+```
+
+Expected: `CRLF Core/Src/buttonHandler.c`.
+
+- [ ] **Step 9: Run the tests and every check**
+
+Run: `tools/check.sh && tools/fw_checks.sh`
+
+Expected:
+
+```
+100% tests passed, 0 tests failed out of 24
+...
+== firmware build (release)
+memory: ITCM 13128/16384 B (80.1%, free 3256)  DTCM 107388/131072 B (81.9%, rest is stack)  RAM <n>/393216 B (...)  image <n>/1015808 B (...)
+image: <repo>/build/release/LXR_V2_V1.7.img
+== compiler warnings: 0
+PASS E2.2
+PASS E2.3
+PASS E2.4
+PASS E2.5
+PASS E2.6
+PASS E2.7
+```
+
+- The memory line is the same as after E2.6: the change replaces one constant.
+- If a warning shows up, fix it: the count must be 0.
+
+Run: `build/host-tests/test_buttons`
+
+Expected:
+
+```
+PASS buttons_global_menu_step_keeps_track_lengths
+PASS buttons_global_menu_page_buttons_keep_the_menu_led
+PASS buttons_global_menu_other_buttons_stay_in_the_menu
+PASS buttons_voice_mode_after_the_global_menu
+PASS buttons_load_or_save_with_step_12_does_nothing
+PASS buttons_last_step_track_sets_the_active_track
+PASS buttons_last_step_all_sets_every_track
+PASS buttons_last_step_from_the_global_menu_starts_with_one_track
+8 of 8 tests passed
+```
+
+- [ ] **Step 10: Review against fw 1.7**
+
+Read the diff (`git diff -- Core/Src/buttonHandler.c`): one assignment and its comment. Each item is
+fw 1.7 behaviour that must survive; the host test covers those marked (T).
+
+- [ ] SHIFT + step 12 opens the global menu on its first sub-page, and each further press moves on
+  (`menu_switchPage(MENU_MIDI_PAGE)` toggles, unchanged). Step 12 blinks while the menu is open (T).
+- [ ] LOAD + step 12 and SAVE + step 12 do nothing (T).
+- [ ] In the menu the select buttons do nothing, and a voice button selects the voice without
+  leaving the menu (T).
+- [ ] The mode buttons leave the menu: mode button 1 returns to the voice pages, where a step button
+  sets a step again (T).
+- [ ] SHIFT + step 14 opens the Last Step page for the active track, also from the menu; a second
+  press switches to all tracks (T). There the step buttons set the length of the active track or of
+  all tracks (T), and the encoder does the same (`menu.c:2769-2795`, untouched).
+- [ ] The mode LEDs do not change when the menu opens: `case SEQ_CONFIG` still does not call
+  `led_setMode2()`.
+- [ ] SHIFT + page up or down still sets the active track's length to the end of the bar it moves
+  to, in the menu as in every other mode (`buttonHandler.c:1650-1657`, `:1704-1711`, untouched).
+
+Intended changes, for the stage 1 report (spec §12):
+- **Global menu, step buttons:** without SHIFT they do nothing. fw 1.7 set the length of all
+  tracks.
+- **Global menu, page buttons:** step 12 keeps blinking and the step LEDs show the active track's
+  steps on the shown bar, as on the FX page. fw 1.7 stopped the blinking and blinked the last step of
+  the active track, as on the Last Step page.
+
+Deviation from the spec, for the stage 1 report (N19):
+- **Host test build (spec §9.1):** `test_buttons` compiles `buttonHandler.c` with `-w` and gets
+  `Core/Inc` as a system include directory; `test_buttons.c` and `tests/stubs/` keep
+  `-Wall -Wextra -Werror`.
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add Core/Src/buttonHandler.c tools/fw_checks.sh tests/CMakeLists.txt tests/test_buttons.c \
+  tests/stubs/stm32f7xx_hal.h tests/stubs/stm32f7xx.h tests/stubs/fatfs.h tests/stubs/Soundengine/FxBus.h
+git commit -m "Give the global menu its own button mode (E2.7)
+
+SHIFT + step 12 stored SEQ_CONFIG, a step button number, in the button
+mode. Its value 11 is also SELECT_MODE_LAST_STEP_ALL, so a step button
+pressed without SHIFT in the global menu set the length of all tracks,
+and the page buttons drew the Last Step page's LEDs. The menu now gets
+SELECT_MODE_MENU, which nothing else sets and whose handling is the
+menu's: step and select buttons do nothing there.
+
+tests/test_buttons.c compiles buttonHandler.c on the host against
+stand-in headers in tests/stubs/ (ctest id buttons); tools/fw_checks.sh
+gets the E2.7 source checks.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+**Hardware check affected:** U1, a new check for E4.2's checklist (below). The CPU page of E3.3
+(H12) is opened the same way, and a step button pressed there changes nothing.
+
+#### Hardware check U1 (for `docs/lichomat/hardware-checklist.md`, E4.2)
+
+E4.2 creates the checklist after this task, so the text goes into E4.2 Step 5 (see the next part).
+In the checklist it is the section after H13:
+
+````markdown
+## U1: step buttons in the global menu
+
+Not in the spec's list: a 1.7 bug that LICHOMAT fixes (tracker E2.7). In 1.7 a step button pressed
+without SHIFT while the global menu was open set the length of every track. The check changes track
+lengths and sets them back; use a pattern you can spare.
+
+1. Internal sync, BPM 120. Press voice button 1. Pattern: every track 16 steps long, voice 1 (kick)
+   on step 1 only, voice 6 (closed hat) on step 16 only. Press START.
+2. Hold SHIFT and press step 12: the global menu opens (BPM, shuffle, …) and step 12 blinks.
+   Release SHIFT.
+3. Press page up, then page down.
+4. Press step 4, then step 8, without SHIFT. Listen for two bars.
+5. Hold SHIFT and press step 14.
+6. Press step 8 without SHIFT and listen. Then hold SHIFT and press step 14 again, and press step 16
+   without SHIFT.
+7. Press the first of the four mode buttons (voice mode; the third and fourth are LOAD and SAVE),
+   then step 5.
+
+**Expected** (the remarks on 1.7 are for the same steps run on 1.7):
+- 3: step 12 keeps blinking, and after page down the step 1 LED is lit (voice 1's step). With 1.7
+  page up stopped the blinking, and page down made step 16 blink, the last step of track 1.
+- 4: the display stays on the global menu, step 12 keeps blinking, and the kick and the hat still
+  play once per bar each. With 1.7 the first press made every track 4 steps long (the kick on every
+  4th step, the hat silent) and step 4 blink, the second made them 8 steps long and step 8 blink.
+- 5: the Last Step page shows `Last Step Trk: 1` and `Current:  16`: step 4 changed no length. 1.7
+  shows `Current:   8`.
+- 6: as in 1.7: step 8 makes track 1 eight steps long (two kicks per bar, the hat unchanged); the
+  second SHIFT + step 14 shows `Last Step All`, and step 16 makes every track 16 steps long again.
+  With 1.7 every track is 8 steps long already before step 8.
+- 7: as in 1.7: the voice page returns, and step 5 adds a kick on step 5 (press step 5 again to
+  remove it).
+
+**Record:** whether step 12 kept blinking in step 3; whether a length changed in step 4; what the
+Last Step page showed in step 5.
+````
+
+#### Changes to other tasks of this plan
+
+> **Assembly note.** These changes are in the plan already, combined with those of E1.14 and E2.8:
+> the counts include E2.8's `usbtx` (`out of 26` in E3.3, E3.4 and R3.1, `out of 18` in E4.3
+> Step 5). N19 has the bullet of item 8 and N20 is in the notes; `docs/lichomat/HANDOFF.md` and
+> `tools/agent/` say N1–N20; E3.4 Step 7 gives the `tools/fw_checks.sh` line of HANDOFF.md the
+> range E2.2-E2.8 (item 10). Nothing in this list is a step of this task.
+
+E2.7 runs between E2.6 and E3.1, so later tasks see its files. When this section joins the plan:
+1. **Task order and dependencies, and Epic E2:**
+   - after item 21 (E2.6) of the task order, add "**E2.7**: SHIFT + step 12 gives the global menu
+     its own button mode, `SELECT_MODE_MENU`; host test `buttons` (`tests/test_buttons.c` with the
+     stand-in headers in `tests/stubs/`) and `tools/fw_checks.sh E2.7`." Renumber the items after
+     it. In the list under them ("Tracker tasks whose sections are written and reviewed on their
+     own …"), the bullet of E2.7 and E2.8 becomes "- **E2.8** (`build/plan/42-E2.8.md`, the fw 1.7
+     USB MIDI out defects): its section gives its place in this order.";
+   - the E2 heading becomes "tasks E2.1-E2.7";
+   - in the E2 intro, the order line "Order: E2.1 → E2.2 → E2.3 → E2.4 → E2.5 → E2.6." ends with
+     "→ E2.6 → E2.7.", and the table under it ends with these two rows (E2.6 is no longer the last
+     E2 image):
+
+     ```markdown
+     | E2.6 | Dead code gone. |
+     | E2.7 | The global menu has a button mode of its own: its step buttons leave the track lengths alone. |
+     ```
+
+   - the E2 intro's Files table gets the rows of item 2 for `Core/Src/buttonHandler.c`,
+     `tests/test_buttons.c` and `tests/stubs/`, and its `tools/fw_checks.sh` row "E2.2-E2.7";
+   - E2 open issue 17 becomes "17. **E2.7 follows this section.** The fw 1.7 bug in the global menu
+     (a step button without SHIFT sets every track length) was added to the tracker after this
+     section was assigned; task E2.7 fixes it."
+2. **File structure:** new rows for `Core/Src/buttonHandler.c` (SHIFT + step 12 sets
+   `SELECT_MODE_MENU`; E2.7), `tests/test_buttons.c` (front-panel buttons in the global menu and on
+   the Last Step page, `buttons`; E2.7) and `tests/stubs/*.h` (host stand-ins for the HAL, FatFs and
+   the FX bus; E2.7). The `tests/CMakeLists.txt` row gets E2.7, the two `tools/fw_checks.sh` rows
+   (this table and the E2 intro's) "E2.2-E2.7".
+3. **E3.3:** in Step 2, "Register it after the `test_syncq` line that E2.1 added, so the list stays
+   in task order." becomes "Register it after the `test_syncq` line that E2.1 added." Its edit still
+   applies: the `test_syncq` line is unchanged, and the `cpumeter` line lands between it and the
+   E2.7 block. In Step 6, `out of 24` (the 22 ids registered in E1, `syncq` from E2.1 and
+   `cpumeter`) becomes `out of 25` (the 22 ids registered in E1, `syncq` from E2.1, `buttons` from
+   E2.7 and `cpumeter`). The `add_executable` line stays at 107 (E3.3 Step 3).
+4. **E3.4 Step 5** and **E4.1:**
+   - E3.4 Step 5 and review row R3.1: `out of 24` becomes `out of 25`;
+   - E4.1 builds the stage 1 report (Step 4, `docs/lichomat/reports/stage1-report.md`) from the
+     *Intended changes* lists of E2.2–E2.5, and E2.7 has one too (Step 10). In the task's intro and
+     in Step 4, "lists of E2.2–E2.5 as N18 amended them" becomes "lists of E2.2–E2.5 as N18 amended
+     them, and of E2.7";
+   - in that report, the table "1. Deviations from the spec" ends with these two rows, after its
+     last row now, the one of `MenuText.h` (§8):
+
+     ```markdown
+     | §12 user interface | unchanged, except for the splash screen and the CPU sub-page | in the global menu the step buttons without SHIFT do nothing, and page up and down keep step 12 blinking and show the step view | N19 (E2.7) |
+     | §9.1 host tests | built with `-Wall -Wextra -Werror` | `test_buttons` compiles fw 1.7's `buttonHandler.c` with `-w` and `Core/Inc` as a system include directory; `test_buttons.c` and `tests/stubs/` keep the three flags | N19 (E2.7) |
+     ```
+
+   - and its table "2. Intended changes against fw 1.7" gets these two rows before its last one (the
+     start-up screen and the CPU page):
+
+     ```markdown
+     | In the global menu a step button pressed without SHIFT no longer sets the length of every track | E2.7 (N19) | Fixed |
+     | In the global menu page up and down keep step 12 blinking and show the track's steps (fw 1.7: the Last Step page's LEDs) | E2.7 (N19) | Fixed |
+     ```
+5. **E4.2 Step 5** (the checklist text): delete the paragraph that starts with
+   `**Caution, unchanged from 1.7:**`, insert the U1 section above before `## Optional: clock jacks`,
+   and add the row `| U1 | | | |` after `| H13 | | | |` in the run sheet. The title can stay "H1-H13"
+   and E4.2's check script needs no change; U1 has its own **Expected** and **Record**.
+6. **E4.3 Step 3** (release notes):
+   - under "## Known limitations", delete the bullet that starts with `From 1.7, unchanged: while the
+     global menu is open`;
+   - under "## Fixed", after the D8 bullet, add:
+
+     ```markdown
+     - **Step buttons in the global menu.** In 1.7 a step button pressed without SHIFT while the
+       global menu was open set the length of every track, and page up or down there stopped step 12
+       blinking. Now the step buttons do nothing in the global menu, and page up and down keep
+       step 12 blinking and show the track's steps, as on the FX page.
+     ```
+
+   - under "## Unchanged", "the user interface apart from the start-up screen and the CPU page"
+     becomes "the user interface apart from the start-up screen, the CPU page and the global menu
+     fix".
+
+   **E4.3 Step 5:** add this row to the table, add `buttons` to the `ctest -R` list, and raise the
+   count it expects by one (`out of 16` becomes `out of 17`):
+
+   ```markdown
+   | global menu: step buttons leave the track lengths alone, page up and down keep step 12 blinking | `buttons`; `tools/fw_checks.sh E2.7`; U1 |
+   ```
+7. **Questions for the owner:** in "From Epic E2", the status line of item 17 (the fw 1.7 bug in the
+   global menu) becomes "*Status: fixed in task E2.7; E4.2 has check U1, and E4.3 lists the fix
+   under Fixed.*"; in "From Part 3", the status line of item 4 becomes "*Status: fixed in task
+   E2.7.*"
+8. **Implementation notes:** N19 is in the notes already (commit `38899ea`, "N19. The global menu
+   fix changes two visible behaviours (E2.7)"): the bug, the two visible changes, the fix, the
+   release notes and U1. It does not cover the host test build, which differs from spec §9.1 (see
+   "How it is tested"). Add this bullet to N19, before its last one:
+
+   ```markdown
+   - **The host test relaxes the warnings for the firmware files it compiles (spec §9.1).**
+     `test_buttons` compiles `buttonHandler.c` with `-w` and gets `Core/Inc` as a system include
+     directory: GCC's `-Wextra` (CI builds the tests with GCC; checked with arm-none-eabi-gcc 14.3)
+     reports `volatile static` at `buttonHandler.c:57`, a fall-through at `:613` and `const extern`
+     at `Preset/InitKit.h:21`, and the tests build with `-Werror`. Apple clang reports none of them.
+     The firmware build (`-Wall`, 0 warnings) stays the warning gate for those files, `sequencer.h`
+     with E2's prototypes among them; `test_buttons.c`, the stand-ins in `tests/stubs/` and every
+     other test keep `-Wall -Wextra -Werror`.
+   ```
+
+   E4.1 row R1.4 then finds both deviations of E2.7 (spec §12 and §9.1) covered by a note. With N19
+   the notes run N1–N19, so these texts change from N1–N18 (or N1-N18) to N1–N19:
+   - the E1 intro, "Authoritative documents": "the implementation notes N1–N18" and "N12–N18 were
+     added during planning", and its list gets "- N19: the global menu fix of E2.7, its two visible
+     changes and its host test build;" after the N18.2–N18.5 line;
+   - E4.1: the "Decisions beyond the spec" row, rows R1.1 and R1.2 (R1.2 then reviews N19), Step 4
+     ("the notes N1–N18" in its intro, and "with the note (N1–N18)" in the stage 1 report) and the
+     prompt of the step that reviews the manual rows ("the notes N1-N18 win");
+   - E4.2 Step 5: the checklist's second paragraph, "(N1–N18)".
+
+   Outside the plan, `docs/lichomat/HANDOFF.md:13` ("(N1–N18; they win over the spec)") and the
+   prompts in `tools/agent/impl-track.js` (line 35, "notes N1-N18", and line 249, "the notes
+   N1-N15") change the same way. No task quotes these lines: E2.2 Step 24 and E3.4 Step 7 edit only
+   the toolchain block of HANDOFF.md.
+9. **E2.8** (`build/plan/42-E2.8.md`, USB MIDI out) is written to run after this task and quotes
+   its texts: the last two lines of the `test_buttons` block in `tests/CMakeLists.txt`, line 2 of
+   `tools/fw_checks.sh` ("tasks E2.2 to E2.7") and `check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7"`;
+   its `out of` counts include `buttons`. E2.8 needs no change while those texts stay as given here.
+10. **`docs/lichomat/HANDOFF.md`** still says `(E2.2-E2.6)` on the `tools/fw_checks.sh` line. This
+    task leaves it, because E3.4 Step 7 quotes that line as its before-text; change both together if
+    the range should be exact.
+
+---
+
+### Task E2.8: USB MIDI out: packets with the right CIN, a ring that waits for the endpoint
+
+fw 1.7's USB MIDI output has three defects and a latent fourth. The task runs after E2.7, and its
+"before" texts are those of the files at that point. Line numbers are those of fw 1.7 (`a43cd4f`).
+E2.1-E2.7 leave `usb_manager.c/.h`, `usbd_cdc.h` and `usbd_cdc_if.c` as they are. E2.4 adds an
+include at line 62 of `usbd_cdc.c`, so the lines quoted from it here, up to `USBD_CDC_DataIn()`,
+move down by one.
+
+**How the transmit path works in fw 1.7**
+- `usb_sendMidi()` (`usb_manager.c:136-147`) writes 4 bytes per message with `usb_sendByte()`
+  (`:94-103`) into `usb_MidiInBuff`, a ring of 128 bytes (`usbd_cdc.c:93-95`,
+  `TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS` from `usbd_cdc.h:142-143`). Nothing checks for room.
+- `usb_flushMidi()` (`:111-134`) runs from `usb_tick()` at the end of `soundengine_process()`
+  (`Soundengine.c:103`), which `TIM2_IRQHandler()` does not call. It passes the bytes from the
+  read pointer to the write pointer to `CDC_Transmit_FS()` (`usbd_cdc_if.c:283-295`). That
+  returns `USBD_BUSY` while `TxState` is 1; otherwise `USBD_CDC_TransmitPacket()` sets
+  `TxState = 1` and calls `USBD_LL_Transmit()` (`usbd_cdc.c:1184-1194`).
+- The transfer happens later, in the OTG_FS interrupt. `USB_EPStartXfer()` only arms the endpoint
+  and enables its TX FIFO empty interrupt (`stm32f7xx_ll_usb.c:845-853`); `PCD_WriteEmptyTxFifo()`
+  then copies the data from the caller's buffer into the FIFO (`stm32f7xx_hal_pcd.c:1963-2014`).
+  When the host has taken it, `USBD_CDC_DataIn()` sets `TxState = 0` (`usbd_cdc.c:914`), and
+  nothing else happens.
+
+**Defects**
+1. **128 bytes past the ring on every wrap** (`usb_manager.c:115` and `:124`):
+
+   ```c
+   	const uint8_t len = usb_MidiInWrPtr - usb_MidiInRdPtr;
+   ```
+   ```c
+   	    CDC_Transmit_FS(usb_MidiInRdPtr, len);
+   ```
+
+   - Once the write pointer has wrapped and the read pointer has not, the difference is negative.
+     As a `uint8_t` it is then 128 more than the number of bytes waiting.
+   - The transfer reads `128 + w` bytes past the end of the ring, where `w` is the write offset.
+     The read pointer is then reset to the start, and the next flush sends the wrapped bytes,
+     after the stray ones.
+   - With a flush after every `seq_tick()`, this happens every 32 messages: every 0.67 s from
+     the MIDI clock alone at 120 BPM.
+   - The ring is followed by the USB receive queue: `0x20020808 usb_MidiInBuff`,
+     `0x20020888 usb_MidiMessagesWrite`, `0x2002088c usb_MidiMessages` (`arm-none-eabi-nm -n`
+     on the fw 1.7 image; the order is the same after E2.7). So the host gets that queue's bytes
+     as USB-MIDI packets.
+   - While the queue is still all zero, those packets carry the reserved CIN 0, which hosts
+     ignore. That is probably why this went unnoticed.
+2. **Messages lost while the endpoint is busy.**
+   - `usb_flushMidi()` ignores what `CDC_Transmit_FS()` returns. It moves the read pointer on
+     (`:126-130`) also after `USBD_BUSY`, so everything queued while a transfer is in flight is
+     dropped.
+   - There is no full check either: more than 128 bytes between two flushes overwrite each
+     other.
+   - That is what happens while the SD card is busy. TIM2 runs `seq_tick()`, which keeps
+     sending, but nothing is flushed until the main loop returns, unless a kit load at a pattern
+     change calls `soundengine_process()` itself (N12).
+3. **Wrong CIN** (`usb_manager.c:138-139`):
+
+   ```c
+   	//MIDI byte[0] = 4 bits cable number + 4 bits event type code
+   	usb_sendByte(msg.status>>4);
+   ```
+
+   - The high nibble is the right CIN for the channel messages (8-E) and for realtime (F).
+   - F1 (MTC quarter frame), F2 (Song Position Pointer), F3 (Song Select) and F6 (Tune Request)
+     get CIN 0xF, a single byte: the host keeps the status and drops the data bytes. The LXR
+     sends these only when it passes DIN input on to USB (routing `M2U` or `M2A`,
+     `MidiParser.c:1731-1734`).
+   - The same routing sends SysEx one byte per message, with the payload byte in `status`
+     (`MidiParser.c:2072-2077`). Its CIN is then 0x0-0x7: 0x43, for example, goes out as CIN 0x4
+     (three SysEx bytes) with two stale bytes.
+   - The unused bytes of short messages are not cleared; USB MIDI 1.0 §4 asks for 0.
+4. **Latent: a NULL class handle.**
+   - Until a host has configured the device, `hUsbDeviceFS.pClassData` is NULL.
+     `USBD_CDC_Init()` allocates it at SET_CONFIGURATION, and a USB reset or a disconnect frees it
+     again.
+   - `CDC_Transmit_FS()` reads `hcdc->TxState` through it all the same (`usbd_cdc_if.c:287-288`):
+     that is ITCM address 0x214, `offsetof(USBD_CDC_HandleTypeDef, TxState)`.
+   - That word is code (`0xEDD06A00` in fw 1.7 and after E2.7), so the call returns `USBD_BUSY`.
+     If an ITCM layout ever put 0 there, `USBD_CDC_SetTxBuffer()` would overwrite 8 bytes of ITCM
+     code (0x208-0x213) on every MIDI message sent without a host.
+
+The DIN parser has a related bug:
+- It routes a Song Select (F3) at once, before its song number (`MidiParser.c:2008-2010`,
+  `parseMsg = 1`).
+- The routed F3 carries the data byte of the previous message, and the song number then becomes a
+  running-status byte of the last channel message.
+- Even with the right CIN, a Song Select passed on to USB would be wrong, so this task fixes the
+  parser too (Step 10).
+
+**Who sends, and in which context** (after E2.7; E2 open issue 11):
+- **The main loop (thread level):** the mute Note Off, the MIDI channel change, a pattern change
+  while stopped, and `usb_tick()`.
+- **The `seq_tick()` context:** the main loop with the TIM2 update interrupt masked, or TIM2 at
+  preemption priority 4 while the SD card is busy (N12). It sends:
+  - from the core's callbacks: triggers, note-offs, MIDI clock and transport;
+  - at a pattern change: the Program Change and the all-notes-off, and a kit load there runs
+    `usb_tick()` through the nested `soundengine_process()`;
+  - from the parser (E2.4): the routing and the echo.
+- **OTG_FS** (priority 3, `stm32f7xx_hal_msp.c:844`): `USBD_CDC_DataIn()`.
+- Apart from TIM2, through `seq_tick()`, no interrupt handler calls `usb_sendMidi()`. At priority 3
+  and above, USART3 and the EXTI lines only queue (E2.4, E2.5), and TIM14 runs the UI timers.
+
+So there are two sending contexts, one of which can preempt the other while the SD card is busy,
+and the transfer state changes in OTG_FS.
+
+**The fix**
+- **`usb_midiTx.c/.h`** (new, plain C, host-tested in `tests/test_usbtx.c`):
+  - `usbtx_packet()` builds the packet with the CIN of USB MIDI 1.0 table 4-1 for every status
+    byte:
+    - the channel messages: the high nibble;
+    - F1 and F3: 0x2; F2: 0x3; F6: 0x5;
+    - realtime, F0, F7, the undefined F4 and F5, and payload bytes: 0xF, the byte on its own,
+      which USB MIDI 1.0 allows for any MIDI byte.
+
+    Unused bytes are 0; data bytes are sent with bit 7 cleared.
+  - `usbtx_ring_t` holds 128 packets, with free-running counters.
+  - `usbtx_push()` rejects a packet when the ring is full, and counts it in `dropped`.
+  - `usbtx_next()` hands out the next transfer:
+    - at most 15 packets (60 bytes), one short packet of the 64-byte endpoint, so a transfer
+      never needs a zero-length packet;
+    - nothing while the endpoint is busy: the packets stay in the ring;
+    - without a host, or once the transfer in flight has waited 100 ms (`USBTX_STALL_MS`: the
+      host has then stopped reading), it empties the ring.
+- **The glue in `usb_manager.c`:**
+  - `usb_sendMidi()` queues the packet and starts a transfer when none is in flight.
+  - `USBD_CDC_DataIn()` calls the new `usb_midiTxComplete()` at the end of a transfer, which
+    starts the next one.
+  - `usb_flushMidi()`, still called by `usb_tick()`, does the same, as a fallback.
+  - Each transfer is copied into a buffer of its own, so packets can be queued while the USB core
+    reads.
+  - All three hold PRIMASK while they use the ring or the endpoint, as the E2.2 mailbox does.
+  - The time for the 100 ms rule is `HAL_GetTick()`, the 1 ms SysTick count.
+- **The old ring** and its macros go from `usbd_cdc.c/.h`.
+
+**When the ring is full,** the new packet is dropped and counted (`usb_midiTxDropped()`), as the
+sync queues do (spec §11). While a host reads, a transfer ends within about a millisecond, so this
+takes more than 128 packets at once, or within 100 ms of a host that has stopped reading.
+
+**Without a host, or with one that has stopped reading, nothing is kept.**
+- Before a host has configured the device nothing is queued. fw 1.7 lost these messages too.
+- A host can also stop reading while the device stays configured: some drivers read the IN
+  endpoint only while a program has the port open. The transfer in flight then stays in flight,
+  and `TxState` stays 1.
+- Without the 100 ms rule the ring would fill with the 128 oldest packets, drop every later one,
+  and hand all of them to the host once it reads again: about 2.7 s of 120 BPM clock in one burst,
+  and possibly a Note On whose Note Off was dropped.
+- With it, `usbtx_next()` empties the ring at every call once the transfer has waited 100 ms,
+  until the host takes it. The host then gets that transfer late (at most 15 packets, as fw 1.7
+  delivered its own transfer in flight) and nothing older after it.
+- A host that connects later, or after a USB reset, gets no old messages at all: the reset ends
+  the transfer, and until the host configures the device again nothing is queued.
+
+**fw 1.7 behaviour that stays:**
+- the packets of the channel and realtime messages the sequencer sends, byte for byte: their CIN
+  was right, and their unused bytes were already 0;
+- what is sent and in which order: the TX filter, the routing, `seq_sendMidi()`;
+- the USB receive path of E2.4, the USB descriptors and the port name;
+- DIN out, apart from a Song Select routed to it (`M2M`, `A2M`, `M2A`), which now waits for its
+  song number (Step 10);
+- `usb_tick()` in `soundengine_process()`.
+
+**Files:**
+- Create: `Core/Inc/Soundengine/USB/usb_midiTx.h`, `Core/Src/Soundengine/USB/usb_midiTx.c`
+- Create: `tests/test_usbtx.c`
+- Modify: `tests/CMakeLists.txt` (at the end, after the `test_buttons` block of E2.7)
+- Modify: `tools/fw_checks.sh` (line 2, and the E2.8 checks before the task list)
+- Modify: `Core/CMakeLists.txt` (`lxr_usb_app`, lines 141-144 after E2.7)
+- Modify: `README.md` (the `lxr_usb_app` row of the module table)
+- Modify: `Core/Src/Soundengine/USB/usb_manager.c` (fw 1.7 lines 15-16 and 89-147)
+- Modify: `Core/Inc/Soundengine/USB/usb_manager.h` (fw 1.7 lines 33-35)
+- Modify: `Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c` (the includes, fw 1.7
+  lines 91-95, `USBD_CDC_DataIn()` at fw 1.7 lines 912-916)
+- Modify: `Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h` (fw 1.7 lines 142-144
+  and 158-160)
+- Modify: `Core/Src/Soundengine/MIDI/MidiParser.c` (`midiParser_parseUartData()`, fw 1.7 lines
+  2008-2010)
+- Test: `tests/test_usbtx.c` (host, ctest id `usbtx`), `tools/fw_checks.sh E2.8`
+
+- [ ] **Step 1: Write the failing host test**
+
+The tests pin the packet of every status byte against USB MIDI 1.0 table 4-1 and the ring
+behaviour the glue relies on: order, at most 15 packets per transfer, nothing lost while the
+endpoint is busy, nothing kept without a host or for one that has left a transfer untaken for
+100 ms, a full ring that drops and counts, counters that wrap, and a 10000-packet stream in random
+bursts against an endpoint that is busy at random.
+
+Create `tests/test_usbtx.c`:
+
+```c
+/*
+ * test_usbtx.c
+ *
+ * Host tests of the USB MIDI output (Core/Src/Soundengine/USB/usb_midiTx.c, task
+ * E2.8): the USB-MIDI event packet and its code index number (CIN) for every
+ * message the firmware sends, and the transmit ring: order, transfer size, a busy
+ * endpoint, a missing host, a host that has stopped reading, a full ring and a
+ * long stream that wraps the ring.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include <string.h>
+#include "Soundengine/USB/usb_midiTx.h"
+#include "seqc_test.h"
+
+/** the four bytes of a packet as 0xAABBCCDD, in the order they go to the host */
+static uint32_t bytesOf(usbtx_packet_t p)
+{
+	return ((uint32_t)p.b[0] << 24) | ((uint32_t)p.b[1] << 16) | ((uint32_t)p.b[2] << 8) | p.b[3];
+}
+
+TEST(usbtx_channel_messages)
+{
+	ASSERT_EQ(bytesOf(usbtx_packet(0x93, 0x3C, 0x64)), 0x09933C64);	/* note on, channel 4 */
+	ASSERT_EQ(bytesOf(usbtx_packet(0x80, 0x24, 0x00)), 0x08802400);	/* note off */
+	ASSERT_EQ(bytesOf(usbtx_packet(0xA5, 0x30, 0x10)), 0x0AA53010);	/* poly pressure */
+	ASSERT_EQ(bytesOf(usbtx_packet(0xB0, 0x07, 0x64)), 0x0BB00764);	/* control change */
+	ASSERT_EQ(bytesOf(usbtx_packet(0xE1, 0x00, 0x40)), 0x0EE10040);	/* pitch bend */
+}
+
+TEST(usbtx_one_data_byte)
+{
+	/* program change and channel pressure have one data byte; the unused byte is 0,
+	 * whatever the message held there (fw 1.7 sent it as it was) */
+	ASSERT_EQ(bytesOf(usbtx_packet(0xC9, 0x05, 0x7F)), 0x0CC90500);
+	ASSERT_EQ(bytesOf(usbtx_packet(0xD2, 0x40, 0x11)), 0x0DD24000);
+}
+
+TEST(usbtx_system_common)
+{
+	/* fw 1.7 sent these with CIN 0xF, a single byte: the host lost the data bytes */
+	ASSERT_EQ(bytesOf(usbtx_packet(0xF1, 0x23, 0x55)), 0x02F12300);	/* MTC quarter frame */
+	ASSERT_EQ(bytesOf(usbtx_packet(0xF2, 0x10, 0x02)), 0x03F21002);	/* Song Position Pointer */
+	ASSERT_EQ(bytesOf(usbtx_packet(0xF3, 0x05, 0x66)), 0x02F30500);	/* Song Select */
+	ASSERT_EQ(bytesOf(usbtx_packet(0xF6, 0x12, 0x34)), 0x05F60000);	/* Tune Request */
+}
+
+TEST(usbtx_realtime_single_byte)
+{
+	const uint8_t realtime[] = { 0xF8, 0xFA, 0xFB, 0xFC, 0xFE, 0xFF };
+	for (unsigned i = 0; i < sizeof realtime; i++)
+		ASSERT_EQ(bytesOf(usbtx_packet(realtime[i], 0x12, 0x34)), 0x0F000000u | ((uint32_t)realtime[i] << 16));
+}
+
+TEST(usbtx_sysex_and_undefined_single_byte)
+{
+	/* the DIN parser routes SysEx one byte per message: F0, each payload byte (in
+	 * status, with MidiMsg.bits.sysxbyte set), F7. fw 1.7 sent payload byte 0x43 with
+	 * CIN 0x4 and two stale bytes, and 0x05 with the reserved CIN 0x0. */
+	ASSERT_EQ(bytesOf(usbtx_packet(0xF0, 0x11, 0x22)), 0x0FF00000);
+	ASSERT_EQ(bytesOf(usbtx_packet(0x43, 0x11, 0x22)), 0x0F430000);
+	ASSERT_EQ(bytesOf(usbtx_packet(0x05, 0x11, 0x22)), 0x0F050000);
+	ASSERT_EQ(bytesOf(usbtx_packet(0x7F, 0x11, 0x22)), 0x0F7F0000);
+	ASSERT_EQ(bytesOf(usbtx_packet(0xF7, 0x11, 0x22)), 0x0FF70000);
+	ASSERT_EQ(bytesOf(usbtx_packet(0xF4, 0x11, 0x22)), 0x0FF40000);	/* undefined */
+	ASSERT_EQ(bytesOf(usbtx_packet(0xF5, 0x11, 0x22)), 0x0FF50000);	/* undefined */
+}
+
+TEST(usbtx_data_bytes_seven_bit)
+{
+	ASSERT_EQ(bytesOf(usbtx_packet(0x90, 0xBC, 0xE4)), 0x09903C64);
+	ASSERT_EQ(bytesOf(usbtx_packet(0xF2, 0xFF, 0x80)), 0x03F27F00);
+}
+
+TEST(usbtx_cin_of_every_status)
+{
+	/* cable 0, the byte itself in MIDI_0, and a CIN of USB MIDI 1.0 table 4-1 that
+	 * fits the byte: never the reserved 0x0 and 0x1, never a SysEx CIN 0x4, 0x6, 0x7 */
+	for (unsigned s = 0; s < 256; s++)
+	{
+		const usbtx_packet_t p = usbtx_packet((uint8_t)s, 0, 0);
+		ASSERT_EQ(p.b[0] >> 4, 0);
+		ASSERT_EQ(p.b[1], s);
+		const unsigned cin = p.b[0] & 0x0Fu;
+		if (s >= 0x80 && s < 0xF0)
+			ASSERT_EQ(cin, s >> 4);
+		else if (s == 0xF1 || s == 0xF3)
+			ASSERT_EQ(cin, 0x2);
+		else if (s == 0xF2)
+			ASSERT_EQ(cin, 0x3);
+		else if (s == 0xF6)
+			ASSERT_EQ(cin, 0x5);
+		else
+			ASSERT_EQ(cin, 0xF);
+	}
+}
+
+//------------------------------------------------------------------------------
+// The transmit ring. The time passed to usbtx_next() is 0 unless a test is about
+// a transfer that the host does not take.
+//------------------------------------------------------------------------------
+static usbtx_ring_t ring;
+static usbtx_packet_t xfer[USBTX_PACKETS_PER_TRANSFER];
+
+/** packet number n of a test stream: a Note On that carries n in its two data bytes */
+static usbtx_packet_t numbered(uint32_t n)
+{
+	return usbtx_packet(0x90, (uint8_t)(n & 0x7Fu), (uint8_t)((n >> 7) & 0x7Fu));
+}
+
+static uint32_t numberOf(usbtx_packet_t p)
+{
+	return (uint32_t)p.b[2] | ((uint32_t)p.b[3] << 7);
+}
+
+TEST(usbtx_ring_order)
+{
+	memset(&ring, 0, sizeof ring);
+	ASSERT_EQ(usbtx_next(&ring, true, false, 0, xfer), 0);	/* nothing waits: no transfer */
+	for (uint32_t i = 0; i < 3; i++)
+		ASSERT_TRUE(usbtx_push(&ring, numbered(i)));
+	ASSERT_EQ(usbtx_waiting(&ring), 3);
+	ASSERT_EQ(usbtx_next(&ring, true, false, 0, xfer), 3);
+	for (uint32_t i = 0; i < 3; i++)
+		ASSERT_EQ(numberOf(xfer[i]), i);
+	ASSERT_EQ(usbtx_waiting(&ring), 0);
+	ASSERT_EQ(usbtx_next(&ring, true, false, 0, xfer), 0);
+}
+
+TEST(usbtx_transfer_size)
+{
+	/* A transfer takes at most 15 packets, 60 bytes: one short packet of the 64-byte
+	 * endpoint, so it never needs a zero-length packet. fw 1.7 sent everything from
+	 * its read pointer to its write pointer, and 128 bytes more once the write pointer
+	 * had wrapped. */
+	ASSERT_EQ(USBTX_PACKETS_PER_TRANSFER * sizeof(usbtx_packet_t), 60);
+	memset(&ring, 0, sizeof ring);
+	for (uint32_t i = 0; i < 40; i++)
+		ASSERT_TRUE(usbtx_push(&ring, numbered(i)));
+	ASSERT_EQ(usbtx_next(&ring, true, false, 0, xfer), 15);
+	ASSERT_EQ(numberOf(xfer[0]), 0);
+	ASSERT_EQ(numberOf(xfer[14]), 14);
+	ASSERT_EQ(usbtx_next(&ring, true, false, 0, xfer), 15);
+	ASSERT_EQ(numberOf(xfer[0]), 15);
+	ASSERT_EQ(usbtx_next(&ring, true, false, 0, xfer), 10);
+	ASSERT_EQ(numberOf(xfer[9]), 39);
+	ASSERT_EQ(usbtx_waiting(&ring), 0);
+}
+
+TEST(usbtx_busy_endpoint_keeps_packets)
+{
+	/* fw 1.7 moved its read pointer on also when the endpoint was busy: lost */
+	memset(&ring, 0, sizeof ring);
+	ASSERT_TRUE(usbtx_push(&ring, numbered(1)));
+	ASSERT_TRUE(usbtx_push(&ring, numbered(2)));
+	ASSERT_EQ(usbtx_next(&ring, true, true, 0, xfer), 0);
+	ASSERT_EQ(usbtx_waiting(&ring), 2);
+	ASSERT_EQ(usbtx_next(&ring, true, false, 0, xfer), 2);
+	ASSERT_EQ(numberOf(xfer[0]), 1);
+	ASSERT_EQ(numberOf(xfer[1]), 2);
+}
+
+TEST(usbtx_no_host_keeps_nothing)
+{
+	memset(&ring, 0, sizeof ring);
+	for (uint32_t i = 0; i < 5; i++)
+		ASSERT_TRUE(usbtx_push(&ring, numbered(i)));
+	ASSERT_EQ(usbtx_next(&ring, false, false, 0, xfer), 0);
+	ASSERT_EQ(usbtx_waiting(&ring), 0);	/* nothing is kept for a host that is not there */
+	ASSERT_EQ(ring.dropped, 0);		/* and that is not an overflow */
+	ASSERT_TRUE(usbtx_push(&ring, numbered(7)));
+	ASSERT_EQ(usbtx_next(&ring, true, false, 0, xfer), 1);
+	ASSERT_EQ(numberOf(xfer[0]), 7);
+}
+
+TEST(usbtx_stalled_host_keeps_nothing)
+{
+	/* A host that has stopped reading leaves the transfer in flight (busy). For
+	 * USBTX_STALL_MS the packets wait for it; after that they are discarded, as
+	 * without a host, at every call until it takes the transfer, so a host that reads
+	 * again gets no burst of old messages. The transfer starts 64 ms before the
+	 * millisecond count wraps. */
+	const uint32_t start = 0xFFFFFFC0u;
+	memset(&ring, 0, sizeof ring);
+	ASSERT_TRUE(usbtx_push(&ring, numbered(0)));
+	ASSERT_EQ(usbtx_next(&ring, true, false, start, xfer), 1);
+	for (uint32_t i = 1; i <= 3; i++)
+		ASSERT_TRUE(usbtx_push(&ring, numbered(i)));
+	ASSERT_EQ(usbtx_next(&ring, true, true, start + USBTX_STALL_MS - 1u, xfer), 0);
+	ASSERT_EQ(usbtx_waiting(&ring), 3);		/* a slow host: the packets wait */
+	ASSERT_EQ(usbtx_next(&ring, true, true, start + USBTX_STALL_MS, xfer), 0);
+	ASSERT_EQ(usbtx_waiting(&ring), 0);		/* it has stopped reading: discarded */
+	ASSERT_TRUE(usbtx_push(&ring, numbered(4)));
+	ASSERT_EQ(usbtx_next(&ring, true, true, start + 5000u, xfer), 0);
+	ASSERT_EQ(usbtx_waiting(&ring), 0);		/* nothing waits while it does not read */
+	ASSERT_EQ(ring.dropped, 0);			/* and that is not an overflow */
+	ASSERT_TRUE(usbtx_push(&ring, numbered(5)));
+	ASSERT_EQ(usbtx_next(&ring, true, false, start + 6000u, xfer), 1);	/* it took the transfer */
+	ASSERT_EQ(numberOf(xfer[0]), 5);
+	ASSERT_TRUE(usbtx_push(&ring, numbered(6)));
+	ASSERT_EQ(usbtx_next(&ring, true, true, start + 6000u + USBTX_STALL_MS - 1u, xfer), 0);
+	ASSERT_EQ(usbtx_waiting(&ring), 1);		/* the new transfer counts from its own start */
+}
+
+TEST(usbtx_full_ring_drops_new_packets)
+{
+	memset(&ring, 0, sizeof ring);
+	for (uint32_t i = 0; i < USBTX_RING_SIZE; i++)
+		ASSERT_TRUE(usbtx_push(&ring, numbered(i)));
+	ASSERT_FALSE(usbtx_push(&ring, numbered(1000)));
+	ASSERT_FALSE(usbtx_push(&ring, numbered(1001)));
+	ASSERT_EQ(ring.dropped, 2);
+	ASSERT_EQ(usbtx_waiting(&ring), USBTX_RING_SIZE);
+	ASSERT_EQ(usbtx_next(&ring, true, false, 0, xfer), USBTX_PACKETS_PER_TRANSFER);
+	ASSERT_EQ(numberOf(xfer[0]), 0);		/* the waiting packets stay, the new ones went */
+	ASSERT_TRUE(usbtx_push(&ring, numbered(2000)));	/* a transfer made room */
+	uint32_t expect = USBTX_PACKETS_PER_TRANSFER, n;
+	while ((n = usbtx_next(&ring, true, false, 0, xfer)) != 0)
+		for (uint32_t i = 0; i < n; i++, expect++)
+			ASSERT_EQ(numberOf(xfer[i]), expect < USBTX_RING_SIZE ? expect : 2000);
+	ASSERT_EQ(expect, USBTX_RING_SIZE + 1);
+	ASSERT_EQ(ring.dropped, 2);
+}
+
+TEST(usbtx_counters_wrap)
+{
+	memset(&ring, 0, sizeof ring);
+	ring.write = ring.read = 0xFFFFFFF0u;	/* 16 packets before the 32-bit wrap */
+	uint32_t pushed = 0, taken = 0, n;
+	for (int round = 0; round < 10; round++)
+	{
+		for (int i = 0; i < 7; i++)
+			ASSERT_TRUE(usbtx_push(&ring, numbered(pushed++)));
+		while ((n = usbtx_next(&ring, true, false, 0, xfer)) != 0)
+			for (uint32_t i = 0; i < n; i++)
+				ASSERT_EQ(numberOf(xfer[i]), taken++);
+	}
+	ASSERT_EQ(taken, 70);
+	ASSERT_EQ(ring.write, 70u - 16u);	/* it did wrap */
+	ASSERT_EQ(ring.dropped, 0);
+}
+
+#define STREAM 10000u
+static uint32_t accepted[STREAM], received[STREAM];
+
+TEST(usbtx_long_stream_wraps_ring)
+{
+	/* 10000 packets in bursts of 0 to 40, with the endpoint busy at random: a push
+	 * fails exactly when 128 packets wait, and the host receives every accepted packet
+	 * once and in order, at most 15 per transfer */
+	memset(&ring, 0, sizeof ring);
+	uint32_t seed = 12345, sent = 0, nAccepted = 0, nReceived = 0, n;
+	while (sent < STREAM)
+	{
+		seed = seed * 1103515245u + 12345u;
+		uint32_t burst = (seed >> 16) % 41u;
+		for (; burst > 0 && sent < STREAM; burst--, sent++)
+		{
+			const bool full = usbtx_waiting(&ring) == USBTX_RING_SIZE;
+			ASSERT_EQ(usbtx_push(&ring, numbered(sent)), !full);
+			if (!full)
+				accepted[nAccepted++] = sent;
+		}
+		seed = seed * 1103515245u + 12345u;
+		const bool busy = ((seed >> 16) & 3u) == 0;	/* busy one time in four */
+		const uint32_t before = usbtx_waiting(&ring);
+		n = usbtx_next(&ring, true, busy, 0, xfer);
+		ASSERT_TRUE(n <= USBTX_PACKETS_PER_TRANSFER);
+		ASSERT_EQ(n, busy ? 0 : (before < USBTX_PACKETS_PER_TRANSFER ? before : USBTX_PACKETS_PER_TRANSFER));
+		for (uint32_t i = 0; i < n; i++)
+			received[nReceived++] = numberOf(xfer[i]);
+	}
+	while ((n = usbtx_next(&ring, true, false, 0, xfer)) != 0)
+		for (uint32_t i = 0; i < n; i++)
+			received[nReceived++] = numberOf(xfer[i]);
+	ASSERT_EQ(nReceived, nAccepted);
+	ASSERT_EQ(ring.dropped, STREAM - nAccepted);
+	ASSERT_TRUE(ring.dropped > 0);		/* the bursts did fill the ring */
+	ASSERT_TRUE(ring.write > 20u * USBTX_RING_SIZE);	/* and the stream wrapped it many times */
+	for (uint32_t i = 0; i < nReceived; i++)
+		ASSERT_EQ(received[i], accepted[i]);
+}
+
+TEST_MAIN()
+```
+
+Register it at the end of the list, after the `test_buttons` block of E2.7. (E3.3 later inserts
+its `test_cpumeter` line after the `test_syncq` line; its edit still matches.)
+
+`tests/CMakeLists.txt`, replace:
+
+```cmake
+    set_source_files_properties(${LXR_ROOT}/Core/Src/buttonHandler.c PROPERTIES COMPILE_OPTIONS -w)
+endif()
+```
+
+with:
+
+```cmake
+    set_source_files_properties(${LXR_ROOT}/Core/Src/buttonHandler.c PROPERTIES COMPILE_OPTIONS -w)
+endif()
+
+seqc_add_test(test_usbtx     IDS usbtx EXTRA ${LXR_ROOT}/Core/Src/Soundengine/USB/usb_midiTx.c)  # E2.8  USB MIDI out packets and ring
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug' 2>&1 | grep -A3 'CMake Error'`
+
+Expected (line 107 is the `add_executable` in `seqc_add_test()`):
+
+```
+CMake Error at CMakeLists.txt:107 (add_executable):
+  Cannot find source file:
+
+    <repo>/Core/Src/Soundengine/USB/usb_midiTx.c
+```
+
+- [ ] **Step 3: Write `usb_midiTx.h` and `usb_midiTx.c`**
+
+Plain C11, no HAL: the packet builder and the ring. Both files are CRLF like the rest of `Core/`
+(Step 11 normalises them).
+
+Create `Core/Inc/Soundengine/USB/usb_midiTx.h`:
+
+```c
+/*
+ * usb_midiTx.h
+ *
+ * USB MIDI output of the LICHOMAT firmware (task E2.8), the part without the HAL:
+ * - usbtx_packet(): the USB-MIDI event packet (USB MIDI 1.0, section 4) of one
+ *   MIDI message, on cable 0, with the code index number (CIN) of table 4-1;
+ * - usbtx_ring_t: the packets that wait for the USB IN endpoint, and usbtx_next(),
+ *   which hands the glue the next transfer once the endpoint is free, and keeps
+ *   nothing for a host that is not there or has stopped reading.
+ *
+ * Plain C11 without HAL or CMSIS, so the host tests (tests/test_usbtx.c) build it
+ * as well. The glue in usb_manager.c owns the ring, masks interrupts (PRIMASK)
+ * around every call, passes HAL_GetTick() as the time, and starts the transfers.
+ *
+ * Packets
+ * -------
+ * - 8n..En, the channel messages: CIN = the high nibble of the status (8 Note Off,
+ *   9 Note On, A poly pressure, B Control Change, C Program Change, D channel
+ *   pressure, E pitch bend). C and D have one data byte.
+ * - F1 MTC quarter frame and F3 Song Select: CIN 0x2 (two-byte system common).
+ * - F2 Song Position Pointer: CIN 0x3 (three-byte system common).
+ * - F6 Tune Request: CIN 0x5 (single-byte system common).
+ * - F8..FF realtime, F0 and F7, the undefined F4 and F5, and 00..7F: CIN 0xF, the
+ *   byte on its own. The MIDI parser routes SysEx one byte per message (F0, each
+ *   payload byte in MidiMsg.status with bits.sysxbyte set, F7), so SysEx goes out
+ *   byte by byte, which USB MIDI 1.0 allows for any MIDI byte.
+ * - Unused bytes are 0, and data bytes are sent with bit 7 cleared.
+ * fw 1.7 used the high nibble of the status for everything: F1, F2, F3 and F6 went
+ * out as single bytes without their data, and SysEx payload bytes with CIN 0x0..0x7.
+ *
+ * Ring
+ * ----
+ * - write and read count the packets since the start; write - read is the number
+ *   waiting, also across the 32-bit wrap. A zeroed ring is empty.
+ * - A full ring rejects the new packet and counts it in dropped (spec 11, as for the
+ *   sync queues). While a host reads, a transfer normally ends within a millisecond,
+ *   so the ring fills only when more than 128 packets come at once, or within
+ *   USBTX_STALL_MS after the host has stopped reading.
+ * - While no host has configured the device, nothing waits for one: usbtx_next()
+ *   empties the ring, and that is not counted.
+ * - A host that has configured the device but stopped reading (some drivers read
+ *   only while a program has the port open) leaves the transfer in flight. Once it
+ *   has waited USBTX_STALL_MS, usbtx_next() treats the host as gone: it empties the
+ *   ring, uncounted, at every call until the host takes that transfer. A host that
+ *   reads again then gets the transfer that was in flight, as with fw 1.7, and no
+ *   burst of old messages after it.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+
+#ifndef USB_MIDITX_H_
+#define USB_MIDITX_H_
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#define USBTX_RING_SIZE             128u  /**< packets that can wait, a power of two */
+#define USBTX_PACKETS_PER_TRANSFER   15u  /**< 60 bytes: one short packet of the 64-byte bulk
+                                               endpoint, so a transfer needs no zero-length packet */
+#define USBTX_STALL_MS              100u  /**< a transfer in flight for this long: the host has
+                                               stopped reading */
+
+/** one USB-MIDI event packet: cable number and CIN, then the three MIDI bytes */
+typedef struct usbtx_packet
+{
+	uint8_t b[4];
+} usbtx_packet_t;
+
+_Static_assert(sizeof(usbtx_packet_t) == 4, "a USB-MIDI event packet is 4 bytes");
+
+/** the packets waiting for the IN endpoint; all zero is an empty ring */
+typedef struct usbtx_ring
+{
+	uint32_t		write;		/**< packets queued since the start */
+	uint32_t		read;		/**< packets handed to a transfer since the start */
+	uint32_t		dropped;	/**< packets rejected because the ring was full */
+	uint32_t		sentAt;		/**< the time (ms) at which the last transfer was handed out */
+	usbtx_packet_t	buf[USBTX_RING_SIZE];
+} usbtx_ring_t;
+
+//------------------------------------------------------------------------------
+/** The USB-MIDI event packet of the MIDI message status, data1, data2 (see above).
+ * Every status byte has a packet; data bytes the message does not have are 0. */
+usbtx_packet_t usbtx_packet(uint8_t status, uint8_t data1, uint8_t data2);
+//------------------------------------------------------------------------------
+/** Queue a packet. false if the ring is full: the packet is dropped and counted. */
+bool usbtx_push(usbtx_ring_t *r, usbtx_packet_t p);
+//------------------------------------------------------------------------------
+/** The next transfer, at the time now (a millisecond count that may wrap): copies up
+ * to USBTX_PACKETS_PER_TRANSFER waiting packets, oldest first, into out and returns
+ * how many; they no longer wait, and now is kept as the start of that transfer.
+ * Returns 0 and keeps every packet while busy (the transfer handed out last is in
+ * flight). Without a host (hostReady false), or while busy USBTX_STALL_MS or more
+ * after the start of that transfer, the waiting packets are discarded and 0 is
+ * returned. */
+uint32_t usbtx_next(usbtx_ring_t *r, bool hostReady, bool busy, uint32_t now, usbtx_packet_t *out);
+//------------------------------------------------------------------------------
+/** the number of packets waiting */
+static inline uint32_t usbtx_waiting(const usbtx_ring_t *r)
+{
+	return r->write - r->read;
+}
+
+#endif /* USB_MIDITX_H_ */
+```
+
+Create `Core/Src/Soundengine/USB/usb_midiTx.c`:
+
+```c
+/*
+ * usb_midiTx.c
+ *
+ * USB MIDI output without the HAL: event packets and the transmit ring
+ * (usb_midiTx.h, task E2.8).
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+
+#include "Soundengine/USB/usb_midiTx.h"
+
+/* code index numbers, USB MIDI 1.0 table 4-1 */
+#define USBTX_CIN_TWO_BYTE_COMMON    0x2u  /**< two-byte system common: F1, F3 */
+#define USBTX_CIN_THREE_BYTE_COMMON  0x3u  /**< three-byte system common: F2 */
+#define USBTX_CIN_ONE_BYTE_COMMON    0x5u  /**< single-byte system common: F6 */
+#define USBTX_CIN_SINGLE_BYTE        0xFu  /**< one MIDI byte as it is */
+
+//------------------------------------------------------------------------------
+usbtx_packet_t usbtx_packet(uint8_t status, uint8_t data1, uint8_t data2)
+{
+	usbtx_packet_t p = { { USBTX_CIN_SINGLE_BYTE, status, 0, 0 } };
+
+	data1 &= 0x7Fu;
+	data2 &= 0x7Fu;
+	if (status >= 0x80u && status < 0xF0u)
+	{
+		/* channel message: the CIN is the message type; C and D have one data byte */
+		p.b[0] = (uint8_t)(status >> 4);
+		p.b[2] = data1;
+		if (status < 0xC0u || status >= 0xE0u)
+			p.b[3] = data2;
+		return p;
+	}
+	switch (status)
+	{
+	case 0xF1u:	/* MTC quarter frame */
+	case 0xF3u:	/* Song Select */
+		p.b[0] = USBTX_CIN_TWO_BYTE_COMMON;
+		p.b[2] = data1;
+		break;
+	case 0xF2u:	/* Song Position Pointer */
+		p.b[0] = USBTX_CIN_THREE_BYTE_COMMON;
+		p.b[2] = data1;
+		p.b[3] = data2;
+		break;
+	case 0xF6u:	/* Tune Request */
+		p.b[0] = USBTX_CIN_ONE_BYTE_COMMON;
+		break;
+	default:	/* realtime, F0, F4, F5, F7, a SysEx payload byte: the byte on its own */
+		break;
+	}
+	return p;
+}
+//------------------------------------------------------------------------------
+bool usbtx_push(usbtx_ring_t *r, usbtx_packet_t p)
+{
+	if (r->write - r->read >= USBTX_RING_SIZE)
+	{
+		r->dropped++;
+		return false;
+	}
+	r->buf[r->write & (USBTX_RING_SIZE - 1u)] = p;
+	r->write++;
+	return true;
+}
+//------------------------------------------------------------------------------
+uint32_t usbtx_next(usbtx_ring_t *r, bool hostReady, bool busy, uint32_t now, usbtx_packet_t *out)
+{
+	/* no host, or one that has not taken the transfer in flight for USBTX_STALL_MS
+	 * and so has stopped reading: nothing waits for it */
+	if (!hostReady || (busy && now - r->sentAt >= USBTX_STALL_MS))
+	{
+		r->read = r->write;
+		return 0;
+	}
+	if (busy)
+		return 0;
+
+	uint32_t n = r->write - r->read;
+	if (n > USBTX_PACKETS_PER_TRANSFER)
+		n = USBTX_PACKETS_PER_TRANSFER;
+	for (uint32_t i = 0; i < n; i++)
+		out[i] = r->buf[(r->read + i) & (USBTX_RING_SIZE - 1u)];
+	r->read += n;
+	if (n != 0)
+		r->sentAt = now;
+	return n;
+}
+```
+
+- [ ] **Step 4: Run the host test to see it pass**
+
+Run: `bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug > /dev/null && cmake --build build/host-tests > /dev/null && build/host-tests/test_usbtx'`
+
+Expected:
+
+```
+PASS usbtx_channel_messages
+PASS usbtx_one_data_byte
+PASS usbtx_system_common
+PASS usbtx_realtime_single_byte
+PASS usbtx_sysex_and_undefined_single_byte
+PASS usbtx_data_bytes_seven_bit
+PASS usbtx_cin_of_every_status
+PASS usbtx_ring_order
+PASS usbtx_transfer_size
+PASS usbtx_busy_endpoint_keeps_packets
+PASS usbtx_no_host_keeps_nothing
+PASS usbtx_stalled_host_keeps_nothing
+PASS usbtx_full_ring_drops_new_packets
+PASS usbtx_counters_wrap
+PASS usbtx_long_stream_wraps_ring
+15 of 15 tests passed
+```
+
+While this plan was written, the same tests were also run against an implementation with fw 1.7's
+rules (CIN = `status >> 4`, the bytes as they come, the read position moved on while busy, no full
+check, nothing dropped without a host): 11 of the 15 failed. Only `usbtx_channel_messages`,
+`usbtx_ring_order`, `usbtx_transfer_size` and `usbtx_counters_wrap` passed, which fw 1.7 got right
+or which that implementation, keeping the 15-packet limit, could not get wrong. Against this module
+without the 100 ms rule (`usbtx_next()` ignoring `now`) only `usbtx_stalled_host_keeps_nothing`
+failed.
+
+- [ ] **Step 5: Write the failing firmware check**
+
+The glue needs the USB peripheral, so, as in E2.2-E2.7, its failing test is a set of checks on the
+release ELF and the sources: the packet builder and the ring are linked and used by
+`usb_sendMidi()`, with the time from `HAL_GetTick()`; the end of a transfer calls back into the
+glue, which starts the next one; the old ring is gone; and the parser waits for the song number.
+
+The header names the tasks (line 2, as E2.7 left it):
+
+`tools/fw_checks.sh`, replace:
+
+```bash
+# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.7), on the
+```
+
+with:
+
+```bash
+# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.8), on the
+```
+
+Then add the E2.8 checks before the task list:
+
+`tools/fw_checks.sh`, replace:
+
+```bash
+check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7"
+```
+
+with:
+
+```bash
+# ---- E2.8: USB MIDI out: packets with their CIN, a ring that waits for the endpoint
+check_E2_8() {
+	need usbtx_packet usbtx_push usbtx_next
+	must_call usb_sendMidi usbtx_packet usbtx_push usbtx_next HAL_GetTick
+	must_call usb_midiTxComplete usbtx_next HAL_GetTick CDC_Transmit_FS
+	must_call USBD_CDC_DataIn usb_midiTxComplete
+	gone usb_MidiInBuff usb_MidiInWrPtr usb_MidiInRdPtr
+	no_tree 'usb_MidiIn|usb_sendByte|TOTAL_MIDI_BUF_SIZE|NUM_SUB_BUFFERS' Core/Src Core/Inc Middlewares/JS
+	grep -A1 'case MIDI_SONG_SEL:' Core/Src/Soundengine/MIDI/MidiParser.c | grep -q 'parserState = MIDI_DATA1' \
+		|| fail "the MIDI parser routes a Song Select before its data byte"
+}
+
+check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8"
+```
+
+- [ ] **Step 6: Run it to see it fail**
+
+Run: `tools/check.sh && tools/fw_checks.sh E2.8`
+
+Expected: `check.sh` passes, with `100% tests passed, 0 tests failed out of 25` (E1's 22 ids,
+`syncq`, `buttons` from E2.7 and the new `usbtx`) and `== compiler warnings: 0`. Then:
+
+```
+FAIL E2.8: usbtx_packet is not linked
+FAIL E2.8: usbtx_push is not linked
+FAIL E2.8: usbtx_next is not linked
+FAIL E2.8: usb_sendMidi does not call usbtx_packet
+FAIL E2.8: usb_sendMidi does not call usbtx_push
+FAIL E2.8: usb_sendMidi does not call usbtx_next
+FAIL E2.8: usb_sendMidi does not call HAL_GetTick
+FAIL E2.8: usb_midiTxComplete is not linked
+FAIL E2.8: USBD_CDC_DataIn does not call usb_midiTxComplete
+FAIL E2.8: usb_MidiInBuff is still linked
+FAIL E2.8: usb_MidiInWrPtr is still linked
+FAIL E2.8: usb_MidiInRdPtr is still linked
+FAIL E2.8: 'usb_MidiIn|usb_sendByte|TOTAL_MIDI_BUF_SIZE|NUM_SUB_BUFFERS' found: Core/Src/Soundengine/USB/usb_manager.c:94:void usb_sendByte(uint8_t byte) Core/Src/Soundengine/USB/usb_manager.c:97:	*usb_MidiInWrPtr++ = byte; Core/Src/Soundengine/USB/usb_manager.c:98:	if(usb_MidiInWrPtr >= (usb_MidiInBuff+(TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS)))
+FAIL E2.8: the MIDI parser routes a Song Select before its data byte
+```
+
+`usb_sendByte` is not in the list of linked symbols: the compiler inlined it into `usb_sendMidi()`
+and the linker dropped its copy, so the source check stands for it.
+
+- [ ] **Step 7: Build the module into the firmware**
+
+The `lxr_usb_app` library (lines 141-144 after E2.7):
+
+`Core/CMakeLists.txt`, replace:
+
+```cmake
+# USB-MIDI message queue on top of the USB device stack.
+add_library(lxr_usb_app OBJECT
+    Src/Soundengine/USB/usb_manager.c
+)
+```
+
+with:
+
+```cmake
+# USB-MIDI message queue on top of the USB device stack, and the USB MIDI output
+# packets and transmit ring (usb_midiTx), which the host tests in tests/ build as well.
+add_library(lxr_usb_app OBJECT
+    Src/Soundengine/USB/usb_manager.c
+    Src/Soundengine/USB/usb_midiTx.c
+)
+# The host tests build usb_midiTx.c with -Wall -Wextra -Werror; warn about the same here.
+set_property(SOURCE Src/Soundengine/USB/usb_midiTx.c APPEND PROPERTY COMPILE_OPTIONS -Wextra)
+```
+
+Its row in the module table of the README:
+
+`README.md`, replace:
+
+```markdown
+| `lxr_usb_app`   | `Core/Src/Soundengine/USB`                      | USB-MIDI message queue                                |
+```
+
+with:
+
+```markdown
+| `lxr_usb_app`   | `Core/Src/Soundengine/USB`                      | USB-MIDI message queue, MIDI out packets and ring     |
+```
+
+- [ ] **Step 8: `usb_manager.c` and `usb_manager.h`: queue the packet, start the transfer when the endpoint is free**
+
+The include (fw 1.7 lines 15-16):
+
+`Core/Src/Soundengine/USB/usb_manager.c`, replace:
+
+```c
+#include "Soundengine/USB/usb_manager.h"
+#include <string.h>
+```
+
+with:
+
+```c
+#include "Soundengine/USB/usb_manager.h"
+#include "Soundengine/USB/usb_midiTx.h"
+#include <string.h>
+```
+
+`usb_sendByte()` and the old `usb_flushMidi()` (fw 1.7 lines 89-134) go. `usb_flushMidi()` mixes
+tabs and spaces, so a script deletes both; the new code follows in the next edit.
+
+Run this script on `Core/Src/Soundengine/USB/usb_manager.c`. It checks the SHA-256 of the block, then deletes its 46 lines, from `first` up to `stop`, which stays:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/USB/usb_manager.c'
+first = b'//-------------------------------------------------------------------------------\r\n/*\r\n * writes a byte to the Usb Tx buffer\r\n'
+stop = b'//------------------------------------------------------------------------------\r\nvoid usb_sendMidi(MidiMsg msg)\r\n'
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == 'b11e77b3c9d0927642013d050cec5c5b1f558eae9b4432298aa0001c41fcb924', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 46 lines from Core/Src/Soundengine/USB/usb_manager.c`
+
+`usb_sendMidi()` (fw 1.7 lines 135-147) becomes the transmit glue:
+
+`Core/Src/Soundengine/USB/usb_manager.c`, replace:
+
+```c
+//------------------------------------------------------------------------------
+void usb_sendMidi(MidiMsg msg)
+{
+	//MIDI byte[0] = 4 bits cable number + 4 bits event type code
+	usb_sendByte(msg.status>>4);
+
+	//then the 3 midi message bytes
+	//USB MIDI msg has to be ALWAYS 4 bytes long
+	//even if it is just a single clock byte
+	usb_sendByte(msg.status);
+	usb_sendByte(msg.data1);
+	usb_sendByte(msg.data2);
+}
+```
+
+with:
+
+```c
+//------------------------------------------------------------------------------
+//LICHOMAT (E2.8): USB MIDI out.
+//usb_sendMidi() makes the USB-MIDI event packet of a message (usb_midiTx.c) and
+//queues it in usb_txRing. Up to 15 packets go to the IN endpoint in one transfer
+//as soon as the endpoint is free: usb_sendMidi() and usb_flushMidi() start one
+//when none is in flight, and the end of a transfer (USBD_CDC_DataIn() calls
+//usb_midiTxComplete()) starts the next while packets wait. The USB core reads
+//usb_txBuffer, never the ring, until the transfer has ended. fw 1.7 sent straight
+//from its ring, dropped what it queued while the endpoint was busy, and sent
+//128 bytes past the ring's end each time its write pointer wrapped.
+//Nothing waits for a host that has not configured the device, nor for one that
+//has left a transfer untaken for USBTX_STALL_MS (100 ms, HAL_GetTick()): such a
+//host has stopped reading (some read only while a program has the port open),
+//and gets no burst of old messages when it reads again.
+//
+//usb_sendMidi() runs in the main loop and in seq_tick(), which runs in the main
+//loop or, while the SD card is busy, in TIM2 at priority 4; usb_midiTxComplete()
+//runs in OTG_FS at priority 3. Each masks interrupts (PRIMASK) while it uses the
+//ring or the endpoint: at most a copy of 15 packets and the start of a transfer.
+//------------------------------------------------------------------------------
+extern USBD_HandleTypeDef hUsbDeviceFS;
+
+static usbtx_ring_t usb_txRing;
+static usbtx_packet_t usb_txBuffer[USBTX_PACKETS_PER_TRANSFER] __attribute__((aligned(4)));
+
+static uint32_t usb_txLock(void)
+{
+	const uint32_t primask = __get_PRIMASK();
+	__disable_irq();
+	return primask;
+}
+//------------------------------------------------------------------------------
+static void usb_txUnlock(uint32_t primask)
+{
+	__set_PRIMASK(primask);
+}
+//------------------------------------------------------------------------------
+/** a host has configured the device, so the class handle and the IN endpoint
+ * exist (fw 1.7's CDC_Transmit_FS() read TxState through a NULL handle before) */
+static uint8_t usb_hostReady(void)
+{
+	return (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) && (hUsbDeviceFS.pClassData != NULL);
+}
+//------------------------------------------------------------------------------
+/** start the next transfer if the IN endpoint is free; interrupts are masked */
+static void usb_startTransfer(void)
+{
+	const uint8_t ready = usb_hostReady();
+	const uint8_t busy = ready && (((USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData)->TxState != 0);
+	const uint32_t n = usbtx_next(&usb_txRing, ready, busy, HAL_GetTick(), usb_txBuffer);
+
+	//cannot fail: the handle exists and no transfer is in flight
+	if(n != 0)
+		CDC_Transmit_FS((uint8_t*)usb_txBuffer, (uint16_t)(n * sizeof(usbtx_packet_t)));
+}
+//------------------------------------------------------------------------------
+/*
+ * start a transfer of the waiting packets if the IN endpoint is free.
+ * usb_sendMidi() and the end of each transfer do this as well, so the call
+ * from usb_tick() is only a fallback.
+ */
+void usb_flushMidi()
+{
+	const uint32_t primask = usb_txLock();
+	usb_startTransfer();
+	usb_txUnlock(primask);
+}
+//------------------------------------------------------------------------------
+void usb_midiTxComplete(void)
+{
+	const uint32_t primask = usb_txLock();
+	usb_startTransfer();
+	usb_txUnlock(primask);
+}
+//------------------------------------------------------------------------------
+uint32_t usb_midiTxDropped(void)
+{
+	return usb_txRing.dropped;
+}
+//------------------------------------------------------------------------------
+void usb_sendMidi(MidiMsg msg)
+{
+	const usbtx_packet_t packet = usbtx_packet(msg.status, msg.data1, msg.data2);
+
+	const uint32_t primask = usb_txLock();
+	if(usb_hostReady())
+		usbtx_push(&usb_txRing, packet);	//a full ring drops the packet and counts it
+	usb_startTransfer();
+	usb_txUnlock(primask);
+}
+```
+
+The prototypes (fw 1.7 lines 33-35):
+
+`Core/Inc/Soundengine/USB/usb_manager.h`, replace:
+
+```c
+void usb_sendMidi(MidiMsg msg);
+uint8_t usb_getMidi(MidiMsg* msg);
+void usb_flushMidi();
+```
+
+with:
+
+```c
+void usb_sendMidi(MidiMsg msg);
+uint8_t usb_getMidi(MidiMsg* msg);
+void usb_flushMidi();
+//LICHOMAT (E2.8): USBD_CDC_DataIn() calls this in the OTG_FS interrupt when a transfer
+//on the MIDI IN endpoint has ended; it starts the next one while packets wait
+void usb_midiTxComplete(void);
+//LICHOMAT (E2.8): USB MIDI packets dropped because the transmit ring was full
+uint32_t usb_midiTxDropped(void);
+```
+
+- [ ] **Step 9: `usbd_cdc.c` and `usbd_cdc.h`: the end of a transfer starts the next; the old ring goes**
+
+`usbd_cdc.c` is compiled with `-w`; Step 13 compiles it once with warnings on.
+
+The include, after the one E2.4 added (fw 1.7 line 61):
+
+`Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c`, replace:
+
+```c
+#include "usbd_ctlreq.h"
+#include "Soundengine/Sequencer/seq_platform.h"
+```
+
+with:
+
+```c
+#include "usbd_ctlreq.h"
+#include "Soundengine/Sequencer/seq_platform.h"
+#include "Soundengine/USB/usb_manager.h"
+```
+
+The old transmit ring (fw 1.7 lines 91-95):
+
+`Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c`, replace:
+
+```c
+uint8_t usb_MidiMessagesWrite = 0;
+
+uint8_t  usb_MidiInBuff [TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS];
+uint8_t* usb_MidiInWrPtr = usb_MidiInBuff;
+uint8_t* usb_MidiInRdPtr = usb_MidiInBuff;
+```
+
+with:
+
+```c
+uint8_t usb_MidiMessagesWrite = 0;
+```
+
+In `USBD_CDC_DataIn()`, the end of a transfer (fw 1.7 lines 912-916). The zero-length-packet
+branch above it stays; the glue never sends a transfer of 64 bytes, so MIDI never takes it:
+
+`Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c`, replace:
+
+```c
+    else
+    {
+      hcdc->TxState = 0U;
+    }
+    return USBD_OK;
+```
+
+with:
+
+```c
+    else
+    {
+      hcdc->TxState = 0U;
+
+      //LICHOMAT (E2.8): the transfer has ended; send the USB MIDI packets that wait
+      usb_midiTxComplete();
+    }
+    return USBD_OK;
+```
+
+The ring's size macros and declarations in `usbd_cdc.h` (fw 1.7 lines 142-144 and 158-160).
+The `NUM_SUB_BUFFERS` line has tabs inside it, so a script deletes both pieces:
+
+Run this script on `Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h`. It deletes these exact pieces; each must be in the file once:
+
+```bash
+python3 - <<'EOF'
+path = 'Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h'
+pieces = [
+    b'#define TOTAL_MIDI_BUF_SIZE                            0x40 // each buffer is 64 bytes\r\n#define NUM_SUB_BUFFERS\t\t\t\t\t\t\t\t\t0x2\t//double buffering\r\n\r\n',
+    b' extern uint8_t  usb_MidiInBuff [TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS];\r\n extern uint8_t* usb_MidiInWrPtr;\r\n extern uint8_t* usb_MidiInRdPtr;\r\n',
+]
+data = open(path, 'rb').read()
+for piece in pieces:
+    assert data.count(piece) == 1, piece
+    data = data.replace(piece, b'')
+open(path, 'wb').write(data)
+print('deleted', len(pieces), 'pieces from', path)
+EOF
+```
+
+Expected output: `deleted 2 pieces from Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h`
+
+- [ ] **Step 10: The MIDI parser waits for the data byte of a Song Select**
+
+`midiParser_parseUartData()` routed F3 at once, before its song number (fw 1.7 lines 2008-2010).
+The routed message carried the data byte of the message before it, and the song number then
+became a running-status byte of the last channel message. With it, a Song Select passed from DIN
+to USB (or to DIN out) would be wrong even with the right CIN. It now waits for one data byte, like
+the MTC quarter frame below it.
+
+Run this script on `Core/Src/Soundengine/MIDI/MidiParser.c`. The old text mixes tabs and spaces, so the script replaces it:
+
+```bash
+python3 - <<'EOF'
+path = 'Core/Src/Soundengine/MIDI/MidiParser.c'
+old = b'        case MIDI_SONG_SEL:\t\t  // passthru only\r\n          parseMsg = 1;\r\n          break; \r\n'
+new = b'        case MIDI_SONG_SEL:\t\t  // passthru only\r\n          parserState = MIDI_DATA1;     // LICHOMAT (E2.8): wait for the song number;\r\n          midiMsg_tmp.bits.length = 1;  // fw 1.7 routed F3 without it\r\n          break;\r\n'
+data = open(path, 'rb').read()
+assert data.count(old) == 1, 'the old text is not in the file exactly once'
+open(path, 'wb').write(data.replace(old, new))
+print('replaced in', path)
+EOF
+```
+
+Expected output: `replaced in Core/Src/Soundengine/MIDI/MidiParser.c`
+
+- [ ] **Step 11: Give the edited files CRLF line endings**
+
+Run:
+
+```bash
+python3 - Core/Inc/Soundengine/USB/usb_midiTx.h Core/Src/Soundengine/USB/usb_midiTx.c \
+  Core/Src/Soundengine/USB/usb_manager.c Core/Inc/Soundengine/USB/usb_manager.h \
+  Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c \
+  Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h Core/Src/Soundengine/MIDI/MidiParser.c <<'EOF'
+import sys
+for path in sys.argv[1:]:
+    with open(path, 'rb') as f:
+        data = f.read()
+    data = data.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+    with open(path, 'wb') as f:
+        f.write(data)
+    print('CRLF', path)
+EOF
+```
+
+Expected: seven lines starting with `CRLF`. `tests/test_usbtx.c`, `tests/CMakeLists.txt`,
+`tools/fw_checks.sh` and `Core/CMakeLists.txt` stay LF.
+
+- [ ] **Step 12: Build and run the checks**
+
+Run: `tools/check.sh && tools/fw_checks.sh`
+
+Expected: the host tests as in Step 6 (`100% tests passed, 0 tests failed out of 25`), then:
+
+```
+== firmware build (release)
+memory: ITCM 13128/16384 B (80.1%, free 3256)  DTCM 107388/131072 B (81.9%, rest is stack)  RAM <n>/393216 B (...)  image <n>/1015808 B (...)
+image: <repo>/build/release/LXR_V2_V1.7.img
+== compiler warnings: 0
+PASS E2.2
+PASS E2.3
+PASS E2.4
+PASS E2.5
+PASS E2.6
+PASS E2.7
+PASS E2.8
+```
+
+Against E2.7: ITCM 13128 B (unchanged), RAM +444 B, image +752 B. The 444 B go beyond the spec
+budget (§10) that the E2 conventions check: N20 allows them, and review row R6.2 (E4.1) counts them
+on top of the 8704 B for the timing core, its sync queues and its glue.
+
+- [ ] **Step 13: Compile `usbd_cdc.c` once with warnings on**
+
+The middleware is built with `-w`. Recompile it from its recorded command with `-Wall -Wextra`
+instead, and look for warnings in the lines this task changed (the includes and the ring near the
+top, `USBD_CDC_DataIn()`):
+
+Run:
+
+```bash
+python3 - <<'EOF'
+import json, re, subprocess
+entry = next(e for e in json.load(open('build/release/compile_commands.json')) if e['file'].endswith('usbd_cdc.c'))
+cmd = re.sub(r'(^| )-w( |$)', r'\1-Wall -Wextra\2', entry['command'])
+cmd = re.sub(r' -o \S+', ' -o /dev/null', cmd)
+out = subprocess.run(cmd, shell=True, cwd=entry['directory'], capture_output=True, text=True).stderr
+lines = [l for l in out.splitlines() if 'warning:' in l and 'usbd_cdc.c' in l]
+print(len(lines), 'warnings in usbd_cdc.c')
+for l in lines:
+    m = re.search(r'usbd_cdc\.c:(\d+)', l)
+    if m and (60 <= int(m.group(1)) <= 100 or 895 <= int(m.group(1)) <= 930):
+        print('NEW?', l)
+EOF
+```
+
+Expected:
+
+```
+2 warnings in usbd_cdc.c
+```
+
+Both warnings are fw 1.7's unused `cfgidx` parameters of `USBD_CDC_Init()` and `USBD_CDC_DeInit()`.
+
+- [ ] **Step 14: Review**
+
+- [ ] Every use of `usb_txRing`, `usb_txBuffer` and the IN endpoint is between `usb_txLock()` and
+  `usb_txUnlock()`, in `usb_sendMidi()`, `usb_flushMidi()` and `usb_midiTxComplete()`.
+  - Check it in the release disassembly:
+    `bash -c 'source tools/env.sh && arm-none-eabi-objdump -d --disassemble=usb_sendMidi build/release/LXR_V2_STM32F765.elf' | grep -E 'cpsid|msr|bl[[:space:]]+[0-9a-f]+ <'`.
+  - With Arm GNU 14.3.rel1 it shows, in address order: `bl usbtx_packet`, `cpsid i`,
+    `bl HAL_GetTick`, `bl usbtx_next`, `msr PRIMASK` (the return when no transfer starts),
+    `bl usbtx_push` (the path with a host, which then branches back to the shared `HAL_GetTick` and
+    `usbtx_next`), `bl CDC_Transmit_FS`, `msr PRIMASK`. Every call after `usbtx_packet` lies
+    between `cpsid i` and an `msr PRIMASK`.
+- [ ] Contexts:
+  - `git grep -n 'usb_sendMidi(msg)' -- Core` finds the two callers, `seq_sendMidi()` in
+    `sequencer.c` and the routing in `MidiParser.c`. They run in the main loop and in the
+    `seq_tick()` context (main loop or TIM2, priority 4).
+  - `usb_midiTxComplete()` runs in OTG_FS (priority 3). Neither of the other two can preempt it,
+    and it cannot interrupt them while they hold PRIMASK.
+- [ ] The interrupts are masked for at most a copy of 15 packets and the start of a transfer, a few
+  hundred instructions. The USART3 and OTG_FS stamps of E2.4 can be late by that much.
+- [ ] `usb_hostReady()` checks `dev_state` and `pClassData` before `TxState` is read, so
+  `CDC_Transmit_FS()` never runs without a class handle (defect 4).
+- [ ] The time:
+  - `HAL_GetTick()` returns `uwTick`, a volatile 32-bit word, so a read with PRIMASK set is
+    atomic.
+  - SysTick (priority 0, `TICK_INT_PRIORITY`) counts it in milliseconds, also while TIM2 or
+    OTG_FS run.
+  - `now - sentAt` is unsigned, so the 49.7-day wrap of the count is harmless
+    (`usbtx_stalled_host_keeps_nothing` starts its transfer 64 ms before it).
+- [ ] A transfer has at most 60 bytes, so MIDI never takes the zero-length-packet branch of
+  `USBD_CDC_DataIn()`; the call after `TxState = 0` runs at the end of every transfer.
+- [ ] The fw 1.7 behaviour listed above is kept (the channel and realtime packets are pinned by
+  `usbtx_channel_messages` and `usbtx_realtime_single_byte`).
+
+Intended changes for the report:
+- System common messages passed from DIN to USB keep their data (CIN 0x2, 0x3, 0x5). SysEx goes
+  out byte by byte with CIN 0xF instead of garbled.
+- No stray bytes from the LXR's memory reach the computer.
+- Nothing is lost while a transfer is in flight. USB MIDI out keeps going while the SD card is
+  busy: TIM2 sends, and the end of a transfer starts the next.
+- A full ring (128 packets) drops the new packets and counts them.
+- Nothing is kept for a host that has not configured the device, or for one that has left a
+  transfer untaken for 100 ms. A host that reads again gets at most that transfer late (up to 15
+  packets, as with fw 1.7), and no burst of old messages.
+- A Song Select passed through (DIN to USB, or to DIN out) waits for its song number.
+
+- [ ] **Step 15: Commit**
+
+```bash
+git add tests/test_usbtx.c tests/CMakeLists.txt tools/fw_checks.sh Core/CMakeLists.txt \
+  Core/Inc/Soundengine/USB/usb_midiTx.h Core/Src/Soundengine/USB/usb_midiTx.c \
+  Core/Src/Soundengine/USB/usb_manager.c Core/Inc/Soundengine/USB/usb_manager.h \
+  Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c \
+  Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h \
+  Core/Src/Soundengine/MIDI/MidiParser.c README.md
+git commit -m "USB MIDI out: CIN per USB MIDI 1.0, a ring that waits for the endpoint (E2.8)
+
+usb_sendMidi() builds each USB-MIDI event packet in the new host-tested
+usb_midiTx.c: CIN 0x2/0x3/0x5 for MTC, Song Select, SPP and Tune
+Request, 0xF for realtime and SysEx bytes, unused bytes 0. Packets wait
+in a 128-packet ring until the IN endpoint is free; the end of a
+transfer starts the next, from a buffer of its own. fw 1.7 sent 128
+bytes past its ring on every wrap, dropped what it queued while the
+endpoint was busy, and sent system common messages without their data.
+A full ring drops and counts new packets. Nothing is kept without a
+host, or for one that has left a transfer untaken for 100 ms, so a
+host that reads again gets no burst of old messages. The MIDI parser
+waits for the data byte of a Song Select.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+**Hardware checks affected:** H5, H7 and H11 when MIDI out is watched over USB. The new X4 below
+checks USB MIDI out directly.
+
+> **Assembly note.** The texts for E4.2 and E4.3 and the items under "For assembling the plan"
+> below are in the plan already, on top of E2.7's changes: E4.1, E4.2 Step 5, E4.3 Steps 3-5 and
+> the other places they name. N20 is in the notes, and E3.4 Step 7 gives the `tools/fw_checks.sh`
+> line of HANDOFF.md the range E2.2-E2.8. Nothing from here to "How this section was checked"
+> is a step of this task.
+
+**For E4.2 (`docs/lichomat/hardware-checklist.md`).**
+- Add the section below after E2.7's U1, before `## Optional: clock jacks`. X4 is not optional:
+  like U1 it checks a 1.7 defect that LICHOMAT fixes, and it has its own **Expected** and
+  **Record**.
+- Add the row `| X4 | | | |` to the run sheet, after `| X3 | | | |`.
+- In "What you need", the sentence `The LXR's USB MIDI out keeps the fw 1.7 defects of tracker task
+  E2.8 until that task is done (it can lose or garble data); check it over USB only after E2.8.`
+  becomes `X4 checks the LXR's USB MIDI out.`
+- The checklist test of E4.2 looks only at H1-H13, so it passes unchanged.
+
+```markdown
+## X4: USB MIDI out
+
+Not in the spec's list: 1.7 defects of the USB MIDI out that LICHOMAT fixes (tracker E2.8).
+
+Setup:
+- The LXR is connected to the computer by USB.
+- MIDI Monitor shows the LXR's USB port, `Sonic Potions USB MIDI`, with time stamps.
+- A DAW records MIDI from that port.
+- Every voice sends on its own MIDI channel: voice n on channel n, as in H8.
+
+1. Internal sync, BPM 120, a pattern with voice 1 on steps 1, 5, 9 and 13 only. Leave the LXR
+   stopped for 10 s, then press START, wait 30 s, and press STOP.
+2. A long stream that wraps the transmit buffer many times: all 7 voices on all 16 steps, and on
+   voice 1 every step with flam `x8`; BPM 180. Record the LXR's USB MIDI in the DAW for 16 bars
+   (about 8700 messages), then STOP.
+3. System common and SysEx passed from DIN to USB:
+   - Set the routing (second screen of the global menu's first sub-page) to `M2U`.
+   - With the LXR stopped, send from the computer, through the MIDI interface, to the LXR's DIN
+     MIDI in: a Song Position Pointer of 32 (`F2 20 00`), a Song Select 5 (`F3 05`), a Tune
+     Request (`F6`), an MTC quarter frame (`F1 13`), and the SysEx
+     `F0 7D 01 02 03 04 05 06 07 08 09 F7`.
+   - With SendMIDI, for example:
+     `sendmidi dev "<name of the MIDI interface>" spp 32 ss 5 tun tc 1 3 hex syx 7D 01 02 03 04 05 06 07 08 09`.
+   - A DAW can send the SPP (locate while stopped) and MTC to the interface as well.
+4. Play the pattern of step 1. Pull the USB cable, wait 10 s, plug it in again, and select the
+   port in MIDI Monitor again.
+5. Play the pattern of step 1. Quit MIDI Monitor and the DAW, so that no program uses the LXR's
+   port, wait 10 s, and start MIDI Monitor again.
+
+**Expected:**
+- 1: while stopped, only Clock (F8) messages, 20.8 ms apart. START gives Start (FA), then a Note
+  On and its Note Off on channel 1 every 500 ms between the clocks. STOP gives Stop (FC). No
+  message of any other type appears at any time. 1.7 sent 128 bytes of its memory every 32
+  messages; a host drops most of them, but any it delivers show up here as stray messages.
+- 2: in the DAW, channel 1 has 8 evenly spaced short notes (about 3.5 ms long) on every step, 128
+  per bar, and channels 2-7 one note per step, 16 per bar. Zoom to one bar at a time and look
+  through all 16: no note is missing, and none is long (stuck).
+- 3: MIDI Monitor shows each of the five once, with exactly the bytes sent, between the LXR's own
+  clocks. With 1.7 the SPP, the Song Select and the quarter frame arrived without their data, and
+  the SysEx garbled.
+- 4: the LXR plays on while the cable is out. After plugging in, the clock and the notes come back
+  at their normal rate, with no group of old messages sharing one time stamp.
+- 5: when MIDI Monitor runs again, at most 15 old messages share its first time stamp (the
+  transfer that was under way when the computer stopped reading), then the clock and the notes go
+  on at their normal rate. If the computer kept reading the port while no program used it, there
+  are no old messages at all.
+
+**Record:** for 1, any message of another type; for 2, any missing or long note (bar and channel);
+for 3, what MIDI Monitor showed for each message; for 4 and 5, what came first, and how many
+messages shared the first time stamp.
+```
+
+**For E4.3 (`docs/lichomat/release-notes-v0.1.md`).** Add this entry at the end of "Fixed":
+
+```markdown
+- **USB MIDI out.** 1.7 sent 128 bytes of unrelated memory to the computer each time its USB send
+  buffer wrapped, dropped messages sent while the previous USB transfer was still under way, and
+  passed Song Position Pointer, MTC, Song Select and SysEx from DIN on to USB without their data
+  or garbled. Now every message goes out once and complete while the computer reads the port, also
+  while a preset is being saved. While the computer does not read it (some systems read it only
+  while a program has it open), the LXR drops what it would send, so a program that opens the port
+  later gets at most 15 old messages, not seconds of them. A Song Select passed on from DIN, to USB
+  or to DIN out, now carries its song number.
+```
+
+**For assembling the plan** (texts of other tasks that this task changes; they assume E2.7's own
+changes are in):
+- **Task order and dependencies, and Epic E2** (after E2.7's item 1):
+  - after the item of E2.7 in the task order, add "**E2.8**: USB MIDI out: packets with the CIN of
+    USB MIDI 1.0 that wait in a ring until the IN endpoint is free (`usb_midiTx.c`, host test
+    `usbtx`; `tools/fw_checks.sh E2.8`), and the MIDI parser waits for the data byte of a Song
+    Select." Renumber the items after it, and delete the bullet of E2.8 from the list under them
+    ("Tracker tasks whose sections are written and reviewed on their own …");
+  - the E2 heading becomes "tasks E2.1-E2.8";
+  - in the E2 intro, the order line ends with "→ E2.7 → E2.8.", and its table gets this row after
+    E2.7's: `| E2.8 | USB MIDI out: the right CIN; nothing sent past the ring, lost while the
+    endpoint is busy, or kept for a host that does not read. |`;
+  - the E2 intro's Files table gets the rows of the next item, and its `tools/fw_checks.sh` row
+    "E2.2-E2.8".
+- **File structure:** new rows for `Core/Inc/Soundengine/USB/usb_midiTx.h` and
+  `Core/Src/Soundengine/USB/usb_midiTx.c` (USB-MIDI event packets and the transmit ring, plain C,
+  host-tested; E2.8), `tests/test_usbtx.c` (USB MIDI out packets and ring, `usbtx`; E2.8) and
+  `Core/Src/Soundengine/USB/usb_manager.c`, `Core/Inc/Soundengine/USB/usb_manager.h` (USB MIDI
+  transmit glue; E2.8). The rows of `tests/CMakeLists.txt`, `tools/fw_checks.sh` ("E2.2-E2.8"),
+  `Core/CMakeLists.txt`, `README.md`, `MidiParser.c` and `usbd_cdc.c` get E2.8, and `usbd_cdc.h`
+  joins the `usbd_cdc.c` row.
+- **Test counts.** E2.8 adds the ctest id `usbtx`, one more than E2.7's texts count:
+  - E3.3 Step 6: `out of 26`, with the 22 ids registered in E1, `syncq` from E2.1, `buttons` from
+    E2.7, `usbtx` from E2.8 and `cpumeter`;
+  - E3.4 Step 5 and E4.1 row R3.1: `out of 26`.
+- **E3.3's `test_cpumeter` line** still goes in after the `test_syncq` line, whose text is
+  unchanged; the E2.7 block and the `test_usbtx` line follow it.
+- **E4.1 row R6.2 (spec §10).**
+  - E2.8 adds 444 B of RAM (Step 12): the 528-byte ring and the 60-byte transfer buffer, in place
+    of fw 1.7's 128-byte ring and its two pointers. The 8704 B of R6.2 are for the timing core,
+    its sync queues and its glue.
+  - Measured on top of E2.7, E3.1 and E3.3, with the E1.13 core of the replay: DTCM + RAM is
+    387336 B with E2.8 and 386892 B without it. With E1.14 (80 B) and the plan's E1 core (60 B
+    more than the replay's: E2 open issue 15 now gives +8460 B after E2.6, the replay +8400 B), that
+    is about 387476 B and 387032 B. R6.2 would then fail by about 350 B with E2.8, and pass by
+    about 90 B without it.
+  - A smaller ring would not be enough: 64 packets save 256 B.
+  - R6.2 therefore allows the ring on top of the 8704 B, which keeps its margin:
+
+    ```markdown
+    | R6.2 | A | the same line | DTCM + RAM is at most 387568 B: the baseline 378420 B plus 8704 B (event queue 6 KB, sync queues 1.5 KB, other state under 1 KB) plus 444 B (the USB MIDI transmit ring of E2.8, N20) | open |
+    ```
+
+  - In E4.1 Step 4 the resources text `(review row R6.2 allows +8704 B)` becomes
+    `(review row R6.2 allows +8704 B, and 444 B more for the USB MIDI transmit ring of E2.8)`.
+- **E4.1 Step 4, the stage 1 report.** E2.8 has an *Intended changes* list too (Step 14), so the
+  text that E2.7's item 4 makes "lists of E2.2–E2.5 as N18 amended them, and of E2.7" becomes "…,
+  and of E2.7 and E2.8", in the task's intro and in Step 4. Under "1. Deviations from the spec",
+  at the end of the table (after E2.7's two rows), add:
+
+  ```markdown
+  | §8 changes outside the core | the USB realtime intercept in `usbd_cdc.c`; in `MidiParser.c` the echo, realtime and SPP | also the USB MIDI out: `usb_manager.c/.h`, the new `usb_midiTx.c/.h`, `usbd_cdc.c/.h` (the old ring goes, the end of a transfer starts the next), and in `MidiParser.c` a Song Select that waits for its song number | N20 (E2.8) |
+  | §10 RAM | about 7.5 KB (review row R6.2: 8704 B) | 444 B more, for the USB MIDI transmit ring and its transfer buffer | N20 (E2.8) |
+  ```
+
+  Under "2. Intended changes against fw 1.7", after E2.7's two rows, before the last row (the
+  start-up screen and the CPU page), add:
+
+  ```markdown
+  | USB MIDI out: the CIN of USB MIDI 1.0 for every message, nothing sent past a buffer, nothing lost while a transfer is under way, nothing kept for a computer that does not read | E2.8 (N20) | Fixed |
+  | A Song Select passed on from DIN, to USB or to DIN out, carries its song number | E2.8 (N20) | Fixed |
+  ```
+- **Implementation notes: a note N20.** This task goes beyond spec §8 (files the spec does not
+  list, and changes to `usbd_cdc.c` and `MidiParser.c` beyond the ones it names), §10 (RAM) and
+  §12 (changes against fw 1.7). E4.1 rows R1.1 and R1.4 treat a deviation without a note as a
+  finding, so, as N19 does for E2.7:
+
+  ```markdown
+  ## N20. USB MIDI out (E2.8)
+
+  fw 1.7's USB MIDI out had defects outside D1–D8 (E2 open issue 10). Stage 1 fixes them (task
+  E2.8), beyond spec §8, §10 and §12:
+
+  - **Packets:** every message gets the CIN of USB MIDI 1.0 table 4-1, and unused bytes are 0: F1
+    and F3 CIN 0x2, F2 0x3, F6 0x5, realtime and SysEx bytes 0xF, so SysEx goes out one byte per
+    packet. fw 1.7 sent F1, F2 and F3 without their data bytes, SysEx garbled, and 128 bytes from
+    past its ring on every wrap.
+  - **Transmit ring:** up to 128 packets wait until the IN endpoint is free, and the end of a
+    transfer starts the next, so nothing is lost while a transfer is under way, also while the SD
+    card is busy. A full ring drops and counts the new packet (spec §11).
+  - **No old messages:** nothing waits for a host that has not configured the device, or for one
+    that has left a transfer untaken for 100 ms: it has stopped reading.
+  - **Song Select:** the MIDI parser routes F3 with its song number, to USB and to DIN out. fw 1.7
+    routed it at once, with the data bytes of the message before it.
+  - **Files beyond §8:** `usb_manager.c/.h` and the new `usb_midiTx.c/.h`; in `usbd_cdc.c/.h` the
+    old ring goes and `USBD_CDC_DataIn()` starts the next transfer.
+  - **RAM beyond §10:** 444 B for the ring and its transfer buffer, in place of fw 1.7's 136-byte
+    ring. Review row R6.2 allows it on top of the timing core's 8704 B.
+  - The release notes list it under fixed bugs. Hardware check X4 covers it.
+  ```
+
+  The notes then run N1–N20. Every text that E2.7's item 8 changes from N1–N18 to N1–N19 becomes
+  N1–N20 instead, in the plan and outside it ("N12–N19 were added during planning" becomes
+  "N12–N20"), so that R1.2 reviews N20 as well. The E1 intro's list of the notes added during
+  planning gets this line after E2.7's N19 line: "- N20: the USB MIDI out of E2.8: the CIN, the
+  transmit ring, no old messages, the Song Select, and its files and RAM beyond the spec;".
+- **E2 open issues 10 and 11, and the same two items in the closing questions:**
+  - The last, italic part of open issue 10, and the *Status* line of its closing item (Epic E2
+    item 10), become:
+
+    ```markdown
+    *Status: fixed by E2.8 (N20); hardware check X4 (E4.2) covers it.*
+    ```
+
+  - Open issue 11 and its closing item (Epic E2 item 11) get this line at the end:
+
+    ```markdown
+    *Status: the USB half is fixed by E2.8: `usb_sendMidi()` and `usb_flushMidi()` hold PRIMASK while they use the transmit ring. The DIN half remains: `uart_sendMidi()` writes the transmit FIFO without a lock, as in fw 1.7.*
+    ```
+- **E4.1 row R8.5** becomes:
+
+  ```markdown
+  | R8.5 | M | USB MIDI out (`usb_sendMidi()`, `usb_flushMidi()`, `usb_midiTxComplete()`, `usb_midiTx.c`; E2.8, N20) | every packet has the CIN of USB MIDI 1.0 table 4-1; the ring and the endpoint are used only with interrupts masked; nothing is sent past a buffer; nothing waits for a host that is not there or has stopped reading | open |
+  ```
+- **E4.3 Step 4:** delete its last sentence, `Unless tracker task E2.8 fixed the USB MIDI out
+  defects, R8.5 is one of these rows: ...`, up to `is not affected.`
+- **E4.3 Step 5:**
+  - Add this row at the end of the claims table:
+
+    ```markdown
+    | USB MIDI out: the right CIN, nothing lost while the computer reads, no stray bytes, no burst of old messages; a routed Song Select keeps its song number | `usbtx`; `tools/fw_checks.sh E2.8`; review R8.5; X4 |
+    ```
+
+  - Add `usbtx` to the `ctest -R` list; its expected `out of` count grows by one (`out of 17`, as
+    E2.7's item 6 leaves it, becomes `out of 18`).
+  - Add `8\.5` to the `grep` of review rows, and `tools/fw_checks.sh E2.8` after the other commands,
+    with `PASS E2.8` expected.
+- **`docs/lichomat/HANDOFF.md`** keeps `(E2.2-E2.6)` on the `tools/fw_checks.sh` line, as E2.7
+  leaves it, because E3.4 Step 7 quotes that line; change both together if the range should be
+  exact.
+- **E4.2 and E4.3:** X4 and the "Fixed" entry above go in after E2.7's texts. In the checklist U1
+  follows H13 and X4 follows U1, before `## Optional: clock jacks`; in the run sheet X4 follows X3.
+  In "Fixed" the order is D8, E2.7's entry, this one.
+
+**How this section was checked.**
+- A scratch copy of the repository was brought to the state after E2.7:
+  - E1.1-E1.13 replayed with the final core and tests;
+  - E2.1-E2.6 replayed by the E2 writers' tool, which renders the E2 section of the plan byte for
+    byte, apart from the measured RAM and image deltas;
+  - E2.7 applied by a script that follows the text of its section (`tools/check.sh`: 24 host tests,
+    0 warnings; `tools/fw_checks.sh`: PASS E2.2-E2.7).
+- Every step of this task was then applied by a script from exactly the text shown here, and the
+  outputs shown were captured from that run. A second script followed the Markdown of this section
+  as written, and produced the same tree.
+- Also checked:
+  - the two mutant runs of Step 4;
+  - `usb_manager.c` compiled with `-Wextra` (0 warnings);
+  - the disassembly of `usb_sendMidi()` and `USBD_CDC_DataIn()` (Step 14);
+  - E3.1 and E3.3 applied on top, with and without this task, for the R6.2 figures above.
+- Not checked: AddressSanitizer, which hangs inside the sandbox the plan was written in (CI runs
+  it); anything on the LXR-02 (X4 is for the owner).
+
+---
+
 ### E2: spec coverage
 
 | Spec / notes | Where |
@@ -15264,6 +18820,8 @@ image is the one to run H2-H11 on (E4.2).
 | §10 ITCM net ≤ 0 | E2.2 (−1872 B), E2.6 (`LXR_ITCM_SOURCES`) |
 | §11 a full sync queue rejects and counts | E2.1 (`seqp_syncOverflows()` for the CPU page of E3.3) |
 | N11 `IN_ITCM_RAM` off `seq_setPendingPatternActive()` and `seq_setMute()` | E2.2 |
+| N19 the global menu's own button mode (a fw 1.7 bug outside D1-D8); the host test that relaxes §9.1 for `buttonHandler.c` | E2.7 (`buttons`, `tools/fw_checks.sh E2.7`) |
+| N20 USB MIDI out: the CIN of USB MIDI 1.0, a ring that waits for the endpoint and keeps nothing for a host that does not read, the Song Select with its song number; §11 a full ring drops and counts | E2.8 (`usbtx`, `tools/fw_checks.sh E2.8`) |
 
 Not in E2: the splash and the version (E3.1), the CPU meter hooks in `TIM2_IRQHandler` and
 `soundengine_process()` (E3.3, on top of the E2.4 versions of these lines), CI (E3.4) and the
@@ -15293,6 +18851,18 @@ printed the failures quoted in each Step 2 before its task and `PASS` for every 
 `tools/check.sh` passed with 0 warnings after each task, and the line numbers, RAM and image sizes
 quoted here are the ones of that replay. E1.14 was not in it.
 
+**E2.7 and E2.8 (inserted after the plan review)** were written, reviewed and fixed on their own. A
+scratch copy of the repository was brought to the state before them: E1.1–E1.13 with the final core
+and tests, then E2.1–E2.6 as this section first gave them, before the fixes of the plan review.
+Every step of E2.7, and then of E2.8, was applied by a script from the text of its section, and the
+outputs shown in them are the captured ones: after E2.7 `tools/check.sh` passed 24 host tests with
+0 warnings and `tools/fw_checks.sh` printed `PASS` for E2.2–E2.7; after E2.8 it passed 25 tests,
+with `PASS` for E2.2–E2.8. E2.8 was also applied with E3.1 and E3.3 on top, with and without it,
+for the RAM figures of review row R6.2. When the two sections were inserted, every text they quote
+from E2.1–E2.6 and from the fw 1.7 files was checked again against this plan: the plan review
+changed none of them. E1.14 was not in these replays; it changes no file that E2.7 or E2.8 edits,
+and adds 80 B of RAM.
+
 ### E2: open issues (owner decisions and follow-ups)
 
 1. **Single skip-once marker.** The API says "a new call replaces the marker". Suppose notes
@@ -15302,8 +18872,8 @@ quoted here are the ones of that replay. E1.14 was not in it.
    the core one marker per track, and the mailbox already passes one per track.*
 2. **MIDI transport out in the slave modes.** *Settled by N18.2 and done in E2.2:* the `transport`
    callback sends Start, Stop and Continue only in internal sync (`seq_sendTransport()`, checked by
-   `tools/fw_checks.sh E2.2`); as a slave the LXR sends none, and thru forwards what arrives. Owner
-   question Q7.
+   `tools/fw_checks.sh E2.2`); as a slave the LXR sends none, and thru forwards what arrives. *Answered by the owner
+   (Q7, 2026-10-24): stay MIDI-compliant; the existing MIDI handling needs no change.*
 3. **A resume sends Continue (FB).** *Superseded by N18.2: only the slave modes resume, and they
    send nothing.*
 4. **One-shot roll MIDI velocity.** *Settled by N18.3 and done in E2.3:* the current step's volume,
@@ -15324,14 +18894,16 @@ quoted here are the ones of that replay. E1.14 was not in it.
    block, and from TIM2 only while the SD card is busy. So MIDI clock out and the clock out jack
    jitter by up to about one block (1.45 ms), as the triggers do. The spacing has not been measured;
    E3.3 and H12 should record it.
-10. **USB MIDI out defects, outside D1-D8, not fixed here.** `usb_flushMidi()` sends 128 bytes past
-    its ring on every wrap, drops data while the endpoint is busy, and `usb_sendMidi()` uses the
-    wrong CIN for system common messages. They affect the LXR's USB MIDI out. *Tracker task E2.8,
-    written as a section of its own. Until it is done the hardware checks that watch the LXR's MIDI
-    out use DIN (E4.2), and review row R8.5 puts them into the release notes' known limitations.*
+10. **USB MIDI out defects, outside D1-D8, not fixed in E2.1-E2.6.** `usb_flushMidi()` sends 128
+    bytes past its ring on every wrap, drops data while the endpoint is busy, and `usb_sendMidi()`
+    uses the wrong CIN for system common messages. They affect the LXR's USB MIDI out.
+    *Status: fixed by E2.8 (N20); hardware check X4 (E4.2) covers it.*
 11. **MIDI sends from the main loop remain.** The mute Note Off, the channel change and a pattern
     change while stopped still send MIDI from the main loop. They can race with `seq_tick()` sends
     only while TIM2 runs, the same race class as in fw 1.7.
+    *Status: the USB half is fixed by E2.8: `usb_sendMidi()` and `usb_flushMidi()` hold PRIMASK
+    while they use the transmit ring. The DIN half remains: `uart_sendMidi()` writes the transmit
+    FIFO without a lock, as in fw 1.7.*
 12. **Intermediate builds.** E2.2 and E2.3 have no MIDI clock input, and E2.2 to E2.4 have no jack
     input. Do not test the slave modes on them.
 13. **Spec wording.** D4 and §7.1 say fw 1.7 echoed once in play mode. It echoed twice in both
@@ -15341,17 +18913,19 @@ quoted here are the ones of that replay. E1.14 was not in it.
     - E2.4: the execution-context comment in `seq_core.h`.
 
     Epic E1 of this plan has all three exactly as quoted here (checked again when the plan was
-    assembled). If E1 changes them, adapt these edits.
+    assembled; E1.14 leaves them as they are). If E1 changes them, adapt these edits.
 15. **RAM.** With the stand-in core, E2.2 adds 8464 B of RAM for the core, the sync queues and the
     glue. The spec estimates about 7.5 KB for them (§10), but the 24-byte events (N2, N13.7) make
     the event queue 6 KB. Confirm with E1's core. *With the E1 core of this plan: +8484 B after
-    E2.2, +8460 B after E2.6; review row R6.2 allows 8704 B. E1.14 adds 80 B.*
+    E2.2, +8460 B after E2.6; review row R6.2 allows 8704 B. E1.14 adds 80 B. E2.8 adds 444 B for
+    the USB MIDI transmit ring, which R6.2 allows on top (N20).*
 16. **The dropout of N15 is E1's.** E2 has no dropout logic of its own. The API header still names
     a fixed `SEQC_DROPOUT_MS` (500 ms), which stops a 4 PPQ jack clock below 30 BPM. N15 sets
     `max(500 ms, 2 × the expected clock interval)`, so check that E1's core implements it.
-17. **E2.7 is not in this section.** The tracker task for the fw 1.7 bug in the global menu (a step
-    button without SHIFT sets every track length) was added after this section was assigned. *Its
-    section is written on its own and inserted after the plan review.*
+    *E1.10 implements it, and E1.14 updates the header comment.*
+17. **E2.7 follows this section.** The fw 1.7 bug in the global menu (a step button without SHIFT
+    sets every track length) was added to the tracker after this section was assigned; task E2.7
+    fixes it.
 18. **Sync queue overflows on the CPU page.** `seqp_syncOverflows()` (E2.1) counts the sync events
     that full queues rejected (spec §11). E3.3's page shows only the event queue counters, but
     could show this count as well.
@@ -15385,12 +18959,13 @@ Python 3 (standard library), Ruby (macOS system Ruby, for the workflow dry run),
 - E1.1–E1.14 are done: `tests/CMakeLists.txt`, `tests/seqc_test.h`, `tests/fake_host.c`/`.h` and the
   13 test files exist, and `Core/Inc/Soundengine/Sequencer/seq_core.h` declares
   `void seqc_stats(seqc_stats_t *out);`.
-- E2.1–E2.6 are done: `seq_core.c` is linked into the firmware (`lxr_sequencer` in
-  `Core/CMakeLists.txt`), `seq_tick()` has its nesting guard (N12), and D4–D8 are fixed.
+- E2.1–E2.8 are done: `seq_core.c` is linked into the firmware (`lxr_sequencer` in
+  `Core/CMakeLists.txt`), `seq_tick()` has its nesting guard (N12), D4–D8 are fixed, the global menu
+  has its own button mode (E2.7), and USB MIDI out is fixed (E2.8).
 - E3.1, E3.2 and E3.5 touch only build files, tools and docs and would also work before E2. E3.3 needs
   `seqc_stats()` in the firmware build. E3.4's host-test job needs every E1 test file, because it
   configures with `SEQC_REQUIRE_ALL_TESTS=ON`.
-- This plan runs E3.2 first and E3.1 right after E2.6, because the expected outputs of E1 and E2
+- This plan runs E3.2 first and E3.1 right after E2.8, because the expected outputs of E1 and E2
   show the fw 1.7 update file `LXR_V2_V1.7.img` and image size (see "Task order and dependencies").
 
 **Conventions for every task in this part.**
@@ -16002,7 +19577,7 @@ from the second screen of another page, the menu opens on the first sub-page's s
 - Create: `Core/Inc/Soundengine/cpuMeter.h`, `Core/Src/Soundengine/cpuMeter.c`
 - Create: `tests/test_cpumeter.c`
 - Modify: `tests/CMakeLists.txt` (after the `test_syncq` line of E2.1)
-- Modify: `Core/CMakeLists.txt:103-105` (`lxr_engine`)
+- Modify: `Core/CMakeLists.txt:104-106` (`lxr_engine`)
 - Modify: `Core/Inc/Soundengine/Soundengine.h:33-35`
 - Modify: `Core/Src/Soundengine/Soundengine.c:18-19`, `Core/Src/Soundengine/Soundengine.c:81-84`, `Core/Src/Soundengine/Soundengine.c:112-116`
 - Modify: `Core/Src/stm32f7xx_it.c:270-274` (`TIM2_IRQHandler`)
@@ -16235,7 +19810,8 @@ TEST(cpumeter_queue_stats)
 TEST_MAIN()
 ```
 
-Register it after the `test_syncq` line that E2.1 added, so the list stays in task order.
+Register it after the `test_syncq` line that E2.1 added. The `test_buttons` block of E2.7 and the
+`test_usbtx` line of E2.8 follow it.
 
 In `tests/CMakeLists.txt`, replace:
 
@@ -16495,8 +20071,8 @@ PASS cpumeter_queue_stats
 
 Run: `tools/check.sh`
 Expected: exit 0; the host test summary lists `cpumeter` and ends with
-`100% tests passed, 0 tests failed out of 24` (the 22 ids registered in E1, `syncq` from E2.1 and
-`cpumeter`), and
+`100% tests passed, 0 tests failed out of 26` (the 22 ids registered in E1, `syncq` from E2.1,
+`buttons` from E2.7, `usbtx` from E2.8 and `cpumeter`), and
 `== compiler warnings: 0`.
 
 - [ ] **Step 7: Commit**
@@ -17283,7 +20859,7 @@ Expected: the six `ok:` lines, then
 == Configure
 == Build
 == Test
-100% tests passed, 0 tests failed out of 24
+100% tests passed, 0 tests failed out of 26
 dry run of host-tests: 3 steps passed
 ```
 
@@ -17321,10 +20897,13 @@ with:
 
 ````markdown
 tools/check.sh             # host tests + release build + memory summary + update file check + warning count; non-zero exit on failure
-tools/fw_checks.sh         # after check.sh: ELF and source checks of the firmware integration (E2.2-E2.6)
+tools/fw_checks.sh         # after check.sh: ELF and source checks of the firmware integration (E2.2-E2.8)
 ruby tools/ci_dry_run.rb firmware   # dry run of the CI workflow's firmware job (or host-tests); nothing is pushed
 ```
 ````
+
+The `tools/fw_checks.sh` line now names E2.2-E2.8: since E2.8 the script has the checks of all
+seven tasks.
 
 - [ ] **Step 8: Run `tools/check.sh`**
 
@@ -17759,7 +21338,8 @@ this task is the review's own gate: it counts the rows that are still `open` and
 still `fix`, and the review is complete when it prints 0. What the notes call the stage 1 report of
 deviations is a file of its own, `docs/lichomat/reports/stage1-report.md` (Step 4): every deviation
 from the spec with the note or plan decision that allows it, every intended change against fw 1.7
-collected from the "Intended changes" lists of E2.2–E2.5 as N18 amended them, and the resources.
+collected from the "Intended changes" lists of E2.2–E2.5 as N18 amended them, and of E2.7 and E2.8,
+and the resources.
 Row R1.4 checks it, and the release notes (E4.3) take the user-visible changes from it.
 
 **Files:**
@@ -17787,7 +21367,7 @@ grep -cE '\| (open|fix) \|' docs/lichomat/reports/stage1-review.md    # must pri
 | | |
 |---|---|
 | Spec | `docs/superpowers/specs/2026-10-23-timing-core-design.md` |
-| Decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md`, N1–N18; they win where the two differ |
+| Decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md`, N1–N20; they win where the two differ |
 | Base | `a43cd4f`, the official firmware 1.7 |
 | Changes reviewed | `git diff a43cd4f..HEAD` on branch `timing-core` |
 
@@ -17811,8 +21391,8 @@ write the finding anyway and decide it as `accepted`.
 
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
-| R1.1 | M | Spec §4–§11, item by item, against the code | every item is implemented, or differs as a note N1–N18 says | open |
-| R1.2 | M | Notes N1–N18, item by item, against the code | every note is implemented as written; for N13 the reference is `seq_core.h`, as N13 says (the `transport()` order is STOP, then REWIND, then ARM, START or CONTINUE) | open |
+| R1.1 | M | Spec §4–§11, item by item, against the code | every item is implemented, or differs as a note N1–N20 says | open |
+| R1.2 | M | Notes N1–N20, item by item, against the code | every note is implemented as written; for N13 the reference is `seq_core.h`, as N13 says (the `transport()` order is STOP, then REWIND, then ARM, START or CONTINUE) | open |
 | R1.3 | M | The comments of `seq_core.h` against `seq_core.c` | they describe what the code does | open |
 | R1.4 | M | Deviations from the spec, against `docs/lichomat/reports/stage1-report.md` | the report lists each deviation with the note or plan decision that allows it, and every intended change against fw 1.7; a deviation in the code that is in neither list is a finding | open |
 
@@ -17834,7 +21414,7 @@ write the finding anyway and decide it as `accepted`.
 
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
-| R3.1 | A | `cmake -S tests -B build/review-host -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSEQC_REQUIRE_ALL_TESTS=ON && cmake --build build/review-host && ctest --test-dir build/review-host` | `100% tests passed, 0 tests failed out of 24` | open |
+| R3.1 | A | `cmake -S tests -B build/review-host -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSEQC_REQUIRE_ALL_TESTS=ON && cmake --build build/review-host && ctest --test-dir build/review-host` | `100% tests passed, 0 tests failed out of 26` | open |
 | R3.2 | A | `ruby tools/ci_dry_run.rb host-tests` | ends with `dry run of host-tests: 3 steps passed` | open |
 | R3.3 | M | Each spec test T1–T20 asserts what spec §13.1 asks for (tolerances, scenarios) | every test does | open |
 | R3.4 | A | Determinism: run R3.1's `ctest` twice | the same tests pass both times | open |
@@ -17866,8 +21446,8 @@ RAM 271032 B, image 274688 B.
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
 | R6.1 | A | `tools/check.sh`, the `memory:` line | ITCM fits (≤ 16384 B) | open |
-| R6.2 | A | the same line | DTCM + RAM is at most 387124 B: the baseline 378420 B plus 8704 B (event queue 6 KB, sync queues 1.5 KB, other state under 1 KB) | open |
-| R6.3 | A | the same line | the image grew by about 15 KB (the core alone has 15.4 KB of code, E1.12 Step 6; spec §10: +10–15 KB); more than 30 KB is a finding | open |
+| R6.2 | A | the same line | DTCM + RAM is at most 387568 B: the baseline 378420 B plus 8704 B (event queue 6 KB, sync queues 1.5 KB, other state under 1 KB) plus 444 B (the USB MIDI transmit ring of E2.8, N20) | open |
+| R6.3 | A | the same line | the image grew by about 17.5 KB (the core alone has 15.7 KB of code, E1.14 Step 8, and the USB MIDI out of E2.8 adds 0.75 KB; spec §10: +10–15 KB); more than 30 KB is a finding | open |
 
 ### R7 Compatibility (G8: no file format changes)
 
@@ -17885,7 +21465,7 @@ RAM 271032 B, image 274688 B.
 | R8.2 | M | Sync event gating | the RX filter `MIDI_FILTER_SYSTEM` and the sync mode gate each event once, at the drain or in the core (N4) | open |
 | R8.3 | M | SPP (N14) | it travels in the sync queues, in order with Continue and Clock | open |
 | R8.4 | M | Note-offs | stop and rewind send the pending note-offs; muting a track sends the note-off of that track's voice | open |
-| R8.5 | M | USB MIDI out (`usb_flushMidi()`, `usb_sendMidi()`) | fixed, or an `accepted` finding listed in the release notes | open |
+| R8.5 | M | USB MIDI out (`usb_sendMidi()`, `usb_flushMidi()`, `usb_midiTxComplete()`, `usb_midiTx.c`; E2.8, N20) | every packet has the CIN of USB MIDI 1.0 table 4-1; the ring and the endpoint are used only with interrupts masked; nothing is sent past a buffer; nothing waits for a host that is not there or has stopped reading | open |
 
 ### R9 Build and code hygiene
 
@@ -17914,7 +21494,7 @@ RAM 271032 B, image 274688 B.
 |---|---|---|---|---|
 | R11.1 | M | README: install, rollback and build instructions | they match the code and the tools | open |
 | R11.2 | M | `docs/lichomat/HANDOFF.md` and the notes | current; every new tool is mentioned where it is used | open |
-| R11.3 | M | Tracker | every task of the plan up to E3.5 done, E1.14, E2.7 and E2.8 included once their sections are in the plan; a task the owner moved out of stage 1 is marked so in the tracker and named in the release notes; E4.1 in progress; questions current | open |
+| R11.3 | M | Tracker | every task of the plan up to E3.5 done, E1.14, E2.7 and E2.8 included; a task the owner moved out of stage 1 is marked so in the tracker and named in the release notes; E4.1 in progress; questions current | open |
 
 ## Commands
 
@@ -18003,7 +21583,8 @@ git commit -m "Add the stage 1 review checklist" \
 
 The notes say that the deviations are listed in the stage 1 report; R1.4 checks it, and E4.3 takes the
 user-visible changes from it. It collects what the plan decided on the way: the decision lists of
-epics E1 and E2, the notes N1–N18, and the "Intended changes" lists of E2.2–E2.5 as N18 amended them.
+epics E1 and E2, the notes N1–N20, and the "Intended changes" lists of E2.2–E2.5 as N18 amended them,
+and of E2.7 and E2.8.
 If a task was carried out differently from the plan, add that deviation as well, with its reason.
 
 Create `docs/lichomat/reports/stage1-report.md`:
@@ -18015,7 +21596,7 @@ The implementation notes (`docs/superpowers/specs/2026-10-24-timing-core-impleme
 win where they and the spec (`docs/superpowers/specs/2026-10-23-timing-core-design.md`) disagree,
 and they say that the deviations are listed in the stage 1 report. This is that report. It lists:
 
-1. every place where stage 1 does something other than the spec says, with the note (N1–N18) or the
+1. every place where stage 1 does something other than the spec says, with the note (N1–N20) or the
    decision of the plan (`docs/superpowers/plans/2026-10-23-timing-core.md`) that allows it;
 2. every intended change of behaviour against the official firmware 1.7, and whether the release
    notes (`docs/lichomat/release-notes-v0.1.md`) tell users about it;
@@ -18059,6 +21640,10 @@ in neither list is a finding.
 | §9.3 block budget | 313 186 cycles | 313 185 (64 × 216 MHz / 44 140 Hz = 313 185.3) | plan, Part 3 |
 | §9.3 the counts shown | the event queue's maximum depth and the overflow counts | the event queue's; the sync queues' overflow count (`seqp_syncOverflows()`) is not on the page | open: question for the owner, Part 3 item 1 |
 | §8 `MenuText.h` | changed for the CPU page | unchanged: the page draws its own text | plan, Part 3 |
+| §12 user interface | unchanged, except for the splash screen and the CPU sub-page | in the global menu the step buttons without SHIFT do nothing, and page up and down keep step 12 blinking and show the step view | N19 (E2.7) |
+| §9.1 host tests | built with `-Wall -Wextra -Werror` | `test_buttons` compiles fw 1.7's `buttonHandler.c` with `-w` and `Core/Inc` as a system include directory; `test_buttons.c` and `tests/stubs/` keep the three flags | N19 (E2.7) |
+| §8 changes outside the core | the USB realtime intercept in `usbd_cdc.c`; in `MidiParser.c` the echo, realtime and SPP | also the USB MIDI out: `usb_manager.c/.h`, the new `usb_midiTx.c/.h`, `usbd_cdc.c/.h` (the old ring goes, the end of a transfer starts the next), and in `MidiParser.c` a Song Select that waits for its song number | N20 (E2.8) |
+| §10 RAM | about 7.5 KB (review row R6.2: 8704 B) | 444 B more, for the USB MIDI transmit ring and its transfer buffer | N20 (E2.8) |
 
 ## 2. Intended changes against fw 1.7
 
@@ -18093,6 +21678,10 @@ in neither list is a finding.
 | The reset gate's side effects (all notes off) run up to one `seq_tick()` later, outside the interrupt | E2.5 | no: under 1.5 ms |
 | The one-shot roll triggers up to one `seq_tick()` later, in the core's context | E2.2 | no: under 1.5 ms |
 | A change of the shuffle or of a step's timing while the step has started to play early applies from that step's next turn | E1.5 | no: a corner of editing while playing |
+| In the global menu a step button pressed without SHIFT no longer sets the length of every track | E2.7 (N19) | Fixed |
+| In the global menu page up and down keep step 12 blinking and show the track's steps (fw 1.7: the Last Step page's LEDs) | E2.7 (N19) | Fixed |
+| USB MIDI out: the CIN of USB MIDI 1.0 for every message, nothing sent past a buffer, nothing lost while a transfer is under way, nothing kept for a computer that does not read | E2.8 (N20) | Fixed |
+| A Song Select passed on from DIN, to USB or to DIN out, carries its song number | E2.8 (N20) | Fixed |
 | The start-up screen shows `LICHOMAT` and `v0.1 unofficial`; the global menu has a CPU page | E3.1, E3.3 | Changed, New |
 
 ## 3. Resources
@@ -18116,8 +21705,8 @@ base = {"ITCM": 15000, "DTCM": 107388, "RAM": 271032, "image": 274688}
 rows = ["| | fw 1.7 | stage 1 | change |", "|---|---|---|---|"]
 for k in ("ITCM", "DTCM", "RAM", "image"):
     rows.append("| %s | %d B | %d B | %+d B |" % (k, base[k], now[k], now[k] - base[k]))
-rows += ["", "Spec §10: about +7.5 KB of DTCM and RAM (review row R6.2 allows +8704 B), about +10–15 KB of",
-         "flash, and no net growth of ITCM."]
+rows += ["", "Spec §10: about +7.5 KB of DTCM and RAM (review row R6.2 allows +8704 B, and 444 B more for the",
+         "USB MIDI transmit ring of E2.8), about +10–15 KB of flash, and no net growth of ITCM."]
 s = open(p).read()
 marker = "Filled in by E4.1 Step 4 from `build/check.log` (the `memory:` line of `tools/check.sh`).\n"
 assert s.count(marker) == 1, "the resources marker is not there"
@@ -18154,7 +21743,7 @@ each this prompt, with its group of rows:
 ```
 You review LICHOMAT stage 1, rows <ROWS> of docs/lichomat/reports/stage1-review.md.
 Read docs/superpowers/specs/2026-10-23-timing-core-design.md and
-docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md first; the notes N1-N18 win
+docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md first; the notes N1-N20 win
 where they differ from the spec. docs/lichomat/reports/stage1-report.md lists the deviations and the
 intended changes that the plan decided. Review the changes since the official firmware 1.7,
 `git diff a43cd4f..HEAD`, for these rows only, and read the code around each change. Do not change
@@ -18235,9 +21824,10 @@ HANDOFF.md says they are prepared but never claimed. This task turns each into a
 can follow on the device: setup, steps, the expected result with numbers (computed from the spec's
 timing: a step is 96 ticks, swing is `round(shuffle × 64 / 127)` ticks on odd steps, shift is 12 ticks
 per unit, ratchet hit j of k is j·96/k ticks into the step), and what to record. Three optional jack
-checks (X1–X3) cover the clock jacks, which E2.5 rewired but the spec's list does not test. It also
-builds the two update files the checks need, LICHOMAT and the official 1.7 from `a43cd4f`, and records
-their SHA-256 in the checklist's run sheet.
+checks (X1–X3) cover the clock jacks, which E2.5 rewired but the spec's list does not test. Two more
+checks, U1 and X4, cover the fw 1.7 bugs that E2.7 and E2.8 fix (the step buttons in the global
+menu, USB MIDI out). It also builds the two update files the checks need, LICHOMAT and the official
+1.7 from `a43cd4f`, and records their SHA-256 in the checklist's run sheet.
 
 **Files:**
 - Create: `docs/lichomat/hardware-checklist.md`
@@ -18316,7 +21906,7 @@ them, on the real device; nothing here is ever marked as passed by an agent. Rec
 the [run sheet](#run-sheet) at the end and report it back (a message, or the tracker).
 
 The spec is `docs/superpowers/specs/2026-10-23-timing-core-design.md`, the decisions beyond it are in
-`docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N18).
+`docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N20).
 
 ## Before you start
 
@@ -18331,9 +21921,8 @@ files as 1.7 (no format changes), but it is unofficial firmware.
 - A computer with a DAW that can record the LXR's audio output and send and receive MIDI over USB
   (and over DIN through a MIDI interface).
 - A MIDI monitor that shows time stamps, for example MIDI Monitor on macOS. Watch the LXR's MIDI
-  out on DIN, through the MIDI interface: H5, H6, H8, H10 and H11 are written for it. The LXR's USB
-  MIDI out keeps the fw 1.7 defects of tracker task E2.8 until that task is done (it can lose or
-  garble data); check it over USB only after E2.8.
+  out on DIN, through the MIDI interface: H5, H6, H8, H10 and H11 are written for it. X4 checks the
+  LXR's USB MIDI out.
 - For H6: a MIDI clock master on DIN (the DAW through a MIDI interface, or a hardware sequencer).
 - For H11: a synth, or the MIDI monitor, on the LXR's MIDI out.
 
@@ -18364,9 +21953,6 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
   of a step).
 - A voice's MIDI channel and note (the note override) are on the second screen of its MIX sub-page
   (select button 8).
-
-**Caution, unchanged from 1.7:** while the global menu is open, a step button pressed **without**
-SHIFT sets the length of all tracks. Use only SHIFT + step 12 there.
 
 **Measuring times in a recording.** Record the LXR's main output at 48 kHz. Find a hit's onset by
 zooming in on the waveform (or with the DAW's transient detection), and measure from a reference hit.
@@ -18622,6 +22208,92 @@ plays as before; nothing written by LICHOMAT disturbs 1.7.
 
 **Record:** the start-up screen; whether the project played normally.
 
+## U1: step buttons in the global menu
+
+Not in the spec's list: a 1.7 bug that LICHOMAT fixes (tracker E2.7). In 1.7 a step button pressed
+without SHIFT while the global menu was open set the length of every track. The check changes track
+lengths and sets them back; use a pattern you can spare.
+
+1. Internal sync, BPM 120. Press voice button 1. Pattern: every track 16 steps long, voice 1 (kick)
+   on step 1 only, voice 6 (closed hat) on step 16 only. Press START.
+2. Hold SHIFT and press step 12: the global menu opens (BPM, shuffle, …) and step 12 blinks.
+   Release SHIFT.
+3. Press page up, then page down.
+4. Press step 4, then step 8, without SHIFT. Listen for two bars.
+5. Hold SHIFT and press step 14.
+6. Press step 8 without SHIFT and listen. Then hold SHIFT and press step 14 again, and press step 16
+   without SHIFT.
+7. Press the first of the four mode buttons (voice mode; the third and fourth are LOAD and SAVE),
+   then step 5.
+
+**Expected** (the remarks on 1.7 are for the same steps run on 1.7):
+- 3: step 12 keeps blinking, and after page down the step 1 LED is lit (voice 1's step). With 1.7
+  page up stopped the blinking, and page down made step 16 blink, the last step of track 1.
+- 4: the display stays on the global menu, step 12 keeps blinking, and the kick and the hat still
+  play once per bar each. With 1.7 the first press made every track 4 steps long (the kick on every
+  4th step, the hat silent) and step 4 blink, the second made them 8 steps long and step 8 blink.
+- 5: the Last Step page shows `Last Step Trk: 1` and `Current:  16`: step 4 changed no length. 1.7
+  shows `Current:   8`.
+- 6: as in 1.7: step 8 makes track 1 eight steps long (two kicks per bar, the hat unchanged); the
+  second SHIFT + step 14 shows `Last Step All`, and step 16 makes every track 16 steps long again.
+  With 1.7 every track is 8 steps long already before step 8.
+- 7: as in 1.7: the voice page returns, and step 5 adds a kick on step 5 (press step 5 again to
+  remove it).
+
+**Record:** whether step 12 kept blinking in step 3; whether a length changed in step 4; what the
+Last Step page showed in step 5.
+
+## X4: USB MIDI out
+
+Not in the spec's list: 1.7 defects of the USB MIDI out that LICHOMAT fixes (tracker E2.8).
+
+Setup:
+- The LXR is connected to the computer by USB.
+- MIDI Monitor shows the LXR's USB port, `Sonic Potions USB MIDI`, with time stamps.
+- A DAW records MIDI from that port.
+- Every voice sends on its own MIDI channel: voice n on channel n, as in H8.
+
+1. Internal sync, BPM 120, a pattern with voice 1 on steps 1, 5, 9 and 13 only. Leave the LXR
+   stopped for 10 s, then press START, wait 30 s, and press STOP.
+2. A long stream that wraps the transmit buffer many times: all 7 voices on all 16 steps, and on
+   voice 1 every step with flam `x8`; BPM 180. Record the LXR's USB MIDI in the DAW for 16 bars
+   (about 8700 messages), then STOP.
+3. System common and SysEx passed from DIN to USB:
+   - Set the routing (second screen of the global menu's first sub-page) to `M2U`.
+   - With the LXR stopped, send from the computer, through the MIDI interface, to the LXR's DIN
+     MIDI in: a Song Position Pointer of 32 (`F2 20 00`), a Song Select 5 (`F3 05`), a Tune
+     Request (`F6`), an MTC quarter frame (`F1 13`), and the SysEx
+     `F0 7D 01 02 03 04 05 06 07 08 09 F7`.
+   - With SendMIDI, for example:
+     `sendmidi dev "<name of the MIDI interface>" spp 32 ss 5 tun tc 1 3 hex syx 7D 01 02 03 04 05 06 07 08 09`.
+   - A DAW can send the SPP (locate while stopped) and MTC to the interface as well.
+4. Play the pattern of step 1. Pull the USB cable, wait 10 s, plug it in again, and select the
+   port in MIDI Monitor again.
+5. Play the pattern of step 1. Quit MIDI Monitor and the DAW, so that no program uses the LXR's
+   port, wait 10 s, and start MIDI Monitor again.
+
+**Expected:**
+- 1: while stopped, only Clock (F8) messages, 20.8 ms apart. START gives Start (FA), then a Note
+  On and its Note Off on channel 1 every 500 ms between the clocks. STOP gives Stop (FC). No
+  message of any other type appears at any time. 1.7 sent 128 bytes of its memory every 32
+  messages; a host drops most of them, but any it delivers show up here as stray messages.
+- 2: in the DAW, channel 1 has 8 evenly spaced short notes (about 3.5 ms long) on every step, 128
+  per bar, and channels 2-7 one note per step, 16 per bar. Zoom to one bar at a time and look
+  through all 16: no note is missing, and none is long (stuck).
+- 3: MIDI Monitor shows each of the five once, with exactly the bytes sent, between the LXR's own
+  clocks. With 1.7 the SPP, the Song Select and the quarter frame arrived without their data, and
+  the SysEx garbled.
+- 4: the LXR plays on while the cable is out. After plugging in, the clock and the notes come back
+  at their normal rate, with no group of old messages sharing one time stamp.
+- 5: when MIDI Monitor runs again, at most 15 old messages share its first time stamp (the
+  transfer that was under way when the computer stopped reading), then the clock and the notes go
+  on at their normal rate. If the computer kept reading the port while no program used it, there
+  are no old messages at all.
+
+**Record:** for 1, any message of another type; for 2, any missing or long note (bar and channel);
+for 3, what MIDI Monitor showed for each message; for 4 and 5, what came first, and how many
+messages shared the first time stamp.
+
 ## Optional: clock jacks
 
 Not in the spec's list, but stage 1 changed how the jacks are driven (tracker E2.5).
@@ -18658,9 +22330,11 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | H11 | | | |
 | H12 | | | |
 | H13 | | | |
+| U1 | | | |
 | X1 | | | |
 | X2 | | | |
 | X3 | | | |
+| X4 | | | |
 ````
 
 - [ ] **Step 6: Fill in the run sheet**
@@ -18710,7 +22384,7 @@ exit=0
 ```bash
 git add docs/lichomat/hardware-checklist.md
 git commit -m "Add the hardware checklist H1-H13" \
-  -m "Step-by-step procedures for the checks of spec 13.2 on the LXR-02, with expected results and what to record, three optional clock jack checks, and a run sheet with the SHA-256 of the LICHOMAT and official 1.7 update files. Only the owner runs them." \
+  -m "Step-by-step procedures for the checks of spec 13.2 on the LXR-02, with expected results and what to record, the checks U1 and X4 of two 1.7 bugs that stage 1 fixes, three optional clock jack checks, and a run sheet with the SHA-256 of the LICHOMAT and official 1.7 update files. Only the owner runs them." \
   -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -18721,8 +22395,9 @@ Q6). Nothing in H1–H13 is marked as done until the owner reports the results.
 
 Spec §14: release v0.1 is a GitHub release on the fork with the CI-built `.img`, and its notes list
 D1–D8 and the behaviour changes of §12. This task writes those notes as a draft: what LICHOMAT is,
-installing and going back to 1.7, the fixes D1–D8 in user terms, the intended changes (spec §12, N4,
-N13 and N18, and the user-visible changes of the stage 1 report, `docs/lichomat/reports/stage1-report.md`),
+installing and going back to 1.7, the fixes D1–D8 and those of E2.7 and E2.8 in user terms, the
+intended changes (spec §12, N4, N13, N18, N19 and N20, and the user-visible changes of the stage 1
+report, `docs/lichomat/reports/stage1-report.md`),
 what stays as in 1.7, the CPU page, the known limitations (including the findings E4.1 accepted),
 the files with their SHA-256, the licence, and how the owner publishes it. Every claim is traced to a
 host test, a review row or a hardware check before the notes are committed. Nothing is pushed, tagged
@@ -18827,6 +22502,18 @@ The start-up screen then shows `Sonic Potions` and `LXR2 Drums V 1.7`.
   when they arrive, over DIN and over USB, and all MIDI input is handled in one place. This removes
   rare duplicated or garbled bytes, and USB clock no longer stalls while a preset is saved to the
   card.
+- **Step buttons in the global menu.** In 1.7 a step button pressed without SHIFT while the
+  global menu was open set the length of every track, and page up or down there stopped step 12
+  blinking. Now the step buttons do nothing in the global menu, and page up and down keep
+  step 12 blinking and show the track's steps, as on the FX page.
+- **USB MIDI out.** 1.7 sent 128 bytes of unrelated memory to the computer each time its USB send
+  buffer wrapped, dropped messages sent while the previous USB transfer was still under way, and
+  passed Song Position Pointer, MTC, Song Select and SysEx from DIN on to USB without their data
+  or garbled. Now every message goes out once and complete while the computer reads the port, also
+  while a preset is being saved. While the computer does not read it (some systems read it only
+  while a program has it open), the LXR drops what it would send, so a program that opens the port
+  later gets at most 15 old messages, not seconds of them. A Song Select passed on from DIN, to USB
+  or to DIN out, now carries its song number.
 
 ## Changed behaviour
 
@@ -18865,7 +22552,8 @@ These are intended; they come with the fixes above.
 
 ## Unchanged
 
-- File formats, and the user interface apart from the start-up screen and the CPU page.
+- File formats, and the user interface apart from the start-up screen, the CPU page and the global
+  menu fix.
 - Roll plays on muted tracks, as in 1.7.
 - A local start in a slave mode waits for the master's next 16th note, as in 1.7.
 - The clock in jack's reset input works as a run gate, as in 1.7: high stops and returns to the
@@ -18889,8 +22577,6 @@ depth and overflow count. It is read only and never saved.
   only while stopped.
 - Sending MIDI clock to the LXR over DIN and USB at the same time is a configuration error, as in 1.7.
 - The LXR still reports itself over USB as `Sonic Potions USB MIDI`.
-- From 1.7, unchanged: while the global menu is open, a step button pressed without SHIFT sets the
-  length of all tracks.
 - The CPU page counts the sequencer and the sound engine, including the interrupts that run in
   between, but not the user interface, and leaves out the kit load of a pattern change.
 
@@ -18928,9 +22614,7 @@ EOF
 
 For each printed row add one bullet at the end of "## Known limitations" that says, for a user of the
 LXR, what does not work as expected and what to do about it. If it prints `no accepted findings`,
-leave the section as it is. Unless tracker task E2.8 fixed the USB MIDI out defects, R8.5 is one of
-these rows: say that the LXR's USB MIDI out can lose or garble data in fw 1.7 and in this version, and
-that its DIN MIDI out is not affected.
+leave the section as it is.
 
 - [ ] **Step 5: Trace every claim**
 
@@ -18961,17 +22645,19 @@ that its DIN MIDI out is not affected.
 | MIDI clock out runs while stopped | T5 |
 | CPU page | `cpumeter`; H12 |
 | no file format change | `layout`; review R7.1, R7.2, R7.3; H2 |
+| global menu: step buttons leave the track lengths alone, page up and down keep step 12 blinking | `buttons`; `tools/fw_checks.sh E2.7`; U1 |
+| USB MIDI out: the right CIN, nothing lost while the computer reads, no stray bytes, no burst of old messages; a routed Song Select keeps its song number | `usbtx`; `tools/fw_checks.sh E2.8`; review R8.5; X4 |
 
 Run:
 
 ```bash
-source tools/env.sh && ctest --test-dir build/host-tests -R '^(T1|T2|T3|T5|T6|T7|T10|T11|T13|T14|T16|T17|T18|T20|layout|cpumeter)$' --output-on-failure | tail -n 3
-grep -E '^\| R(1\.4|2\.4|2\.5|2\.6|2\.9|7\.1|7\.2|7\.3|8\.1|8\.2|8\.3|8\.4) \|' docs/lichomat/reports/stage1-review.md
-tools/fw_checks.sh E2.2
+source tools/env.sh && ctest --test-dir build/host-tests -R '^(T1|T2|T3|T5|T6|T7|T10|T11|T13|T14|T16|T17|T18|T20|layout|cpumeter|buttons|usbtx)$' --output-on-failure | tail -n 3
+grep -E '^\| R(1\.4|2\.4|2\.5|2\.6|2\.9|7\.1|7\.2|7\.3|8\.1|8\.2|8\.3|8\.4|8\.5) \|' docs/lichomat/reports/stage1-review.md
+tools/fw_checks.sh E2.2 E2.7 E2.8
 ```
 
-Expected: `100% tests passed, 0 tests failed out of 16`, every listed review row ends in `| pass |`,
-and `PASS E2.2`.
+Expected: `100% tests passed, 0 tests failed out of 18`, every listed review row ends in `| pass |`,
+and `PASS E2.2`, `PASS E2.7` and `PASS E2.8`.
 Open each named test and confirm that it asserts the claim. A claim without evidence is either removed
 from the notes, or becomes a finding of the review with a failing test first (E4.1, "Fixing
 findings").
@@ -19055,7 +22741,7 @@ Log the commit in the tracker; Q5 (pushing) stays open for the owner.
 | §9.5 branding: `LICHOMAT_NAME`, `project(VERSION 0.1)`, `LXR_BASE_VERSION 1.7`, splash `LICHOMAT` / `v0.1 unofficial`, `LXR_V2_LICHOMAT_0.1.img`, magic `LXRV2IMG` | E3.1 |
 | §9.5 README section; source headers of new files | E3.5; every new file in E3.1–E3.4 carries the 2026 copyright, SPDX and NOTICE.md lines |
 | §8: `main.c` splash, `stm32f7xx_it.c` CPU meter, `menu.c`/`menuPages.h`, the linker script, `CMakeLists.txt`/`Core/CMakeLists.txt`, `.github/workflows/build.yml`, `README.md` | E3.1, E3.3, E3.2, E3.4, E3.5 |
-| §13.2 H1–H13 | E4.2 |
+| §13.2 H1–H13 | E4.2 (with U1 and X4 for the 1.7 bugs that E2.7 and E2.8 fix) |
 | §14 release v0.1 with D1–D8 and §12; nothing pushed | E4.3 |
 | HANDOFF: zero warnings after each task, review and owner questions | every task; E4.1 |
 
@@ -19079,11 +22765,12 @@ Notes made while executing the plan, one bullet each, newest last: the date, the
 happened (a deviation from the plan, a surprise, a decision taken on the way).
 
 - 2026-10-24, plan review: Plan reviewed by 3 critics; 29 findings accepted and fixed, 1 rejected.
+- 2026-10-24, plan assembly: E1.14, E2.7 and E2.8 inserted after review.
 
 ## Questions for the owner
 
 The open issues the section writers raised, as they gave them. A *Status* line says where a note
-written later (N16–N18), a commit or the assembly of this plan has settled or changed an item. The
+written later (N16–N20), a commit or the assembly of this plan has settled or changed an item. The
 questions the owner has to answer are also kept in the tracker (`docs/lichomat/tracker.json`,
 `questions`, Q1–Q7).
 
@@ -19094,8 +22781,8 @@ questions the owner has to answer are also kept in the tracker (`docs/lichomat/t
    a row on the same side. Not implemented, because it goes beyond seq_core.h.
    *Status: settled by N16 (restart after 4 outliers in a row on the same side, 2 for the jack at
    4 PPQ; the band is on the clock intervals, so it is needed only when the tempo more than doubles
-   or drops below two thirds). Task E1.14, whose section is written on its own and inserted after
-   E1.13.*
+   or drops below two thirds). Done in task E1.14 (`T16_tempo_jump_*`,
+   `T18_tempo_jump_4ppq_restarts_after_2`).*
 2. N9 'clamp included': a boundary at the next clock's tick can be handled by the interpolation
    before that clock arrives, so after a dropout one more step plays than clocks arrived.
 3. T19 cannot fill the 256-entry queue through the API: 7 tracks leave at most about 170 events
@@ -19103,19 +22790,23 @@ questions the owner has to answer are also kept in the tracker (`docs/lichomat/t
    tests/CMakeLists.txt beyond its API version (a CORE argument and a 16-entry core library).
 4. The N10 early exit also records now (a compare plus a store), because the header defines the
    core's current time as the last process call. The header promises 'one 64-bit compare'.
+   *Status: kept (epic E1, decision 1); E1.14 updates the header comment of `seqc_process()`.*
 5. T12 already passes before E1.7, since the late part has been generated at the boundary since
    E1.5. It is kept as a regression test; T11 is E1.7's failing test.
 6. A start right after a free-running MIDI clock sends the next clock less than 16 ticks later. This
    is N8's re-phase, and fw 1.7 did the same.
 7. seqc_masterTrack() after a song position returns the seeked pattern's master track, not 0 as the
    header says.
+   *Status: kept (epic E1, decision 5); E1.14 updates the header comment of `seqc_masterTrack()`.*
 8. Pending note-offs are not flushed during a slave dropout, so a MIDI note can hang until the next
    clock or a Stop. The spec does not ask for a flush.
-   *Status: settled by N17 (a dropout sends the pending note-offs, as a stop does). Task E1.14.*
+   *Status: settled by N17 (a dropout sends the pending note-offs, as a stop does). Done in task
+   E1.14 (`T18_dropout_note_off_is_sent`).*
 9. seq_core.h still describes SEQC_DROPOUT_MS as a plain 500 ms. N15, added during planning, wins
    and the core follows it (E1.10, T18_slow_4ppq_clock_is_not_a_dropout). The header comment could
    be updated.
-   *Status: E1.14 updates it.*
+   *Status: E1.14 updates it: the comments of `SEQC_DROPOUT_MS`, `seqc_stats_t.dropouts` and
+   "Slave position" describe the N15 dropout time.*
 10. Expected outputs (image hash, object sizes, absolute paths in failure messages) come from the
     reference Mac with Apple clang 17 and Arm GNU 14.3.rel1 darwin-arm64. ASan and Linux builds were
     not run locally.
@@ -19140,7 +22831,8 @@ questions the owner has to answer are also kept in the tracker (`docs/lichomat/t
 1. Single skip-once marker in the API: when notes recorded on two tracks land in the second half of
    the same step (e.g. a MIDI chord), the first marker is lost and that track plays its recorded
    note twice. A per-track marker is an E1/API decision.
-   *Status: settled by N18.1 (one marker per track; the signature stays). Task E1.14, which also
+   *Status: settled by N18.1 (one marker per track; the signature stays). Done in task E1.14
+   (`T14_skip_once_per_track_two_tracks`, `T14_skip_once_replaces_only_its_track`), which also
    changes the comment of seqc_skipOnce() in seq_core.h to "a new call replaces the marker of its
    own track only".*
 2. MIDI transport out in the slave modes: the transport callback sends FA/FB/FC in every sync mode.
@@ -19177,11 +22869,12 @@ questions the owner has to answer are also kept in the tracker (`docs/lichomat/t
 10. USB MIDI out defects outside D1-D8 are not fixed: usb_flushMidi() sends 128 bytes past its ring
     on every wrap and drops data while the endpoint is busy, and usb_sendMidi() uses the wrong CIN
     for system common messages. They affect H5, H7 and H11 over USB.
-    *Status: tracker task E2.8, whose section is written on its own and inserted after the plan
-    review. Until it is done the checks that watch the LXR's MIDI out use DIN (E4.2), and review row
-    R8.5 (E4.1) puts the defects into the release notes' known limitations (E4.3 Step 4).*
+    *Status: fixed by E2.8 (N20); hardware check X4 (E4.2) covers it.*
 11. MIDI sends from the main loop remain (mute Note Off, channel change, pattern change while
     stopped). They race with seq_tick() sends only while TIM2 runs, as in fw 1.7.
+    *Status: the USB half is fixed by E2.8: `usb_sendMidi()` and `usb_flushMidi()` hold PRIMASK
+    while they use the transmit ring. The DIN half remains: `uart_sendMidi()` writes the transmit
+    FIFO without a lock, as in fw 1.7.*
 12. Intermediate builds: E2.2-E2.3 have no MIDI clock input and E2.2-E2.4 no jack input; do not
     test the slave modes on them.
 13. Spec wording: D4/§7.1 say fw 1.7 echoed once in play mode, but it echoed twice in both modes.
@@ -19190,20 +22883,21 @@ questions the owner has to answer are also kept in the tracker (`docs/lichomat/t
 14. E1 anchors: E2.1 quotes E1's test_fw17 line and E1.3's lxr_sequencer block; E2.4 quotes the
     execution-context comment in seq_core.h. All three match Epic E1 of this plan now; adapt them if
     E1 changes that text.
-    *Status: checked again while assembling: all three match Epic E1 exactly.*
+    *Status: checked again while assembling: all three match Epic E1 exactly, and E1.14 leaves them
+    as they are.*
 15. RAM: with the stand-in core, E2.2 adds 8464 B (core, sync queues, glue) against the spec's
     ~7.5 KB, because 24-byte events make the event queue 6 KB. Confirm with E1's real core.
     *Status: E1.12 Step 6 gives the core 6973 B of bss; with the plan's E1 core E2.2 adds 8484 B
-    and E2.6 leaves 8460 B; review row R6.2 (E4.1) allows 8704 B in all.*
+    and E2.6 leaves 8460 B; review row R6.2 (E4.1) allows 8704 B in all. E1.14 adds 80 B, and E2.8
+    444 B for the USB MIDI transmit ring, which R6.2 allows on top (N20).*
 16. N15 dropout belongs to E1: Epic E1 still has a fixed SEQC_DROPOUT_MS of 500 ms, which stops a
     4 PPQ jack clock below 30 BPM. E1 should implement max(500 ms, 2x the expected clock interval).
     *Status: done in the final Epic E1: E1.10 implements N15 (`seqc_dropoutCycles()`, test
-    `T18_slow_4ppq_clock_is_not_a_dropout`). Only the header comment still says 500 ms (E1 item 9).*
+    `T18_slow_4ppq_clock_is_not_a_dropout`), and E1.14 updates the header comment (E1 item 9).*
 17. Tracker task E2.7 (fw 1.7 bug: buttonHandler.c:901 assigns SEQ_CONFIG = 11 =
     SELECT_MODE_LAST_STEP_ALL, so a step button without SHIFT in the global menu sets all track
     lengths) is not covered by this section.
-    *Status: its section is written on its own and inserted after the plan review. Until then E4.2
-    and E4.3 list the bug as a caution and as a known limitation.*
+    *Status: fixed in task E2.7; E4.2 has check U1, and E4.3 lists the fix under Fixed.*
 18. seqp_syncOverflows() (E2.1, spec §11) is not shown on E3.3's CPU page, which shows only the
     event queue counters.
     *Status: open; the same as Part 3 item 1.*
@@ -19226,8 +22920,7 @@ questions the owner has to answer are also kept in the tracker (`docs/lichomat/t
    pressing a step button without SHIFT in the global menu sets the length of all tracks. It is
    listed as a known limitation and as a caution in the checklist. Whether to fix it is a tracker
    question for the owner.
-   *Status: tracker task E2.7, whose section is written on its own and inserted after the plan
-   review.*
+   *Status: fixed in task E2.7.*
 5. Cross-section risk: `source tools/env.sh` leaves CMake off PATH in zsh until E3.5 fixes it, and
    that would hit E1/E2 commands too. This part uses `bash -c` or tools/check.sh until then. The
    orchestrator may want to move the env.sh fix (E3.5 steps 1-6) ahead of E1.1.
@@ -19245,9 +22938,10 @@ questions the owner has to answer are also kept in the tracker (`docs/lichomat/t
    with cpumeter), and that the add_executable line of seqc_add_test stays at CMakeLists.txt:94.
    Which test asserts the event payload for D5 depends on E1 (T11 is suggested); E4.3 step 5 checks
    it.
-   *Status: fixed while assembling: with `syncq` from E2.1 there are 24 ids (E3.3 Step 6, E3.4
-   Step 5, review row R3.1), the line is 107 (E3.3 Step 3), and E4.3 Step 5 names
-   `T2_event_carries_its_step_data` and `T11_early_hit_of_the_next_pattern` for D5.*
+   *Status: fixed while assembling: with `syncq` from E2.1, `buttons` from E2.7 and `usbtx` from
+   E2.8 there are 26 ids (E3.3 Step 6, E3.4 Step 5, review row R3.1), the line is 107 (E3.3 Step 3),
+   and E4.3 Step 5 names `T2_event_carries_its_step_data` and `T11_early_hit_of_the_next_pattern`
+   for D5.*
 9. The CPU meter leaves out the outer piece of work around a kit autoload, so pattern changes don't
    show a false peak of several thousand percent. That is a design choice, and the release notes
    state it. The budget constant is 313185 cycles (313185.3 rounded); the spec says about 313186.

@@ -128,6 +128,16 @@
           </table>
         </div>
       </section>
+      <section class="lx-card" id="decyzje">
+        <h2>Twoje decyzje</h2>
+        <p class="lx-note">Odpowiedzi, według których już pracuję.</p>
+        <div class="lx-box">
+          <table class="lx-t lx-answers" data-source="questions" data-row-key="id">
+            <thead><tr><th data-field="id">ID</th><th data-field="question">Pytanie</th><th data-field="answer">Odpowiedź</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -279,6 +289,8 @@ function lxDrawTables() {
     [{ key: 'id', cls: 'lx-id' }, { key: 'title' }]);
   lxRows(document.querySelector('.lx-questions'), (q.status === 'ok' ? q.data : []).filter((r) => r.status === 'otwarte'),
     [{ key: 'id', cls: 'lx-id' }, { key: 'question' }, { key: 'assumption' }]);
+  lxRows(document.querySelector('.lx-answers'), (q.status === 'ok' ? q.data : []).filter((r) => r.status === 'zamknięte'),
+    [{ key: 'id', cls: 'lx-id' }, { key: 'question' }, { key: 'answer' }]);
   lxRows(document.querySelector('.lx-ms'), (m.status === 'ok' ? m.data.slice().reverse() : []),
     [{ key: 'id', cls: 'lx-id' }, { key: 'date', cls: 'lx-nowrap' }, { key: 'title' }, { key: 'summary' }]);
   const needle = lxSearch.value.trim().toLowerCase();

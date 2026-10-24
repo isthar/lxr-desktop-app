@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 11:38",
+    "updated": "2026-10-24 12:08",
     "phase": "Etap 1 — przygotowanie implementacji",
     "focus": "Wstawianie trzech dodatkowych sekcji do planu (będzie 30 zadań) i kontrola spójności. Zaraz potem rusza implementacja.",
     "branch": "timing-core",
-    "head": "074a3d1",
+    "head": "04cb385",
     "next": "Implementacja 30 zadań po kolei: implementacja TDD, przegląd zgodności ze specyfikacją, przegląd jakości. Zaczyna się od E3.2 i rdzenia E1.1–E1.14.",
-    "updated_at": "2026-10-24T11:38:00+02:00"
+    "updated_at": "2026-10-24T12:08:00+02:00"
   },
   "epics": [
     {
@@ -435,8 +435,8 @@
       "id": "E7.1",
       "epic": "E7",
       "status": "zablokowane",
-      "title": "Doprecyzować „ambient” i zmierzyć CPU na sprzęcie (H12)",
-      "updated": ""
+      "title": "Zmierzyć zapas CPU na sprzęcie (H12) przed efektami; znaczenie „ambient” ustalone: długi, falujący, zamrożony pogłos",
+      "updated": "2026-10-24"
     },
     {
       "id": "E7.2",
@@ -463,8 +463,15 @@
       "id": "E7.5",
       "epic": "E7",
       "status": "do zrobienia",
-      "title": "Ambient i rumble z duckingiem",
-      "updated": ""
+      "title": "Ambient: długi, falujący, zamrożony pogłos (freeze z modulacją, bardzo długi ogon)",
+      "updated": "2026-10-24"
+    },
+    {
+      "id": "E7.6",
+      "epic": "E7",
+      "status": "do zrobienia",
+      "title": "Rumble: pogłos z duckingiem od stopy (techno rumble)",
+      "updated": "2026-10-24"
     }
   ],
   "milestones": [
@@ -496,33 +503,38 @@
   "questions": [
     {
       "id": "Q1",
-      "status": "otwarte",
+      "status": "zamknięte",
       "question": "Czy akceptujesz specyfikację etapu 1 bez zmian?",
-      "assumption": "Traktuję jako zatwierdzoną i pracuję dalej."
+      "assumption": "Traktuję jako zatwierdzoną i pracuję dalej.",
+      "answer": "Tak, specyfikacja zaakceptowana (24.10)."
     },
     {
       "id": "Q2",
-      "status": "otwarte",
+      "status": "zamknięte",
       "question": "Adres e-mail autora commitów: służbowy framna.com czy prywatny?",
-      "assumption": "Zostaje obecna tożsamość git; da się ją zmienić przed pushem."
+      "assumption": "Zostaje obecna tożsamość git; da się ją zmienić przed pushem.",
+      "answer": "Prywatny adres. Commity w tym repo idą z tkrzywicki@gmail.com, a moje dotychczasowe commity dostają go przed pierwszym pushem."
     },
     {
       "id": "Q3",
-      "status": "otwarte",
+      "status": "zamknięte",
       "question": "Czy nazwa LICHOMAT jest ostateczna?",
-      "assumption": "LICHOMAT, w jednej zmiennej CMake."
+      "assumption": "LICHOMAT, w jednej zmiennej CMake.",
+      "answer": "Nazwa LICHOMAT zostaje."
     },
     {
       "id": "Q4",
-      "status": "otwarte",
+      "status": "zamknięte",
       "question": "Co znaczy „ambient” w etapie 3: długi lub zamrożony pogłos czy warstwa tekstur/drona?",
-      "assumption": "Decyzja przed specyfikacją etapu 3."
+      "assumption": "Decyzja przed specyfikacją etapu 3.",
+      "answer": "Długi, falujący, zamrożony pogłos (freeze z modulacją)."
     },
     {
       "id": "Q5",
-      "status": "otwarte",
+      "status": "zamknięte",
       "question": "Czy mogę wypychać gałąź timing-core na GitHuba (Twój fork)?",
-      "assumption": "Nic nie pushuję bez Twojej zgody."
+      "assumption": "Nic nie pushuję bez Twojej zgody.",
+      "answer": "Tak, na bieżąco, na Twój fork (origin)."
     },
     {
       "id": "Q6",
@@ -532,9 +544,10 @@
     },
     {
       "id": "Q7",
-      "status": "otwarte",
+      "status": "zamknięte",
       "question": "Czy LXR jako slave (sync MIDI lub jack) ma wysyłać dalej Start, Stop i Continue na swoje MIDI out?",
-      "assumption": "Nie, jak w fw 1.7: wysyła je tylko jako master. Jeśli thru jest włączone, przekazuje to, co przychodzi."
+      "assumption": "Nie, jak w fw 1.7: wysyła je tylko jako master. Jeśli thru jest włączone, przekazuje to, co przychodzi.",
+      "answer": "Ma być zgodnie ze standardem MIDI; istniejąca obsługa MIDI nie wymaga zmian. Jako slave LXR nie wysyła własnych Start/Stop/Continue (tylko master), a MIDI thru przekazuje dalej to, co przychodzi (N18.2)."
     }
   ],
   "log": [
@@ -757,6 +770,11 @@
       "n": 44,
       "at": "2026-10-24 11:38",
       "text": "Start wstawiania E1.14, E2.7 i E2.8 do planu: jeden agent wstawia sekcje i uzgadnia odwołania (kolejność, tabele, liczby testów, budżet RAM, notatki wydania), dwóch niezależnie sprawdza spójność, na końcu poprawki."
+    },
+    {
+      "n": 45,
+      "at": "2026-10-24 12:08",
+      "text": "Odpowiedzi na pytania: Q1 specyfikacja OK, Q2 prywatny adres w commitach, Q3 nazwa LICHOMAT zostaje, Q4 ambient to długi, falujący, zamrożony pogłos, Q5 push na Twój fork na bieżąco, Q7 transport MIDI zgodny ze standardem: jako slave LXR nie wysyła własnych Start/Stop/Continue. Otwarte zostaje tylko Q6 (testy na sprzęcie)."
     }
   ]
 }

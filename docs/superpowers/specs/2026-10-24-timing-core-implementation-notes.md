@@ -339,7 +339,8 @@ says otherwise. The owner can still change them.
    - In the slave modes (1 and 2) it sends nothing. MIDI thru, when on, forwards what arrives, so
      downstream gear gets no duplicates.
    - A resume therefore never sends Continue in practice, because only the slave modes resume.
-   - Open question Q7 for the owner.
+   - The owner confirmed this on 2026-10-24 (Q7): stay MIDI-compliant; the existing MIDI handling
+     needs no change.
 3. **One-shot roll velocity.** The MIDI Note On of a one-shot roll uses the current step's volume, as
    in fw 1.7, not a fixed roll velocity.
 4. **USB realtime with CIN 0x5.** `USBD_CDC_DataOut()` also takes realtime bytes 0xF8–0xFF that a host
