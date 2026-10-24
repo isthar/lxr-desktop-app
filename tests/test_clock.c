@@ -68,7 +68,7 @@ static void checkTempo(double bpm)
 		/* handled by the first call at or after the ideal time */
 		const double late = (double)(r->time - t0) - n * step;
 		ASSERT_TRUE(late > -1.0);
-		ASSERT_TRUE(late < (double)interval + 1.0);
+		ASSERT_TRUE(late < (double)interval);
 		last = r;
 		n++;
 	}

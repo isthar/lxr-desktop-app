@@ -187,6 +187,13 @@ static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
 	return best;
 }
 //------------------------------------------------------------------------------
+/* A tick that rounding left a few ULPs short of the target still counts as due. The
+ * tolerance is far above double rounding and far below one cycle in a long session. */
+static inline double seqc_dueLimit(double target)
+{
+	return target + 1e-12 * (1.0 + (target > 0.0 ? target : -target));
+}
+//------------------------------------------------------------------------------
 /** handle every item due at or before target, earliest first (spec 6.3) */
 static void seqc_runTo(double target)
 {
@@ -195,7 +202,7 @@ static void seqc_runTo(double target)
 		seqc_tick_t tick;
 		uint8_t track;
 		const seqc_item_t item = seqc_nextItem(&tick, &track);
-		if (item == SEQC_ITEM_NONE || (double)tick > target)
+		if (item == SEQC_ITEM_NONE || (double)tick > seqc_dueLimit(target))
 			break;
 		switch (item)
 		{
