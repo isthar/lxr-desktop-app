@@ -2788,13 +2788,13 @@ This is what E2 needs: `sequencer.c` will include both `sequencer.h` (and with i
 - Modify: `Core/Inc/Preset/SeqStep.h:20-42` (CRLF: the comment, `Step`, `StepTiming` and the blank line after them)
 - Test: `tests/test_layout.c` (ctest id `layout`)
 
-- [ ] **Step 1: Note the reference hash of the image**
+- [x] **Step 1: Note the reference hash of the image**
 
 Run: `shasum -a 256 build/release/LXR_V2_STM32F765.bin`
 
 Expected: the value noted in E1.1 Step 11 (`573054ad…` on the reference toolchain).
 
-- [ ] **Step 2: Write the layout test `tests/test_layout.c`**
+- [x] **Step 2: Write the layout test `tests/test_layout.c`**
 
 It passes already, because `SeqStepTypes.h` exists since E1.1. It also proves that `seq_core.h`
 builds without the HAL: no HAL directory is on the include path of the host tests.
@@ -2853,7 +2853,7 @@ TEST(layout_event)
 TEST_MAIN()
 ```
 
-- [ ] **Step 3: Run the check that must fail now**
+- [x] **Step 3: Run the check that must fail now**
 
 This is a translation unit with both headers, as `sequencer.c` will have in E2.
 
@@ -2869,7 +2869,7 @@ Core/Inc/Preset/SeqStepTypes.h:47:16: error: redefinition of 'struct StepTiming'
 Core/Inc/Preset/SeqStepTypes.h:51:2: error: conflicting types for 'StepTiming'; have 'struct StepTiming'
 ```
 
-- [ ] **Step 4: Make `SeqStep.h` include `SeqStepTypes.h`**
+- [x] **Step 4: Make `SeqStep.h` include `SeqStepTypes.h`**
 
 The edit replaces everything from `/** a copy of the step struct` through `}StepTiming;` and the blank
 line after it with one include line. It keeps CRLF, `#include "main.h"` and `StepPosition`.
@@ -2902,7 +2902,7 @@ typedef enum StepPositionEnum
 Core/Inc/Preset/SeqStep.h: c program text, ASCII text, with CRLF line terminators
 ```
 
-- [ ] **Step 5: Run the checks to verify they pass**
+- [x] **Step 5: Run the checks to verify they pass**
 
 Run the command of Step 3 again. Expected: `both headers: OK`.
 
@@ -2916,7 +2916,7 @@ Run: `shasum -a 256 build/release/LXR_V2_STM32F765.bin`
 Expected: exactly the hash of Step 1. A different hash means the layout changed: stop and compare
 the typedefs.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add Core/Inc/Preset/SeqStep.h tests/test_layout.c
