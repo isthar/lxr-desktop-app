@@ -395,3 +395,26 @@ E2.8), beyond spec §8, §10 and §12:
 - **RAM beyond §10:** 444 B for the ring and its transfer buffer, in place of fw 1.7's 136-byte
   ring. Review row R6.2 allows it on top of the timing core's 8704 B.
 - The release notes list it under fixed bugs. Hardware check X4 covers it.
+
+## N21. The tempo estimate measures the clock rate when clocks share a stamp (task E1.15)
+
+E2.4 stamps USB MIDI at the packet (`USBD_CDC_DataOut()`), so every clock in one USB transfer gets the
+same stamp. Under N9 and N16 a 0 interval is left out, so the estimate then measures the packet rate,
+not the clock rate. Some hosts send one transfer per audio buffer, which makes this a normal case for
+USB clock sync from a DAW. The E1.10 review found it:
+- 3 clocks per packet at 120 BPM read as about 40 BPM;
+- one transfer per 23.2 ms audio buffer reads as about 107.67 BPM.
+
+The step grid and absStep stay correct, because clocks are counted. The wrong tempo reaches:
+- the BPM display and `lfo_recalcSync()`;
+- the hits played between clocks;
+- the dropout time.
+
+**Requirement:**
+- With clocks that share stamps, `seqc_currentBpm()` stays close to the true clock tempo: within 0.5%
+  after two beats of a steady clock, for packets of 1 to 6 clocks and for one transfer per 5.8–23.2 ms
+  audio buffer.
+- N16 tempo jumps, the N15 dropout and the jack at 4 PPQ keep working.
+- The design is chosen by a separate design pass and implemented test-first in task **E1.15**, after
+  E1.14 and before E2.1. Until then the E1.10 and E1.14 behaviour stands; reviewers need not raise this
+  case again.
