@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 07:25",
+    "updated": "2026-10-24 07:28",
     "phase": "Etap 1 — plan implementacji (faza 3 z 6)",
     "focus": "Plan etapu 1, faza 3 z 6: trzech agentów pisze sekcje planu z kodem: rdzeń seq_core metodą TDD, integracja z firmware oraz narzędzia i weryfikacja.",
     "branch": "timing-core",
-    "head": "851cf88",
+    "head": "768c12a",
     "next": "Fazy 3–6 planu: trzy sekcje z kodem, złożenie, trzech krytyków i poprawki; koniec planu szacuję na ok. 10:00. Potem rdzeń seq_core metodą TDD (E1.1–E1.13).",
-    "updated_at": "2026-10-24T07:25:00+02:00"
+    "updated_at": "2026-10-24T07:28:00+02:00"
   },
   "epics": [
     {
@@ -404,6 +404,13 @@
       "updated": ""
     },
     {
+      "id": "E6.10",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "Wyzwalanie z dokładnością do próbki: blok audio liczony w częściach dzielonych w chwilach zdarzeń (dziś start głosu jest kwantowany do bloku 1,45 ms)",
+      "updated": "2026-10-24"
+    },
+    {
       "id": "E7.1",
       "epic": "E7",
       "status": "zablokowane",
@@ -572,6 +579,11 @@
       "n": 15,
       "at": "2026-10-24 07:25",
       "text": "Sprawdziłem w kodzie uwagę agenta od API: w fw 1.7 sekwencer i synteza liczą się zwykle w pętli głównej (3 razy na obieg), a przerwanie TIM2 działa tylko przy zapisie i odczycie karty SD. Specyfikacja zakładała TIM2 ok. 36 kHz. To zmienia szacunek jittera, nie architekturę; poprawię notatki po planie."
+    },
+    {
+      "n": 16,
+      "at": "2026-10-24 07:28",
+      "text": "Notatki N12–N15: sekwencer chodzi z pętli głównej, nie z TIM2; przyjęte decyzje API; SPP w kolejce synchronizacji razem z Continue i Clock; próg dropoutu dla wolnego zegara 4 PPQ. Krytycy w fazie 5 sprawdzą plan także względem nich. Nowe zadanie E6.10: wyzwalanie z dokładnością do próbki."
     }
   ]
 }
