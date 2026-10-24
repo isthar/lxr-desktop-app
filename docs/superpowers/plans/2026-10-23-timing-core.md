@@ -395,7 +395,7 @@ interface function exists, and nothing plays. E1.3 replaces it.
 - Create: `Core/Src/Soundengine/Sequencer/seq_core.c` (CRLF, skeleton)
 - Test: `tests/test_harness.c` (ctest id `harness`)
 
-- [ ] **Step 1: Create the test runner `tests/seqc_test.h`**
+- [x] **Step 1: Create the test runner `tests/seqc_test.h`**
 
 ```c
 /*
@@ -479,7 +479,7 @@ __attribute__((unused)) static int seqc_test_matches_(const char *name, const ch
 #endif /* SEQC_TEST_H_ */
 ```
 
-- [ ] **Step 2: Create the host test project `tests/CMakeLists.txt`**
+- [x] **Step 2: Create the host test project `tests/CMakeLists.txt`**
 
 ```cmake
 # Host tests for the LICHOMAT sequencer timing core
@@ -601,7 +601,7 @@ seqc_add_test(test_overflow  IDS T19)                # E1.12 queue overflow, sta
 seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c)  # E1.13 fw 1.7 replica (reference/)
 ```
 
-- [ ] **Step 3: Write the failing test `tests/test_harness.c`**
+- [x] **Step 3: Write the failing test `tests/test_harness.c`**
 
 It calls the fake host's callbacks directly, so it does not depend on the core. It checks:
 - the runner itself;
@@ -885,7 +885,7 @@ TEST(harness_record)
 TEST_MAIN()
 ```
 
-- [ ] **Step 4: Run it to verify it fails**
+- [x] **Step 4: Run it to verify it fails**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -910,7 +910,7 @@ CMake Error at CMakeLists.txt:64 (message):
   is missing: the host tests need the timing core
 ```
 
-- [ ] **Step 5: Create `Core/Inc/Preset/SeqStepTypes.h`**
+- [x] **Step 5: Create `Core/Inc/Preset/SeqStepTypes.h`**
 
 ```c
 /*
@@ -971,7 +971,7 @@ _Static_assert(sizeof(StepTiming) == 1, "StepTiming is stored and copied as one 
 #endif /* SEQSTEPTYPES_H_ */
 ```
 
-- [ ] **Step 6: Create `Core/Inc/Soundengine/Sequencer/seq_core.h`**
+- [x] **Step 6: Create `Core/Inc/Soundengine/Sequencer/seq_core.h`**
 
 The functions are final. E1.14 adds what N16 needs, the constants `SEQC_TEMPO_RESTART` and
 `SEQC_TEMPO_RESTART_4PPQ` and the counter `seqc_stats_t.tempoRestarts` at the end of the struct,
@@ -1598,7 +1598,7 @@ void seqc_resetStats(void);
 #endif /* SEQ_CORE_H_ */
 ```
 
-- [ ] **Step 7: Create the skeleton `Core/Src/Soundengine/Sequencer/seq_core.c`**
+- [x] **Step 7: Create the skeleton `Core/Src/Soundengine/Sequencer/seq_core.c`**
 
 ```c
 /*
@@ -1652,7 +1652,7 @@ void seqc_stats(seqc_stats_t *out) { memset(out, 0, sizeof *out); }
 void seqc_resetStats(void) {}
 ```
 
-- [ ] **Step 8: Convert the three Core files to CRLF**
+- [x] **Step 8: Convert the three Core files to CRLF**
 
 Run:
 ```bash
@@ -1661,7 +1661,7 @@ file Core/Inc/Preset/SeqStepTypes.h Core/Inc/Soundengine/Sequencer/seq_core.h Co
 ```
 Expected: each of the three lines ends with `with CRLF line terminators`.
 
-- [ ] **Step 9: Create the fake host header `tests/fake_host.h`**
+- [x] **Step 9: Create the fake host header `tests/fake_host.h`**
 
 ```c
 /*
@@ -1938,7 +1938,7 @@ void fake_printLog(const fake_host_t *h, size_t from, size_t to);
 #endif /* FAKE_HOST_H_ */
 ```
 
-- [ ] **Step 10: Create the fake host `tests/fake_host.c`**
+- [x] **Step 10: Create the fake host `tests/fake_host.c`**
 
 ```c
 /*
@@ -2727,7 +2727,7 @@ void fake_printLog(const fake_host_t *h, size_t from, size_t to)
 }
 ```
 
-- [ ] **Step 11: Run the tests to verify they pass**
+- [x] **Step 11: Run the tests to verify they pass**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -2753,7 +2753,7 @@ Expected: the same hash as before this task, because the firmware is untouched. 
 `573054add56aa2a38dc5f9a3b126a69030d15e41d8726080d0f97b86794bb2d4`. Note the value: E1.2 compares
 against it.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add tests/seqc_test.h tests/CMakeLists.txt tests/test_harness.c tests/fake_host.h tests/fake_host.c \
