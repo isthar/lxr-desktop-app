@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 11:22",
+    "updated": "2026-10-24 11:38",
     "phase": "Etap 1 — przygotowanie implementacji",
-    "focus": "Plan etapu 1 gotowy i zacommitowany. Czekam na poprawki sekcji E2.8, potem agent wstawi trzy dodatkowe sekcje do planu, a dwóch recenzentów sprawdzi spójność.",
+    "focus": "Wstawianie trzech dodatkowych sekcji do planu (będzie 30 zadań) i kontrola spójności. Zaraz potem rusza implementacja.",
     "branch": "timing-core",
-    "head": "31de367",
+    "head": "074a3d1",
     "next": "Implementacja 30 zadań po kolei: implementacja TDD, przegląd zgodności ze specyfikacją, przegląd jakości. Zaczyna się od E3.2 i rdzenia E1.1–E1.14.",
-    "updated_at": "2026-10-24T11:22:00+02:00"
+    "updated_at": "2026-10-24T11:38:00+02:00"
   },
   "epics": [
     {
@@ -747,6 +747,16 @@
       "n": 42,
       "at": "2026-10-24 11:22",
       "text": "Poprawki E2.7 gotowe: wszystkie 4 uwagi przyjęte. Kroki kontroli U1 sprawdzone symulacją: te same naciśnięcia przycisków przepuszczone przez prawdziwy buttonHandler.c z fw 1.7 i z poprawką. Notatka N19 dostała opis złagodzonych ostrzeżeń w teście. Czekają jeszcze poprawki E2.8."
+    },
+    {
+      "n": 43,
+      "at": "2026-10-24 11:36",
+      "text": "Poprawki E2.8 gotowe: wszystkie 4 uwagi przyjęte. Bufor wysyłki USB nie trzyma starych komunikatów dla komputera, który przestał czytać (próg 100 ms, nowy test), a budżet RAM jest podniesiony o 444 B z uzasadnieniem. Nowa notatka N20. Workflow dodatkowych sekcji zakończony: 9 agentów, 2 h 5 min."
+    },
+    {
+      "n": 44,
+      "at": "2026-10-24 11:38",
+      "text": "Start wstawiania E1.14, E2.7 i E2.8 do planu: jeden agent wstawia sekcje i uzgadnia odwołania (kolejność, tabele, liczby testów, budżet RAM, notatki wydania), dwóch niezależnie sprawdza spójność, na końcu poprawki."
     }
   ]
 }
