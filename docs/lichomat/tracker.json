@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 10:32",
+    "updated": "2026-10-24 11:01",
     "phase": "Etap 1 — plan implementacji (faza 6 z 6)",
     "focus": "Plan etapu 1, faza 6 z 6: agent wprowadza poprawki z 30 uwag krytyków, w tym trzy prawdziwe błędy logiki. Równolegle trwa recenzja sekcji E1.14 i pisanie sekcji E2.7 i E2.8.",
     "branch": "timing-core",
-    "head": "980437c",
+    "head": "6771786",
     "next": "Fazy 3–6 planu: trzy sekcje z kodem, złożenie, trzech krytyków i poprawki; koniec planu szacuję na ok. 10:00. Potem rdzeń seq_core metodą TDD (E1.1–E1.13).",
-    "updated_at": "2026-10-24T10:32:00+02:00"
+    "updated_at": "2026-10-24T11:01:00+02:00"
   },
   "epics": [
     {
@@ -701,6 +701,21 @@
       "n": 34,
       "at": "2026-10-24 10:32",
       "text": "Sekcja E2.8 gotowa (15 kroków TDD, 14 testów). Potwierdzone błędy USB MIDI out z fw 1.7: po każdym zawinięciu bufora (przy 120 BPM co ok. 0,67 s, od samego zegara) idzie 128 bajtów spoza bufora, z kolejki odbiorczej USB; komunikaty wysłane przy zajętym porcie przepadają; zły CIN dla F1/F2/F3/F6. Poprawka to nowy moduł usb_midiTx.c testowany na hoście i cienka warstwa w usb_manager.c. Teraz sprawdza ją recenzent."
+    },
+    {
+      "n": 35,
+      "at": "2026-10-24 10:35",
+      "text": "Recenzja E1.14: przyjęta, 4 drobne uwagi. Najciekawsza: spóźnione pakiety USB po 2 takty mogły fałszywie zrestartować estymację tempa na połowę."
+    },
+    {
+      "n": 36,
+      "at": "2026-10-24 10:51",
+      "text": "Recenzja E2.7: przyjęta, 4 drobne uwagi (opis kontroli U1, flagi kompilacji testu, notatki wydania, lista zmian w innych zadaniach)."
+    },
+    {
+      "n": 37,
+      "at": "2026-10-24 11:01",
+      "text": "Poprawki E1.14 gotowe: wszystkie 4 uwagi przyjęte, test na pary spóźnionych taktów USB, 13 celowo wprowadzonych błędów w rdzeniu łapią testy. Sekcja pasuje do planu po jego poprawkach (29/29 testów). Notatka N16 uzupełniona o regułę zerowego odstępu."
     }
   ]
 }
