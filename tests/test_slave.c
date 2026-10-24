@@ -426,8 +426,13 @@ TEST(T16_switch_to_internal_starts_an_armed_transport)
 	seqc_setSyncMode(SEQC_SYNC_INTERNAL);
 	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
 	ASSERT_EQ(seqc_position(), 0.0);
+	const uint32_t clocks = h->calls[FAKE_MIDI_CLOCK];
+	const uint32_t steps = h->calls[FAKE_TEMPO_STEP];
 	fake_process(h, h->now + 10);
 	ASSERT_EQ(seqc_absStep(), 0);
+	/* the start re-phases the MIDI clock out and the tempo steps (N8): both at step 0 */
+	ASSERT_EQ(h->calls[FAKE_MIDI_CLOCK], clocks + 1);
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], steps + 1);
 	ASSERT_EQ(fake_triggers(h, 0, trig, 4), 1);
 	size_t pos = 0, n = 0;
 	const fake_rec_t *r;
