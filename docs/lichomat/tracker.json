@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 10:06",
+    "updated": "2026-10-24 10:10",
     "phase": "Etap 1 — plan implementacji (faza 5 z 6)",
     "focus": "Plan etapu 1, faza 5 z 6: trzech krytyków sprawdza złożony plan (27 zadań). Równolegle drugi workflow pisze i sprawdza sekcje dla nowych zadań E1.14, E2.7 i E2.8.",
     "branch": "timing-core",
-    "head": "6dc5b3d",
+    "head": "0247079",
     "next": "Fazy 3–6 planu: trzy sekcje z kodem, złożenie, trzech krytyków i poprawki; koniec planu szacuję na ok. 10:00. Potem rdzeń seq_core metodą TDD (E1.1–E1.13).",
-    "updated_at": "2026-10-24T10:06:00+02:00"
+    "updated_at": "2026-10-24T10:10:00+02:00"
   },
   "epics": [
     {
@@ -676,6 +676,11 @@
       "n": 29,
       "at": "2026-10-24 10:06",
       "text": "Poprawiona notatka N16: pasmo ±50% dotyczy odstępów zegara, nie tempa. Skok 120→190 BPM estymacja przejmuje w ciągu jednej ćwierćnuty bez restartu; restart jest potrzebny dopiero, gdy tempo spada poniżej 2/3 albo rośnie ponad dwukrotnie (np. 90→200)."
+    },
+    {
+      "n": 30,
+      "at": "2026-10-24 10:10",
+      "text": "Faza 5/6: krytyk wykonalności zgłosił 8 uwag. Krytyczna to brak E1.14, którego sekcja już jest. Z poważnych prawdziwy błąd w E2.2: klej przekazuje rdzeniowi szybkość rolla w kodowaniu z fw 1.7, więc domyślne 1/16 rdzeń brał za wyłączony roll. Do tego niezgodności z N18.2 i N18.4. Czeka jeszcze krytyk poprawności."
     }
   ]
 }
