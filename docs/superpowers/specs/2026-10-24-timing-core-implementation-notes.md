@@ -287,3 +287,43 @@ apart. The dropout time is `max(500 ms, 2 × the expected clock interval)`:
 - With an estimate, the expected interval comes from the estimate.
 - Without one, it is the interval at 20 BPM, the lowest tempo the estimate accepts. At 4 PPQ that is
   750 ms, so the dropout is 1.5 s, and a slow clock can still build its first estimate.
+
+## N16. The tempo estimate follows a large tempo jump
+
+With N9's outlier rule alone, a jump of more than 50% (for example 120 to 190 BPM when a DJ changes
+tracks) makes every new interval an outlier, and the estimate stays at the old tempo for good. So:
+
+- Count consecutive outliers that lie on the same side of the estimate (all longer or all shorter).
+- After 4 in a row (24 PPQ sources) or 2 in a row (jack at 4 PPQ), restart the estimate from those
+  intervals alone, as if after a dropout.
+- An interval inside the ±50% band, or an outlier on the other side, resets the count.
+
+## N17. A dropout sends the pending note-offs
+
+After a slave dropout (N9, N15) the core sends every pending note-off at once, as it does at a stop.
+Otherwise a note on an external MIDI device can hang until the next clock or Stop.
+
+N16 and N17 came out of writing the plan, after the E1.10 section was finished. Task **E1.14**, after
+E1.13, implements both test-first, with tests named `T16_tempo_jump_*` and `T18_dropout_note_off_*`.
+
+## N18. Defaults settled while writing the plan
+
+These choices came up while writing the integration section. Each keeps fw 1.7 behaviour unless it
+says otherwise. The owner can still change them.
+
+1. **Skip-once marker per track.** `seqc_skipOnce(track, step)` keeps one marker per track; a new
+   call replaces only that track's marker. With a single marker, a chord recorded on two tracks in
+   the second half of a step would lose the first marker, and that track would play its recorded note
+   twice. The signature is unchanged. E1.14 implements it test-first (`T14_skip_once_per_track_*`).
+2. **MIDI transport out only as master.**
+   - In internal sync the `transport()` callback sends Start, Stop and Continue on MIDI out, as fw 1.7
+     did.
+   - In the slave modes (1 and 2) it sends nothing. MIDI thru, when on, forwards what arrives, so
+     downstream gear gets no duplicates.
+   - A resume therefore never sends Continue in practice, because only the slave modes resume.
+   - Open question Q7 for the owner.
+3. **One-shot roll velocity.** The MIDI Note On of a one-shot roll uses the current step's volume, as
+   in fw 1.7, not a fixed roll velocity.
+4. **USB realtime with CIN 0x5.** `USBD_CDC_DataOut()` also takes realtime bytes 0xF8–0xFF that a host
+   sends with CIN 0x5 instead of CIN 0xF. Some hosts do this.
+5. **Echo of an overridden note.** It stays note 60, as in fw 1.7.
