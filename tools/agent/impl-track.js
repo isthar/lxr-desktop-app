@@ -210,8 +210,10 @@ async function reviewLoop(t, impl, kind, promptFn, schema) {
   for (let round = 1; round <= MAX_ROUNDS; round++) {
     const review = await agent(promptFn(t, current), { label: `${kind}:${t.id}#${round}`, phase: kind === 'spec' ? 'Spec review' : 'Quality review', schema })
     if (!review) return { ok: false, reason: `${kind} reviewer failed`, impl: current }
-    const blocking = (review.issues || []).filter((i) => kind === 'spec' || i.severity !== 'minor')
-    if (blocking.length === 0) return { ok: true, review, impl: current }
+    // Every spec issue blocks in the first round; after that only critical and important ones do,
+    // so a stream of minor findings cannot stop the track. Minor leftovers are reported.
+    const blocking = (review.issues || []).filter((i) => i.severity !== 'minor' || (kind === 'spec' && round === 1))
+    if (blocking.length === 0) return { ok: true, review, impl: current, minor: (review.issues || []).filter((i) => i.severity === 'minor') }
     if (round === MAX_ROUNDS) return { ok: false, reason: `${kind} review not satisfied after ${MAX_ROUNDS} rounds`, review, impl: current }
     const fix = await agent(fixPrompt(t, current, blocking, kind), { label: `fix:${t.id}:${kind}#${round}`, phase: kind === 'spec' ? 'Spec review' : 'Quality review', schema: IMPL, effort: 'high' })
     if (!fix || fix.status === 'BLOCKED' || fix.status === 'NEEDS_CONTEXT') return { ok: false, reason: `${kind} fix ${fix ? fix.status : 'failed'}`, fix, impl: current }
@@ -237,7 +239,7 @@ for (const t of A.tasks) {
     results.push({ id: t.id, impl, spec, quality })
     return { stoppedAt: t.id, reason: quality.reason, results }
   }
-  const minor = (quality.review.issues || []).filter((i) => i.severity === 'minor')
+  const minor = [...(spec.minor || []), ...(quality.minor || [])]
   results.push({ id: t.id, impl: quality.impl, concerns: impl.concerns || [], deviations: impl.deviations || [], minor })
   log(`${t.id}: done at ${quality.impl.head_sha}`)
 }
