@@ -300,8 +300,11 @@ interval out, and the estimate would stay at the old tempo for good. So:
 - After 4 in a row (24 PPQ sources) or 2 in a row (jack at 4 PPQ), restart the estimate from those
   intervals alone, as if after a dropout.
 - An interval inside the ±50% band, or an outlier on the other side, resets the count.
-- An interval of 0 (clocks bunched into one USB packet share a stamp) is still left out, and it neither
-  extends nor ends a row. Otherwise a packet of bunched clocks could restart the estimate at a mean of 0.
+- An interval of 0 (clocks bunched into one USB packet share a stamp) is still left out. It ends a row
+  without starting one: the packet came late, so the interval before the 0 is no sign of a new tempo.
+  - A 0 that extended a row could restart the estimate at a mean of 0.
+  - A 0 that left the row alone would let a few late packets of 2 clocks in a row restart the estimate
+    at half the tempo.
 
 ## N17. A dropout sends the pending note-offs
 
