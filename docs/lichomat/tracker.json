@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 11:01",
+    "updated": "2026-10-24 11:07",
     "phase": "Etap 1 — plan implementacji (faza 6 z 6)",
     "focus": "Plan etapu 1, faza 6 z 6: agent wprowadza poprawki z 30 uwag krytyków, w tym trzy prawdziwe błędy logiki. Równolegle trwa recenzja sekcji E1.14 i pisanie sekcji E2.7 i E2.8.",
     "branch": "timing-core",
-    "head": "6771786",
+    "head": "7c17581",
     "next": "Fazy 3–6 planu: trzy sekcje z kodem, złożenie, trzech krytyków i poprawki; koniec planu szacuję na ok. 10:00. Potem rdzeń seq_core metodą TDD (E1.1–E1.13).",
-    "updated_at": "2026-10-24T11:01:00+02:00"
+    "updated_at": "2026-10-24T11:07:00+02:00"
   },
   "epics": [
     {
@@ -716,6 +716,16 @@
       "n": 37,
       "at": "2026-10-24 11:01",
       "text": "Poprawki E1.14 gotowe: wszystkie 4 uwagi przyjęte, test na pary spóźnionych taktów USB, 13 celowo wprowadzonych błędów w rdzeniu łapią testy. Sekcja pasuje do planu po jego poprawkach (29/29 testów). Notatka N16 uzupełniona o regułę zerowego odstępu."
+    },
+    {
+      "n": 38,
+      "at": "2026-10-24 11:06",
+      "text": "Recenzja E2.8: 1 poważna uwaga (nowy bufor wysyłki USB przekracza automatyczny budżet RAM z E4.1, choć w RAM jest ok. 119 KB wolnego) i 3 drobne. Poprawki w toku."
+    },
+    {
+      "n": 39,
+      "at": "2026-10-24 11:07",
+      "text": "Faza 6/6 w toku: agent poprawia plan, ma już m.in. nowe reguły i testy w E1.10–E1.13 (plan urósł z 699 do 752 KB)."
     }
   ]
 }
