@@ -19,7 +19,7 @@ export const meta = {
 //   branch: 'timing-core',
 //   plan: 'docs/superpowers/plans/2026-10-23-timing-core.md',
 //   context: 'scene-setting text shared by all tasks of this track',
-//   tasks: [{ id, title, text }],        // full task text extracted from the plan
+//   tasks: [{ id, title, text } | { id, title, file }],  // full task text, or a file holding it (extract_tasks.py --files)
 //   final: { review: true, attacks: [{ key, prompt }] }   // optional
 // }
 
@@ -91,7 +91,7 @@ function implementPrompt(t) {
 
 ## Task description (full text from the plan)
 
-${t.text}
+${taskText(t)}
 
 ## Context
 
@@ -118,7 +118,7 @@ function fixPrompt(t, impl, issues, kind) {
 
 ## Task description (full text from the plan)
 
-${t.text}
+${taskText(t)}
 
 ## Context
 
@@ -144,7 +144,7 @@ function specReviewPrompt(t, impl) {
 
 ## What was requested (full task text)
 
-${t.text}
+${taskText(t)}
 
 ## Context
 
@@ -176,7 +176,7 @@ ${t.id}: ${t.title}. Implementer summary: ${impl.summary}
 
 ## Requirements / plan
 
-${t.text}
+${taskText(t)}
 
 ## Context
 
@@ -196,6 +196,11 @@ Repository ${A.repo}: git diff --stat ${impl.base_sha}..HEAD and git diff ${impl
 Do not edit files and do not commit.
 
 Severity: critical = bug or broken behaviour; important = test gap, architecture or robustness problem that should be fixed now; minor = polish. ready = yes only without critical or important issues. Each issue needs file, line, the problem and the fix.`
+}
+
+// A task's full text is given inline (text) or in a file the agents read first (file).
+function taskText(t) {
+  return t.text ? t.text : `The full text of this task, exactly as the plan has it, is in the file ${t.file}. Read that whole file first; it is your task description.`
 }
 
 const results = []
