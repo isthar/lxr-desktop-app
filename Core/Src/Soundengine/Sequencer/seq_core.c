@@ -409,14 +409,24 @@ static void seqc_generateLate(uint32_t n, uint8_t pattern)
 	}
 }
 //------------------------------------------------------------------------------
-/** boundary step 6: the early part of step n+1, with the indices advanced as at
- * a boundary of the same pattern */
+/** boundary step 6: the early part of step n+1. If the master track wraps at
+ * n+1, peekNextPattern() tells the pattern and whether the indices restart. */
 static void seqc_generateEarly(uint32_t n, uint8_t pattern)
 {
+	const uint8_t m = seqc_trk.master;
+	uint8_t next = pattern;
+	bool restart = false;
+
+	if (seqc_nextIndex(seqc_trk.index[m], seqc_trackLength(pattern, m)) == 0)
+	{
+		restart = seqc.host.peekNextPattern(seqc.host.ctx, &next);
+		if (next == SEQC_NO_PATTERN)
+			return;			/* the song ends at n+1 */
+	}
 	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
 	{
-		const uint8_t step = (uint8_t)seqc_nextIndex(seqc_trk.index[t], seqc_trackLength(pattern, t));
-		seqc_generate(t, n + 1u, pattern, step, true);
+		const uint8_t step = restart ? 0 : (uint8_t)seqc_nextIndex(seqc_trk.index[t], seqc_trackLength(next, t));
+		seqc_generate(t, n + 1u, next, step, true);
 	}
 }
 
