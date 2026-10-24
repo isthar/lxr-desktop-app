@@ -290,13 +290,18 @@ apart. The dropout time is `max(500 ms, 2 × the expected clock interval)`:
 
 ## N16. The tempo estimate follows a large tempo jump
 
-With N9's outlier rule alone, a jump of more than 50% (for example 120 to 190 BPM when a DJ changes
-tracks) makes every new interval an outlier, and the estimate stays at the old tempo for good. So:
+N9's outlier band applies to clock intervals, not to the tempo. An interval is outside ±50% only when
+the tempo more than doubles or drops below two thirds, for example 90 to 200 BPM or 200 to 90 BPM.
+Smaller jumps, such as 120 to 190 BPM, stay inside the band, and the mean follows them within one
+window (24 clocks, one beat). After a jump outside the band, N9's rule alone would leave every new
+interval out, and the estimate would stay at the old tempo for good. So:
 
 - Count consecutive outliers that lie on the same side of the estimate (all longer or all shorter).
 - After 4 in a row (24 PPQ sources) or 2 in a row (jack at 4 PPQ), restart the estimate from those
   intervals alone, as if after a dropout.
 - An interval inside the ±50% band, or an outlier on the other side, resets the count.
+- An interval of 0 (clocks bunched into one USB packet share a stamp) is still left out, and it neither
+  extends nor ends a row. Otherwise a packet of bunched clocks could restart the estimate at a mean of 0.
 
 ## N17. A dropout sends the pending note-offs
 
