@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 10:17",
+    "updated": "2026-10-24 10:32",
     "phase": "Etap 1 — plan implementacji (faza 6 z 6)",
     "focus": "Plan etapu 1, faza 6 z 6: agent wprowadza poprawki z 30 uwag krytyków, w tym trzy prawdziwe błędy logiki. Równolegle trwa recenzja sekcji E1.14 i pisanie sekcji E2.7 i E2.8.",
     "branch": "timing-core",
-    "head": "38899ea",
+    "head": "980437c",
     "next": "Fazy 3–6 planu: trzy sekcje z kodem, złożenie, trzech krytyków i poprawki; koniec planu szacuję na ok. 10:00. Potem rdzeń seq_core metodą TDD (E1.1–E1.13).",
-    "updated_at": "2026-10-24T10:17:00+02:00"
+    "updated_at": "2026-10-24T10:32:00+02:00"
   },
   "epics": [
     {
@@ -696,6 +696,11 @@
       "n": 33,
       "at": "2026-10-24 10:17",
       "text": "Sekcja E2.7 gotowa: poprawka jednej linii (w menu globalnym tryb przycisków to SELECT_MODE_MENU zamiast numeru kroku 11). Prawdziwy buttonHandler.c skompilowany na hoście z atrapami sprzętu: 8 testów, 3 najpierw nie przechodziły; po poprawce wszystkie przechodzą, firmware 0 ostrzeżeń. Opis zmiany w notatce N19; teraz sekcję sprawdza recenzent."
+    },
+    {
+      "n": 34,
+      "at": "2026-10-24 10:32",
+      "text": "Sekcja E2.8 gotowa (15 kroków TDD, 14 testów). Potwierdzone błędy USB MIDI out z fw 1.7: po każdym zawinięciu bufora (przy 120 BPM co ok. 0,67 s, od samego zegara) idzie 128 bajtów spoza bufora, z kolejki odbiorczej USB; komunikaty wysłane przy zajętym porcie przepadają; zły CIN dla F1/F2/F3/F6. Poprawka to nowy moduł usb_midiTx.c testowany na hoście i cienka warstwa w usb_manager.c. Teraz sprawdza ją recenzent."
     }
   ]
 }
