@@ -341,3 +341,19 @@ says otherwise. The owner can still change them.
 4. **USB realtime with CIN 0x5.** `USBD_CDC_DataOut()` also takes realtime bytes 0xF8–0xFF that a host
    sends with CIN 0x5 instead of CIN 0xF. Some hosts do this.
 5. **Echo of an overridden note.** It stays note 60, as in fw 1.7.
+
+## N19. The global menu fix changes two visible behaviours (E2.7)
+
+Spec §12 says the UI is unchanged apart from the start-up screen and the CPU page. E2.7 is a third
+exception: it fixes a fw 1.7 bug.
+
+- **The bug:** `buttonHandler.c:901` stores `SEQ_CONFIG`, a step-button number (11), in the button
+  mode. 11 is also `SELECT_MODE_LAST_STEP_ALL`.
+- **What the fix changes:**
+  - In the global menu (SHIFT + step 12), a step button without SHIFT no longer sets the length of all
+    seven tracks.
+  - Page up and down in the global menu keep step 12 blinking and show the step view, instead of the
+    Last Step page's LEDs.
+- **How:** the case stores `SELECT_MODE_MENU` (7), the existing "config menu" mode, whose handling is
+  what the menu needs.
+- The release notes list it under fixed bugs. Hardware check U1 covers it.
