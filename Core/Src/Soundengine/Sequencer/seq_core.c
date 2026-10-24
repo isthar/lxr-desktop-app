@@ -50,10 +50,11 @@ typedef struct
 	seqc_host_t	host;
 	uint32_t	cyclesPerSecond;
 	bool		busy;		/**< inside a seqc_ call that can run callbacks */
-	bool		haveTime;	/**< seqc_process() has set the time */
+	bool		haveTime;	/**< seqc_process() or seqc_syncEvent() has set the time */
 	seqc_time_t	now;		/**< the core's current time */
 	seqc_time_t	nextDue;	/**< N10: nothing is due before this time */
 
+	seqc_sync_t	mode;
 	double		masterBpm;
 	double		ticksPerCycle;	/**< of the master tempo */
 	double		cyclesPerTick;
@@ -144,6 +145,26 @@ typedef struct
 } seqc_skip_t;
 
 //------------------------------------------------------------------------------
+/** slave modes: clock count, tempo estimate and the interpolation (N9) */
+typedef struct
+{
+	uint8_t		ppq;		/**< clock in jack: 4 or 24 */
+	uint32_t	clockCount;	/**< clocks since the last reset of the count */
+	bool		haveStamp;
+	seqc_time_t	lastStamp;	/**< stamp of the last clock, in any state */
+	double		lastClockPos;	/**< position of the last clock while running, ticks */
+	seqc_time_t	lastClockTime;	/**< its stamp */
+	bool		droppedOut;	/**< no clock for the dropout time (N15): the position holds */
+	double		bpm;		/**< the estimate, or the last known tempo */
+	double		ticksPerCycle;	/**< of bpm */
+	double		cyclesPerTick;
+	uint32_t	interval[SEQC_TEMPO_WINDOW];	/**< clock intervals, cycles */
+	uint8_t		intervalCount;
+	uint8_t		intervalNext;
+	uint64_t	intervalSum;
+} seqc_slave_t;
+
+//------------------------------------------------------------------------------
 /* the state, one part per area */
 static seqc_core_t seqc;
 static seqc_tracks_t seqc_trk;
@@ -152,6 +173,7 @@ static seqc_queue_t seqc_queue;
 static seqc_fire_t seqc_fire;
 static seqc_outputs_t seqc_out;
 static seqc_skip_t seqc_skip;
+static seqc_slave_t seqc_sl;
 
 //------------------------------------------------------------------------------
 // Helpers
@@ -230,6 +252,60 @@ static int seqc_shiftTicks(uint8_t shift)
 		return 0;
 	return ((int)shift - (int)SEQC_SHIFT_CENTER) * (int)SEQC_SHIFT_UNIT_TICKS;
 }
+//------------------------------------------------------------------------------
+/** floor() for ticks; seq_core does not use <math.h> (spec 4.1) */
+static seqc_tick_t seqc_floor(double x)
+{
+	seqc_tick_t i = (seqc_tick_t)x;
+	if ((double)i > x)
+		i--;
+	return i;
+}
+//------------------------------------------------------------------------------
+/** the first multiple of m above x */
+static seqc_tick_t seqc_nextMultiple(double x, seqc_tick_t m)
+{
+	const seqc_tick_t i = seqc_floor(x);
+	seqc_tick_t q = i / m;
+	if (i % m != 0 && i < 0)
+		q--;
+	return (q + 1) * m;
+}
+//------------------------------------------------------------------------------
+/** ticks of one clock: a MIDI clock or a jack pulse */
+static double seqc_ticksPerClock(void)
+{
+	if (seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24)
+		return SEQC_TICKS_PER_STEP;
+	return SEQC_TICKS_PER_MIDI_CLOCK;
+}
+//------------------------------------------------------------------------------
+/** clocks of one step: 6, or 1 for the jack at 4 PPQ */
+static uint32_t seqc_clocksPerStep(void)
+{
+	if (seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24)
+		return 1;
+	return SEQC_MIDI_CLOCKS_PER_STEP;
+}
+//------------------------------------------------------------------------------
+/** the position before step 0: 0 in internal sync, minus one clock in the slave
+ * modes, so that the next clock brings it to 0 */
+static double seqc_startPosition(void)
+{
+	return seqc.mode == SEQC_SYNC_INTERNAL ? 0.0 : -seqc_ticksPerClock();
+}
+//------------------------------------------------------------------------------
+/** the dropout time (N15): SEQC_DROPOUT_MS, or two expected clock intervals if
+ * that is longer. Without an estimate the interval is the one at
+ * SEQC_SLAVE_BPM_MIN, so that a slow clock can still build its first estimate. */
+static seqc_time_t seqc_dropoutCycles(void)
+{
+	const double cyclesPerTick = seqc_sl.intervalCount > 0 ? seqc_sl.cyclesPerTick
+			: 1.0 / seqc_ticksPerCycle(SEQC_SLAVE_BPM_MIN);
+	const double twoClocks = 2.0 * seqc_ticksPerClock() * cyclesPerTick;
+	const double minimum = (double)seqc.cyclesPerSecond * SEQC_DROPOUT_MS / 1000.0;
+	return (seqc_time_t)(twoClocks > minimum ? twoClocks : minimum);
+}
 
 //------------------------------------------------------------------------------
 // Position
@@ -250,12 +326,28 @@ static seqc_time_t seqc_internalTime(seqc_tick_t tick)
 	return seqc.anchorTime + (seqc_time_t)cycles;
 }
 //------------------------------------------------------------------------------
+/** slave modes, while running: the position at time t (N9). It is interpolated
+ * from the last clock at the estimated tempo, clamped to the next clock and never
+ * goes back. After a dropout it holds. */
+static double seqc_slaveTarget(seqc_time_t t)
+{
+	if (seqc_sl.droppedOut)
+		return seqc.pos;
+	const double limit = seqc_sl.lastClockPos + seqc_ticksPerClock();
+	double p = seqc_sl.lastClockPos;
+	if (t > seqc_sl.lastClockTime)
+		p += (double)(t - seqc_sl.lastClockTime) * seqc_sl.ticksPerCycle;
+	if (p > limit)
+		p = limit;
+	return p > seqc.pos ? p : seqc.pos;
+}
+//------------------------------------------------------------------------------
 /** the position at time t, at or after the core's current time */
 static double seqc_positionAt(seqc_time_t t)
 {
 	if (seqc.state != SEQC_RUNNING || seqc.startPending)
 		return seqc.pos;
-	const double p = seqc_internalTick(t);
+	const double p = seqc.mode == SEQC_SYNC_INTERNAL ? seqc_internalTick(t) : seqc_slaveTarget(t);
 	return p > seqc.pos ? p : seqc.pos;
 }
 
@@ -559,21 +651,34 @@ static void seqc_rewindTransport(void)
 	seqc.absStep = -1;
 	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
 	seqc_trk.master = 0;
-	seqc.pos = 0.0;
+	seqc.pos = seqc_startPosition();
+	seqc_sl.lastClockPos = seqc.pos;
 	seqc_out.nextPulse = 0;
 	seqc.atStart = true;
 	if (!wasAtStart)
 		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_REWIND);
 }
 //------------------------------------------------------------------------------
-/** local start (seqc_start()): from the beginning */
+/** arm: playback starts with the next clock that begins a step */
+static void seqc_arm(void)
+{
+	seqc.state = SEQC_ARMED;
+	seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_ARM);
+}
+//------------------------------------------------------------------------------
+/** local start (seqc_start()): from the beginning; a slave arms */
 static void seqc_localStart(void)
 {
 	if (!seqc.atStart)
 		seqc_rewindTransport();
-	seqc.state = SEQC_RUNNING;
-	seqc.startPending = true;
-	seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_START);
+	if (seqc.mode == SEQC_SYNC_INTERNAL)
+	{
+		seqc.state = SEQC_RUNNING;
+		seqc.startPending = true;
+		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_START);
+	}
+	else
+		seqc_arm();
 }
 
 //------------------------------------------------------------------------------
@@ -625,6 +730,85 @@ static void seqc_boundary(seqc_tick_t tick)
 }
 
 //------------------------------------------------------------------------------
+// Tempo estimate (slave modes)
+//------------------------------------------------------------------------------
+/** the tempo estimate from bpm, clamped (N9) */
+static void seqc_setSlaveBpm(double bpm)
+{
+	if (bpm < SEQC_SLAVE_BPM_MIN)
+		bpm = SEQC_SLAVE_BPM_MIN;
+	if (bpm > SEQC_SLAVE_BPM_MAX)
+		bpm = SEQC_SLAVE_BPM_MAX;
+	seqc_sl.bpm = bpm;
+	seqc_sl.ticksPerCycle = seqc_ticksPerCycle(bpm);
+	seqc_sl.cyclesPerTick = 1.0 / seqc_sl.ticksPerCycle;
+}
+//------------------------------------------------------------------------------
+/** forget the measured intervals (the last known tempo stays) */
+static void seqc_clearEstimate(void)
+{
+	seqc_sl.intervalCount = 0;
+	seqc_sl.intervalNext = 0;
+	seqc_sl.intervalSum = 0;
+}
+//------------------------------------------------------------------------------
+/** a measured clock interval, in cycles. An interval more than
+ * SEQC_TEMPO_OUTLIER_PCT off the mean is left out. */
+static void seqc_tempoInterval(uint32_t dt)
+{
+	const uint8_t window = (seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24)
+			? SEQC_TEMPO_WINDOW_4PPQ : SEQC_TEMPO_WINDOW;
+	if (seqc_sl.intervalCount > 0)
+	{
+		/* |dt - mean| > mean * pct / 100, with mean = sum / count */
+		const uint64_t scaled = (uint64_t)dt * seqc_sl.intervalCount;
+		const uint64_t dev = scaled > seqc_sl.intervalSum ? scaled - seqc_sl.intervalSum
+				: seqc_sl.intervalSum - scaled;
+		if (dev * 100u > seqc_sl.intervalSum * SEQC_TEMPO_OUTLIER_PCT)
+		{
+			seqc.stats.intervalsExcluded++;
+			return;
+		}
+	}
+	else if (dt == 0)
+	{
+		seqc.stats.intervalsExcluded++;
+		return;
+	}
+	if (seqc_sl.intervalCount < window)
+		seqc_sl.intervalCount++;
+	else
+		seqc_sl.intervalSum -= seqc_sl.interval[seqc_sl.intervalNext];
+	seqc_sl.interval[seqc_sl.intervalNext] = dt;
+	seqc_sl.intervalSum += dt;
+	seqc_sl.intervalNext = (uint8_t)((seqc_sl.intervalNext + 1u) % window);
+
+	const double mean = (double)seqc_sl.intervalSum / seqc_sl.intervalCount;
+	seqc_setSlaveBpm(seqc_ticksPerClock() / mean * (double)seqc.cyclesPerSecond * 60.0 / SEQC_TICKS_PER_BEAT);
+}
+//------------------------------------------------------------------------------
+/** the tempo part of a clock: the interval since the last clock, from the raw
+ * stamps. After a dropout the interval is not used. */
+static void seqc_tempoClock(seqc_time_t stamp)
+{
+	if (seqc_sl.haveStamp)
+	{
+		const seqc_time_t dt = stamp > seqc_sl.lastStamp ? stamp - seqc_sl.lastStamp : 0u;
+		if (seqc_sl.droppedOut || dt > seqc_dropoutCycles())
+		{
+			if (!seqc_sl.droppedOut)
+				seqc.stats.dropouts++;
+			seqc_clearEstimate();
+		}
+		else
+			seqc_tempoInterval((uint32_t)dt);
+	}
+	seqc_sl.haveStamp = true;
+	seqc_sl.lastStamp = stamp;
+	seqc_sl.droppedOut = false;
+}
+
+//------------------------------------------------------------------------------
 // Processing
 //------------------------------------------------------------------------------
 /** keep the earlier of two candidates; at equal ticks the lower item */
@@ -645,8 +829,11 @@ static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
 	seqc_item_t best = SEQC_ITEM_NONE;
 	*tick = SEQC_NO_TICK;
 	*track = 0;
-	seqc_consider(SEQC_ITEM_TEMPO_STEP, seqc_out.nextTempoStep, 0, &best, tick, track);
-	seqc_consider(SEQC_ITEM_MIDI_CLOCK, seqc_out.nextMidiClock, 0, &best, tick, track);
+	if (seqc.mode == SEQC_SYNC_INTERNAL)
+	{
+		seqc_consider(SEQC_ITEM_TEMPO_STEP, seqc_out.nextTempoStep, 0, &best, tick, track);
+		seqc_consider(SEQC_ITEM_MIDI_CLOCK, seqc_out.nextMidiClock, 0, &best, tick, track);
+	}
 	if (seqc.state == SEQC_RUNNING && !seqc.startPending)
 	{
 		seqc_consider(SEQC_ITEM_BOUNDARY, (seqc_tick_t)seqc_nextBoundaryStep() * SEQC_TICKS_PER_STEP, 0,
@@ -733,6 +920,25 @@ static void seqc_runInternal(void)
 	seqc_runTo(seqc_internalTick(seqc.now));
 }
 //------------------------------------------------------------------------------
+/** slave modes: while running, the position follows the interpolation (N9).
+ * After the dropout time (N15) without a clock it holds and the estimate is
+ * cleared. */
+static void seqc_runSlave(void)
+{
+	if (seqc.state != SEQC_RUNNING)
+		return;
+	const seqc_time_t limit = seqc_sl.lastClockTime + seqc_dropoutCycles();
+	if (!seqc_sl.droppedOut && seqc.now > limit)
+	{
+		seqc_runTo(seqc_slaveTarget(limit));
+		seqc_sl.droppedOut = true;
+		seqc_clearEstimate();
+		seqc.stats.dropouts++;
+		return;
+	}
+	seqc_runTo(seqc_slaveTarget(seqc.now));
+}
+//------------------------------------------------------------------------------
 /** move the core's time to t (never back) and handle everything due up to it */
 static void seqc_advance(seqc_time_t t)
 {
@@ -742,10 +948,34 @@ static void seqc_advance(seqc_time_t t)
 		seqc.haveTime = true;
 		seqc.now = t;
 		seqc.anchorTime = t;
+		seqc_sl.lastClockTime = t;
 	}
 	else if (t > seqc.now)
 		seqc.now = t;
-	seqc_runInternal();
+	if (seqc.mode == SEQC_SYNC_INTERNAL)
+		seqc_runInternal();
+	else
+		seqc_runSlave();
+}
+//------------------------------------------------------------------------------
+/** slave modes: the time at which the next item falls due, capped at the clamp
+ * time and the dropout timeout (N10) */
+static seqc_time_t seqc_slaveDue(seqc_item_t item, seqc_tick_t tick)
+{
+	if (seqc.state != SEQC_RUNNING || seqc_sl.droppedOut)
+		return SEQC_NEVER;
+	seqc_time_t due = seqc_sl.lastClockTime + seqc_dropoutCycles();
+	double until = seqc_sl.lastClockPos + seqc_ticksPerClock();
+	if (item != SEQC_ITEM_NONE && (double)tick < until)
+		until = (double)tick;
+	if (until > seqc.pos)
+	{
+		const double cycles = (until - seqc_sl.lastClockPos) * seqc_sl.cyclesPerTick;
+		const seqc_time_t t = seqc_sl.lastClockTime + (cycles > 0.0 ? (seqc_time_t)cycles : 0u);
+		if (t < due)
+			due = t;
+	}
+	return due;
 }
 //------------------------------------------------------------------------------
 /** work out nextDue (N10) */
@@ -759,10 +989,38 @@ static void seqc_schedule(void)
 	seqc_tick_t tick;
 	uint8_t track;
 	const seqc_item_t item = seqc_nextItem(&tick, &track);
-	if (item == SEQC_ITEM_NONE)
+	if (seqc.mode != SEQC_SYNC_INTERNAL)
+		seqc.nextDue = seqc_slaveDue(item, tick);
+	else if (item == SEQC_ITEM_NONE)
 		seqc.nextDue = SEQC_NEVER;
 	else
 		seqc.nextDue = seqc_internalTime(tick);
+}
+
+//------------------------------------------------------------------------------
+// Slave clocks
+//------------------------------------------------------------------------------
+/** a MIDI clock or a jack pulse in its sync mode (seq_core.h, "Slave position") */
+static void seqc_slaveClock(seqc_time_t stamp)
+{
+	const bool stepClock = seqc_sl.clockCount % seqc_clocksPerStep() == 0;
+
+	seqc_sl.clockCount++;
+	seqc_tempoClock(stamp);
+	if (seqc.state == SEQC_ARMED && stepClock)
+	{
+		seqc.state = SEQC_RUNNING;
+		seqc.host.transport(seqc.host.ctx, seqc.atStart ? SEQC_TRANSPORT_START : SEQC_TRANSPORT_CONTINUE);
+	}
+	if (stepClock)
+		seqc.host.tempoStep(seqc.host.ctx);
+	if (seqc.state == SEQC_RUNNING)
+	{
+		/* the position jumps to the clock, and everything due on the way is handled */
+		seqc_sl.lastClockPos += seqc_ticksPerClock();
+		seqc_sl.lastClockTime = stamp;
+		seqc_runTo(seqc_sl.lastClockPos);
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -795,9 +1053,11 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
 	memset(&seqc_fire, 0, sizeof seqc_fire);
 	memset(&seqc_out, 0, sizeof seqc_out);
 	memset(&seqc_skip, 0, sizeof seqc_skip);
+	memset(&seqc_sl, 0, sizeof seqc_sl);
 
 	seqc.host = *host;
 	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
+	seqc.mode = SEQC_SYNC_INTERNAL;
 	seqc.masterBpm = SEQC_DEFAULT_BPM;
 	seqc.ticksPerCycle = seqc_ticksPerCycle(seqc.masterBpm);
 	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
@@ -805,11 +1065,48 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
 	seqc.atStart = true;
 	seqc.absStep = -1;
 	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+	seqc_sl.ppq = 4;
+	seqc_setSlaveBpm(seqc.masterBpm);
 }
 //------------------------------------------------------------------------------
 void seqc_setSyncMode(seqc_sync_t mode)
 {
-	(void)mode;			/* internal sync only, for now */
+	if (!seqc_enter())
+		return;
+	if (mode != seqc.mode && (mode == SEQC_SYNC_INTERNAL || mode == SEQC_SYNC_ANALOG || mode == SEQC_SYNC_MIDI))
+	{
+		seqc.pos = seqc_positionAt(seqc.now);
+		seqc.startPending = false;
+		seqc.mode = mode;
+		seqc_clearEstimate();
+		seqc_sl.clockCount = 0;
+		seqc_sl.haveStamp = false;
+		seqc_sl.droppedOut = false;
+		seqc_setSlaveBpm(seqc.masterBpm);
+		if (seqc.atStart)
+			seqc.pos = seqc_startPosition();
+		if (mode == SEQC_SYNC_INTERNAL)
+		{
+			/* the position continues at the master tempo; an armed transport starts */
+			seqc.anchorTime = seqc.now;
+			seqc.anchorTick = seqc.pos;
+			seqc_out.nextMidiClock = seqc_nextMultiple(seqc.pos, SEQC_TICKS_PER_MIDI_CLOCK);
+			seqc_out.nextTempoStep = seqc_nextMultiple(seqc.pos, SEQC_TICKS_PER_STEP);
+			if (seqc.state == SEQC_ARMED)
+			{
+				seqc.state = SEQC_RUNNING;
+				seqc.startPending = seqc.atStart;
+				seqc.host.transport(seqc.host.ctx, seqc.atStart ? SEQC_TRANSPORT_START : SEQC_TRANSPORT_CONTINUE);
+			}
+		}
+		else
+		{
+			/* the next clock adds one clock to the position */
+			seqc_sl.lastClockPos = seqc.pos;
+			seqc_sl.lastClockTime = seqc.now;
+		}
+	}
+	seqc_leave();
 }
 //------------------------------------------------------------------------------
 void seqc_setTempo(float bpm)
@@ -830,12 +1127,30 @@ void seqc_setTempo(float bpm)
 	seqc.masterBpm = b;
 	seqc.ticksPerCycle = seqc_ticksPerCycle(b);
 	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
+	if (seqc_sl.intervalCount == 0)
+		seqc_setSlaveBpm(b);	/* the first estimate while nothing is measured */
 	seqc_leave();
 }
 //------------------------------------------------------------------------------
 void seqc_setAnalogPpq(uint8_t ppq)
 {
-	(void)ppq;			/* internal sync only, for now */
+	if (!seqc_enter())
+		return;
+	seqc_sl.ppq = ppq == 24 ? 24 : 4;
+	if (seqc.mode == SEQC_SYNC_ANALOG)
+	{
+		/* only the jack's count and estimate depend on the PPQ; in the other
+		 * modes it is kept, and the switch to analog sync clears both */
+		seqc_clearEstimate();
+		seqc_sl.clockCount = 0;
+		seqc_sl.haveStamp = false;
+		if (seqc.atStart)
+		{
+			seqc.pos = seqc_startPosition();
+			seqc_sl.lastClockPos = seqc.pos;
+		}
+	}
+	seqc_leave();
 }
 //------------------------------------------------------------------------------
 void seqc_start(void)
@@ -870,8 +1185,27 @@ void seqc_rewind(void)
 //------------------------------------------------------------------------------
 void seqc_syncEvent(seqc_sync_ev_t ev, seqc_time_t stamp)
 {
-	(void)ev;			/* internal sync only, for now */
-	(void)stamp;
+	if (!seqc_enter())
+		return;
+	seqc_advance(stamp);
+
+	const bool midi = seqc.mode == SEQC_SYNC_MIDI;
+	const bool analog = seqc.mode == SEQC_SYNC_ANALOG;
+	bool used = false;
+	switch (ev)
+	{
+	case SEQC_EV_CLOCK:
+	case SEQC_EV_PULSE:
+		used = ev == SEQC_EV_CLOCK ? midi : analog;
+		if (used)
+			seqc_slaveClock(stamp);
+		break;
+	default:
+		break;			/* the transport events are not handled yet */
+	}
+	if (!used)
+		seqc.stats.syncIgnored++;
+	seqc_leave();
 }
 //------------------------------------------------------------------------------
 void seqc_songPosition(uint16_t sixteenths)
@@ -947,7 +1281,7 @@ float seqc_stepPhase(void)
 //------------------------------------------------------------------------------
 float seqc_currentBpm(void)
 {
-	return (float)seqc.masterBpm;
+	return (float)(seqc.mode == SEQC_SYNC_INTERNAL ? seqc.masterBpm : seqc_sl.bpm);
 }
 //------------------------------------------------------------------------------
 seqc_state_t seqc_state(void)

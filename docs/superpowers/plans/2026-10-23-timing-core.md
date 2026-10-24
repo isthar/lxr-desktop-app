@@ -7202,7 +7202,7 @@ mode to internal sync starts an armed transport at once.
 - Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
 - Test: `tests/test_slave.c` (ctest ids `T16`, `T18`)
 
-- [ ] **Step 1: Write the failing test `tests/test_slave.c`**
+- [x] **Step 1: Write the failing test `tests/test_slave.c`**
 
 ```c
 /*
@@ -7731,7 +7731,7 @@ TEST(T18_ppq_change_in_midi_sync_keeps_the_count)
 TEST_MAIN()
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -7751,7 +7751,7 @@ FAIL T16_position_is_clamped_to_the_next_clock
 0 of 21 tests passed
 ```
 
-- [ ] **Step 3: Implement the slave modes in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+- [x] **Step 3: Implement the slave modes in `Core/Src/Soundengine/Sequencer/seq_core.c`**
 
 Replace `seqc_core_t` with:
 
@@ -8370,20 +8370,20 @@ float seqc_currentBpm(void)
 }
 ```
 
-- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+- [x] **Step 4: Convert `seq_core.c` to CRLF**
 
 Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
 
 Expected: `... with CRLF line terminators`
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `tools/check.sh; echo "exit $?"`
 
 Expected: `100% tests passed, 0 tests failed out of 19`, image `274688/1015808 B`,
 `== compiler warnings: 0`, `exit 0`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add Core/Src/Soundengine/Sequencer/seq_core.c tests/test_slave.c
