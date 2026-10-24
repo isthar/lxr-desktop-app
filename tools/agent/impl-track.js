@@ -210,10 +210,18 @@ async function reviewLoop(t, impl, kind, promptFn, schema) {
   for (let round = 1; round <= MAX_ROUNDS; round++) {
     const review = await agent(promptFn(t, current), { label: `${kind}:${t.id}#${round}`, phase: kind === 'spec' ? 'Spec review' : 'Quality review', schema })
     if (!review) return { ok: false, reason: `${kind} reviewer failed`, impl: current }
-    // Every spec issue blocks in the first round; after that only critical and important ones do,
-    // so a stream of minor findings cannot stop the track. Minor leftovers are reported.
-    const blocking = (review.issues || []).filter((i) => i.severity !== 'minor' || (kind === 'spec' && round === 1))
-    if (blocking.length === 0) return { ok: true, review, impl: current, minor: (review.issues || []).filter((i) => i.severity === 'minor') }
+    // What blocks a task:
+    // - critical issues, always;
+    // - important issues, except in the last quality round;
+    // - minor spec issues, in the first round only.
+    // A stream of test-gap findings therefore cannot stop the track; the issues that do not block
+    // are reported with the task's result as leftovers.
+    const lastRound = round === MAX_ROUNDS
+    const blocks = (i) => i.severity === 'critical'
+      || (i.severity === 'important' && (kind === 'spec' || !lastRound))
+      || (i.severity === 'minor' && kind === 'spec' && round === 1)
+    const blocking = (review.issues || []).filter(blocks)
+    if (blocking.length === 0) return { ok: true, review, impl: current, minor: (review.issues || []).filter((i) => !blocks(i)) }
     if (round === MAX_ROUNDS) return { ok: false, reason: `${kind} review not satisfied after ${MAX_ROUNDS} rounds`, review, impl: current }
     const fix = await agent(fixPrompt(t, current, blocking, kind), { label: `fix:${t.id}:${kind}#${round}`, phase: kind === 'spec' ? 'Spec review' : 'Quality review', schema: IMPL, effort: 'high' })
     if (!fix || fix.status === 'BLOCKED' || fix.status === 'NEEDS_CONTEXT') return { ok: false, reason: `${kind} fix ${fix ? fix.status : 'failed'}`, fix, impl: current }
