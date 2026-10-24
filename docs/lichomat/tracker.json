@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 09:32",
+    "updated": "2026-10-24 09:55",
     "phase": "Etap 1 — plan implementacji (faza 5 z 6)",
     "focus": "Plan etapu 1, faza 5 z 6: trzech krytyków sprawdza złożony plan (27 zadań). Równolegle drugi workflow pisze i sprawdza sekcje dla nowych zadań E1.14, E2.7 i E2.8.",
     "branch": "timing-core",
-    "head": "576b1c4",
+    "head": "0ee4000",
     "next": "Fazy 3–6 planu: trzy sekcje z kodem, złożenie, trzech krytyków i poprawki; koniec planu szacuję na ok. 10:00. Potem rdzeń seq_core metodą TDD (E1.1–E1.13).",
-    "updated_at": "2026-10-24T09:32:00+02:00"
+    "updated_at": "2026-10-24T09:55:00+02:00"
   },
   "epics": [
     {
@@ -661,6 +661,11 @@
       "n": 26,
       "at": "2026-10-24 09:32",
       "text": "Start workflowu dodatkowych sekcji planu: E1.14 (estymacja tempa po skoku, note-off przy zaniku zegara, skip-once per tor), E2.7 (błąd menu globalnego), E2.8 (błędy USB MIDI out). Każdą sekcję pisze jeden agent i sprawdza ją w kopii repo, potem drugi agent odtwarza ją od nowa i szuka błędów."
+    },
+    {
+      "n": 27,
+      "at": "2026-10-24 09:55",
+      "text": "Faza 5/6: krytyk pokrycia skończył: 12 uwag (6 poważnych, 6 drobnych). Poważne dotyczą notatek N16–N18: brakujące E1.14, które pisze się równolegle, oraz trzech miejsc w E2.1–E2.3, które musi poprawić agent od poprawek. Czekają jeszcze krytycy poprawności i wykonalności."
     }
   ]
 }
