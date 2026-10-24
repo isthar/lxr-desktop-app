@@ -134,6 +134,50 @@ TEST(T11_same_pattern_keeps_the_indices)
 	ASSERT_FALSE(r->flag);
 }
 
+TEST(T11_reload_of_the_same_pattern_restarts_the_indices)
+{
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 1, 12);			/* track 1 would be at step 4 at absStep 16 */
+	fake_setStep(h, 0, 1, 0, true);
+	fake_setTiming(h, 0, 1, 0, 0, -1);
+	fake_setStep(h, 0, 1, 4, true);
+	fake_setTiming(h, 0, 1, 4, 0, -1);
+	start(h);
+	runToTick(h, 96);
+	fake_setNextPattern(h, 0);			/* reload: patternEnd() returns SEQC_PAT_CHANGED */
+	runToTick(h, 17 * 96);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 8), 3);	/* absStep 4 (step 4), 12 (step 0), 16 (step 0) */
+	ASSERT_EQ(trig[2]->ev.tick, 16 * 96 - 12);
+	ASSERT_EQ(trig[2]->ev.pattern, 0);
+	ASSERT_EQ(trig[2]->ev.step, 0);
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_PEEK, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->pattern, 0);
+	ASSERT_TRUE(r->flag);
+}
+
+TEST(T11_peek_follows_the_master_track)
+{
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 3, 24);			/* track 3 is the master track: the pattern ends at 24 */
+	fake_setStep(h, 1, 2, 0, true);
+	fake_setTiming(h, 1, 2, 0, 0, -7);
+	start(h);
+	runToTick(h, 96);
+	fake_setNextPattern(h, 1);
+	runToTick(h, 26 * 96);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 24 * 96 - 84);
+	ASSERT_EQ(trig[0]->ev.pattern, 1);
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_PEEK, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->absStep, 23);			/* not at 15, where track 0 wraps */
+	ASSERT_TRUE(fake_next(h, FAKE_PEEK, &pos) == NULL);
+	ASSERT_EQ(h->errors, 0);
+}
+
 TEST(T11_no_early_hits_after_the_song_end)
 {
 	fake_host_t *h = fake_init();
@@ -152,6 +196,7 @@ TEST(T11_no_early_hits_after_the_song_end)
 	const fake_rec_t *r = fake_next(h, FAKE_PEEK, &pos);
 	ASSERT_TRUE(r != NULL);
 	ASSERT_EQ(r->pattern, SEQC_NO_PATTERN);
+	ASSERT_EQ(h->errors, 0);
 }
 
 TEST(T11_late_hits_of_the_old_pattern_after_the_switch)
