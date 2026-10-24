@@ -69,8 +69,17 @@ typedef struct
 } seqc_core_t;
 
 //------------------------------------------------------------------------------
+/** per-track step counters */
+typedef struct
+{
+	int8_t		index[SEQC_NUM_TRACKS];	/**< track step, -1 before the first step */
+	uint8_t		master;			/**< master track of the last boundary */
+} seqc_tracks_t;
+
+//------------------------------------------------------------------------------
 /* the state, one part per area */
 static seqc_core_t seqc;
+static seqc_tracks_t seqc_trk;
 
 //------------------------------------------------------------------------------
 // Helpers
@@ -85,6 +94,46 @@ static double seqc_ticksPerCycle(double bpm)
 static uint32_t seqc_nextBoundaryStep(void)
 {
 	return (uint32_t)(seqc.absStep + 1);
+}
+//------------------------------------------------------------------------------
+/** a raw track length as the sequencer plays it: 0 is 16, above 64 is 64 */
+static uint8_t seqc_effectiveLength(uint8_t raw)
+{
+	if (raw == 0)
+		return SEQC_DEFAULT_LENGTH;
+	return raw > SEQC_NUM_STEPS ? SEQC_NUM_STEPS : raw;
+}
+//------------------------------------------------------------------------------
+/** the effective length of a track */
+static uint8_t seqc_trackLength(uint8_t pattern, uint8_t track)
+{
+	return seqc_effectiveLength(seqc.host.trackLength(seqc.host.ctx, pattern, track));
+}
+//------------------------------------------------------------------------------
+/** the master track of a pattern, as fw 1.7 seq_getLongestTrack(): the largest
+ * raw length, the lowest track on a tie */
+static uint8_t seqc_longestTrack(uint8_t pattern)
+{
+	uint8_t master = 0;
+	uint8_t longest = seqc.host.trackLength(seqc.host.ctx, pattern, 0);
+	for (uint8_t t = 1; t < SEQC_NUM_TRACKS; t++)
+	{
+		const uint8_t len = seqc.host.trackLength(seqc.host.ctx, pattern, t);
+		if (len > longest)
+		{
+			longest = len;
+			master = t;
+		}
+	}
+	return master;
+}
+//------------------------------------------------------------------------------
+/** the track index after index on a track of length len (fw 1.7 seq_nextStep()).
+ * The master track wraps when this is 0. */
+static int8_t seqc_nextIndex(int8_t index, uint8_t len)
+{
+	const int next = index + 1;
+	return (next >= len || (next & 0x3f) == 0) ? 0 : (int8_t)next;
 }
 
 //------------------------------------------------------------------------------
@@ -132,6 +181,8 @@ static void seqc_rewindTransport(void)
 	const bool wasAtStart = seqc.atStart;
 
 	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+	seqc_trk.master = 0;
 	seqc.pos = 0.0;
 	seqc.atStart = true;
 	if (!wasAtStart)
@@ -151,13 +202,45 @@ static void seqc_localStart(void)
 //------------------------------------------------------------------------------
 // Step boundary
 //------------------------------------------------------------------------------
+/** boundary steps 1 and 2: advance the counters, and call patternEnd() if the
+ * master track wraps. Returns false if the song ended there. */
+static bool seqc_advanceCounters(void)
+{
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+	const uint8_t master = seqc_longestTrack(pattern);
+	const bool wrap = seqc_nextIndex(seqc_trk.index[master], seqc_trackLength(pattern, master)) == 0;
+
+	seqc.absStep++;
+	seqc.atStart = false;
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		seqc_trk.index[t] = seqc_nextIndex(seqc_trk.index[t], seqc_trackLength(pattern, t));
+	if (!wrap)
+		return true;
+	switch (seqc.host.patternEnd(seqc.host.ctx))
+	{
+	case SEQC_PAT_CHANGED:
+		memset(seqc_trk.index, 0, sizeof seqc_trk.index);
+		return true;
+	case SEQC_PAT_STOP:
+		seqc_stopTransport();
+		seqc_rewindTransport();
+		return false;
+	default:
+		return true;
+	}
+}
+//------------------------------------------------------------------------------
 /** the step boundary at tick (seq_core.h, "Processing order") */
 static void seqc_boundary(seqc_tick_t tick)
 {
 	seqc.pos = (double)tick;
-	seqc.absStep++;
-	seqc.atStart = false;
-	seqc.host.stepBoundary(seqc.host.ctx, (uint32_t)seqc.absStep);
+	if (!seqc_advanceCounters())
+		return;
+	const uint32_t n = (uint32_t)seqc.absStep;
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+
+	seqc_trk.master = seqc_longestTrack(pattern);
+	seqc.host.stepBoundary(seqc.host.ctx, n);
 }
 
 //------------------------------------------------------------------------------
@@ -287,6 +370,7 @@ static void seqc_leave(void)
 void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
 {
 	memset(&seqc, 0, sizeof seqc);
+	memset(&seqc_trk, 0, sizeof seqc_trk);
 
 	seqc.host = *host;
 	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
@@ -296,6 +380,7 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
 	seqc.state = SEQC_STOPPED;
 	seqc.atStart = true;
 	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
 }
 //------------------------------------------------------------------------------
 void seqc_setSyncMode(seqc_sync_t mode)
@@ -393,8 +478,9 @@ void seqc_skipOnce(uint8_t track, uint8_t step)
 //------------------------------------------------------------------------------
 uint8_t seqc_trackStep(uint8_t track)
 {
-	(void)track;			/* no track counters yet */
-	return SEQC_NO_STEP;
+	if (track >= SEQC_NUM_TRACKS || seqc_trk.index[track] < 0)
+		return SEQC_NO_STEP;
+	return (uint8_t)seqc_trk.index[track];
 }
 //------------------------------------------------------------------------------
 int32_t seqc_absStep(void)
@@ -404,7 +490,7 @@ int32_t seqc_absStep(void)
 //------------------------------------------------------------------------------
 uint8_t seqc_masterTrack(void)
 {
-	return 0;			/* no track counters yet */
+	return seqc_trk.master;
 }
 //------------------------------------------------------------------------------
 double seqc_position(void)
