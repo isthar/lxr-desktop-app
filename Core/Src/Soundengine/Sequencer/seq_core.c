@@ -80,6 +80,7 @@ typedef struct
 {
 	int8_t		index[SEQC_NUM_TRACKS];	/**< track step, -1 before the first step */
 	uint8_t		master;			/**< master track of the last boundary */
+	bool		seeked;			/**< after a song position: the next boundary is absStep itself */
 } seqc_tracks_t;
 
 //------------------------------------------------------------------------------
@@ -145,10 +146,19 @@ typedef struct
 } seqc_skip_t;
 
 //------------------------------------------------------------------------------
+/** how an armed transport starts */
+typedef enum
+{
+	SEQC_ARM_STEP_CLOCK = 0,	/**< local start: with the next clock that begins a step */
+	SEQC_ARM_NEXT_CLOCK,		/**< MIDI Start or Continue: with the next clock */
+} seqc_arm_t;
+
+//------------------------------------------------------------------------------
 /** slave modes: clock count, tempo estimate and the interpolation (N9) */
 typedef struct
 {
 	uint8_t		ppq;		/**< clock in jack: 4 or 24 */
+	seqc_arm_t	arm;
 	uint32_t	clockCount;	/**< clocks since the last reset of the count */
 	bool		haveStamp;
 	seqc_time_t	lastStamp;	/**< stamp of the last clock, in any state */
@@ -187,7 +197,7 @@ static double seqc_ticksPerCycle(double bpm)
 /** the absolute step of the next boundary */
 static uint32_t seqc_nextBoundaryStep(void)
 {
-	return (uint32_t)(seqc.absStep + 1);
+	return (uint32_t)(seqc_trk.seeked ? seqc.absStep : seqc.absStep + 1);
 }
 //------------------------------------------------------------------------------
 /** a raw track length as the sequencer plays it: 0 is 16, above 64 is 64 */
@@ -632,7 +642,7 @@ static void seqc_stopTransport(void)
 }
 //------------------------------------------------------------------------------
 /** clear what belongs to the current run: queue, note-offs, draws, same-tick
- * state and the skip-once marker (rewind) */
+ * state and the skip-once marker (rewind and seek) */
 static void seqc_clearRun(void)
 {
 	seqc_queue.count = 0;
@@ -651,6 +661,7 @@ static void seqc_rewindTransport(void)
 	seqc.absStep = -1;
 	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
 	seqc_trk.master = 0;
+	seqc_trk.seeked = false;
 	seqc.pos = seqc_startPosition();
 	seqc_sl.lastClockPos = seqc.pos;
 	seqc_out.nextPulse = 0;
@@ -659,14 +670,16 @@ static void seqc_rewindTransport(void)
 		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_REWIND);
 }
 //------------------------------------------------------------------------------
-/** arm: playback starts with the next clock that begins a step */
-static void seqc_arm(void)
+/** arm: playback starts with a later clock */
+static void seqc_arm(seqc_arm_t how)
 {
 	seqc.state = SEQC_ARMED;
+	seqc_sl.arm = how;
 	seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_ARM);
 }
 //------------------------------------------------------------------------------
-/** local start (seqc_start()): from the beginning; a slave arms */
+/** local start (seqc_start(), jack reset release): from the beginning; a slave
+ * arms */
 static void seqc_localStart(void)
 {
 	if (!seqc.atStart)
@@ -678,7 +691,25 @@ static void seqc_localStart(void)
 		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_START);
 	}
 	else
-		seqc_arm();
+		seqc_arm(SEQC_ARM_STEP_CLOCK);
+}
+//------------------------------------------------------------------------------
+/** song position (N6): seek to step sixteenths */
+static void seqc_seek(uint16_t sixteenths)
+{
+	seqc_clearRun();
+	const uint32_t steps = seqc.host.seekPosition(seqc.host.ctx, sixteenths);
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		seqc_trk.index[t] = (int8_t)(steps % seqc_trackLength(pattern, t));
+	seqc_trk.master = seqc_longestTrack(pattern);
+	seqc_trk.seeked = true;
+	seqc.absStep = sixteenths;
+	seqc.atStart = false;
+	seqc.pos = (double)sixteenths * SEQC_TICKS_PER_STEP - seqc_ticksPerClock();
+	seqc_sl.lastClockPos = seqc.pos;
+	seqc_out.nextPulse = (seqc_tick_t)sixteenths * SEQC_TICKS_PER_STEP;
+	seqc_sl.clockCount = 0;
 }
 
 //------------------------------------------------------------------------------
@@ -688,6 +719,12 @@ static void seqc_localStart(void)
  * master track wraps. Returns false if the song ended there. */
 static bool seqc_advanceCounters(void)
 {
+	if (seqc_trk.seeked)
+	{
+		/* the first boundary after a song position: the counters are set */
+		seqc_trk.seeked = false;
+		return true;
+	}
 	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
 	const uint8_t master = seqc_longestTrack(pattern);
 	const bool wrap = seqc_nextIndex(seqc_trk.index[master], seqc_trackLength(pattern, master)) == 0;
@@ -1007,7 +1044,7 @@ static void seqc_slaveClock(seqc_time_t stamp)
 
 	seqc_sl.clockCount++;
 	seqc_tempoClock(stamp);
-	if (seqc.state == SEQC_ARMED && stepClock)
+	if (seqc.state == SEQC_ARMED && (stepClock || seqc_sl.arm == SEQC_ARM_NEXT_CLOCK))
 	{
 		seqc.state = SEQC_RUNNING;
 		seqc.host.transport(seqc.host.ctx, seqc.atStart ? SEQC_TRANSPORT_START : SEQC_TRANSPORT_CONTINUE);
@@ -1021,6 +1058,15 @@ static void seqc_slaveClock(seqc_time_t stamp)
 		seqc_sl.lastClockTime = stamp;
 		seqc_runTo(seqc_sl.lastClockPos);
 	}
+}
+//------------------------------------------------------------------------------
+/** MIDI Start, or the clock jack reset input: stop, rewind and reset the count */
+static void seqc_syncReset(void)
+{
+	if (seqc.state != SEQC_STOPPED)
+		seqc_stopTransport();
+	seqc_rewindTransport();
+	seqc_sl.clockCount = 0;
 }
 
 //------------------------------------------------------------------------------
@@ -1200,8 +1246,39 @@ void seqc_syncEvent(seqc_sync_ev_t ev, seqc_time_t stamp)
 		if (used)
 			seqc_slaveClock(stamp);
 		break;
+	case SEQC_EV_START:
+		used = midi || analog;
+		if (used)
+		{
+			seqc_syncReset();
+			seqc_arm(SEQC_ARM_NEXT_CLOCK);
+		}
+		break;
+	case SEQC_EV_CONTINUE:
+		used = (midi || analog) && seqc.state == SEQC_STOPPED;
+		if (used)
+			seqc_arm(SEQC_ARM_NEXT_CLOCK);
+		break;
+	case SEQC_EV_STOP:
+		used = (midi || analog) && seqc.state != SEQC_STOPPED;
+		if (used)
+		{
+			seqc.pos = seqc_positionAt(seqc.now);
+			seqc_stopTransport();
+		}
+		break;
+	case SEQC_EV_RESET_ON:
+		used = analog;
+		if (used)
+			seqc_syncReset();
+		break;
+	case SEQC_EV_RESET_OFF:
+		used = analog && seqc.state == SEQC_STOPPED;
+		if (used)
+			seqc_localStart();
+		break;
 	default:
-		break;			/* the transport events are not handled yet */
+		break;
 	}
 	if (!used)
 		seqc.stats.syncIgnored++;
@@ -1210,7 +1287,13 @@ void seqc_syncEvent(seqc_sync_ev_t ev, seqc_time_t stamp)
 //------------------------------------------------------------------------------
 void seqc_songPosition(uint16_t sixteenths)
 {
-	(void)sixteenths;		/* not handled yet */
+	if (!seqc_enter())
+		return;
+	if (seqc.mode == SEQC_SYNC_INTERNAL || seqc.state == SEQC_RUNNING)
+		seqc.stats.syncIgnored++;
+	else
+		seqc_seek(sixteenths);
+	seqc_leave();
 }
 //------------------------------------------------------------------------------
 void seqc_process(seqc_time_t now)
