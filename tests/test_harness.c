@@ -30,14 +30,31 @@ TEST(harness_runner)
 }
 
 /* a failing ASSERT_ sets the flag and returns from its function; this checks the
- * runner without its own macros, and prints the one expected failure line */
+ * runner without its own macros, and prints the four expected failure lines */
 static int afterFailingAssert;
 static void failingAssert(void) { ASSERT_EQ(1, 2); afterFailingAssert = 1; }
+static void failingTrue(void) { ASSERT_TRUE(0); afterFailingAssert = 1; }
+static void failingFalse(void) { ASSERT_FALSE(1); afterFailingAssert = 1; }
+static void failingNear(void) { ASSERT_NEAR(1.0, 2.0, 0.5); afterFailingAssert = 1; }
 TEST(harness_runner_failure)
 {
-	failingAssert();
-	const int failed = seqc_test_failed_;
-	seqc_test_failed_ = !(failed == 1 && afterFailingAssert == 0);
+	void (*const helpers[])(void) = { failingAssert, failingTrue, failingFalse, failingNear };
+	int ok = 1;
+	for (size_t i = 0; i < sizeof helpers / sizeof helpers[0]; i++) {
+		seqc_test_failed_ = 0;
+		afterFailingAssert = 0;
+		helpers[i]();
+		ok = ok && seqc_test_failed_ == 1 && afterFailingAssert == 0;
+	}
+	seqc_test_failed_ = !ok;
+}
+
+TEST(harness_runner_filter)
+{
+	ASSERT_TRUE(seqc_test_matches_("T2", "T2"));
+	ASSERT_TRUE(seqc_test_matches_("T2_grid", "T2"));
+	ASSERT_FALSE(seqc_test_matches_("T20", "T2"));
+	ASSERT_FALSE(seqc_test_matches_("T20_x", "T2"));
 }
 
 TEST(harness_defaults)
@@ -273,7 +290,12 @@ TEST(harness_record)
 	ASSERT_EQ(h->mainSteps[0][0], 0);
 	const seqc_event_t ev = { .tick = 0, .absStep = 0, .track = 4, .pattern = 0, .step = 6,
 			.vel = SEQC_ROLL_VELOCITY, .note = 62, .flags = SEQC_EVF_ROLL };
+	fake_setStepData(h, 0, 4, 6, 50, 60, 30);	/* the recording must overwrite these */
 	seqc_start();
+	h->recordActive = false;
+	h->host.trigger(h, &ev);			/* recording off: a roll hit is not recorded */
+	ASSERT_EQ(h->mainSteps[0][4], 0);
+	h->recordActive = true;
 	h->host.trigger(h, &ev);			/* a roll hit is recorded at its own step */
 	ASSERT_EQ(h->mainSteps[0][4], 1ull << 6);
 	ASSERT_EQ(h->steps[0][4][6].volume, SEQC_ROLL_VELOCITY | FAKE_STEP_ACTIVE_MASK);
