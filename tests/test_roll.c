@@ -160,6 +160,27 @@ TEST(T13_note_wins_over_a_roll_at_the_same_tick)
 	ASSERT_EQ(stats().chokeDrops, 1);
 }
 
+TEST(T13_roll_chokes_the_previous_step)
+{
+	fake_host_t *h = fake_init();
+	h->rollRate[2] = 4;
+	fake_setStep(h, 0, 2, 3, true);
+	fake_setTiming(h, 0, 2, 3, 3, 7);		/* hits at 372, 396, 420, 444 */
+	start(h);
+	runToTick(h, 5 * 96 - 1);
+	/* the roll at step 4 chokes the queued hits of step 3 (spec 6.4) */
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 3);
+	ASSERT_EQ(trig[0]->ev.absStep, 0);
+	ASSERT_EQ(trig[0]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(trig[1]->ev.absStep, 3);
+	ASSERT_EQ(trig[1]->ev.tick, 372);
+	ASSERT_EQ(trig[1]->ev.flags, 0);
+	ASSERT_EQ(trig[2]->ev.absStep, 4);
+	ASSERT_EQ(trig[2]->ev.tick, 384);
+	ASSERT_EQ(trig[2]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(stats().chokeDrops, 3);
+}
+
 TEST(T13_roll_hit_is_recorded_at_its_own_step)
 {
 	fake_host_t *h = fake_init();
@@ -258,6 +279,25 @@ TEST(T14_skip_once_removes_the_queued_early_hits)
 	fake_addNote(h, 4, 100, 64);
 	runToTick(h, 6 * 96);
 	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 0);
+	ASSERT_EQ(stats().skipDrops, 1);
+}
+
+TEST(T14_skip_once_removes_only_its_occurrence)
+{
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	fake_setStep(h, 0, 4, 4, true);
+	fake_setTiming(h, 0, 4, 4, 1, -2);		/* 360 early, 408 late */
+	fake_setStep(h, 0, 2, 4, true);			/* the same step on another track */
+	fake_setTiming(h, 0, 2, 4, 1, -2);
+	start(h);
+	runToTick(h, 3 * 96 + 50);			/* both early hits are queued */
+	fake_addNote(h, 4, 100, 64);			/* marker for track 4 only */
+	runToTick(h, 6 * 96);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 0);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.tick, 360);
+	ASSERT_EQ(trig[1]->ev.tick, 408);
 	ASSERT_EQ(stats().skipDrops, 1);
 }
 
