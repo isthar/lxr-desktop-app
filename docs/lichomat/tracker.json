@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 11:18",
+    "updated": "2026-10-24 11:22",
     "phase": "Etap 1 — przygotowanie implementacji",
     "focus": "Plan etapu 1 gotowy i zacommitowany. Czekam na poprawki sekcji E2.8, potem agent wstawi trzy dodatkowe sekcje do planu, a dwóch recenzentów sprawdzi spójność.",
     "branch": "timing-core",
-    "head": "68faab1",
+    "head": "31de367",
     "next": "Implementacja 30 zadań po kolei: implementacja TDD, przegląd zgodności ze specyfikacją, przegląd jakości. Zaczyna się od E3.2 i rdzenia E1.1–E1.14.",
-    "updated_at": "2026-10-24T11:18:00+02:00"
+    "updated_at": "2026-10-24T11:22:00+02:00"
   },
   "epics": [
     {
@@ -742,6 +742,11 @@
       "n": 41,
       "at": "2026-10-24 11:18",
       "text": "Kamień milowy M4: plan etapu 1 zacommitowany (2b3ae42, 19 265 linii, 27 zadań); raport w docs/lichomat/reports/M4-plan-etapu-1.md. Następny krok: wstawienie E1.14, E2.7 i E2.8, potem implementacja."
+    },
+    {
+      "n": 42,
+      "at": "2026-10-24 11:22",
+      "text": "Poprawki E2.7 gotowe: wszystkie 4 uwagi przyjęte. Kroki kontroli U1 sprawdzone symulacją: te same naciśnięcia przycisków przepuszczone przez prawdziwy buttonHandler.c z fw 1.7 i z poprawką. Notatka N19 dostała opis złagodzonych ostrzeżeń w teście. Czekają jeszcze poprawki E2.8."
     }
   ]
 }
