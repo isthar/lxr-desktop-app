@@ -51,9 +51,16 @@ def main():
         "log.json": sorted(log, key=lambda e: (e["at"], e["n"]), reverse=True),
     }
     for name, rows in files.items():
-        with open(os.path.join(out, name), "w", encoding="utf-8") as f:
-            json.dump(rows, f, ensure_ascii=False, indent=1)
-        print(f"{out}/{name}: {len(rows)} rows")
+        path = os.path.join(out, name)
+        text = json.dumps(rows, ensure_ascii=False, indent=1)
+        try:
+            with open(path, encoding="utf-8") as f:
+                state = "unchanged" if f.read() == text else "changed"
+        except OSError:
+            state = "new"
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(f"{path}: {len(rows)} rows, {state}")
 
 
 if __name__ == "__main__":

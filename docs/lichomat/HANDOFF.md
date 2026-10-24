@@ -37,7 +37,7 @@ log entry for every finished agent step, every commit and every phase change.
 2. For task, milestone or question changes, edit `docs/lichomat/tracker.json` by hand:
    - status values: `zrobione`, `w toku`, `do zrobienia`, `zablokowane`
    - question status: `otwarte` or `zamknięte`
-3. Run `python3 tools/tracker_export.py`. It writes `build/tracker/*.json` and validates epics, statuses,
+3. Run `python3 tools/tracker_export.py`. It writes `build/tracker/*.json`, says which files changed, and validates epics, statuses,
    ids and log entries.
 4. Upload each changed file to the artifact as an asset: Artifact tool, `url` = tracker, `asset: true`, `file_path`.
    A log entry changes `status.json` and `log.json`.
@@ -46,6 +46,8 @@ log entry for every finished agent step, every commit and every phase change.
    - fields to set: `source.url`, `source.name` and `updated` (`{at, by}`)
    - pin each write with `if_version` from the last read or write
 6. Delete the replaced uploads (Artifact `delete` with the asset id as `path`).
+   `build/tracker/remote.json` (git-ignored) keeps the last blob id and document version per dataset.
+   If it is missing or stale, ArtifactData `list` of the `datasets` collection shows both.
 7. The page itself is `files/index.html` in the store (`{text}`). Its source is kept in `docs/lichomat/tracker-page.html`.
 
 While a workflow runs, a Monitor on its `journal.jsonl` reports each agent that starts or finishes, so
