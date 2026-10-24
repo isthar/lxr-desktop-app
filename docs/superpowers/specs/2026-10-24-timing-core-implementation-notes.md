@@ -306,6 +306,15 @@ Otherwise a note on an external MIDI device can hang until the next clock or Sto
 N16 and N17 came out of writing the plan, after the E1.10 section was finished. Task **E1.14**, after
 E1.13, implements both test-first, with tests named `T16_tempo_jump_*` and `T18_dropout_note_off_*`.
 
+The plan sections for the tasks added this way are written and reviewed separately, then inserted into
+the plan after its review:
+- `build/plan/40-E1.14.md`: E1.14, which implements N16, N17 and N18.1;
+- `build/plan/41-E2.7.md`: E2.7, the global-menu step-button bug;
+- `build/plan/42-E2.8.md`: E2.8, the USB MIDI out defects.
+
+A plan review that finds these sections missing is therefore expected. N18.2–N18.4 are not part of
+them: they change E2.1–E2.3, and the plan fix applies them there.
+
 ## N18. Defaults settled while writing the plan
 
 These choices came up while writing the integration section. Each keeps fw 1.7 behaviour unless it
