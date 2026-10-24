@@ -36,6 +36,7 @@ typedef enum
 {
 	SEQC_ITEM_NONE = 0,
 	SEQC_ITEM_BOUNDARY,	/**< the next step boundary */
+	SEQC_ITEM_NOTE_OFF,	/**< a pending note-off */
 	SEQC_ITEM_EVENT,	/**< the next queued event */
 } seqc_item_t;
 
@@ -109,11 +110,20 @@ typedef struct
 } seqc_queue_t;
 
 //------------------------------------------------------------------------------
+/** per-track firing state: the pending note-off */
+typedef struct
+{
+	bool		offPending[SEQC_NUM_TRACKS];
+	seqc_tick_t	offTick[SEQC_NUM_TRACKS];
+} seqc_fire_t;
+
+//------------------------------------------------------------------------------
 /* the state, one part per area */
 static seqc_core_t seqc;
 static seqc_tracks_t seqc_trk;
 static seqc_gen_t seqc_gen;
 static seqc_queue_t seqc_queue;
+static seqc_fire_t seqc_fire;
 
 //------------------------------------------------------------------------------
 // Helpers
@@ -258,16 +268,65 @@ static void seqc_queueInsert(const seqc_event_t *ev)
 	seqc_queue.events[lo] = *ev;
 	seqc_queue.count++;
 }
+//------------------------------------------------------------------------------
+/** choke: remove the queued events of track with an absolute step below absStep.
+ * Returns how many were removed. */
+static uint32_t seqc_queueChoke(uint8_t track, uint32_t absStep)
+{
+	uint16_t kept = 0;
+	for (uint16_t i = 0; i < seqc_queue.count; i++)
+	{
+		const seqc_event_t *ev = &seqc_queue.events[i];
+		if (ev->track == track && ev->absStep < absStep)
+			continue;
+		seqc_queue.events[kept++] = *ev;
+	}
+	const uint32_t removed = (uint32_t)(seqc_queue.count - kept);
+	seqc_queue.count = kept;
+	return removed;
+}
 
 //------------------------------------------------------------------------------
 // Firing
 //------------------------------------------------------------------------------
-/** the next queued event is due */
+/** send every pending note-off now (stop, rewind, seek) */
+static void seqc_flushNoteOffs(void)
+{
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		if (seqc_fire.offPending[t])
+		{
+			seqc_fire.offPending[t] = false;
+			seqc.host.noteOff(seqc.host.ctx, t);
+		}
+	}
+}
+//------------------------------------------------------------------------------
+/** a pending note-off is due */
+static void seqc_noteOffDue(uint8_t track)
+{
+	seqc.pos = (double)seqc_fire.offTick[track];
+	seqc_fire.offPending[track] = false;
+	seqc.host.noteOff(seqc.host.ctx, track);
+}
+//------------------------------------------------------------------------------
+/** the next queued event is due: mute, choke, note-off, trigger (spec 6.4, N2) */
 static void seqc_fireNext(void)
 {
 	const seqc_event_t ev = seqc_queue.events[--seqc_queue.count];
+	const uint8_t t = ev.track;
 
 	seqc.pos = (double)ev.tick;
+	if (seqc.host.muted(seqc.host.ctx, t))
+	{
+		seqc.stats.muteDrops++;
+		return;
+	}
+	seqc.stats.chokeDrops += seqc_queueChoke(t, ev.absStep);
+	if (seqc_fire.offPending[t])
+		seqc.host.noteOff(seqc.host.ctx, t);
+	seqc_fire.offPending[t] = true;
+	seqc_fire.offTick[t] = ev.tick + SEQC_NOTE_OFF_TICKS;
 	seqc.host.trigger(seqc.host.ctx, &ev);
 }
 
@@ -369,13 +428,16 @@ static void seqc_stopTransport(void)
 {
 	seqc.state = SEQC_STOPPED;
 	seqc.startPending = false;
+	seqc_flushNoteOffs();
 	seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_STOP);
 }
 //------------------------------------------------------------------------------
-/** clear what belongs to the current run: the queue and the draws (rewind) */
+/** clear what belongs to the current run: the queue, the note-offs and the
+ * draws (rewind) */
 static void seqc_clearRun(void)
 {
 	seqc_queue.count = 0;
+	seqc_flushNoteOffs();
 	memset(seqc_gen.draw, 0, sizeof seqc_gen.draw);
 }
 //------------------------------------------------------------------------------
@@ -476,6 +538,9 @@ static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
 	{
 		seqc_consider(SEQC_ITEM_BOUNDARY, (seqc_tick_t)seqc_nextBoundaryStep() * SEQC_TICKS_PER_STEP, 0,
 				&best, tick, track);
+		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+			if (seqc_fire.offPending[t])
+				seqc_consider(SEQC_ITEM_NOTE_OFF, seqc_fire.offTick[t], t, &best, tick, track);
 		if (seqc_queue.count > 0)
 			seqc_consider(SEQC_ITEM_EVENT, seqc_queue.events[seqc_queue.count - 1u].tick, 0, &best, tick, track);
 	}
@@ -504,6 +569,9 @@ static void seqc_runTo(double target)
 		{
 		case SEQC_ITEM_BOUNDARY:
 			seqc_boundary(tick);
+			break;
+		case SEQC_ITEM_NOTE_OFF:
+			seqc_noteOffDue(track);
 			break;
 		case SEQC_ITEM_EVENT:
 			seqc_fireNext();
@@ -589,6 +657,7 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
 	memset(&seqc_trk, 0, sizeof seqc_trk);
 	memset(&seqc_gen, 0, sizeof seqc_gen);
 	memset(&seqc_queue, 0, sizeof seqc_queue);
+	memset(&seqc_fire, 0, sizeof seqc_fire);
 
 	seqc.host = *host;
 	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
