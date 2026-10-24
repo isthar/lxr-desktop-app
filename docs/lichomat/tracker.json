@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 12:08",
-    "phase": "Etap 1 — przygotowanie implementacji",
-    "focus": "Wstawianie trzech dodatkowych sekcji do planu (będzie 30 zadań) i kontrola spójności. Zaraz potem rusza implementacja.",
+    "updated": "2026-10-24 12:54",
+    "phase": "Etap 1 — implementacja",
+    "focus": "Rusza implementacja etapu 1: najpierw E3.2 i rdzeń E1.1–E1.14 (15 zadań). Każde zadanie: implementacja TDD z check.sh i commitem, przegląd zgodności ze specyfikacją, przegląd jakości.",
     "branch": "timing-core",
-    "head": "cdd45eb",
-    "next": "Implementacja 30 zadań po kolei: implementacja TDD, przegląd zgodności ze specyfikacją, przegląd jakości. Zaczyna się od E3.2 i rdzenia E1.1–E1.14.",
-    "updated_at": "2026-10-24T12:08:00+02:00"
+    "head": "86aafa2",
+    "next": "Po rdzeniu: integracja E2.1–E2.8, potem narzędzia i wydanie (E3.1, E3.3–E3.5, E4.1–E4.3). Push na Twój fork po każdym zadaniu.",
+    "updated_at": "2026-10-24T12:54:00+02:00"
   },
   "epics": [
     {
@@ -775,6 +775,16 @@
       "n": 45,
       "at": "2026-10-24 12:08",
       "text": "Odpowiedzi na pytania: Q1 specyfikacja OK, Q2 prywatny adres w commitach, Q3 nazwa LICHOMAT zostaje, Q4 ambient to długi, falujący, zamrożony pogłos, Q5 push na Twój fork na bieżąco, Q7 transport MIDI zgodny ze standardem: jako slave LXR nie wysyła własnych Start/Stop/Continue. Otwarte zostaje tylko Q6 (testy na sprzęcie)."
+    },
+    {
+      "n": 46,
+      "at": "2026-10-24 12:53",
+      "text": "Plan kompletny: E1.14, E2.7 i E2.8 wstawione (30 zadań). Dwie niezależne kontrole spójności: 5 drobnych uwag, wszystkie poprawione."
+    },
+    {
+      "n": 47,
+      "at": "2026-10-24 12:54",
+      "text": "Commity mają teraz Twój prywatny adres: 40 commitów przepisanych, treść, daty i drzewo plików bez zmian, stara historia w lokalnej gałęzi zapasowej. timing-core wypchnięta na Twój fork: github.com/isthar/lxr-desktop-app/tree/timing-core."
     }
   ]
 }
