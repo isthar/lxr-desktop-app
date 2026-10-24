@@ -230,6 +230,11 @@ TEST(T1_tempo_is_clamped)
 	const double p = seqc_position();
 	fake_process(h, fake_msToCycles(1010.0));
 	ASSERT_NEAR(seqc_position() - p, idealTicks(SEQC_MASTER_BPM_MAX, fake_msToCycles(10.0)), 1e-6);
+	/* the next boundary moves earlier too: 89.6 ticks at 300 BPM, 46.67 ms after the change */
+	fake_runUntil(h, fake_msToCycles(1046.6), fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 0);
+	fake_runUntil(h, fake_msToCycles(1046.8), fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 1);
 	seqc_setTempo(133.5f);				/* fractional tempos are exact as well */
 	ASSERT_NEAR(seqc_currentBpm(), 133.5, 1e-6);
 }
@@ -246,13 +251,27 @@ TEST(T1_time_never_goes_back)
 	ASSERT_TRUE(seqc_position() == p);
 	fake_process(h, fake_msToCycles(130.0));
 	ASSERT_EQ(seqc_absStep(), 1);
+	/* one late call handles every boundary due by then, none dropped */
+	fake_process(h, fake_msToCycles(1000.0));
+	ASSERT_EQ(seqc_absStep(), 8);
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 9);
+	size_t pos = 0;
+	const fake_rec_t *r;
+	uint32_t n = 0;
+	while ((r = fake_next(h, FAKE_STEP_BOUNDARY, &pos)) != NULL)
+	{
+		ASSERT_EQ(r->arg, n);
+		ASSERT_NEAR(r->tick, (double)n * SEQC_TICKS_PER_STEP, 1e-9);
+		n++;
+	}
+	ASSERT_NEAR(seqc_position(), 768.0, 1e-6);
 
 	/* the same when no early exit applies: a start is pending */
 	seqc_stop();
 	seqc_start();
-	fake_process(h, fake_msToCycles(120.0));	/* earlier: step 0 at 130 ms */
+	fake_process(h, fake_msToCycles(990.0));	/* earlier: step 0 at 1000 ms */
 	ASSERT_EQ(seqc_absStep(), 0);
-	fake_process(h, fake_msToCycles(140.0));
+	fake_process(h, fake_msToCycles(1010.0));
 	ASSERT_NEAR(seqc_position(), idealTicks(120.0, fake_msToCycles(10.0)), 1e-6);
 }
 
