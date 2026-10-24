@@ -80,6 +80,8 @@ TEST(T7_newer_step_chokes_the_older_hits)
 	fake_setTiming(h, 0, 4, 1, 5, 7);		/* 180, 192, ..., 264 */
 	fake_setStep(h, 0, 4, 2, true);
 	fake_setTiming(h, 0, 4, 2, 0, 1);		/* 204 */
+	fake_setStep(h, 0, 3, 1, true);			/* the same hits on track 3, no step 2 */
+	fake_setTiming(h, 0, 3, 1, 5, 7);
 	runSteps(h, 120.0, 5);
 	ASSERT_EQ(fake_triggers(h, 4, trig, 16), 3);
 	ASSERT_EQ(trig[0]->ev.tick, 180);
@@ -88,6 +90,7 @@ TEST(T7_newer_step_chokes_the_older_hits)
 	ASSERT_EQ(trig[2]->ev.absStep, 2);
 	ASSERT_EQ(stats().chokeDrops, 6);
 	/* another track is not affected */
+	ASSERT_EQ(fake_triggers(h, 3, trig, 16), 8);
 	ASSERT_EQ(h->errors, 0);
 }
 
@@ -144,6 +147,56 @@ TEST(T9_mute_during_a_ratchet_drops_the_rest)
 	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 8), fake_msToCycles(0.1));
 	ASSERT_EQ(fake_triggers(h, 1, trig, 16), 4);
 	ASSERT_EQ(trig[3]->ev.tick, 6 * 96);
+}
+
+TEST(T9_muted_drop_does_not_choke)
+{
+	/* step 1 x8 +7 (180, 192, ..., 264) and step 2 +1 (204); muted from the
+	 * trigger at 192 to tick 210, so both hits at 204 are dropped. The dropped
+	 * step 2 hit must not remove step 1's later hits. */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 4, 1, true);
+	fake_setTiming(h, 0, 4, 1, 5, 7);
+	fake_setStep(h, 0, 4, 2, true);
+	fake_setTiming(h, 0, 4, 2, 0, 1);
+	muteAfter = 1;
+	h->onTrigger = muteOnThirdHit;
+	seqc_setTempo(120.0f);
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_runUntil(h, (seqc_time_t)(fake_tickCycles(120.0) * 210), fake_msToCycles(0.1));
+	h->onTrigger = NULL;
+	h->muted[4] = false;
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 4), fake_msToCycles(0.1));
+	ASSERT_EQ(stats().muteDrops, 2);
+	ASSERT_EQ(stats().chokeDrops, 0);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 16), 7);
+	ASSERT_EQ(trig[2]->ev.tick, 216);
+}
+
+TEST(T9_muted_drop_keeps_the_pending_note_off)
+{
+	/* shuffle 4: step 2 +7 at 276, step 3 -1 at 278; muted after the trigger
+	 * at 276. The dropped hit at 278 neither sends the pending note-off early
+	 * nor restarts its timer: one note-off, at 280. */
+	fake_host_t *h = fake_init();
+	h->shuffle = 4;
+	fake_setStep(h, 0, 0, 2, true);
+	fake_setTiming(h, 0, 0, 2, 0, 7);
+	fake_setStep(h, 0, 0, 3, true);
+	fake_setTiming(h, 0, 0, 3, 0, -1);
+	muteAfter = 0;
+	h->onTrigger = muteOnThirdHit;
+	runSteps(h, 120.0, 5);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 4), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 276);
+	ASSERT_EQ(stats().muteDrops, 1);
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 1);
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_NOTE_OFF, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_NEAR(r->tick, 280.0, 1e-9);
 }
 
 TEST(T9_mute_is_read_when_the_event_fires)
@@ -216,6 +269,28 @@ TEST(T15_note_off_comes_right_before_a_retrigger)
 	ASSERT_NEAR(r->tick, 278.0, 1e-9);
 	r = fake_next(h, FAKE_NOTE_OFF, &pos);
 	ASSERT_NEAR(r->tick, 282.0, 1e-9);
+}
+
+TEST(T15_note_off_before_another_tracks_trigger_at_the_same_tick)
+{
+	/* shuffle 8 is a swing of 4 ticks: track 0 step 2 +7 triggers at 276, its
+	 * note-off is due at 280; track 1 step 3 -1 triggers at 288 + 4 - 12 = 280.
+	 * At equal ticks the note-off comes first. */
+	fake_host_t *h = fake_init();
+	h->shuffle = 8;
+	fake_setStep(h, 0, 0, 2, true);
+	fake_setTiming(h, 0, 0, 2, 0, 7);
+	fake_setStep(h, 0, 1, 3, true);
+	fake_setTiming(h, 0, 1, 3, 0, -1);
+	runSteps(h, 120.0, 5);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 4), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 280);
+	size_t pos = 0;
+	const fake_rec_t *off = fake_next(h, FAKE_NOTE_OFF, &pos);
+	ASSERT_TRUE(off != NULL);
+	ASSERT_EQ(off->track, 0);
+	ASSERT_NEAR(off->tick, 280.0, 1e-9);
+	ASSERT_TRUE(off < trig[0]);
 }
 
 TEST(T15_stop_sends_the_pending_note_offs)
