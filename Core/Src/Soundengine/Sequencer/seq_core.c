@@ -35,9 +35,12 @@
 typedef enum
 {
 	SEQC_ITEM_NONE = 0,
+	SEQC_ITEM_TEMPO_STEP,	/**< tempoStep(), internal sync */
 	SEQC_ITEM_BOUNDARY,	/**< the next step boundary */
 	SEQC_ITEM_NOTE_OFF,	/**< a pending note-off */
 	SEQC_ITEM_EVENT,	/**< the next queued event */
+	SEQC_ITEM_PULSE,	/**< clockOutPulse(), while running */
+	SEQC_ITEM_MIDI_CLOCK,	/**< midiClockOut(), internal sync */
 } seqc_item_t;
 
 //------------------------------------------------------------------------------
@@ -118,12 +121,22 @@ typedef struct
 } seqc_fire_t;
 
 //------------------------------------------------------------------------------
+/** clock outputs and the tempo step (N8) */
+typedef struct
+{
+	seqc_tick_t	nextMidiClock;	/**< internal timeline */
+	seqc_tick_t	nextTempoStep;	/**< internal timeline */
+	seqc_tick_t	nextPulse;	/**< position */
+} seqc_outputs_t;
+
+//------------------------------------------------------------------------------
 /* the state, one part per area */
 static seqc_core_t seqc;
 static seqc_tracks_t seqc_trk;
 static seqc_gen_t seqc_gen;
 static seqc_queue_t seqc_queue;
 static seqc_fire_t seqc_fire;
+static seqc_outputs_t seqc_out;
 
 //------------------------------------------------------------------------------
 // Helpers
@@ -461,6 +474,7 @@ static void seqc_rewindTransport(void)
 	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
 	seqc_trk.master = 0;
 	seqc.pos = 0.0;
+	seqc_out.nextPulse = 0;
 	seqc.atStart = true;
 	if (!wasAtStart)
 		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_REWIND);
@@ -544,6 +558,8 @@ static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
 	seqc_item_t best = SEQC_ITEM_NONE;
 	*tick = SEQC_NO_TICK;
 	*track = 0;
+	seqc_consider(SEQC_ITEM_TEMPO_STEP, seqc_out.nextTempoStep, 0, &best, tick, track);
+	seqc_consider(SEQC_ITEM_MIDI_CLOCK, seqc_out.nextMidiClock, 0, &best, tick, track);
 	if (seqc.state == SEQC_RUNNING && !seqc.startPending)
 	{
 		seqc_consider(SEQC_ITEM_BOUNDARY, (seqc_tick_t)seqc_nextBoundaryStep() * SEQC_TICKS_PER_STEP, 0,
@@ -553,6 +569,7 @@ static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
 				seqc_consider(SEQC_ITEM_NOTE_OFF, seqc_fire.offTick[t], t, &best, tick, track);
 		if (seqc_queue.count > 0)
 			seqc_consider(SEQC_ITEM_EVENT, seqc_queue.events[seqc_queue.count - 1u].tick, 0, &best, tick, track);
+		seqc_consider(SEQC_ITEM_PULSE, seqc_out.nextPulse, 0, &best, tick, track);
 	}
 	return best;
 }
@@ -577,6 +594,12 @@ static void seqc_runTo(double target)
 			break;
 		switch (item)
 		{
+		case SEQC_ITEM_TEMPO_STEP:
+			if (seqc.state == SEQC_RUNNING)
+				seqc.pos = (double)tick;
+			seqc_out.nextTempoStep += SEQC_TICKS_PER_STEP;
+			seqc.host.tempoStep(seqc.host.ctx);
+			break;
 		case SEQC_ITEM_BOUNDARY:
 			seqc_boundary(tick);
 			break;
@@ -585,6 +608,18 @@ static void seqc_runTo(double target)
 			break;
 		case SEQC_ITEM_EVENT:
 			seqc_fireNext();
+			break;
+		case SEQC_ITEM_PULSE:
+			seqc.pos = (double)tick;
+			seqc_out.nextPulse += SEQC_TICKS_PER_PULSE;
+			seqc.host.clockOutPulse(seqc.host.ctx,
+					(uint8_t)((tick % SEQC_TICKS_PER_STEP) / SEQC_TICKS_PER_PULSE));
+			break;
+		case SEQC_ITEM_MIDI_CLOCK:
+			if (seqc.state == SEQC_RUNNING)
+				seqc.pos = (double)tick;
+			seqc_out.nextMidiClock += SEQC_TICKS_PER_MIDI_CLOCK;
+			seqc.host.midiClockOut(seqc.host.ctx);
 			break;
 		default:
 			return;
@@ -599,11 +634,14 @@ static void seqc_runInternal(void)
 {
 	if (seqc.startPending)
 	{
-		/* step 0 now */
+		/* step 0 now; the MIDI clock out and the tempo steps are re-phased (N8) */
 		seqc.startPending = false;
 		seqc.anchorTime = seqc.now;
 		seqc.anchorTick = 0.0;
 		seqc.pos = 0.0;
+		seqc_out.nextMidiClock = 0;
+		seqc_out.nextTempoStep = 0;
+		seqc_out.nextPulse = 0;
 	}
 	seqc_runTo(seqc_internalTick(seqc.now));
 }
@@ -668,6 +706,7 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
 	memset(&seqc_gen, 0, sizeof seqc_gen);
 	memset(&seqc_queue, 0, sizeof seqc_queue);
 	memset(&seqc_fire, 0, sizeof seqc_fire);
+	memset(&seqc_out, 0, sizeof seqc_out);
 
 	seqc.host = *host;
 	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
