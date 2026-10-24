@@ -117,13 +117,18 @@ TEST(T17_stop_and_continue_resume_in_place)
 	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
 	const double held = seqc_position();
 	ASSERT_TRUE(held >= 496.0 && held <= 512.0);
-	clocks(h, 10);					/* the master's clock runs on */
+	clocks(h, 7);					/* the master's clock runs on: count 39 */
 	ASSERT_EQ(seqc_position(), held);
 	ASSERT_EQ(seqc_absStep(), 5);
 	sync(h, SEQC_EV_CONTINUE);
 	ASSERT_EQ(seqc_state(), SEQC_ARMED);
-	clocks(h, 6 * 2);
+	clocks(h, 1);					/* off the step grid: it resumes anyway */
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
 	uint8_t tr[8];
+	ASSERT_EQ(transports(h, 0, tr, 8), 5);
+	ASSERT_EQ(tr[4], SEQC_TRANSPORT_CONTINUE);
+	ASSERT_EQ(seqc_position(), 496.0 + 16);		/* the last clock plus one clock */
+	clocks(h, 6 * 2 - 1);
 	const size_t n = transports(h, 0, tr, 8);
 	ASSERT_EQ(n, 5);				/* ARM, START, STOP, ARM, CONTINUE */
 	ASSERT_EQ(tr[2], SEQC_TRANSPORT_STOP);
@@ -165,6 +170,26 @@ TEST(T17_events_that_do_nothing_are_counted)
 	sync(h, SEQC_EV_RESET_OFF);
 	ASSERT_EQ(stats().syncIgnored, 5);
 	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+}
+
+TEST(T17_stop_and_start_while_armed)
+{
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 0, true);
+	sync(h, SEQC_EV_START);
+	sync(h, SEQC_EV_START);				/* armed: stop, then arm again */
+	uint8_t tr[8];
+	ASSERT_EQ(transports(h, 0, tr, 8), 3);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_ARM);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_STOP);
+	ASSERT_EQ(tr[2], SEQC_TRANSPORT_ARM);
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	sync(h, SEQC_EV_STOP);				/* armed: the master stopped */
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	ASSERT_EQ(stats().syncIgnored, 0);
+	clocks(h, 12);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	ASSERT_EQ(fake_count(h, FAKE_TRIGGER), 0);
 }
 
 TEST(T17_transport_events_are_ignored_in_internal_sync)
@@ -211,7 +236,10 @@ TEST(T17_spp_in_pattern_mode)
 	uint8_t tr[8];
 	ASSERT_EQ(transports(h, 0, tr, 8), 2);
 	ASSERT_EQ(tr[1], SEQC_TRANSPORT_CONTINUE);
-	clocks(h, 6);
+	ASSERT_EQ(h->calls[FAKE_CLOCK_PULSE], 1);	/* from tick 37 * 96 on, not from 0 */
+	clocks(h, 1);
+	ASSERT_EQ(h->calls[FAKE_CLOCK_PULSE], 5);
+	clocks(h, 5);
 	/* the first boundary plays step 37 without a pattern end; 37 is odd: swung */
 	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 0);
 	ASSERT_EQ(fake_triggers(h, -1, trig, 8), 3);
@@ -233,12 +261,18 @@ TEST(T17_spp_in_song_mode_with_identical_entries)
 	fake_setSongMode(h, true);
 	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
 		fake_setLength(h, 2, t, 8);
+	fake_setLength(h, 1, 1, 12);			/* polymeter: the run is not the entry */
 	fake_setStep(h, 1, 0, 4, true);
 	fake_setStep(h, 2, 0, 0, true);
 	seqc_songPosition(20);				/* in the second A: its run began at 0 */
 	ASSERT_EQ(h->activePattern, 1);
 	ASSERT_EQ(h->songPos, 1);
 	ASSERT_EQ(seqc_trackStep(0), 4);
+	ASSERT_EQ(seqc_trackStep(1), 20 % 12);		/* the entry offset would give 4 */
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_SEEK, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->result, 20);
 	sync(h, SEQC_EV_CONTINUE);
 	clocks(h, 1 + 6 * 13);				/* steps 20..33 */
 	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 2);
@@ -309,6 +343,44 @@ TEST(T17_spp_within_the_active_pattern_does_not_reload_it)
 	ASSERT_EQ(h->activePattern, 0);
 	ASSERT_EQ(h->songPos, 0);
 	ASSERT_EQ(h->patternChanges, changes + 2);
+}
+
+TEST(T17_spp_then_midi_start_plays_step_0)
+{
+	/* a DAW located, then started from the top: SPP, then Start */
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 0, true);
+	seqc_songPosition(8);
+	sync(h, SEQC_EV_START);
+	clocks(h, 1);
+	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 0);
+	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 1);
+	clocks(h, 6);
+	ASSERT_EQ(seqc_absStep(), 1);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T17_spp_then_rewind_plays_step_0)
+{
+	/* the local stop button after a locate, then a Continue */
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 0, true);
+	seqc_songPosition(8);
+	seqc_rewind();
+	sync(h, SEQC_EV_CONTINUE);
+	clocks(h, 1);
+	uint8_t tr[8];
+	ASSERT_EQ(transports(h, 0, tr, 8), 3);
+	ASSERT_EQ(tr[2], SEQC_TRANSPORT_START);
+	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 0);
+	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 1);
+	clocks(h, 6);
+	ASSERT_EQ(seqc_absStep(), 1);
+	ASSERT_EQ(h->errors, 0);
 }
 
 TEST(T17_spp_while_running_is_ignored)
@@ -402,6 +474,91 @@ TEST(T17_jack_run_gate)
 	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 2);
 	sync(h, SEQC_EV_START);				/* MIDI Start is accepted in analog sync */
 	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+}
+
+/* jack pulses at 24 PPQ and 120 BPM */
+static void pulses(fake_host_t *h, uint32_t count)
+{
+	const double per = fake_clockCycles(120.0);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, count, fake_msToCycles(0.1));
+}
+
+TEST(T17_jack_run_gate_at_24_ppq)
+{
+	/* as fw 1.7: the active gate resets the count, and the release waits for a
+	 * pulse that begins a step */
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_setStep(h, 0, 0, 0, true);
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);
+	seqc_setAnalogPpq(24);
+	fake_process(h, fake_msToCycles(1.0));
+	pulses(h, 3);
+	sync(h, SEQC_EV_RESET_ON);
+	pulses(h, 2);					/* count 2 since the reset */
+	sync(h, SEQC_EV_RESET_OFF);
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	sync(h, SEQC_EV_RESET_OFF);			/* armed: does nothing */
+	ASSERT_EQ(stats().syncIgnored, 1);
+	pulses(h, 4);
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	ASSERT_EQ(fake_count(h, FAKE_TRIGGER), 0);
+	pulses(h, 1);					/* count 6: it begins a step */
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(stats().syncIgnored, 1);
+}
+
+TEST(T17_jack_reset_after_a_midi_stop_rewinds)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);		/* 4 PPQ */
+	fake_process(h, fake_msToCycles(1.0));
+	const double per = fake_stepCycles(120.0);
+	sync(h, SEQC_EV_START);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 3, fake_msToCycles(0.1));
+	sync(h, SEQC_EV_STOP);
+	ASSERT_EQ(seqc_absStep(), 2);			/* kept for a Continue */
+	const size_t from = h->logCount;
+	sync(h, SEQC_EV_RESET_ON);
+	ASSERT_EQ(seqc_absStep(), -1);
+	uint8_t tr[8];
+	ASSERT_EQ(transports(h, from, tr, 8), 1);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_REWIND);
+	ASSERT_EQ(stats().syncIgnored, 0);
+}
+
+TEST(T17_midi_transport_and_spp_in_analog_sync_at_4_ppq)
+{
+	/* N4: MIDI Start, Continue and Stop in sync mode 1; SPP in both slave modes */
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_setStep(h, 0, 0, 8, true);
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);		/* 4 PPQ: one pulse per step */
+	fake_process(h, fake_msToCycles(1.0));
+	const double per = fake_stepCycles(120.0);
+	sync(h, SEQC_EV_START);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 3, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 2);
+	sync(h, SEQC_EV_STOP);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	sync(h, SEQC_EV_CONTINUE);
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 1, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(seqc_absStep(), 3);
+	sync(h, SEQC_EV_STOP);
+	seqc_songPosition(8);
+	ASSERT_EQ(seqc_absStep(), 8);
+	ASSERT_EQ(seqc_position(), 8.0 * 96 - 96);	/* minus one clock: 96 ticks at 4 PPQ */
+	sync(h, SEQC_EV_CONTINUE);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 1, fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 8);
+	ASSERT_TRUE(seqc_position() < 8.0 * 96 + 2);	/* the pulse lands on the step */
+	ASSERT_EQ(stats().syncIgnored, 0);
 }
 
 TEST_MAIN()
