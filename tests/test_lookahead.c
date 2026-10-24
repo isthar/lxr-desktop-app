@@ -97,6 +97,29 @@ TEST(T11_late_change_of_the_pending_pattern)
 	ASSERT_EQ(h->activePattern, 2);
 }
 
+TEST(T11_ratchet_across_the_switch_keeps_its_draw)
+{
+	/* the prediction holds: the late hit of step 0 of pattern 1 belongs to the
+	 * occurrence whose early hit was predicted at boundary 15, with its draw */
+	fake_host_t *h = fake_init();
+	static const uint32_t draws[] = { 0, 80 };	/* r = 1, then r = 81 */
+	fake_setStep(h, 1, 2, 0, true);
+	fake_setTiming(h, 1, 2, 0, 1, -2);		/* x2: -24 and +24 */
+	fake_setStepData(h, 1, 2, 0, 100, 60, 50);
+	start(h);
+	runToTick(h, 2 * 96);
+	fake_setNextPattern(h, 1);
+	runToTick(h, 15 * 96 - 10);			/* before the peek at boundary 15 */
+	fake_scriptRandom(h, draws, 2);
+	runToTick(h, 18 * 96);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 2);	/* both hits or neither */
+	ASSERT_EQ(trig[0]->ev.tick, 16 * 96 - 24);
+	ASSERT_EQ(trig[0]->ev.pattern, 1);
+	ASSERT_EQ(trig[1]->ev.tick, 16 * 96 + 24);
+	ASSERT_EQ(trig[1]->ev.pattern, 1);
+	ASSERT_EQ(h->rngScriptPos, 1);			/* one draw, made with the early part */
+}
+
 TEST(T11_restart_takes_step_0_of_every_track)
 {
 	fake_host_t *h = fake_init();
