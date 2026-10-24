@@ -36,6 +36,7 @@ typedef enum
 {
 	SEQC_ITEM_NONE = 0,
 	SEQC_ITEM_BOUNDARY,	/**< the next step boundary */
+	SEQC_ITEM_EVENT,	/**< the next queued event */
 } seqc_item_t;
 
 //------------------------------------------------------------------------------
@@ -77,9 +78,42 @@ typedef struct
 } seqc_tracks_t;
 
 //------------------------------------------------------------------------------
+/** the probability draw of one step occurrence (N3), and the timing its early
+ * part used */
+typedef struct
+{
+	bool		valid;
+	uint32_t	absStep;
+	uint8_t		pattern;
+	uint8_t		step;
+	uint8_t		r;		/**< 1..100 */
+	bool		timed;		/**< the early part was generated: hits and offset are set */
+	uint8_t		hits;		/**< the ratchet hits it used */
+	int16_t		offset;		/**< the swing + shift it used, ticks after absStep * 96 */
+} seqc_draw_t;
+
+//------------------------------------------------------------------------------
+/** event generation */
+typedef struct
+{
+	seqc_draw_t	draw[SEQC_NUM_TRACKS][2];	/**< N3: slots for n and n+1, by absStep & 1 */
+	uint8_t		swing;				/**< swing ticks read at the last boundary */
+} seqc_gen_t;
+
+//------------------------------------------------------------------------------
+/** the event queue, sorted so that events[count - 1] fires next (N2) */
+typedef struct
+{
+	seqc_event_t	events[SEQC_QUEUE_SIZE];
+	uint16_t	count;
+} seqc_queue_t;
+
+//------------------------------------------------------------------------------
 /* the state, one part per area */
 static seqc_core_t seqc;
 static seqc_tracks_t seqc_trk;
+static seqc_gen_t seqc_gen;
+static seqc_queue_t seqc_queue;
 
 //------------------------------------------------------------------------------
 // Helpers
@@ -135,6 +169,29 @@ static int8_t seqc_nextIndex(int8_t index, uint8_t len)
 	const int next = index + 1;
 	return (next >= len || (next & 0x3f) == 0) ? 0 : (int8_t)next;
 }
+//------------------------------------------------------------------------------
+/** swing ticks of a shuffle value: round(shuffle * 64 / 127) */
+static uint8_t seqc_swingTicks(uint8_t shuffle)
+{
+	if (shuffle > SEQC_MAX_SHUFFLE)
+		shuffle = SEQC_MAX_SHUFFLE;
+	return (uint8_t)((shuffle * SEQC_MAX_SWING_TICKS + SEQC_MAX_SHUFFLE / 2) / SEQC_MAX_SHUFFLE);
+}
+//------------------------------------------------------------------------------
+/** hits of StepTiming.flam: 0..5 give 1, 2, 3, 4, 6, 8; any other value 1 */
+static uint8_t seqc_hitCount(uint8_t flam)
+{
+	static const uint8_t hits[6] = { 1, 2, 3, 4, 6, 8 };
+	return flam < 6 ? hits[flam] : 1;
+}
+//------------------------------------------------------------------------------
+/** ticks of StepTiming.shift: 0..14 are -7..+7 units, 15 counts as 0 */
+static int seqc_shiftTicks(uint8_t shift)
+{
+	if (shift > 14)
+		return 0;
+	return ((int)shift - (int)SEQC_SHIFT_CENTER) * (int)SEQC_SHIFT_UNIT_TICKS;
+}
 
 //------------------------------------------------------------------------------
 // Position
@@ -165,6 +222,146 @@ static double seqc_positionAt(seqc_time_t t)
 }
 
 //------------------------------------------------------------------------------
+// Event queue
+//------------------------------------------------------------------------------
+/** true if event a fires before event b (N2) */
+static bool seqc_firesBefore(const seqc_event_t *a, const seqc_event_t *b)
+{
+	if (a->tick != b->tick)
+		return a->tick < b->tick;
+	if (a->absStep != b->absStep)
+		return a->absStep > b->absStep;
+	if ((a->flags & SEQC_EVF_ROLL) != (b->flags & SEQC_EVF_ROLL))
+		return (a->flags & SEQC_EVF_ROLL) == 0;
+	return a->track < b->track;
+}
+//------------------------------------------------------------------------------
+/** queue an event, in firing order: a binary search plus memmove (N2). A full
+ * queue rejects it. */
+static void seqc_queueInsert(const seqc_event_t *ev)
+{
+	if (seqc_queue.count >= SEQC_QUEUE_SIZE)
+		return;
+	/* the first event that fires before ev, and all above it, move up one */
+	uint16_t lo = 0;
+	uint16_t hi = seqc_queue.count;
+	while (lo < hi)
+	{
+		const uint16_t mid = (uint16_t)((lo + hi) / 2u);
+		if (seqc_firesBefore(&seqc_queue.events[mid], ev))
+			hi = mid;
+		else
+			lo = (uint16_t)(mid + 1u);
+	}
+	memmove(&seqc_queue.events[lo + 1u], &seqc_queue.events[lo],
+			(size_t)(seqc_queue.count - lo) * sizeof seqc_queue.events[0]);
+	seqc_queue.events[lo] = *ev;
+	seqc_queue.count++;
+}
+
+//------------------------------------------------------------------------------
+// Firing
+//------------------------------------------------------------------------------
+/** the next queued event is due */
+static void seqc_fireNext(void)
+{
+	const seqc_event_t ev = seqc_queue.events[--seqc_queue.count];
+
+	seqc.pos = (double)ev.tick;
+	seqc.host.trigger(seqc.host.ctx, &ev);
+}
+
+//------------------------------------------------------------------------------
+// Generation
+//------------------------------------------------------------------------------
+/** the draw slot of occurrence (track, absStep) at (pattern, step), N3: r is
+ * drawn once and kept with (pattern, step); a different step gets a new draw */
+static seqc_draw_t *seqc_draw(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step)
+{
+	seqc_draw_t *d = &seqc_gen.draw[track][absStep & 1u];
+	if (!d->valid || d->absStep != absStep || d->pattern != pattern || d->step != step)
+	{
+		const uint32_t v = seqc.host.random(seqc.host.ctx);
+		d->valid = true;
+		d->absStep = absStep;
+		d->pattern = pattern;
+		d->step = step;
+		d->r = (uint8_t)(1u + v % 100u);
+		d->timed = false;
+	}
+	return d;
+}
+//------------------------------------------------------------------------------
+/** queue the hits of occurrence (track, absStep) at (pattern, step) that belong to
+ * one part (N3): the early part has the hits before absStep * 96, the late part
+ * the rest.
+ * The early part keeps the timing it used (swing + shift, ratchet hits) in the
+ * draw slot. The late part reads the timing again, so an edit or a shuffle change
+ * before the boundary applies, but it keeps the early part's timing instead if
+ * the early part queued a hit, or if the timing read now would put a hit before
+ * absStep * 96, which has passed. Either way every hit is generated once
+ * (decision 9 of epic E1). */
+static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step, bool early)
+{
+	if (!seqc.host.stepOn(seqc.host.ctx, pattern, track, step))
+		return;
+	seqc_draw_t *d = seqc_draw(track, absStep, pattern, step);
+	const Step *data = seqc.host.step(seqc.host.ctx, pattern, track, step);
+	if (d->r > data->prob)
+		return;
+	const StepTiming timing = seqc.host.timing(seqc.host.ctx, pattern, track, step);
+	uint8_t hits = seqc_hitCount(timing.flam);
+	int offset = ((absStep & 1u) ? seqc_gen.swing : 0) + seqc_shiftTicks(timing.shift);
+	if (early)
+	{
+		d->timed = true;
+		d->hits = hits;
+		d->offset = (int16_t)offset;
+	}
+	else if (d->timed && (d->offset < 0 || offset < 0))
+	{
+		hits = d->hits;
+		offset = d->offset;
+	}
+	const seqc_tick_t base = (seqc_tick_t)absStep * SEQC_TICKS_PER_STEP;
+	const seqc_tick_t first = base + offset;
+
+	for (uint8_t j = 0; j < hits; j++)
+	{
+		const seqc_tick_t tick = first + (seqc_tick_t)(j * SEQC_TICKS_PER_STEP / hits);
+		if ((tick < base) != early)
+			continue;
+		const seqc_event_t ev = {
+			.tick = tick, .absStep = absStep, .track = track, .pattern = pattern, .step = step,
+			.hit = j, .vel = (uint8_t)(data->volume & 0x7f), .note = data->note, .flags = 0, .reserved = 0,
+			.p1Nr = data->param1Nr, .p1Val = data->param1Val, .p2Nr = data->param2Nr, .p2Val = data->param2Val,
+		};
+		seqc_queueInsert(&ev);
+	}
+}
+//------------------------------------------------------------------------------
+/** boundary step 5: the late part of step n */
+static void seqc_generateLate(uint32_t n, uint8_t pattern)
+{
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		const uint8_t step = (uint8_t)seqc_trk.index[t];
+		seqc_generate(t, n, pattern, step, false);
+	}
+}
+//------------------------------------------------------------------------------
+/** boundary step 6: the early part of step n+1, with the indices advanced as at
+ * a boundary of the same pattern */
+static void seqc_generateEarly(uint32_t n, uint8_t pattern)
+{
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		const uint8_t step = (uint8_t)seqc_nextIndex(seqc_trk.index[t], seqc_trackLength(pattern, t));
+		seqc_generate(t, n + 1u, pattern, step, true);
+	}
+}
+
+//------------------------------------------------------------------------------
 // Transport
 //------------------------------------------------------------------------------
 /** stop and keep the position (the caller has set it) */
@@ -175,11 +372,19 @@ static void seqc_stopTransport(void)
 	seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_STOP);
 }
 //------------------------------------------------------------------------------
+/** clear what belongs to the current run: the queue and the draws (rewind) */
+static void seqc_clearRun(void)
+{
+	seqc_queue.count = 0;
+	memset(seqc_gen.draw, 0, sizeof seqc_gen.draw);
+}
+//------------------------------------------------------------------------------
 /** back to the start, before step 0 */
 static void seqc_rewindTransport(void)
 {
 	const bool wasAtStart = seqc.atStart;
 
+	seqc_clearRun();
 	seqc.absStep = -1;
 	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
 	seqc_trk.master = 0;
@@ -240,7 +445,10 @@ static void seqc_boundary(seqc_tick_t tick)
 	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
 
 	seqc_trk.master = seqc_longestTrack(pattern);
+	seqc_gen.swing = seqc_swingTicks(seqc.host.shuffle(seqc.host.ctx));
 	seqc.host.stepBoundary(seqc.host.ctx, n);
+	seqc_generateLate(n, pattern);
+	seqc_generateEarly(n, pattern);
 }
 
 //------------------------------------------------------------------------------
@@ -265,8 +473,12 @@ static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
 	*tick = SEQC_NO_TICK;
 	*track = 0;
 	if (seqc.state == SEQC_RUNNING && !seqc.startPending)
+	{
 		seqc_consider(SEQC_ITEM_BOUNDARY, (seqc_tick_t)seqc_nextBoundaryStep() * SEQC_TICKS_PER_STEP, 0,
 				&best, tick, track);
+		if (seqc_queue.count > 0)
+			seqc_consider(SEQC_ITEM_EVENT, seqc_queue.events[seqc_queue.count - 1u].tick, 0, &best, tick, track);
+	}
 	return best;
 }
 //------------------------------------------------------------------------------
@@ -292,6 +504,9 @@ static void seqc_runTo(double target)
 		{
 		case SEQC_ITEM_BOUNDARY:
 			seqc_boundary(tick);
+			break;
+		case SEQC_ITEM_EVENT:
+			seqc_fireNext();
 			break;
 		default:
 			return;
@@ -372,6 +587,8 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
 {
 	memset(&seqc, 0, sizeof seqc);
 	memset(&seqc_trk, 0, sizeof seqc_trk);
+	memset(&seqc_gen, 0, sizeof seqc_gen);
+	memset(&seqc_queue, 0, sizeof seqc_queue);
 
 	seqc.host = *host;
 	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
