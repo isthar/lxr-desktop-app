@@ -141,6 +141,21 @@ TEST(T10_raw_zero_master_wraps_at_16)
 	ASSERT_EQ(seen[40][0], 40 % 16);
 }
 
+TEST(T10_length_edit_moves_the_master)
+{
+	fake_host_t *h = fake_init();
+	runTo(h, 15);					/* every track 16 steps: track 0 is the master */
+	fake_setLength(h, 0, 2, 32);			/* now track 2 is the longest */
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 40) + fake_msToCycles(1.0), fake_msToCycles(1.0));
+	ASSERT_EQ(seenMaster[15], 0);
+	ASSERT_EQ(seenMaster[16], 2);
+	int32_t ends[8];
+	ASSERT_EQ(patternEnds(h, ends, 8), 2);		/* no pattern end at 16 */
+	ASSERT_EQ(ends[1], 32);
+	ASSERT_EQ(seen[16][2], 16);
+	ASSERT_EQ(seen[16][0], 0);
+}
+
 TEST(T10_tie_goes_to_the_lowest_track)
 {
 	fake_host_t *h = fake_init();
