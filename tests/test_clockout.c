@@ -202,6 +202,54 @@ TEST(T6_pulses_every_4_ticks_while_running)
 	ASSERT_EQ(fake_count(h, FAKE_CLOCK_PULSE), 0);
 }
 
+TEST(T6_restart_begins_the_pulses_at_step_0)
+{
+	fake_host_t *h = fake_init();
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 10.5), fake_msToCycles(0.1));
+	seqc_stop();
+	seqc_rewind();					/* the stop button */
+	fake_clearLog(h);
+	fake_runUntil(h, h->now + fake_msToCycles(50.0), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_count(h, FAKE_CLOCK_PULSE), 0);	/* stopped */
+	/* stopped, the MIDI clock runs on the free-running timeline */
+	size_t pos = 0;
+	const fake_rec_t *r;
+	const fake_rec_t *prev = NULL;
+	while ((r = fake_next(h, FAKE_MIDI_CLOCK, &pos)) != NULL)
+	{
+		if (prev != NULL)
+			ASSERT_NEAR((double)(r->time - prev->time), fake_clockCycles(120.0),
+				fake_msToCycles(0.1) + 1.0);
+		prev = r;
+	}
+	ASSERT_TRUE(fake_count(h, FAKE_MIDI_CLOCK) >= 2);
+	fake_clearLog(h);
+	seqc_start();
+	const seqc_time_t t0 = h->now + fake_msToCycles(0.1);
+	fake_process(h, t0);
+	fake_runUntil(h, t0 + (seqc_time_t)(fake_stepCycles(120.0) * 2) - 1, fake_msToCycles(0.01));
+	/* the pulses start again at step 0, not at the old position */
+	pos = 0;
+	int k = 0;
+	while ((r = fake_next(h, FAKE_CLOCK_PULSE, &pos)) != NULL)
+	{
+		ASSERT_NEAR(r->tick, 4.0 * k, 1e-9);
+		ASSERT_EQ(r->value, k % 24);
+		k++;
+	}
+	ASSERT_EQ(k, 2 * 24);
+	/* and the first MIDI clock after the restart is at step 0 */
+	pos = 0;
+	r = fake_next(h, FAKE_MIDI_CLOCK, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_NEAR(r->tick, 0.0, 1e-9);
+	ASSERT_EQ(r->time, t0);
+	ASSERT_EQ(h->errors, 0);
+}
+
 /* fw 1.7 trigger_clockTick() (TriggerOut.c): the counter runs mod 96 from
  * trigger_reset(1) at the start, and the jack is high on the pulses where it is a
  * multiple of the prescaler of the output PPQ setting */
