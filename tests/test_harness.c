@@ -29,6 +29,17 @@ TEST(harness_runner)
 	ASSERT_NEAR(1.0, 1.0 + 1e-12, 1e-9);
 }
 
+/* a failing ASSERT_ sets the flag and returns from its function; this checks the
+ * runner without its own macros, and prints the one expected failure line */
+static int afterFailingAssert;
+static void failingAssert(void) { ASSERT_EQ(1, 2); afterFailingAssert = 1; }
+TEST(harness_runner_failure)
+{
+	failingAssert();
+	const int failed = seqc_test_failed_;
+	seqc_test_failed_ = !(failed == 1 && afterFailingAssert == 0);
+}
+
 TEST(harness_defaults)
 {
 	fake_host_t *h = fake_init();
@@ -78,6 +89,7 @@ TEST(harness_random)
 	uint32_t a[4], b[4];
 	for (int i = 0; i < 4; i++)
 		a[i] = h->host.random(h);
+	ASSERT_TRUE(a[0] != a[1]);
 	fake_seed(h, 1);
 	for (int i = 0; i < 4; i++)
 		b[i] = h->host.random(h);
@@ -201,6 +213,7 @@ TEST(harness_seek)
 	ASSERT_EQ(h->songPos, 0);
 	ASSERT_EQ(h->activePattern, 1);
 	ASSERT_EQ(seek(h, 20), 20);			/* entry 1; the run began at 0 */
+	ASSERT_EQ(h->patternChanges, 1);		/* the active pattern: no reload */
 	ASSERT_EQ(h->songPos, 1);
 	ASSERT_EQ(seek(h, 32), 0);			/* B */
 	ASSERT_EQ(h->songPos, 2);
@@ -256,7 +269,7 @@ TEST(harness_record)
 {
 	fake_host_t *h = fake_init();
 	h->recordActive = true;
-	fake_addNote(h, 0, 90, 61);			/* stopped: nothing */
+	fake_addNote(h, 0, 90, 61);			/* stopped, before the first step: nothing */
 	ASSERT_EQ(h->mainSteps[0][0], 0);
 	const seqc_event_t ev = { .tick = 0, .absStep = 0, .track = 4, .pattern = 0, .step = 6,
 			.vel = SEQC_ROLL_VELOCITY, .note = 62, .flags = SEQC_EVF_ROLL };
@@ -266,6 +279,9 @@ TEST(harness_record)
 	ASSERT_EQ(h->steps[0][4][6].volume, SEQC_ROLL_VELOCITY | FAKE_STEP_ACTIVE_MASK);
 	ASSERT_EQ(h->steps[0][4][6].note, 62);
 	ASSERT_EQ(h->steps[0][4][6].prob, 100);
+	const seqc_event_t hit = { .tick = 0, .absStep = 0, .track = 4, .pattern = 0, .step = 9, .vel = 90, .note = 63 };
+	h->host.trigger(h, &hit);			/* an ordinary hit is not recorded */
+	ASSERT_EQ(h->mainSteps[0][4], 1ull << 6);
 }
 
 TEST_MAIN()
