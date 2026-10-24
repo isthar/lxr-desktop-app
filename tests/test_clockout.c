@@ -145,6 +145,46 @@ TEST(T5_tempo_steps_come_with_the_boundaries)
 	ASSERT_EQ(fake_count(h, FAKE_TEMPO_STEP), 4);
 }
 
+/* checks that there are count records of kind, each pair period apart */
+static void checkPeriod(const fake_host_t *h, fake_kind_t kind, int count, double period,
+	double tolerance)
+{
+	size_t pos = 0;
+	const fake_rec_t *r;
+	const fake_rec_t *prev = NULL;
+	int n = 0;
+	while ((r = fake_next(h, kind, &pos)) != NULL)
+	{
+		if (prev != NULL)
+			ASSERT_NEAR((double)(r->time - prev->time), period, tolerance);
+		prev = r;
+		n++;
+	}
+	ASSERT_EQ(n, count);
+}
+
+TEST(T5_stop_and_rewind_keep_the_clock_phase)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_BIT(FAKE_MIDI_CLOCK) | FAKE_LOG_BIT(FAKE_TEMPO_STEP);
+	fake_process(h, 0);
+	fake_clearLog(h);
+	seqc_start();
+	fake_process(h, 0);
+	/* tick 988.8, between the clocks at 976 and 992 */
+	const seqc_time_t interval = fake_msToCycles(0.1);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 10.3), interval);
+	seqc_stop();
+	seqc_rewind();					/* the stop button */
+	fake_runUntil(h, h->now + fake_msToCycles(300.0), interval);
+	/* only a start re-phases them: the pairs across the stop keep the spacing */
+	const double tolerance = (double)interval + 1.0;
+	/* 1288 + 300 ms: clocks at 0..1216 and tempo steps at 0..1152 on the timeline */
+	checkPeriod(h, FAKE_MIDI_CLOCK, 77, fake_clockCycles(120.0), tolerance);
+	checkPeriod(h, FAKE_TEMPO_STEP, 13, fake_stepCycles(120.0), tolerance);
+	ASSERT_EQ(h->errors, 0);
+}
+
 TEST(T5_tempo_change_keeps_the_clock_continuous)
 {
 	fake_host_t *h = fake_init();
@@ -225,7 +265,7 @@ TEST(T6_restart_begins_the_pulses_at_step_0)
 				fake_msToCycles(0.1) + 1.0);
 		prev = r;
 	}
-	ASSERT_TRUE(fake_count(h, FAKE_MIDI_CLOCK) >= 2);
+	ASSERT_EQ(fake_count(h, FAKE_MIDI_CLOCK), 2);	/* ticks 1024 and 1040, on the old phase */
 	fake_clearLog(h);
 	seqc_start();
 	const seqc_time_t t0 = h->now + fake_msToCycles(0.1);
