@@ -32,7 +32,7 @@ const RULES = `Working rules (all mandatory):
 - Every commit message ends with this trailer line: Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - Do not edit docs/lichomat/tracker.json or docs/lichomat/reports/, and do not run tools/tracker_note.py: the controller keeps the tracker. Where the plan tells you to log a commit in the tracker (its convention 7), skip that step and say so in your report.
 - Toolchain: "source tools/env.sh" puts arm-none-eabi-gcc, cmake and ninja on PATH. "tools/check.sh" runs the host tests, the firmware release build, prints the memory summary and the warning count. It must pass with 0 warnings after your work.
-- Authoritative documents: docs/superpowers/specs/2026-10-23-timing-core-design.md (spec), docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (notes N1-N19; they win over the spec), the plan ${A.plan}.
+- Authoritative documents: docs/superpowers/specs/2026-10-23-timing-core-design.md (spec), docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (notes N1-N20; they win over the spec), the plan ${A.plan}.
 - Hardware checks (H1-H13) cannot be run here; never claim them.`
 
 const IMPL = {
@@ -246,7 +246,7 @@ if (A.final && A.final.review && results.length) {
 
 ${A.context}
 
-Authoritative documents: the spec, the notes N1-N19 and the plan ${A.plan}. Range: from ${results[0].impl.base_sha} to HEAD in ${A.repo}.
+Authoritative documents: the spec, the notes N1-N20 and the plan ${A.plan}. Range: from ${results[0].impl.base_sha} to HEAD in ${A.repo}.
 
 Review the combined result as one piece: does it meet the spec and notes for these tasks, are the pieces consistent with each other, are there bugs that only show across tasks, are the tests strong enough to catch regressions? Do not edit files.`, { label: 'final-review', phase: 'Final review', schema: QUALITY })
 }

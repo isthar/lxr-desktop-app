@@ -372,3 +372,25 @@ exception: it fixes a fw 1.7 bug.
   - `test_buttons.c`, the stand-ins in `tests/stubs/` and every other test keep
     `-Wall -Wextra -Werror`.
 - The release notes list it under fixed bugs. Hardware check U1 covers it.
+
+## N20. USB MIDI out (E2.8)
+
+fw 1.7's USB MIDI out had defects outside D1–D8 (E2 open issue 10). Stage 1 fixes them (task
+E2.8), beyond spec §8, §10 and §12:
+
+- **Packets:** every message gets the CIN of USB MIDI 1.0 table 4-1, and unused bytes are 0: F1
+  and F3 CIN 0x2, F2 0x3, F6 0x5, realtime and SysEx bytes 0xF, so SysEx goes out one byte per
+  packet. fw 1.7 sent F1, F2 and F3 without their data bytes, SysEx garbled, and 128 bytes from
+  past its ring on every wrap.
+- **Transmit ring:** up to 128 packets wait until the IN endpoint is free, and the end of a
+  transfer starts the next, so nothing is lost while a transfer is under way, also while the SD
+  card is busy. A full ring drops and counts the new packet (spec §11).
+- **No old messages:** nothing waits for a host that has not configured the device, or for one
+  that has left a transfer untaken for 100 ms: it has stopped reading.
+- **Song Select:** the MIDI parser routes F3 with its song number, to USB and to DIN out. fw 1.7
+  routed it at once, with the data bytes of the message before it.
+- **Files beyond §8:** `usb_manager.c/.h` and the new `usb_midiTx.c/.h`; in `usbd_cdc.c/.h` the
+  old ring goes and `USBD_CDC_DataIn()` starts the next transfer.
+- **RAM beyond §10:** 444 B for the ring and its transfer buffer, in place of fw 1.7's 136-byte
+  ring. Review row R6.2 allows it on top of the timing core's 8704 B.
+- The release notes list it under fixed bugs. Hardware check X4 covers it.
