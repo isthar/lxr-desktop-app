@@ -13,7 +13,7 @@ Read this first when picking the project up in a new session.
 | Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N20; they win over the spec) |
 | Reports per milestone | `docs/lichomat/reports/` |
 | fw 1.7 timing replica | `tests/reference/fw17_replica.c` |
-| Work branch | `timing-core` (local commits; nothing is pushed without the owner's OK) |
+| Work branch | `timing-core`, pushed to the owner's fork: https://github.com/isthar/lxr-desktop-app/tree/timing-core |
 
 ## Toolchain
 
@@ -90,7 +90,8 @@ A workflow can only be resumed (`resumeFromRunId`) in the session that started i
 
 - Small commits ending with the `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` trailer.
 - Add files explicitly; never `git add -A`.
-- Never push, never touch `main`, never change git config.
+- Push `timing-core` only to `origin`, the owner's fork, as work lands; the owner allowed this on 2026-10-24. Never push to `upstream` (Erica Synths), never touch `main`.
+- Commits use the repo-local identity `Tomasz Krzywicki <tkrzywicki@gmail.com>`; the owner chose the private address. `backup/timing-core-before-reauthor` keeps the history as it was before the re-authoring; it is local only.
 - After each task run `tools/check.sh`. It must show zero warnings, ITCM must fit, and RAM must stay within the spec budget.
 - Decisions that belong to the owner go into `questions` in the tracker. Work continues with a reversible default.
 - Hardware checks (H1–H13 in the spec) can only be done by the owner on the LXR-02. They are prepared but never claimed.
