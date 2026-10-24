@@ -9,7 +9,8 @@ Read this first when picking the project up in a new session.
 | Backlog (source of truth) | `docs/lichomat/tracker.json` |
 | Tracker page (claude.ai artifact) | https://claude.ai/artifact/MPCLCyFzqsp3ViNGuwgTZt |
 | Stage 1 spec | `docs/superpowers/specs/2026-10-23-timing-core-design.md` |
-| Stage 1 plan | `docs/superpowers/plans/2026-10-23-timing-core.md` (once written) |
+| Stage 1 plan | `docs/superpowers/plans/2026-10-23-timing-core.md` |
+| Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N18; they win over the spec) |
 | Reports per milestone | `docs/lichomat/reports/` |
 | fw 1.7 timing replica | `tests/reference/fw17_replica.c` |
 | Work branch | `timing-core` (local commits; nothing is pushed without the owner's OK) |
@@ -52,6 +53,38 @@ log entry for every finished agent step, every commit and every phase change.
 
 While a workflow runs, a Monitor on its `journal.jsonl` reports each agent that starts or finishes, so
 the log can follow the workflow step by step.
+
+## Running the plan with agents
+
+The scripts in `tools/agent/` drive the work through Claude Code workflows:
+
+- **`impl-track.js`** is a Workflow script. It runs the plan's tasks in order:
+  - for each task: an implementer (TDD, `tools/check.sh`, commit), then a spec-compliance review, then
+    a quality review;
+  - fix loops of at most 3 rounds after each review;
+  - the run stops and reports when a task is blocked or does not pass review.
+
+  Start it with the Workflow tool, `scriptPath: tools/agent/impl-track.js`, and these args:
+
+  | arg | value |
+  |---|---|
+  | `repo` | the repository path |
+  | `branch` | the work branch |
+  | `plan` | the plan path |
+  | `context` | a scene-setting text |
+  | `tasks` | a list of `{id, title, text}`, made by `extract_tasks.py` |
+  | `final` | `{review: true}`, optional |
+
+- **`extract_tasks.py`** cuts the full text of the chosen tasks out of the plan:
+  `python3 tools/agent/extract_tasks.py <plan> <out.json> E1.1 E1.2 …`. Without ids it lists the tasks
+  it finds.
+- **`wf_watch.py`** prints one line per agent that starts or finishes in a workflow's
+  `journal.jsonl`. Run it under a Monitor:
+  `python3 tools/agent/wf_watch.py <workflow transcript dir> <lines already seen> <label> [finished-only]`.
+
+A workflow can only be resumed (`resumeFromRunId`) in the session that started it. In a new session:
+1. Look at `git log` and the plan's ticked checkboxes to see where the run stopped.
+2. Start `impl-track.js` again with only the remaining tasks.
 
 ## Working rules
 
