@@ -180,7 +180,7 @@ TEST(T13_roll_hit_is_recorded_at_its_own_step)
 TEST(T14_phase_is_linear_without_shuffle)
 {
 	fake_host_t *h = fake_init();
-	ASSERT_EQ(seqc_stepPhase(), 0.0f);		/* stopped */
+	ASSERT_TRUE(seqc_stepPhase() == 0.0f);		/* stopped */
 	start(h);
 	static const double at[] = { 0.0, 12.0, 48.0, 72.0, 95.0 };
 	for (size_t i = 0; i < sizeof at / sizeof at[0]; i++)
@@ -214,7 +214,7 @@ TEST(T14_phase_is_zero_when_stopped)
 	runToTick(h, 2 * 96 + 50);
 	ASSERT_TRUE(seqc_stepPhase() > 0.5f);
 	seqc_stop();
-	ASSERT_EQ(seqc_stepPhase(), 0.0f);
+	ASSERT_TRUE(seqc_stepPhase() == 0.0f);
 }
 
 TEST(T14_late_note_goes_to_the_next_step_and_plays_once)
