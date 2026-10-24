@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 08:06",
+    "updated": "2026-10-24 08:30",
     "phase": "Etap 1 — plan implementacji (faza 3 z 6)",
     "focus": "Plan etapu 1, faza 3 z 6: trzech agentów pisze sekcje planu i od razu sprawdza ich kod w kopiach roboczych (testy, build). Rdzeń jest przy E1.8 z 13 zadań, integracja przy E2.2 z 6, narzędzia przy E4.2 z 8.",
     "branch": "timing-core",
-    "head": "98fd963",
+    "head": "5911417",
     "next": "Fazy 3–6 planu: trzy sekcje z kodem, złożenie, trzech krytyków i poprawki; koniec planu szacuję na ok. 10:00. Potem rdzeń seq_core metodą TDD (E1.1–E1.13).",
-    "updated_at": "2026-10-24T08:06:00+02:00"
+    "updated_at": "2026-10-24T08:30:00+02:00"
   },
   "epics": [
     {
@@ -248,6 +248,13 @@
       "status": "do zrobienia",
       "title": "Usunięcie clockSync.c i porządki w ITCM",
       "updated": ""
+    },
+    {
+      "id": "E2.7",
+      "epic": "E2",
+      "status": "do zrobienia",
+      "title": "Błąd fw 1.7: krok bez SHIFT w menu globalnym ustawia długość wszystkich torów (buttonHandler.c:901 przypisuje SEQ_CONFIG = 11 do trybu przycisków, czyli SELECT_MODE_LAST_STEP_ALL)",
+      "updated": "2026-10-24"
     },
     {
       "id": "E3.1",
@@ -589,6 +596,16 @@
       "n": 17,
       "at": "2026-10-24 08:06",
       "text": "Faza 3/6 w toku: piszący sprawdzają kod planu w kopiach roboczych repo. Rdzeń: testy i kod gotowe do E1.7, teraz E1.8 (zegar MIDI). Integracja: klej w sequencer.c (E2.2) buduje się w kopii. Narzędzia: E3.1–E3.5 sprawdzone, teraz checklista testów na sprzęcie (E4.2)."
+    },
+    {
+      "n": 18,
+      "at": "2026-10-24 08:28",
+      "text": "Faza 3/6: sekcja narzędzi i weryfikacji gotowa (E3.1–E4.3, 3515 linii). Cały jej kod autor sprawdził w kopii repo: check.sh zielony, 0 ostrzeżeń, 10 testów licznika CPU, asercja linkera, próbny przebieg CI."
+    },
+    {
+      "n": 19,
+      "at": "2026-10-24 08:30",
+      "text": "Naprawione tools/env.sh w zsh, który jest domyślną powłoką macOS: CMake nie trafiał na PATH (5911417). Nowe zadanie E2.7: błąd fw 1.7, w którym krok bez SHIFT w menu globalnym ustawia długość wszystkich torów."
     }
   ]
 }
