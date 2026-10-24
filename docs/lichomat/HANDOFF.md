@@ -20,7 +20,7 @@ The tools live in `.toolchain/` (git-ignored, about 1.4 GB). Nothing is installe
 
 ```sh
 tools/setup-toolchain.sh   # downloads Arm GNU 14.3.rel1, CMake 3.31.12, Ninja 1.13.2 if missing (SHA-256 checked)
-source tools/env.sh        # puts them on PATH, sets ARM_TOOLCHAIN_DIR
+source tools/env.sh        # puts them on PATH (bash or zsh), sets ARM_TOOLCHAIN_DIR
 tools/check.sh             # host tests + release build + memory summary + warning count; non-zero exit on failure
 ```
 

@@ -1,4 +1,4 @@
-# Source this file to put the repo-local build tools on PATH:
+# Source this file to put the repo-local build tools on PATH (bash or zsh):
 #
 #   source tools/env.sh
 #
@@ -12,8 +12,14 @@ _lxr_root="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 _lxr_tc="$_lxr_root/.toolchain"
 
 export LXR_ROOT="$_lxr_root"
-export ARM_TOOLCHAIN_DIR="$( (ls -d "$_lxr_tc"/arm-gnu-toolchain-*/bin 2>/dev/null || true) | head -n 1)"
-_lxr_cmake_bin="$( (ls -d "$_lxr_tc"/cmake-*/CMake.app/Contents/bin "$_lxr_tc"/cmake-*/bin 2>/dev/null || true) | head -n 1)"
-export PATH="$_lxr_cmake_bin:$_lxr_tc/bin:$ARM_TOOLCHAIN_DIR:$PATH"
+# find, not shell globs: in zsh a glob that matches nothing is an error, which left
+# CMake off PATH. -H follows a .toolchain that is a symlink.
+export ARM_TOOLCHAIN_DIR="$(find -H "$_lxr_tc" -maxdepth 2 -type d -path "$_lxr_tc/arm-gnu-toolchain-*/bin" 2>/dev/null | sort | head -n 1)"
+_lxr_cmake_bin="$(find -H "$_lxr_tc" -maxdepth 4 -type d \( -path "$_lxr_tc/cmake-*/CMake.app/Contents/bin" -o -path "$_lxr_tc/cmake-*/bin" \) 2>/dev/null | sort | head -n 1)"
+# only directories that exist: an empty PATH entry would mean the current directory
+for _lxr_dir in "$ARM_TOOLCHAIN_DIR" "$_lxr_tc/bin" "$_lxr_cmake_bin"; do
+  if [ -n "$_lxr_dir" ] && [ -d "$_lxr_dir" ]; then PATH="$_lxr_dir:$PATH"; fi
+done
+export PATH
 
-unset _lxr_root _lxr_tc _lxr_cmake_bin
+unset _lxr_root _lxr_tc _lxr_cmake_bin _lxr_dir
