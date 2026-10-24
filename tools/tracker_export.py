@@ -3,14 +3,15 @@
 
     python3 tools/tracker_export.py [out_dir]     # default: build/tracker
 
-Writes status.json (one row), epics.json, tasks.json, milestones.json and questions.json,
-the files the LICHOMAT Tracker artifact reads.
+Writes status.json (one row), epics.json, tasks.json, milestones.json, questions.json and
+log.json (newest first), the files the LICHOMAT Tracker artifact reads.
 
 Copyright (C) 2026 Tomasz Krzywicki
 SPDX-License-Identifier: GPL-3.0-only
 """
 import json
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +34,13 @@ def main():
     ids = [x["id"] for x in t["tasks"]]
     if len(ids) != len(set(ids)):
         sys.exit("duplicate task ids")
+    log = t.get("log", [])
+    for entry in log:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", entry.get("at", "")) or not entry.get("text"):
+            sys.exit(f"log entry {entry.get('n')} needs 'at' (YYYY-MM-DD HH:MM) and 'text'")
+    numbers = [e["n"] for e in log]
+    if len(numbers) != len(set(numbers)):
+        sys.exit("duplicate log entry numbers")
 
     files = {
         "status.json": [t["status"]],
@@ -40,6 +48,7 @@ def main():
         "tasks.json": t["tasks"],
         "milestones.json": t["milestones"],
         "questions.json": t["questions"],
+        "log.json": sorted(log, key=lambda e: (e["at"], e["n"]), reverse=True),
     }
     for name, rows in files.items():
         with open(os.path.join(out, name), "w", encoding="utf-8") as f:

@@ -1,11 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 05:37",
-    "phase": "Etap 1 — plan implementacji",
-    "focus": "Workflow pisze plan implementacji etapu 1: 5 agentów mapuje integrację, potem API seq_core, trzy sekcje planu z kodem, trzech krytyków i poprawki.",
+    "updated": "2026-10-24 07:04",
+    "phase": "Etap 1 — plan implementacji (faza 2 z 6)",
+    "focus": "Plan etapu 1, faza 2 z 6: agent projektuje ostateczne API rdzenia seq_core i harness testów. Szkice plików są gotowe, trwa kompilacja próbna. Mapa kodu (faza 1) skończyła się o 06:34.",
     "branch": "timing-core",
-    "head": "680d06f",
-    "next": "Po planie: harness testów i rdzeń seq_core metodą TDD (E1.1–E1.13), w osobnym workflowie z niezależnym autorem testów i przeglądem."
+    "head": "efd2f80",
+    "next": "Fazy 3–6 planu: trzy sekcje z kodem, złożenie, trzech krytyków i poprawki; koniec planu szacuję na ok. 10:00. Potem rdzeń seq_core metodą TDD (E1.1–E1.13).",
+    "updated_at": "2026-10-24T07:04:00+02:00"
   },
   "epics": [
     {
@@ -494,6 +495,73 @@
       "status": "otwarte",
       "question": "Testy na sprzęcie H1–H13 wymagają Ciebie i LXR-02.",
       "assumption": "Przygotuję checklistę i obrazy .img do wgrania."
+    }
+  ],
+  "log": [
+    {
+      "n": 1,
+      "at": "2026-10-23 22:27",
+      "text": "Specyfikacja etapu 1 zacommitowana razem z repliką timingu fw 1.7 (e11d274)."
+    },
+    {
+      "n": 2,
+      "at": "2026-10-23 22:43",
+      "text": "Do planu doszedł etap 1b: emulator na Maca (6e54a3d)."
+    },
+    {
+      "n": 3,
+      "at": "2026-10-24 05:28",
+      "text": "Toolchain w repo: tools/setup-toolchain.sh i tools/check.sh; testy i build zielone, 0 ostrzeżeń (3e9d856)."
+    },
+    {
+      "n": 4,
+      "at": "2026-10-24 05:32",
+      "text": "Backlog: 8 epików i 53 zadania, eksport do tego trackera (910e6a8)."
+    },
+    {
+      "n": 5,
+      "at": "2026-10-24 05:34",
+      "text": "Notatki implementacyjne N1–N11: decyzje, które uzupełniają specyfikację (680d06f)."
+    },
+    {
+      "n": 6,
+      "at": "2026-10-24 05:37",
+      "text": "Start workflowu planu etapu 1 (6 faz). Faza 1/6, mapa kodu: 5 agentów czyta sekwencer, MIDI, zegar, UI i build."
+    },
+    {
+      "n": 7,
+      "at": "2026-10-24 06:02",
+      "text": "Mapa kodu: gotowe MIDI (DIN, USB, parser; miejsca błędów D4, D7 i D8)."
+    },
+    {
+      "n": 8,
+      "at": "2026-10-24 06:03",
+      "text": "Mapa kodu: gotowe UI, branding, linker i miejsce na miernik CPU."
+    },
+    {
+      "n": 9,
+      "at": "2026-10-24 06:06",
+      "text": "Mapa kodu: gotowy sequencer.c, funkcja po funkcji."
+    },
+    {
+      "n": 10,
+      "at": "2026-10-24 06:09",
+      "text": "Mapa kodu: gotowy zegar (wejście i wyjście jack, sync, transport)."
+    },
+    {
+      "n": 11,
+      "at": "2026-10-24 06:34",
+      "text": "Mapa kodu: gotowy build i testy. Faza 1/6 zakończona; start fazy 2/6: projekt seq_core.h i harnessu testów."
+    },
+    {
+      "n": 12,
+      "at": "2026-10-24 07:00",
+      "text": "Faza 2/6: szkice seq_core.h, SeqStepTypes.h, seqc_test.h i fake_host.h gotowe w brudnopisie, trwa kompilacja próbna."
+    },
+    {
+      "n": 13,
+      "at": "2026-10-24 07:04",
+      "text": "Tracker: doszedł dziennik pracy i licznik „ile minut temu”. Od teraz odświeżam go po każdym kroku agentów, nie tylko po zakończonym zadaniu."
     }
   ]
 }

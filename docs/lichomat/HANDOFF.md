@@ -28,16 +28,28 @@ The release image lands in `build/release/`, and the full log of the last check 
 
 ## Updating the tracker page
 
-1. Edit `docs/lichomat/tracker.json`:
+The owner watches this page, so it must move with the work, not only when a task closes. Add a
+log entry for every finished agent step, every commit and every phase change.
+
+1. Log what happened and refresh the status in one go:
+   `python3 tools/tracker_note.py "text" [--focus …] [--next …] [--phase …]`.
+   It stamps the entry with the local time and sets `status.updated`, `status.updated_at` and `status.head`.
+2. For task, milestone or question changes, edit `docs/lichomat/tracker.json` by hand:
    - status values: `zrobione`, `w toku`, `do zrobienia`, `zablokowane`
    - question status: `otwarte` or `zamknięte`
-2. Run `python3 tools/tracker_export.py`. It writes `build/tracker/*.json` and validates epics, statuses and ids.
-3. Upload each changed file to the artifact as an asset: Artifact tool, `url` = tracker, `asset: true`, `file_path`.
-4. Point the matching store document at the new upload with ArtifactData `update`:
-   - documents `datasets/<id>`, where the id is `status`, `epics`, `tasks`, `milestones` or `questions`
+3. Run `python3 tools/tracker_export.py`. It writes `build/tracker/*.json` and validates epics, statuses,
+   ids and log entries.
+4. Upload each changed file to the artifact as an asset: Artifact tool, `url` = tracker, `asset: true`, `file_path`.
+   A log entry changes `status.json` and `log.json`.
+5. Point the matching store documents at the new uploads in one ArtifactData `batch` of `update` writes:
+   - documents `datasets/<id>`, where the id is `status`, `epics`, `tasks`, `milestones`, `questions` or `log`
    - fields to set: `source.url`, `source.name` and `updated` (`{at, by}`)
-   - pass `if_version` from a fresh read
-5. The page itself is `files/index.html` in the store (`{text}`). Its source is kept in `docs/lichomat/tracker-page.html`.
+   - pin each write with `if_version` from the last read or write
+6. Delete the replaced uploads (Artifact `delete` with the asset id as `path`).
+7. The page itself is `files/index.html` in the store (`{text}`). Its source is kept in `docs/lichomat/tracker-page.html`.
+
+While a workflow runs, a Monitor on its `journal.jsonl` reports each agent that starts or finishes, so
+the log can follow the workflow step by step.
 
 ## Working rules
 

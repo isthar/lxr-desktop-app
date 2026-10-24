@@ -42,6 +42,8 @@
   .lx-tools input { flex: 1 1 14rem; }
   .lx-tools input:focus-visible, .lx-tools select:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 1px; }
   .lx-empty { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .lx-ago { color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+  .lx-box-log { max-height: 22rem; }
   [data-dash-source-state=empty] { color: transparent; }
   [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
 </style>
@@ -53,7 +55,7 @@
     <p class="lx-meta">
       <span>Etap: <b class="dash-skeleton" data-source="status" data-field="phase" data-row="0">—</b></span>
       <span>Gałąź: <b class="dash-skeleton" data-source="status" data-field="branch" data-row="0">—</b> @ <b class="dash-skeleton" data-source="status" data-field="head" data-row="0">—</b></span>
-      <span>Aktualizacja: <b class="dash-skeleton" data-source="status" data-field="updated" data-row="0">—</b></span>
+      <span>Aktualizacja: <b class="dash-skeleton" data-source="status" data-field="updated" data-row="0">—</b> <span class="lx-ago" id="lx-ago"></span></span>
     </p>
   </header>
 
@@ -79,6 +81,17 @@
   <section class="lx-card" id="dalej">
     <h2>Następny krok</h2>
     <p class="lx-next dash-skeleton" data-source="status" data-field="next" data-row="0" style="margin-top: var(--cds-gap-sm)">—</p>
+  </section>
+
+  <section class="lx-card" id="dziennik">
+    <h2>Dziennik pracy</h2>
+    <p class="lx-note">Każdy krok agentów i każdy commit, najnowsze na górze.</p>
+    <div class="lx-box lx-box-log">
+      <table class="lx-t lx-log" data-source="log" data-row-key="n">
+        <thead><tr><th data-field="at">Kiedy</th><th data-field="text">Co się stało</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </section>
 
   <div class="lx-grid">
@@ -258,7 +271,10 @@ function lxDrawTables() {
   const t = dash.data('tasks');
   const q = dash.data('questions');
   const m = dash.data('milestones');
+  const lg = dash.data('log');
   const tasks = t.status === 'ok' ? t.data : [];
+  lxRows(document.querySelector('.lx-log'), lg.status === 'ok' ? lg.data : [],
+    [{ key: 'at', cls: 'lx-id' }, { key: 'text' }]);
   lxRows(document.querySelector('.lx-doing'), tasks.filter((r) => r.status === 'w toku' || r.status === 'zablokowane'),
     [{ key: 'id', cls: 'lx-id' }, { key: 'title' }]);
   lxRows(document.querySelector('.lx-questions'), (q.status === 'ok' ? q.data : []).filter((r) => r.status === 'otwarte'),
@@ -271,12 +287,23 @@ function lxDrawTables() {
     [{ key: 'id', cls: 'lx-id' }, { key: 'epic', cls: 'lx-id' }, { key: 'title' }, { key: 'status', pill: true }, { key: 'updated', cls: 'lx-nowrap' }]);
 }
 
+function lxAgo() {
+  const d = dash.data('status');
+  const el = document.getElementById('lx-ago');
+  const t = d.status === 'ok' && d.data[0] ? Date.parse(d.data[0].updated_at) : NaN;
+  if (Number.isNaN(t)) { el.textContent = ''; return; }
+  const min = Math.max(0, Math.round((Date.now() - t) / 60000));
+  el.textContent = min < 1 ? '(przed chwilą)' : min < 60 ? '(' + min + ' min temu)' : '(' + Math.floor(min / 60) + ' h ' + (min % 60) + ' min temu)';
+}
+setInterval(lxAgo, 30000);
+
 lxSearch.addEventListener('input', lxDrawTables);
 lxEpic.addEventListener('change', lxDrawTables);
 
 dash.onData(() => {
   document.querySelectorAll('[data-source="status"][data-field]').forEach((el) => lxFill(el, 'status', el.dataset.field));
   document.querySelectorAll('[data-source="overall"][data-field]').forEach((el) => lxFill(el, 'overall', el.dataset.field));
+  lxAgo();
   lxDrawEpicOptions();
   lxDrawEpics();
   lxDrawTables();
