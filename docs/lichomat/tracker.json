@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 12:54",
+    "updated": "2026-10-24 13:20",
     "phase": "Etap 1 — implementacja",
     "focus": "Rusza implementacja etapu 1: najpierw E3.2 i rdzeń E1.1–E1.14 (15 zadań). Każde zadanie: implementacja TDD z check.sh i commitem, przegląd zgodności ze specyfikacją, przegląd jakości.",
     "branch": "timing-core",
-    "head": "86aafa2",
+    "head": "acd4c58",
     "next": "Po rdzeniu: integracja E2.1–E2.8, potem narzędzia i wydanie (E3.1, E3.3–E3.5, E4.1–E4.3). Push na Twój fork po każdym zadaniu.",
-    "updated_at": "2026-10-24T12:54:00+02:00"
+    "updated_at": "2026-10-24T13:20:00+02:00"
   },
   "epics": [
     {
@@ -119,9 +119,9 @@
     {
       "id": "E1.1",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Harness testów na hoście (tests/, fake host)",
-      "updated": ""
+      "updated": "2026-10-24"
     },
     {
       "id": "E1.2",
@@ -280,9 +280,9 @@
     {
       "id": "E3.2",
       "epic": "E3",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Kontrola rozmiaru obrazu w linkerze",
-      "updated": ""
+      "updated": "2026-10-24"
     },
     {
       "id": "E3.3",
@@ -785,6 +785,16 @@
       "n": 47,
       "at": "2026-10-24 12:54",
       "text": "Commity mają teraz Twój prywatny adres: 40 commitów przepisanych, treść, daty i drzewo plików bez zmian, stara historia w lokalnej gałęzi zapasowej. timing-core wypchnięta na Twój fork: github.com/isthar/lxr-desktop-app/tree/timing-core."
+    },
+    {
+      "n": 48,
+      "at": "2026-10-24 12:55",
+      "text": "Start implementacji, workflow A: E3.2 i rdzeń E1.1–E1.14. Dla każdego zadania implementacja TDD z check.sh i commitem, potem przegląd zgodności ze specyfikacją i przegląd jakości, z poprawkami do 3 rund. Na koniec przegląd całego rdzenia."
+    },
+    {
+      "n": 49,
+      "at": "2026-10-24 13:20",
+      "text": "E3.2 gotowe (6d3e247, acd4c58): linker przerywa build, gdy obraz nie mieści się we FLASH; przegląd zgodności znalazł błędny komentarz o .data, poprawiony; przegląd jakości przeszedł (2 drobne uwagi na później). Wypchnięte na fork. Teraz E1.1: zestaw testów rdzenia."
     }
   ]
 }
