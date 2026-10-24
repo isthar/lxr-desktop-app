@@ -308,6 +308,23 @@ TEST(T16_dropout_clears_the_estimate)
 	ASSERT_EQ(stats().intervalsExcluded, 0);
 }
 
+TEST(T16_dropout_while_stopped)
+{
+	/* stopped, only the gap between two stamps can show a dropout: the master
+	 * stops its clock, changes the tempo from 120 to 60 BPM and starts it again */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 30, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	const seqc_time_t t1 = t0 + (seqc_time_t)(29.0 * per + 0.5) + fake_msToCycles(2000.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t1, fake_clockCycles(60.0), 30, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().dropouts, 1);
+	ASSERT_NEAR(seqc_currentBpm(), 60.0, 1e-3);	/* the gap is not used */
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+}
+
 TEST(T16_local_start_waits_for_the_masters_step)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
