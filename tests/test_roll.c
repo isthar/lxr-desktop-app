@@ -67,6 +67,24 @@ TEST(T13_roll_at_every_rate)
 	}
 }
 
+TEST(T13_roll_carries_the_step_plocks)
+{
+	fake_host_t *h = fake_init();
+	h->rollRate[3] = 4;
+	fake_setPlocks(h, 0, 3, 4, 10, 20, 30, 40);
+	start(h);
+	runToTick(h, 5 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 3, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.absStep, 0);
+	ASSERT_EQ(trig[0]->ev.p1Nr, FAKE_NO_AUTOMATION);
+	ASSERT_EQ(trig[0]->ev.p2Nr, FAKE_NO_AUTOMATION);
+	ASSERT_EQ(trig[1]->ev.absStep, 4);
+	ASSERT_EQ(trig[1]->ev.p1Nr, 10);
+	ASSERT_EQ(trig[1]->ev.p1Val, 20);
+	ASSERT_EQ(trig[1]->ev.p2Nr, 30);
+	ASSERT_EQ(trig[1]->ev.p2Val, 40);
+}
+
 TEST(T13_roll_is_swung)
 {
 	fake_host_t *h = fake_init();
@@ -106,6 +124,22 @@ TEST(T13_roll_plays_on_a_muted_track)
 	ASSERT_EQ(trig[0]->ev.flags, SEQC_EVF_ROLL);
 	ASSERT_EQ(trig[1]->ev.flags, SEQC_EVF_ROLL);
 	ASSERT_EQ(stats().muteDrops, 1);
+}
+
+TEST(T13_roll_plays_on_a_muted_step_with_a_note)
+{
+	fake_host_t *h = fake_init();
+	h->rollRate[5] = 2;
+	h->muted[5] = true;
+	fake_setStep(h, 0, 5, 2, true);			/* muted, at the tick of the roll */
+	start(h);
+	runToTick(h, 4 * 96 - 1);
+	/* the muted note does not take part in the same-tick rule */
+	ASSERT_EQ(fake_triggers(h, 5, trig, 8), 2);
+	ASSERT_EQ(trig[1]->ev.absStep, 2);
+	ASSERT_EQ(trig[1]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(stats().muteDrops, 1);
+	ASSERT_EQ(stats().chokeDrops, 0);
 }
 
 TEST(T13_note_wins_over_a_roll_at_the_same_tick)
@@ -246,10 +280,76 @@ TEST(T14_skip_once_is_ignored_when_stopped_or_out_of_range)
 	fake_setStep(h, 0, 2, 0, true);
 	seqc_skipOnce(2, 0);				/* stopped */
 	start(h);
-	seqc_skipOnce(7, 1);
-	seqc_skipOnce(2, 64);
 	runToTick(h, 17 * 96);
 	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 2);
+	ASSERT_EQ(stats().skipDrops, 0);
+
+	/* out of range: the valid marker is kept */
+	h = fake_init();
+	h->recordActive = true;
+	start(h);
+	runToTick(h, 3 * 96 + 60);
+	fake_addNote(h, 4, 100, 64);			/* marker for track 4, step 4 */
+	seqc_skipOnce(7, 4);
+	seqc_skipOnce(4, 64);
+	runToTick(h, 21 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 20);
+	ASSERT_EQ(stats().skipDrops, 1);
+}
+
+static void skipStep4(fake_host_t *h, uint32_t absStep)
+{
+	(void)h;
+	if (absStep == 3)
+		seqc_skipOnce(4, 4);
+}
+
+TEST(T14_skip_once_from_the_step_boundary_drops_the_early_hits)
+{
+	fake_host_t *h = fake_init();
+	h->onStepBoundary = skipStep4;			/* before the early part of step 4 */
+	fake_setStep(h, 0, 4, 4, true);
+	fake_setTiming(h, 0, 4, 4, 1, -2);		/* 360 early, 408 late */
+	start(h);
+	runToTick(h, 6 * 96);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 0);
+	ASSERT_EQ(stats().skipDrops, 1);
+}
+
+TEST(T14_marker_belongs_to_the_active_pattern)
+{
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	fake_setStep(h, 1, 4, 0, true);
+	fake_setTiming(h, 1, 4, 0, 1, -2);		/* 1512 early, 1560 late */
+	start(h);
+	fake_setNextPattern(h, 1);
+	runToTick(h, 15 * 96 + 60);			/* the early hit of pattern 1 is queued */
+	fake_addNote(h, 4, 100, 64);			/* marker for pattern 0, step 0 */
+	runToTick(h, 17 * 96);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.pattern, 1);
+	ASSERT_EQ(trig[0]->ev.tick, 1512);
+	ASSERT_EQ(trig[1]->ev.pattern, 1);
+	ASSERT_EQ(trig[1]->ev.tick, 1560);
+	ASSERT_EQ(stats().skipDrops, 0);
+}
+
+TEST(T14_rewind_clears_the_marker)
+{
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	start(h);
+	runToTick(h, 3 * 96 + 60);
+	fake_addNote(h, 4, 100, 64);			/* marker for step 4, absStep 4 */
+	seqc_stop();
+	seqc_rewind();					/* the stop button */
+	fake_clearLog(h);
+	seqc_start();
+	fake_runUntil(h, h->now + (seqc_time_t)(fake_stepCycles(120.0) * 5), fake_msToCycles(0.01));
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 4);
 	ASSERT_EQ(stats().skipDrops, 0);
 }
 
