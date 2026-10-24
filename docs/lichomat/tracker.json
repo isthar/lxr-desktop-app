@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 08:30",
+    "updated": "2026-10-24 08:36",
     "phase": "Etap 1 — plan implementacji (faza 3 z 6)",
     "focus": "Plan etapu 1, faza 3 z 6: trzech agentów pisze sekcje planu i od razu sprawdza ich kod w kopiach roboczych (testy, build). Rdzeń jest przy E1.8 z 13 zadań, integracja przy E2.2 z 6, narzędzia przy E4.2 z 8.",
     "branch": "timing-core",
-    "head": "5911417",
+    "head": "af2e80e",
     "next": "Fazy 3–6 planu: trzy sekcje z kodem, złożenie, trzech krytyków i poprawki; koniec planu szacuję na ok. 10:00. Potem rdzeń seq_core metodą TDD (E1.1–E1.13).",
-    "updated_at": "2026-10-24T08:30:00+02:00"
+    "updated_at": "2026-10-24T08:36:00+02:00"
   },
   "epics": [
     {
@@ -606,6 +606,11 @@
       "n": 19,
       "at": "2026-10-24 08:30",
       "text": "Naprawione tools/env.sh w zsh, który jest domyślną powłoką macOS: CMake nie trafiał na PATH (5911417). Nowe zadanie E2.7: błąd fw 1.7, w którym krok bez SHIFT w menu globalnym ustawia długość wszystkich torów."
+    },
+    {
+      "n": 20,
+      "at": "2026-10-24 08:36",
+      "text": "Faza 3/6: obaj pozostali piszący (rdzeń i integracja) mają już kod wszystkich swoich zadań i odtwarzają je od zera na świeżej kopii repo z check.sh po każdym zadaniu, żeby sprawdzić plan."
     }
   ]
 }
