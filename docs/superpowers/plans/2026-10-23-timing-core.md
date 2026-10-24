@@ -2964,7 +2964,7 @@ Still placeholders after this task:
 - Modify: `Core/CMakeLists.txt:123-128` (the `lxr_sequencer` library)
 - Test: `tests/test_clock.c` (ctest id `T1`)
 
-- [ ] **Step 1: Write the failing test `tests/test_clock.c`**
+- [x] **Step 1: Write the failing test `tests/test_clock.c`**
 
 T1 runs 10 minutes at 60, 120, 128, 137 and 200 BPM, with a process call every 0.05 ms. Every step
 boundary must come at the first call at or after its ideal time. Over the run:
@@ -3219,7 +3219,7 @@ TEST(T1_time_never_goes_back)
 TEST_MAIN()
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -3245,7 +3245,7 @@ FAIL T1_start_at_next_process
 0 of 12 tests passed
 ```
 
-- [ ] **Step 3: Replace `Core/Src/Soundengine/Sequencer/seq_core.c` with the core skeleton**
+- [x] **Step 3: Replace `Core/Src/Soundengine/Sequencer/seq_core.c` with the core skeleton**
 
 ```c
 /*
@@ -3688,13 +3688,13 @@ void seqc_resetStats(void)
 }
 ```
 
-- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+- [x] **Step 4: Convert `seq_core.c` to CRLF**
 
 Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
 
 Expected: `Core/Src/Soundengine/Sequencer/seq_core.c: c program text, ASCII text, with CRLF line terminators`
 
-- [ ] **Step 5: Add `seq_core.c` to the firmware build**
+- [x] **Step 5: Add `seq_core.c` to the firmware build**
 
 In `Core/CMakeLists.txt` (LF), replace:
 ```cmake
@@ -3723,7 +3723,7 @@ set_property(SOURCE Src/Soundengine/Sequencer/seq_core.c APPEND PROPERTY COMPILE
 `-ffast-math -freciprocal-math`. `seq_core.c` is not in `LXR_ITCM_SOURCES`, so it runs from flash
 (N11).
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -3739,7 +3739,7 @@ Run: `grep -o '"command": "[^"]*seq_core.c[^"]*"' build/release/compile_commands
 
 Expected: `-Wextra`, which shows the firmware compiles the core with the extra warnings.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add Core/Src/Soundengine/Sequencer/seq_core.c Core/CMakeLists.txt tests/test_clock.c
