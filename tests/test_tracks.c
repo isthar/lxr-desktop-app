@@ -37,11 +37,20 @@ static void recordSteps(fake_host_t *h, uint32_t absStep)
 	seenCount = absStep + 1;
 }
 
+/* forget every recorded boundary, so a later run cannot pass on stale values */
+static void clearSeen(void)
+{
+	memset(seen, 0xFF, sizeof seen);
+	memset(seenPattern, 0xFF, sizeof seenPattern);
+	memset(seenMaster, 0xFF, sizeof seenMaster);
+	seenCount = 0;
+}
+
 /* start at time 0 and run at 120 BPM until just after the boundary of step last */
 static void runTo(fake_host_t *h, uint32_t last)
 {
 	h->onStepBoundary = recordSteps;
-	seenCount = 0;
+	clearSeen();
 	fake_process(h, 0);
 	seqc_start();
 	fake_process(h, 0);
@@ -116,6 +125,20 @@ TEST(T10_raw_zero_loses_to_any_other_length)
 	/* the other tracks keep running through the pattern ends */
 	ASSERT_EQ(seen[40][0], 40 % 16);
 	ASSERT_EQ(seen[40][4], 0);
+}
+
+TEST(T10_raw_zero_master_wraps_at_16)
+{
+	fake_host_t *h = fake_init();
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		fake_setLength(h, 0, t, 0);		/* all raw 0: the master plays 16 steps (N5) */
+	runTo(h, 40);
+	ASSERT_EQ(seqc_masterTrack(), 0);
+	int32_t ends[8];
+	ASSERT_EQ(patternEnds(h, ends, 8), 3);
+	ASSERT_EQ(ends[1], 16);
+	ASSERT_EQ(ends[2], 32);
+	ASSERT_EQ(seen[40][0], 40 % 16);
 }
 
 TEST(T10_tie_goes_to_the_lowest_track)
@@ -236,11 +259,12 @@ TEST(T10_song_end_stops_and_rewinds)
 
 	/* the next start plays the song from entry 0, once */
 	fake_clearLog(h);
-	seenCount = 0;
+	clearSeen();
 	seqc_start();
 	const seqc_time_t t = h->now;
 	fake_process(h, t);
 	fake_runUntil(h, t + (seqc_time_t)(fake_stepCycles(120.0) * 16) + fake_msToCycles(1.0), fake_msToCycles(1.0));
+	ASSERT_EQ(seenCount, 17);
 	ASSERT_EQ(seenPattern[0], 1);
 	ASSERT_EQ(seenPattern[15], 1);
 	ASSERT_EQ(seenPattern[16], 2);
