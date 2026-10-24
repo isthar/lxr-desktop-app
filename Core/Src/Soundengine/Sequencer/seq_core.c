@@ -271,7 +271,8 @@ static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
 }
 //------------------------------------------------------------------------------
 /* A tick that rounding left a few ULPs short of the target still counts as due. The
- * tolerance is far above double rounding and far below one cycle in a long session. */
+ * tolerance, 1e-12 of the target, is far above double rounding; it grows by about 2e-4
+ * cycles per second of play, so it stays below one cycle for the first hour after a start. */
 static inline double seqc_dueLimit(double target)
 {
 	return target + 1e-12 * (1.0 + (target > 0.0 ? target : -target));

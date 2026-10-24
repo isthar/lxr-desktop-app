@@ -22,6 +22,7 @@
 /* the track steps seen at each boundary, recorded by the stepBoundary() hook */
 static uint8_t seen[MAX_SEEN][SEQC_NUM_TRACKS];
 static uint8_t seenPattern[MAX_SEEN];
+static uint8_t seenMaster[MAX_SEEN];
 static uint32_t seenCount;
 
 static void recordSteps(fake_host_t *h, uint32_t absStep)
@@ -31,6 +32,7 @@ static void recordSteps(fake_host_t *h, uint32_t absStep)
 		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
 			seen[absStep][t] = seqc_trackStep(t);
 		seenPattern[absStep] = h->activePattern;
+		seenMaster[absStep] = seqc_masterTrack();
 	}
 	seenCount = absStep + 1;
 }
@@ -153,6 +155,7 @@ TEST(T10_pattern_change_restarts_every_track)
 	fake_host_t *h = fake_init();
 	fake_setLength(h, 0, 1, 12);
 	fake_setLength(h, 1, 1, 5);
+	fake_setLength(h, 1, 3, 20);		/* the master of pattern 1 */
 	runTo(h, 3);
 	fake_setNextPattern(h, 1);			/* running: switches at the pattern end */
 	ASSERT_EQ(h->activePattern, 0);
@@ -160,6 +163,8 @@ TEST(T10_pattern_change_restarts_every_track)
 	ASSERT_EQ(seenPattern[15], 0);
 	ASSERT_EQ(seen[15][1], 3);
 	ASSERT_EQ(seenPattern[16], 1);
+	ASSERT_EQ(seenMaster[15], 0);
+	ASSERT_EQ(seenMaster[16], 3);		/* the new pattern's master at the change */
 	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
 		ASSERT_EQ(seen[16][t], 0);
 	ASSERT_EQ(seen[21][1], 0);			/* pattern 1: track 1 has 5 steps */
@@ -206,7 +211,12 @@ TEST(T10_song_end_stops_and_rewinds)
 	static const uint8_t song[] = { 1, 2 };
 	fake_setSong(h, song, 2);
 	fake_setSongMode(h, true);
+	/* raw 0 loses: track 1 is the master, and the song timing is unchanged */
+	fake_setLength(h, 1, 0, 0);
+	fake_setLength(h, 2, 0, 0);
 	runTo(h, 40);
+	ASSERT_EQ(seenMaster[31], 1);
+	ASSERT_EQ(seqc_masterTrack(), 0);		/* the rewind resets the master */
 	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
 	ASSERT_EQ(seqc_absStep(), -1);
 	ASSERT_EQ(seqc_trackStep(0), SEQC_NO_STEP);
