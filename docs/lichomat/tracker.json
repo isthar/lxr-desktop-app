@@ -1,88 +1,499 @@
 {
   "status": {
-    "updated": "2026-10-24 05:45",
+    "updated": "2026-10-24 05:37",
     "phase": "Etap 1 — plan implementacji",
-    "focus": "Pracuję autonomicznie: toolchain trwały w repo, tracker gotowy, teraz plan implementacji etapu 1 i rdzeń seq_core z testami.",
+    "focus": "Workflow pisze plan implementacji etapu 1: 5 agentów mapuje integrację, potem API seq_core, trzy sekcje planu z kodem, trzech krytyków i poprawki.",
     "branch": "timing-core",
-    "head": "3e9d856",
-    "next": "Plan implementacji etapu 1 (E0.7), potem harness testów i rdzeń seq_core (E1)."
+    "head": "680d06f",
+    "next": "Po planie: harness testów i rdzeń seq_core metodą TDD (E1.1–E1.13), w osobnym workflowie z niezależnym autorem testów i przeglądem."
   },
   "epics": [
-    {"id": "E0", "order": 0, "stage": "Start", "title": "Start i infrastruktura", "goal": "Fork, analiza kodu, środowisko buildu, specyfikacja, tracker."},
-    {"id": "E1", "order": 1, "stage": "Etap 1", "title": "Rdzeń timingu seq_core", "goal": "Czysty moduł C: zegar muzyczny, kolejka zdarzeń, swing całego kroku, choke per tor, slave MIDI/analog, testy na hoście T1–T20."},
-    {"id": "E2", "order": 2, "stage": "Etap 1", "title": "Integracja z firmware", "goal": "Warstwa platformy (DWT, kolejki sync), klej w sequencer.c, poprawki MIDI D4–D8, jack clock in/out."},
-    {"id": "E3", "order": 3, "stage": "Etap 1", "title": "Narzędzia i branding", "goal": "LICHOMAT na ekranie startowym, kontrola rozmiaru obrazu, licznik CPU, CI, README."},
-    {"id": "E4", "order": 4, "stage": "Etap 1", "title": "Weryfikacja i wydanie v0.1", "goal": "Przegląd wielowymiarowy, checklista testów na sprzęcie H1–H13, notatki wydania."},
-    {"id": "E5", "order": 5, "stage": "Etap 1b", "title": "Emulator na Maca", "goal": "Renderer WAV i aplikacja z wirtualnym panelem z tych samych źródeł (CoreAudio, CoreMIDI)."},
-    {"id": "E6", "order": 6, "stage": "Etap 2", "title": "Funkcje groove", "goal": "Swing per tor i szablony, track delay, pełny mikrotiming, humanize, trig conditions, dzielniki, rotacja, fill, sceny mute, DJ-filtr."},
-    {"id": "E7", "order": 7, "stage": "Etap 3", "title": "Efekty", "goal": "Reverb, echo zsynchronizowane z tempem, ambient, rumble — po pomiarach CPU na sprzęcie."}
+    {
+      "id": "E0",
+      "order": 0,
+      "stage": "Start",
+      "title": "Start i infrastruktura",
+      "goal": "Fork, analiza kodu, środowisko buildu, specyfikacja, tracker."
+    },
+    {
+      "id": "E1",
+      "order": 1,
+      "stage": "Etap 1",
+      "title": "Rdzeń timingu seq_core",
+      "goal": "Czysty moduł C: zegar muzyczny, kolejka zdarzeń, swing całego kroku, choke per tor, slave MIDI/analog, testy na hoście T1–T20."
+    },
+    {
+      "id": "E2",
+      "order": 2,
+      "stage": "Etap 1",
+      "title": "Integracja z firmware",
+      "goal": "Warstwa platformy (DWT, kolejki sync), klej w sequencer.c, poprawki MIDI D4–D8, jack clock in/out."
+    },
+    {
+      "id": "E3",
+      "order": 3,
+      "stage": "Etap 1",
+      "title": "Narzędzia i branding",
+      "goal": "LICHOMAT na ekranie startowym, kontrola rozmiaru obrazu, licznik CPU, CI, README."
+    },
+    {
+      "id": "E4",
+      "order": 4,
+      "stage": "Etap 1",
+      "title": "Weryfikacja i wydanie v0.1",
+      "goal": "Przegląd wielowymiarowy, checklista testów na sprzęcie H1–H13, notatki wydania."
+    },
+    {
+      "id": "E5",
+      "order": 5,
+      "stage": "Etap 1b",
+      "title": "Emulator na Maca",
+      "goal": "Renderer WAV i aplikacja z wirtualnym panelem z tych samych źródeł (CoreAudio, CoreMIDI)."
+    },
+    {
+      "id": "E6",
+      "order": 6,
+      "stage": "Etap 2",
+      "title": "Funkcje groove",
+      "goal": "Swing per tor i szablony, track delay, pełny mikrotiming, humanize, trig conditions, dzielniki, rotacja, fill, sceny mute, DJ-filtr."
+    },
+    {
+      "id": "E7",
+      "order": 7,
+      "stage": "Etap 3",
+      "title": "Efekty",
+      "goal": "Reverb, echo zsynchronizowane z tempem, ambient, rumble — po pomiarach CPU na sprzęcie."
+    }
   ],
   "tasks": [
-    {"id": "E0.1", "epic": "E0", "status": "zrobione", "title": "Fork isthar/lxr-desktop-app i klon lokalny", "updated": "2026-10-23"},
-    {"id": "E0.2", "epic": "E0", "status": "zrobione", "title": "Analiza firmware i researchu FM-1", "updated": "2026-10-23"},
-    {"id": "E0.3", "epic": "E0", "status": "zrobione", "title": "Build firmware i raport pamięci", "updated": "2026-10-23"},
-    {"id": "E0.4", "epic": "E0", "status": "zrobione", "title": "Replika timingu fw 1.7 i potwierdzenie błędów D1–D3", "updated": "2026-10-23"},
-    {"id": "E0.5", "epic": "E0", "status": "zrobione", "title": "Specyfikacja etapu 1", "updated": "2026-10-23"},
-    {"id": "E0.6", "epic": "E0", "status": "zrobione", "title": "Trwały toolchain i skrypty tools/", "updated": "2026-10-24"},
-    {"id": "E0.7", "epic": "E0", "status": "w toku", "title": "Tracker i plan implementacji etapu 1", "updated": "2026-10-24"},
-    {"id": "E1.1", "epic": "E1", "status": "do zrobienia", "title": "Harness testów na hoście (tests/, fake host)", "updated": ""},
-    {"id": "E1.2", "epic": "E1", "status": "do zrobienia", "title": "Wydzielenie SeqStepTypes.h bez zmiany układu", "updated": ""},
-    {"id": "E1.3", "epic": "E1", "status": "do zrobienia", "title": "Szkielet seq_core i zegar master (T1)", "updated": ""},
-    {"id": "E1.4", "epic": "E1", "status": "do zrobienia", "title": "Granice kroków, liczniki torów, koniec patternu (T10)", "updated": ""},
-    {"id": "E1.5", "epic": "E1", "status": "do zrobienia", "title": "Generowanie zdarzeń: ratchet, shift, swing, probability (T2–T4, T8)", "updated": ""},
-    {"id": "E1.6", "epic": "E1", "status": "do zrobienia", "title": "Kolejka, kolejność, choke per tor, mute, note-off (T7, T9, T15)", "updated": ""},
-    {"id": "E1.7", "epic": "E1", "status": "do zrobienia", "title": "Wyprzedzenie, przeliczanie na granicy, zmiana patternu (T11, T12)", "updated": ""},
-    {"id": "E1.8", "epic": "E1", "status": "do zrobienia", "title": "MIDI clock out i impulsy clock out (T5, T6)", "updated": ""},
-    {"id": "E1.9", "epic": "E1", "status": "do zrobienia", "title": "Roll, faza nagrywania, skip-once (T13, T14)", "updated": ""},
-    {"id": "E1.10", "epic": "E1", "status": "do zrobienia", "title": "Slave: MIDI/analog clock, estymacja tempa, zanik (T16, T18)", "updated": ""},
-    {"id": "E1.11", "epic": "E1", "status": "do zrobienia", "title": "Transport: Start, Continue, Stop, SPP, song mode (T17)", "updated": ""},
-    {"id": "E1.12", "epic": "E1", "status": "do zrobienia", "title": "Przepełnienie kolejki i statystyki (T19)", "updated": ""},
-    {"id": "E1.13", "epic": "E1", "status": "do zrobienia", "title": "Zgodność z repliką fw 1.7 (T20)", "updated": ""},
-    {"id": "E2.1", "epic": "E2", "status": "do zrobienia", "title": "seq_platform: czas z DWT i kolejki sync SPSC", "updated": ""},
-    {"id": "E2.2", "epic": "E2", "status": "do zrobienia", "title": "Klej w sequencer.c zamiast maszyny pulsów", "updated": ""},
-    {"id": "E2.3", "epic": "E2", "status": "do zrobienia", "title": "Jeden MIDI Note On na trigger, echo raz (D4)", "updated": ""},
-    {"id": "E2.4", "epic": "E2", "status": "do zrobienia", "title": "Wątki wejścia MIDI, realtime z przerwań, SPP (D7, D8)", "updated": ""},
-    {"id": "E2.5", "epic": "E2", "status": "do zrobienia", "title": "Jack clock in, reset i clock out przez rdzeń", "updated": ""},
-    {"id": "E2.6", "epic": "E2", "status": "do zrobienia", "title": "Usunięcie clockSync.c i porządki w ITCM", "updated": ""},
-    {"id": "E3.1", "epic": "E3", "status": "do zrobienia", "title": "Nazwa, wersja 0.1, ekran startowy, nazwa obrazu", "updated": ""},
-    {"id": "E3.2", "epic": "E3", "status": "do zrobienia", "title": "Kontrola rozmiaru obrazu w linkerze", "updated": ""},
-    {"id": "E3.3", "epic": "E3", "status": "do zrobienia", "title": "Licznik CPU i podstrona menu globalnego", "updated": ""},
-    {"id": "E3.4", "epic": "E3", "status": "do zrobienia", "title": "CI: testy na hoście i build firmware", "updated": ""},
-    {"id": "E3.5", "epic": "E3", "status": "do zrobienia", "title": "README: sekcja LICHOMAT", "updated": ""},
-    {"id": "E4.1", "epic": "E4", "status": "do zrobienia", "title": "Przegląd wielowymiarowy i poprawki", "updated": ""},
-    {"id": "E4.2", "epic": "E4", "status": "do zrobienia", "title": "Checklista testów na sprzęcie H1–H13", "updated": ""},
-    {"id": "E4.3", "epic": "E4", "status": "do zrobienia", "title": "Notatki wydania v0.1 (bez pushowania)", "updated": ""},
-    {"id": "E5.1", "epic": "E5", "status": "do zrobienia", "title": "Specyfikacja i plan emulatora", "updated": ""},
-    {"id": "E5.2", "epic": "E5", "status": "do zrobienia", "title": "Build silnika DSP na hoście (shimy CMSIS)", "updated": ""},
-    {"id": "E5.3", "epic": "E5", "status": "do zrobienia", "title": "Renderer WAV z projektu z karty SD", "updated": ""},
-    {"id": "E5.4", "epic": "E5", "status": "do zrobienia", "title": "Testy golden render w CI", "updated": ""},
-    {"id": "E5.5", "epic": "E5", "status": "do zrobienia", "title": "Aplikacja z wirtualnym panelem (CoreAudio, CoreMIDI)", "updated": ""},
-    {"id": "E6.1", "epic": "E6", "status": "do zrobienia", "title": "Specyfikacja i plan etapu 2", "updated": ""},
-    {"id": "E6.2", "epic": "E6", "status": "do zrobienia", "title": "Swing per tor i szablony groove", "updated": ""},
-    {"id": "E6.3", "epic": "E6", "status": "do zrobienia", "title": "Track delay w ms i humanize", "updated": ""},
-    {"id": "E6.4", "epic": "E6", "status": "do zrobienia", "title": "Pełny mikrotiming i format PatV04", "updated": ""},
-    {"id": "E6.5", "epic": "E6", "status": "do zrobienia", "title": "Nagrywanie z zachowaniem mikrotimingu", "updated": ""},
-    {"id": "E6.6", "epic": "E6", "status": "do zrobienia", "title": "Trig conditions (1:2…4:4, FILL, FIRST, PRE)", "updated": ""},
-    {"id": "E6.7", "epic": "E6", "status": "do zrobienia", "title": "Dzielnik tempa per tor i rotacja", "updated": ""},
-    {"id": "E6.8", "epic": "E6", "status": "do zrobienia", "title": "Tryb fill, sceny mute, roll 1/32 i triole", "updated": ""},
-    {"id": "E6.9", "epic": "E6", "status": "do zrobienia", "title": "DJ-filtr na masterze", "updated": ""},
-    {"id": "E7.1", "epic": "E7", "status": "zablokowane", "title": "Doprecyzować „ambient” i zmierzyć CPU na sprzęcie (H12)", "updated": ""},
-    {"id": "E7.2", "epic": "E7", "status": "do zrobienia", "title": "Specyfikacja etapu 3", "updated": ""},
-    {"id": "E7.3", "epic": "E7", "status": "do zrobienia", "title": "Reverb: włączenie i strojenie", "updated": ""},
-    {"id": "E7.4", "epic": "E7", "status": "do zrobienia", "title": "Echo zsynchronizowane z tempem", "updated": ""},
-    {"id": "E7.5", "epic": "E7", "status": "do zrobienia", "title": "Ambient i rumble z duckingiem", "updated": ""}
+    {
+      "id": "E0.1",
+      "epic": "E0",
+      "status": "zrobione",
+      "title": "Fork isthar/lxr-desktop-app i klon lokalny",
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "E0.2",
+      "epic": "E0",
+      "status": "zrobione",
+      "title": "Analiza firmware i researchu FM-1",
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "E0.3",
+      "epic": "E0",
+      "status": "zrobione",
+      "title": "Build firmware i raport pamięci",
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "E0.4",
+      "epic": "E0",
+      "status": "zrobione",
+      "title": "Replika timingu fw 1.7 i potwierdzenie błędów D1–D3",
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "E0.5",
+      "epic": "E0",
+      "status": "zrobione",
+      "title": "Specyfikacja etapu 1",
+      "updated": "2026-10-23"
+    },
+    {
+      "id": "E0.6",
+      "epic": "E0",
+      "status": "zrobione",
+      "title": "Trwały toolchain i skrypty tools/",
+      "updated": "2026-10-24"
+    },
+    {
+      "id": "E0.7",
+      "epic": "E0",
+      "status": "w toku",
+      "title": "Tracker i plan implementacji etapu 1",
+      "updated": "2026-10-24"
+    },
+    {
+      "id": "E1.1",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Harness testów na hoście (tests/, fake host)",
+      "updated": ""
+    },
+    {
+      "id": "E1.2",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Wydzielenie SeqStepTypes.h bez zmiany układu",
+      "updated": ""
+    },
+    {
+      "id": "E1.3",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Szkielet seq_core i zegar master (T1)",
+      "updated": ""
+    },
+    {
+      "id": "E1.4",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Granice kroków, liczniki torów, koniec patternu (T10)",
+      "updated": ""
+    },
+    {
+      "id": "E1.5",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Generowanie zdarzeń: ratchet, shift, swing, probability (T2–T4, T8)",
+      "updated": ""
+    },
+    {
+      "id": "E1.6",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Kolejka, kolejność, choke per tor, mute, note-off (T7, T9, T15)",
+      "updated": ""
+    },
+    {
+      "id": "E1.7",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Wyprzedzenie, przeliczanie na granicy, zmiana patternu (T11, T12)",
+      "updated": ""
+    },
+    {
+      "id": "E1.8",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "MIDI clock out i impulsy clock out (T5, T6)",
+      "updated": ""
+    },
+    {
+      "id": "E1.9",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Roll, faza nagrywania, skip-once (T13, T14)",
+      "updated": ""
+    },
+    {
+      "id": "E1.10",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Slave: MIDI/analog clock, estymacja tempa, zanik (T16, T18)",
+      "updated": ""
+    },
+    {
+      "id": "E1.11",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Transport: Start, Continue, Stop, SPP, song mode (T17)",
+      "updated": ""
+    },
+    {
+      "id": "E1.12",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Przepełnienie kolejki i statystyki (T19)",
+      "updated": ""
+    },
+    {
+      "id": "E1.13",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Zgodność z repliką fw 1.7 (T20)",
+      "updated": ""
+    },
+    {
+      "id": "E2.1",
+      "epic": "E2",
+      "status": "do zrobienia",
+      "title": "seq_platform: czas z DWT i kolejki sync SPSC",
+      "updated": ""
+    },
+    {
+      "id": "E2.2",
+      "epic": "E2",
+      "status": "do zrobienia",
+      "title": "Klej w sequencer.c zamiast maszyny pulsów",
+      "updated": ""
+    },
+    {
+      "id": "E2.3",
+      "epic": "E2",
+      "status": "do zrobienia",
+      "title": "Jeden MIDI Note On na trigger, echo raz (D4)",
+      "updated": ""
+    },
+    {
+      "id": "E2.4",
+      "epic": "E2",
+      "status": "do zrobienia",
+      "title": "Wątki wejścia MIDI, realtime z przerwań, SPP (D7, D8)",
+      "updated": ""
+    },
+    {
+      "id": "E2.5",
+      "epic": "E2",
+      "status": "do zrobienia",
+      "title": "Jack clock in, reset i clock out przez rdzeń",
+      "updated": ""
+    },
+    {
+      "id": "E2.6",
+      "epic": "E2",
+      "status": "do zrobienia",
+      "title": "Usunięcie clockSync.c i porządki w ITCM",
+      "updated": ""
+    },
+    {
+      "id": "E3.1",
+      "epic": "E3",
+      "status": "do zrobienia",
+      "title": "Nazwa, wersja 0.1, ekran startowy, nazwa obrazu",
+      "updated": ""
+    },
+    {
+      "id": "E3.2",
+      "epic": "E3",
+      "status": "do zrobienia",
+      "title": "Kontrola rozmiaru obrazu w linkerze",
+      "updated": ""
+    },
+    {
+      "id": "E3.3",
+      "epic": "E3",
+      "status": "do zrobienia",
+      "title": "Licznik CPU i podstrona menu globalnego",
+      "updated": ""
+    },
+    {
+      "id": "E3.4",
+      "epic": "E3",
+      "status": "do zrobienia",
+      "title": "CI: testy na hoście i build firmware",
+      "updated": ""
+    },
+    {
+      "id": "E3.5",
+      "epic": "E3",
+      "status": "do zrobienia",
+      "title": "README: sekcja LICHOMAT",
+      "updated": ""
+    },
+    {
+      "id": "E4.1",
+      "epic": "E4",
+      "status": "do zrobienia",
+      "title": "Przegląd wielowymiarowy i poprawki",
+      "updated": ""
+    },
+    {
+      "id": "E4.2",
+      "epic": "E4",
+      "status": "do zrobienia",
+      "title": "Checklista testów na sprzęcie H1–H13",
+      "updated": ""
+    },
+    {
+      "id": "E4.3",
+      "epic": "E4",
+      "status": "do zrobienia",
+      "title": "Notatki wydania v0.1 (bez pushowania)",
+      "updated": ""
+    },
+    {
+      "id": "E5.1",
+      "epic": "E5",
+      "status": "do zrobienia",
+      "title": "Specyfikacja i plan emulatora",
+      "updated": ""
+    },
+    {
+      "id": "E5.2",
+      "epic": "E5",
+      "status": "do zrobienia",
+      "title": "Build silnika DSP na hoście (shimy CMSIS)",
+      "updated": ""
+    },
+    {
+      "id": "E5.3",
+      "epic": "E5",
+      "status": "do zrobienia",
+      "title": "Renderer WAV z projektu z karty SD",
+      "updated": ""
+    },
+    {
+      "id": "E5.4",
+      "epic": "E5",
+      "status": "do zrobienia",
+      "title": "Testy golden render w CI",
+      "updated": ""
+    },
+    {
+      "id": "E5.5",
+      "epic": "E5",
+      "status": "do zrobienia",
+      "title": "Aplikacja z wirtualnym panelem (CoreAudio, CoreMIDI)",
+      "updated": ""
+    },
+    {
+      "id": "E6.1",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "Specyfikacja i plan etapu 2",
+      "updated": ""
+    },
+    {
+      "id": "E6.2",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "Swing per tor i szablony groove",
+      "updated": ""
+    },
+    {
+      "id": "E6.3",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "Track delay w ms i humanize",
+      "updated": ""
+    },
+    {
+      "id": "E6.4",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "Pełny mikrotiming i format PatV04",
+      "updated": ""
+    },
+    {
+      "id": "E6.5",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "Nagrywanie z zachowaniem mikrotimingu",
+      "updated": ""
+    },
+    {
+      "id": "E6.6",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "Trig conditions (1:2…4:4, FILL, FIRST, PRE)",
+      "updated": ""
+    },
+    {
+      "id": "E6.7",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "Dzielnik tempa per tor i rotacja",
+      "updated": ""
+    },
+    {
+      "id": "E6.8",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "Tryb fill, sceny mute, roll 1/32 i triole",
+      "updated": ""
+    },
+    {
+      "id": "E6.9",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "DJ-filtr na masterze",
+      "updated": ""
+    },
+    {
+      "id": "E7.1",
+      "epic": "E7",
+      "status": "zablokowane",
+      "title": "Doprecyzować „ambient” i zmierzyć CPU na sprzęcie (H12)",
+      "updated": ""
+    },
+    {
+      "id": "E7.2",
+      "epic": "E7",
+      "status": "do zrobienia",
+      "title": "Specyfikacja etapu 3",
+      "updated": ""
+    },
+    {
+      "id": "E7.3",
+      "epic": "E7",
+      "status": "do zrobienia",
+      "title": "Reverb: włączenie i strojenie",
+      "updated": ""
+    },
+    {
+      "id": "E7.4",
+      "epic": "E7",
+      "status": "do zrobienia",
+      "title": "Echo zsynchronizowane z tempem",
+      "updated": ""
+    },
+    {
+      "id": "E7.5",
+      "epic": "E7",
+      "status": "do zrobienia",
+      "title": "Ambient i rumble z duckingiem",
+      "updated": ""
+    }
   ],
   "milestones": [
-    {"id": "M1", "date": "2026-10-23", "title": "Fork i analiza", "summary": "Fork, analiza firmware, research sceny FM-1, build i raport pamięci."},
-    {"id": "M2", "date": "2026-10-23", "title": "Specyfikacja etapu 1", "summary": "Zatwierdzona w trzech częściach, zacommitowana z repliką fw 1.7 (e11d274, 6e54a3d)."},
-    {"id": "M3", "date": "2026-10-24", "title": "Trwały toolchain i tracker", "summary": "Toolchain w .toolchain/ z tools/setup-toolchain.sh i tools/check.sh (3e9d856); ten tracker."}
+    {
+      "id": "M1",
+      "date": "2026-10-23",
+      "title": "Fork i analiza",
+      "summary": "Fork, analiza firmware, research sceny FM-1, build i raport pamięci."
+    },
+    {
+      "id": "M2",
+      "date": "2026-10-23",
+      "title": "Specyfikacja etapu 1",
+      "summary": "Zatwierdzona w trzech częściach, zacommitowana z repliką fw 1.7 (e11d274, 6e54a3d)."
+    },
+    {
+      "id": "M3",
+      "date": "2026-10-24",
+      "title": "Trwały toolchain i tracker",
+      "summary": "Toolchain w .toolchain/ z tools/setup-toolchain.sh i tools/check.sh (3e9d856); ten tracker."
+    }
   ],
   "questions": [
-    {"id": "Q1", "status": "otwarte", "question": "Czy akceptujesz specyfikację etapu 1 bez zmian?", "assumption": "Traktuję jako zatwierdzoną i pracuję dalej."},
-    {"id": "Q2", "status": "otwarte", "question": "Adres e-mail autora commitów: służbowy framna.com czy prywatny?", "assumption": "Zostaje obecna tożsamość git; da się ją zmienić przed pushem."},
-    {"id": "Q3", "status": "otwarte", "question": "Czy nazwa LICHOMAT jest ostateczna?", "assumption": "LICHOMAT, w jednej zmiennej CMake."},
-    {"id": "Q4", "status": "otwarte", "question": "Co znaczy „ambient” w etapie 3: długi lub zamrożony pogłos czy warstwa tekstur/drona?", "assumption": "Decyzja przed specyfikacją etapu 3."},
-    {"id": "Q5", "status": "otwarte", "question": "Czy mogę wypychać gałąź timing-core na GitHuba (Twój fork)?", "assumption": "Nic nie pushuję bez Twojej zgody."},
-    {"id": "Q6", "status": "otwarte", "question": "Testy na sprzęcie H1–H13 wymagają Ciebie i LXR-02.", "assumption": "Przygotuję checklistę i obrazy .img do wgrania."}
+    {
+      "id": "Q1",
+      "status": "otwarte",
+      "question": "Czy akceptujesz specyfikację etapu 1 bez zmian?",
+      "assumption": "Traktuję jako zatwierdzoną i pracuję dalej."
+    },
+    {
+      "id": "Q2",
+      "status": "otwarte",
+      "question": "Adres e-mail autora commitów: służbowy framna.com czy prywatny?",
+      "assumption": "Zostaje obecna tożsamość git; da się ją zmienić przed pushem."
+    },
+    {
+      "id": "Q3",
+      "status": "otwarte",
+      "question": "Czy nazwa LICHOMAT jest ostateczna?",
+      "assumption": "LICHOMAT, w jednej zmiennej CMake."
+    },
+    {
+      "id": "Q4",
+      "status": "otwarte",
+      "question": "Co znaczy „ambient” w etapie 3: długi lub zamrożony pogłos czy warstwa tekstur/drona?",
+      "assumption": "Decyzja przed specyfikacją etapu 3."
+    },
+    {
+      "id": "Q5",
+      "status": "otwarte",
+      "question": "Czy mogę wypychać gałąź timing-core na GitHuba (Twój fork)?",
+      "assumption": "Nic nie pushuję bez Twojej zgody."
+    },
+    {
+      "id": "Q6",
+      "status": "otwarte",
+      "question": "Testy na sprzęcie H1–H13 wymagają Ciebie i LXR-02.",
+      "assumption": "Przygotuję checklistę i obrazy .img do wgrania."
+    }
   ]
 }
