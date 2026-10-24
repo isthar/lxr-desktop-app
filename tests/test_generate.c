@@ -399,4 +399,39 @@ TEST(T4_timing_edit_before_the_boundary_applies)
 		ASSERT_EQ(trig[j]->ev.tick, hitTick(2, 0, 1, j, 4));
 }
 
+TEST(T4_ratchet_edit_after_the_early_part_keeps_its_hits)
+{
+	/* even step 2, x2 at -3 units: hit 0 at 156 is early, hit 1 at 204 late. The
+	 * ratchet goes to x8 after hit 0 played: the late part keeps the early
+	 * part's hit count, so it plays hit 1 of 2 and no hits of x8. */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 2, true);
+	fake_setTiming(h, 0, 2, 2, 1, -3);
+	runSteps(h, 2);					/* hit 0 played at 156 */
+	fake_setTiming(h, 0, 2, 2, 5, -3);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 5), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 2, trig, 16), 2);
+	ASSERT_EQ(trig[0]->ev.tick, hitTick(2, 0, -3, 0, 2));
+	ASSERT_EQ(trig[1]->ev.tick, hitTick(2, 0, -3, 1, 2));
+	ASSERT_EQ(trig[1]->ev.hit, 1);
+}
+
+TEST(T2_restart_drops_the_old_run)
+{
+	/* step 3 at x8, +7 units: hits at 372 + 12j. A stop after hit 0 and a start
+	 * from stopped rewind, which clears the queue and the draws: the old run's
+	 * 7 pending hits do not fire in the new run. */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 3, true);
+	fake_setTiming(h, 0, 0, 3, 5, 7);
+	runSteps(h, 4);					/* hit 0 played at 372 */
+	seqc_stop();
+	seqc_start();
+	fake_runUntil(h, h->now + (seqc_time_t)(fake_stepCycles(120.0) * 6), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 0, trig, 32), 9);
+	ASSERT_EQ(trig[0]->ev.tick, hitTick(3, 0, 7, 0, 8));
+	for (int i = 1; i < 9; i++)
+		ASSERT_EQ(trig[i]->ev.tick, hitTick(3, 0, 7, i - 1, 8));
+}
+
 TEST_MAIN()
