@@ -1,0 +1,50 @@
+#!/bin/bash
+# One-shot verification used during development:
+#   1. host tests (tests/, built with the host compiler), if present
+#   2. firmware release build (build/release), with a memory summary
+#   3. compiler warning count (must stay 0)
+# Exit code is non-zero if any step fails. The full log is in build/check.log.
+#
+#   tools/check.sh
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+set -u -o pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=env.sh
+source "$ROOT/tools/env.sh"
+mkdir -p "$ROOT/build"
+LOG="$ROOT/build/check.log"
+: > "$LOG"
+status=0
+
+if [ -f "$ROOT/tests/CMakeLists.txt" ]; then
+  echo "== host tests"
+  if cmake -S "$ROOT/tests" -B "$ROOT/build/host-tests" -G Ninja -DCMAKE_BUILD_TYPE=Debug >>"$LOG" 2>&1 \
+     && cmake --build "$ROOT/build/host-tests" >>"$LOG" 2>&1; then
+    (cd "$ROOT/build/host-tests" && ctest --output-on-failure 2>&1) | tee -a "$LOG" | tail -n 25 || status=1
+  else
+    echo "host test build FAILED"; grep -E "error|warning" "$LOG" | head -n 30; status=1
+  fi
+else
+  echo "== host tests: tests/CMakeLists.txt not present"
+fi
+
+echo "== firmware build (release)"
+if cmake --preset release -DARM_TOOLCHAIN_DIR="$ARM_TOOLCHAIN_DIR" -S "$ROOT" >>"$LOG" 2>&1 \
+   && cmake --build --preset release >>"$LOG" 2>&1; then
+  B="$ROOT/build/release"
+  arm-none-eabi-size -A "$B/LXR_V2_STM32F765.elf" | awk -v bin="$(stat -f %z "$B/LXR_V2_STM32F765.bin")" '
+    $1==".itcm_text"{itcm=$2} $1==".dtcm"||$1==".dtcmz"{dtcm+=$2} $1==".data"||$1==".bss"||$1=="._user_heap"{ram+=$2}
+    END{printf "memory: ITCM %d/16384 B (%.1f%%, free %d)  DTCM %d/131072 B (%.1f%%, rest is stack)  RAM %d/393216 B (%.1f%%, free %d)  image %d/1015808 B (%.1f%%)\n",
+        itcm,itcm/163.84,16384-itcm, dtcm,dtcm/1310.72, ram,ram/3932.16,393216-ram, bin,bin/10158.08}'
+  ls -1 "$B"/*.img 2>/dev/null | sed 's/^/image: /'
+else
+  echo "firmware build FAILED"; grep -E "error" "$LOG" | head -n 30; status=1
+fi
+
+w=$(grep -c "warning:" "$LOG" || true)
+echo "== compiler warnings: $w"
+[ "$w" -eq 0 ] || { grep "warning:" "$LOG" | sort -u | head -n 20; status=1; }
+exit $status
