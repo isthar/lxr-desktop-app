@@ -230,6 +230,10 @@ TEST(T15_note_off_4_ticks_after_the_trigger)
 		ASSERT_TRUE(i < 3);
 		ASSERT_EQ(r->track, 3);
 		ASSERT_NEAR(r->tick, (double)expect[i], 1e-9);
+		/* sent by the first call at or after its time */
+		const double late = (double)r->time - (double)expect[i] * fake_tickCycles(120.0);
+		ASSERT_TRUE(late > -1.0);
+		ASSERT_TRUE(late < fake_msToCycles(0.1));
 		i++;
 	}
 	ASSERT_EQ(i, 3);
