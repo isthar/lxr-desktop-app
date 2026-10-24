@@ -1,0 +1,284 @@
+<style>
+  .lx { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); }
+  .lx-head { display: grid; gap: var(--cds-gap-xs); }
+  .lx-head h1 { margin: 0; font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); text-wrap: balance; }
+  .lx-take { margin: 0; max-width: 70ch; font-size: var(--cds-font-size-body); }
+  .lx-meta { margin: 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs) var(--cds-gap-md); }
+  .lx-meta b { font-weight: var(--cds-font-weight-medium); color: var(--color-fg); }
+  .lx-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: var(--cds-gap-md); }
+  .lx-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); min-width: 0; }
+  .lx-tile { display: grid; gap: var(--cds-gap-xs); align-content: start; }
+  .lx-num { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .lx-num small { font-size: var(--cds-font-size-heading); color: var(--color-fg-muted); }
+  .lx-label { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .lx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--cds-gap-md); }
+  .lx-card h2 { margin: 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+  .lx-note { margin: var(--cds-gap-xs) 0 var(--cds-gap-md); color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .lx-next { margin: 0; font-size: var(--cds-font-size-body); }
+  .lx-epics { display: grid; gap: var(--cds-gap-md); min-height: 6rem; }
+  .lx-epic { display: grid; gap: var(--cds-gap-xs); }
+  .lx-epic-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--cds-gap-sm); }
+  .lx-epic-name { min-width: 0; }
+  .lx-epic-stage { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); margin-right: var(--cds-gap-xs); }
+  .lx-epic-count { font-variant-numeric: tabular-nums; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); white-space: nowrap; }
+  .lx-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--cds-chart-grid); }
+  .lx-bar span { display: block; height: 100%; }
+  .lx-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm) var(--cds-gap-md); margin-top: var(--cds-gap-md); color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .lx-legend i { display: inline-block; width: 0.625rem; height: 0.625rem; border-radius: 2px; margin-right: var(--cds-gap-xs); vertical-align: -1px; }
+  .lx-box { max-height: 30rem; overflow: auto; }
+  table.lx-t { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-body); }
+  .lx-t th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); padding: var(--cds-pad-xs) var(--cds-pad-sm) var(--cds-pad-xs) 0; border-bottom: 1px solid var(--color-border-line); }
+  .lx-t td { padding: var(--cds-pad-xs) var(--cds-pad-sm) var(--cds-pad-xs) 0; border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+  .lx-t tr:last-child td { border-bottom: 0; }
+  .lx-t .lx-id { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--color-fg-muted); }
+  .lx-t .lx-nowrap { white-space: nowrap; }
+  .lx-pill { display: inline-block; white-space: nowrap; padding: 0 var(--cds-pad-sm); border: 1px solid currentColor; border-radius: 999px; font-size: var(--cds-font-size-caption); }
+  .lx-pill[data-s="zrobione"] { color: var(--color-ok); }
+  .lx-pill[data-s="w toku"] { color: var(--color-warn); }
+  .lx-pill[data-s="zablokowane"] { color: var(--color-bad); }
+  .lx-pill[data-s="do zrobienia"] { color: var(--color-fg-muted); }
+  .lx-tools { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); margin-bottom: var(--cds-gap-md); }
+  .lx-tools input, .lx-tools select { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-xs) var(--cds-pad-sm); min-width: 0; }
+  .lx-tools input { flex: 1 1 14rem; }
+  .lx-tools input:focus-visible, .lx-tools select:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 1px; }
+  .lx-empty { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  [data-dash-source-state=empty] { color: transparent; }
+  [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+</style>
+
+<div class="lx">
+  <header class="lx-head" id="naglowek">
+    <h1>LICHOMAT</h1>
+    <p class="lx-take dash-skeleton" data-source="status" data-field="focus" data-row="0">—</p>
+    <p class="lx-meta">
+      <span>Etap: <b class="dash-skeleton" data-source="status" data-field="phase" data-row="0">—</b></span>
+      <span>Gałąź: <b class="dash-skeleton" data-source="status" data-field="branch" data-row="0">—</b> @ <b class="dash-skeleton" data-source="status" data-field="head" data-row="0">—</b></span>
+      <span>Aktualizacja: <b class="dash-skeleton" data-source="status" data-field="updated" data-row="0">—</b></span>
+    </p>
+  </header>
+
+  <section class="lx-tiles" id="podsumowanie" aria-label="Podsumowanie">
+    <div class="lx-card lx-tile">
+      <span class="lx-label">Zadania zrobione</span>
+      <span class="lx-num"><span class="dash-skeleton" data-source="overall" data-field="done" data-row="0">—</span> <small>/ <span data-source="overall" data-field="total" data-row="0">—</span></small></span>
+    </div>
+    <div class="lx-card lx-tile">
+      <span class="lx-label">W toku</span>
+      <span class="lx-num dash-skeleton" data-source="overall" data-field="doing" data-row="0">—</span>
+    </div>
+    <div class="lx-card lx-tile">
+      <span class="lx-label">Zablokowane</span>
+      <span class="lx-num dash-skeleton" data-source="overall" data-field="blocked" data-row="0">—</span>
+    </div>
+    <div class="lx-card lx-tile">
+      <span class="lx-label">Pytania do Ciebie</span>
+      <span class="lx-num dash-skeleton" data-source="overall" data-field="open" data-row="0">—</span>
+    </div>
+  </section>
+
+  <section class="lx-card" id="dalej">
+    <h2>Następny krok</h2>
+    <p class="lx-next dash-skeleton" data-source="status" data-field="next" data-row="0" style="margin-top: var(--cds-gap-sm)">—</p>
+  </section>
+
+  <div class="lx-grid">
+    <section class="lx-card" id="epiki">
+      <h2>Epiki</h2>
+      <p class="lx-note">Zadania w każdym epiku według statusu.</p>
+      <div class="lx-epics dash-skeleton" data-source="epic_progress"></div>
+      <div class="lx-legend" aria-hidden="true">
+        <span><i class="lx-sw-done"></i>zrobione</span>
+        <span><i class="lx-sw-doing"></i>w toku</span>
+        <span><i class="lx-sw-blocked"></i>zablokowane</span>
+        <span><i class="lx-sw-todo"></i>do zrobienia</span>
+      </div>
+    </section>
+
+    <div style="display: grid; gap: var(--cds-gap-md); align-content: start; min-width: 0;">
+      <section class="lx-card" id="w-toku">
+        <h2>W toku</h2>
+        <p class="lx-note">Nad tym pracuję teraz.</p>
+        <div class="lx-box">
+          <table class="lx-t lx-doing" data-source="tasks" data-row-key="id">
+            <thead><tr><th data-field="id">ID</th><th data-field="title">Zadanie</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="lx-card" id="pytania">
+        <h2>Pytania do Ciebie</h2>
+        <p class="lx-note">Do czasu odpowiedzi działam według przyjętego założenia.</p>
+        <div class="lx-box">
+          <table class="lx-t lx-questions" data-source="questions" data-row-key="id">
+            <thead><tr><th data-field="id">ID</th><th data-field="question">Pytanie</th><th data-field="assumption">Przyjęte założenie</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="lx-card" id="kamienie">
+    <h2>Kamienie milowe</h2>
+    <p class="lx-note">Najnowsze na górze.</p>
+    <div class="lx-box">
+      <table class="lx-t lx-ms" data-source="milestones" data-row-key="id">
+        <thead><tr><th data-field="id">ID</th><th data-field="date">Data</th><th data-field="title">Kamień milowy</th><th data-field="summary">Co się stało</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="lx-card" id="zadania">
+    <h2>Wszystkie zadania</h2>
+    <p class="lx-note">Szukaj po treści albo zawęź do jednego epika.</p>
+    <div class="lx-tools">
+      <input id="lx-search" type="search" placeholder="Szukaj zadania" aria-label="Szukaj zadania">
+      <select id="lx-epic" aria-label="Epik"><option value="">Wszystkie epiki</option></select>
+    </div>
+    <div class="lx-box">
+      <table class="lx-t lx-all" data-source="tasks" data-row-key="id">
+        <thead><tr><th data-field="id">ID</th><th data-field="epic">Epik</th><th data-field="title">Zadanie</th><th data-field="status">Status</th><th data-field="updated">Zmiana</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+dash.calc('overall', {
+  inputs: ['tasks', 'questions'],
+  title: 'Podsumowanie zadań',
+  description: 'Liczba zadań według statusu i liczba otwartych pytań.',
+  fn: (tasks, questions) => [{
+    done: tasks.filter((t) => t.status === 'zrobione').length,
+    total: tasks.length,
+    doing: tasks.filter((t) => t.status === 'w toku').length,
+    blocked: tasks.filter((t) => t.status === 'zablokowane').length,
+    open: questions.filter((q) => q.status === 'otwarte').length,
+  }],
+});
+
+dash.calc('epic_progress', {
+  inputs: ['epics', 'tasks'],
+  title: 'Postęp epików',
+  description: 'Dla każdego epika liczba zadań zrobionych, w toku, zablokowanych i do zrobienia.',
+  fn: (epics, tasks) => epics.map((e) => {
+    const mine = tasks.filter((t) => t.epic === e.id);
+    const count = (s) => mine.filter((t) => t.status === s).length;
+    return { id: e.id, stage: e.stage, title: e.title, done: count('zrobione'), doing: count('w toku'), blocked: count('zablokowane'), todo: count('do zrobienia'), total: mine.length };
+  }),
+});
+
+const lxColors = { done: dash.colors[0], doing: dash.colors[2], blocked: 'var(--cds-chart-status-critical)', todo: 'var(--cds-chart-muted)' };
+document.querySelector('.lx-sw-done').style.background = lxColors.done;
+document.querySelector('.lx-sw-doing').style.background = lxColors.doing;
+document.querySelector('.lx-sw-blocked').style.background = lxColors.blocked;
+document.querySelector('.lx-sw-todo').style.background = lxColors.todo;
+
+const lxSearch = document.getElementById('lx-search');
+const lxEpic = document.getElementById('lx-epic');
+
+function lxFill(el, source, field) {
+  const d = dash.data(source);
+  const row = d.status === 'ok' ? (d.data[0] || {}) : null;
+  el.classList.toggle('dash-skeleton', d.status === 'loading');
+  el.textContent = row && row[field] != null && row[field] !== '' ? String(row[field]) : '—';
+}
+
+function lxRows(table, rows, cells) {
+  const body = table.querySelector('tbody');
+  body.replaceChildren();
+  for (const r of rows) {
+    const tr = document.createElement('tr');
+    for (const c of cells) {
+      const td = document.createElement('td');
+      if (c.cls) td.className = c.cls;
+      if (c.pill) {
+        const s = document.createElement('span');
+        s.className = 'lx-pill';
+        s.dataset.s = r[c.key];
+        s.textContent = r[c.key];
+        td.appendChild(s);
+      } else {
+        td.textContent = r[c.key] == null ? '' : String(r[c.key]);
+      }
+      tr.appendChild(td);
+    }
+    body.appendChild(tr);
+  }
+}
+
+function lxDrawEpics() {
+  const box = document.querySelector('.lx-epics');
+  const d = dash.data('epic_progress');
+  box.classList.toggle('dash-skeleton', d.status === 'loading');
+  box.replaceChildren();
+  if (d.status !== 'ok') return;
+  for (const e of d.data) {
+    const wrap = document.createElement('div');
+    wrap.className = 'lx-epic';
+    const top = document.createElement('div');
+    top.className = 'lx-epic-top';
+    const name = document.createElement('span');
+    name.className = 'lx-epic-name';
+    const stage = document.createElement('span');
+    stage.className = 'lx-epic-stage';
+    stage.textContent = e.id + ' · ' + e.stage;
+    name.append(stage, document.createTextNode(e.title));
+    const cnt = document.createElement('span');
+    cnt.className = 'lx-epic-count';
+    cnt.textContent = e.done + ' / ' + e.total;
+    top.append(name, cnt);
+    const bar = document.createElement('div');
+    bar.className = 'lx-bar';
+    bar.setAttribute('role', 'img');
+    bar.setAttribute('aria-label', e.title + ': ' + e.done + ' z ' + e.total + ' zrobione');
+    for (const [k, v] of [['done', e.done], ['doing', e.doing], ['blocked', e.blocked], ['todo', e.todo]]) {
+      if (!v || !e.total) continue;
+      const seg = document.createElement('span');
+      seg.style.width = (100 * v / e.total) + '%';
+      seg.style.background = lxColors[k];
+      bar.appendChild(seg);
+    }
+    wrap.append(top, bar);
+    box.appendChild(wrap);
+  }
+}
+
+function lxDrawEpicOptions() {
+  const d = dash.data('epics');
+  if (d.status !== 'ok') return;
+  const keep = lxEpic.value;
+  lxEpic.replaceChildren(new Option('Wszystkie epiki', ''), ...d.data.map((e) => new Option(e.id + ' · ' + e.title, e.id)));
+  lxEpic.value = keep;
+}
+
+function lxDrawTables() {
+  const t = dash.data('tasks');
+  const q = dash.data('questions');
+  const m = dash.data('milestones');
+  const tasks = t.status === 'ok' ? t.data : [];
+  lxRows(document.querySelector('.lx-doing'), tasks.filter((r) => r.status === 'w toku' || r.status === 'zablokowane'),
+    [{ key: 'id', cls: 'lx-id' }, { key: 'title' }]);
+  lxRows(document.querySelector('.lx-questions'), (q.status === 'ok' ? q.data : []).filter((r) => r.status === 'otwarte'),
+    [{ key: 'id', cls: 'lx-id' }, { key: 'question' }, { key: 'assumption' }]);
+  lxRows(document.querySelector('.lx-ms'), (m.status === 'ok' ? m.data.slice().reverse() : []),
+    [{ key: 'id', cls: 'lx-id' }, { key: 'date', cls: 'lx-nowrap' }, { key: 'title' }, { key: 'summary' }]);
+  const needle = lxSearch.value.trim().toLowerCase();
+  const epic = lxEpic.value;
+  lxRows(document.querySelector('.lx-all'), tasks.filter((r) => (!epic || r.epic === epic) && (!needle || (r.id + ' ' + r.title).toLowerCase().includes(needle))),
+    [{ key: 'id', cls: 'lx-id' }, { key: 'epic', cls: 'lx-id' }, { key: 'title' }, { key: 'status', pill: true }, { key: 'updated', cls: 'lx-nowrap' }]);
+}
+
+lxSearch.addEventListener('input', lxDrawTables);
+lxEpic.addEventListener('change', lxDrawTables);
+
+dash.onData(() => {
+  document.querySelectorAll('[data-source="status"][data-field]').forEach((el) => lxFill(el, 'status', el.dataset.field));
+  document.querySelectorAll('[data-source="overall"][data-field]').forEach((el) => lxFill(el, 'overall', el.dataset.field));
+  lxDrawEpicOptions();
+  lxDrawEpics();
+  lxDrawTables();
+});
+</script>
