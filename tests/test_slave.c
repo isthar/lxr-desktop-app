@@ -203,6 +203,20 @@ TEST(T16_bunched_clocks_lose_no_event)
 	ASSERT_TRUE(stats().intervalsExcluded > 0);
 }
 
+TEST(T16_zero_interval_without_an_estimate_is_left_out)
+{
+	/* USB bunching right after the switch: the first interval is 0. With no
+	 * mean to compare it to it is left out, or it would be the whole estimate. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const double per = fake_clockCycles(100.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_sync(h, SEQC_EV_CLOCK, t0);
+	fake_sync(h, SEQC_EV_CLOCK, t0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(per + 0.5), per, 30, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-2);
+}
+
 TEST(T16_position_is_clamped_to_the_next_clock)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
@@ -407,6 +421,57 @@ TEST(T16_switch_to_internal_starts_an_armed_transport)
 	ASSERT_EQ(n, 2);
 	ASSERT_EQ(tr[0], SEQC_TRANSPORT_ARM);
 	ASSERT_EQ(tr[1], SEQC_TRANSPORT_START);
+}
+
+/* MIDI-slaved to step 40 at 120 BPM, running or stopped there */
+static fake_host_t *slavedToStep40(bool stop)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	fake_runClocks(h, SEQC_EV_CLOCK, fake_msToCycles(10.0), fake_clockCycles(120.0), 6 * 40 + 1,
+			fake_msToCycles(0.1));	/* clock 240: tick 3840 */
+	if (stop)
+		seqc_stop();
+	return h;
+}
+
+TEST(T16_switch_to_internal_while_running)
+{
+	/* the position continues at the master tempo (120 BPM), and the MIDI clock
+	 * out and the tempo steps start from it: no burst to catch up */
+	fake_host_t *h = slavedToStep40(false);
+	ASSERT_EQ(seqc_absStep(), 40);
+	seqc_setSyncMode(SEQC_SYNC_INTERNAL);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	const double at = seqc_position();
+	ASSERT_NEAR(at, 3840.0, 0.2);
+	const uint32_t clocks = h->calls[FAKE_MIDI_CLOCK];
+	const uint32_t steps = h->calls[FAKE_TEMPO_STEP];
+	fake_runUntil(h, h->now + fake_msToCycles(50.0), fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_NEAR(seqc_position(), at + 0.05 * 768.0, 0.2);
+	ASSERT_TRUE(h->calls[FAKE_MIDI_CLOCK] - clocks >= 2 && h->calls[FAKE_MIDI_CLOCK] - clocks <= 3);
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], steps);
+	ASSERT_EQ(seqc_absStep(), 40);
+}
+
+TEST(T16_switch_to_internal_while_stopped)
+{
+	/* stopped away from the start: the position holds, and the free-running
+	 * timeline continues from it without a burst of MIDI clocks */
+	fake_host_t *h = slavedToStep40(true);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	const double at = seqc_position();
+	seqc_setSyncMode(SEQC_SYNC_INTERNAL);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	ASSERT_EQ(seqc_position(), at);
+	const uint32_t clocks = h->calls[FAKE_MIDI_CLOCK];
+	const uint32_t steps = h->calls[FAKE_TEMPO_STEP];
+	fake_runUntil(h, h->now + fake_msToCycles(50.0), fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	ASSERT_EQ(seqc_position(), at);
+	ASSERT_TRUE(h->calls[FAKE_MIDI_CLOCK] - clocks >= 2 && h->calls[FAKE_MIDI_CLOCK] - clocks <= 3);
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], steps);
 }
 
 TEST(T18_jack_4ppq_one_pulse_per_step)
