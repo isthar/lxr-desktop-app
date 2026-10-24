@@ -360,4 +360,15 @@ exception: it fixes a fw 1.7 bug.
     Last Step page's LEDs.
 - **How:** the case stores `SELECT_MODE_MENU` (7), the existing "config menu" mode, whose handling is
   what the menu needs.
+- **The host test relaxes warnings for the firmware files it compiles (spec §9.1).**
+  - `test_buttons` compiles `buttonHandler.c` with `-w`, and `Core/Inc` is a system include directory
+    for it.
+  - The reason: the tests build with `-Werror`, and GCC's `-Wextra` (CI builds the tests with GCC;
+    checked with arm-none-eabi-gcc 14.3) reports `volatile static` at `buttonHandler.c:57`, a
+    fall-through at `:613`, and `const extern` at `Preset/InitKit.h:21`. Apple clang reports none of
+    them.
+  - The firmware build (`-Wall`, 0 warnings) remains the warning gate for those files, including
+    `sequencer.h` with E2's prototypes.
+  - `test_buttons.c`, the stand-ins in `tests/stubs/` and every other test keep
+    `-Wall -Wextra -Werror`.
 - The release notes list it under fixed bugs. Hardware check U1 covers it.

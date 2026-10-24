@@ -10,7 +10,7 @@ Read this first when picking the project up in a new session.
 | Tracker page (claude.ai artifact) | https://claude.ai/artifact/MPCLCyFzqsp3ViNGuwgTZt |
 | Stage 1 spec | `docs/superpowers/specs/2026-10-23-timing-core-design.md` |
 | Stage 1 plan | `docs/superpowers/plans/2026-10-23-timing-core.md` |
-| Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N18; they win over the spec) |
+| Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N19; they win over the spec) |
 | Reports per milestone | `docs/lichomat/reports/` |
 | fw 1.7 timing replica | `tests/reference/fw17_replica.c` |
 | Work branch | `timing-core` (local commits; nothing is pushed without the owner's OK) |
