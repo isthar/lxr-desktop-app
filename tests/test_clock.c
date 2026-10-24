@@ -64,6 +64,7 @@ static void checkTempo(double bpm)
 	while ((r = fake_next(h, FAKE_STEP_BOUNDARY, &pos)) != NULL)
 	{
 		ASSERT_EQ(r->arg, n);
+		ASSERT_NEAR(r->tick, (double)n * SEQC_TICKS_PER_STEP, 1e-9);
 		/* handled by the first call at or after the ideal time */
 		const double late = (double)(r->time - t0) - n * step;
 		ASSERT_TRUE(late > -1.0);
@@ -108,7 +109,7 @@ TEST(T1_start_at_next_process)
 	ASSERT_TRUE(r != NULL);
 	ASSERT_EQ(r->arg, 0);
 	ASSERT_EQ(r->time, t);
-	ASSERT_EQ(r->tick, 0.0);
+	ASSERT_NEAR(r->tick, 0.0, 1e-9);
 	ASSERT_EQ(seqc_absStep(), 0);
 
 	/* step 1 at 120 BPM is 125 ms later */
@@ -147,19 +148,21 @@ TEST(T1_stop_keeps_the_position_and_start_rewinds)
 	ASSERT_NEAR(held, idealTicks(120.0, fake_msToCycles(300.0)), 1e-6);
 
 	fake_runUntil(h, fake_msToCycles(900.0), fake_msToCycles(0.1));
-	ASSERT_EQ(seqc_position(), held);		/* the position holds */
+	ASSERT_TRUE(seqc_position() == held);		/* the position holds */
 	ASSERT_EQ(seqc_absStep(), 2);
 	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 3);
+	uint8_t tr[4];
 	seqc_stop();					/* ignored while stopped */
+	ASSERT_EQ(transports(h, tr, 4), 2);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_STOP);
 
 	fake_clearLog(h);
 	seqc_start();					/* rewinds first */
-	uint8_t tr[4];
 	ASSERT_EQ(transports(h, tr, 4), 2);
 	ASSERT_EQ(tr[0], SEQC_TRANSPORT_REWIND);
 	ASSERT_EQ(tr[1], SEQC_TRANSPORT_START);
 	ASSERT_EQ(seqc_absStep(), -1);
-	ASSERT_EQ(seqc_position(), 0.0);
+	ASSERT_NEAR(seqc_position(), 0.0, 1e-9);
 	fake_process(h, fake_msToCycles(901.0));
 	ASSERT_EQ(seqc_absStep(), 0);
 	seqc_start();					/* ignored while running */
@@ -180,7 +183,7 @@ TEST(T1_rewind_only_when_stopped)
 	seqc_stop();
 	seqc_rewind();
 	ASSERT_EQ(seqc_absStep(), -1);
-	ASSERT_EQ(seqc_position(), 0.0);
+	ASSERT_NEAR(seqc_position(), 0.0, 1e-9);
 	uint8_t tr[4];
 	ASSERT_EQ(transports(h, tr, 4), 3);
 	ASSERT_EQ(tr[0], SEQC_TRANSPORT_START);
@@ -194,29 +197,39 @@ TEST(T1_tempo_change_is_continuous)
 	fake_process(h, 0);
 	seqc_start();
 	fake_process(h, 0);
-	const seqc_time_t t1 = fake_msToCycles(1000.0);	/* step 8 at 120 BPM */
+	/* in the middle of step 8 at 120 BPM: the last handled position lags here */
+	const seqc_time_t t1 = fake_msToCycles(1062.5);
 	fake_runUntil(h, t1, fake_msToCycles(0.1));
 	const double before = seqc_position();
-	ASSERT_NEAR(before, 8.0 * SEQC_TICKS_PER_STEP, 1e-6);
+	ASSERT_NEAR(before, 816.0, 1e-6);
 	seqc_setTempo(90.0f);
 	ASSERT_NEAR(seqc_currentBpm(), 90.0, 1e-6);
-	ASSERT_EQ(seqc_position(), before);
-	/* step 9 one 90 BPM step later: 166.67 ms */
-	fake_runUntil(h, t1 + fake_msToCycles(166.6), fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_position(), before, 1e-9);
+	/* step 9 is 48 ticks later, at 90 BPM 83.33 ms */
+	fake_runUntil(h, t1 + fake_msToCycles(83.2), fake_msToCycles(0.1));
 	ASSERT_EQ(seqc_absStep(), 8);
-	fake_runUntil(h, t1 + fake_msToCycles(166.7), fake_msToCycles(0.1));
+	fake_runUntil(h, t1 + fake_msToCycles(83.4), fake_msToCycles(0.1));
 	ASSERT_EQ(seqc_absStep(), 9);
-	ASSERT_NEAR(seqc_position(), before + idealTicks(90.0, fake_msToCycles(166.7)), 1e-6);
+	ASSERT_NEAR(seqc_position(), before + idealTicks(90.0, fake_msToCycles(83.4)), 1e-6);
 }
 
 TEST(T1_tempo_is_clamped)
 {
-	fake_init();
+	fake_host_t *h = fake_init();
 	ASSERT_NEAR(seqc_currentBpm(), SEQC_DEFAULT_BPM, 1e-6);
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	/* the clock runs at the clamped tempo, not only reports it */
 	seqc_setTempo(0.25f);
 	ASSERT_NEAR(seqc_currentBpm(), SEQC_MASTER_BPM_MIN, 1e-6);
+	fake_process(h, fake_msToCycles(1000.0));
+	ASSERT_NEAR(seqc_position(), idealTicks(SEQC_MASTER_BPM_MIN, fake_msToCycles(1000.0)), 1e-6);
 	seqc_setTempo(1000.0f);
 	ASSERT_NEAR(seqc_currentBpm(), SEQC_MASTER_BPM_MAX, 1e-6);
+	const double p = seqc_position();
+	fake_process(h, fake_msToCycles(1010.0));
+	ASSERT_NEAR(seqc_position() - p, idealTicks(SEQC_MASTER_BPM_MAX, fake_msToCycles(10.0)), 1e-6);
 	seqc_setTempo(133.5f);				/* fractional tempos are exact as well */
 	ASSERT_NEAR(seqc_currentBpm(), 133.5, 1e-6);
 }
@@ -230,9 +243,17 @@ TEST(T1_time_never_goes_back)
 	fake_process(h, fake_msToCycles(100.0));
 	const double p = seqc_position();
 	fake_process(h, fake_msToCycles(50.0));		/* earlier: counts as the last time */
-	ASSERT_EQ(seqc_position(), p);
+	ASSERT_TRUE(seqc_position() == p);
 	fake_process(h, fake_msToCycles(130.0));
 	ASSERT_EQ(seqc_absStep(), 1);
+
+	/* the same when no early exit applies: a start is pending */
+	seqc_stop();
+	seqc_start();
+	fake_process(h, fake_msToCycles(120.0));	/* earlier: step 0 at 130 ms */
+	ASSERT_EQ(seqc_absStep(), 0);
+	fake_process(h, fake_msToCycles(140.0));
+	ASSERT_NEAR(seqc_position(), idealTicks(120.0, fake_msToCycles(10.0)), 1e-6);
 }
 
 TEST_MAIN()
