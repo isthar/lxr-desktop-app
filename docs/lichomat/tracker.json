@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 11:07",
-    "phase": "Etap 1 — plan implementacji (faza 6 z 6)",
-    "focus": "Plan etapu 1, faza 6 z 6: agent wprowadza poprawki z 30 uwag krytyków, w tym trzy prawdziwe błędy logiki. Równolegle trwa recenzja sekcji E1.14 i pisanie sekcji E2.7 i E2.8.",
+    "updated": "2026-10-24 11:18",
+    "phase": "Etap 1 — przygotowanie implementacji",
+    "focus": "Plan etapu 1 gotowy i zacommitowany. Czekam na poprawki sekcji E2.8, potem agent wstawi trzy dodatkowe sekcje do planu, a dwóch recenzentów sprawdzi spójność.",
     "branch": "timing-core",
-    "head": "7c17581",
-    "next": "Fazy 3–6 planu: trzy sekcje z kodem, złożenie, trzech krytyków i poprawki; koniec planu szacuję na ok. 10:00. Potem rdzeń seq_core metodą TDD (E1.1–E1.13).",
-    "updated_at": "2026-10-24T11:07:00+02:00"
+    "head": "68faab1",
+    "next": "Implementacja 30 zadań po kolei: implementacja TDD, przegląd zgodności ze specyfikacją, przegląd jakości. Zaczyna się od E3.2 i rdzenia E1.1–E1.14.",
+    "updated_at": "2026-10-24T11:18:00+02:00"
   },
   "epics": [
     {
@@ -112,7 +112,7 @@
     {
       "id": "E0.7",
       "epic": "E0",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Tracker i plan implementacji etapu 1",
       "updated": "2026-10-24"
     },
@@ -485,6 +485,12 @@
       "date": "2026-10-24",
       "title": "Trwały toolchain i tracker",
       "summary": "Toolchain w .toolchain/ z tools/setup-toolchain.sh i tools/check.sh (3e9d856); ten tracker."
+    },
+    {
+      "id": "M4",
+      "date": "2026-10-24",
+      "title": "Plan implementacji etapu 1",
+      "summary": "Plan: 27 zadań, 19 265 linii (2b3ae42). Każda sekcja sprawdzona w kopii repo; trzech krytyków zgłosiło 30 uwag, 29 przyjęto i poprawiono. Po drodze: notatki N12–N19, nowe zadania E1.14, E2.7, E2.8 i E6.10. Raport: docs/lichomat/reports/M4-plan-etapu-1.md."
     }
   ],
   "questions": [
@@ -726,6 +732,16 @@
       "n": 39,
       "at": "2026-10-24 11:07",
       "text": "Faza 6/6 w toku: agent poprawia plan, ma już m.in. nowe reguły i testy w E1.10–E1.13 (plan urósł z 699 do 752 KB)."
+    },
+    {
+      "n": 40,
+      "at": "2026-10-24 11:17",
+      "text": "Faza 6/6 zakończona: z 30 uwag krytyków 29 przyjęte i poprawione, 1 odrzucona z dowodem (szybkość rolla była dobrze, bo fw 1.7 dodaje 1 przy zapisie). Poprawiony E1 i E2 agent odtworzył od zera: 22/22 testów, 0 ostrzeżeń."
+    },
+    {
+      "n": 41,
+      "at": "2026-10-24 11:18",
+      "text": "Kamień milowy M4: plan etapu 1 zacommitowany (2b3ae42, 19 265 linii, 27 zadań); raport w docs/lichomat/reports/M4-plan-etapu-1.md. Następny krok: wstawienie E1.14, E2.7 i E2.8, potem implementacja."
     }
   ]
 }
