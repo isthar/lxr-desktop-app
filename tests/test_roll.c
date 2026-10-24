@@ -282,7 +282,7 @@ TEST(T14_skip_once_removes_the_queued_early_hits)
 	ASSERT_EQ(stats().skipDrops, 1);
 }
 
-TEST(T14_skip_once_removes_only_its_occurrence)
+TEST(T14_skip_once_leaves_other_tracks_alone)
 {
 	fake_host_t *h = fake_init();
 	h->recordActive = true;
@@ -298,6 +298,44 @@ TEST(T14_skip_once_removes_only_its_occurrence)
 	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 2);
 	ASSERT_EQ(trig[0]->ev.tick, 360);
 	ASSERT_EQ(trig[1]->ev.tick, 408);
+	ASSERT_EQ(stats().skipDrops, 1);
+}
+
+TEST(T14_skip_once_keeps_the_early_hits_of_another_step)
+{
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	fake_setLength(h, 0, 0, 16);			/* track 0 stays the master */
+	fake_setLength(h, 0, 4, 6);
+	fake_setStep(h, 0, 4, 0, true);
+	fake_setTiming(h, 0, 4, 0, 1, -2);		/* at absStep 16: 1512 early, 1560 late */
+	start(h);
+	fake_setNextPattern(h, 0);			/* a reload: the indices restart at 16 */
+	runToTick(h, 15 * 96 + 60);			/* the early hit of step 0 is queued */
+	fake_addNote(h, 4, 100, 64);			/* track 4 at step 3: marker for step 4 */
+	runToTick(h, 17 * 96);
+	const size_t n = fake_triggers(h, 4, trig, 16);
+	ASSERT_EQ(n, 7);
+	ASSERT_EQ(trig[n - 2]->ev.absStep, 16);
+	ASSERT_EQ(trig[n - 2]->ev.tick, 1512);
+	ASSERT_EQ(trig[n - 1]->ev.tick, 1560);
+	ASSERT_EQ(stats().skipDrops, 0);
+}
+
+TEST(T14_skip_once_keeps_the_hits_of_an_earlier_occurrence)
+{
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	fake_setLength(h, 0, 0, 16);
+	fake_setLength(h, 0, 4, 2);			/* step 0 at absSteps 0 and 2 */
+	fake_setStep(h, 0, 4, 0, true);
+	fake_setTiming(h, 0, 4, 0, 5, 7);		/* 8 hits, 84 to 168 */
+	start(h);
+	runToTick(h, 96 + 50);				/* hits 156 and 168 of absStep 0 are queued */
+	fake_addNote(h, 4, 100, 64);			/* marker for step 0 at absStep 2 */
+	runToTick(h, 3 * 96);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 16), 8);
+	ASSERT_EQ(trig[7]->ev.tick, 168);
 	ASSERT_EQ(stats().skipDrops, 1);
 }
 
