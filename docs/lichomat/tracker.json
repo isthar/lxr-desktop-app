@@ -4,7 +4,7 @@
     "phase": "Etap 1 — przygotowanie implementacji",
     "focus": "Wstawianie trzech dodatkowych sekcji do planu (będzie 30 zadań) i kontrola spójności. Zaraz potem rusza implementacja.",
     "branch": "timing-core",
-    "head": "04cb385",
+    "head": "cdd45eb",
     "next": "Implementacja 30 zadań po kolei: implementacja TDD, przegląd zgodności ze specyfikacją, przegląd jakości. Zaczyna się od E3.2 i rdzenia E1.1–E1.14.",
     "updated_at": "2026-10-24T12:08:00+02:00"
   },
@@ -485,19 +485,19 @@
       "id": "M2",
       "date": "2026-10-23",
       "title": "Specyfikacja etapu 1",
-      "summary": "Zatwierdzona w trzech częściach, zacommitowana z repliką fw 1.7 (e11d274, 6e54a3d)."
+      "summary": "Zatwierdzona w trzech częściach, zacommitowana z repliką fw 1.7 (bad5cf8, 3d69188)."
     },
     {
       "id": "M3",
       "date": "2026-10-24",
       "title": "Trwały toolchain i tracker",
-      "summary": "Toolchain w .toolchain/ z tools/setup-toolchain.sh i tools/check.sh (3e9d856); ten tracker."
+      "summary": "Toolchain w .toolchain/ z tools/setup-toolchain.sh i tools/check.sh (ae2bd82); ten tracker."
     },
     {
       "id": "M4",
       "date": "2026-10-24",
       "title": "Plan implementacji etapu 1",
-      "summary": "Plan: 27 zadań, 19 265 linii (2b3ae42). Każda sekcja sprawdzona w kopii repo; trzech krytyków zgłosiło 30 uwag, 29 przyjęto i poprawiono. Po drodze: notatki N12–N19, nowe zadania E1.14, E2.7, E2.8 i E6.10. Raport: docs/lichomat/reports/M4-plan-etapu-1.md."
+      "summary": "Plan: 27 zadań, 19 265 linii (50d8889). Każda sekcja sprawdzona w kopii repo; trzech krytyków zgłosiło 30 uwag, 29 przyjęto i poprawiono. Po drodze: notatki N12–N19, nowe zadania E1.14, E2.7, E2.8 i E6.10. Raport: docs/lichomat/reports/M4-plan-etapu-1.md."
     }
   ],
   "questions": [
@@ -554,27 +554,27 @@
     {
       "n": 1,
       "at": "2026-10-23 22:27",
-      "text": "Specyfikacja etapu 1 zacommitowana razem z repliką timingu fw 1.7 (e11d274)."
+      "text": "Specyfikacja etapu 1 zacommitowana razem z repliką timingu fw 1.7 (bad5cf8)."
     },
     {
       "n": 2,
       "at": "2026-10-23 22:43",
-      "text": "Do planu doszedł etap 1b: emulator na Maca (6e54a3d)."
+      "text": "Do planu doszedł etap 1b: emulator na Maca (3d69188)."
     },
     {
       "n": 3,
       "at": "2026-10-24 05:28",
-      "text": "Toolchain w repo: tools/setup-toolchain.sh i tools/check.sh; testy i build zielone, 0 ostrzeżeń (3e9d856)."
+      "text": "Toolchain w repo: tools/setup-toolchain.sh i tools/check.sh; testy i build zielone, 0 ostrzeżeń (ae2bd82)."
     },
     {
       "n": 4,
       "at": "2026-10-24 05:32",
-      "text": "Backlog: 8 epików i 53 zadania, eksport do tego trackera (910e6a8)."
+      "text": "Backlog: 8 epików i 53 zadania, eksport do tego trackera (f1f607d)."
     },
     {
       "n": 5,
       "at": "2026-10-24 05:34",
-      "text": "Notatki implementacyjne N1–N11: decyzje, które uzupełniają specyfikację (680d06f)."
+      "text": "Notatki implementacyjne N1–N11: decyzje, które uzupełniają specyfikację (47cc50f)."
     },
     {
       "n": 6,
@@ -644,7 +644,7 @@
     {
       "n": 19,
       "at": "2026-10-24 08:30",
-      "text": "Naprawione tools/env.sh w zsh, który jest domyślną powłoką macOS: CMake nie trafiał na PATH (5911417). Nowe zadanie E2.7: błąd fw 1.7, w którym krok bez SHIFT w menu globalnym ustawia długość wszystkich torów."
+      "text": "Naprawione tools/env.sh w zsh, który jest domyślną powłoką macOS: CMake nie trafiał na PATH (aa70b81). Nowe zadanie E2.7: błąd fw 1.7, w którym krok bez SHIFT w menu globalnym ustawia długość wszystkich torów."
     },
     {
       "n": 20,
@@ -754,7 +754,7 @@
     {
       "n": 41,
       "at": "2026-10-24 11:18",
-      "text": "Kamień milowy M4: plan etapu 1 zacommitowany (2b3ae42, 19 265 linii, 27 zadań); raport w docs/lichomat/reports/M4-plan-etapu-1.md. Następny krok: wstawienie E1.14, E2.7 i E2.8, potem implementacja."
+      "text": "Kamień milowy M4: plan etapu 1 zacommitowany (50d8889, 19 265 linii, 27 zadań); raport w docs/lichomat/reports/M4-plan-etapu-1.md. Następny krok: wstawienie E1.14, E2.7 i E2.8, potem implementacja."
     },
     {
       "n": 42,

@@ -83,8 +83,8 @@ Paths are relative to the repository root.
 | `Core/Inc/menu/menu.h`, `Core/Inc/menu/menuPages.h`, `Core/Src/menu/menu.c` | The read-only CPU page, 3rd sub-page of the global menu | E3.3 |
 | `.github/workflows/build.yml` (new) | CI: host tests, firmware build, artifacts, memory summary | E3.4 |
 | `tools/ci_dry_run.rb` (new) | Checks the workflow and runs its steps locally | E3.4 |
-| `tools/env.sh` | Puts the repo-local tools on `PATH` in bash and zsh | E3.5 Steps 1–6, already done in commit `5911417` |
-| `docs/lichomat/HANDOFF.md` | The tool list of the handoff guide | E2.2, E3.4 (the E3.5 line is already done in `5911417`) |
+| `tools/env.sh` | Puts the repo-local tools on `PATH` in bash and zsh | E3.5 Steps 1–6, already done in commit `aa70b81` |
+| `docs/lichomat/HANDOFF.md` | The tool list of the handoff guide | E2.2, E3.4 (the E3.5 line is already done in `aa70b81`) |
 | `README.md` | LICHOMAT section, the new file names, the module table, the link to the release notes | E2.6, E2.8, E3.5, E4.3 |
 | `docs/lichomat/reports/stage1-review.md` (new) | Stage 1 review: checklist, findings, result | E4.1 |
 | `docs/lichomat/reports/stage1-report.md` (new) | Stage 1 report: each deviation from the spec with the note or decision that allows it, and the intended changes against fw 1.7 | E4.1 |
@@ -152,7 +152,7 @@ the one before it.
 26. **E3.4**: CI workflow (host tests and firmware build) and its local dry run. Needs E3.1 (the
     update file check), E3.3 (`cpumeter`) and every host test file.
 27. **E3.5**: the README's LICHOMAT section and the new file names. Steps 1–6 (`tools/env.sh` for
-    zsh) are already done, in commit `5911417`: start at Step 7. Needs E2.6 (the module table row)
+    zsh) are already done, in commit `aa70b81`: start at Step 7. Needs E2.6 (the module table row)
     and E3.1–E3.4 (what the README describes).
 28. **E4.1**: multi-dimension review of all of stage 1; findings fixed test-first, one commit each.
 29. **E4.2**: hardware checklist H1–H13, with U1 (E2.7) and X4 (E2.8), and the two update files for
@@ -232,7 +232,7 @@ fake host (`tests/fake_host.c`) that implements every callback the way `sequence
   - `build/host-tests/test_clock` runs every test of the file;
   - `build/host-tests/test_clock T1_start_at_next_process` runs one test. A prefix such as `T1`
     runs that test id and every test named `T1_...`.
-- **Tools from `.toolchain/`.** `tools/env.sh` works in bash and in zsh since commit 5911417. Steps
+- **Tools from `.toolchain/`.** `tools/env.sh` works in bash and in zsh since commit aa70b81. Steps
   that need CMake or the Arm tools directly run them as `bash -c 'source tools/env.sh && …'`, so they
   also work in a fresh shell.
 - **Line endings.**
@@ -11194,7 +11194,7 @@ EOF
 - **The diffs.** For every task, a tool applied the listed replace and insert operations to the
   previous version and got exactly the next version.
 - **A full replay.** All tasks were replayed in order in a copy of the repository at commit
-  `1179a1f`, which already has N12–N15 and the zsh-safe `tools/env.sh`. `tools/check.sh` ran at
+  `3536599`, which already has N12–N15 and the zsh-safe `tools/env.sh`. `tools/check.sh` ran at
   each step.
   - Each new test file failed before its implementation, with the outputs quoted above, and passed
     after it.
@@ -11293,7 +11293,7 @@ E2 builds on E1. It needs:
 E1.3 adds `seq_core.c` to the firmware's `lxr_sequencer` library, and E2.1 extends that block.
 
 Line numbers in this section are those of the fw 1.7 sources on branch `timing-core`. They did
-not change between `851cf88` and `1179a1f`, the HEAD when this section was written. E1 changes only
+not change between `0bf9ca9` and `3536599`, the HEAD when this section was written. E1 changes only
 one of the fw 1.7 files that E2 edits, `Core/CMakeLists.txt`, and E2.1 quotes E1's version of it.
 Each "before" block was copied from those texts, and the whole section was checked on a scratch copy
 of the repository (see the end of the section). Implementation notes N12-N20 apply as well; this
@@ -11340,7 +11340,7 @@ Order: E2.1 → E2.2 → E2.3 → E2.4 → E2.5 → E2.6 → E2.7 → E2.8. Each
 
 - **Where commands run.** From the repository root. Anything that needs CMake or the Arm tools
   runs as `bash -c 'source tools/env.sh && …'` or through `tools/check.sh`. That works in any shell;
-  `tools/env.sh` itself works in bash and zsh since `5911417`.
+  `tools/env.sh` itself works in bash and zsh since `aa70b81`.
 - **Line endings.**
   - CRLF: the C files under `Core/` and `usbd_cdc.c`.
   - LF: `tests/`, the CMake files, `tools/` and the Markdown files.
@@ -17188,7 +17188,7 @@ E2.7 runs between E2.6 and E3.1, so later tasks see its files. When this section
    global menu) becomes "*Status: fixed in task E2.7; E4.2 has check U1, and E4.3 lists the fix
    under Fixed.*"; in "From Part 3", the status line of item 4 becomes "*Status: fixed in task
    E2.7.*"
-8. **Implementation notes:** N19 is in the notes already (commit `38899ea`, "N19. The global menu
+8. **Implementation notes:** N19 is in the notes already (commit `4d64849`, "N19. The global menu
    fix changes two visible behaviours (E2.7)"): the bug, the two visible changes, the fix, the
    release notes and U1. It does not cover the host test build, which differs from spec §9.1 (see
    "How it is tested"). Add this bullet to N19, before its last one:
@@ -18829,7 +18829,7 @@ hardware checklist (E4.2).
 
 ### E2: how this section was checked
 
-Every task was applied, in order, to a scratch copy of the repository at `1179a1f`. E1 was
+Every task was applied, in order, to a scratch copy of the repository at `3536599`. E1 was
 simulated:
 - the API's `seq_core.h` and the `SeqStepTypes.h` split;
 - the `tests/` harness of E1.1;
@@ -18970,7 +18970,7 @@ Python 3 (standard library), Ruby (macOS system Ruby, for the workflow dry run),
 
 **Conventions for every task in this part.**
 1. Run every command from the repository root, `/Users/tk/Code/lxr`.
-2. The Bash tool runs zsh. `source tools/env.sh` works in zsh since commit `5911417`, which made E3.5
+2. The Bash tool runs zsh. `source tools/env.sh` works in zsh since commit `aa70b81`, which made E3.5
    Steps 1–6 ahead of this plan. The commands of E3.1–E3.4 that call `cmake`, `ctest`, `ninja` or an
    `arm-none-eabi-*` tool directly still run as `bash -c 'source tools/env.sh && …'`, which works in
    any shell. `tools/check.sh` is a bash script and always works.
@@ -20931,7 +20931,7 @@ of the README gets the new file names, the `LICHOMAT_NAME` option, the actual `L
 (empty; the README said `-O2`) and a note on the linker's FLASH check from E3.2.
 
 **Already done.** Steps 1–6, the `tools/env.sh` fix and its `HANDOFF.md` line, went in ahead of this
-plan as commit `5911417`: `tools/env.sh` is byte-identical to the file of Step 2, so Step 1 no longer
+plan as commit `aa70b81`: `tools/env.sh` is byte-identical to the file of Step 2, so Step 1 no longer
 fails. Check it with `zsh -f -c 'source tools/env.sh && command -v cmake'`, which prints the CMake
 path, and start at Step 7.
 
@@ -22924,7 +22924,7 @@ questions the owner has to answer are also kept in the tracker (`docs/lichomat/t
 5. Cross-section risk: `source tools/env.sh` leaves CMake off PATH in zsh until E3.5 fixes it, and
    that would hit E1/E2 commands too. This part uses `bash -c` or tools/check.sh until then. The
    orchestrator may want to move the env.sh fix (E3.5 steps 1-6) ahead of E1.1.
-   *Status: resolved: commit `5911417` made E3.5 Steps 1–6 before this plan; `tools/env.sh` is
+   *Status: resolved: commit `aa70b81` made E3.5 Steps 1–6 before this plan; `tools/env.sh` is
    identical to E3.5 Step 2.*
 6. E3.5 edits the lxr_sequencer row of README.md. If E2.6 also edits that row while removing
    clockSync, the step has a conditional instruction. Coordinate with the E2 section.

@@ -1,6 +1,6 @@
 # M4: plan implementacji etapu 1
 
-Data: 2026-10-24. Gałąź `timing-core`, commit planu `2b3ae42`. Nic nie jest wypchnięte.
+Data: 2026-10-24. Gałąź `timing-core`, commit planu `50d8889`. Nic nie jest wypchnięte.
 
 ## Co powstało
 
