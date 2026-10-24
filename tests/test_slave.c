@@ -136,6 +136,19 @@ TEST(T16_usb_like_jitter)
 	ASSERT_EQ(stats().intervalsExcluded, 0);
 }
 
+TEST(T16_estimate_uses_24_intervals)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, fake_clockCycles(120.0), 30, fake_msToCycles(0.1));
+	const seqc_time_t t1 = t0 + (seqc_time_t)(29.0 * fake_clockCycles(120.0) + 0.5)
+			+ (seqc_time_t)fake_clockCycles(100.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t1, fake_clockCycles(100.0), 12, fake_msToCycles(0.1));
+	/* 12 intervals at 120 and 12 at 100: (12 x 20.833 + 12 x 25) / 24 ms */
+	ASSERT_NEAR(seqc_currentBpm(), 60.0 / 0.55, 5e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+}
+
 TEST(T16_tempo_ramp_120_to_140)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
@@ -224,6 +237,18 @@ TEST(T16_outlier_interval_is_left_out)
 	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 10);	/* steps 0..9 */
 }
 
+TEST(T16_interval_inside_the_band_is_kept)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 30, fake_msToCycles(0.1));
+	fake_sync(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(29.0 * per + 1.4 * per));
+	/* 40% long, inside the 50% band: used */
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0 * 24.0 / 24.4, 1e-2);
+}
+
 TEST(T16_dropout_and_resume)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
@@ -253,6 +278,20 @@ TEST(T16_dropout_and_resume)
 		ASSERT_EQ(trig[k]->ev.absStep, k);
 	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
 	ASSERT_EQ(stats().dropouts, 1);
+}
+
+TEST(T16_dropout_clears_the_estimate)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	fake_runClocks(h, SEQC_EV_CLOCK, fake_msToCycles(10.0), fake_clockCycles(100.0), 48, fake_msToCycles(0.1));
+	fake_runUntil(h, h->now + fake_msToCycles(800.0), fake_msToCycles(0.1));
+	ASSERT_EQ(stats().dropouts, 1);
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);	/* the last known tempo, not the master's 120 */
+	/* resume at 50 BPM: twice the interval, outside the band of the old estimate */
+	fake_runClocks(h, SEQC_EV_CLOCK, h->now + 1000, fake_clockCycles(50.0), 30, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 50.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
 }
 
 TEST(T16_local_start_waits_for_the_masters_step)
@@ -309,6 +348,23 @@ TEST(T16_clock_only_in_midi_sync)
 	fake_sync(h, SEQC_EV_PULSE, 400);
 	ASSERT_EQ(stats().syncIgnored, 3);
 	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], 2);	/* the internal one at time 0, and the MIDI clock's */
+}
+
+TEST(T16_switch_clears_the_estimate_and_the_count)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_setAnalogPpq(24);				/* only kept in MIDI sync */
+	const double per = fake_clockCycles(100.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, fake_msToCycles(10.0), per, 4, fake_msToCycles(0.1));	/* count 4 */
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);	/* no estimate: the master tempo */
+	const uint32_t steps = h->calls[FAKE_TEMPO_STEP];
+	const double per50 = fake_clockCycles(50.0);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per50, per50, 8, fake_msToCycles(0.1));
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], steps + 2);	/* pulses 0 and 6 of the new count */
+	ASSERT_NEAR(seqc_currentBpm(), 50.0, 1e-3);	/* the old intervals are gone */
+	ASSERT_EQ(stats().intervalsExcluded, 0);
 }
 
 TEST(T16_switch_from_internal_while_running)
@@ -381,7 +437,7 @@ TEST(T18_jack_4ppq_estimate_uses_4_intervals)
 	fake_runClocks(h, SEQC_EV_PULSE, t0, fake_stepCycles(120.0), 9, fake_msToCycles(0.1));
 	const seqc_time_t t1 = t0 + (seqc_time_t)(9.0 * fake_stepCycles(120.0));
 	fake_runClocks(h, SEQC_EV_PULSE, t1, fake_stepCycles(100.0), 3, fake_msToCycles(0.1));
-	ASSERT_TRUE(seqc_currentBpm() < 119.0);		/* moving, 3 of 4 intervals at 100 */
+	ASSERT_NEAR(seqc_currentBpm(), 15.0 / 0.1375, 1e-3);	/* 2 of 4 intervals at 100: (125 + 125 + 150 + 150) / 4 ms */
 	fake_runClocks(h, SEQC_EV_PULSE, t1 + (seqc_time_t)(3.0 * fake_stepCycles(100.0)),
 			fake_stepCycles(100.0), 2, fake_msToCycles(0.1));
 	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);	/* 4 intervals at 100 */
@@ -423,6 +479,18 @@ TEST(T18_ppq_change_restarts_the_count)
 	ASSERT_TRUE(seqc_position() >= 96.0 && seqc_position() < 96.1);
 }
 
+TEST(T18_ppq_change_clears_the_estimate)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_setAnalogPpq(24);
+	fake_runClocks(h, SEQC_EV_PULSE, fake_msToCycles(10.0), fake_clockCycles(120.0), 6, fake_msToCycles(0.1));
+	seqc_setAnalogPpq(4);
+	const double per = fake_stepCycles(100.0);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 3, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);	/* the 24 PPQ intervals are gone */
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+}
+
 TEST(T18_slow_4ppq_clock_is_not_a_dropout)
 {
 	/* N15: at 25 BPM the pulses are 600 ms apart, longer than SEQC_DROPOUT_MS.
@@ -440,6 +508,20 @@ TEST(T18_slow_4ppq_clock_is_not_a_dropout)
 	fake_runUntil(h, last + fake_msToCycles(1150.0), fake_msToCycles(1.0));
 	ASSERT_EQ(stats().dropouts, 0);
 	fake_runUntil(h, last + fake_msToCycles(1250.0), fake_msToCycles(1.0));
+	ASSERT_EQ(stats().dropouts, 1);
+}
+
+TEST(T18_dropout_time_without_an_estimate)
+{
+	/* N15: before the first interval the 4 PPQ dropout time is 1.5 s, two
+	 * steps at 20 BPM */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_start();
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_sync(h, SEQC_EV_PULSE, t0);			/* step 0, no interval yet */
+	fake_runUntil(h, t0 + fake_msToCycles(1450.0), fake_msToCycles(1.0));
+	ASSERT_EQ(stats().dropouts, 0);
+	fake_runUntil(h, t0 + fake_msToCycles(1550.0), fake_msToCycles(1.0));
 	ASSERT_EQ(stats().dropouts, 1);
 }
 
