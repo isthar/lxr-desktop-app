@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 08:36",
-    "phase": "Etap 1 — plan implementacji (faza 3 z 6)",
-    "focus": "Plan etapu 1, faza 3 z 6: trzech agentów pisze sekcje planu i od razu sprawdza ich kod w kopiach roboczych (testy, build). Rdzeń jest przy E1.8 z 13 zadań, integracja przy E2.2 z 6, narzędzia przy E4.2 z 8.",
+    "updated": "2026-10-24 09:03",
+    "phase": "Etap 1 — plan implementacji (faza 4 z 6)",
+    "focus": "Plan etapu 1, faza 4 z 6: agent składa trzy sprawdzone sekcje (rdzeń, integracja, narzędzia; ok. 18 tys. linii) w jeden plan i ujednolica nazwy. Potem trzech krytyków i poprawki.",
     "branch": "timing-core",
-    "head": "af2e80e",
+    "head": "1179a1f",
     "next": "Fazy 3–6 planu: trzy sekcje z kodem, złożenie, trzech krytyków i poprawki; koniec planu szacuję na ok. 10:00. Potem rdzeń seq_core metodą TDD (E1.1–E1.13).",
-    "updated_at": "2026-10-24T08:36:00+02:00"
+    "updated_at": "2026-10-24T09:03:00+02:00"
   },
   "epics": [
     {
@@ -208,6 +208,13 @@
       "updated": ""
     },
     {
+      "id": "E1.14",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Slave: powrót estymacji po skoku tempa ponad 50% (N16), note-off przy zaniku zegara (N17), skip-once per tor (N18.1)",
+      "updated": "2026-10-24"
+    },
+    {
       "id": "E2.1",
       "epic": "E2",
       "status": "do zrobienia",
@@ -254,6 +261,13 @@
       "epic": "E2",
       "status": "do zrobienia",
       "title": "Błąd fw 1.7: krok bez SHIFT w menu globalnym ustawia długość wszystkich torów (buttonHandler.c:901 przypisuje SEQ_CONFIG = 11 do trybu przycisków, czyli SELECT_MODE_LAST_STEP_ALL)",
+      "updated": "2026-10-24"
+    },
+    {
+      "id": "E2.8",
+      "epic": "E2",
+      "status": "do zrobienia",
+      "title": "Błędy USB MIDI out z fw 1.7: usb_flushMidi() wysyła 128 bajtów za buforem przy każdym zawinięciu i gubi dane przy zajętym endpoincie; usb_sendMidi() daje zły CIN dla system common",
       "updated": "2026-10-24"
     },
     {
@@ -509,6 +523,12 @@
       "status": "otwarte",
       "question": "Testy na sprzęcie H1–H13 wymagają Ciebie i LXR-02.",
       "assumption": "Przygotuję checklistę i obrazy .img do wgrania."
+    },
+    {
+      "id": "Q7",
+      "status": "otwarte",
+      "question": "Czy LXR jako slave (sync MIDI lub jack) ma wysyłać dalej Start, Stop i Continue na swoje MIDI out?",
+      "assumption": "Nie, jak w fw 1.7: wysyła je tylko jako master. Jeśli thru jest włączone, przekazuje to, co przychodzi."
     }
   ],
   "log": [
@@ -611,6 +631,26 @@
       "n": 20,
       "at": "2026-10-24 08:36",
       "text": "Faza 3/6: obaj pozostali piszący (rdzeń i integracja) mają już kod wszystkich swoich zadań i odtwarzają je od zera na świeżej kopii repo z check.sh po każdym zadaniu, żeby sprawdzić plan."
+    },
+    {
+      "n": 21,
+      "at": "2026-10-24 09:02",
+      "text": "Faza 3/6: sekcja rdzenia gotowa (E1.1–E1.13, 9708 linii). Każde zadanie autor odtworzył na kopii repo: nowy test najpierw nie przechodzi, po implementacji przechodzi, check.sh zielony, 0 ostrzeżeń, obraz bez zmian. Rdzeń zajmuje ok. 15 KB kodu i 6,9 KB RAM."
+    },
+    {
+      "n": 22,
+      "at": "2026-10-24 09:02",
+      "text": "Z uwag autora rdzenia: N16, czyli estymacja tempa slave'a nie wraca po skoku tempa ponad 50%, i N17, czyli nuty MIDI mogą zawisnąć przy zaniku zegara. Obie poprawki trafiają do nowego zadania E1.14, po E1.13."
+    },
+    {
+      "n": 23,
+      "at": "2026-10-24 09:02",
+      "text": "Faza 3/6 zakończona: sekcja integracji gotowa (E2.1–E2.6, 4893 linii); każde zadanie najpierw nie przechodzi swojej kontroli, potem przechodzi, 0 ostrzeżeń. Start fazy 4/6: agent składa trzy sekcje w jeden plan."
+    },
+    {
+      "n": 24,
+      "at": "2026-10-24 09:03",
+      "text": "Z uwag autora integracji: notatka N18 z domyślnymi rozstrzygnięciami, zadanie E2.8 (błędy USB MIDI out z fw 1.7) i pytanie Q7 do Ciebie: czy LXR jako slave ma wysyłać dalej Start/Stop/Continue (domyślnie nie, jak w fw 1.7)."
     }
   ]
 }
