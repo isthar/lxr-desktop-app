@@ -237,7 +237,8 @@ What this changes:
 They extend N2, N4, N5 and N7:
 
 1. `transport(ctx, seqc_transport_t)` replaces the `bool` in N5. Its values are STOP, START, CONTINUE,
-   ARM and REWIND, always reported in that order. START and CONTINUE come before any other callback of
+   ARM and REWIND. When one change reports several of them, the order is STOP, then REWIND, then ARM,
+   START or CONTINUE, as `seq_core.h` documents. START and CONTINUE come before any other callback of
    the first step, and N5's "running" means START or CONTINUE.
 2. The sync event types include `SEQC_EV_PULSE`, `SEQC_EV_RESET_ON` and `SEQC_EV_RESET_OFF`. The type
    names the source, so the core applies N4's gating by sync mode itself. `EXTI9_5` pushes

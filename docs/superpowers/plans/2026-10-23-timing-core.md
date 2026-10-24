@@ -1,0 +1,19264 @@
+# LICHOMAT Stage 1 (timing core, sync, bug fixes) Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Replace the sequencer's 24-pulse timing machine with `seq_core`, a pure-C timing core tested on the host, and its firmware glue, so that defects D1–D8 are fixed, the LXR-02 follows MIDI clock and the clock jack robustly, and the stage 1 tooling (branding, FLASH check, CPU meter, CI, review, hardware checklist, release notes) is in place, with a firmware that builds with zero warnings after every task.
+
+**Architecture:** `seq_core.c` is plain C11 without the HAL: it keeps the musical position as a `double` in ticks (96 per step) from an anchor, generates each step's events one step ahead into a sorted queue with a per-track choke, follows MIDI clock or the clock in jack in the slave modes, and reaches pattern data and outputs only through the `seqc_host_t` callbacks of `seq_core.h`. In the firmware only `seq_tick()` calls it: it applies a PRIMASK mailbox that the other contexts post to, drains the time-stamped DIN, USB and jack sync queues that the interrupt handlers fill (`seq_syncq`, and `seq_platform` with the DWT time base), runs `seqc_process()` and parses MIDI with a budget, while `sequencer.c` keeps the pattern and song data and the public `seq_*` API. The core and the CPU meter also build on the host, where `tests/` runs T1–T20 against a fake host, locally through `tools/check.sh` and in CI.
+
+**Tech Stack:** C11 on the STM32F765 (Cortex-M7 at 216 MHz, FPv5-D16 double FPU) with Arm GNU Toolchain 14.3.rel1; CMake 3.31 presets and Ninja; host tests built with Apple clang or GCC with `-Wall -Wextra -Werror`, UBSan (ASan in CI) and ctest; bash and Python 3 check scripts; Ruby for the CI dry run; GitHub Actions.
+
+---
+
+## File structure
+
+Every file this plan creates, changes or deletes, with its one responsibility and the tasks that touch it.
+Paths are relative to the repository root.
+
+**Timing core and its host tests**
+
+| File | Responsibility | Tasks |
+|---|---|---|
+| `Core/Inc/Soundengine/Sequencer/seq_core.h` (new) | Interface of the timing core: types, the `seqc_host_t` callbacks, commands, queries, and the rules of context, time, processing order, generation and firing | E1.1 (the API, with two rules added by the plan review), E1.14 (comments: N15, N16, N17, N18.1), E2.4 (execution-context comment) |
+| `Core/Src/Soundengine/Sequencer/seq_core.c` (new) | The timing core: clock, track counters, event generation and queue, choke, note-offs, clock outputs, slave sync, transport, recording phase, statistics | E1.1 (skeleton), E1.3–E1.12 |
+| `Core/Inc/Preset/SeqStepTypes.h` (new) | `Step` and `StepTiming` without the HAL | E1.1 |
+| `Core/Inc/Preset/SeqStep.h` | Includes `SeqStepTypes.h` instead of defining the two types; layout unchanged | E1.2 |
+| `tests/CMakeLists.txt` (new) | Host test project: one ctest test per id, and a 16-entry core for T19 | E1.1, E1.12, E2.1, E3.3 |
+| `tests/seqc_test.h` (new) | Test runner and asserts | E1.1 |
+| `tests/fake_host.h`, `tests/fake_host.c` (new) | Fake host: pattern data, song mode, the glue's rules, RNG, callback recorder | E1.1 |
+| `tests/test_harness.c` (new) | Self-test of the runner and the fake host (`harness`) | E1.1 |
+| `tests/test_layout.c` (new) | Layout of `Step`, `StepTiming` and `seqc_event_t` (`layout`) | E1.2 |
+| `tests/test_clock.c` (new) | Master clock accuracy and the internal transport (T1) | E1.3 |
+| `tests/test_tracks.c` (new) | Track counters, master wrap, pattern end (T10) | E1.4 |
+| `tests/test_generate.c` (new) | Grid, swing, shift, ratchets, probability (T2, T3, T4, T8) | E1.5 |
+| `tests/test_fire.c` (new) | Per-track choke, mutes, note-offs (T7, T9, T15) | E1.6 |
+| `tests/test_lookahead.c` (new) | Pattern change and edits before the boundary (T11, T12) | E1.7 |
+| `tests/test_clockout.c` (new) | MIDI clock out and clock out pulses (T5, T6) | E1.8 |
+| `tests/test_roll.c` (new) | Roll, recording phase, skip-once (T13, T14) | E1.9 |
+| `tests/test_slave.c` (new) | MIDI and jack slave, tempo estimate, dropout (T16, T18) | E1.10 |
+| `tests/test_transport.c` (new) | Start, Continue, Stop, the run gate, SPP, song mode (T17) | E1.11 |
+| `tests/test_overflow.c` (new) | Queue overflow, statistics, calls from callbacks (T19) | E1.12 |
+| `tests/fw17_adapter.h`, `tests/fw17_adapter.c` (new) | Plain-type interface to the fw 1.7 replica | E1.13 |
+| `tests/test_fw17.c` (new) | Equivalence with the fw 1.7 replica (T20) | E1.13 |
+| `tests/reference/fw17_replica.c` | Host replica of the fw 1.7 timing; `FW17_REPLICA_NO_MAIN` leaves out its report | E1.13 |
+| `tests/test_syncq.c` (new) | Sync queues and MIDI decoding (`syncq`) | E2.1 |
+| `tests/test_cpumeter.c` (new) | CPU meter (`cpumeter`) | E3.3 |
+
+**Firmware integration**
+
+| File | Responsibility | Tasks |
+|---|---|---|
+| `Core/Inc/Soundengine/Sequencer/seq_syncq.h`, `Core/Src/Soundengine/Sequencer/seq_syncq.c` (new) | SPSC sync queues, MIDI realtime and SPP decoding, stamp unwrap and merge, 64-bit counter extension; plain C, host-tested | E2.1 |
+| `Core/Inc/Soundengine/Sequencer/seq_platform.h`, `Core/Src/Soundengine/Sequencer/seq_platform.c` (new) | DWT time base, the three queue instances, the interrupt entry points, the merged drain | E2.1 |
+| `Core/Src/Soundengine/Sequencer/sequencer.c` | Glue around the core: mailbox, copies for other contexts, host callbacks, `seq_tick()`, per-voice MIDI notes | E2.2, E2.3, E2.4, E2.6 |
+| `Core/Inc/Soundengine/Sequencer/sequencer.h` | Public sequencer API: new `seq_recordNoteAtStep()`, `seq_setClockInPpq()`, `seq_sendVoiceNoteOn/Off()`; the pulse-machine prototypes go | E2.2, E2.3, E2.6 |
+| `Core/Src/Soundengine/Sequencer/clockSync.c`, `Core/Inc/Soundengine/Sequencer/clockSync.h` | Deleted: the fw 1.7 MIDI clock sync | E2.6 |
+| `Core/Src/Soundengine/MIDI/MidiVoiceControl.c` | No MIDI in `voiceControl_noteOn()`; Note Offs per voice | E2.3 |
+| `Core/Src/Soundengine/MIDI/MidiParser.c` | MIDI parser: echo per voice, realtime messages only routed, realtime bytes inside DIN messages | E2.3, E2.4 |
+| `Core/Src/Soundengine/MIDI/Uart.c`, `Core/Inc/Soundengine/MIDI/Uart.h` | DIN stamp and intercept in the USART3 receive interrupt, the parse budget; `midi_process_block` goes | E2.4, E2.6 |
+| `Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c` | USB stamp and intercept in `USBD_CDC_DataOut()`; a full message queue drops the new message | E2.4 |
+| `Core/Src/main.c` | Main loop without MIDI parsing; the LICHOMAT start-up screen | E2.4, E3.1 |
+| `Core/Src/Soundengine/Soundengine.c`, `Core/Inc/Soundengine/Soundengine.h` | `soundengine_process()` without MIDI parsing; the CPU meter hooks `soundengine_cpuBegin()` and `soundengine_cpuEnd()` | E2.4, E3.3 |
+| `Core/Src/stm32f7xx_it.c` | `TIM2_IRQHandler()` without MIDI parsing, with the CPU meter hooks | E2.4, E3.3 |
+| `Core/Src/Soundengine/TriggerOut.c`, `Core/Inc/Soundengine/TriggerOut.h` | `trigger_setClockPhase()` keeps the clock out jack on the step grid; clock in and reset jack interrupts push to the jack sync queue; dead timing code goes | E2.2, E2.5, E2.6 |
+| `Core/Src/Soundengine/MIDI/CortexParser.c` | Posts the clock in PPQ to the core | E2.5 |
+| `tools/fw_checks.sh` (new) | ELF and source checks that stand in for unit tests of the firmware glue | E2.2–E2.6 |
+
+**Build, tooling, branding and documents**
+
+| File | Responsibility | Tasks |
+|---|---|---|
+| `Core/CMakeLists.txt` | Firmware library lists (`lxr_sequencer`, `lxr_engine`, `LXR_ITCM_SOURCES`) and the start-up screen defines | E1.3, E2.1, E2.6, E3.1, E3.3 |
+| `CMakeLists.txt` | `LICHOMAT_NAME`, `project(VERSION 0.1)`, `LXR_BASE_VERSION`, the update file name | E3.1 |
+| `tools/check_image.py` (new) | Checks the update file: name, header, start-up screen strings | E3.1 |
+| `tools/check.sh` | Runs `check_image.py` and works from any directory | E3.1 |
+| `STM32F765VGTX_FLASH.ld` | `ASSERT` that the load images end inside FLASH | E3.2 |
+| `Core/Inc/Soundengine/cpuMeter.h`, `Core/Src/Soundengine/cpuMeter.c` (new) | CPU meter: block load, 1 s mean and peak, the nesting rule; plain C, host-tested | E3.3 |
+| `Core/Inc/menu/menu.h`, `Core/Inc/menu/menuPages.h`, `Core/Src/menu/menu.c` | The read-only CPU page, 3rd sub-page of the global menu | E3.3 |
+| `.github/workflows/build.yml` (new) | CI: host tests, firmware build, artifacts, memory summary | E3.4 |
+| `tools/ci_dry_run.rb` (new) | Checks the workflow and runs its steps locally | E3.4 |
+| `tools/env.sh` | Puts the repo-local tools on `PATH` in bash and zsh | E3.5 Steps 1–6, already done in commit `5911417` |
+| `docs/lichomat/HANDOFF.md` | The tool list of the handoff guide | E2.2, E3.4 (the E3.5 line is already done in `5911417`) |
+| `README.md` | LICHOMAT section, the new file names, the module table, the link to the release notes | E2.6, E3.5, E4.3 |
+| `docs/lichomat/reports/stage1-review.md` (new) | Stage 1 review: checklist, findings, result | E4.1 |
+| `docs/lichomat/reports/stage1-report.md` (new) | Stage 1 report: each deviation from the spec with the note or decision that allows it, and the intended changes against fw 1.7 | E4.1 |
+| `docs/lichomat/hardware-checklist.md` (new) | H1–H13 procedures and the run sheet for the owner | E4.2 |
+| `docs/lichomat/release-notes-v0.1.md` (new) | Draft of the v0.1 release text | E4.3 |
+
+Not committed: the scratch check scripts under `build/` (`build/e3-ldcheck/relink_small.sh` in E3.2,
+`build/e3-readme-check.sh` in E3.5, `build/e4-checklist-check.sh` in E4.2, `build/e4-notes-check.sh`
+in E4.3). E4.1 also changes the files its findings name, one commit per finding.
+`docs/lichomat/tracker.json` and the tracker page follow every commit, in commits of their own, as
+`docs/lichomat/HANDOFF.md` describes.
+
+## Task order and dependencies
+
+Run the tasks in this order. Every task ends with `tools/check.sh` exiting 0 with
+`== compiler warnings: 0`, so the firmware builds after each one. Within an epic each task builds on
+the one before it.
+
+1. **E3.2**: linker `ASSERT` that the image fits in FLASH; the `.bin` stays byte-identical. It
+   depends on nothing, so it runs first and checks every later link.
+2. **E1.1**: host test harness (runner, fake host, `tests/CMakeLists.txt`), the API headers
+   `seq_core.h` and `SeqStepTypes.h` verbatim, and a skeleton `seq_core.c`.
+3. **E1.2**: `Step` and `StepTiming` move into `SeqStepTypes.h`; the `.bin` stays byte-identical
+   (`layout`).
+4. **E1.3**: core structure, the internal master clock from an anchor (N1), the processing loop
+   with the N10 early exit, internal start, stop and rewind; `seq_core.c` joins `lxr_sequencer` (T1).
+5. **E1.4**: track counters, the master track and its wrap, `patternEnd()` (T10).
+6. **E1.5**: event generation in early and late parts, with ratchet, shift, swing and probability,
+   into the sorted queue (T2, T3, T4, T8).
+7. **E1.6**: firing rules: per-track choke, mutes at fire time, note-offs (T7, T9, T15).
+8. **E1.7**: early hits across a pattern change with `peekNextPattern()` (T11, T12).
+9. **E1.8**: MIDI clock out, tempo steps and clock out pulses (T5, T6).
+10. **E1.9**: roll, recording phase, skip-once and the same-tick rule (T13, T14).
+11. **E1.10**: MIDI clock and clock in jack slave: interpolation, tempo estimate, the N15 dropout
+    (T16, T18).
+12. **E1.11**: Start, Continue, Stop, the jack run gate and Song Position Pointer (T17).
+13. **E1.12**: queue overflow, statistics and calls from callbacks, with a 16-entry test core (T19).
+14. **E1.13**: equivalence with the fw 1.7 replica (T20). The core is complete.
+15. **E2.1**: `seq_syncq` (host-tested SPSC queues and MIDI decoding) and `seq_platform` (DWT time
+    base, queue instances), built but not linked yet (`syncq`). Needs all of E1.
+16. **E2.2**: `sequencer.c` becomes the glue: host callbacks, mailbox, copies, the new `seq_tick()`;
+    the pulse machine goes; `tools/fw_checks.sh`.
+17. **E2.3**: D4: one MIDI Note On per trigger, Note Offs per voice, the echo once.
+18. **E2.4**: D7 and D8: realtime messages and SPP stamped in the receive interrupts, MIDI parsed
+    only in `seq_tick()`.
+19. **E2.5**: clock in and reset jacks through the jack sync queue; the clock in PPQ goes to the core.
+20. **E2.6**: `clockSync` and the dead timing code go; `sequencer.c` leaves ITCM.
+21. **E3.1**: LICHOMAT name, version 0.1, start-up screen, `LXR_V2_LICHOMAT_0.1.img`, and
+    `tools/check_image.py` in `tools/check.sh`. It runs here and not first, because the expected
+    outputs of E1 and E2 show the fw 1.7 update file `LXR_V2_V1.7.img` and the fw 1.7 image size.
+22. **E3.3**: CPU meter (`cpuMeter.c`, host-tested), its hooks in both render paths, and the CPU
+    page. Needs E2: `seqc_stats()` in the firmware, `TIM2_IRQHandler()` as E2.4 left it, and the
+    `test_syncq` line of E2.1 in `tests/CMakeLists.txt`.
+23. **E3.4**: CI workflow (host tests and firmware build) and its local dry run. Needs E3.1 (the
+    update file check), E3.3 (`cpumeter`) and every host test file.
+24. **E3.5**: the README's LICHOMAT section and the new file names. Steps 1–6 (`tools/env.sh` for
+    zsh) are already done, in commit `5911417`: start at Step 7. Needs E2.6 (the module table row)
+    and E3.1–E3.4 (what the README describes).
+25. **E4.1**: multi-dimension review of all of stage 1; findings fixed test-first, one commit each.
+26. **E4.2**: hardware checklist H1–H13 and the two update files for the owner. Needs E3.1 and E3.3.
+27. **E4.3**: draft v0.1 release notes; nothing is pushed. Needs E4.1 (the accepted findings), E4.2
+    (the checks it cites) and E3.5 (the README section that links to it).
+
+Tracker tasks whose sections are written and reviewed on their own and inserted into this plan
+after its review (implementation notes, end of N17):
+- **E1.14** (`build/plan/40-E1.14.md`): N16 (the tempo estimate restarts after a tempo jump beyond
+  the ±50% band of the clock intervals), N17 (a slave dropout sends the pending note-offs) and N18.1
+  (one skip-once marker per track). It goes between items 14 and 15 above, after E1.13 and before
+  E2.1. E2 relies on it: the mailbox of E2.2 keeps one skip-once marker per track and passes each
+  to `seqc_skipOnce()`.
+- **E2.7** (`build/plan/41-E2.7.md`, fw 1.7: a step button without SHIFT in the global menu sets
+  every track length) and **E2.8** (`build/plan/42-E2.8.md`, the fw 1.7 USB MIDI out defects): their
+  sections give their place in this order.
+- N18.2, N18.3 and N18.4 are applied where they belong: E2.2 (`seq_cbTransport()`), E2.3
+  (`seq_triggerVoice()`) and E2.1 (`seqq_usbMessage()`).
+
+**Line endings, in every part.** 155 of the 157 files in `Core/` use CRLF; `tests/`, `tools/`,
+`docs/`, `.github/`, the CMake files and `README.md` use LF. A task that writes or edits a CRLF file
+normalises it before it builds, and `file <path>` must then say `with CRLF line terminators` (a
+mixed file says `with CRLF, LF line terminators`). E1 uses `perl -pi -e 's/\r?\n/\r\n/' <file>`;
+E2 a Python script that reads the whole file before it writes it; Part 3 the same `perl` line. All
+three give pure CRLF whatever the editor did to the inserted lines.
+
+---
+
+## Epic E1: timing core `seq_core` (tasks E1.1–E1.14)
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build the sequencer's new timing core `seq_core` test first, behind the final interface
+`seq_core.h`, so that the host tests T1–T20 of spec §13.1 pass and the firmware builds with zero
+warnings after every task.
+
+**Architecture:** One plain C11 file, `Core/Src/Soundengine/Sequencer/seq_core.c`, with no HAL, no
+interrupts and no allocation. It holds:
+- the musical clock in `double` ticks computed from an anchor (N1);
+- a sorted event queue (N2);
+- at each step boundary, the late part of step n and the early part of step n+1 (N3);
+- per-track choke, the slave interpolation clamped to the next clock (N9), and an early exit on
+  `nextDue` (N10).
+
+The mailbox stays in `sequencer.c` (N7, epic E2). The host tests in `tests/` run the core against a
+fake host (`tests/fake_host.c`) that implements every callback the way `sequencer.c` will in E2.
+
+**Tech Stack:** C11. CMake ≥ 3.21 and Ninja. The host tests build with Apple clang or GCC using
+`-Wall -Wextra -Werror` and UBSan, and run with ctest. The firmware builds with Arm GNU Toolchain
+14.3.rel1.
+
+**Authoritative documents:**
+- the spec, `docs/superpowers/specs/2026-10-23-timing-core-design.md`;
+- the implementation notes N1–N18, `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md`.
+  They win over the spec where the two differ. N12–N18 were added during planning:
+  - N12: the main-loop execution context;
+  - N13: the API decisions, already in `seq_core.h`;
+  - N14: SPP travels in the sync queues (E2);
+  - N15: the dropout threshold, implemented in E1.10;
+  - N16, N17 and N18.1: the restart of the tempo estimate after a large tempo jump, the note-offs at
+    a dropout and one skip-once marker per track, implemented in E1.14 (its section is inserted
+    after E1.13, see "Task order and dependencies");
+  - N18.2–N18.5: defaults for the glue, applied in E2.1–E2.3;
+- the interface (API phase of this plan), reproduced verbatim in Task E1.1;
+- `docs/lichomat/HANDOFF.md` for the tooling and the working rules.
+
+---
+
+### Conventions for every task of this epic
+
+- **Where and on what.** Run every command from the repository root, `/Users/tk/Code/lxr`, on branch
+  `timing-core`.
+- **The gate is `tools/check.sh`.** It runs:
+  - the host tests (it reconfigures `build/host-tests`, so new test files are picked up);
+  - the firmware release build;
+  - the memory summary;
+  - the warning count.
+
+  It is a bash script, so it works from zsh too. Every task ends with `tools/check.sh` printing
+  `== compiler warnings: 0` and exiting 0.
+- **Test binaries.** `tools/check.sh` builds them into `build/host-tests/`:
+  - `build/host-tests/test_clock` runs every test of the file;
+  - `build/host-tests/test_clock T1_start_at_next_process` runs one test. A prefix such as `T1`
+    runs that test id and every test named `T1_...`.
+- **Tools from `.toolchain/`.** `tools/env.sh` works in bash and in zsh since commit 5911417. Steps
+  that need CMake or the Arm tools directly run them as `bash -c 'source tools/env.sh && …'`, so they
+  also work in a fresh shell.
+- **Line endings.**
+  - CRLF: `seq_core.c`, `seq_core.h`, `SeqStepTypes.h` and `SeqStep.h`, like 155 of the 157 files
+    in `Core/`.
+  - LF: the CMake files and everything in `tests/`.
+  - After writing or editing a CRLF file, run `perl -pi -e 's/\r?\n/\r\n/' <file>`. It is
+    idempotent. `file <file>` must then report `with CRLF line terminators`.
+  - If an edit tool does not match text in a CRLF file, convert the file to LF with
+    `perl -pi -e 's/\r\n/\n/' <file>`, edit it, and convert it back.
+- **How changes to `seq_core.c` are given.** From E1.3 on, the file is a sequence of blocks separated
+  by the 80-character line `//------------------------------------------------------------------------------`.
+  Each block is a section banner, a type, a function, the constants or the state variables.
+  - **"Replace `seqc_x()` with:"** means: replace the doc comment and the body of that function,
+    everything between the separator line above it and the next separator line. Types work the same
+    way.
+  - **"Insert after `seqc_y()`:"** means: paste the given text right after the closing line of
+    `seqc_y()`, before the next separator. The text starts with its own separator line.
+  - Keep one blank line before every section banner (`// Event queue` and so on).
+  - The operations of a task are listed in file order. A tool replayed each list on the previous
+    version of the file and got exactly the next version (see "How this section was verified" at the
+    end of this epic).
+- **Commits.**
+  - One commit per task, made with `git add` and explicit paths. Never use `git add -A`, never push,
+    never touch `main`.
+  - The message ends with the trailer line `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+  - After each commit, update the tracker as `docs/lichomat/HANDOFF.md` describes ("Updating the
+    tracker page"): set task E1.x to `zrobione` and log the commit.
+- **What does not change in E1.** No existing firmware behaviour changes in this epic. `seq_core.c`
+  joins the firmware build in E1.3, but nothing calls it until E2, so `--gc-sections` drops it.
+  - The image stays 274 688 bytes, and ITCM stays at 15 000 bytes.
+  - From E1.3 on, the `.bin` is no longer byte-identical: the ITCM veneers are linked in a
+    different order.
+  - E1.2 is the only task that proves byte identity.
+
+### Files of this epic
+
+| File | Created / changed in | Responsibility |
+|---|---|---|
+| `Core/Inc/Soundengine/Sequencer/seq_core.h` | E1.1 (the API, final but for comments), E1.14 (comments) | The interface: types, callbacks (`seqc_host_t`), commands, queries, and the rules of execution context, time, processing order, generation and firing. |
+| `Core/Inc/Preset/SeqStepTypes.h` | E1.1 (verbatim API) | `Step` and `StepTiming` without the HAL, so `seq_core.h` builds on the host. |
+| `Core/Inc/Preset/SeqStep.h` | E1.2 | Includes `SeqStepTypes.h` instead of defining the two types; the layout is unchanged. |
+| `Core/Src/Soundengine/Sequencer/seq_core.c` | E1.1 skeleton, E1.3 core, then every task up to E1.12 | The timing core. |
+| `Core/CMakeLists.txt` | E1.3 | `seq_core.c` joins `lxr_sequencer`, compiled with `-Wextra` like on the host. |
+| `tests/CMakeLists.txt` | E1.1 (verbatim API), E1.12 | The host test project, with one ctest test per spec id. |
+| `tests/seqc_test.h` | E1.1 (verbatim API) | Test runner and asserts. |
+| `tests/fake_host.h`, `tests/fake_host.c` | E1.1 (the API; `cb_seekPosition()` as the plan review changed it) | The fake host. It holds the pattern data, song mode, the glue's erase and recording, an RNG and a callback recorder. |
+| `tests/test_harness.c` | E1.1 | Self-test of the runner and the fake host. |
+| `tests/test_layout.c` | E1.2 | `Step`/`StepTiming`/`seqc_event_t` layout. |
+| `tests/test_clock.c` … `tests/test_overflow.c` | E1.3–E1.12 | T1–T19, one file per task, as listed in `tests/CMakeLists.txt`. |
+| `tests/fw17_adapter.h`, `tests/fw17_adapter.c`, `tests/test_fw17.c` | E1.13 | T20 against the fw 1.7 replica. |
+| `tests/reference/fw17_replica.c` | E1.13 | `#ifndef FW17_REPLICA_NO_MAIN` around the report, so T20 can link the replica's logic. |
+
+### Interfaces with the other epics
+
+- **E2 (glue).**
+  - `seq_core.c` is already in `lxr_sequencer` (E1.3), so E2 must not add it again. E2 removes
+    `clockSync.c` from the same list.
+  - After E1.2, `sequencer.c` can include both `sequencer.h` (which includes `SeqStep.h`) and
+    `seq_core.h`.
+  - The glue calls `seqc_init(&host, SEQC_CPU_HZ)`.
+  - `tests/fake_host.c` is the reference for the callbacks. Its `cb_patternEnd()`,
+    `cb_peekNextPattern()` and `cb_seekPosition()` are the song-mode rules `sequencer.c` must follow,
+    and its `cb_transport()` resets the song pointer on `SEQC_TRANSPORT_REWIND`.
+  - The core ignores and counts calls made from inside a callback. `seq_tick()` must still skip its
+    mailbox, drain, process and parse steps when it is entered again from a kit autoload.
+  - Queries are for the `seq_tick()` context only (N7). The glue caches what the main loop needs:
+    step index, phase and BPM.
+  - N14: the sync-queue drain calls `seqc_songPosition()` at the SPP's place in stamp order. It
+    takes no stamp and acts at the core's current time, which is the stamp of the event drained
+    before it.
+- **E3 (CI).** The workflow should configure the host tests with
+  `-DSEQC_SANITIZE=address,undefined -DSEQC_REQUIRE_ALL_TESTS=ON`. All 13 test files exist after
+  E1.13, which shows that the second option works.
+- **E1.12** changes `tests/CMakeLists.txt` beyond the API version: `seqc_add_test()` gets a `CORE`
+  argument, and a second core library is built with a 16-entry queue for T19.
+
+### Decisions beyond the spec, the notes and the API
+
+These are deliberate. They are repeated where they apply and listed again in the open issues.
+
+1. **The N10 early exit stores the time.** When nothing is due, `seqc_process()` returns after the
+   `now < nextDue` compare. Before returning it also records `now`, because the header defines the
+   core's current time as "the time of the last seqc_process() call". Without it,
+   `seqc_position()` and `seqc_stepPhase()` would lag by up to 4 ticks.
+2. **The internal timeline is anchored at the first call.** It starts at the first `seqc_process()`
+   or `seqc_syncEvent()` call and runs from then on. A start re-anchors it at tick 0, so while the
+   transport runs the position *is* the timeline. That makes the MIDI clock re-phase exact.
+3. **The same-tick rule arrives with rolls (E1.9).** Without roll events the choke alone already
+   lets only the highest step fire at a tick. The rule is needed only for "a note wins over a roll
+   at the same step".
+4. **T19 uses a second build of the core.** 7 tracks cannot fill 256 entries: at most about 170
+   events are pending. The core therefore takes `SEQC_QUEUE_CAPACITY` (default `SEQC_QUEUE_SIZE`),
+   and `tests/CMakeLists.txt` builds a 16-entry copy for `test_overflow`.
+5. **`seqc_masterTrack()` after a song position** returns the master track of the seeked pattern,
+   not 0.
+6. **T12 already passes before E1.7.** The late part of a step is generated at its boundary from
+   E1.5 on. In E1.7, T11 is the failing test and T12 stays as the regression test for edits.
+7. **Interface functions arrive task by task.** Until its task, an interface function keeps a
+   documented no-op body. Each task lists which ones are still placeholders.
+8. **N15 extends `SEQC_DROPOUT_MS`.** The dropout time is
+   `max(SEQC_DROPOUT_MS, 2 × the expected clock interval)`. The interval comes from the estimate,
+   or from 20 BPM while there is none, which gives 1.5 s for the jack at 4 PPQ. The header still
+   describes the plain 500 ms; the note wins (`seqc_dropoutCycles()`, E1.10). E1.14 updates the
+   comment.
+9. **The early part fixes the timing of its occurrence (N3, spec §6.2).** The early part (at
+   boundary n−1) and the late part (at boundary n) each take the hits that are theirs from the swing
+   and the `StepTiming` read at their own boundary. If the shuffle, the shift or the ratchet changes
+   in between, a hit could fall into both parts, and play twice, or into neither, and be lost. So
+   the early part keeps the swing + shift and the hit count it used in the draw slot, and the late
+   part of the same (track, n, pattern, step) uses them if the early part queued a hit, or if the
+   timing read at boundary n would put a hit before that boundary, which has passed. Otherwise the
+   late part reads the timing at its boundary, so an edit made before the boundary applies to the
+   step, as spec §6.2 says. N3's "no event is ever generated twice" holds with this rule. Tests:
+   `T3_shuffle_change_after_the_early_part_*`, `T4_shift_edit_*` and
+   `T4_timing_edit_before_the_boundary_applies` (E1.5).
+10. **The order of the `transport()` calls is the header's**: STOP, then REWIND, then ARM, START or
+    CONTINUE (`seq_core.h`, "Transport"). N13.1 lists the values in the order of the enum and adds
+    "always reported in that order"; N13 makes the header the reference, and a REWIND reported after
+    a START would undo the start. T1, T16 and T17 assert the header's order. Review row R1.2 (E4.1)
+    checks N13 against the header. The wording of N13.1 is a question for the owner ("Questions for
+    the owner", Epic E1, item 14).
+11. **The jack PPQ outside analog sync.** `seqc_setAnalogPpq()` restarts the clock count and clears
+    the tempo estimate only in analog sync, where they depend on it; in the other modes it keeps the
+    value for later, and switching to analog sync clears both anyway. The firmware sends the PPQ with
+    the globals of every project load: without this rule a MIDI slave's tempo steps and its next local
+    start would move off the master's step grid (`T18_ppq_change_in_midi_sync_keeps_the_count`). The
+    glue posts the PPQ only when it changes (E2.2), which covers analog sync as well.
+
+---
+
+### Task E1.1: Host test harness (runner, fake host, CMake project)
+
+The host test project from the API phase:
+- the runner `seqc_test.h`;
+- the fake host, which implements every `seqc_host_t` callback the way `sequencer.c` will;
+- `tests/CMakeLists.txt`, with one ctest test per spec id.
+
+The fake host includes `seq_core.h`, and `seq_core.h` includes `Preset/SeqStepTypes.h`, so both
+headers are created here, verbatim. E1.2 then makes `SeqStep.h` use `SeqStepTypes.h`. Until then no
+firmware file includes the new header, so the duplicate typedefs never meet.
+
+"Verbatim" means as the API phase wrote them, plus three changes from the plan review (2026-10-24):
+- `seq_core.h`, "Generation": the early part of a step fixes the timing that the late part uses
+  (decision 9);
+- `seq_core.h`, `seqc_setAnalogPpq()`: it restarts the count and clears the estimate only in analog
+  sync (decision 11);
+- `tests/fake_host.c`, `cb_seekPosition()`: a song position inside the run of the pattern that is
+  active already requests no reload, as the song walk at a pattern end (`T17`, E1.11; the glue does
+  the same in E2.2).
+
+`tests/CMakeLists.txt` stops when `seq_core.c` is missing, and `tools/check.sh` runs the host tests
+as soon as `tests/CMakeLists.txt` exists. So this task also adds a skeleton `seq_core.c`: every
+interface function exists, and nothing plays. E1.3 replaces it.
+
+**Files:**
+- Create: `tests/seqc_test.h`, `tests/CMakeLists.txt`, `tests/fake_host.h`, `tests/fake_host.c` (LF, verbatim API)
+- Create: `Core/Inc/Preset/SeqStepTypes.h`, `Core/Inc/Soundengine/Sequencer/seq_core.h` (CRLF, verbatim API)
+- Create: `Core/Src/Soundengine/Sequencer/seq_core.c` (CRLF, skeleton)
+- Test: `tests/test_harness.c` (ctest id `harness`)
+
+- [ ] **Step 1: Create the test runner `tests/seqc_test.h`**
+
+```c
+/*
+ * seqc_test.h
+ *
+ * Minimal test runner for the host tests. One test file per executable:
+ *
+ *   TEST(T2_straight_grid) { ASSERT_EQ(n, 16); ASSERT_NEAR(bpm, 130.0, 1e-3); }
+ *   TEST_MAIN()
+ *
+ * "<exe>" runs every test, "<exe> T2" only the tests named T2 or T2_... (ctest
+ * passes the spec test id this way). The exit status is 1 if a test failed and 2
+ * if no test matches. An ASSERT_ that fails prints file:line and returns from the
+ * function it is in, so use it in a TEST body or in a void helper. ASSERT_EQ
+ * compares integers (and enums) as long long; use ASSERT_NEAR for floating point.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#ifndef SEQC_TEST_H_
+#define SEQC_TEST_H_
+
+#include <stdio.h>
+#include <string.h>
+
+#define SEQC_TEST_MAX 256
+typedef struct { const char *name; void (*fn)(void); } seqc_test_case_t;
+__attribute__((unused)) static seqc_test_case_t seqc_test_cases_[SEQC_TEST_MAX];
+__attribute__((unused)) static int seqc_test_count_;	/* registered, may exceed SEQC_TEST_MAX */
+__attribute__((unused)) static int seqc_test_failed_;	/* the running test has failed */
+
+/* each TEST registers itself before main() runs, in source order */
+#define TEST(name) \
+	static void seqc_tfn_##name(void); \
+	__attribute__((constructor)) static void seqc_treg_##name(void) { \
+		if (seqc_test_count_ < SEQC_TEST_MAX) \
+			seqc_test_cases_[seqc_test_count_] = (seqc_test_case_t){ #name, seqc_tfn_##name }; \
+		seqc_test_count_++; } \
+	static void seqc_tfn_##name(void)
+
+#define SEQC_TEST_FAIL_(...) do { printf("%s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); \
+	printf("\n"); seqc_test_failed_ = 1; return; } while (0)
+#define ASSERT_TRUE(c) do { if (!(c)) SEQC_TEST_FAIL_("ASSERT_TRUE(%s) failed", #c); } while (0)
+#define ASSERT_FALSE(c) do { if (c) SEQC_TEST_FAIL_("ASSERT_FALSE(%s) failed", #c); } while (0)
+#define ASSERT_EQ(a, b) do { long long a_ = (long long)(a), b_ = (long long)(b); if (a_ != b_) \
+	SEQC_TEST_FAIL_("ASSERT_EQ(%s, %s) failed: %lld != %lld", #a, #b, a_, b_); } while (0)
+#define ASSERT_NEAR(a, b, tol) do { double a_ = (double)(a), b_ = (double)(b), t_ = (double)(tol); \
+	if (!(a_ - b_ <= t_ && b_ - a_ <= t_)) SEQC_TEST_FAIL_("ASSERT_NEAR(%s, %s, %s) failed: %.9g vs %.9g", \
+	#a, #b, #tol, a_, b_); } while (0)
+
+/* a filter selects the test of that name and the tests named <filter>_... */
+__attribute__((unused)) static int seqc_test_matches_(const char *name, const char *filter)
+{
+	const size_t n = strlen(filter);
+	return strncmp(name, filter, n) == 0 && (name[n] == '\0' || name[n] == '_');
+}
+
+#define TEST_MAIN() \
+	int main(int argc, char **argv) \
+	{ \
+		const char *filter = argc > 1 ? argv[1] : NULL; \
+		int ran = 0, failed = 0; \
+		if (seqc_test_count_ > SEQC_TEST_MAX) { printf("more than %d tests\n", SEQC_TEST_MAX); return 2; } \
+		for (int i = 0; i < seqc_test_count_; i++) { \
+			if (filter && !seqc_test_matches_(seqc_test_cases_[i].name, filter)) continue; \
+			seqc_test_failed_ = 0; \
+			seqc_test_cases_[i].fn(); \
+			ran++; failed += seqc_test_failed_; \
+			printf("%s %s\n", seqc_test_failed_ ? "FAIL" : "PASS", seqc_test_cases_[i].name); \
+			fflush(stdout); \
+		} \
+		if (ran == 0) { printf("no test matches %s\n", filter ? filter : "(none)"); return 2; } \
+		printf("%d of %d tests passed\n", ran - failed, ran); \
+		return failed ? 1 : 0; \
+	}
+
+#endif /* SEQC_TEST_H_ */
+```
+
+- [ ] **Step 2: Create the host test project `tests/CMakeLists.txt`**
+
+```cmake
+# Host tests for the LICHOMAT sequencer timing core
+# (Core/Src/Soundengine/Sequencer/seq_core.c).
+#
+# A CMake project of its own, built with the host C compiler. It is not part of the
+# firmware build, which always uses the arm-none-eabi toolchain file:
+#
+#   cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug
+#   cmake --build build/host-tests
+#   ctest --test-dir build/host-tests --output-on-failure
+#
+# tools/check.sh and .github/workflows/build.yml run these steps.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+
+cmake_minimum_required(VERSION 3.21)
+project(lichomat_host_tests LANGUAGES C)
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+endif()
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+get_filename_component(LXR_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
+set(SEQC_CORE_SOURCE "${LXR_ROOT}/Core/Src/Soundengine/Sequencer/seq_core.c")
+
+# Sanitizers, as for -fsanitize=. CI uses address,undefined. The default leaves out
+# AddressSanitizer, because ASan binaries hang inside the macOS sandbox that Claude
+# Code runs commands in.
+set(SEQC_SANITIZE "undefined" CACHE STRING "Sanitizers for the host tests (e.g. address,undefined; empty = none)")
+set(SEQC_TEST_TIMEOUT 120 CACHE STRING "Time limit per test in seconds")
+option(SEQC_REQUIRE_ALL_TESTS "Fail if a test file listed below is missing" OFF)
+
+# Options for everything built here.
+add_library(seqc_options INTERFACE)
+target_compile_options(seqc_options INTERFACE -Wall -Wextra -Werror)
+if(SEQC_SANITIZE)
+    target_compile_options(seqc_options INTERFACE
+        -fsanitize=${SEQC_SANITIZE} -fno-sanitize-recover=all -fno-omit-frame-pointer)
+    target_link_options(seqc_options INTERFACE -fsanitize=${SEQC_SANITIZE})
+endif()
+if(NOT WIN32)
+    target_link_libraries(seqc_options INTERFACE m)
+endif()
+
+# The timing core, compiled from the firmware source. Only Core/Inc is on the
+# include path and no HAL or CMSIS directory is, so an include of main.h or of a HAL
+# header fails here. It gets the firmware's floating-point options
+# (lxr_board_config in ../CMakeLists.txt), so the tests run the same optimisation
+# model as the device; the tests themselves are built without them.
+#
+# An OBJECT library, as in the firmware build: as a static library, a core without
+# symbols (an early skeleton) makes macOS ranlib print a "warning:" that
+# tools/check.sh counts.
+if(NOT EXISTS "${SEQC_CORE_SOURCE}")
+    message(FATAL_ERROR "${SEQC_CORE_SOURCE} is missing: the host tests need the timing core")
+endif()
+add_library(seq_core OBJECT "${SEQC_CORE_SOURCE}")
+target_include_directories(seq_core PUBLIC "${LXR_ROOT}/Core/Inc")
+target_compile_options(seq_core PRIVATE -ffast-math -freciprocal-math)
+target_link_libraries(seq_core PUBLIC seqc_options)
+
+# The fake host (pattern data, song mode, recorder) and the runner header.
+add_library(seqc_fake_host OBJECT fake_host.c)
+target_include_directories(seqc_fake_host PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(seqc_fake_host PUBLIC seq_core)
+
+enable_testing()
+
+# seqc_add_test(<name> IDS <id>... [EXTRA <source>...])
+#
+# Builds <name>.c (plus the EXTRA sources) with the fake host into the executable
+# <name>, and registers one ctest test per id: ctest runs "<name> <id>", which
+# runs the tests named <id> and <id>_... (seqc_test.h). The ids are the test ids
+# of the spec (§13.1). Until a test file exists, its line here only prints a
+# note; with SEQC_REQUIRE_ALL_TESTS a missing file is an error.
+function(seqc_add_test name)
+    cmake_parse_arguments(ARG "" "" "IDS;EXTRA" ${ARGN})
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${name}.c")
+        if(SEQC_REQUIRE_ALL_TESTS)
+            message(FATAL_ERROR "tests/${name}.c is missing (${ARG_IDS})")
+        endif()
+        message(STATUS "host tests: tests/${name}.c not written yet (${ARG_IDS})")
+        return()
+    endif()
+    add_executable(${name} ${name}.c ${ARG_EXTRA})
+    # Both, directly: CMake links the objects of an OBJECT library only into
+    # targets that name it, not through another OBJECT library.
+    target_link_libraries(${name} PRIVATE seqc_fake_host seq_core)
+    foreach(id IN LISTS ARG_IDS)
+        add_test(NAME ${id} COMMAND ${name} ${id})
+        set_tests_properties(${id} PROPERTIES TIMEOUT ${SEQC_TEST_TIMEOUT})
+    endforeach()
+endfunction()
+
+# One file per area, in the order of the stage 1 tasks (tracker E1.x).
+seqc_add_test(test_harness   IDS harness)            # E1.1  runner, fake host, song walk
+seqc_add_test(test_layout    IDS layout)             # E1.2  Step and StepTiming layout
+seqc_add_test(test_clock     IDS T1)                 # E1.3  master clock accuracy
+seqc_add_test(test_tracks    IDS T10)                # E1.4  track counters, master wrap, pattern end
+seqc_add_test(test_generate  IDS T2 T3 T4 T8)        # E1.5  grid, swing, shift, ratchet, probability
+seqc_add_test(test_fire      IDS T7 T9 T15)          # E1.6  choke, mutes, note-off
+seqc_add_test(test_lookahead IDS T11 T12)            # E1.7  pattern change, edits before the boundary
+seqc_add_test(test_clockout  IDS T5 T6)              # E1.8  MIDI clock out, clock out pulses
+seqc_add_test(test_roll      IDS T13 T14)            # E1.9  roll, recording phase, skip-once
+seqc_add_test(test_slave     IDS T16 T18)            # E1.10 MIDI and jack slave, tempo estimate
+seqc_add_test(test_transport IDS T17)                # E1.11 Start, Continue, Stop, SPP, song mode
+seqc_add_test(test_overflow  IDS T19)                # E1.12 queue overflow, stats
+seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c)  # E1.13 fw 1.7 replica (reference/)
+```
+
+- [ ] **Step 3: Write the failing test `tests/test_harness.c`**
+
+It calls the fake host's callbacks directly, so it does not depend on the core. It checks:
+- the runner itself;
+- the defaults of `fake_reset()`;
+- the conversions, the timing setter and the random generator;
+- the master track rule (raw 0 loses to raw 8);
+- pattern mode, song mode, `SONG_LOOP` and the song-position walk of N6;
+- the recorder, and the recording of a roll hit at its own step.
+
+```c
+/*
+ * test_harness.c
+ *
+ * Self-test of the host test harness: the runner (seqc_test.h) and the fake
+ * host (fake_host.c), which implements the seqc_host_t callbacks the way
+ * sequencer.c will. The callbacks are called directly here, so these tests do
+ * not depend on the timing core.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+#include "seqc_test.h"
+
+static seqc_pat_t patternEnd(fake_host_t *h) { return h->host.patternEnd(h->host.ctx); }
+static bool peek(fake_host_t *h, uint8_t *p) { return h->host.peekNextPattern(h->host.ctx, p); }
+static uint32_t seek(fake_host_t *h, uint32_t absStep) { return h->host.seekPosition(h->host.ctx, absStep); }
+
+TEST(harness_runner)
+{
+	ASSERT_TRUE(1 + 1 == 2);
+	ASSERT_FALSE(0);
+	ASSERT_EQ(-3, -3);
+	ASSERT_EQ((uint64_t)1 << 40, (uint64_t)1 << 40);
+	ASSERT_NEAR(1.0, 1.0 + 1e-12, 1e-9);
+}
+
+TEST(harness_defaults)
+{
+	fake_host_t *h = fake_init();
+	ASSERT_TRUE(h->host.ctx == h);
+	ASSERT_EQ(h->steps[3][2][5].volume, 127);
+	ASSERT_EQ(h->steps[3][2][5].prob, 100);
+	ASSERT_EQ(h->steps[3][2][5].note, FAKE_DEFAULT_NOTE);
+	ASSERT_EQ(h->steps[3][2][5].param1Nr, FAKE_NO_AUTOMATION);
+	ASSERT_EQ(h->timing[3][2][5].shift, SEQC_SHIFT_CENTER);
+	ASSERT_EQ(h->length[63][6], 16);
+	ASSERT_EQ(h->song[0], 0);
+	ASSERT_EQ(h->song[1], FAKE_SONG_END);
+	ASSERT_EQ(h->songPos, FAKE_NO_SONG_POS);
+	ASSERT_FALSE(h->host.stepOn(h, 0, 0, 0));
+	fake_setStep(h, 0, 0, 63, true);
+	ASSERT_TRUE(h->host.stepOn(h, 0, 0, 63));
+	ASSERT_EQ(h->errors, 0);
+	(void)h->host.stepOn(h, 64, 0, 0);		/* out of range: counted */
+	ASSERT_EQ(h->errors, 1);
+}
+
+TEST(harness_conversions)
+{
+	ASSERT_EQ(fake_msToCycles(1.0), 216000);
+	ASSERT_NEAR(fake_cyclesToMs(216000), 1.0, 1e-12);
+	ASSERT_NEAR(fake_stepCycles(120.0), 216e6 * 0.125, 1e-6);
+	ASSERT_NEAR(fake_tickCycles(120.0) * 96.0, fake_stepCycles(120.0), 1e-6);
+	ASSERT_NEAR(fake_clockCycles(120.0) * 6.0, fake_stepCycles(120.0), 1e-6);
+}
+
+TEST(harness_timing_setter)
+{
+	fake_host_t *h = fake_init();
+	fake_setTiming(h, 1, 2, 3, 5, -7);
+	ASSERT_EQ(h->timing[1][2][3].flam, 5);
+	ASSERT_EQ(h->timing[1][2][3].shift, 0);
+	fake_setTiming(h, 1, 2, 3, 0, 7);
+	ASSERT_EQ(h->timing[1][2][3].shift, 14);
+	fake_setTiming(h, 1, 2, 3, 0, 8);		/* out of range: counted, not stored */
+	ASSERT_EQ(h->errors, 1);
+	ASSERT_EQ(h->timing[1][2][3].shift, 14);
+}
+
+TEST(harness_random)
+{
+	fake_host_t *h = fake_init();
+	uint32_t a[4], b[4];
+	for (int i = 0; i < 4; i++)
+		a[i] = h->host.random(h);
+	fake_seed(h, 1);
+	for (int i = 0; i < 4; i++)
+		b[i] = h->host.random(h);
+	for (int i = 0; i < 4; i++)
+		ASSERT_EQ(a[i], b[i]);
+	static const uint32_t script[] = { 49, 50 };
+	fake_scriptRandom(h, script, 2);
+	ASSERT_EQ(h->host.random(h), 49);
+	ASSERT_EQ(h->host.random(h), 50);
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 10);
+}
+
+TEST(harness_master_track)
+{
+	fake_host_t *h = fake_init();
+	ASSERT_EQ(fake_masterTrack(h, 0), 0);		/* all 16: the lowest track */
+	fake_setLength(h, 0, 3, 32);
+	ASSERT_EQ(fake_masterTrack(h, 0), 3);
+	for (uint8_t t = 0; t < 7; t++)
+		fake_setLength(h, 1, t, 0);
+	fake_setLength(h, 1, 5, 8);
+	ASSERT_EQ(fake_masterTrack(h, 1), 5);		/* raw 0 (16 steps) loses to raw 8 */
+	ASSERT_EQ(fake_effectiveLength(0), 16);
+	ASSERT_EQ(fake_effectiveLength(70), 64);
+}
+
+TEST(harness_pattern_mode)
+{
+	fake_host_t *h = fake_init();
+	uint8_t p = 0xAA;
+	ASSERT_FALSE(peek(h, &p));
+	ASSERT_EQ(p, 0);
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_SAME);
+	seqc_start();					/* running: no immediate switch */
+	fake_setNextPattern(h, 5);
+	ASSERT_EQ(h->activePattern, 0);
+	ASSERT_TRUE(peek(h, &p));
+	ASSERT_EQ(p, 5);
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_CHANGED);
+	ASSERT_EQ(h->activePattern, 5);
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_SAME);
+	fake_setNextPattern(h, 5);			/* reload the same pattern */
+	ASSERT_TRUE(peek(h, &p));
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_CHANGED);
+	seqc_stop();
+	fake_setNextPattern(h, 7);			/* stopped: switches at once */
+	ASSERT_EQ(h->activePattern, 7);
+	ASSERT_FALSE(h->reload);
+	ASSERT_EQ(h->patternChanges, 3);
+}
+
+TEST(harness_song_mode)
+{
+	fake_host_t *h = fake_init();
+	static const uint8_t song[] = { 1, 1, 2 };
+	fake_setSong(h, song, 3);
+	fake_setSongMode(h, true);
+	uint8_t p;
+	/* the first pattern end after a start moves the pointer from -1 to 0 */
+	ASSERT_TRUE(peek(h, &p));
+	ASSERT_EQ(p, 1);
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_CHANGED);
+	ASSERT_EQ(h->songPos, 0);
+	ASSERT_FALSE(peek(h, &p));			/* an identical entry: no restart */
+	ASSERT_EQ(p, 1);
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_SAME);
+	ASSERT_TRUE(peek(h, &p));
+	ASSERT_EQ(p, 2);
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_CHANGED);
+	ASSERT_FALSE(peek(h, &p));
+	ASSERT_EQ(p, SEQC_NO_PATTERN);			/* the song ends next */
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_STOP);
+	ASSERT_EQ(h->pendingPattern, 2);
+	ASSERT_EQ(h->activePattern, 2);
+	/* the core rewinds at a song end; the next start plays entry 0 again */
+	h->host.transport(h, SEQC_TRANSPORT_REWIND);
+	ASSERT_EQ(h->songPos, FAKE_NO_SONG_POS);
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_CHANGED);
+	ASSERT_EQ(h->activePattern, 1);
+	ASSERT_EQ(h->songPos, 0);
+}
+
+TEST(harness_song_loop)
+{
+	fake_host_t *h = fake_init();
+	static const uint8_t song[] = { 1, 2, FAKE_SONG_LOOP };
+	fake_setSong(h, song, 3);
+	fake_setSongMode(h, true);
+	uint8_t p;
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_CHANGED);	/* 1 */
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_CHANGED);	/* 2 */
+	ASSERT_TRUE(peek(h, &p));
+	ASSERT_EQ(p, 1);
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_CHANGED);	/* loops to 1 */
+	ASSERT_EQ(h->songPos, 0);
+	ASSERT_EQ(h->activePattern, 1);
+	/* a loop onto the same pattern keeps the indices running */
+	static const uint8_t song2[] = { 3, FAKE_SONG_LOOP };
+	fake_setSong(h, song2, 2);
+	h->songPos = FAKE_NO_SONG_POS;
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_CHANGED);	/* 3 */
+	ASSERT_FALSE(peek(h, &p));
+	ASSERT_EQ(p, 3);
+	ASSERT_EQ(patternEnd(h), SEQC_PAT_SAME);
+}
+
+TEST(harness_seek)
+{
+	fake_host_t *h = fake_init();
+	/* pattern mode: no side effects */
+	ASSERT_EQ(seek(h, 1234), 1234);
+	ASSERT_EQ(h->patternChanges, 0);
+	/* the song A A B LOOP with A = pattern 1 (16 steps), B = pattern 2 (8 steps) */
+	for (uint8_t t = 0; t < 7; t++)
+		fake_setLength(h, 2, t, 4);
+	fake_setLength(h, 2, 4, 8);
+	static const uint8_t song[] = { 1, 1, 2, FAKE_SONG_LOOP };
+	fake_setSong(h, song, 4);
+	fake_setSongMode(h, true);
+	ASSERT_EQ(seek(h, 0), 0);
+	ASSERT_EQ(h->songPos, 0);
+	ASSERT_EQ(h->activePattern, 1);
+	ASSERT_EQ(seek(h, 20), 20);			/* entry 1; the run began at 0 */
+	ASSERT_EQ(h->songPos, 1);
+	ASSERT_EQ(seek(h, 32), 0);			/* B */
+	ASSERT_EQ(h->songPos, 2);
+	ASSERT_EQ(h->activePattern, 2);
+	ASSERT_EQ(seek(h, 39), 7);
+	ASSERT_EQ(seek(h, 40), 0);			/* looped to entry 0 */
+	ASSERT_EQ(h->songPos, 0);
+	ASSERT_EQ(seek(h, 40 + 40 + 17), 17);		/* second loop, entry 1 */
+	ASSERT_EQ(h->songPos, 1);
+	/* past SONG_END: the last step of the last entry */
+	static const uint8_t song2[] = { 1, 2 };
+	fake_setSong(h, song2, 2);
+	ASSERT_EQ(seek(h, 300), 7);
+	ASSERT_EQ(h->songPos, 1);
+	ASSERT_EQ(h->activePattern, 2);
+	/* a loop that joins the same pattern keeps one run: A B A LOOP */
+	static const uint8_t song3[] = { 1, 2, 1, FAKE_SONG_LOOP };
+	fake_setSong(h, song3, 4);
+	ASSERT_EQ(seek(h, 24 + 3), 3);			/* the second A, its run began at 24 */
+	ASSERT_EQ(seek(h, 40 + 5), 16 + 5);		/* the first A after the loop joins it */
+	ASSERT_EQ(h->songPos, 0);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(harness_log)
+{
+	fake_host_t *h = fake_init();
+	h->host.tempoStep(h);
+	h->host.noteOff(h, 3);
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	h->host.clockOutPulse(h, 5);			/* counted, not logged */
+	ASSERT_EQ(h->logCount, 2);
+	ASSERT_EQ(h->calls[FAKE_CLOCK_PULSE], 1);
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_NOTE_OFF, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->track, 3);
+	ASSERT_EQ(pos, 2);
+	ASSERT_TRUE(fake_next(h, FAKE_NOTE_OFF, &pos) == NULL);
+	const seqc_event_t ev = { .tick = 96, .absStep = 1, .track = 2, .pattern = 0, .step = 1, .vel = 100, .note = 60 };
+	h->host.trigger(h, &ev);
+	const fake_rec_t *trig[4];
+	ASSERT_EQ(fake_triggers(h, 2, trig, 4), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 96);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 4), 0);
+	fake_printLog(h, 0, 99);
+	fake_clearLog(h);
+	ASSERT_EQ(h->logCount, 0);
+	ASSERT_EQ(h->calls[FAKE_TRIGGER], 1);		/* the counts keep running */
+}
+
+TEST(harness_record)
+{
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	fake_addNote(h, 0, 90, 61);			/* stopped: nothing */
+	ASSERT_EQ(h->mainSteps[0][0], 0);
+	const seqc_event_t ev = { .tick = 0, .absStep = 0, .track = 4, .pattern = 0, .step = 6,
+			.vel = SEQC_ROLL_VELOCITY, .note = 62, .flags = SEQC_EVF_ROLL };
+	seqc_start();
+	h->host.trigger(h, &ev);			/* a roll hit is recorded at its own step */
+	ASSERT_EQ(h->mainSteps[0][4], 1ull << 6);
+	ASSERT_EQ(h->steps[0][4][6].volume, SEQC_ROLL_VELOCITY | FAKE_STEP_ACTIVE_MASK);
+	ASSERT_EQ(h->steps[0][4][6].note, 62);
+	ASSERT_EQ(h->steps[0][4][6].prob, 100);
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 4: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: configuration stops because the core source is missing.
+```
+== host tests
+host test build FAILED
+-- Configuring incomplete, errors occurred!
+== firmware build (release)
+memory: ITCM 15000/16384 B (91.6%, free 1384)  ...  image 274688/1015808 B (27.0%)
+...
+== compiler warnings: 0
+exit 1
+```
+Run: `grep -A3 "CMake Error" build/check.log`
+
+Expected:
+```
+CMake Error at CMakeLists.txt:64 (message):
+
+  /Users/tk/Code/lxr/Core/Src/Soundengine/Sequencer/seq_core.c
+  is missing: the host tests need the timing core
+```
+
+- [ ] **Step 5: Create `Core/Inc/Preset/SeqStepTypes.h`**
+
+```c
+/*
+ * SeqStepTypes.h
+ *
+ * The step data types of the pattern format, moved out of SeqStep.h unchanged so
+ * that code without the HAL can use them: the sequencer timing core (seq_core)
+ * and its host tests. SeqStep.h includes this file.
+ *
+ * The layout is part of the pattern file format (PatV03) and must not change:
+ * - Step is stored raw, 7 bytes;
+ * - StepTiming is stored and copied as one byte, flam in bits 0-3 and shift in
+ *   bits 4-7.
+ *
+ * Created: 26.06.2012 16:46:31
+ *  Author: Julian
+ *
+ * Copyright (C) 2012-2026 Erica Synths
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * This file is part of the LXR firmware. It is licensed under the GNU General
+ * Public License version 3, with the additional permission and terms in
+ * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
+ */
+
+#ifndef SEQSTEPTYPES_H_
+#define SEQSTEPTYPES_H_
+
+#include <stdint.h>
+
+/** a copy of the step struct from the sequencer.h file from the cortex src
+used to load step data from sequencer and write it to the pattern preset*/
+typedef struct StepStruct
+{
+	//uint8_t  	active;		// bit 0: on/off
+	uint8_t 	volume;		// 0-127 volume -> 0x7f => lower 7 bit, upper bit => active <- active c an probably be removed
+	uint8_t  	prob;		//step probability 7 bit [0:100]
+	uint8_t		note;		// 7 bit
+
+	//parameter automation
+	uint8_t 	param1Nr;
+	uint8_t 	param1Val; //probably 7
+
+	uint8_t 	param2Nr;
+	uint8_t 	param2Val; //probably 7
+}Step;
+
+typedef struct StepTiming
+{
+	uint8_t flam:4; // [0:5] => off, x2, x3, x4, x6, x8
+	uint8_t shift:4; // [-7:7]
+}StepTiming;
+
+_Static_assert(sizeof(Step) == 7, "Step is stored raw in pattern files (7 bytes)");
+_Static_assert(sizeof(StepTiming) == 1, "StepTiming is stored and copied as one byte");
+
+#endif /* SEQSTEPTYPES_H_ */
+```
+
+- [ ] **Step 6: Create `Core/Inc/Soundengine/Sequencer/seq_core.h`**
+
+The functions, types and constants are final. Only comments change later: E1.14 brings them in
+line with N15–N18.1 (among them the per-track skip-once marker), and E2.4 Step 8 corrects the
+execution-context comment.
+
+```c
+/*
+ * seq_core.h
+ *
+ * Timing core of the LICHOMAT sequencer:
+ * - the musical clock, 96 ticks per step, and the clock outputs;
+ * - the per-track step counters and the pattern end of the master track;
+ * - the event generator, with one step of lookahead (swing, shift, ratchet,
+ *   probability, roll);
+ * - the event queue, the per-track choke and the note-off timing;
+ * - the sync inputs: MIDI clock and the clock in jack, with the tempo estimate,
+ *   the interpolation between clocks, the transport and the song position;
+ * - the recording phase and the skip-once marker.
+ *
+ * The core is plain C11. It has no HAL, CMSIS, menu, LED or preset code, no
+ * interrupts and no allocation, so it builds in the firmware and on the host
+ * (tests/). Pattern data, song mode and every output go through the callbacks in
+ * seqc_host_t: sequencer.c implements them in the firmware, tests/fake_host.c on
+ * the host.
+ *
+ * Design: docs/superpowers/specs/2026-10-23-timing-core-design.md (the spec) and
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N11;
+ * they win where the two differ).
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+
+#ifndef SEQ_CORE_H_
+#define SEQ_CORE_H_
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "Preset/SeqStepTypes.h"
+
+/*
+ * Execution context (spec 4.3, N7)
+ * --------------------------------
+ * The core has a single context. In the firmware only seq_tick() calls it, and on
+ * each call it:
+ *   1. applies the mailbox of sequencer.c: seqc_start(), seqc_stop(), seqc_rewind(),
+ *      seqc_setSyncMode(), seqc_setTempo(), seqc_setAnalogPpq();
+ *   2. drains the DIN, USB and jack sync queues, merged in stamp order, into
+ *      seqc_syncEvent();
+ *   3. calls seqc_process(seqp_now());
+ *   4. parses MIDI input, which can call seqc_songPosition() and seqc_skipOnce().
+ * Other contexts (main loop, interrupts) never call a seqc_ function. They post
+ * to the mailbox in sequencer.c instead.
+ *
+ * Callbacks run only from inside the core's own functions. Inside a callback,
+ * the query functions and seqc_skipOnce() may be called. Any other seqc_ call
+ * made from a callback is ignored and counted in seqc_stats_t.reentries. This
+ * covers, for example, a kit autoload in patternEnd() that runs
+ * soundengine_process() and so seq_tick() again.
+ *
+ * Time
+ * ----
+ * seqc_time_t counts CPU cycles from any origin. The firmware uses DWT->CYCCNT
+ * extended to 64 bits, at SEQC_CPU_HZ. Times passed to the core must not go
+ * backwards; a time earlier than the last one counts as the last one. A command
+ * without a time argument acts at the core's current time, which is the time of
+ * the last seqc_process() or seqc_syncEvent() call. Before the first such call
+ * there is no current time, and a command acts at the time of that first call.
+ *
+ * Position
+ * --------
+ * The musical position is a double in ticks (N1): step n begins at tick n * 96,
+ * and step 0 at tick 0. The absolute step n counts from 0 at a start from the
+ * beginning, or from the SPP value after a song position.
+ * - Internal sync: the position is computed from an anchor,
+ *   pos = anchorPos + (now - anchorTime) * ticksPerCycle. The anchor moves only on
+ *   a start or a tempo change, so the position does not drift.
+ * - Slave modes: the position follows the incoming clocks (spec 5, N9).
+ *
+ * Processing order (spec 6.2, 6.3; N3, N4)
+ * ----------------------------------------
+ * seqc_process(now) moves the position to its value at now. It then handles the
+ * earliest item due at or before it, again and again, until nothing due is left.
+ * The items are:
+ * - on the transport timeline: step boundaries, queued events, note-offs and
+ *   clock out pulses;
+ * - on the free-running timeline (internal sync only): MIDI clocks and tempo
+ *   steps.
+ * At equal ticks the order is tempoStep(), the step boundary, noteOff(),
+ * trigger(), clockOutPulse(), midiClockOut(). A due item is never dropped: after
+ * a jump in a slave mode, the late items are handled in chronological order.
+ *
+ * At the boundary of step n the core:
+ *   1. advances the absolute step to n and every track index by one. An index
+ *      wraps to 0 at the track length (raw 0 means 16) or at 64;
+ *   2. calls patternEnd() if the master track wrapped:
+ *      - on SEQC_PAT_CHANGED, all track indices restart at 0;
+ *      - on SEQC_PAT_STOP, the transport stops and rewinds, and steps 3 to 6
+ *        are skipped;
+ *   3. calls stepBoundary(n);
+ *   4. queues the roll events of step n;
+ *   5. generates the late part of step n: its hits at or after tick n * 96;
+ *   6. generates the early part of step n+1: its hits before tick (n+1) * 96,
+ *      which come from a negative shift. If the master track wraps at n+1, the
+ *      pattern and indices come from peekNextPattern().
+ * The master track is the track of the active pattern with the largest raw length,
+ * the lowest track number on a tie, as in fw 1.7 seq_getLongestTrack(). A raw 0
+ * (16 steps) therefore loses to any non-zero length. The master track wraps when
+ * ((index + 1) & 0x3f) == 0 or index + 1 >= its length.
+ *
+ * After a start from the beginning, every track index and the absolute step are
+ * -1. At the first boundary, -1 + 1 = 0 counts as a wrap of the master track, so
+ * patternEnd() is called at step 0 (N4). In song mode this moves the song pointer
+ * from -1 to entry 0, as in fw 1.7. After a song position, the first boundary
+ * does not advance anything (the counters are already set) and does not call
+ * patternEnd(); steps 3 to 6 run as usual.
+ *
+ * Generation (spec 6.1)
+ * ---------------------
+ * For track t at absolute step n, the core reads the active pattern p and the
+ * track step s.
+ * - The step plays only if its main-step bit is set (stepOn()) and the
+ *   probability draw r = 1 + random() % 100 is at most Step.prob.
+ * - r is drawn once per (t, n), together with (p, s). If (p, s) differs between
+ *   the early and the late part, a new draw is made.
+ * - The early part keeps the swing and the StepTiming it used. The late part of
+ *   the same (t, n, p, s) takes them instead of the values read at boundary n if
+ *   the early part queued a hit, or if the values read now would put a hit before
+ *   tick n * 96. So a change of the shuffle or of the step's timing between the
+ *   two boundaries plays no hit twice and loses none; otherwise an edit made
+ *   before boundary n applies to step n.
+ * - All hits of a step play together or not at all.
+ * - StepTiming.flam 0..5 gives k = 1, 2, 3, 4, 6 or 8 hits; any other value
+ *   gives 1. Hit j (0..k-1) is at
+ *       n * 96 + swing + shift + j * 96 / k
+ *   where:
+ *   - shift = (StepTiming.shift - 7) * 12 for 0..14, and 15 counts as 0;
+ *   - swing = round(shuffle() * 64 / 127) on odd n, otherwise 0.
+ * - Hits before tick 0 of a start, or before the first boundary after a song
+ *   position, are never generated.
+ * - Each event carries a copy of its step's data, so it still plays correctly
+ *   after a pattern switch (D5).
+ *
+ * Firing (spec 6.4, N2)
+ * ---------------------
+ * - Mutes: an event of a muted track is dropped when it fires, without side
+ *   effects. Roll events are exempt; they play on muted tracks, as in fw 1.7.
+ * - Choke per track:
+ *   - firing an event of (t, n) removes every queued event of track t with a
+ *     lower absolute step;
+ *   - of several events of one track due at the same tick, only the one with the
+ *     highest n fires;
+ *   - at the same n as well, only one fires, and a note event wins over a roll
+ *     event.
+ * - Queue order (N2): tick ascending, then absolute step descending, then note
+ *   events before roll events, then track ascending. So events of different
+ *   tracks at the same tick fire in track order.
+ * - Note-off: noteOff() comes 4 ticks after the trigger. If a track triggers again
+ *   while its note-off is still pending, the core calls noteOff() right before the
+ *   new trigger(). Stopping and rewinding send all pending note-offs at once.
+ */
+
+//------------------------------------------------------------------------------
+// Musical time
+//------------------------------------------------------------------------------
+#define SEQC_TICKS_PER_STEP         96u   /**< 384 PPQN; one step is a 16th note */
+#define SEQC_TICKS_PER_BEAT        384u   /**< one quarter note */
+#define SEQC_TICKS_PER_MIDI_CLOCK   16u   /**< 24 MIDI clocks per quarter note */
+#define SEQC_TICKS_PER_PULSE         4u   /**< 96 PPQN grid of the clock out jack */
+#define SEQC_PULSES_PER_STEP        24u
+#define SEQC_MIDI_CLOCKS_PER_STEP    6u
+#define SEQC_NOTE_OFF_TICKS          4u   /**< MIDI Note Off one pulse after the trigger */
+
+//------------------------------------------------------------------------------
+// Pattern data, sizes as in sequencer.h
+//------------------------------------------------------------------------------
+#define SEQC_NUM_TRACKS              7u
+#define SEQC_NUM_STEPS              64u   /**< a track index wraps at 64 at the latest */
+#define SEQC_NUM_PATTERNS           64u
+#define SEQC_DEFAULT_LENGTH         16u   /**< length of a track whose raw length is 0 */
+#define SEQC_SHIFT_CENTER            7u   /**< StepTiming.shift: 0..14 = -7..+7, 15 = 0 */
+#define SEQC_SHIFT_UNIT_TICKS       12u   /**< +-7 units = +-84 ticks = +-7/8 step */
+#define SEQC_MAX_SHIFT_TICKS        84u
+#define SEQC_MAX_SHUFFLE           127u   /**< shuffle() range, PAR_SHUFFLE */
+#define SEQC_MAX_SWING_TICKS        64u   /**< swing at shuffle 127: 2/3 of a step */
+#define SEQC_ROLL_VELOCITY         100u   /**< velocity of roll events, ROLL_VOLUME in sequencer.h */
+
+#define SEQC_NO_STEP              0xFFu   /**< seqc_trackStep() before the first step (fw 1.7: index -1) */
+#define SEQC_NO_PATTERN           0xFFu   /**< peekNextPattern(): the song ends at the next pattern end */
+
+//------------------------------------------------------------------------------
+// Event queue
+//------------------------------------------------------------------------------
+#define SEQC_QUEUE_SIZE            256u   /**< events; 256 x 24 B = 6 KB (N2) */
+
+//------------------------------------------------------------------------------
+// Tempo and sync
+//------------------------------------------------------------------------------
+#define SEQC_CPU_HZ          216000000u   /**< cycles per second of the firmware time base (DWT->CYCCNT) */
+#define SEQC_DEFAULT_BPM          120.0f  /**< tempo after seqc_init() */
+#define SEQC_MASTER_BPM_MIN         1.0f  /**< seqc_setTempo() clamps to this range */
+#define SEQC_MASTER_BPM_MAX       300.0f
+#define SEQC_SLAVE_BPM_MIN         20.0f  /**< the slave tempo estimate is clamped to this range */
+#define SEQC_SLAVE_BPM_MAX        300.0f
+#define SEQC_TEMPO_WINDOW           24u   /**< clock intervals averaged: MIDI clock, jack at 24 PPQ */
+#define SEQC_TEMPO_WINDOW_4PPQ       4u   /**< clock intervals averaged: jack at 4 PPQ */
+#define SEQC_TEMPO_OUTLIER_PCT      50u   /**< an interval off the estimate by more than this is left out */
+#define SEQC_DROPOUT_MS            500u   /**< no clock for this long: the estimate is cleared */
+
+//------------------------------------------------------------------------------
+// Types
+//------------------------------------------------------------------------------
+/** CPU cycles since an arbitrary origin, monotonic (the firmware: DWT->CYCCNT
+ * extended to 64 bits) */
+typedef uint64_t seqc_time_t;
+
+/** musical position in ticks: step n begins at tick n * 96 */
+typedef int64_t seqc_tick_t;
+
+/** sync mode, the same values as seq_setExtSync() and seq_getExtSync() */
+typedef enum
+{
+	SEQC_SYNC_INTERNAL = 0,		/**< master: the core's own tempo */
+	SEQC_SYNC_ANALOG   = 1,		/**< slave to the clock in jack (seqc_setAnalogPpq()) */
+	SEQC_SYNC_MIDI     = 2,		/**< slave to MIDI clock, DIN and USB */
+} seqc_sync_t;
+
+/** sync input events for seqc_syncEvent(). The MIDI events come from DIN and
+ * USB, the PULSE and RESET events from the clock in jack. The table shows the
+ * sync modes in which each one is accepted; in any other mode it is ignored and
+ * counted in seqc_stats_t.syncIgnored (N4). */
+typedef enum
+{
+	SEQC_EV_CLOCK = 0,	/**< MIDI Timing Clock, F8. Mode MIDI */
+	SEQC_EV_START,		/**< MIDI Start, FA. Modes ANALOG and MIDI */
+	SEQC_EV_CONTINUE,	/**< MIDI Continue, FB. Modes ANALOG and MIDI */
+	SEQC_EV_STOP,		/**< MIDI Stop, FC. Modes ANALOG and MIDI */
+	SEQC_EV_PULSE,		/**< clock in jack pulse. Mode ANALOG */
+	SEQC_EV_RESET_ON,	/**< clock jack reset input became active. Mode ANALOG */
+	SEQC_EV_RESET_OFF,	/**< clock jack reset input released. Mode ANALOG */
+} seqc_sync_ev_t;
+/* An event that does nothing in the current transport state is also counted as
+ * ignored: a Continue while armed or running, a Stop while stopped, a reset
+ * release while not stopped. */
+
+/** transport state, see seqc_state() */
+typedef enum
+{
+	SEQC_STOPPED = 0,	/**< nothing plays, the position is held */
+	SEQC_ARMED,		/**< waiting for a clock to start (slave modes) */
+	SEQC_RUNNING,		/**< playing */
+} seqc_state_t;
+
+/** what changed, passed to the transport() callback */
+typedef enum
+{
+	SEQC_TRANSPORT_STOP = 0,	/**< playback stopped (it was running or armed); the position is kept */
+	SEQC_TRANSPORT_START,		/**< playback starts now, at step 0 */
+	SEQC_TRANSPORT_CONTINUE,	/**< playback resumes now, at the kept or SPP position */
+	SEQC_TRANSPORT_ARM,		/**< armed: playback starts with a later clock */
+	SEQC_TRANSPORT_REWIND,		/**< the position went back to the start (before step 0) */
+} seqc_transport_t;
+
+/** result of the patternEnd() callback */
+typedef enum
+{
+	SEQC_PAT_SAME = 0,	/**< the same pattern continues; the track indices keep running */
+	SEQC_PAT_CHANGED,	/**< a pattern was activated or reloaded; all track indices restart at 0 */
+	SEQC_PAT_STOP,		/**< the song ended; the transport stops */
+} seqc_pat_t;
+
+/** seqc_event_t.flags */
+#define SEQC_EVF_ROLL	0x01u	/**< a roll hit (spec 6.6), not a step hit */
+
+/** One queued note event. It is self-contained: it plays the same way after a
+ * pattern switch or an edit of its step (D5). 24 bytes (N2). */
+typedef struct seqc_event
+{
+	seqc_tick_t	tick;		/**< when it fires, in ticks */
+	uint32_t	absStep;	/**< n, the absolute step it belongs to */
+	uint8_t		track;		/**< 0..6 */
+	uint8_t		pattern;	/**< pattern the step was read from */
+	uint8_t		step;		/**< track step s, 0..63 */
+	uint8_t		hit;		/**< ratchet hit j, 0 = the step's first hit; 0 for a roll */
+	uint8_t		vel;		/**< Step.volume & 0x7f, or SEQC_ROLL_VELOCITY for a roll */
+	uint8_t		note;		/**< Step.note */
+	uint8_t		flags;		/**< SEQC_EVF_* */
+	uint8_t		reserved;	/**< 0 */
+	uint8_t		p1Nr;		/**< copy of the step's p-locks: Step.param1Nr */
+	uint8_t		p1Val;		/**< Step.param1Val */
+	uint8_t		p2Nr;		/**< Step.param2Nr */
+	uint8_t		p2Val;		/**< Step.param2Val */
+} seqc_event_t;
+
+_Static_assert(sizeof(seqc_event_t) == 24, "seqc_event_t is 24 bytes (N2)");
+
+/** counters for the CPU page and the tests, see seqc_stats() */
+typedef struct seqc_stats
+{
+	uint16_t queueDepth;		/**< events queued now */
+	uint16_t queueMax;		/**< largest queue depth since seqc_init() or seqc_resetStats() */
+	uint32_t queueOverflow;		/**< events rejected because the queue was full */
+	uint32_t chokeDrops;		/**< queued events removed by the choke or the same-tick rule */
+	uint32_t muteDrops;		/**< events dropped when they fired because their track was muted */
+	uint32_t skipDrops;		/**< step occurrences not played because of seqc_skipOnce() */
+	uint32_t syncIgnored;		/**< sync events and song positions that did nothing (seqc_sync_ev_t) */
+	uint32_t intervalsExcluded;	/**< clock intervals left out of the tempo estimate (outliers) */
+	uint32_t dropouts;		/**< slave clock dropouts (SEQC_DROPOUT_MS without a clock) */
+	uint32_t reentries;		/**< calls ignored because they came from inside a callback */
+} seqc_stats_t;
+
+/** The host: pattern data, pattern sequencing and outputs (N5). Every pointer
+ * must be set. ctx is passed back to each callback unchanged. */
+typedef struct seqc_host
+{
+	void *ctx;
+
+	/* -- pattern data, read only -- */
+	/** true if the main-step bit of the step is set (seq_intIsMainStepActive) */
+	bool		(*stepOn)(void *ctx, uint8_t pattern, uint8_t track, uint8_t step);
+	/** the step's data: volume, prob, note and p-locks. Never NULL. It is read
+	 * when the step's events are generated, and copied into them */
+	const Step	*(*step)(void *ctx, uint8_t pattern, uint8_t track, uint8_t step);
+	/** the step's ratchet (flam) and shift */
+	StepTiming	(*timing)(void *ctx, uint8_t pattern, uint8_t track, uint8_t step);
+	/** the raw length as stored in seq_patternSet.length. 0 means 16, and above 64
+	 * the track wraps at 64 */
+	uint8_t		(*trackLength)(void *ctx, uint8_t pattern, uint8_t track);
+	/** PAR_SHUFFLE, 0..127; read at every step boundary. Larger values count as 127 */
+	uint8_t		(*shuffle)(void *ctx);
+	/** true if the track is muted; read when one of its events fires */
+	bool		(*muted)(void *ctx, uint8_t track);
+	/** 0 = no roll; otherwise the roll period in steps (16, 8, 4, 2 or 1).
+	 * Read at every step boundary. The one-shot roll stays in seq_setRoll() */
+	uint8_t		(*rollRate)(void *ctx, uint8_t track);
+
+	/* -- pattern sequencing: song mode and pending patterns stay in sequencer.c -- */
+	/** the pattern that plays now (seq_activePattern) */
+	uint8_t		(*activePattern)(void *ctx);
+	/** Called at the step boundary where the master track wraps, after the
+	 * indices advanced, so the master track is at 0. It commits the next
+	 * pattern (song mode, or a pending pattern) with the side effects of
+	 * seq_setPendingPatternActive(): backup buffer, kit autoload, Program Change,
+	 * LEDs, all notes off. When the same pattern continues it still refreshes the
+	 * UI. Returns:
+	 * - SEQC_PAT_CHANGED if a pattern was activated or reloaded;
+	 * - SEQC_PAT_SAME if the same pattern continues;
+	 * - SEQC_PAT_STOP at a song end. */
+	seqc_pat_t	(*patternEnd)(void *ctx);
+	/** What patternEnd() will do at the next pattern end, without side effects.
+	 * Sets *pattern to the pattern that will play next, or to SEQC_NO_PATTERN if
+	 * the song ends there. Returns true if the track indices will restart at 0
+	 * (patternEnd() will return SEQC_PAT_CHANGED). Called at a boundary when the
+	 * master track wraps at the next one, to generate the early hits of the next
+	 * pattern's first step. */
+	bool		(*peekNextPattern)(void *ctx, uint8_t *pattern);
+	/** Song position (N6), called while stopped or armed. Puts the song where
+	 * absolute step absStep lies, and returns the number of steps since the run
+	 * of the pattern that plays there started. The core then sets each track
+	 * index to steps mod length.
+	 * - Pattern mode: returns absStep, with no side effects.
+	 * - Song mode:
+	 *   - walks the song from entry 0; each entry lasts the master length of its
+	 *     pattern, and consecutive identical entries form one run;
+	 *   - SONG_LOOP wraps the walk to entry 0;
+	 *   - past SONG_END, the position is the last step of the last entry;
+	 *   - activates the entry's pattern with the normal pattern-change side
+	 *     effects and sets the song pointer to that entry. */
+	uint32_t	(*seekPosition)(void *ctx, uint32_t absStep);
+
+	/* -- outputs -- */
+	/** An event fires. The glue applies the event's p-locks, triggers the voice
+	 * and sends exactly one MIDI Note On (D4, D5): on the track's channel, with
+	 * ev->vel, and with the PAR_MIDI_NOTE1+t override applied */
+	void		(*trigger)(void *ctx, const seqc_event_t *ev);
+	/** MIDI Note Off for the track's last note */
+	void		(*noteOff)(void *ctx, uint8_t track);
+	/** Step boundary n, after the counters advanced and after patternEnd(), and
+	 * before step n is generated: LEDs, follow-bar, chase light, erase and the MTC
+	 * check. A step erased here does not play. It is not called at a song end */
+	void		(*stepBoundary)(void *ctx, uint32_t absStep);
+	/** Every step of the tempo, also while stopped (N8). It drives the tempo blink
+	 * (led_blinkHandler()).
+	 * - Internal sync: every 96 ticks of the free-running timeline; while
+	 *   running, at each step boundary.
+	 * - Slave modes: on every clock that begins a step of the clock count. */
+	void		(*tempoStep)(void *ctx);
+	/** Internal sync only: send one MIDI clock (F8). Called every 16 ticks of the
+	 * free-running timeline, also while stopped. A start re-phases it: the first
+	 * clock after transport(START) is at step 0 (N8) */
+	void		(*midiClockOut)(void *ctx);
+	/** While running, every 4 ticks of the position: one pulse of the clock out
+	 * jack. pulseInStep is 0..23, and 0 at the step boundary. It is straight
+	 * whatever the swing */
+	void		(*clockOutPulse)(void *ctx, uint8_t pulseInStep);
+	/** A transport change, see "Transport" at seqc_start(). The glue sends MIDI
+	 * Start/Stop, calls trigger_reset(), resets the song pointer on REWIND and
+	 * mirrors the state for seq_isRunning() */
+	void		(*transport)(void *ctx, seqc_transport_t change);
+	/** A random number for the probability draw, 1 + random() % 100. It is
+	 * called once per generated step occurrence (track, absolute step) whose
+	 * main-step bit is set, and again only if that step changed (see Generation) */
+	uint32_t	(*random)(void *ctx);
+} seqc_host_t;
+
+//------------------------------------------------------------------------------
+// Setup
+//------------------------------------------------------------------------------
+/** Reset the core and start it with this host. The host table is copied. The
+ * core starts stopped and rewound, in internal sync at SEQC_DEFAULT_BPM, with the
+ * analog PPQ at 4, an empty queue and zeroed stats. cyclesPerSecond is the rate
+ * of seqc_time_t: SEQC_CPU_HZ in the firmware and in the host tests. No callback
+ * is called. */
+void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond);
+//------------------------------------------------------------------------------
+/** Set the sync mode (seq_setExtSync()). The transport state and the position
+ * are kept, and the slave tempo estimate and the clock count are cleared.
+ * - Internal to slave: the position continues from where it is, and the next
+ *   clock adds one clock's worth of ticks.
+ * - Slave to internal: the position continues at the master tempo. An armed
+ *   transport starts at once (transport START or CONTINUE). */
+void seqc_setSyncMode(seqc_sync_t mode);
+//------------------------------------------------------------------------------
+/** Set the master tempo in BPM, clamped to SEQC_MASTER_BPM_MIN..MAX. The
+ * transport position and the free-running timeline are re-anchored at the core's
+ * current time, so both stay continuous. In a slave mode the value is kept for
+ * internal sync, and is the first estimate when there is no measured tempo yet. */
+void seqc_setTempo(float bpm);
+//------------------------------------------------------------------------------
+/** Set the PPQ of the clock in jack, 4 or 24 (PAR_PRESCALER_CLOCK_IN). Any other
+ * value counts as 4.
+ * - 4 PPQ: one pulse is 96 ticks and one step, and 4 intervals are averaged.
+ * - 24 PPQ: one pulse is 16 ticks, 6 pulses make a step, and 24 intervals are
+ *   averaged.
+ * The change applies from the next pulse. In analog sync the tempo estimate is
+ * cleared and the clock count restarts, also when the value is the same. In the
+ * other modes the value is only kept for analog sync: the MIDI clock count and
+ * the estimate stay. */
+void seqc_setAnalogPpq(uint8_t ppq);
+
+//------------------------------------------------------------------------------
+// Transport (spec 5, N4)
+//------------------------------------------------------------------------------
+/*
+ * Here a clock is a MIDI clock in MIDI sync and a jack pulse in analog sync.
+ *
+ * Each change is reported with the transport() callback, in this order: STOP,
+ * then REWIND, then ARM, START or CONTINUE. REWIND is reported only when the
+ * position was not at the start already. START and CONTINUE come before every
+ * other callback of the step that begins playback, so the glue's MIDI Start and
+ * trigger_reset(1) precede its first note, clock out pulse and MIDI clock.
+ *
+ * Local commands (the mailbox in sequencer.c):
+ * - seqc_start() is a local start; it always starts from the beginning.
+ *   - From stopped: rewind if the position is not at the start (REWIND).
+ *   - Internal sync: start at once (START). Step 0 is at the time of the next
+ *     seqc_process() call, which handles it. MIDI clock out is re-phased, so its
+ *     next clock is at step 0.
+ *   - Slave modes: arm (ARM). Playback starts at step 0 (START) with the next
+ *     clock that begins a step of the clock count: clock count % clocksPerStep
+ *     == 0, counted before that clock. clocksPerStep is 6 for MIDI and for the
+ *     jack at 24 PPQ, and 1 for the jack at 4 PPQ. The count runs all the time,
+ *     and is reset by SEQC_EV_START, a song position and SEQC_EV_RESET_ON, so a
+ *     local start lands on the master's 16th grid, as fw 1.7 sync_clockCnt did.
+ *   - Ignored while armed or running.
+ * - seqc_stop() stops and keeps the position (STOP). The queue is kept for a
+ *   later continue, and pending note-offs are sent now. Ignored while stopped.
+ * - seqc_rewind(), while stopped or armed: back to the start (REWIND, only if the
+ *   position was not at the start). The queue, the pending note-offs, the
+ *   probability draws and the skip-once marker are cleared. Ignored while
+ *   running.
+ *   - The local stop button is seqc_stop() then seqc_rewind(), as fw 1.7
+ *     seq_resetPosition() plus seq_setRunning(0).
+ *   - sequencer.c also rewinds after a pattern switch while stopped, as fw 1.7
+ *     seq_setStepIndexToStart() did.
+ *
+ * Sync events (seqc_syncEvent()):
+ * - SEQC_EV_START: stop if running or armed (STOP), rewind (REWIND), reset the
+ *   clock count, arm (ARM). The next clock starts step 0 (START).
+ * - SEQC_EV_CONTINUE, while stopped: arm (ARM). The next clock resumes playback
+ *   (CONTINUE) one clock after the position of the last clock, which was kept
+ *   at the stop or set by a song position. At the start position it starts
+ *   step 0 instead (START). Ignored while armed or running.
+ * - SEQC_EV_STOP: like seqc_stop().
+ * - SEQC_EV_RESET_ON: stop if running or armed (STOP), rewind (REWIND), reset the
+ *   clock count. In fw 1.7 the reset input is a run gate, not a reset pulse (N4).
+ * - SEQC_EV_RESET_OFF, while stopped: like seqc_start() in a slave mode. Playback
+ *   starts at step 0 with the next pulse that begins a step.
+ *
+ * A song position (seqc_songPosition()) is accepted in the slave modes, while
+ * stopped or armed. It seeks at once (seekPosition()), so a kit autoload in song
+ * mode happens at the locate, not at the Continue, and it resets the clock count.
+ * A Continue then resumes there.
+ *
+ * Slave position (spec 5, N9):
+ * - While stopped, clocks only feed the clock count, the tempo estimate and
+ *   tempoStep(); the position holds.
+ * - While running, each clock sets a target: the position of the last clock plus
+ *   one clock (16 ticks for MIDI and for the jack at 24 PPQ, 96 for the jack at
+ *   4 PPQ). If the position is behind the target, it jumps there, and everything
+ *   due in between is handled in order.
+ * - Between clocks, the position advances at the estimated tempo. It is clamped
+ *   to the next target, so it never runs ahead of the incoming clock, and it
+ *   never goes back.
+ * - The estimate is the mean of the last SEQC_TEMPO_WINDOW intervals
+ *   (SEQC_TEMPO_WINDOW_4PPQ for the jack at 4 PPQ). Intervals more than
+ *   SEQC_TEMPO_OUTLIER_PCT off the estimate are left out, and the estimate is
+ *   clamped to SEQC_SLAVE_BPM_MIN..MAX. Without a measured interval, the last
+ *   known tempo is used.
+ * - After SEQC_DROPOUT_MS without a clock, the estimate is cleared and the
+ *   position holds. The next clock resumes playback, and its interval is not
+ *   used for the estimate.
+ */
+/** local start, see Transport */
+void seqc_start(void);
+//------------------------------------------------------------------------------
+/** stop and keep the position, see Transport */
+void seqc_stop(void);
+//------------------------------------------------------------------------------
+/** go back to the start while stopped or armed, see Transport */
+void seqc_rewind(void);
+//------------------------------------------------------------------------------
+/** A timestamped sync event, from the sync queues of seq_platform (spec 7.2).
+ * Everything due before the stamp is processed first, so callbacks can run from
+ * here; then the event is applied at the stamp.
+ * - The caller unwraps the stamp to 64 bits; a stamp later than seqp_now()
+ *   counts as now (spec 4.4).
+ * - A stamp earlier than the core's current time is handled at the current time,
+ *   since the core never goes back. Its own value is still used for the tempo
+ *   estimate and as the anchor of the interpolation.
+ * - The caller applies the RX filter (MIDI_FILTER_SYSTEM). The sync-mode gating
+ *   is applied here, see seqc_sync_ev_t. */
+void seqc_syncEvent(seqc_sync_ev_t ev, seqc_time_t stamp);
+//------------------------------------------------------------------------------
+/** MIDI Song Position Pointer, in 16ths (0..16383); one 16th is one step. It is
+ * accepted in the slave modes while stopped or armed. It seeks at once:
+ * - the absolute step becomes sixteenths, so swing parity follows the master;
+ * - the track indices come from seekPosition() (N6);
+ * - the last clock position is set to sixteenths * 96 minus one clock, so the
+ *   next clock plays that step;
+ * - the queue is cleared and the clock count reset.
+ * While running, or in internal sync, it is ignored and counted in
+ * seqc_stats_t.syncIgnored (the MIDI spec only expects SPP while stopped). */
+void seqc_songPosition(uint16_t sixteenths);
+
+//------------------------------------------------------------------------------
+// Processing
+//------------------------------------------------------------------------------
+/** Advance to now and handle everything due up to there, see Processing order.
+ * When nothing is due it returns after one 64-bit compare (N10). */
+void seqc_process(seqc_time_t now);
+
+//------------------------------------------------------------------------------
+// Recording (spec 6.7)
+//------------------------------------------------------------------------------
+/** D6: the next occurrence of step on track does not play. seq_addNote() calls
+ * this when it moves a recorded note forward to the next step while running.
+ * - The marker belongs to the active pattern at the time of the call.
+ * - Hits of that occurrence that are already queued (early hits from a negative
+ *   shift) are removed at once.
+ * - At the track's next step boundary, if the track arrives at (pattern, step),
+ *   the occurrence is not generated. The marker is cleared at that boundary
+ *   whether or not it matched.
+ * - A new call replaces the marker. Ignored while stopped, or with track >= 7 or
+ *   step >= 64. It may be called from a callback. */
+void seqc_skipOnce(uint8_t track, uint8_t step);
+
+//------------------------------------------------------------------------------
+// Queries. Pure reads, allowed at any time in the core's context, also inside
+// callbacks; there they show the state being processed.
+//------------------------------------------------------------------------------
+/** The track's step index 0..63 (replaces seq_stepIndex[]). SEQC_NO_STEP before
+ * the first step after a start, or for track >= 7 */
+uint8_t seqc_trackStep(uint8_t track);
+//------------------------------------------------------------------------------
+/** The absolute step n of the current step; -1 before the first step after a
+ * start. After a song position it is the SPP value. */
+int32_t seqc_absStep(void);
+//------------------------------------------------------------------------------
+/** The master track chosen at the last step boundary (0 before the first) */
+uint8_t seqc_masterTrack(void);
+//------------------------------------------------------------------------------
+/** The musical position in ticks: its value at the core's current time, or,
+ * inside a callback, the tick of the item being handled. At the start (before
+ * step 0) it is 0 in internal sync, and minus one clock in the slave modes, so
+ * that the next clock brings it to 0. The free-running timeline is not shown
+ * here. */
+double seqc_position(void);
+//------------------------------------------------------------------------------
+/** Recording phase, 0..1, of the current step n at the current position.
+ * seq_getElapsedStepTimePercent() returns it x 100, and seq_addNote() moves a
+ * note to the next step at 0.5 or more (spec 6.7).
+ * - 0 at the step boundary n * 96.
+ * - 0.5 at n * 96 + (96 + swing) / 2, where swing = round(shuffle * 64 / 127)
+ *   whatever the parity of n. That is halfway between the swung grid times of
+ *   steps n and n+1, so the 0.5 rule picks the nearer step, also with shuffle.
+ * - Linear in between, and on towards 1 at the next boundary.
+ * - With shuffle 0 it is (pos - n * 96) / 96.
+ * - 0 while stopped or armed, and before the first step. */
+float seqc_stepPhase(void);
+//------------------------------------------------------------------------------
+/** The tempo in BPM: the master tempo in internal sync, the estimate in the
+ * slave modes, or the last known tempo while there is no estimate. sequencer.c
+ * rounds it for seq_getBpm() and lfo_recalcSync() (N9). */
+float seqc_currentBpm(void);
+//------------------------------------------------------------------------------
+/** stopped, armed or running */
+seqc_state_t seqc_state(void);
+//------------------------------------------------------------------------------
+/** true while armed or running: the fw 1.7 meaning of seq_isRunning() (N7) */
+bool seqc_isRunning(void);
+//------------------------------------------------------------------------------
+/** copy the counters into out */
+void seqc_stats(seqc_stats_t *out);
+//------------------------------------------------------------------------------
+/** reset queueMax and every counter to 0; queueDepth stays live */
+void seqc_resetStats(void);
+
+#endif /* SEQ_CORE_H_ */
+```
+
+- [ ] **Step 7: Create the skeleton `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+```c
+/*
+ * seq_core.c
+ *
+ * Timing core of the LICHOMAT sequencer, see seq_core.h.
+ *
+ * This is the skeleton of task E1.1: every function of the interface exists,
+ * so the host test harness builds and links, but nothing plays yet. The
+ * tasks E1.3 to E1.12 replace it with the timing core.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+
+#include "Soundengine/Sequencer/seq_core.h"
+
+#include <string.h>
+
+static seqc_state_t seqc_skeletonState;
+
+void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
+{
+	(void)host;
+	(void)cyclesPerSecond;
+	seqc_skeletonState = SEQC_STOPPED;
+}
+void seqc_setSyncMode(seqc_sync_t mode) { (void)mode; }
+void seqc_setTempo(float bpm) { (void)bpm; }
+void seqc_setAnalogPpq(uint8_t ppq) { (void)ppq; }
+void seqc_start(void) { seqc_skeletonState = SEQC_RUNNING; }
+void seqc_stop(void) { seqc_skeletonState = SEQC_STOPPED; }
+void seqc_rewind(void) {}
+void seqc_syncEvent(seqc_sync_ev_t ev, seqc_time_t stamp) { (void)ev; (void)stamp; }
+void seqc_songPosition(uint16_t sixteenths) { (void)sixteenths; }
+void seqc_process(seqc_time_t now) { (void)now; }
+void seqc_skipOnce(uint8_t track, uint8_t step) { (void)track; (void)step; }
+uint8_t seqc_trackStep(uint8_t track) { (void)track; return SEQC_NO_STEP; }
+int32_t seqc_absStep(void) { return -1; }
+uint8_t seqc_masterTrack(void) { return 0; }
+double seqc_position(void) { return 0.0; }
+float seqc_stepPhase(void) { return 0.0f; }
+float seqc_currentBpm(void) { return SEQC_DEFAULT_BPM; }
+seqc_state_t seqc_state(void) { return seqc_skeletonState; }
+bool seqc_isRunning(void) { return seqc_skeletonState != SEQC_STOPPED; }
+void seqc_stats(seqc_stats_t *out) { memset(out, 0, sizeof *out); }
+void seqc_resetStats(void) {}
+```
+
+- [ ] **Step 8: Convert the three Core files to CRLF**
+
+Run:
+```bash
+perl -pi -e 's/\r?\n/\r\n/' Core/Inc/Preset/SeqStepTypes.h Core/Inc/Soundengine/Sequencer/seq_core.h Core/Src/Soundengine/Sequencer/seq_core.c
+file Core/Inc/Preset/SeqStepTypes.h Core/Inc/Soundengine/Sequencer/seq_core.h Core/Src/Soundengine/Sequencer/seq_core.c
+```
+Expected: each of the three lines ends with `with CRLF line terminators`.
+
+- [ ] **Step 9: Create the fake host header `tests/fake_host.h`**
+
+```c
+/*
+ * fake_host.h
+ *
+ * Fake host for the seq_core host tests. It implements every seqc_host_t callback
+ * the way sequencer.c will:
+ * - the pattern data in plain arrays (64 patterns x 7 tracks x 64 steps), with the
+ *   track lengths, shuffle, mutes and roll rates;
+ * - pattern sequencing and song mode with the fw 1.7 rules of
+ *   seq_determineNextPattern(), seq_setPendingPatternActive() and
+ *   seq_setNextPattern(): active and pending pattern, the reload flag, the song
+ *   list with SONG_END and SONG_LOOP;
+ * - the song position walk of seekPosition() (N6);
+ * - the glue's erase at the step boundary and its recording (seq_addNote(), and
+ *   roll notes at their own step);
+ * - a seeded random generator, which can also play a script;
+ * - a recorder that logs the output and sequencing callbacks with the host time
+ *   and the core's tick, and counts every callback.
+ *
+ * Usage:
+ *   fake_host_t *h = fake_init();          // reset + seqc_init(), at the start of each test
+ *   fake_setStep(h, 0, 0, 4, true);        // pattern 0, track 0, step 4 on
+ *   fake_process(h, 0);                    // the core's time starts at 0
+ *   seqc_start();                          // step 0 at the next seqc_process(), 0.1 ms
+ *   fake_runUntil(h, fake_msToCycles(600.0), fake_msToCycles(0.1));
+ *   ASSERT_EQ(fake_count(h, FAKE_TRIGGER), 1);   // step 4 at 120 BPM: 500.1 ms
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#ifndef FAKE_HOST_H_
+#define FAKE_HOST_H_
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include "Soundengine/Sequencer/seq_core.h"
+
+/* sizes and markers, the same values as sequencer.h */
+#define FAKE_NUM_PATTERNS	64	/* NUM_PATTERN, MAX_PATTERN */
+#define FAKE_NUM_TRACKS		7	/* NUM_TRACKS */
+#define FAKE_NUM_STEPS		64	/* NUM_STEPS */
+#define FAKE_SONG_LENGTH	64	/* MAX_SONG_LENGTH */
+#define FAKE_SONG_END		64	/* SONG_END = MAX_PATTERN */
+#define FAKE_SONG_LOOP		65	/* SONG_LOOP = SONG_END + 1 */
+#define FAKE_DEFAULT_NOTE	60	/* SEQ_DEFAULT_NOTE */
+#define FAKE_NO_AUTOMATION	0xFF	/* NO_AUTOMATION, MidiMessages.h */
+#define FAKE_STEP_ACTIVE_MASK	0x80	/* STEP_ACTIVE_MASK */
+#define FAKE_NO_SONG_POS	0xFF	/* seq_songPositionPointer before the first entry (-1) */
+
+#define FAKE_LOG_SIZE		65536	/* log entries; later ones are only counted */
+
+//------------------------------------------------------------------------------
+// Time: the firmware time base, SEQC_CPU_HZ = 216 MHz
+//------------------------------------------------------------------------------
+static inline seqc_time_t fake_msToCycles(double ms) { return (seqc_time_t)(ms * (SEQC_CPU_HZ / 1000.0) + 0.5); }
+static inline double fake_cyclesToMs(seqc_time_t cycles) { return (double)cycles / (SEQC_CPU_HZ / 1000.0); }
+/** cycles of one step (a 16th) at bpm */
+static inline double fake_stepCycles(double bpm) { return SEQC_CPU_HZ * 60.0 / (bpm * 4.0); }
+/** cycles of one tick (1/96 step) at bpm */
+static inline double fake_tickCycles(double bpm) { return SEQC_CPU_HZ * 60.0 / (bpm * SEQC_TICKS_PER_BEAT); }
+/** cycles between two MIDI clocks (24 per quarter note) at bpm */
+static inline double fake_clockCycles(double bpm) { return SEQC_CPU_HZ * 60.0 / (bpm * 24.0); }
+
+//------------------------------------------------------------------------------
+// Recorder
+//------------------------------------------------------------------------------
+/** callbacks that are logged */
+typedef enum
+{
+	FAKE_TRIGGER = 0,	/**< trigger(): ev */
+	FAKE_NOTE_OFF,		/**< noteOff(): track */
+	FAKE_STEP_BOUNDARY,	/**< stepBoundary(): arg = absStep */
+	FAKE_TEMPO_STEP,	/**< tempoStep() */
+	FAKE_MIDI_CLOCK,	/**< midiClockOut() */
+	FAKE_CLOCK_PULSE,	/**< clockOutPulse(): value = pulseInStep */
+	FAKE_TRANSPORT,		/**< transport(): value = seqc_transport_t */
+	FAKE_PATTERN_END,	/**< patternEnd(): value = seqc_pat_t, pattern = active pattern after it */
+	FAKE_PEEK,		/**< peekNextPattern(): pattern = *pattern, flag = result */
+	FAKE_SEEK,		/**< seekPosition(): arg = absStep, result = steps, pattern = active pattern after it */
+	FAKE_NUM_KINDS
+} fake_kind_t;
+
+/** callbacks that are only counted (pattern reads) */
+typedef enum
+{
+	FAKE_READ_STEP_ON = 0,
+	FAKE_READ_STEP,
+	FAKE_READ_TIMING,
+	FAKE_READ_LENGTH,
+	FAKE_READ_SHUFFLE,
+	FAKE_READ_MUTED,
+	FAKE_READ_ROLL_RATE,
+	FAKE_READ_ACTIVE_PATTERN,
+	FAKE_READ_RANDOM,
+	FAKE_NUM_READS
+} fake_read_t;
+
+#define FAKE_LOG_BIT(kind)	(1u << (kind))
+#define FAKE_LOG_ALL		((1u << FAKE_NUM_KINDS) - 1u)
+/** everything but the per-pulse and per-clock outputs, for long runs */
+#define FAKE_LOG_NO_CLOCKS	(FAKE_LOG_ALL & ~(FAKE_LOG_BIT(FAKE_CLOCK_PULSE) | FAKE_LOG_BIT(FAKE_MIDI_CLOCK)))
+
+/** one logged callback */
+typedef struct fake_rec
+{
+	fake_kind_t	kind;
+	seqc_time_t	time;		/**< host time of the core call it came from (fake_host_t.now) */
+	double		tick;		/**< seqc_position() during the callback */
+	int32_t		absStep;	/**< seqc_absStep() during the callback */
+	uint8_t		track;		/**< NOTE_OFF */
+	uint8_t		value;		/**< CLOCK_PULSE, TRANSPORT, PATTERN_END: see fake_kind_t */
+	uint8_t		pattern;	/**< PATTERN_END, PEEK, SEEK */
+	bool		flag;		/**< PEEK */
+	uint32_t	arg;		/**< STEP_BOUNDARY, SEEK */
+	uint32_t	result;		/**< SEEK */
+	seqc_event_t	ev;		/**< TRIGGER */
+} fake_rec_t;
+
+//------------------------------------------------------------------------------
+// The fake host. Tests may read and write every field.
+//------------------------------------------------------------------------------
+typedef struct fake_host
+{
+	seqc_host_t	host;		/**< the callback table, ctx = this host */
+	seqc_time_t	now;		/**< host time of the current core call, set by fake_process() and fake_sync() */
+
+	/* pattern data (seq_patternSet) */
+	Step		steps[FAKE_NUM_PATTERNS][FAKE_NUM_TRACKS][FAKE_NUM_STEPS];
+	StepTiming	timing[FAKE_NUM_PATTERNS][FAKE_NUM_TRACKS][FAKE_NUM_STEPS];
+	uint64_t	mainSteps[FAKE_NUM_PATTERNS][FAKE_NUM_TRACKS];	/**< bit s = main step s is on */
+	uint8_t		length[FAKE_NUM_PATTERNS][FAKE_NUM_TRACKS];	/**< raw: 0 means 16 */
+	uint8_t		shuffle;					/**< PAR_SHUFFLE 0..127 */
+	bool		muted[FAKE_NUM_TRACKS];
+	uint8_t		rollRate[FAKE_NUM_TRACKS];			/**< what rollRate() returns: 0, or 16/8/4/2/1 */
+
+	/* pattern sequencing (sequencer.c) */
+	uint8_t		activePattern;			/**< seq_activePattern */
+	uint8_t		pendingPattern;			/**< seq_pendingPattern */
+	bool		reload;				/**< seq_loadPendigFlag */
+	bool		songMode;			/**< seq_songModeEnabled */
+	uint8_t		song[FAKE_SONG_LENGTH];		/**< the active song: patterns, FAKE_SONG_END, FAKE_SONG_LOOP */
+	uint8_t		songPos;			/**< seq_songPositionPointer, FAKE_NO_SONG_POS before the first entry */
+	uint32_t	patternChanges;			/**< activations with the pattern-change side effects */
+
+	/* glue behaviour */
+	bool		recordActive;			/**< seq_recordActive */
+	bool		eraseActive;			/**< seq_eraseActive */
+	uint8_t		activeTrack;			/**< frontParser_activeTrack: the track erase works on */
+	void		(*onStepBoundary)(struct fake_host *h, uint32_t absStep);	/**< test hook, after the erase */
+	void		(*onTrigger)(struct fake_host *h, const seqc_event_t *ev);	/**< test hook, after logging */
+
+	/* random(): a 64-bit LCG, or a script that is played first */
+	uint64_t	rngState;
+	const uint32_t	*rngScript;
+	size_t		rngScriptLen;
+	size_t		rngScriptPos;
+
+	/* recorder */
+	uint32_t	logMask;			/**< FAKE_LOG_BIT()s of the kinds that are logged */
+	size_t		logCount;			/**< entries in log */
+	uint32_t	logLost;			/**< entries not stored because the log was full */
+	uint32_t	calls[FAKE_NUM_KINDS];		/**< every call, logged or not */
+	uint32_t	reads[FAKE_NUM_READS];
+	uint32_t	errors;				/**< callbacks with an argument out of range */
+	char		lastError[160];
+	fake_rec_t	log[FAKE_LOG_SIZE];
+} fake_host_t;
+
+//------------------------------------------------------------------------------
+// Setup
+//------------------------------------------------------------------------------
+/** reset the fake host to its defaults and call seqc_init() with it at
+ * SEQC_CPU_HZ; call this at the start of every test */
+fake_host_t *fake_init(void);
+/** The defaults, as fw 1.7 seq_init() and seq_clearPattern():
+ * - every step off, volume 127, prob 100, note 60, no p-locks, flam 0, shift 7;
+ * - every track length 16, shuffle 0, no mutes, no roll;
+ * - pattern 0 active and pending, pattern mode;
+ * - song = { 0, SONG_END, ... } and song pointer FAKE_NO_SONG_POS;
+ * - random seed 1, every kind logged, time 0.
+ * seqc_init() is not called. */
+void fake_reset(fake_host_t *h);
+/** restart the random generator from seed; ends a script */
+void fake_seed(fake_host_t *h, uint64_t seed);
+/** random() returns these values first, then continues with the generator.
+ * The array must stay valid while it plays. */
+void fake_scriptRandom(fake_host_t *h, const uint32_t *values, size_t count);
+
+//------------------------------------------------------------------------------
+// Pattern data
+//------------------------------------------------------------------------------
+/** set or clear the main-step bit */
+void fake_setStep(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step, bool on);
+/** volume (0..127; the active bit is kept), note and probability (0..100) */
+void fake_setStepData(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step,
+		uint8_t vel, uint8_t note, uint8_t prob);
+/** the two p-locks */
+void fake_setPlocks(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step,
+		uint8_t p1Nr, uint8_t p1Val, uint8_t p2Nr, uint8_t p2Val);
+/** flam (raw StepTiming.flam, 0..5 = 1, 2, 3, 4, 6, 8 hits) and shift in units,
+ * -7..+7 (stored as shift + 7) */
+void fake_setTiming(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step,
+		uint8_t flam, int8_t shift);
+/** the raw track length, 0 means 16 */
+void fake_setLength(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t rawLength);
+/** the effective length of a raw length: 0 is 16, above 64 is 64 */
+uint8_t fake_effectiveLength(uint8_t rawLength);
+/** the master track of a pattern: the largest raw length, lowest track on a tie */
+uint8_t fake_masterTrack(const fake_host_t *h, uint8_t pattern);
+
+//------------------------------------------------------------------------------
+// Pattern sequencing, as the public functions of sequencer.c
+//------------------------------------------------------------------------------
+/** seq_setNextPattern(): pending = pattern and the reload flag set. When the core
+ * is stopped, the pattern switches at once and the core rewinds (seqc_rewind()) */
+void fake_setNextPattern(fake_host_t *h, uint8_t pattern);
+/** seq_setSongModeEnabled(): switching it on puts the song pointer before entry 0 */
+void fake_setSongMode(fake_host_t *h, bool on);
+/** the song list; the entries after count are FAKE_SONG_END */
+void fake_setSong(fake_host_t *h, const uint8_t *entries, size_t count);
+
+//------------------------------------------------------------------------------
+// Recording, as the glue
+//------------------------------------------------------------------------------
+/** seq_addNote(): while running with recordActive, record the note at the
+ * track's current step, or at the next one from phase 0.5 on. In the second
+ * case it calls seqc_skipOnce() (D6). The step gets the note, volume vel | 0x80,
+ * prob 100 and its main-step bit. Before the first step nothing is recorded. */
+void fake_addNote(fake_host_t *h, uint8_t track, uint8_t vel, uint8_t note);
+/** seq_recordNoteAtStep() (N11): write a recorded note into a given step */
+void fake_recordNoteAtStep(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step,
+		uint8_t vel, uint8_t note);
+
+//------------------------------------------------------------------------------
+// Driving the core. Each sets h->now first, so the log has the right times.
+//------------------------------------------------------------------------------
+/** seqc_process(now) */
+void fake_process(fake_host_t *h, seqc_time_t now);
+/** seqc_syncEvent(ev, stamp) */
+void fake_sync(fake_host_t *h, seqc_sync_ev_t ev, seqc_time_t stamp);
+/** seqc_process() every interval cycles after h->now, and once more at until if
+ * the last call fell short of it. interval must not be 0 */
+void fake_runUntil(fake_host_t *h, seqc_time_t until, seqc_time_t interval);
+/** count sync events ev, stamped first, first + period, ... (period in cycles,
+ * rounded per event), delivered the way seq_tick() does it: every interval cycles
+ * after h->now, the events stamped up to that time go to seqc_syncEvent() and
+ * then seqc_process() runs at that time. It ends with the seqc_process() call
+ * that follows the last event. */
+void fake_runClocks(fake_host_t *h, seqc_sync_ev_t ev, seqc_time_t first, double period,
+		uint32_t count, seqc_time_t interval);
+
+//------------------------------------------------------------------------------
+// Log
+//------------------------------------------------------------------------------
+/** forget the logged entries and logLost; calls, reads and errors keep counting */
+void fake_clearLog(fake_host_t *h);
+/** number of logged entries of kind */
+size_t fake_count(const fake_host_t *h, fake_kind_t kind);
+/** the next logged entry of kind at or after index *pos, or NULL. On a hit, *pos
+ * is set past it, so a loop finds them all */
+const fake_rec_t *fake_next(const fake_host_t *h, fake_kind_t kind, size_t *pos);
+/** the logged triggers of track (all tracks if track < 0), in firing order. It
+ * returns how many there are, and stores up to max pointers in out */
+size_t fake_triggers(const fake_host_t *h, int track, const fake_rec_t **out, size_t max);
+/** print log entries from .. to-1 (to is clamped to the log) */
+void fake_printLog(const fake_host_t *h, size_t from, size_t to);
+
+#endif /* FAKE_HOST_H_ */
+```
+
+- [ ] **Step 10: Create the fake host `tests/fake_host.c`**
+
+```c
+/*
+ * fake_host.c
+ *
+ * Fake host for the seq_core host tests, see fake_host.h. The pattern sequencing
+ * follows sequencer.c of fw 1.7: seq_determineNextPattern(),
+ * seq_setPendingPatternActive(), seq_setNextPattern() and the pattern-end block
+ * of seq_nextStep().
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+
+static fake_host_t fake_instance;
+
+//------------------------------------------------------------------------------
+// Helpers
+//------------------------------------------------------------------------------
+__attribute__((format(printf, 2, 3)))
+static void fake_error(fake_host_t *h, const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(h->lastError, sizeof h->lastError, fmt, ap);
+	va_end(ap);
+	h->errors++;
+}
+//------------------------------------------------------------------------------
+static bool fake_validStep(fake_host_t *h, const char *fn, uint8_t pattern, uint8_t track, uint8_t step)
+{
+	if (pattern < FAKE_NUM_PATTERNS && track < FAKE_NUM_TRACKS && step < FAKE_NUM_STEPS)
+		return true;
+	fake_error(h, "%s(pattern %u, track %u, step %u): out of range", fn, pattern, track, step);
+	return false;
+}
+//------------------------------------------------------------------------------
+static bool fake_validTrack(fake_host_t *h, const char *fn, uint8_t track)
+{
+	if (track < FAKE_NUM_TRACKS)
+		return true;
+	fake_error(h, "%s(track %u): out of range", fn, track);
+	return false;
+}
+//------------------------------------------------------------------------------
+/** a log entry for a callback of kind, or a scratch entry if it isn't stored */
+static fake_rec_t *fake_log(fake_host_t *h, fake_kind_t kind)
+{
+	static fake_rec_t scratch;
+	fake_rec_t *r = &scratch;
+
+	h->calls[kind]++;
+	if (h->logMask & FAKE_LOG_BIT(kind))
+	{
+		if (h->logCount < FAKE_LOG_SIZE)
+			r = &h->log[h->logCount++];
+		else
+			h->logLost++;
+	}
+	memset(r, 0, sizeof *r);
+	r->kind = kind;
+	r->time = h->now;
+	r->tick = seqc_position();
+	r->absStep = seqc_absStep();
+	return r;
+}
+//------------------------------------------------------------------------------
+uint8_t fake_effectiveLength(uint8_t rawLength)
+{
+	if (rawLength == 0)
+		return SEQC_DEFAULT_LENGTH;
+	return rawLength > FAKE_NUM_STEPS ? FAKE_NUM_STEPS : rawLength;
+}
+//------------------------------------------------------------------------------
+uint8_t fake_masterTrack(const fake_host_t *h, uint8_t pattern)
+{
+	uint8_t master = 0;
+	for (uint8_t t = 1; t < FAKE_NUM_TRACKS; t++)
+		if (h->length[pattern][t] > h->length[pattern][master])
+			master = t;
+	return master;
+}
+//------------------------------------------------------------------------------
+static uint32_t fake_masterLength(const fake_host_t *h, uint8_t pattern)
+{
+	return fake_effectiveLength(h->length[pattern][fake_masterTrack(h, pattern)]);
+}
+//------------------------------------------------------------------------------
+/** song[0] as a pattern; a song that starts with a marker plays pattern 0 */
+static uint8_t fake_firstSongPattern(const fake_host_t *h)
+{
+	return h->song[0] < FAKE_NUM_PATTERNS ? h->song[0] : 0;
+}
+
+//------------------------------------------------------------------------------
+// Pattern sequencing, as sequencer.c
+//------------------------------------------------------------------------------
+/** seq_determineNextPattern(): the raw song entry (a pattern or a marker) */
+static uint8_t fake_determineNextPattern(fake_host_t *h, bool autoIncrement)
+{
+	if (!h->songMode)
+		return h->activePattern;
+	if (autoIncrement)
+	{
+		h->songPos++;		/* uint8_t: FAKE_NO_SONG_POS + 1 == 0 */
+		if (h->songPos == FAKE_SONG_LENGTH)
+			h->songPos = 0;
+		return h->song[h->songPos];
+	}
+	uint8_t pos = (uint8_t)(h->songPos + 1);
+	if (pos == FAKE_SONG_LENGTH)
+		pos = 0;
+	return h->song[pos];
+}
+//------------------------------------------------------------------------------
+/** seq_setPendingPatternActive(): the switch with its side effects */
+static seqc_pat_t fake_setPendingPatternActive(fake_host_t *h)
+{
+	if (h->activePattern != h->pendingPattern || h->reload)
+	{
+		h->reload = false;
+		h->activePattern = h->pendingPattern;
+		h->patternChanges++;
+		return SEQC_PAT_CHANGED;
+	}
+	return SEQC_PAT_SAME;
+}
+//------------------------------------------------------------------------------
+/** a marker is SONG_LOOP or anything else from SONG_END on; the rest is SONG_END */
+static bool fake_isSongEnd(uint8_t entry)
+{
+	return entry >= FAKE_NUM_PATTERNS && entry != FAKE_SONG_LOOP;
+}
+
+//------------------------------------------------------------------------------
+// Callbacks: pattern data
+//------------------------------------------------------------------------------
+static bool cb_stepOn(void *ctx, uint8_t pattern, uint8_t track, uint8_t step)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_STEP_ON]++;
+	if (!fake_validStep(h, "stepOn", pattern, track, step))
+		return false;
+	return ((h->mainSteps[pattern][track] >> step) & 1u) != 0;
+}
+//------------------------------------------------------------------------------
+static const Step *cb_step(void *ctx, uint8_t pattern, uint8_t track, uint8_t step)
+{
+	static const Step invalid = { 0, 0, FAKE_DEFAULT_NOTE, FAKE_NO_AUTOMATION, 0, FAKE_NO_AUTOMATION, 0 };
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_STEP]++;
+	if (!fake_validStep(h, "step", pattern, track, step))
+		return &invalid;
+	return &h->steps[pattern][track][step];
+}
+//------------------------------------------------------------------------------
+static StepTiming cb_timing(void *ctx, uint8_t pattern, uint8_t track, uint8_t step)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_TIMING]++;
+	if (!fake_validStep(h, "timing", pattern, track, step))
+		return (StepTiming){ .flam = 0, .shift = SEQC_SHIFT_CENTER };
+	return h->timing[pattern][track][step];
+}
+//------------------------------------------------------------------------------
+static uint8_t cb_trackLength(void *ctx, uint8_t pattern, uint8_t track)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_LENGTH]++;
+	if (!fake_validStep(h, "trackLength", pattern, track, 0))
+		return 0;
+	return h->length[pattern][track];
+}
+//------------------------------------------------------------------------------
+static uint8_t cb_shuffle(void *ctx)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_SHUFFLE]++;
+	return h->shuffle;
+}
+//------------------------------------------------------------------------------
+static bool cb_muted(void *ctx, uint8_t track)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_MUTED]++;
+	if (!fake_validTrack(h, "muted", track))
+		return false;
+	return h->muted[track];
+}
+//------------------------------------------------------------------------------
+static uint8_t cb_rollRate(void *ctx, uint8_t track)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_ROLL_RATE]++;
+	if (!fake_validTrack(h, "rollRate", track))
+		return 0;
+	return h->rollRate[track];
+}
+
+//------------------------------------------------------------------------------
+// Callbacks: pattern sequencing
+//------------------------------------------------------------------------------
+static uint8_t cb_activePattern(void *ctx)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_ACTIVE_PATTERN]++;
+	return h->activePattern;
+}
+//------------------------------------------------------------------------------
+/** the pattern-end block of fw 1.7 seq_nextStep(), then seq_setPendingPatternActive() */
+static seqc_pat_t cb_patternEnd(void *ctx)
+{
+	fake_host_t *h = ctx;
+	seqc_pat_t result;
+
+	/* the song advances only when no other pattern is pending */
+	if (h->activePattern == h->pendingPattern)
+	{
+		uint8_t next = fake_determineNextPattern(h, true);
+		if (fake_isSongEnd(next))
+		{
+			/* The transport stops. The next start plays the song from entry 0:
+			 * the core rewinds (transport REWIND puts the song pointer before
+			 * entry 0), and with pending == active the first pattern end advances
+			 * it to entry 0. fw 1.7 set pending = song[0] and the pointer to 0
+			 * here, which played entry 0 twice after the usual stop press. */
+			h->pendingPattern = h->activePattern;
+			result = SEQC_PAT_STOP;
+			goto done;
+		}
+		if (next == FAKE_SONG_LOOP)
+		{
+			/* reset to the song start; fw 1.7 did not clamp a marker in song[0] */
+			next = fake_firstSongPattern(h);
+			h->songPos = 0;
+		}
+		h->pendingPattern = next;
+	}
+	result = fake_setPendingPatternActive(h);
+
+done:
+	{
+		fake_rec_t *r = fake_log(h, FAKE_PATTERN_END);
+		r->value = (uint8_t)result;
+		r->pattern = h->activePattern;
+	}
+	return result;
+}
+//------------------------------------------------------------------------------
+/** cb_patternEnd() without side effects */
+static bool cb_peekNextPattern(void *ctx, uint8_t *pattern)
+{
+	fake_host_t *h = ctx;
+	uint8_t next = h->pendingPattern;
+	bool restart;
+
+	if (h->activePattern == h->pendingPattern)
+	{
+		next = fake_determineNextPattern(h, false);
+		if (next == FAKE_SONG_LOOP)
+			next = fake_firstSongPattern(h);
+	}
+	if (fake_isSongEnd(next))
+	{
+		*pattern = SEQC_NO_PATTERN;
+		restart = false;
+	}
+	else
+	{
+		*pattern = next;
+		restart = next != h->activePattern || h->reload;
+	}
+
+	fake_rec_t *r = fake_log(h, FAKE_PEEK);
+	r->pattern = *pattern;
+	r->flag = restart;
+	return restart;
+}
+//------------------------------------------------------------------------------
+/** N6: in song mode, walk the song to absStep and activate that entry */
+static uint32_t cb_seekPosition(void *ctx, uint32_t absStep)
+{
+	fake_host_t *h = ctx;
+	uint32_t steps = absStep;
+
+	if (h->songMode && h->song[0] < FAKE_NUM_PATTERNS)
+	{
+		uint32_t entryStart = 0;	/* absolute step where entry idx begins */
+		uint32_t runStart = 0;		/* absolute step where the run of identical entries began */
+		uint8_t idx = 0;
+		uint8_t prev = FAKE_SONG_END;	/* pattern of the entry before idx */
+		uint8_t lastIdx = 0;		/* the last entry walked through completely */
+		uint32_t lastEnd = 0, lastRunStart = 0;
+		bool found = false;
+
+		/* every pass either adds an entry of at least one step or wraps at
+		 * SONG_LOOP to entry 0, which is a pattern; so this ends */
+		for (;;)
+		{
+			const uint8_t entry = h->song[idx];
+			if (entry == FAKE_SONG_LOOP)
+			{
+				idx = 0;
+				continue;
+			}
+			if (fake_isSongEnd(entry))
+				break;
+			if (entry != prev)
+				runStart = entryStart;
+			const uint32_t len = fake_masterLength(h, entry);
+			if (absStep < entryStart + len)
+			{
+				steps = absStep - runStart;
+				found = true;
+				break;
+			}
+			prev = entry;
+			lastIdx = idx;
+			lastRunStart = runStart;
+			entryStart += len;
+			lastEnd = entryStart;
+			idx = (uint8_t)((idx + 1) % FAKE_SONG_LENGTH);
+		}
+		if (!found)
+		{
+			/* past SONG_END: the last step of the last entry */
+			idx = lastIdx;
+			steps = lastEnd - 1 - lastRunStart;
+		}
+
+		/* activate the entry with the normal pattern-change side effects. Inside
+		 * the run of the active pattern nothing changes and nothing reloads, as at
+		 * a pattern end of the song walk: no unsaved edit is lost, no kit loads. */
+		h->songPos = idx;
+		h->pendingPattern = h->song[idx];
+		fake_setPendingPatternActive(h);
+	}
+
+	fake_rec_t *r = fake_log(h, FAKE_SEEK);
+	r->arg = absStep;
+	r->result = steps;
+	r->pattern = h->activePattern;
+	return steps;
+}
+
+//------------------------------------------------------------------------------
+// Callbacks: outputs
+//------------------------------------------------------------------------------
+static void cb_trigger(void *ctx, const seqc_event_t *ev)
+{
+	fake_host_t *h = ctx;
+
+	if (!fake_validStep(h, "trigger", ev->pattern, ev->track, ev->step))
+		return;
+	if (ev->hit >= 8 || (ev->flags & ~SEQC_EVF_ROLL) != 0 || ev->reserved != 0)
+		fake_error(h, "trigger: hit %u, flags 0x%02x, reserved %u", ev->hit, ev->flags, ev->reserved);
+
+	fake_rec_t *r = fake_log(h, FAKE_TRIGGER);
+	r->track = ev->track;
+	r->ev = *ev;
+
+	/* the glue records a roll hit at its own step (N11) */
+	if ((ev->flags & SEQC_EVF_ROLL) && h->recordActive && seqc_isRunning())
+		fake_recordNoteAtStep(h, ev->pattern, ev->track, ev->step, ev->vel, ev->note);
+
+	if (h->onTrigger)
+		h->onTrigger(h, ev);
+}
+//------------------------------------------------------------------------------
+static void cb_noteOff(void *ctx, uint8_t track)
+{
+	fake_host_t *h = ctx;
+	if (!fake_validTrack(h, "noteOff", track))
+		return;
+	fake_log(h, FAKE_NOTE_OFF)->track = track;
+}
+//------------------------------------------------------------------------------
+static void cb_stepBoundary(void *ctx, uint32_t absStep)
+{
+	fake_host_t *h = ctx;
+
+	if ((int32_t)absStep != seqc_absStep())
+		fake_error(h, "stepBoundary(%u) but seqc_absStep() is %d", (unsigned)absStep, (int)seqc_absStep());
+	fake_log(h, FAKE_STEP_BOUNDARY)->arg = absStep;
+
+	/* the glue's erase (fw 1.7 gating): active track, not muted, main step on */
+	if (h->eraseActive && h->activeTrack < FAKE_NUM_TRACKS && !h->muted[h->activeTrack])
+	{
+		const uint8_t s = seqc_trackStep(h->activeTrack);
+		if (s < FAKE_NUM_STEPS)
+			h->mainSteps[h->activePattern][h->activeTrack] &= ~(1ull << s);
+	}
+
+	if (h->onStepBoundary)
+		h->onStepBoundary(h, absStep);
+}
+//------------------------------------------------------------------------------
+static void cb_tempoStep(void *ctx)
+{
+	fake_log(ctx, FAKE_TEMPO_STEP);
+}
+//------------------------------------------------------------------------------
+static void cb_midiClockOut(void *ctx)
+{
+	fake_log(ctx, FAKE_MIDI_CLOCK);
+}
+//------------------------------------------------------------------------------
+static void cb_clockOutPulse(void *ctx, uint8_t pulseInStep)
+{
+	fake_host_t *h = ctx;
+	if (pulseInStep >= SEQC_PULSES_PER_STEP)
+		fake_error(h, "clockOutPulse(%u): out of range", pulseInStep);
+	fake_log(h, FAKE_CLOCK_PULSE)->value = pulseInStep;
+}
+//------------------------------------------------------------------------------
+static void cb_transport(void *ctx, seqc_transport_t change)
+{
+	fake_host_t *h = ctx;
+	if ((unsigned)change > SEQC_TRANSPORT_REWIND)
+		fake_error(h, "transport(%u): out of range", (unsigned)change);
+	fake_log(h, FAKE_TRANSPORT)->value = (uint8_t)change;
+
+	/* the glue's seq_resetPosition(): the song restarts before entry 0 */
+	if (change == SEQC_TRANSPORT_REWIND)
+		h->songPos = FAKE_NO_SONG_POS;
+}
+//------------------------------------------------------------------------------
+static uint32_t cb_random(void *ctx)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_RANDOM]++;
+	if (h->rngScript && h->rngScriptPos < h->rngScriptLen)
+		return h->rngScript[h->rngScriptPos++];
+	/* Knuth's MMIX LCG; the high half has the good bits */
+	h->rngState = h->rngState * 6364136223846793005ull + 1442695040888963407ull;
+	return (uint32_t)(h->rngState >> 32);
+}
+
+//------------------------------------------------------------------------------
+// Setup
+//------------------------------------------------------------------------------
+void fake_reset(fake_host_t *h)
+{
+	memset(h, 0, sizeof *h);
+
+	for (int p = 0; p < FAKE_NUM_PATTERNS; p++)
+		for (int t = 0; t < FAKE_NUM_TRACKS; t++)
+		{
+			h->length[p][t] = SEQC_DEFAULT_LENGTH;
+			for (int s = 0; s < FAKE_NUM_STEPS; s++)
+			{
+				/* seq_resetNote() and seq_clearTrack() */
+				h->steps[p][t][s] = (Step){ .volume = 127, .prob = 100, .note = FAKE_DEFAULT_NOTE,
+						.param1Nr = FAKE_NO_AUTOMATION, .param1Val = 0,
+						.param2Nr = FAKE_NO_AUTOMATION, .param2Val = 0 };
+				h->timing[p][t][s] = (StepTiming){ .flam = 0, .shift = SEQC_SHIFT_CENTER };
+			}
+		}
+
+	/* seq_init(): every song entry SONG_END but the first */
+	memset(h->song, FAKE_SONG_END, sizeof h->song);
+	h->song[0] = 0;
+	h->songPos = FAKE_NO_SONG_POS;
+
+	h->logMask = FAKE_LOG_ALL;
+	fake_seed(h, 1);
+
+	h->host = (seqc_host_t){
+		.ctx = h,
+		.stepOn = cb_stepOn,
+		.step = cb_step,
+		.timing = cb_timing,
+		.trackLength = cb_trackLength,
+		.shuffle = cb_shuffle,
+		.muted = cb_muted,
+		.rollRate = cb_rollRate,
+		.activePattern = cb_activePattern,
+		.patternEnd = cb_patternEnd,
+		.peekNextPattern = cb_peekNextPattern,
+		.seekPosition = cb_seekPosition,
+		.trigger = cb_trigger,
+		.noteOff = cb_noteOff,
+		.stepBoundary = cb_stepBoundary,
+		.tempoStep = cb_tempoStep,
+		.midiClockOut = cb_midiClockOut,
+		.clockOutPulse = cb_clockOutPulse,
+		.transport = cb_transport,
+		.random = cb_random,
+	};
+}
+//------------------------------------------------------------------------------
+fake_host_t *fake_init(void)
+{
+	fake_host_t *h = &fake_instance;
+	fake_reset(h);
+	seqc_init(&h->host, SEQC_CPU_HZ);
+	return h;
+}
+//------------------------------------------------------------------------------
+void fake_seed(fake_host_t *h, uint64_t seed)
+{
+	h->rngState = seed;
+	h->rngScript = NULL;
+	h->rngScriptLen = h->rngScriptPos = 0;
+}
+//------------------------------------------------------------------------------
+void fake_scriptRandom(fake_host_t *h, const uint32_t *values, size_t count)
+{
+	h->rngScript = values;
+	h->rngScriptLen = count;
+	h->rngScriptPos = 0;
+}
+
+//------------------------------------------------------------------------------
+// Pattern data
+//------------------------------------------------------------------------------
+void fake_setStep(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step, bool on)
+{
+	if (!fake_validStep(h, "fake_setStep", pattern, track, step))
+		return;
+	if (on)
+		h->mainSteps[pattern][track] |= 1ull << step;
+	else
+		h->mainSteps[pattern][track] &= ~(1ull << step);
+}
+//------------------------------------------------------------------------------
+void fake_setStepData(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step,
+		uint8_t vel, uint8_t note, uint8_t prob)
+{
+	if (!fake_validStep(h, "fake_setStepData", pattern, track, step))
+		return;
+	Step *s = &h->steps[pattern][track][step];
+	s->volume = (uint8_t)((s->volume & FAKE_STEP_ACTIVE_MASK) | (vel & 0x7F));
+	s->note = note;
+	s->prob = prob;
+}
+//------------------------------------------------------------------------------
+void fake_setPlocks(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step,
+		uint8_t p1Nr, uint8_t p1Val, uint8_t p2Nr, uint8_t p2Val)
+{
+	if (!fake_validStep(h, "fake_setPlocks", pattern, track, step))
+		return;
+	Step *s = &h->steps[pattern][track][step];
+	s->param1Nr = p1Nr;
+	s->param1Val = p1Val;
+	s->param2Nr = p2Nr;
+	s->param2Val = p2Val;
+}
+//------------------------------------------------------------------------------
+void fake_setTiming(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step,
+		uint8_t flam, int8_t shift)
+{
+	if (!fake_validStep(h, "fake_setTiming", pattern, track, step))
+		return;
+	if (flam > 15 || shift < -7 || shift > 7)
+	{
+		fake_error(h, "fake_setTiming(flam %u, shift %d): out of range", flam, shift);
+		return;
+	}
+	h->timing[pattern][track][step] = (StepTiming){ .flam = flam & 0x0F,
+			.shift = (uint8_t)(shift + (int8_t)SEQC_SHIFT_CENTER) & 0x0F };
+}
+//------------------------------------------------------------------------------
+void fake_setLength(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t rawLength)
+{
+	if (!fake_validStep(h, "fake_setLength", pattern, track, 0))
+		return;
+	h->length[pattern][track] = rawLength;
+}
+
+//------------------------------------------------------------------------------
+// Pattern sequencing
+//------------------------------------------------------------------------------
+void fake_setNextPattern(fake_host_t *h, uint8_t pattern)
+{
+	if (pattern >= FAKE_NUM_PATTERNS)
+		return;
+	h->pendingPattern = pattern;
+	h->reload = true;
+	if (!seqc_isRunning())
+	{
+		/* immediately change pattern, and restart it (seq_setStepIndexToStart()) */
+		fake_setPendingPatternActive(h);
+		seqc_rewind();
+	}
+}
+//------------------------------------------------------------------------------
+void fake_setSongMode(fake_host_t *h, bool on)
+{
+	h->songMode = on;
+	if (on)
+		h->songPos = FAKE_NO_SONG_POS;	/* because the first pattern end increments it */
+}
+//------------------------------------------------------------------------------
+void fake_setSong(fake_host_t *h, const uint8_t *entries, size_t count)
+{
+	memset(h->song, FAKE_SONG_END, sizeof h->song);
+	if (count > FAKE_SONG_LENGTH)
+		count = FAKE_SONG_LENGTH;
+	if (count > 0)
+		memcpy(h->song, entries, count);
+}
+
+//------------------------------------------------------------------------------
+// Recording
+//------------------------------------------------------------------------------
+void fake_recordNoteAtStep(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step,
+		uint8_t vel, uint8_t note)
+{
+	if (!fake_validStep(h, "fake_recordNoteAtStep", pattern, track, step))
+		return;
+	Step *s = &h->steps[pattern][track][step];
+	s->note = note;
+	s->volume = (uint8_t)(vel | FAKE_STEP_ACTIVE_MASK);
+	s->prob = 100;
+	h->mainSteps[pattern][track] |= 1ull << step;
+}
+//------------------------------------------------------------------------------
+void fake_addNote(fake_host_t *h, uint8_t track, uint8_t vel, uint8_t note)
+{
+	if (track >= FAKE_NUM_TRACKS || !h->recordActive || !seqc_isRunning())
+		return;
+	const uint8_t step = seqc_trackStep(track);
+	if (step == SEQC_NO_STEP)
+		return;
+	const uint8_t pattern = h->activePattern;
+	/* fw 1.7 took the raw length here, a modulo by zero for a raw 0 */
+	const uint8_t len = fake_effectiveLength(h->length[pattern][track]);
+	/* from half the step on, the note belongs to the next step */
+	const uint8_t target = seqc_stepPhase() >= 0.5f ? (uint8_t)((step + 1) % len) : step;
+	if (target != step)
+		seqc_skipOnce(track, target);	/* D6: the sequencer must not play it again */
+	fake_recordNoteAtStep(h, pattern, track, target, vel, note);
+}
+
+//------------------------------------------------------------------------------
+// Driving the core
+//------------------------------------------------------------------------------
+void fake_process(fake_host_t *h, seqc_time_t now)
+{
+	h->now = now;
+	seqc_process(now);
+}
+//------------------------------------------------------------------------------
+void fake_sync(fake_host_t *h, seqc_sync_ev_t ev, seqc_time_t stamp)
+{
+	h->now = stamp;
+	seqc_syncEvent(ev, stamp);
+}
+//------------------------------------------------------------------------------
+void fake_runUntil(fake_host_t *h, seqc_time_t until, seqc_time_t interval)
+{
+	if (interval == 0)
+	{
+		fake_error(h, "fake_runUntil: interval 0");
+		return;
+	}
+	for (seqc_time_t t = h->now + interval; t <= until; t += interval)
+		fake_process(h, t);
+	if (h->now < until)
+		fake_process(h, until);
+}
+//------------------------------------------------------------------------------
+void fake_runClocks(fake_host_t *h, seqc_sync_ev_t ev, seqc_time_t first, double period,
+		uint32_t count, seqc_time_t interval)
+{
+	if (interval == 0)
+	{
+		fake_error(h, "fake_runClocks: interval 0");
+		return;
+	}
+	seqc_time_t t = h->now;
+	uint32_t i = 0;
+	while (i < count)
+	{
+		t += interval;
+		/* like seq_tick(): the events stamped up to now first, then process */
+		for (; i < count; i++)
+		{
+			const seqc_time_t stamp = first + (seqc_time_t)((double)i * period + 0.5);
+			if (stamp > t)
+				break;
+			fake_sync(h, ev, stamp);
+		}
+		fake_process(h, t);
+	}
+}
+
+//------------------------------------------------------------------------------
+// Log
+//------------------------------------------------------------------------------
+void fake_clearLog(fake_host_t *h)
+{
+	h->logCount = 0;
+	h->logLost = 0;
+}
+//------------------------------------------------------------------------------
+size_t fake_count(const fake_host_t *h, fake_kind_t kind)
+{
+	size_t n = 0;
+	for (size_t i = 0; i < h->logCount; i++)
+		if (h->log[i].kind == kind)
+			n++;
+	return n;
+}
+//------------------------------------------------------------------------------
+const fake_rec_t *fake_next(const fake_host_t *h, fake_kind_t kind, size_t *pos)
+{
+	for (size_t i = *pos; i < h->logCount; i++)
+		if (h->log[i].kind == kind)
+		{
+			*pos = i + 1;
+			return &h->log[i];
+		}
+	*pos = h->logCount;
+	return NULL;
+}
+//------------------------------------------------------------------------------
+size_t fake_triggers(const fake_host_t *h, int track, const fake_rec_t **out, size_t max)
+{
+	size_t n = 0;
+	for (size_t i = 0; i < h->logCount; i++)
+	{
+		const fake_rec_t *r = &h->log[i];
+		if (r->kind != FAKE_TRIGGER || (track >= 0 && r->ev.track != track))
+			continue;
+		if (n < max)
+			out[n] = r;
+		n++;
+	}
+	return n;
+}
+//------------------------------------------------------------------------------
+void fake_printLog(const fake_host_t *h, size_t from, size_t to)
+{
+	static const char *const names[FAKE_NUM_KINDS] = {
+		"trigger", "noteOff", "boundary", "tempoStep", "midiClock", "pulse",
+		"transport", "patternEnd", "peek", "seek" };
+	if (to > h->logCount)
+		to = h->logCount;
+	for (size_t i = from; i < to; i++)
+	{
+		const fake_rec_t *r = &h->log[i];
+		printf("%6zu %10.4f ms  tick %10.3f  step %4d  %-10s", i, fake_cyclesToMs(r->time), r->tick,
+				(int)r->absStep, names[r->kind]);
+		switch (r->kind)
+		{
+		case FAKE_TRIGGER:
+			printf(" track %u pattern %u step %u hit %u tick %lld abs %u vel %u note %u%s", r->ev.track,
+					r->ev.pattern, r->ev.step, r->ev.hit, (long long)r->ev.tick, (unsigned)r->ev.absStep,
+					r->ev.vel, r->ev.note, (r->ev.flags & SEQC_EVF_ROLL) ? " roll" : "");
+			break;
+		case FAKE_NOTE_OFF:
+			printf(" track %u", r->track);
+			break;
+		case FAKE_STEP_BOUNDARY:
+			printf(" %u", (unsigned)r->arg);
+			break;
+		case FAKE_CLOCK_PULSE:
+		case FAKE_TRANSPORT:
+			printf(" %u", r->value);
+			break;
+		case FAKE_PATTERN_END:
+			printf(" result %u pattern %u", r->value, r->pattern);
+			break;
+		case FAKE_PEEK:
+			printf(" pattern %u restart %d", r->pattern, (int)r->flag);
+			break;
+		case FAKE_SEEK:
+			printf(" absStep %u steps %u pattern %u", (unsigned)r->arg, (unsigned)r->result, r->pattern);
+			break;
+		default:
+			break;
+		}
+		printf("\n");
+	}
+}
+```
+
+- [ ] **Step 11: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected:
+```
+== host tests
+...
+1/1 Test #1: harness ..........................   Passed
+100% tests passed, 0 tests failed out of 1
+== firmware build (release)
+memory: ITCM 15000/16384 B (91.6%, free 1384)  DTCM 107388/131072 B (81.9%, rest is stack)  RAM 271032/393216 B (68.9%, free 122184)  image 274688/1015808 B (27.0%)
+image: /Users/tk/Code/lxr/build/release/LXR_V2_V1.7.img
+== compiler warnings: 0
+exit 0
+```
+CMake also prints one STATUS note per test file that does not exist yet ("tests/test_layout.c not
+written yet (layout)" and so on) into `build/check.log`. That is expected.
+
+Run: `shasum -a 256 build/release/LXR_V2_STM32F765.bin`
+
+Expected: the same hash as before this task, because the firmware is untouched. With Arm GNU
+14.3.rel1 on the reference Mac it is
+`573054add56aa2a38dc5f9a3b126a69030d15e41d8726080d0f97b86794bb2d4`. Note the value: E1.2 compares
+against it.
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add tests/seqc_test.h tests/CMakeLists.txt tests/test_harness.c tests/fake_host.h tests/fake_host.c \
+        Core/Inc/Preset/SeqStepTypes.h Core/Inc/Soundengine/Sequencer/seq_core.h \
+        Core/Src/Soundengine/Sequencer/seq_core.c
+git commit -F - <<'EOF'
+Add the seq_core interface and the host test harness (E1.1)
+
+tests/ is a CMake project of its own, built with the host compiler: the
+runner seqc_test.h, the fake host that implements the seqc_host_t callbacks
+like sequencer.c will, and one ctest test per spec id. seq_core.h and
+SeqStepTypes.h are the final interface; seq_core.c is a skeleton until E1.3.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.2: Step types without the HAL (`SeqStepTypes.h`)
+
+`SeqStep.h` includes `main.h`, and through it the HAL. Its two typedefs move to `SeqStepTypes.h`
+(created in E1.1) and `SeqStep.h` includes that file. The layout is part of the pattern file format
+(PatV03), so the firmware image must stay byte-identical.
+
+This is what E2 needs: `sequencer.c` will include both `sequencer.h` (and with it `SeqStep.h`) and
+`seq_core.h`, and today that is a redefinition error. That error is the failing test of this task.
+`tests/test_layout.c` guards the layout from now on.
+
+**Files:**
+- Modify: `Core/Inc/Preset/SeqStep.h:20-42` (CRLF: the comment, `Step`, `StepTiming` and the blank line after them)
+- Test: `tests/test_layout.c` (ctest id `layout`)
+
+- [ ] **Step 1: Note the reference hash of the image**
+
+Run: `shasum -a 256 build/release/LXR_V2_STM32F765.bin`
+
+Expected: the value noted in E1.1 Step 11 (`573054ad…` on the reference toolchain).
+
+- [ ] **Step 2: Write the layout test `tests/test_layout.c`**
+
+It passes already, because `SeqStepTypes.h` exists since E1.1. It also proves that `seq_core.h`
+builds without the HAL: no HAL directory is on the include path of the host tests.
+
+```c
+/*
+ * test_layout.c
+ *
+ * The step types keep the layout of the fw 1.7 pattern files (PatV03): Step is
+ * stored raw (7 bytes), StepTiming as one byte with flam in bits 0-3 and shift
+ * in bits 4-7. seqc_event_t is 24 bytes (N2). Including seq_core.h here also
+ * shows that it builds without the HAL: no HAL directory is on the include path
+ * of the host tests.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
+#include "Preset/SeqStepTypes.h"
+#include "Soundengine/Sequencer/seq_core.h"
+#include "seqc_test.h"
+
+TEST(layout_step)
+{
+	ASSERT_EQ(sizeof(Step), 7);
+	ASSERT_EQ(offsetof(Step, volume), 0);
+	ASSERT_EQ(offsetof(Step, prob), 1);
+	ASSERT_EQ(offsetof(Step, note), 2);
+	ASSERT_EQ(offsetof(Step, param1Nr), 3);
+	ASSERT_EQ(offsetof(Step, param1Val), 4);
+	ASSERT_EQ(offsetof(Step, param2Nr), 5);
+	ASSERT_EQ(offsetof(Step, param2Val), 6);
+}
+
+TEST(layout_step_timing)
+{
+	ASSERT_EQ(sizeof(StepTiming), 1);
+	const StepTiming t = { .flam = 5, .shift = 10 };
+	uint8_t b;
+	memcpy(&b, &t, 1);
+	ASSERT_EQ(b, 0xA5);				/* flam in bits 0-3, shift in bits 4-7 */
+}
+
+TEST(layout_event)
+{
+	ASSERT_EQ(sizeof(seqc_event_t), 24);
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 3: Run the check that must fail now**
+
+This is a translation unit with both headers, as `sequencer.c` will have in E2.
+
+Run:
+```bash
+bash -c 'source tools/env.sh && printf "#include \"Preset/SeqStep.h\"\n#include \"Soundengine/Sequencer/seq_core.h\"\n" | arm-none-eabi-gcc -std=gnu11 -mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -DSTM32F765xx -DUSE_HAL_DRIVER -ICore/Inc -IDrivers/CMSIS/Include -IDrivers/CMSIS/Device/ST/STM32F7xx/Include -IDrivers/STM32F7xx_HAL_Driver/Inc -fsyntax-only -x c - && echo "both headers: OK"'
+```
+Expected (FAIL):
+```
+Core/Inc/Preset/SeqStepTypes.h:32:16: error: redefinition of 'struct StepStruct'
+Core/Inc/Preset/SeqStepTypes.h:45:2: error: conflicting types for 'Step'; have 'struct StepStruct'
+Core/Inc/Preset/SeqStepTypes.h:47:16: error: redefinition of 'struct StepTiming'
+Core/Inc/Preset/SeqStepTypes.h:51:2: error: conflicting types for 'StepTiming'; have 'struct StepTiming'
+```
+
+- [ ] **Step 4: Make `SeqStep.h` include `SeqStepTypes.h`**
+
+The edit replaces everything from `/** a copy of the step struct` through `}StepTiming;` and the blank
+line after it with one include line. It keeps CRLF, `#include "main.h"` and `StepPosition`.
+
+Run:
+```bash
+python3 - Core/Inc/Preset/SeqStep.h <<'EOF'
+import sys
+path = sys.argv[1]
+with open(path, newline='') as f:
+    text = f.read()
+start = text.index('/** a copy of the step struct')
+end = text.index('}StepTiming;\r\n') + len('}StepTiming;\r\n')
+assert text[end:end + 2] == '\r\n', 'expected the blank line after StepTiming'
+text = text[:start] + '#include "SeqStepTypes.h"     /* Step, StepTiming */\r\n' + text[end + 2:]
+with open(path, 'w', newline='') as f:
+    f.write(text)
+EOF
+sed -n 16,22p Core/Inc/Preset/SeqStep.h; file Core/Inc/Preset/SeqStep.h
+```
+Expected:
+```
+#ifndef SEQSTEP_H_
+#define SEQSTEP_H_
+#include "main.h"
+
+#include "SeqStepTypes.h"     /* Step, StepTiming */
+
+typedef enum StepPositionEnum
+Core/Inc/Preset/SeqStep.h: c program text, ASCII text, with CRLF line terminators
+```
+
+- [ ] **Step 5: Run the checks to verify they pass**
+
+Run the command of Step 3 again. Expected: `both headers: OK`.
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 2`, the same memory line as before,
+`== compiler warnings: 0`, `exit 0`.
+
+Run: `shasum -a 256 build/release/LXR_V2_STM32F765.bin`
+
+Expected: exactly the hash of Step 1. A different hash means the layout changed: stop and compare
+the typedefs.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Core/Inc/Preset/SeqStep.h tests/test_layout.c
+git commit -F - <<'EOF'
+Move Step and StepTiming into SeqStepTypes.h (E1.2)
+
+SeqStep.h includes SeqStepTypes.h instead of defining the two types, so code
+without the HAL (seq_core, the host tests) can use them, and sequencer.c can
+include both sequencer.h and seq_core.h. The release image is byte-identical.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.3: Core skeleton and the internal master clock (T1)
+
+This task replaces the skeleton with the structure of the core:
+- **State.** One static struct per area. Later tasks add more.
+- **Time base (N1).** An internal timeline, `anchorTick + (t - anchorTime) * ticksPerCycle`. It starts
+  at the first `seqc_process()` call and is re-anchored at tick 0 by a start and at the current time
+  by a tempo change.
+- **Processing loop (spec 6.3).** `seqc_runTo()` handles the earliest due item again and again. In
+  this task the only item is the step boundary, which advances `absStep` and calls `stepBoundary(n)`.
+- **N10.** After each pass, `seqc_schedule()` works out `nextDue`, and `seqc_process()` returns at
+  once before it.
+- **Internal transport.** `seqc_start()` (START, with step 0 at the next process call),
+  `seqc_stop()` (STOP, the position is kept) and `seqc_rewind()` (REWIND only when not at the start).
+- **Re-entry guard.** `seqc_enter()` and `seqc_leave()`: a call from inside a callback is ignored.
+  Counting it comes with the statistics in E1.12.
+
+The core also joins the firmware build. The firmware compiles it with `-Wall -Wextra` at `-O3`,
+which catches target-only warnings from now on.
+
+Still placeholders after this task:
+- `seqc_setSyncMode()`, `seqc_setAnalogPpq()`, `seqc_syncEvent()` and `seqc_songPosition()` do
+  nothing;
+- `seqc_skipOnce()` does nothing;
+- `seqc_trackStep()` returns `SEQC_NO_STEP`, `seqc_masterTrack()` returns 0, `seqc_stepPhase()`
+  returns 0.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c` (whole file)
+- Modify: `Core/CMakeLists.txt:123-128` (the `lxr_sequencer` library)
+- Test: `tests/test_clock.c` (ctest id `T1`)
+
+- [ ] **Step 1: Write the failing test `tests/test_clock.c`**
+
+T1 runs 10 minutes at 60, 120, 128, 137 and 200 BPM, with a process call every 0.05 ms. Every step
+boundary must come at the first call at or after its ideal time. Over the run:
+- the tempo error must stay below 0.01%;
+- the drift must stay below 1 tick (fw 1.7 played 128 as 128.20 and 137 as 137.29, D3).
+
+It also checks:
+- that a start takes effect at the next process call;
+- stop, restart and rewind;
+- that a tempo change keeps the position continuous;
+- the tempo clamp;
+- that time never goes back.
+
+```c
+/*
+ * test_clock.c
+ *
+ * T1: the internal master clock (spec 5, N1). The tempo error stays below
+ * 0.01% and the drift below 1 tick over 10 minutes at 60-200 BPM; the position
+ * stays continuous across tempo changes; the internal transport starts at the
+ * next seqc_process() call, stops in place and rewinds before the next start.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+#include "seqc_test.h"
+
+/** the values of the logged transport() calls, in order; returns how many */
+static size_t transports(const fake_host_t *h, uint8_t *out, size_t max)
+{
+	size_t n = 0, pos = 0;
+	const fake_rec_t *r;
+	while ((r = fake_next(h, FAKE_TRANSPORT, &pos)) != NULL)
+	{
+		if (n < max)
+			out[n] = r->value;
+		n++;
+	}
+	return n;
+}
+
+/** ticks of the master tempo after cycles */
+static double idealTicks(double bpm, seqc_time_t cycles)
+{
+	return (double)cycles * bpm * SEQC_TICKS_PER_BEAT / 60.0 / SEQC_CPU_HZ;
+}
+
+/* Runs bpm for 10 minutes with a seqc_process() call every 0.05 ms and checks
+ * every step boundary against the ideal grid. */
+static void checkTempo(double bpm)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_BIT(FAKE_STEP_BOUNDARY);
+	seqc_setTempo((float)bpm);
+	fake_process(h, 0);
+	const seqc_time_t t0 = fake_msToCycles(1.0);
+	seqc_start();
+	fake_process(h, t0);				/* step 0 is here */
+
+	const seqc_time_t interval = fake_msToCycles(0.05);
+	const seqc_time_t end = t0 + fake_msToCycles(10.0 * 60.0 * 1000.0);
+	fake_runUntil(h, end, interval);
+
+	const double step = fake_stepCycles(bpm);
+	const uint32_t expected = (uint32_t)(idealTicks(bpm, end - t0) / SEQC_TICKS_PER_STEP) + 1;
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), expected);
+	ASSERT_EQ(h->logLost, 0);
+
+	size_t pos = 0;
+	const fake_rec_t *r;
+	const fake_rec_t *last = NULL;
+	uint32_t n = 0;
+	while ((r = fake_next(h, FAKE_STEP_BOUNDARY, &pos)) != NULL)
+	{
+		ASSERT_EQ(r->arg, n);
+		/* handled by the first call at or after the ideal time */
+		const double late = (double)(r->time - t0) - n * step;
+		ASSERT_TRUE(late > -1.0);
+		ASSERT_TRUE(late < (double)interval + 1.0);
+		last = r;
+		n++;
+	}
+	ASSERT_TRUE(last != NULL);
+
+	/* tempo error below 0.01% */
+	const double measured = 60.0 * SEQC_CPU_HZ * (double)last->arg / ((double)(last->time - t0) * 4.0);
+	ASSERT_NEAR(measured / bpm, 1.0, 1e-4);
+	/* drift below 1 tick: at the last boundary and at the end */
+	ASSERT_TRUE(idealTicks(bpm, last->time - t0) - (double)last->arg * SEQC_TICKS_PER_STEP < 1.0);
+	ASSERT_NEAR(seqc_position(), idealTicks(bpm, end - t0), 1e-3);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T1_tempo_accuracy_60_bpm) { checkTempo(60.0); }
+TEST(T1_tempo_accuracy_120_bpm) { checkTempo(120.0); }
+TEST(T1_tempo_accuracy_128_bpm) { checkTempo(128.0); }		/* fw 1.7 played 128.20 */
+TEST(T1_tempo_accuracy_137_bpm) { checkTempo(137.0); }		/* fw 1.7 played 137.29 */
+TEST(T1_tempo_accuracy_200_bpm) { checkTempo(200.0); }
+
+TEST(T1_start_at_next_process)
+{
+	fake_host_t *h = fake_init();
+	fake_process(h, 1000);
+	seqc_start();
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_TRUE(seqc_isRunning());
+	uint8_t tr[4];
+	ASSERT_EQ(transports(h, tr, 4), 1);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_START);
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 0);
+	ASSERT_EQ(seqc_absStep(), -1);
+
+	const seqc_time_t t = fake_msToCycles(7.0);
+	fake_process(h, t);
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_STEP_BOUNDARY, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->arg, 0);
+	ASSERT_EQ(r->time, t);
+	ASSERT_EQ(r->tick, 0.0);
+	ASSERT_EQ(seqc_absStep(), 0);
+
+	/* step 1 at 120 BPM is 125 ms later */
+	fake_runUntil(h, t + fake_msToCycles(124.9), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 1);
+	fake_runUntil(h, t + fake_msToCycles(125.0), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 2);
+	ASSERT_EQ(seqc_absStep(), 1);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T1_start_before_the_first_process)
+{
+	fake_host_t *h = fake_init();
+	seqc_start();					/* no time yet: acts at the first call */
+	fake_process(h, 5000);
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_STEP_BOUNDARY, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->time, 5000);
+	ASSERT_NEAR(seqc_position(), 0.0, 1e-9);
+}
+
+TEST(T1_stop_keeps_the_position_and_start_rewinds)
+{
+	fake_host_t *h = fake_init();
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_runUntil(h, fake_msToCycles(300.0), fake_msToCycles(0.1));	/* 2.4 steps */
+	ASSERT_EQ(seqc_absStep(), 2);
+	seqc_stop();
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	ASSERT_FALSE(seqc_isRunning());
+	const double held = seqc_position();
+	ASSERT_NEAR(held, idealTicks(120.0, fake_msToCycles(300.0)), 1e-6);
+
+	fake_runUntil(h, fake_msToCycles(900.0), fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_position(), held);		/* the position holds */
+	ASSERT_EQ(seqc_absStep(), 2);
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 3);
+	seqc_stop();					/* ignored while stopped */
+
+	fake_clearLog(h);
+	seqc_start();					/* rewinds first */
+	uint8_t tr[4];
+	ASSERT_EQ(transports(h, tr, 4), 2);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_REWIND);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_START);
+	ASSERT_EQ(seqc_absStep(), -1);
+	ASSERT_EQ(seqc_position(), 0.0);
+	fake_process(h, fake_msToCycles(901.0));
+	ASSERT_EQ(seqc_absStep(), 0);
+	seqc_start();					/* ignored while running */
+	ASSERT_EQ(transports(h, tr, 4), 2);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T1_rewind_only_when_stopped)
+{
+	fake_host_t *h = fake_init();
+	fake_process(h, 0);
+	seqc_rewind();					/* already at the start: no callback */
+	ASSERT_EQ(fake_count(h, FAKE_TRANSPORT), 0);
+	seqc_start();
+	fake_process(h, 10);
+	seqc_rewind();					/* ignored while running */
+	ASSERT_EQ(seqc_absStep(), 0);
+	seqc_stop();
+	seqc_rewind();
+	ASSERT_EQ(seqc_absStep(), -1);
+	ASSERT_EQ(seqc_position(), 0.0);
+	uint8_t tr[4];
+	ASSERT_EQ(transports(h, tr, 4), 3);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_START);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_STOP);
+	ASSERT_EQ(tr[2], SEQC_TRANSPORT_REWIND);
+}
+
+TEST(T1_tempo_change_is_continuous)
+{
+	fake_host_t *h = fake_init();
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	const seqc_time_t t1 = fake_msToCycles(1000.0);	/* step 8 at 120 BPM */
+	fake_runUntil(h, t1, fake_msToCycles(0.1));
+	const double before = seqc_position();
+	ASSERT_NEAR(before, 8.0 * SEQC_TICKS_PER_STEP, 1e-6);
+	seqc_setTempo(90.0f);
+	ASSERT_NEAR(seqc_currentBpm(), 90.0, 1e-6);
+	ASSERT_EQ(seqc_position(), before);
+	/* step 9 one 90 BPM step later: 166.67 ms */
+	fake_runUntil(h, t1 + fake_msToCycles(166.6), fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 8);
+	fake_runUntil(h, t1 + fake_msToCycles(166.7), fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 9);
+	ASSERT_NEAR(seqc_position(), before + idealTicks(90.0, fake_msToCycles(166.7)), 1e-6);
+}
+
+TEST(T1_tempo_is_clamped)
+{
+	fake_init();
+	ASSERT_NEAR(seqc_currentBpm(), SEQC_DEFAULT_BPM, 1e-6);
+	seqc_setTempo(0.25f);
+	ASSERT_NEAR(seqc_currentBpm(), SEQC_MASTER_BPM_MIN, 1e-6);
+	seqc_setTempo(1000.0f);
+	ASSERT_NEAR(seqc_currentBpm(), SEQC_MASTER_BPM_MAX, 1e-6);
+	seqc_setTempo(133.5f);				/* fractional tempos are exact as well */
+	ASSERT_NEAR(seqc_currentBpm(), 133.5, 1e-6);
+}
+
+TEST(T1_time_never_goes_back)
+{
+	fake_host_t *h = fake_init();
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_process(h, fake_msToCycles(100.0));
+	const double p = seqc_position();
+	fake_process(h, fake_msToCycles(50.0));		/* earlier: counts as the last time */
+	ASSERT_EQ(seqc_position(), p);
+	fake_process(h, fake_msToCycles(130.0));
+	ASSERT_EQ(seqc_absStep(), 1);
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected:
+```
+67% tests passed, 1 tests failed out of 3
+The following tests FAILED:
+	  3 - T1 (Failed)
+...
+== compiler warnings: 0
+exit 1
+```
+Run: `build/host-tests/test_clock`
+
+Expected (the path before `tests/` is absolute):
+```
+.../tests/test_clock.c:57: ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), expected) failed: 0 != 2401
+FAIL T1_tempo_accuracy_60_bpm
+...
+.../tests/test_clock.c:99: ASSERT_EQ(transports(h, tr, 4), 1) failed: 0 != 1
+FAIL T1_start_at_next_process
+...
+0 of 12 tests passed
+```
+
+- [ ] **Step 3: Replace `Core/Src/Soundengine/Sequencer/seq_core.c` with the core skeleton**
+
+```c
+/*
+ * seq_core.c
+ *
+ * Timing core of the LICHOMAT sequencer, see seq_core.h for the interface and
+ * its rules. Plain C11 without the HAL, interrupts or allocation, so the same
+ * file builds in the firmware and in the host tests (tests/).
+ *
+ * Design: docs/superpowers/specs/2026-10-23-timing-core-design.md (the spec) and
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N11;
+ * they win where the two differ).
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+
+#include "Soundengine/Sequencer/seq_core.h"
+
+#include <string.h>
+
+//------------------------------------------------------------------------------
+// Constants
+//------------------------------------------------------------------------------
+#define SEQC_NEVER		UINT64_MAX	/**< nextDue when nothing is scheduled */
+#define SEQC_NO_TICK		INT64_MAX	/**< no item pending */
+
+//------------------------------------------------------------------------------
+// State
+//------------------------------------------------------------------------------
+/** The items of the timeline. At equal ticks they are handled in this order
+ * (seq_core.h, "Processing order"). */
+typedef enum
+{
+	SEQC_ITEM_NONE = 0,
+	SEQC_ITEM_BOUNDARY,	/**< the next step boundary */
+} seqc_item_t;
+
+//------------------------------------------------------------------------------
+/** time base, musical clock and transport */
+typedef struct
+{
+	seqc_host_t	host;
+	uint32_t	cyclesPerSecond;
+	bool		busy;		/**< inside a seqc_ call that can run callbacks */
+	bool		haveTime;	/**< seqc_process() has set the time */
+	seqc_time_t	now;		/**< the core's current time */
+	seqc_time_t	nextDue;	/**< N10: nothing is due before this time */
+
+	double		masterBpm;
+	double		ticksPerCycle;	/**< of the master tempo */
+	double		cyclesPerTick;
+
+	/* Internal sync (N1): the timeline is at tick
+	 * anchorTick + (t - anchorTime) * ticksPerCycle at time t. It runs all the
+	 * time. While the transport runs, the position is on it: a start re-anchors
+	 * it at tick 0. */
+	seqc_time_t	anchorTime;
+	double		anchorTick;
+
+	seqc_state_t	state;
+	bool		startPending;	/**< internal start: step 0 at the next seqc_process() */
+	bool		atStart;	/**< rewound, and nothing has played since */
+	double		pos;		/**< the position handled so far, ticks */
+	int32_t		absStep;	/**< n of the current step, -1 before the first */
+	seqc_stats_t	stats;
+} seqc_core_t;
+
+//------------------------------------------------------------------------------
+/* the state, one part per area */
+static seqc_core_t seqc;
+
+//------------------------------------------------------------------------------
+// Helpers
+//------------------------------------------------------------------------------
+/** ticks per cycle at bpm */
+static double seqc_ticksPerCycle(double bpm)
+{
+	return bpm * SEQC_TICKS_PER_BEAT / 60.0 / (double)seqc.cyclesPerSecond;
+}
+//------------------------------------------------------------------------------
+/** the absolute step of the next boundary */
+static uint32_t seqc_nextBoundaryStep(void)
+{
+	return (uint32_t)(seqc.absStep + 1);
+}
+
+//------------------------------------------------------------------------------
+// Position
+//------------------------------------------------------------------------------
+/** the internal timeline at time t (N1) */
+static double seqc_internalTick(seqc_time_t t)
+{
+	return seqc.anchorTick + (double)(t - seqc.anchorTime) * seqc.ticksPerCycle;
+}
+//------------------------------------------------------------------------------
+/** the time at which the internal timeline reaches tick (rounded down, so that
+ * a process call at that time handles it or finds it just short) */
+static seqc_time_t seqc_internalTime(seqc_tick_t tick)
+{
+	const double cycles = ((double)tick - seqc.anchorTick) * seqc.cyclesPerTick;
+	if (cycles <= 0.0)
+		return seqc.now;
+	return seqc.anchorTime + (seqc_time_t)cycles;
+}
+//------------------------------------------------------------------------------
+/** the position at time t, at or after the core's current time */
+static double seqc_positionAt(seqc_time_t t)
+{
+	if (seqc.state != SEQC_RUNNING || seqc.startPending)
+		return seqc.pos;
+	const double p = seqc_internalTick(t);
+	return p > seqc.pos ? p : seqc.pos;
+}
+
+//------------------------------------------------------------------------------
+// Transport
+//------------------------------------------------------------------------------
+/** stop and keep the position (the caller has set it) */
+static void seqc_stopTransport(void)
+{
+	seqc.state = SEQC_STOPPED;
+	seqc.startPending = false;
+	seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_STOP);
+}
+//------------------------------------------------------------------------------
+/** back to the start, before step 0 */
+static void seqc_rewindTransport(void)
+{
+	const bool wasAtStart = seqc.atStart;
+
+	seqc.absStep = -1;
+	seqc.pos = 0.0;
+	seqc.atStart = true;
+	if (!wasAtStart)
+		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_REWIND);
+}
+//------------------------------------------------------------------------------
+/** local start (seqc_start()): from the beginning */
+static void seqc_localStart(void)
+{
+	if (!seqc.atStart)
+		seqc_rewindTransport();
+	seqc.state = SEQC_RUNNING;
+	seqc.startPending = true;
+	seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_START);
+}
+
+//------------------------------------------------------------------------------
+// Step boundary
+//------------------------------------------------------------------------------
+/** the step boundary at tick (seq_core.h, "Processing order") */
+static void seqc_boundary(seqc_tick_t tick)
+{
+	seqc.pos = (double)tick;
+	seqc.absStep++;
+	seqc.atStart = false;
+	seqc.host.stepBoundary(seqc.host.ctx, (uint32_t)seqc.absStep);
+}
+
+//------------------------------------------------------------------------------
+// Processing
+//------------------------------------------------------------------------------
+/** keep the earlier of two candidates; at equal ticks the lower item */
+static void seqc_consider(seqc_item_t item, seqc_tick_t tick, uint8_t track,
+		seqc_item_t *best, seqc_tick_t *bestTick, uint8_t *bestTrack)
+{
+	if (tick < *bestTick || (tick == *bestTick && item < *best))
+	{
+		*best = item;
+		*bestTick = tick;
+		*bestTrack = track;
+	}
+}
+//------------------------------------------------------------------------------
+/** the next item of the timeline: its kind, tick and track (note-offs) */
+static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
+{
+	seqc_item_t best = SEQC_ITEM_NONE;
+	*tick = SEQC_NO_TICK;
+	*track = 0;
+	if (seqc.state == SEQC_RUNNING && !seqc.startPending)
+		seqc_consider(SEQC_ITEM_BOUNDARY, (seqc_tick_t)seqc_nextBoundaryStep() * SEQC_TICKS_PER_STEP, 0,
+				&best, tick, track);
+	return best;
+}
+//------------------------------------------------------------------------------
+/** handle every item due at or before target, earliest first (spec 6.3) */
+static void seqc_runTo(double target)
+{
+	for (;;)
+	{
+		seqc_tick_t tick;
+		uint8_t track;
+		const seqc_item_t item = seqc_nextItem(&tick, &track);
+		if (item == SEQC_ITEM_NONE || (double)tick > target)
+			break;
+		switch (item)
+		{
+		case SEQC_ITEM_BOUNDARY:
+			seqc_boundary(tick);
+			break;
+		default:
+			return;
+		}
+	}
+	if (seqc.state == SEQC_RUNNING && target > seqc.pos)
+		seqc.pos = target;
+}
+//------------------------------------------------------------------------------
+/** internal sync: a pending start begins here, then the timeline runs to now */
+static void seqc_runInternal(void)
+{
+	if (seqc.startPending)
+	{
+		/* step 0 now */
+		seqc.startPending = false;
+		seqc.anchorTime = seqc.now;
+		seqc.anchorTick = 0.0;
+		seqc.pos = 0.0;
+	}
+	seqc_runTo(seqc_internalTick(seqc.now));
+}
+//------------------------------------------------------------------------------
+/** move the core's time to t (never back) and handle everything due up to it */
+static void seqc_advance(seqc_time_t t)
+{
+	if (!seqc.haveTime)
+	{
+		/* the first time: the internal timeline starts here */
+		seqc.haveTime = true;
+		seqc.now = t;
+		seqc.anchorTime = t;
+	}
+	else if (t > seqc.now)
+		seqc.now = t;
+	seqc_runInternal();
+}
+//------------------------------------------------------------------------------
+/** work out nextDue (N10) */
+static void seqc_schedule(void)
+{
+	if (!seqc.haveTime || seqc.startPending)
+	{
+		seqc.nextDue = 0;
+		return;
+	}
+	seqc_tick_t tick;
+	uint8_t track;
+	const seqc_item_t item = seqc_nextItem(&tick, &track);
+	if (item == SEQC_ITEM_NONE)
+		seqc.nextDue = SEQC_NEVER;
+	else
+		seqc.nextDue = seqc_internalTime(tick);
+}
+
+//------------------------------------------------------------------------------
+// Interface
+//------------------------------------------------------------------------------
+/** Start of a seqc_ call that changes the state. A call from inside a callback
+ * is ignored and counted (seq_core.h, "Execution context"). */
+static bool seqc_enter(void)
+{
+	if (seqc.busy)
+		return false;
+	seqc.busy = true;
+	seqc.nextDue = 0;	/* so that a nested seqc_process() reaches seqc_enter() */
+	return true;
+}
+//------------------------------------------------------------------------------
+/** end of such a call */
+static void seqc_leave(void)
+{
+	seqc_schedule();
+	seqc.busy = false;
+}
+//------------------------------------------------------------------------------
+void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
+{
+	memset(&seqc, 0, sizeof seqc);
+
+	seqc.host = *host;
+	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
+	seqc.masterBpm = SEQC_DEFAULT_BPM;
+	seqc.ticksPerCycle = seqc_ticksPerCycle(seqc.masterBpm);
+	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
+	seqc.state = SEQC_STOPPED;
+	seqc.atStart = true;
+	seqc.absStep = -1;
+}
+//------------------------------------------------------------------------------
+void seqc_setSyncMode(seqc_sync_t mode)
+{
+	(void)mode;			/* internal sync only, for now */
+}
+//------------------------------------------------------------------------------
+void seqc_setTempo(float bpm)
+{
+	if (!seqc_enter())
+		return;
+	double b = bpm;
+	if (b < SEQC_MASTER_BPM_MIN)
+		b = SEQC_MASTER_BPM_MIN;
+	if (b > SEQC_MASTER_BPM_MAX)
+		b = SEQC_MASTER_BPM_MAX;
+	if (seqc.haveTime)
+	{
+		/* re-anchor, so that the timeline and the position stay continuous */
+		seqc.anchorTick = seqc_internalTick(seqc.now);
+		seqc.anchorTime = seqc.now;
+	}
+	seqc.masterBpm = b;
+	seqc.ticksPerCycle = seqc_ticksPerCycle(b);
+	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
+	seqc_leave();
+}
+//------------------------------------------------------------------------------
+void seqc_setAnalogPpq(uint8_t ppq)
+{
+	(void)ppq;			/* internal sync only, for now */
+}
+//------------------------------------------------------------------------------
+void seqc_start(void)
+{
+	if (!seqc_enter())
+		return;
+	if (seqc.state == SEQC_STOPPED)
+		seqc_localStart();
+	seqc_leave();
+}
+//------------------------------------------------------------------------------
+void seqc_stop(void)
+{
+	if (!seqc_enter())
+		return;
+	if (seqc.state != SEQC_STOPPED)
+	{
+		seqc.pos = seqc_positionAt(seqc.now);
+		seqc_stopTransport();
+	}
+	seqc_leave();
+}
+//------------------------------------------------------------------------------
+void seqc_rewind(void)
+{
+	if (!seqc_enter())
+		return;
+	if (seqc.state != SEQC_RUNNING)
+		seqc_rewindTransport();
+	seqc_leave();
+}
+//------------------------------------------------------------------------------
+void seqc_syncEvent(seqc_sync_ev_t ev, seqc_time_t stamp)
+{
+	(void)ev;			/* internal sync only, for now */
+	(void)stamp;
+}
+//------------------------------------------------------------------------------
+void seqc_songPosition(uint16_t sixteenths)
+{
+	(void)sixteenths;		/* not handled yet */
+}
+//------------------------------------------------------------------------------
+void seqc_process(seqc_time_t now)
+{
+	if (now < seqc.nextDue)
+	{
+		/* N10: nothing is due; the time is kept for the queries */
+		if (now > seqc.now)
+			seqc.now = now;
+		return;
+	}
+	if (!seqc_enter())
+		return;
+	seqc_advance(now);
+	seqc_leave();
+}
+//------------------------------------------------------------------------------
+void seqc_skipOnce(uint8_t track, uint8_t step)
+{
+	(void)track;			/* not handled yet */
+	(void)step;
+}
+//------------------------------------------------------------------------------
+uint8_t seqc_trackStep(uint8_t track)
+{
+	(void)track;			/* no track counters yet */
+	return SEQC_NO_STEP;
+}
+//------------------------------------------------------------------------------
+int32_t seqc_absStep(void)
+{
+	return seqc.absStep;
+}
+//------------------------------------------------------------------------------
+uint8_t seqc_masterTrack(void)
+{
+	return 0;			/* no track counters yet */
+}
+//------------------------------------------------------------------------------
+double seqc_position(void)
+{
+	return seqc.busy ? seqc.pos : seqc_positionAt(seqc.now);
+}
+//------------------------------------------------------------------------------
+float seqc_stepPhase(void)
+{
+	return 0.0f;			/* not handled yet */
+}
+//------------------------------------------------------------------------------
+float seqc_currentBpm(void)
+{
+	return (float)seqc.masterBpm;
+}
+//------------------------------------------------------------------------------
+seqc_state_t seqc_state(void)
+{
+	return seqc.state;
+}
+//------------------------------------------------------------------------------
+bool seqc_isRunning(void)
+{
+	return seqc.state != SEQC_STOPPED;
+}
+//------------------------------------------------------------------------------
+void seqc_stats(seqc_stats_t *out)
+{
+	*out = seqc.stats;
+}
+//------------------------------------------------------------------------------
+void seqc_resetStats(void)
+{
+	if (seqc.busy)
+		return;
+	memset(&seqc.stats, 0, sizeof seqc.stats);
+}
+```
+
+- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `Core/Src/Soundengine/Sequencer/seq_core.c: c program text, ASCII text, with CRLF line terminators`
+
+- [ ] **Step 5: Add `seq_core.c` to the firmware build**
+
+In `Core/CMakeLists.txt` (LF), replace:
+```cmake
+# Step sequencer, Euclidean generator, external clock sync.
+add_library(lxr_sequencer OBJECT
+    Src/Soundengine/Sequencer/clockSync.c
+    Src/Soundengine/Sequencer/EuklidGenerator.c
+    Src/Soundengine/Sequencer/sequencer.c
+)
+```
+with:
+```cmake
+# Step sequencer, Euclidean generator, external clock sync, and the timing core
+# seq_core (also built by the host tests in tests/).
+add_library(lxr_sequencer OBJECT
+    Src/Soundengine/Sequencer/clockSync.c
+    Src/Soundengine/Sequencer/EuklidGenerator.c
+    Src/Soundengine/Sequencer/seq_core.c
+    Src/Soundengine/Sequencer/sequencer.c
+)
+# The host tests build seq_core.c with -Wall -Wextra -Werror; warn about the same here.
+set_property(SOURCE Src/Soundengine/Sequencer/seq_core.c APPEND PROPERTY COMPILE_OPTIONS -Wextra)
+```
+`lxr_sequencer` is already in `LXR_APP_MODULES` and links `lxr_app_common`. That library gives
+`seq_core.c` the firmware flags: `-O3 -std=gnu11 -Wall`, the MCU flags and
+`-ffast-math -freciprocal-math`. `seq_core.c` is not in `LXR_ITCM_SOURCES`, so it runs from flash
+(N11).
+
+- [ ] **Step 6: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected:
+```
+100% tests passed, 0 tests failed out of 3
+== firmware build (release)
+memory: ITCM 15000/16384 B (91.6%, free 1384)  ...  image 274688/1015808 B (27.0%)
+== compiler warnings: 0
+exit 0
+```
+Run: `grep -o '"command": "[^"]*seq_core.c[^"]*"' build/release/compile_commands.json | grep -o -- '-Wextra'`
+
+Expected: `-Wextra`, which shows the firmware compiles the core with the extra warnings.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c Core/CMakeLists.txt tests/test_clock.c
+git commit -F - <<'EOF'
+seq_core: master clock, step boundaries and internal transport (E1.3, T1)
+
+The position is a double in ticks from an anchor (N1), so the tempo is exact
+and does not drift; nextDue gives the early exit of N10. Start, stop and
+rewind in internal sync, with the transport() callback. seq_core.c joins
+lxr_sequencer and is compiled with -Wextra, as on the host.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.4: Track counters, master wrap and pattern end (T10)
+
+At each boundary every track index advances by one. It wraps at the effective length, where raw 0
+is 16 and anything above 64 is 64, or at 64. The master track is the track with the largest raw
+length, the lowest track on a tie (fw 1.7 `seq_getLongestTrack()`). When it wraps, `patternEnd()`
+is called, and it returns one of:
+- `SEQC_PAT_CHANGED`: every index restarts at 0;
+- `SEQC_PAT_SAME`: the indices keep running, which keeps the polymeter;
+- `SEQC_PAT_STOP`: a song end. The transport stops and rewinds, and `stepBoundary()` is not called.
+
+After a start every index is −1. At the first boundary −1 + 1 = 0 counts as a wrap, so
+`patternEnd()` comes at step 0 (N4). In song mode this moves the song pointer from −1 to entry 0.
+
+`seqc_trackStep()` and `seqc_masterTrack()` become real.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
+- Test: `tests/test_tracks.c` (ctest id `T10`)
+
+- [ ] **Step 1: Write the failing test `tests/test_tracks.c`**
+
+```c
+/*
+ * test_tracks.c
+ *
+ * T10: the per-track step counters and the pattern end (spec 6.5, N4, N5).
+ * Every track wraps at its own length (polymeter); the master track is the
+ * longest by raw length, as fw 1.7 seq_getLongestTrack(); patternEnd() comes at
+ * the master wrap, also at step 0 after a start; the indices restart only when
+ * the pattern changes; a song end stops and rewinds the transport.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+#include "seqc_test.h"
+
+#define MAX_SEEN 256
+
+/* the track steps seen at each boundary, recorded by the stepBoundary() hook */
+static uint8_t seen[MAX_SEEN][SEQC_NUM_TRACKS];
+static uint8_t seenPattern[MAX_SEEN];
+static uint32_t seenCount;
+
+static void recordSteps(fake_host_t *h, uint32_t absStep)
+{
+	if (absStep < MAX_SEEN)
+	{
+		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+			seen[absStep][t] = seqc_trackStep(t);
+		seenPattern[absStep] = h->activePattern;
+	}
+	seenCount = absStep + 1;
+}
+
+/* start at time 0 and run at 120 BPM until just after the boundary of step last */
+static void runTo(fake_host_t *h, uint32_t last)
+{
+	h->onStepBoundary = recordSteps;
+	seenCount = 0;
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * last) + fake_msToCycles(1.0), fake_msToCycles(1.0));
+}
+
+/* the absolute steps of the logged patternEnd() calls */
+static size_t patternEnds(const fake_host_t *h, int32_t *out, size_t max)
+{
+	size_t n = 0, pos = 0;
+	const fake_rec_t *r;
+	while ((r = fake_next(h, FAKE_PATTERN_END, &pos)) != NULL)
+	{
+		if (n < max)
+			out[n] = r->absStep;
+		n++;
+	}
+	return n;
+}
+
+TEST(T10_no_track_step_before_the_first_step)
+{
+	fake_host_t *h = fake_init();
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		ASSERT_EQ(seqc_trackStep(t), SEQC_NO_STEP);
+	ASSERT_EQ(seqc_trackStep(7), SEQC_NO_STEP);
+	ASSERT_EQ(seqc_masterTrack(), 0);
+	fake_process(h, 0);
+	seqc_start();
+	ASSERT_EQ(seqc_trackStep(0), SEQC_NO_STEP);	/* the start is pending */
+	fake_process(h, 0);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		ASSERT_EQ(seqc_trackStep(t), 0);
+	ASSERT_EQ(seqc_trackStep(7), SEQC_NO_STEP);
+}
+
+TEST(T10_polymeter_wrap_per_track)
+{
+	fake_host_t *h = fake_init();
+	/* raw 0 plays 16 steps and raw 70 plays 64 */
+	static const uint8_t raw[SEQC_NUM_TRACKS] = { 16, 12, 7, 64, 0, 5, 70 };
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		fake_setLength(h, 0, t, raw[t]);
+	runTo(h, 199);
+	ASSERT_EQ(seenCount, 200);
+	for (uint32_t n = 0; n < 200; n++)
+		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+			ASSERT_EQ(seen[n][t], n % fake_effectiveLength(raw[t]));
+	/* track 6 has the largest raw length: the pattern ends every 64 steps */
+	ASSERT_EQ(seqc_masterTrack(), 6);
+	int32_t ends[8];
+	ASSERT_EQ(patternEnds(h, ends, 8), 4);
+	ASSERT_EQ(ends[0], 0);
+	ASSERT_EQ(ends[1], 64);
+	ASSERT_EQ(ends[2], 128);
+	ASSERT_EQ(ends[3], 192);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T10_raw_zero_loses_to_any_other_length)
+{
+	fake_host_t *h = fake_init();
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		fake_setLength(h, 0, t, 0);		/* 16 steps each */
+	fake_setLength(h, 0, 4, 8);			/* the master, as in fw 1.7 */
+	runTo(h, 40);
+	ASSERT_EQ(seqc_masterTrack(), 4);
+	int32_t ends[8];
+	ASSERT_EQ(patternEnds(h, ends, 8), 6);
+	for (int i = 0; i < 6; i++)
+		ASSERT_EQ(ends[i], 8 * i);
+	/* the other tracks keep running through the pattern ends */
+	ASSERT_EQ(seen[40][0], 40 % 16);
+	ASSERT_EQ(seen[40][4], 0);
+}
+
+TEST(T10_tie_goes_to_the_lowest_track)
+{
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 2, 24);
+	fake_setLength(h, 0, 5, 24);
+	runTo(h, 30);
+	ASSERT_EQ(seqc_masterTrack(), 2);
+	int32_t ends[4];
+	ASSERT_EQ(patternEnds(h, ends, 4), 2);
+	ASSERT_EQ(ends[1], 24);
+}
+
+TEST(T10_same_pattern_keeps_the_indices_running)
+{
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 1, 12);
+	runTo(h, 20);
+	size_t pos = 0;
+	const fake_rec_t *r;
+	int ends = 0;
+	while ((r = fake_next(h, FAKE_PATTERN_END, &pos)) != NULL)
+	{
+		ASSERT_EQ(r->value, SEQC_PAT_SAME);
+		ends++;
+	}
+	ASSERT_EQ(ends, 2);				/* steps 0 and 16 */
+	ASSERT_EQ(seen[16][0], 0);
+	ASSERT_EQ(seen[16][1], 4);			/* 16 mod 12: no reset */
+	ASSERT_EQ(seen[20][1], 8);
+	ASSERT_EQ(h->patternChanges, 0);
+}
+
+TEST(T10_pattern_change_restarts_every_track)
+{
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 1, 12);
+	fake_setLength(h, 1, 1, 5);
+	runTo(h, 3);
+	fake_setNextPattern(h, 1);			/* running: switches at the pattern end */
+	ASSERT_EQ(h->activePattern, 0);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 23) + fake_msToCycles(1.0), fake_msToCycles(1.0));
+	ASSERT_EQ(seenPattern[15], 0);
+	ASSERT_EQ(seen[15][1], 3);
+	ASSERT_EQ(seenPattern[16], 1);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		ASSERT_EQ(seen[16][t], 0);
+	ASSERT_EQ(seen[21][1], 0);			/* pattern 1: track 1 has 5 steps */
+	ASSERT_EQ(seen[23][1], 2);
+	ASSERT_EQ(h->patternChanges, 1);
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_PATTERN_END, &pos);	/* step 0 */
+	r = fake_next(h, FAKE_PATTERN_END, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->absStep, 16);
+	ASSERT_EQ(r->value, SEQC_PAT_CHANGED);
+	ASSERT_EQ(r->pattern, 1);
+}
+
+TEST(T10_reload_of_the_same_pattern_restarts)
+{
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 1, 12);
+	runTo(h, 3);
+	fake_setNextPattern(h, 0);			/* the same pattern, with the reload flag */
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 16) + fake_msToCycles(1.0), fake_msToCycles(1.0));
+	ASSERT_EQ(seen[16][1], 0);
+	ASSERT_EQ(h->patternChanges, 1);
+}
+
+TEST(T10_first_boundary_starts_the_song)
+{
+	fake_host_t *h = fake_init();
+	static const uint8_t song[] = { 3, 5 };
+	fake_setSong(h, song, 2);
+	fake_setSongMode(h, true);
+	runTo(h, 17);
+	int32_t ends[4];
+	ASSERT_EQ(patternEnds(h, ends, 4), 2);
+	ASSERT_EQ(ends[0], 0);				/* the pointer goes from -1 to entry 0 */
+	ASSERT_EQ(seenPattern[0], 3);
+	ASSERT_EQ(seenPattern[16], 5);
+	ASSERT_EQ(h->songPos, 1);
+}
+
+TEST(T10_song_end_stops_and_rewinds)
+{
+	fake_host_t *h = fake_init();
+	static const uint8_t song[] = { 1, 2 };
+	fake_setSong(h, song, 2);
+	fake_setSongMode(h, true);
+	runTo(h, 40);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	ASSERT_EQ(seqc_absStep(), -1);
+	ASSERT_EQ(seqc_trackStep(0), SEQC_NO_STEP);
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 32);	/* no stepBoundary() at the song end */
+	size_t pos = 0;
+	const fake_rec_t *r;
+	uint8_t tr[4];
+	size_t n = 0;
+	while ((r = fake_next(h, FAKE_TRANSPORT, &pos)) != NULL)
+		if (n < 4)
+			tr[n++] = r->value;
+	ASSERT_EQ(n, 3);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_START);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_STOP);
+	ASSERT_EQ(tr[2], SEQC_TRANSPORT_REWIND);
+	ASSERT_EQ(h->songPos, FAKE_NO_SONG_POS);
+
+	/* the next start plays the song from entry 0, once */
+	fake_clearLog(h);
+	seenCount = 0;
+	seqc_start();
+	const seqc_time_t t = h->now;
+	fake_process(h, t);
+	fake_runUntil(h, t + (seqc_time_t)(fake_stepCycles(120.0) * 16) + fake_msToCycles(1.0), fake_msToCycles(1.0));
+	ASSERT_EQ(seenPattern[0], 1);
+	ASSERT_EQ(seenPattern[15], 1);
+	ASSERT_EQ(seenPattern[16], 2);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `75% tests passed, 1 tests failed out of 4`, `4 - T10 (Failed)`, `exit 1`.
+
+Run: `build/host-tests/test_tracks`
+
+Expected:
+```
+.../tests/test_tracks.c:75: ASSERT_EQ(seqc_trackStep(t), 0) failed: 255 != 0
+FAIL T10_no_track_step_before_the_first_step
+.../tests/test_tracks.c:90: ASSERT_EQ(seen[n][t], n % fake_effectiveLength(raw[t])) failed: 255 != 0
+FAIL T10_polymeter_wrap_per_track
+...
+0 of 9 tests passed
+```
+
+- [ ] **Step 3: Implement the counters in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+Insert after `seqc_core_t` (`seqc_tracks_t`):
+
+```c
+//------------------------------------------------------------------------------
+/** per-track step counters */
+typedef struct
+{
+	int8_t		index[SEQC_NUM_TRACKS];	/**< track step, -1 before the first step */
+	uint8_t		master;			/**< master track of the last boundary */
+} seqc_tracks_t;
+```
+
+Replace the state variables block (`/* the state, one part per area */`) with:
+
+```c
+/* the state, one part per area */
+static seqc_core_t seqc;
+static seqc_tracks_t seqc_trk;
+```
+
+Insert after `seqc_nextBoundaryStep()` (`seqc_effectiveLength()`, `seqc_trackLength()`, `seqc_longestTrack()`, `seqc_nextIndex()`):
+
+```c
+//------------------------------------------------------------------------------
+/** a raw track length as the sequencer plays it: 0 is 16, above 64 is 64 */
+static uint8_t seqc_effectiveLength(uint8_t raw)
+{
+	if (raw == 0)
+		return SEQC_DEFAULT_LENGTH;
+	return raw > SEQC_NUM_STEPS ? SEQC_NUM_STEPS : raw;
+}
+//------------------------------------------------------------------------------
+/** the effective length of a track */
+static uint8_t seqc_trackLength(uint8_t pattern, uint8_t track)
+{
+	return seqc_effectiveLength(seqc.host.trackLength(seqc.host.ctx, pattern, track));
+}
+//------------------------------------------------------------------------------
+/** the master track of a pattern, as fw 1.7 seq_getLongestTrack(): the largest
+ * raw length, the lowest track on a tie */
+static uint8_t seqc_longestTrack(uint8_t pattern)
+{
+	uint8_t master = 0;
+	uint8_t longest = seqc.host.trackLength(seqc.host.ctx, pattern, 0);
+	for (uint8_t t = 1; t < SEQC_NUM_TRACKS; t++)
+	{
+		const uint8_t len = seqc.host.trackLength(seqc.host.ctx, pattern, t);
+		if (len > longest)
+		{
+			longest = len;
+			master = t;
+		}
+	}
+	return master;
+}
+//------------------------------------------------------------------------------
+/** the track index after index on a track of length len (fw 1.7 seq_nextStep()).
+ * The master track wraps when this is 0. */
+static int8_t seqc_nextIndex(int8_t index, uint8_t len)
+{
+	const int next = index + 1;
+	return (next >= len || (next & 0x3f) == 0) ? 0 : (int8_t)next;
+}
+```
+
+Replace `seqc_rewindTransport()` with:
+
+```c
+/** back to the start, before step 0 */
+static void seqc_rewindTransport(void)
+{
+	const bool wasAtStart = seqc.atStart;
+
+	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+	seqc_trk.master = 0;
+	seqc.pos = 0.0;
+	seqc.atStart = true;
+	if (!wasAtStart)
+		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_REWIND);
+}
+```
+
+Insert after the section banner `// Step boundary` (`seqc_advanceCounters()`):
+
+```c
+//------------------------------------------------------------------------------
+/** boundary steps 1 and 2: advance the counters, and call patternEnd() if the
+ * master track wraps. Returns false if the song ended there. */
+static bool seqc_advanceCounters(void)
+{
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+	const uint8_t master = seqc_longestTrack(pattern);
+	const bool wrap = seqc_nextIndex(seqc_trk.index[master], seqc_trackLength(pattern, master)) == 0;
+
+	seqc.absStep++;
+	seqc.atStart = false;
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		seqc_trk.index[t] = seqc_nextIndex(seqc_trk.index[t], seqc_trackLength(pattern, t));
+	if (!wrap)
+		return true;
+	switch (seqc.host.patternEnd(seqc.host.ctx))
+	{
+	case SEQC_PAT_CHANGED:
+		memset(seqc_trk.index, 0, sizeof seqc_trk.index);
+		return true;
+	case SEQC_PAT_STOP:
+		seqc_stopTransport();
+		seqc_rewindTransport();
+		return false;
+	default:
+		return true;
+	}
+}
+```
+
+Replace `seqc_boundary()` with:
+
+```c
+/** the step boundary at tick (seq_core.h, "Processing order") */
+static void seqc_boundary(seqc_tick_t tick)
+{
+	seqc.pos = (double)tick;
+	if (!seqc_advanceCounters())
+		return;
+	const uint32_t n = (uint32_t)seqc.absStep;
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+
+	seqc_trk.master = seqc_longestTrack(pattern);
+	seqc.host.stepBoundary(seqc.host.ctx, n);
+}
+```
+
+Replace `seqc_init()` with:
+
+```c
+void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
+{
+	memset(&seqc, 0, sizeof seqc);
+	memset(&seqc_trk, 0, sizeof seqc_trk);
+
+	seqc.host = *host;
+	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
+	seqc.masterBpm = SEQC_DEFAULT_BPM;
+	seqc.ticksPerCycle = seqc_ticksPerCycle(seqc.masterBpm);
+	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
+	seqc.state = SEQC_STOPPED;
+	seqc.atStart = true;
+	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+}
+```
+
+Replace `seqc_trackStep()` with:
+
+```c
+uint8_t seqc_trackStep(uint8_t track)
+{
+	if (track >= SEQC_NUM_TRACKS || seqc_trk.index[track] < 0)
+		return SEQC_NO_STEP;
+	return (uint8_t)seqc_trk.index[track];
+}
+```
+
+Replace `seqc_masterTrack()` with:
+
+```c
+uint8_t seqc_masterTrack(void)
+{
+	return seqc_trk.master;
+}
+```
+
+- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `... with CRLF line terminators`
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 4`, image `274688/1015808 B`,
+`== compiler warnings: 0`, `exit 0`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c tests/test_tracks.c
+git commit -F - <<'EOF'
+seq_core: track counters, master wrap and pattern end (E1.4, T10)
+
+Every track wraps at its own length; the master track is the longest by raw
+length, as fw 1.7; patternEnd() comes at its wrap, also at step 0 after a
+start (N4). Indices restart only on SEQC_PAT_CHANGED; a song end stops and
+rewinds.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.5: Event generation: ratchet, shift, swing, probability, early and late parts (T2, T3, T4, T8)
+
+Generation (spec 6.1) with the early and late parts of N3.
+
+At the boundary of step n the core generates:
+- **the late part of step n:** its hits at or after n·96;
+- **the early part of step n+1:** its hits before (n+1)·96, which can only come from a negative shift.
+
+No hit is generated twice, so nothing has to be removed. That needs one more rule (decision 9): each
+part decides from the swing and the `StepTiming` at its own boundary which hits are its own, so a
+shuffle change or a timing edit between the two boundaries could put a hit into both parts or into
+neither. The early part therefore keeps the swing + shift and the hit count it used in the draw
+slot, and the late part of the same occurrence uses them if the early part queued a hit, or if the
+timing read at its boundary would put a hit before that boundary. Otherwise the late part reads the
+timing at its boundary, so an edit before the boundary applies to the step (spec §6.2).
+
+**Hit j** of k is at `n·96 + swing + shift + j·96/k`:
+- `StepTiming.flam` 0..5 gives k ∈ {1, 2, 3, 4, 6, 8}; any other value gives 1;
+- `shift = (StepTiming.shift − 7)·12`, and 15 counts as 0;
+- `swing = round(shuffle·64/127)` on odd n.
+
+**Probability.** `r = 1 + random() % 100` is drawn once per occurrence (track, n) and kept with its
+(pattern, step) in one of the track's two slots (n & 1). A different (pattern, step) gets a new
+draw. The step plays when `r ≤ Step.prob`, with all of its hits or none.
+
+**Events.** Each event carries a copy of its step's velocity, note and p-locks (D5).
+
+**Queue (N2).** It is sorted so that the last element fires next: binary search plus `memmove`. The
+order is tick ascending, absStep descending, notes before rolls, then track ascending. Firing here
+only pops the event and calls `trigger()`. These come later:
+- the choke, mutes and note-offs in E1.6;
+- `peekNextPattern()` for the early part at a pattern end in E1.7 (until then the early part
+  assumes that the same pattern continues);
+- counting a queue overflow in E1.12 (until then a full queue rejects the event silently).
+
+The tests keep the steps of one track apart in time, so the missing choke cannot change them.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
+- Test: `tests/test_generate.c` (ctest ids `T2`, `T3`, `T4`, `T8`)
+
+- [ ] **Step 1: Write the failing test `tests/test_generate.c`**
+
+```c
+/*
+ * test_generate.c
+ *
+ * Event generation (spec 6.1, N3):
+ * - T2: the straight grid, and the step data each event carries (D5);
+ * - T3: swing moves every hit of a swung step, ratchets included (D1);
+ * - T4: shift -7..+7 on every ratchet type, early hits included;
+ * - T3, T4: a shuffle change or a timing edit between the early and the late
+ *   part of a step plays no hit twice and loses none (the early part fixes the
+ *   timing, decision 9 of epic E1);
+ * - T8: probability is deterministic with a seeded generator, and the hits of a
+ *   step play all together or not at all.
+ * The steps of one track never overlap in these tests, so the choke (T7) does
+ * not take part.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+#include "seqc_test.h"
+
+static const fake_rec_t *trig[4096];
+
+/* start at time 0 and run at 120 BPM until just before the boundary of step end */
+static void runSteps(fake_host_t *h, uint32_t end)
+{
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * end) - 1, fake_msToCycles(0.1));
+}
+
+/* the hit ticks of one step, as the spec defines them */
+static int64_t hitTick(uint32_t n, int swing, int shiftUnits, int hit, int hits)
+{
+	return (int64_t)n * 96 + ((n & 1u) ? swing : 0) + shiftUnits * 12 + hit * 96 / hits;
+}
+
+TEST(T2_straight_grid)
+{
+	fake_host_t *h = fake_init();
+	static const uint8_t steps[] = { 0, 3, 4, 9, 15 };
+	for (size_t i = 0; i < sizeof steps; i++)
+		fake_setStep(h, 0, 2, steps[i], true);
+	runSteps(h, 32);
+	ASSERT_EQ(fake_count(h, FAKE_TRIGGER), 10);
+	const size_t n = fake_triggers(h, 2, trig, 64);
+	ASSERT_EQ(n, 10);
+	for (size_t i = 0; i < n; i++)
+	{
+		const seqc_event_t *ev = &trig[i]->ev;
+		const uint32_t abs = (uint32_t)(i / 5 * 16 + steps[i % 5]);
+		ASSERT_EQ(ev->absStep, abs);
+		ASSERT_EQ(ev->tick, (int64_t)abs * 96);
+		ASSERT_EQ(ev->step, steps[i % 5]);
+		ASSERT_EQ(ev->track, 2);
+		ASSERT_EQ(ev->pattern, 0);
+		ASSERT_EQ(ev->hit, 0);
+		ASSERT_EQ(ev->flags, 0);
+		ASSERT_EQ(ev->vel, 127);
+		ASSERT_EQ(ev->note, FAKE_DEFAULT_NOTE);
+		/* fired by the first call at or after its time */
+		const double late = (double)trig[i]->time - abs * fake_stepCycles(120.0);
+		ASSERT_TRUE(late > -1.0);
+		ASSERT_TRUE(late < fake_msToCycles(0.1) + 1.0);
+	}
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T2_event_carries_its_step_data)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 6, 5, true);
+	fake_setStepData(h, 0, 6, 5, 90, 64, 100);
+	h->steps[0][6][5].volume |= FAKE_STEP_ACTIVE_MASK;	/* the active bit is not velocity */
+	fake_setPlocks(h, 0, 6, 5, 12, 34, 56, 78);
+	runSteps(h, 8);
+	ASSERT_EQ(fake_triggers(h, 6, trig, 4), 1);
+	const seqc_event_t *ev = &trig[0]->ev;
+	ASSERT_EQ(ev->vel, 90);
+	ASSERT_EQ(ev->note, 64);
+	ASSERT_EQ(ev->p1Nr, 12);
+	ASSERT_EQ(ev->p1Val, 34);
+	ASSERT_EQ(ev->p2Nr, 56);
+	ASSERT_EQ(ev->p2Val, 78);
+	ASSERT_EQ(ev->reserved, 0);
+}
+
+TEST(T2_flam_out_of_range_plays_one_hit)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 1, 2, true);
+	fake_setTiming(h, 0, 1, 2, 9, 0);
+	runSteps(h, 4);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 4), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 192);
+}
+
+/* one step per track, so that no two steps of a track overlap */
+static void setUpSwing(fake_host_t *h, uint8_t shuffle)
+{
+	h->shuffle = shuffle;
+	fake_setStep(h, 0, 0, 1, true);			/* odd: x4, +1 */
+	fake_setTiming(h, 0, 0, 1, 3, 1);
+	fake_setStep(h, 0, 1, 2, true);			/* even: x3, -1 */
+	fake_setTiming(h, 0, 1, 2, 2, -1);
+	fake_setStep(h, 0, 2, 5, true);			/* odd: one hit, -7 */
+	fake_setTiming(h, 0, 2, 5, 0, -7);
+	fake_setStep(h, 0, 3, 6, true);			/* even: x8 */
+	fake_setTiming(h, 0, 3, 6, 5, 0);
+	fake_setStep(h, 0, 4, 9, true);			/* odd: x8, +7: spills into step 10 */
+	fake_setTiming(h, 0, 4, 9, 5, 7);
+}
+
+static void checkSwing(uint8_t shuffle, int swing)
+{
+	fake_host_t *h = fake_init();
+	setUpSwing(h, shuffle);
+	runSteps(h, 16);
+	static const struct { uint8_t track, step; int shift, hits; } spec[] = {
+		{ 0, 1, 1, 4 }, { 1, 2, -1, 3 }, { 2, 5, -7, 1 }, { 3, 6, 0, 8 }, { 4, 9, 7, 8 },
+	};
+	for (size_t i = 0; i < sizeof spec / sizeof spec[0]; i++)
+	{
+		const size_t n = fake_triggers(h, spec[i].track, trig, 16);
+		ASSERT_EQ(n, (size_t)spec[i].hits);
+		for (int j = 0; j < spec[i].hits; j++)
+		{
+			ASSERT_EQ(trig[j]->ev.absStep, spec[i].step);
+			ASSERT_EQ(trig[j]->ev.hit, j);
+			ASSERT_EQ(trig[j]->ev.tick, hitTick(spec[i].step, swing, spec[i].shift, j, spec[i].hits));
+		}
+	}
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T3_swing_0) { checkSwing(0, 0); }
+TEST(T3_swing_32) { checkSwing(32, 16); }		/* round(32 * 64 / 127) */
+TEST(T3_swing_64) { checkSwing(64, 32); }
+TEST(T3_swing_127) { checkSwing(127, 64); }		/* 2/3 of a step */
+TEST(T3_shuffle_above_127_counts_as_127) { checkSwing(200, 64); }
+
+TEST(T3_parity_counts_from_the_start)
+{
+	fake_host_t *h = fake_init();
+	h->shuffle = 127;
+	fake_setLength(h, 0, 5, 7);			/* step 0 of a 7-step track: odd at 7, 21 */
+	fake_setStep(h, 0, 5, 0, true);
+	runSteps(h, 29);
+	ASSERT_EQ(fake_triggers(h, 5, trig, 8), 5);
+	ASSERT_EQ(trig[0]->ev.tick, 0);
+	ASSERT_EQ(trig[1]->ev.tick, 7 * 96 + 64);
+	ASSERT_EQ(trig[2]->ev.tick, 14 * 96);
+	ASSERT_EQ(trig[3]->ev.tick, 21 * 96 + 64);
+	ASSERT_EQ(trig[4]->ev.tick, 28 * 96);
+}
+
+TEST(T3_shuffle_is_read_at_every_boundary)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 1, true);
+	fake_setStep(h, 0, 0, 3, true);
+	h->shuffle = 64;
+	runSteps(h, 2);					/* step 1 is generated at boundary 1 */
+	h->shuffle = 127;
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 4), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 0, trig, 4), 2);
+	ASSERT_EQ(trig[0]->ev.tick, 96 + 32);
+	ASSERT_EQ(trig[1]->ev.tick, 3 * 96 + 64);
+}
+
+TEST(T4_shift_on_every_ratchet_type)
+{
+	for (uint8_t flam = 0; flam < 6; flam++)
+	{
+		const int hits = (int[]){ 1, 2, 3, 4, 6, 8 }[flam];
+		for (int shift = -7; shift <= 8; shift++)
+		{
+			/* 8 stands for the raw value 15, which counts as 0 */
+			fake_host_t *h = fake_init();
+			fake_setStep(h, 0, 3, 4, true);
+			if (shift <= 7)
+				fake_setTiming(h, 0, 3, 4, flam, (int8_t)shift);
+			else
+				h->timing[0][3][4] = (StepTiming){ .flam = flam, .shift = 15 };
+			runSteps(h, 8);
+			const size_t n = fake_triggers(h, 3, trig, 16);
+			ASSERT_EQ(n, (size_t)hits);
+			for (int j = 0; j < hits; j++)
+			{
+				ASSERT_EQ(trig[j]->ev.tick, hitTick(4, 0, shift <= 7 ? shift : 0, j, hits));
+				ASSERT_EQ(trig[j]->ev.absStep, 4);
+				ASSERT_EQ(trig[j]->ev.hit, j);
+			}
+			ASSERT_EQ(h->errors, 0);
+		}
+	}
+}
+
+TEST(T4_negative_shift_on_step_0_of_the_next_loop)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 0, true);
+	fake_setTiming(h, 0, 2, 0, 1, -3);		/* x2: -36 and +12 */
+	fake_setStep(h, 0, 3, 0, true);
+	fake_setTiming(h, 0, 3, 0, 0, -7);		/* one hit at -84 */
+	runSteps(h, 40);
+	/* after the start, step 0 has no early hits: they would be before tick 0 */
+	size_t n = fake_triggers(h, 2, trig, 16);
+	ASSERT_EQ(n, 5);
+	ASSERT_EQ(trig[0]->ev.tick, 12);
+	ASSERT_EQ(trig[0]->ev.hit, 1);
+	ASSERT_EQ(trig[1]->ev.tick, 16 * 96 - 36);
+	ASSERT_EQ(trig[1]->ev.absStep, 16);
+	ASSERT_EQ(trig[1]->ev.step, 0);
+	ASSERT_EQ(trig[1]->ev.hit, 0);
+	ASSERT_EQ(trig[2]->ev.tick, 16 * 96 + 12);
+	ASSERT_EQ(trig[3]->ev.tick, 32 * 96 - 36);
+	ASSERT_EQ(trig[4]->ev.tick, 32 * 96 + 12);
+	n = fake_triggers(h, 3, trig, 16);
+	ASSERT_EQ(n, 2);
+	ASSERT_EQ(trig[0]->ev.tick, 16 * 96 - 84);
+	ASSERT_EQ(trig[0]->ev.absStep, 16);
+	ASSERT_EQ(trig[1]->ev.tick, 32 * 96 - 84);
+}
+
+TEST(T4_late_hits_spill_into_the_next_steps)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 3, true);
+	fake_setTiming(h, 0, 0, 3, 5, 7);		/* x8, +84: up to 168 ticks after step 3 */
+	runSteps(h, 6);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 16), 8);
+	ASSERT_EQ(trig[0]->ev.tick, 3 * 96 + 84);
+	ASSERT_EQ(trig[7]->ev.tick, 3 * 96 + 168);
+	ASSERT_EQ(trig[7]->ev.absStep, 3);
+}
+
+TEST(T8_draws_come_from_the_generator)
+{
+	fake_host_t *h = fake_init();
+	for (uint8_t s = 0; s < 16; s += 4)
+	{
+		fake_setStep(h, 0, 0, s, true);
+		fake_setStepData(h, 0, 0, s, 127, 60, 50);
+	}
+	/* r = 1 + value % 100, and the step plays when r <= prob */
+	static const uint32_t script[] = { 49, 50, 100, 199 };
+	fake_scriptRandom(h, script, 4);
+	runSteps(h, 15);				/* step 16 would be drawn at boundary 15 */
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 4);	/* once per occurrence */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.absStep, 0);		/* r = 50 */
+	ASSERT_EQ(trig[1]->ev.absStep, 8);		/* r = 1 */
+}
+
+/* every step of every track at prob 50, run 64 steps; returns the trigger count */
+static size_t runRandom(fake_host_t *h, uint64_t seed, int64_t *ticks, size_t max)
+{
+	fake_seed(h, seed);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		for (uint8_t s = 0; s < 16; s++)
+		{
+			fake_setStep(h, 0, t, s, true);
+			fake_setStepData(h, 0, t, s, 100, 60, 50);
+		}
+	runSteps(h, 64);
+	const size_t n = fake_triggers(h, -1, trig, 4096);
+	for (size_t i = 0; i < n && i < max; i++)
+		ticks[i] = trig[i]->ev.tick * 8 + trig[i]->ev.track;
+	return n;
+}
+
+TEST(T8_probability_is_deterministic)
+{
+	static int64_t a[512], b[512], c[512];
+	const size_t na = runRandom(fake_init(), 1234, a, 512);
+	const size_t nb = runRandom(fake_init(), 1234, b, 512);
+	const size_t nc = runRandom(fake_init(), 99, c, 512);
+	ASSERT_EQ(na, nb);
+	for (size_t i = 0; i < na; i++)
+		ASSERT_EQ(a[i], b[i]);
+	/* about half of the 448 occurrences play */
+	ASSERT_TRUE(na > 448 / 4 && na < 448 * 3 / 4);
+	bool differs = na != nc;
+	for (size_t i = 0; i < na && i < nc && !differs; i++)
+		differs = a[i] != c[i];
+	ASSERT_TRUE(differs);
+}
+
+TEST(T8_ratchet_hits_play_all_or_none)
+{
+	fake_host_t *h = fake_init();
+	fake_seed(h, 7);
+	fake_setLength(h, 0, 0, 4);
+	fake_setStep(h, 0, 0, 2, true);
+	fake_setStepData(h, 0, 0, 2, 100, 60, 50);
+	fake_setTiming(h, 0, 0, 2, 5, -3);		/* x8, -36: 3 early hits, 5 late */
+	runSteps(h, 400);
+	const size_t n = fake_triggers(h, 0, trig, 4096);
+	uint32_t hits[100] = { 0 };
+	for (size_t i = 0; i < n; i++)
+	{
+		ASSERT_EQ(trig[i]->ev.absStep % 4, 2);
+		hits[trig[i]->ev.absStep / 4]++;
+	}
+	int played = 0;
+	for (int i = 0; i < 100; i++)
+	{
+		ASSERT_TRUE(hits[i] == 0 || hits[i] == 8);
+		played += hits[i] == 8;
+	}
+	ASSERT_TRUE(played > 20 && played < 80);
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 100);
+}
+
+/* The early part of a step fixes its timing (seqc_generate()). A change of the
+ * shuffle or of the step's timing between the boundary that makes the early part
+ * and the step's own boundary neither plays a hit twice nor loses one. */
+TEST(T3_shuffle_change_after_the_early_part_plays_once)
+{
+	/* odd step 1 at -1 unit: at shuffle 0 its hit is at 84, before boundary 1,
+	 * so boundary 0 queues it. Shuffle 127 would put it at 148: the late part
+	 * keeps the early part's timing and does not play it again. */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 1, true);
+	fake_setTiming(h, 0, 2, 1, 0, -1);
+	runSteps(h, 1);					/* the hit played at 84 */
+	h->shuffle = 127;
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 4), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 2, trig, 4), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 96 - 12);
+}
+
+TEST(T3_shuffle_change_after_the_early_part_loses_nothing)
+{
+	/* the other way round: at shuffle 127 the hit of step 1 is at 148, so
+	 * boundary 0 queues nothing. Shuffle 0 would put it at 84, which has passed
+	 * when boundary 1 makes the late part: it keeps the early part's timing. */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 1, true);
+	fake_setTiming(h, 0, 2, 1, 0, -1);
+	h->shuffle = 127;
+	runSteps(h, 1);
+	h->shuffle = 0;
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 4), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 2, trig, 4), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 96 + 64 - 12);
+}
+
+TEST(T4_shift_edit_after_the_early_part_plays_each_hit_once)
+{
+	/* even step 2, x2 at -1 unit: hit 0 at 180 is early, hit 1 at 228 late. The
+	 * shift goes to +1 after hit 0 played: the late part keeps the early part's
+	 * timing, so hit 0 does not play again at 204. */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 2, true);
+	fake_setTiming(h, 0, 2, 2, 1, -1);
+	runSteps(h, 2);					/* hit 0 played at 180 */
+	fake_setTiming(h, 0, 2, 2, 1, 1);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 5), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 2, trig, 4), 2);
+	ASSERT_EQ(trig[0]->ev.tick, hitTick(2, 0, -1, 0, 2));
+	ASSERT_EQ(trig[0]->ev.hit, 0);
+	ASSERT_EQ(trig[1]->ev.tick, hitTick(2, 0, -1, 1, 2));
+	ASSERT_EQ(trig[1]->ev.hit, 1);
+}
+
+TEST(T4_shift_edit_into_the_past_loses_nothing)
+{
+	/* even step 2 without shift: boundary 1 queues nothing early. The shift goes
+	 * to -1 after tick 180, where the hit would now be: the late part keeps the
+	 * early part's timing and plays it at 192. */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 2, true);
+	runSteps(h, 2);
+	fake_setTiming(h, 0, 2, 2, 0, -1);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 5), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 2, trig, 4), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 2 * 96);
+}
+
+TEST(T4_timing_edit_before_the_boundary_applies)
+{
+	/* an edit that leaves every hit at or after the boundary applies to the
+	 * step: step 2 becomes x4 at +1 unit during step 1 */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 2, true);
+	runSteps(h, 2);
+	fake_setTiming(h, 0, 2, 2, 3, 1);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 5), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 4);
+	for (int j = 0; j < 4; j++)
+		ASSERT_EQ(trig[j]->ev.tick, hitTick(2, 0, 1, j, 4));
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected:
+```
+50% tests passed, 4 tests failed out of 8
+	  5 - T2 (Failed)
+	  6 - T3 (Failed)
+	  7 - T4 (Failed)
+	  8 - T8 (Failed)
+exit 1
+```
+Run: `build/host-tests/test_generate`
+
+Expected:
+```
+.../tests/test_generate.c:48: ASSERT_EQ(fake_count(h, FAKE_TRIGGER), 10) failed: 0 != 10
+FAIL T2_straight_grid
+...
+0 of 21 tests passed
+```
+
+- [ ] **Step 3: Implement generation and the queue in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+Replace `seqc_item_t` with:
+
+```c
+/** The items of the timeline. At equal ticks they are handled in this order
+ * (seq_core.h, "Processing order"). */
+typedef enum
+{
+	SEQC_ITEM_NONE = 0,
+	SEQC_ITEM_BOUNDARY,	/**< the next step boundary */
+	SEQC_ITEM_EVENT,	/**< the next queued event */
+} seqc_item_t;
+```
+
+Insert after `seqc_tracks_t` (`seqc_draw_t`, `seqc_gen_t`, `seqc_queue_t`):
+
+```c
+//------------------------------------------------------------------------------
+/** the probability draw of one step occurrence (N3), and the timing its early
+ * part used */
+typedef struct
+{
+	bool		valid;
+	uint32_t	absStep;
+	uint8_t		pattern;
+	uint8_t		step;
+	uint8_t		r;		/**< 1..100 */
+	bool		timed;		/**< the early part was generated: hits and offset are set */
+	uint8_t		hits;		/**< the ratchet hits it used */
+	int16_t		offset;		/**< the swing + shift it used, ticks after absStep * 96 */
+} seqc_draw_t;
+
+//------------------------------------------------------------------------------
+/** event generation */
+typedef struct
+{
+	seqc_draw_t	draw[SEQC_NUM_TRACKS][2];	/**< N3: slots for n and n+1, by absStep & 1 */
+	uint8_t		swing;				/**< swing ticks read at the last boundary */
+} seqc_gen_t;
+
+//------------------------------------------------------------------------------
+/** the event queue, sorted so that events[count - 1] fires next (N2) */
+typedef struct
+{
+	seqc_event_t	events[SEQC_QUEUE_SIZE];
+	uint16_t	count;
+} seqc_queue_t;
+```
+
+Replace the state variables block (`/* the state, one part per area */`) with:
+
+```c
+/* the state, one part per area */
+static seqc_core_t seqc;
+static seqc_tracks_t seqc_trk;
+static seqc_gen_t seqc_gen;
+static seqc_queue_t seqc_queue;
+```
+
+Insert after `seqc_nextIndex()` (`seqc_swingTicks()`, `seqc_hitCount()`, `seqc_shiftTicks()`):
+
+```c
+//------------------------------------------------------------------------------
+/** swing ticks of a shuffle value: round(shuffle * 64 / 127) */
+static uint8_t seqc_swingTicks(uint8_t shuffle)
+{
+	if (shuffle > SEQC_MAX_SHUFFLE)
+		shuffle = SEQC_MAX_SHUFFLE;
+	return (uint8_t)((shuffle * SEQC_MAX_SWING_TICKS + SEQC_MAX_SHUFFLE / 2) / SEQC_MAX_SHUFFLE);
+}
+//------------------------------------------------------------------------------
+/** hits of StepTiming.flam: 0..5 give 1, 2, 3, 4, 6, 8; any other value 1 */
+static uint8_t seqc_hitCount(uint8_t flam)
+{
+	static const uint8_t hits[6] = { 1, 2, 3, 4, 6, 8 };
+	return flam < 6 ? hits[flam] : 1;
+}
+//------------------------------------------------------------------------------
+/** ticks of StepTiming.shift: 0..14 are -7..+7 units, 15 counts as 0 */
+static int seqc_shiftTicks(uint8_t shift)
+{
+	if (shift > 14)
+		return 0;
+	return ((int)shift - (int)SEQC_SHIFT_CENTER) * (int)SEQC_SHIFT_UNIT_TICKS;
+}
+```
+
+Insert after `seqc_positionAt()` (the section banner `// Event queue`, `seqc_firesBefore()`, `seqc_queueInsert()`, the section banner `// Firing`, `seqc_fireNext()`, the section banner `// Generation`, `seqc_draw()`, `seqc_generate()`, `seqc_generateLate()`, `seqc_generateEarly()`):
+
+```c
+//------------------------------------------------------------------------------
+// Event queue
+//------------------------------------------------------------------------------
+/** true if event a fires before event b (N2) */
+static bool seqc_firesBefore(const seqc_event_t *a, const seqc_event_t *b)
+{
+	if (a->tick != b->tick)
+		return a->tick < b->tick;
+	if (a->absStep != b->absStep)
+		return a->absStep > b->absStep;
+	if ((a->flags & SEQC_EVF_ROLL) != (b->flags & SEQC_EVF_ROLL))
+		return (a->flags & SEQC_EVF_ROLL) == 0;
+	return a->track < b->track;
+}
+//------------------------------------------------------------------------------
+/** queue an event, in firing order: a binary search plus memmove (N2). A full
+ * queue rejects it. */
+static void seqc_queueInsert(const seqc_event_t *ev)
+{
+	if (seqc_queue.count >= SEQC_QUEUE_SIZE)
+		return;
+	/* the first event that fires before ev, and all above it, move up one */
+	uint16_t lo = 0;
+	uint16_t hi = seqc_queue.count;
+	while (lo < hi)
+	{
+		const uint16_t mid = (uint16_t)((lo + hi) / 2u);
+		if (seqc_firesBefore(&seqc_queue.events[mid], ev))
+			hi = mid;
+		else
+			lo = (uint16_t)(mid + 1u);
+	}
+	memmove(&seqc_queue.events[lo + 1u], &seqc_queue.events[lo],
+			(size_t)(seqc_queue.count - lo) * sizeof seqc_queue.events[0]);
+	seqc_queue.events[lo] = *ev;
+	seqc_queue.count++;
+}
+
+//------------------------------------------------------------------------------
+// Firing
+//------------------------------------------------------------------------------
+/** the next queued event is due */
+static void seqc_fireNext(void)
+{
+	const seqc_event_t ev = seqc_queue.events[--seqc_queue.count];
+
+	seqc.pos = (double)ev.tick;
+	seqc.host.trigger(seqc.host.ctx, &ev);
+}
+
+//------------------------------------------------------------------------------
+// Generation
+//------------------------------------------------------------------------------
+/** the draw slot of occurrence (track, absStep) at (pattern, step), N3: r is
+ * drawn once and kept with (pattern, step); a different step gets a new draw */
+static seqc_draw_t *seqc_draw(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step)
+{
+	seqc_draw_t *d = &seqc_gen.draw[track][absStep & 1u];
+	if (!d->valid || d->absStep != absStep || d->pattern != pattern || d->step != step)
+	{
+		const uint32_t v = seqc.host.random(seqc.host.ctx);
+		d->valid = true;
+		d->absStep = absStep;
+		d->pattern = pattern;
+		d->step = step;
+		d->r = (uint8_t)(1u + v % 100u);
+		d->timed = false;
+	}
+	return d;
+}
+//------------------------------------------------------------------------------
+/** queue the hits of occurrence (track, absStep) at (pattern, step) that belong to
+ * one part (N3): the early part has the hits before absStep * 96, the late part
+ * the rest.
+ * The early part keeps the timing it used (swing + shift, ratchet hits) in the
+ * draw slot. The late part reads the timing again, so an edit or a shuffle change
+ * before the boundary applies, but it keeps the early part's timing instead if
+ * the early part queued a hit, or if the timing read now would put a hit before
+ * absStep * 96, which has passed. Either way every hit is generated once
+ * (decision 9 of epic E1). */
+static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step, bool early)
+{
+	if (!seqc.host.stepOn(seqc.host.ctx, pattern, track, step))
+		return;
+	seqc_draw_t *d = seqc_draw(track, absStep, pattern, step);
+	const Step *data = seqc.host.step(seqc.host.ctx, pattern, track, step);
+	if (d->r > data->prob)
+		return;
+	const StepTiming timing = seqc.host.timing(seqc.host.ctx, pattern, track, step);
+	uint8_t hits = seqc_hitCount(timing.flam);
+	int offset = ((absStep & 1u) ? seqc_gen.swing : 0) + seqc_shiftTicks(timing.shift);
+	if (early)
+	{
+		d->timed = true;
+		d->hits = hits;
+		d->offset = (int16_t)offset;
+	}
+	else if (d->timed && (d->offset < 0 || offset < 0))
+	{
+		hits = d->hits;
+		offset = d->offset;
+	}
+	const seqc_tick_t base = (seqc_tick_t)absStep * SEQC_TICKS_PER_STEP;
+	const seqc_tick_t first = base + offset;
+
+	for (uint8_t j = 0; j < hits; j++)
+	{
+		const seqc_tick_t tick = first + (seqc_tick_t)(j * SEQC_TICKS_PER_STEP / hits);
+		if ((tick < base) != early)
+			continue;
+		const seqc_event_t ev = {
+			.tick = tick, .absStep = absStep, .track = track, .pattern = pattern, .step = step,
+			.hit = j, .vel = (uint8_t)(data->volume & 0x7f), .note = data->note, .flags = 0, .reserved = 0,
+			.p1Nr = data->param1Nr, .p1Val = data->param1Val, .p2Nr = data->param2Nr, .p2Val = data->param2Val,
+		};
+		seqc_queueInsert(&ev);
+	}
+}
+//------------------------------------------------------------------------------
+/** boundary step 5: the late part of step n */
+static void seqc_generateLate(uint32_t n, uint8_t pattern)
+{
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		const uint8_t step = (uint8_t)seqc_trk.index[t];
+		seqc_generate(t, n, pattern, step, false);
+	}
+}
+//------------------------------------------------------------------------------
+/** boundary step 6: the early part of step n+1, with the indices advanced as at
+ * a boundary of the same pattern */
+static void seqc_generateEarly(uint32_t n, uint8_t pattern)
+{
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		const uint8_t step = (uint8_t)seqc_nextIndex(seqc_trk.index[t], seqc_trackLength(pattern, t));
+		seqc_generate(t, n + 1u, pattern, step, true);
+	}
+}
+```
+
+Insert after `seqc_stopTransport()` (`seqc_clearRun()`):
+
+```c
+//------------------------------------------------------------------------------
+/** clear what belongs to the current run: the queue and the draws (rewind) */
+static void seqc_clearRun(void)
+{
+	seqc_queue.count = 0;
+	memset(seqc_gen.draw, 0, sizeof seqc_gen.draw);
+}
+```
+
+Replace `seqc_rewindTransport()` with:
+
+```c
+/** back to the start, before step 0 */
+static void seqc_rewindTransport(void)
+{
+	const bool wasAtStart = seqc.atStart;
+
+	seqc_clearRun();
+	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+	seqc_trk.master = 0;
+	seqc.pos = 0.0;
+	seqc.atStart = true;
+	if (!wasAtStart)
+		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_REWIND);
+}
+```
+
+Replace `seqc_boundary()` with:
+
+```c
+/** the step boundary at tick (seq_core.h, "Processing order") */
+static void seqc_boundary(seqc_tick_t tick)
+{
+	seqc.pos = (double)tick;
+	if (!seqc_advanceCounters())
+		return;
+	const uint32_t n = (uint32_t)seqc.absStep;
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+
+	seqc_trk.master = seqc_longestTrack(pattern);
+	seqc_gen.swing = seqc_swingTicks(seqc.host.shuffle(seqc.host.ctx));
+	seqc.host.stepBoundary(seqc.host.ctx, n);
+	seqc_generateLate(n, pattern);
+	seqc_generateEarly(n, pattern);
+}
+```
+
+Replace `seqc_nextItem()` with:
+
+```c
+/** the next item of the timeline: its kind, tick and track (note-offs) */
+static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
+{
+	seqc_item_t best = SEQC_ITEM_NONE;
+	*tick = SEQC_NO_TICK;
+	*track = 0;
+	if (seqc.state == SEQC_RUNNING && !seqc.startPending)
+	{
+		seqc_consider(SEQC_ITEM_BOUNDARY, (seqc_tick_t)seqc_nextBoundaryStep() * SEQC_TICKS_PER_STEP, 0,
+				&best, tick, track);
+		if (seqc_queue.count > 0)
+			seqc_consider(SEQC_ITEM_EVENT, seqc_queue.events[seqc_queue.count - 1u].tick, 0, &best, tick, track);
+	}
+	return best;
+}
+```
+
+Replace `seqc_runTo()` with:
+
+```c
+/** handle every item due at or before target, earliest first (spec 6.3) */
+static void seqc_runTo(double target)
+{
+	for (;;)
+	{
+		seqc_tick_t tick;
+		uint8_t track;
+		const seqc_item_t item = seqc_nextItem(&tick, &track);
+		if (item == SEQC_ITEM_NONE || (double)tick > target)
+			break;
+		switch (item)
+		{
+		case SEQC_ITEM_BOUNDARY:
+			seqc_boundary(tick);
+			break;
+		case SEQC_ITEM_EVENT:
+			seqc_fireNext();
+			break;
+		default:
+			return;
+		}
+	}
+	if (seqc.state == SEQC_RUNNING && target > seqc.pos)
+		seqc.pos = target;
+}
+```
+
+Replace `seqc_init()` with:
+
+```c
+void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
+{
+	memset(&seqc, 0, sizeof seqc);
+	memset(&seqc_trk, 0, sizeof seqc_trk);
+	memset(&seqc_gen, 0, sizeof seqc_gen);
+	memset(&seqc_queue, 0, sizeof seqc_queue);
+
+	seqc.host = *host;
+	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
+	seqc.masterBpm = SEQC_DEFAULT_BPM;
+	seqc.ticksPerCycle = seqc_ticksPerCycle(seqc.masterBpm);
+	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
+	seqc.state = SEQC_STOPPED;
+	seqc.atStart = true;
+	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+}
+```
+
+- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `... with CRLF line terminators`
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 8`, image `274688/1015808 B`,
+`== compiler warnings: 0`, `exit 0`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c tests/test_generate.c
+git commit -F - <<'EOF'
+seq_core: event generation with swing, shift, ratchet and probability (E1.5, T2-T4, T8)
+
+At boundary n the late part of step n and the early part of step n+1 are
+queued (N3); swing moves every hit of a swung step (D1). One probability draw
+per occurrence, kept with its pattern and step, and with the timing its early
+part used, so a shuffle change or a timing edit between the two parts plays
+no hit twice and loses none. Events carry a copy of their step's data (D5).
+The queue is sorted by the order of N2.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.6: Firing rules: per-track choke, mutes, note-off (T7, T9, T15)
+
+Firing (spec 6.4, N2):
+- **Mutes.** An event of a muted track is dropped when it fires, without side effects, and counted
+  in `muteDrops`.
+- **Choke.** Firing an event of (t, n) removes every queued event of track t with a lower absStep,
+  counted in `chokeDrops`. This fixes D2: fw 1.7 shared its choke flags between tracks. It also
+  covers "of several events of one track at the same tick only the highest n fires", because that
+  event comes first in the queue order. The same-tick rule for one step (a note wins over a roll)
+  needs roll events, so it comes with them in E1.9.
+- **Note-off.** `noteOff()` comes 4 ticks after the trigger, as the new `SEQC_ITEM_NOTE_OFF` item
+  (handled before triggers at equal ticks). It comes right before a retrigger that is still pending.
+  A stop or a rewind sends all pending note-offs at once.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
+- Test: `tests/test_fire.c` (ctest ids `T7`, `T9`, `T15`)
+
+- [ ] **Step 1: Write the failing test `tests/test_fire.c`**
+
+```c
+/*
+ * test_fire.c
+ *
+ * Firing (spec 6.4, N2):
+ * - T7: the choke works per track (D2): both replica scenarios of the spec,
+ *   the removal of older steps' hits, and the same-tick rule;
+ * - T9: muting a track drops its pending hits when they fire;
+ * - T15: the note-off comes 4 ticks after the trigger, before a retrigger, and
+ *   at once on a stop.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+#include "seqc_test.h"
+
+static const fake_rec_t *trig[256];
+
+/* start at time 0 and run at bpm until just before the boundary of step end */
+static void runSteps(fake_host_t *h, double bpm, uint32_t end)
+{
+	seqc_setTempo((float)bpm);
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(bpm) * end) - 1, fake_msToCycles(0.1));
+}
+
+static seqc_stats_t stats(void)
+{
+	seqc_stats_t s;
+	seqc_stats(&s);
+	return s;
+}
+
+TEST(T7_d2_snare_does_not_choke_the_hat)
+{
+	/* replica scenario 6: hat x4 on step 0; snare step 1 shifted -2 lands on
+	 * the hat's 4th hit. fw 1.7 dropped that hit (global choke flags). */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 5, 0, true);
+	fake_setTiming(h, 0, 5, 0, 3, 0);
+	fake_setStep(h, 0, 3, 1, true);
+	fake_setTiming(h, 0, 3, 1, 0, -2);
+	runSteps(h, 130.0, 4);
+	ASSERT_EQ(fake_triggers(h, 5, trig, 8), 4);
+	for (int j = 0; j < 4; j++)
+		ASSERT_EQ(trig[j]->ev.tick, j * 24);
+	ASSERT_EQ(fake_triggers(h, 3, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 72);
+	ASSERT_EQ(stats().chokeDrops, 0);
+}
+
+TEST(T7_d2_kick_does_not_choke_the_spill_over)
+{
+	/* replica scenario 6: hat step 2 x2 shifted +4; its second hit spills to
+	 * tick 0 of step 3, where the kick plays */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 3, true);
+	fake_setStep(h, 0, 5, 2, true);
+	fake_setTiming(h, 0, 5, 2, 1, 4);
+	runSteps(h, 130.0, 5);
+	ASSERT_EQ(fake_triggers(h, 5, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.tick, 2 * 96 + 48);
+	ASSERT_EQ(trig[1]->ev.tick, 3 * 96);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 3 * 96);
+	ASSERT_EQ(stats().chokeDrops, 0);
+}
+
+TEST(T7_newer_step_chokes_the_older_hits)
+{
+	/* step 1 x8 +7 runs over step 2; the first hit of step 2 removes the rest */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 4, 1, true);
+	fake_setTiming(h, 0, 4, 1, 5, 7);		/* 180, 192, ..., 264 */
+	fake_setStep(h, 0, 4, 2, true);
+	fake_setTiming(h, 0, 4, 2, 0, 1);		/* 204 */
+	runSteps(h, 120.0, 5);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 16), 3);
+	ASSERT_EQ(trig[0]->ev.tick, 180);
+	ASSERT_EQ(trig[1]->ev.tick, 192);
+	ASSERT_EQ(trig[2]->ev.tick, 204);
+	ASSERT_EQ(trig[2]->ev.absStep, 2);
+	ASSERT_EQ(stats().chokeDrops, 6);
+	/* another track is not affected */
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T7_same_tick_highest_step_wins)
+{
+	/* step 1 +7 x8: its 2nd hit is at 192 = step 2's own hit */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 1, true);
+	fake_setTiming(h, 0, 2, 1, 5, 7);		/* 180, 192, ... */
+	fake_setStep(h, 0, 2, 2, true);			/* 192 */
+	fake_setStepData(h, 0, 2, 2, 77, 61, 100);
+	runSteps(h, 120.0, 4);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 16), 2);
+	ASSERT_EQ(trig[0]->ev.tick, 180);
+	ASSERT_EQ(trig[1]->ev.tick, 192);
+	ASSERT_EQ(trig[1]->ev.absStep, 2);
+	ASSERT_EQ(trig[1]->ev.vel, 77);
+}
+
+TEST(T7_same_tick_on_other_tracks_fire_in_track_order)
+{
+	fake_host_t *h = fake_init();
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		fake_setStep(h, 0, (uint8_t)(6 - t), 1, true);
+	runSteps(h, 120.0, 3);
+	ASSERT_EQ(fake_triggers(h, -1, trig, 16), 7);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		ASSERT_EQ(trig[t]->ev.track, t);
+}
+
+static uint8_t muteAfter;
+static void muteOnThirdHit(fake_host_t *h, const seqc_event_t *ev)
+{
+	if (ev->hit == muteAfter)
+		h->muted[ev->track] = true;
+}
+
+TEST(T9_mute_during_a_ratchet_drops_the_rest)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 1, 2, true);
+	fake_setTiming(h, 0, 1, 2, 5, 0);		/* x8 */
+	fake_setStep(h, 0, 1, 6, true);
+	muteAfter = 2;
+	h->onTrigger = muteOnThirdHit;
+	runSteps(h, 120.0, 4);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 16), 3);
+	ASSERT_EQ(stats().muteDrops, 5);
+	/* a muted drop has no side effects: one note-off, for the last hit played */
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 3);
+	/* unmuted again, the next step plays */
+	h->onTrigger = NULL;
+	h->muted[1] = false;
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 8), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 1, trig, 16), 4);
+	ASSERT_EQ(trig[3]->ev.tick, 6 * 96);
+}
+
+TEST(T9_mute_is_read_when_the_event_fires)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 1, true);
+	fake_setTiming(h, 0, 0, 1, 0, -7);		/* early: queued at boundary 0, fires at 12 */
+	h->muted[0] = true;
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);				/* boundary 0 queues it while muted */
+	h->muted[0] = false;				/* unmuted before it fires */
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 2), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 0, trig, 4), 1);
+	ASSERT_EQ(stats().muteDrops, 0);
+}
+
+TEST(T15_note_off_4_ticks_after_the_trigger)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 3, 0, true);
+	fake_setStep(h, 0, 3, 5, true);
+	fake_setTiming(h, 0, 3, 5, 1, 0);		/* x2: 480, 528 */
+	runSteps(h, 120.0, 8);
+	size_t pos = 0;
+	const fake_rec_t *r;
+	static const int64_t expect[] = { 4, 484, 532 };
+	int i = 0;
+	while ((r = fake_next(h, FAKE_NOTE_OFF, &pos)) != NULL)
+	{
+		ASSERT_TRUE(i < 3);
+		ASSERT_EQ(r->track, 3);
+		ASSERT_NEAR(r->tick, (double)expect[i], 1e-9);
+		i++;
+	}
+	ASSERT_EQ(i, 3);
+}
+
+TEST(T15_note_off_comes_right_before_a_retrigger)
+{
+	/* shuffle 4 is a swing of 2 ticks: step 2 at 192 + 84 = 276, step 3 at
+	 * 288 + 2 - 12 = 278, only 2 ticks later */
+	fake_host_t *h = fake_init();
+	h->shuffle = 4;
+	fake_setStep(h, 0, 0, 2, true);
+	fake_setTiming(h, 0, 0, 2, 0, 7);
+	fake_setStep(h, 0, 0, 3, true);
+	fake_setTiming(h, 0, 0, 3, 0, -1);
+	runSteps(h, 120.0, 5);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 4), 2);
+	ASSERT_EQ(trig[0]->ev.tick, 276);
+	ASSERT_EQ(trig[1]->ev.tick, 278);
+	/* trigger 276, note-off at 278, trigger 278, note-off at 282 */
+	size_t pos = 0;
+	const fake_rec_t *r;
+	int seq = 0;
+	for (size_t i = 0; i < h->logCount; i++)
+	{
+		r = &h->log[i];
+		if (r->kind == FAKE_TRIGGER || r->kind == FAKE_NOTE_OFF)
+		{
+			static const fake_kind_t order[] = { FAKE_TRIGGER, FAKE_NOTE_OFF, FAKE_TRIGGER, FAKE_NOTE_OFF };
+			ASSERT_TRUE(seq < 4);
+			ASSERT_EQ(r->kind, order[seq]);
+			seq++;
+		}
+	}
+	ASSERT_EQ(seq, 4);
+	r = fake_next(h, FAKE_NOTE_OFF, &pos);
+	ASSERT_NEAR(r->tick, 278.0, 1e-9);
+	r = fake_next(h, FAKE_NOTE_OFF, &pos);
+	ASSERT_NEAR(r->tick, 282.0, 1e-9);
+}
+
+TEST(T15_stop_sends_the_pending_note_offs)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 0, true);
+	fake_setStep(h, 0, 4, 0, true);
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);				/* both trigger at tick 0 */
+	ASSERT_EQ(fake_count(h, FAKE_TRIGGER), 2);
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 0);
+	fake_clearLog(h);
+	seqc_stop();
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 2);
+	ASSERT_EQ(h->log[0].kind, FAKE_NOTE_OFF);	/* before the STOP */
+	ASSERT_EQ(h->log[0].track, 2);
+	ASSERT_EQ(h->log[1].track, 4);
+	ASSERT_EQ(h->log[2].kind, FAKE_TRANSPORT);
+	ASSERT_EQ(h->log[2].value, SEQC_TRANSPORT_STOP);
+	fake_runUntil(h, fake_msToCycles(100.0), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 2);	/* not again */
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `73% tests passed, 3 tests failed out of 11`, with `T7`, `T9` and `T15` listed as failed,
+and `exit 1`.
+
+Run: `build/host-tests/test_fire`
+
+Expected:
+- four tests pass already: they expect hits *not* to be dropped, and nothing is dropped yet. They
+  are the two D2 scenarios, `T7_same_tick_on_other_tracks_fire_in_track_order` and
+  `T9_mute_is_read_when_the_event_fires`;
+- the choke, mute and note-off tests fail.
+```
+PASS T7_d2_snare_does_not_choke_the_hat
+PASS T7_d2_kick_does_not_choke_the_spill_over
+.../tests/test_fire.c:84: ASSERT_EQ(fake_triggers(h, 4, trig, 16), 3) failed: 9 != 3
+FAIL T7_newer_step_chokes_the_older_hits
+...
+.../tests/test_fire.c:137: ASSERT_EQ(fake_triggers(h, 1, trig, 16), 3) failed: 8 != 3
+FAIL T9_mute_during_a_ratchet_drops_the_rest
+...
+.../tests/test_fire.c:182: ASSERT_EQ(i, 3) failed: 0 != 3
+FAIL T15_note_off_4_ticks_after_the_trigger
+...
+4 of 10 tests passed
+```
+
+- [ ] **Step 3: Implement the firing rules in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+Replace `seqc_item_t` with:
+
+```c
+/** The items of the timeline. At equal ticks they are handled in this order
+ * (seq_core.h, "Processing order"). */
+typedef enum
+{
+	SEQC_ITEM_NONE = 0,
+	SEQC_ITEM_BOUNDARY,	/**< the next step boundary */
+	SEQC_ITEM_NOTE_OFF,	/**< a pending note-off */
+	SEQC_ITEM_EVENT,	/**< the next queued event */
+} seqc_item_t;
+```
+
+Insert after `seqc_queue_t` (`seqc_fire_t`):
+
+```c
+//------------------------------------------------------------------------------
+/** per-track firing state: the pending note-off */
+typedef struct
+{
+	bool		offPending[SEQC_NUM_TRACKS];
+	seqc_tick_t	offTick[SEQC_NUM_TRACKS];
+} seqc_fire_t;
+```
+
+Replace the state variables block (`/* the state, one part per area */`) with:
+
+```c
+/* the state, one part per area */
+static seqc_core_t seqc;
+static seqc_tracks_t seqc_trk;
+static seqc_gen_t seqc_gen;
+static seqc_queue_t seqc_queue;
+static seqc_fire_t seqc_fire;
+```
+
+Insert after `seqc_queueInsert()` (`seqc_queueChoke()`):
+
+```c
+//------------------------------------------------------------------------------
+/** choke: remove the queued events of track with an absolute step below absStep.
+ * Returns how many were removed. */
+static uint32_t seqc_queueChoke(uint8_t track, uint32_t absStep)
+{
+	uint16_t kept = 0;
+	for (uint16_t i = 0; i < seqc_queue.count; i++)
+	{
+		const seqc_event_t *ev = &seqc_queue.events[i];
+		if (ev->track == track && ev->absStep < absStep)
+			continue;
+		seqc_queue.events[kept++] = *ev;
+	}
+	const uint32_t removed = (uint32_t)(seqc_queue.count - kept);
+	seqc_queue.count = kept;
+	return removed;
+}
+```
+
+Insert after the section banner `// Firing` (`seqc_flushNoteOffs()`, `seqc_noteOffDue()`):
+
+```c
+//------------------------------------------------------------------------------
+/** send every pending note-off now (stop, rewind, seek) */
+static void seqc_flushNoteOffs(void)
+{
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		if (seqc_fire.offPending[t])
+		{
+			seqc_fire.offPending[t] = false;
+			seqc.host.noteOff(seqc.host.ctx, t);
+		}
+	}
+}
+//------------------------------------------------------------------------------
+/** a pending note-off is due */
+static void seqc_noteOffDue(uint8_t track)
+{
+	seqc.pos = (double)seqc_fire.offTick[track];
+	seqc_fire.offPending[track] = false;
+	seqc.host.noteOff(seqc.host.ctx, track);
+}
+```
+
+Replace `seqc_fireNext()` with:
+
+```c
+/** the next queued event is due: mute, choke, note-off, trigger (spec 6.4, N2) */
+static void seqc_fireNext(void)
+{
+	const seqc_event_t ev = seqc_queue.events[--seqc_queue.count];
+	const uint8_t t = ev.track;
+
+	seqc.pos = (double)ev.tick;
+	if (seqc.host.muted(seqc.host.ctx, t))
+	{
+		seqc.stats.muteDrops++;
+		return;
+	}
+	seqc.stats.chokeDrops += seqc_queueChoke(t, ev.absStep);
+	if (seqc_fire.offPending[t])
+		seqc.host.noteOff(seqc.host.ctx, t);
+	seqc_fire.offPending[t] = true;
+	seqc_fire.offTick[t] = ev.tick + SEQC_NOTE_OFF_TICKS;
+	seqc.host.trigger(seqc.host.ctx, &ev);
+}
+```
+
+Replace `seqc_stopTransport()` with:
+
+```c
+/** stop and keep the position (the caller has set it) */
+static void seqc_stopTransport(void)
+{
+	seqc.state = SEQC_STOPPED;
+	seqc.startPending = false;
+	seqc_flushNoteOffs();
+	seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_STOP);
+}
+```
+
+Replace `seqc_clearRun()` with:
+
+```c
+/** clear what belongs to the current run: the queue, the note-offs and the
+ * draws (rewind) */
+static void seqc_clearRun(void)
+{
+	seqc_queue.count = 0;
+	seqc_flushNoteOffs();
+	memset(seqc_gen.draw, 0, sizeof seqc_gen.draw);
+}
+```
+
+Replace `seqc_nextItem()` with:
+
+```c
+/** the next item of the timeline: its kind, tick and track (note-offs) */
+static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
+{
+	seqc_item_t best = SEQC_ITEM_NONE;
+	*tick = SEQC_NO_TICK;
+	*track = 0;
+	if (seqc.state == SEQC_RUNNING && !seqc.startPending)
+	{
+		seqc_consider(SEQC_ITEM_BOUNDARY, (seqc_tick_t)seqc_nextBoundaryStep() * SEQC_TICKS_PER_STEP, 0,
+				&best, tick, track);
+		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+			if (seqc_fire.offPending[t])
+				seqc_consider(SEQC_ITEM_NOTE_OFF, seqc_fire.offTick[t], t, &best, tick, track);
+		if (seqc_queue.count > 0)
+			seqc_consider(SEQC_ITEM_EVENT, seqc_queue.events[seqc_queue.count - 1u].tick, 0, &best, tick, track);
+	}
+	return best;
+}
+```
+
+Replace `seqc_runTo()` with:
+
+```c
+/** handle every item due at or before target, earliest first (spec 6.3) */
+static void seqc_runTo(double target)
+{
+	for (;;)
+	{
+		seqc_tick_t tick;
+		uint8_t track;
+		const seqc_item_t item = seqc_nextItem(&tick, &track);
+		if (item == SEQC_ITEM_NONE || (double)tick > target)
+			break;
+		switch (item)
+		{
+		case SEQC_ITEM_BOUNDARY:
+			seqc_boundary(tick);
+			break;
+		case SEQC_ITEM_NOTE_OFF:
+			seqc_noteOffDue(track);
+			break;
+		case SEQC_ITEM_EVENT:
+			seqc_fireNext();
+			break;
+		default:
+			return;
+		}
+	}
+	if (seqc.state == SEQC_RUNNING && target > seqc.pos)
+		seqc.pos = target;
+}
+```
+
+Replace `seqc_init()` with:
+
+```c
+void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
+{
+	memset(&seqc, 0, sizeof seqc);
+	memset(&seqc_trk, 0, sizeof seqc_trk);
+	memset(&seqc_gen, 0, sizeof seqc_gen);
+	memset(&seqc_queue, 0, sizeof seqc_queue);
+	memset(&seqc_fire, 0, sizeof seqc_fire);
+
+	seqc.host = *host;
+	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
+	seqc.masterBpm = SEQC_DEFAULT_BPM;
+	seqc.ticksPerCycle = seqc_ticksPerCycle(seqc.masterBpm);
+	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
+	seqc.state = SEQC_STOPPED;
+	seqc.atStart = true;
+	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+}
+```
+
+- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `... with CRLF line terminators`
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 11`, image `274688/1015808 B`,
+`== compiler warnings: 0`, `exit 0`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c tests/test_fire.c
+git commit -F - <<'EOF'
+seq_core: per-track choke, mutes and note-off (E1.6, T7, T9, T15)
+
+Firing (t, n) removes the queued events of track t with a lower step, so one
+track's hits never swallow another track's (D2). Muted events are dropped when
+they fire. The note-off comes 4 ticks after the trigger, before a retrigger,
+and at once on stop and rewind.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.7: Lookahead across a pattern change with `peekNextPattern()` (T11, T12)
+
+If the master track wraps at n+1, the early part of step n+1 asks `peekNextPattern()` which pattern
+plays next and whether the indices restart:
+- with a restart, every track's step is 0 in the next pattern;
+- with `SEQC_NO_PATTERN` the song ends at n+1, and no early part is generated.
+
+When the prediction no longer holds at the boundary, for example because the pending pattern
+changed during the last step, the late part follows the actual pattern with a new draw (E1.5 slots).
+The early hits already played came from the prediction, "the state from one step earlier".
+
+T12 (edits and erase before a boundary apply to that step) passes already. Since E1.5 the late part
+is generated at the boundary and the erase runs in `stepBoundary()` before it. T12 stays as the
+regression test; T11 is the failing test of this task. One T11 test passes already as well:
+`T11_late_hits_of_the_old_pattern_after_the_switch` (spec §6.5). Since E1.5 every event carries its
+own data, so the hits of the old pattern that spill over the pattern end play after the switch with
+the old pattern's velocity and p-locks.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c` (`seqc_generateEarly()`)
+- Test: `tests/test_lookahead.c` (ctest ids `T11`, `T12`)
+
+- [ ] **Step 1: Write the failing test `tests/test_lookahead.c`**
+
+```c
+/*
+ * test_lookahead.c
+ *
+ * One step of lookahead (spec 6.2, 6.5, N3):
+ * - T11: the early hits of the first step of the next pattern come from that
+ *   pattern (peekNextPattern()); if the prediction no longer holds at the
+ *   boundary, the late part follows the actual pattern with a new draw; at a
+ *   song end no early part is generated; the late hits of the old pattern still
+ *   play after the switch, with their own data.
+ * - T12: an edit or an erase before a step's boundary applies to that step;
+ *   only hits that play before their boundary use the state one step earlier.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+#include "seqc_test.h"
+
+static const fake_rec_t *trig[256];
+
+static void start(fake_host_t *h)
+{
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+}
+
+/* run at 120 BPM until the time of tick (the boundary of step tick / 96 included) */
+static void runToTick(fake_host_t *h, double tick)
+{
+	fake_runUntil(h, (seqc_time_t)(fake_tickCycles(120.0) * tick) + 1, fake_msToCycles(0.1));
+}
+
+TEST(T11_early_hit_of_the_next_pattern)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 1, 2, 0, true);			/* pattern 1, track 2, step 0 */
+	fake_setTiming(h, 1, 2, 0, 0, -7);
+	fake_setStepData(h, 1, 2, 0, 90, 64, 100);
+	fake_setStep(h, 0, 2, 0, true);			/* pattern 0 would play at 1536 */
+	start(h);
+	runToTick(h, 2 * 96 + 10);
+	fake_setNextPattern(h, 1);			/* pending from the next pattern end */
+	runToTick(h, 18 * 96);
+	const size_t n = fake_triggers(h, 2, trig, 8);
+	ASSERT_EQ(n, 2);
+	ASSERT_EQ(trig[0]->ev.tick, 0);			/* pattern 0, step 0 at the start */
+	ASSERT_EQ(trig[1]->ev.tick, 16 * 96 - 84);
+	ASSERT_EQ(trig[1]->ev.pattern, 1);
+	ASSERT_EQ(trig[1]->ev.absStep, 16);
+	ASSERT_EQ(trig[1]->ev.vel, 90);
+	ASSERT_EQ(trig[1]->ev.note, 64);
+	ASSERT_EQ(h->activePattern, 1);
+	/* the peek came at boundary 15, where the master track wraps next */
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_PEEK, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->absStep, 15);
+	ASSERT_EQ(r->pattern, 1);
+	ASSERT_TRUE(r->flag);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T11_late_change_of_the_pending_pattern)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 1, 2, 0, true);			/* predicted: pattern 1, early hit */
+	fake_setTiming(h, 1, 2, 0, 0, -7);
+	fake_setStepData(h, 1, 2, 0, 100, 64, 100);
+	fake_setStep(h, 2, 2, 0, true);			/* actual: pattern 2, x2 -2 */
+	fake_setTiming(h, 2, 2, 0, 1, -2);
+	fake_setStepData(h, 2, 2, 0, 100, 67, 100);
+	start(h);
+	runToTick(h, 2 * 96);
+	fake_setNextPattern(h, 1);
+	runToTick(h, 15 * 96 + 6);			/* after the peek at boundary 15 */
+	const uint32_t draws = h->reads[FAKE_READ_RANDOM];
+	fake_setNextPattern(h, 2);			/* changed during the last step */
+	runToTick(h, 18 * 96);
+	const size_t n = fake_triggers(h, 2, trig, 8);
+	ASSERT_EQ(n, 2);
+	/* the early hit was predicted at boundary 15 and played before the boundary */
+	ASSERT_EQ(trig[0]->ev.tick, 16 * 96 - 84);
+	ASSERT_EQ(trig[0]->ev.pattern, 1);
+	ASSERT_EQ(trig[0]->ev.note, 64);
+	/* from the boundary on, pattern 2 plays: its late hit, with a new draw */
+	ASSERT_EQ(trig[1]->ev.tick, 16 * 96 - 24 + 48);
+	ASSERT_EQ(trig[1]->ev.pattern, 2);
+	ASSERT_EQ(trig[1]->ev.note, 67);
+	ASSERT_EQ(trig[1]->ev.hit, 1);
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], draws + 1);
+	ASSERT_EQ(h->activePattern, 2);
+}
+
+TEST(T11_restart_takes_step_0_of_every_track)
+{
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 1, 12);			/* in pattern 0, track 1 would be at step 4 */
+	fake_setStep(h, 0, 1, 4, true);
+	fake_setTiming(h, 0, 1, 4, 0, -1);
+	fake_setStep(h, 1, 1, 0, true);
+	fake_setTiming(h, 1, 1, 0, 0, -1);
+	start(h);
+	runToTick(h, 96);
+	fake_setNextPattern(h, 1);
+	runToTick(h, 17 * 96);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.absStep, 4);		/* pattern 0, step 4 at absStep 4 */
+	ASSERT_EQ(trig[1]->ev.tick, 16 * 96 - 12);
+	ASSERT_EQ(trig[1]->ev.pattern, 1);
+	ASSERT_EQ(trig[1]->ev.step, 0);
+}
+
+TEST(T11_same_pattern_keeps_the_indices)
+{
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 1, 12);
+	fake_setStep(h, 0, 1, 4, true);			/* absStep 4, and 16 (16 mod 12) */
+	fake_setTiming(h, 0, 1, 4, 0, -1);
+	start(h);
+	runToTick(h, 17 * 96);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.tick, 4 * 96 - 12);
+	ASSERT_EQ(trig[1]->ev.tick, 16 * 96 - 12);
+	ASSERT_EQ(trig[1]->ev.step, 4);
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_PEEK, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_FALSE(r->flag);
+}
+
+TEST(T11_no_early_hits_after_the_song_end)
+{
+	fake_host_t *h = fake_init();
+	static const uint8_t song[] = { 1 };
+	fake_setSong(h, song, 1);
+	fake_setSongMode(h, true);
+	fake_setStep(h, 1, 0, 0, true);
+	fake_setTiming(h, 1, 0, 0, 0, -7);
+	fake_setStep(h, 1, 0, 8, true);
+	start(h);
+	runToTick(h, 20 * 96);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);	/* only step 8 */
+	ASSERT_EQ(trig[0]->ev.absStep, 8);
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_PEEK, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->pattern, SEQC_NO_PATTERN);
+}
+
+TEST(T11_late_hits_of_the_old_pattern_after_the_switch)
+{
+	/* spec 6.5: step 15 of pattern 0, x8 at +7, spills over the pattern end. Its
+	 * hits after the boundary still play, with their own data, after pattern 1
+	 * has taken over (D5); that track's step 0 is off in pattern 1, so nothing
+	 * chokes them. */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 15, true);
+	fake_setTiming(h, 0, 2, 15, 5, 7);		/* 15 * 96 + 84 + 12 j */
+	fake_setStepData(h, 0, 2, 15, 90, 64, 100);
+	fake_setPlocks(h, 0, 2, 15, 3, 40, 7, 99);
+	fake_setPlocks(h, 1, 2, 15, 1, 1, 1, 1);	/* pattern 1 differs, and is never read */
+	start(h);
+	runToTick(h, 2 * 96);
+	fake_setNextPattern(h, 1);
+	runToTick(h, 18 * 96);
+	ASSERT_EQ(h->activePattern, 1);
+	size_t pos = 0;
+	const fake_rec_t *end = fake_next(h, FAKE_PATTERN_END, &pos);
+	ASSERT_TRUE(end != NULL);
+	while (end != NULL && end->absStep != 16)
+		end = fake_next(h, FAKE_PATTERN_END, &pos);
+	ASSERT_TRUE(end != NULL);
+	ASSERT_EQ(end->pattern, 1);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 16), 8);
+	for (size_t j = 0; j < 8; j++)
+	{
+		ASSERT_EQ(trig[j]->ev.tick, 15 * 96 + 84 + 12 * (int64_t)j);
+		ASSERT_EQ(trig[j]->ev.pattern, 0);
+		ASSERT_EQ(trig[j]->ev.vel, 90);
+		ASSERT_EQ(trig[j]->ev.p1Nr, 3);
+		ASSERT_EQ(trig[j]->ev.p1Val, 40);
+		ASSERT_EQ(trig[j]->ev.p2Nr, 7);
+		ASSERT_EQ(trig[j]->ev.p2Val, 99);
+		/* hits 1..7 come after the switch to pattern 1 */
+		const fake_rec_t *r = trig[j];
+		ASSERT_EQ(r > end, j >= 1);
+	}
+}
+
+TEST(T12_step_switched_on_before_its_boundary_plays)
+{
+	fake_host_t *h = fake_init();
+	start(h);
+	runToTick(h, 4 * 96 + 50);
+	fake_setStep(h, 0, 3, 5, true);
+	runToTick(h, 7 * 96);
+	ASSERT_EQ(fake_triggers(h, 3, trig, 4), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 5 * 96);
+}
+
+TEST(T12_step_switched_off_before_its_boundary_does_not_play)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 3, 5, true);
+	start(h);
+	runToTick(h, 4 * 96 + 50);
+	fake_setStep(h, 0, 3, 5, false);
+	runToTick(h, 7 * 96);
+	ASSERT_EQ(fake_triggers(h, 3, trig, 4), 0);
+}
+
+TEST(T12_early_hits_use_the_state_one_step_earlier)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 3, 5, true);
+	fake_setTiming(h, 0, 3, 5, 1, -2);		/* x2: 456 early, 504 late */
+	fake_setStepData(h, 0, 3, 5, 80, 60, 100);
+	start(h);
+	runToTick(h, 4 * 96 + 10);			/* the early hit is queued */
+	fake_setStepData(h, 0, 3, 5, 40, 62, 100);
+	runToTick(h, 7 * 96);
+	ASSERT_EQ(fake_triggers(h, 3, trig, 4), 2);
+	ASSERT_EQ(trig[0]->ev.tick, 456);
+	ASSERT_EQ(trig[0]->ev.vel, 80);			/* the step as it was at boundary 4 */
+	ASSERT_EQ(trig[1]->ev.tick, 504);
+	ASSERT_EQ(trig[1]->ev.vel, 40);			/* the step as it is at boundary 5 */
+	ASSERT_EQ(trig[1]->ev.note, 62);
+	/* one draw for the occurrence, made with the early part */
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 1);
+}
+
+TEST(T12_erase_at_the_boundary_wins)
+{
+	fake_host_t *h = fake_init();
+	for (uint8_t s = 0; s < 16; s++)
+		fake_setStep(h, 0, 3, s, true);
+	fake_setStep(h, 0, 4, 6, true);
+	h->eraseActive = true;
+	h->activeTrack = 3;
+	start(h);
+	runToTick(h, 8 * 96);
+	ASSERT_EQ(fake_triggers(h, 3, trig, 16), 0);	/* every step erased before it played */
+	ASSERT_EQ(h->mainSteps[0][3], 0xFE00u);		/* steps 0..8 erased, 9..15 kept */
+	ASSERT_EQ(fake_triggers(h, 4, trig, 16), 1);	/* other tracks play */
+}
+
+TEST(T12_track_length_change_before_the_boundary)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 1, 0, true);
+	fake_setStep(h, 0, 1, 4, true);
+	start(h);
+	runToTick(h, 3 * 96 + 50);			/* step 4 is predicted at boundary 3 */
+	fake_setLength(h, 0, 1, 4);			/* now track 1 wraps to step 0 at 4 */
+	runToTick(h, 6 * 96);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 4), 2);
+	ASSERT_EQ(trig[1]->ev.absStep, 4);
+	ASSERT_EQ(trig[1]->ev.step, 0);
+	/* steps 0 (absStep 0), 4 (predicted at boundary 3) and 0 (actual): 3 draws */
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 3);
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `92% tests passed, 1 tests failed out of 13`, `12 - T11 (Failed)`, `exit 1`. T12
+and `T11_late_hits_of_the_old_pattern_after_the_switch` pass, as explained above.
+
+Run: `build/host-tests/test_lookahead`
+
+Expected:
+```
+.../tests/test_lookahead.c:50: ASSERT_EQ(n, 2) failed: 1 != 2
+FAIL T11_early_hit_of_the_next_pattern
+.../tests/test_lookahead.c:85: ASSERT_EQ(n, 2) failed: 1 != 2
+FAIL T11_late_change_of_the_pending_pattern
+...
+.../tests/test_lookahead.c:148: ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1) failed: 2 != 1
+FAIL T11_no_early_hits_after_the_song_end
+PASS T11_late_hits_of_the_old_pattern_after_the_switch
+PASS T12_step_switched_on_before_its_boundary_plays
+...
+6 of 11 tests passed
+```
+
+- [ ] **Step 3: Implement the prediction in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+Replace `seqc_generateEarly()` with:
+
+```c
+/** boundary step 6: the early part of step n+1. If the master track wraps at
+ * n+1, peekNextPattern() tells the pattern and whether the indices restart. */
+static void seqc_generateEarly(uint32_t n, uint8_t pattern)
+{
+	const uint8_t m = seqc_trk.master;
+	uint8_t next = pattern;
+	bool restart = false;
+
+	if (seqc_nextIndex(seqc_trk.index[m], seqc_trackLength(pattern, m)) == 0)
+	{
+		restart = seqc.host.peekNextPattern(seqc.host.ctx, &next);
+		if (next == SEQC_NO_PATTERN)
+			return;			/* the song ends at n+1 */
+	}
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		const uint8_t step = restart ? 0 : (uint8_t)seqc_nextIndex(seqc_trk.index[t], seqc_trackLength(next, t));
+		seqc_generate(t, n + 1u, next, step, true);
+	}
+}
+```
+
+- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `... with CRLF line terminators`
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 13`, image `274688/1015808 B`,
+`== compiler warnings: 0`, `exit 0`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c tests/test_lookahead.c
+git commit -F - <<'EOF'
+seq_core: early hits of the next pattern via peekNextPattern (E1.7, T11, T12)
+
+At the boundary before a pattern end the early part of the next step comes
+from the pattern peekNextPattern() announces, with the indices restarted when
+the pattern changes; none at a song end. A late change of the pending pattern
+is corrected at the boundary with a new draw. The late hits of the old pattern
+still play after the switch, with their own data.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.8: MIDI clock out, tempo steps and clock out pulses (T5, T6)
+
+Three new timeline items (N8):
+- **`SEQC_ITEM_TEMPO_STEP`.** `tempoStep()` every 96 ticks of the internal timeline. It also comes
+  while stopped, so the LEDs blink with the tempo. While running it comes right before each step
+  boundary.
+- **`SEQC_ITEM_MIDI_CLOCK`.** `midiClockOut()` every 16 ticks of the internal timeline, also while
+  stopped. It is straight whatever the swing, because swing only moves events.
+- **`SEQC_ITEM_PULSE`.** While running, `clockOutPulse(pulseInStep)` every 4 ticks of the position,
+  with `pulseInStep` 0..23 (0 at the boundary).
+
+A start re-phases the MIDI clock and the tempo step: the first clock after `transport(START)` is at
+step 0. The order at equal ticks is tempo step, boundary, note-off, trigger, pulse, MIDI clock. The
+output PPQ prescaler stays in the glue (`trigger_clockTick()`). T6 replays it on the pulses to show
+that every setting divides them evenly.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
+- Test: `tests/test_clockout.c` (ctest ids `T5`, `T6`)
+
+- [ ] **Step 1: Write the failing test `tests/test_clockout.c`**
+
+```c
+/*
+ * test_clockout.c
+ *
+ * Clock outputs (spec 5 "Outputs", N8):
+ * - T5: the MIDI clock out runs on the free-running timeline, also while
+ *   stopped, every 16 ticks, straight whatever the shuffle; a start re-phases it
+ *   to step 0; the tempo steps run on the same timeline;
+ * - T6: while running, a clock out pulse comes every 4 ticks with its pulse in
+ *   the step, and each output PPQ prescaler of fw 1.7 divides them evenly.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+#include "seqc_test.h"
+
+/* busy pattern: ratchets and shifts on every track, so the queue has work */
+static void setUpBusy(fake_host_t *h, uint8_t shuffle)
+{
+	h->shuffle = shuffle;
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		for (uint8_t s = t % 3; s < 16; s += 3)
+		{
+			fake_setStep(h, 0, t, s, true);
+			fake_setTiming(h, 0, t, s, (uint8_t)(s % 6), (int8_t)((s * 5 + t) % 15 - 7));
+		}
+}
+
+static void checkClockSpacing(uint8_t shuffle)
+{
+	fake_host_t *h = fake_init();
+	setUpBusy(h, shuffle);
+	fake_process(h, 0);				/* the stopped timeline's clock at 0 */
+	fake_clearLog(h);
+	seqc_start();
+	fake_process(h, 0);
+	const seqc_time_t interval = fake_msToCycles(0.02);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 32), interval);
+	/* clocks at ticks 0, 16, 32, ... while running */
+	size_t pos = 0;
+	const fake_rec_t *r;
+	const fake_rec_t *prev = NULL;
+	int k = 0;
+	while ((r = fake_next(h, FAKE_MIDI_CLOCK, &pos)) != NULL)
+	{
+		ASSERT_NEAR(r->tick, 16.0 * k, 1e-9);
+		if (prev != NULL)
+		{
+			/* 16 ticks at 120 BPM are 20.833 ms, quantized to the calls */
+			const double dt = (double)(r->time - prev->time);
+			ASSERT_TRUE(dt > fake_clockCycles(120.0) - interval - 1.0);
+			ASSERT_TRUE(dt < fake_clockCycles(120.0) + interval + 1.0);
+		}
+		prev = r;
+		k++;
+	}
+	ASSERT_EQ(k, 32 * 6 + 1);
+	ASSERT_TRUE(fake_count(h, FAKE_TRIGGER) > 100);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T5_midi_clock_spacing_shuffle_0) { checkClockSpacing(0); }
+TEST(T5_midi_clock_spacing_shuffle_64) { checkClockSpacing(64); }
+TEST(T5_midi_clock_spacing_shuffle_127) { checkClockSpacing(127); }
+
+TEST(T5_midi_clock_runs_while_stopped)
+{
+	fake_host_t *h = fake_init();
+	fake_process(h, 0);				/* the timeline starts here */
+	fake_runUntil(h, fake_msToCycles(1000.0), fake_msToCycles(0.05));
+	/* 120 BPM: a clock every 20.833 ms and a tempo step every 125 ms, from 0 */
+	ASSERT_EQ(fake_count(h, FAKE_MIDI_CLOCK), 49);
+	ASSERT_EQ(fake_count(h, FAKE_TEMPO_STEP), 9);
+	ASSERT_EQ(fake_count(h, FAKE_CLOCK_PULSE), 0);	/* only while running */
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 0);
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_MIDI_CLOCK, &pos);
+	ASSERT_EQ(r->time, 0);
+	r = fake_next(h, FAKE_MIDI_CLOCK, &pos);
+	ASSERT_NEAR((double)r->time, fake_clockCycles(120.0), fake_msToCycles(0.05) + 1.0);
+	ASSERT_EQ(r->tick, 0.0);			/* the transport position is not moved */
+}
+
+TEST(T5_start_rephases_the_clock)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 0, true);
+	fake_process(h, 0);
+	fake_runUntil(h, fake_msToCycles(30.0), fake_msToCycles(0.1));	/* clocks at 0 and 20.8 ms */
+	ASSERT_EQ(fake_count(h, FAKE_MIDI_CLOCK), 2);
+	fake_clearLog(h);
+	seqc_start();
+	const seqc_time_t t = fake_msToCycles(30.1);
+	fake_process(h, t);
+	/* START, then at tick 0: tempo step, pattern end, boundary, trigger, pulse, MIDI clock */
+	static const fake_kind_t order[] = {
+		FAKE_TRANSPORT, FAKE_TEMPO_STEP, FAKE_PATTERN_END, FAKE_STEP_BOUNDARY,
+		FAKE_TRIGGER, FAKE_CLOCK_PULSE, FAKE_MIDI_CLOCK,
+	};
+	ASSERT_EQ(h->logCount, sizeof order / sizeof order[0]);
+	for (size_t i = 0; i < h->logCount; i++)
+	{
+		ASSERT_EQ(h->log[i].kind, order[i]);
+		ASSERT_NEAR(h->log[i].tick, 0.0, 1e-9);
+	}
+	ASSERT_EQ(h->log[0].value, SEQC_TRANSPORT_START);
+	ASSERT_EQ(h->log[6].time, t);
+	/* the next clock is 16 ticks after the start, not on the old phase */
+	fake_runUntil(h, t + fake_msToCycles(25.0), fake_msToCycles(0.1));
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_MIDI_CLOCK, &pos);
+	r = fake_next(h, FAKE_MIDI_CLOCK, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_NEAR(r->tick, 16.0, 1e-9);
+	ASSERT_NEAR((double)(r->time - t), fake_clockCycles(120.0), fake_msToCycles(0.1) + 1.0);
+}
+
+TEST(T5_tempo_steps_come_with_the_boundaries)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_process(h, 0);				/* the stopped timeline's tempo step at 0 */
+	fake_clearLog(h);
+	seqc_start();
+	fake_process(h, 0);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 8) - 1, fake_msToCycles(0.1));
+	ASSERT_EQ(fake_count(h, FAKE_TEMPO_STEP), 8);
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 8);
+	/* each tempo step right before its boundary */
+	for (size_t i = 0; i + 1 < h->logCount; i++)
+		if (h->log[i].kind == FAKE_TEMPO_STEP)
+		{
+			const fake_kind_t next = h->log[i + 1].kind;
+			ASSERT_TRUE(next == FAKE_PATTERN_END || next == FAKE_STEP_BOUNDARY);
+			ASSERT_NEAR(h->log[i].tick, h->log[i + 1].tick, 1e-9);
+		}
+	/* stopped, the tempo steps continue on the free-running timeline */
+	seqc_stop();
+	fake_clearLog(h);
+	fake_runUntil(h, h->now + (seqc_time_t)(fake_stepCycles(120.0) * 4), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_count(h, FAKE_TEMPO_STEP), 4);
+}
+
+TEST(T5_tempo_change_keeps_the_clock_continuous)
+{
+	fake_host_t *h = fake_init();
+	fake_process(h, 0);
+	fake_clearLog(h);
+	seqc_start();
+	fake_process(h, 0);
+	const seqc_time_t t1 = fake_msToCycles(100.0);	/* 76.8 ticks: clocks at 0..64 */
+	fake_runUntil(h, t1, fake_msToCycles(0.01));
+	ASSERT_EQ(fake_count(h, FAKE_MIDI_CLOCK), 5);
+	seqc_setTempo(60.0f);
+	fake_runUntil(h, t1 + fake_msToCycles(200.0), fake_msToCycles(0.01));
+	size_t pos = 0;
+	const fake_rec_t *r;
+	int k = 0;
+	seqc_time_t t80 = 0;
+	while ((r = fake_next(h, FAKE_MIDI_CLOCK, &pos)) != NULL)
+	{
+		ASSERT_NEAR(r->tick, 16.0 * k, 1e-9);
+		if (k == 5)
+			t80 = r->time;
+		k++;
+	}
+	/* tick 80 is 3.2 ticks after the change; at 60 BPM a tick is 2.604 ms */
+	ASSERT_NEAR(fake_cyclesToMs(t80 - t1), 3.2 * 60000.0 / (60.0 * 384.0), 0.011);
+	ASSERT_EQ(k, 5 + (int)((76.8 + 200.0 * 60.0 * 384.0 / 60000.0 - 80.0) / 16.0) + 1);
+}
+
+TEST(T6_pulses_every_4_ticks_while_running)
+{
+	fake_host_t *h = fake_init();
+	setUpBusy(h, 127);				/* straight whatever the swing */
+	fake_process(h, 0);
+	fake_runUntil(h, fake_msToCycles(50.0), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_count(h, FAKE_CLOCK_PULSE), 0);	/* stopped */
+	seqc_start();
+	const seqc_time_t t0 = fake_msToCycles(50.0);
+	fake_process(h, t0);
+	fake_runUntil(h, t0 + (seqc_time_t)(fake_stepCycles(120.0) * 8) - 1, fake_msToCycles(0.01));
+	size_t pos = 0;
+	const fake_rec_t *r;
+	int k = 0;
+	while ((r = fake_next(h, FAKE_CLOCK_PULSE, &pos)) != NULL)
+	{
+		ASSERT_NEAR(r->tick, 4.0 * k, 1e-9);
+		ASSERT_EQ(r->value, k % 24);
+		const double late = (double)(r->time - t0) - 4.0 * k * fake_tickCycles(120.0);
+		ASSERT_TRUE(late > -1.0 && late < fake_msToCycles(0.01) + 1.0);
+		k++;
+	}
+	ASSERT_EQ(k, 8 * 24);
+	seqc_stop();
+	fake_clearLog(h);
+	fake_runUntil(h, h->now + fake_msToCycles(100.0), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_count(h, FAKE_CLOCK_PULSE), 0);
+}
+
+/* fw 1.7 trigger_clockTick() (TriggerOut.c): the counter runs mod 96 from
+ * trigger_reset(1) at the start, and the jack is high on the pulses where it is a
+ * multiple of the prescaler of the output PPQ setting */
+static const struct { int ppq, prescaler; } outputs[] = {
+	{ 2, 48 }, { 4, 24 }, { 8, 12 }, { 16, 6 }, { 24, 4 }, { 48, 2 },
+};
+
+TEST(T6_output_ppq_prescalers_divide_evenly)
+{
+	fake_host_t *h = fake_init();
+	setUpBusy(h, 127);
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 16) - 1, fake_msToCycles(0.02));
+	for (size_t o = 0; o < sizeof outputs / sizeof outputs[0]; o++)
+	{
+		int counter = 0;				/* trigger_reset(1) */
+		int edges = 0;
+		double lastEdge = -1.0;
+		size_t pos = 0;
+		const fake_rec_t *r;
+		while ((r = fake_next(h, FAKE_CLOCK_PULSE, &pos)) != NULL)
+		{
+			if (counter % outputs[o].prescaler == 0)
+			{
+				if (lastEdge >= 0.0)
+					ASSERT_NEAR(r->tick - lastEdge, 4.0 * outputs[o].prescaler, 1e-9);
+				lastEdge = r->tick;
+				edges++;
+			}
+			counter = (counter + 1) % 96;
+		}
+		/* 16 steps are 4 quarter notes */
+		ASSERT_EQ(edges, 4 * outputs[o].ppq);
+	}
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `87% tests passed, 2 tests failed out of 15`, `14 - T5 (Failed)`, `15 - T6 (Failed)`,
+`exit 1`.
+
+Run: `build/host-tests/test_clockout`
+
+Expected:
+```
+.../tests/test_clockout.c:61: ASSERT_EQ(k, 32 * 6 + 1) failed: 0 != 193
+FAIL T5_midi_clock_spacing_shuffle_0
+...
+.../tests/test_clockout.c:76: ASSERT_EQ(fake_count(h, FAKE_MIDI_CLOCK), 49) failed: 0 != 49
+FAIL T5_midi_clock_runs_while_stopped
+...
+0 of 9 tests passed
+```
+
+- [ ] **Step 3: Implement the clock outputs in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+Replace `seqc_item_t` with:
+
+```c
+/** The items of the timeline. At equal ticks they are handled in this order
+ * (seq_core.h, "Processing order"). */
+typedef enum
+{
+	SEQC_ITEM_NONE = 0,
+	SEQC_ITEM_TEMPO_STEP,	/**< tempoStep(), internal sync */
+	SEQC_ITEM_BOUNDARY,	/**< the next step boundary */
+	SEQC_ITEM_NOTE_OFF,	/**< a pending note-off */
+	SEQC_ITEM_EVENT,	/**< the next queued event */
+	SEQC_ITEM_PULSE,	/**< clockOutPulse(), while running */
+	SEQC_ITEM_MIDI_CLOCK,	/**< midiClockOut(), internal sync */
+} seqc_item_t;
+```
+
+Insert after `seqc_fire_t` (`seqc_outputs_t`):
+
+```c
+//------------------------------------------------------------------------------
+/** clock outputs and the tempo step (N8) */
+typedef struct
+{
+	seqc_tick_t	nextMidiClock;	/**< internal timeline */
+	seqc_tick_t	nextTempoStep;	/**< internal timeline */
+	seqc_tick_t	nextPulse;	/**< position */
+} seqc_outputs_t;
+```
+
+Replace the state variables block (`/* the state, one part per area */`) with:
+
+```c
+/* the state, one part per area */
+static seqc_core_t seqc;
+static seqc_tracks_t seqc_trk;
+static seqc_gen_t seqc_gen;
+static seqc_queue_t seqc_queue;
+static seqc_fire_t seqc_fire;
+static seqc_outputs_t seqc_out;
+```
+
+Replace `seqc_rewindTransport()` with:
+
+```c
+/** back to the start, before step 0 */
+static void seqc_rewindTransport(void)
+{
+	const bool wasAtStart = seqc.atStart;
+
+	seqc_clearRun();
+	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+	seqc_trk.master = 0;
+	seqc.pos = 0.0;
+	seqc_out.nextPulse = 0;
+	seqc.atStart = true;
+	if (!wasAtStart)
+		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_REWIND);
+}
+```
+
+Replace `seqc_nextItem()` with:
+
+```c
+/** the next item of the timeline: its kind, tick and track (note-offs) */
+static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
+{
+	seqc_item_t best = SEQC_ITEM_NONE;
+	*tick = SEQC_NO_TICK;
+	*track = 0;
+	seqc_consider(SEQC_ITEM_TEMPO_STEP, seqc_out.nextTempoStep, 0, &best, tick, track);
+	seqc_consider(SEQC_ITEM_MIDI_CLOCK, seqc_out.nextMidiClock, 0, &best, tick, track);
+	if (seqc.state == SEQC_RUNNING && !seqc.startPending)
+	{
+		seqc_consider(SEQC_ITEM_BOUNDARY, (seqc_tick_t)seqc_nextBoundaryStep() * SEQC_TICKS_PER_STEP, 0,
+				&best, tick, track);
+		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+			if (seqc_fire.offPending[t])
+				seqc_consider(SEQC_ITEM_NOTE_OFF, seqc_fire.offTick[t], t, &best, tick, track);
+		if (seqc_queue.count > 0)
+			seqc_consider(SEQC_ITEM_EVENT, seqc_queue.events[seqc_queue.count - 1u].tick, 0, &best, tick, track);
+		seqc_consider(SEQC_ITEM_PULSE, seqc_out.nextPulse, 0, &best, tick, track);
+	}
+	return best;
+}
+```
+
+Replace `seqc_runTo()` with:
+
+```c
+/** handle every item due at or before target, earliest first (spec 6.3) */
+static void seqc_runTo(double target)
+{
+	for (;;)
+	{
+		seqc_tick_t tick;
+		uint8_t track;
+		const seqc_item_t item = seqc_nextItem(&tick, &track);
+		if (item == SEQC_ITEM_NONE || (double)tick > target)
+			break;
+		switch (item)
+		{
+		case SEQC_ITEM_TEMPO_STEP:
+			if (seqc.state == SEQC_RUNNING)
+				seqc.pos = (double)tick;
+			seqc_out.nextTempoStep += SEQC_TICKS_PER_STEP;
+			seqc.host.tempoStep(seqc.host.ctx);
+			break;
+		case SEQC_ITEM_BOUNDARY:
+			seqc_boundary(tick);
+			break;
+		case SEQC_ITEM_NOTE_OFF:
+			seqc_noteOffDue(track);
+			break;
+		case SEQC_ITEM_EVENT:
+			seqc_fireNext();
+			break;
+		case SEQC_ITEM_PULSE:
+			seqc.pos = (double)tick;
+			seqc_out.nextPulse += SEQC_TICKS_PER_PULSE;
+			seqc.host.clockOutPulse(seqc.host.ctx,
+					(uint8_t)((tick % SEQC_TICKS_PER_STEP) / SEQC_TICKS_PER_PULSE));
+			break;
+		case SEQC_ITEM_MIDI_CLOCK:
+			if (seqc.state == SEQC_RUNNING)
+				seqc.pos = (double)tick;
+			seqc_out.nextMidiClock += SEQC_TICKS_PER_MIDI_CLOCK;
+			seqc.host.midiClockOut(seqc.host.ctx);
+			break;
+		default:
+			return;
+		}
+	}
+	if (seqc.state == SEQC_RUNNING && target > seqc.pos)
+		seqc.pos = target;
+}
+```
+
+Replace `seqc_runInternal()` with:
+
+```c
+/** internal sync: a pending start begins here, then the timeline runs to now */
+static void seqc_runInternal(void)
+{
+	if (seqc.startPending)
+	{
+		/* step 0 now; the MIDI clock out and the tempo steps are re-phased (N8) */
+		seqc.startPending = false;
+		seqc.anchorTime = seqc.now;
+		seqc.anchorTick = 0.0;
+		seqc.pos = 0.0;
+		seqc_out.nextMidiClock = 0;
+		seqc_out.nextTempoStep = 0;
+		seqc_out.nextPulse = 0;
+	}
+	seqc_runTo(seqc_internalTick(seqc.now));
+}
+```
+
+Replace `seqc_init()` with:
+
+```c
+void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
+{
+	memset(&seqc, 0, sizeof seqc);
+	memset(&seqc_trk, 0, sizeof seqc_trk);
+	memset(&seqc_gen, 0, sizeof seqc_gen);
+	memset(&seqc_queue, 0, sizeof seqc_queue);
+	memset(&seqc_fire, 0, sizeof seqc_fire);
+	memset(&seqc_out, 0, sizeof seqc_out);
+
+	seqc.host = *host;
+	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
+	seqc.masterBpm = SEQC_DEFAULT_BPM;
+	seqc.ticksPerCycle = seqc_ticksPerCycle(seqc.masterBpm);
+	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
+	seqc.state = SEQC_STOPPED;
+	seqc.atStart = true;
+	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+}
+```
+
+- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `... with CRLF line terminators`
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 15`, image `274688/1015808 B`,
+`== compiler warnings: 0`, `exit 0`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c tests/test_clockout.c
+git commit -F - <<'EOF'
+seq_core: MIDI clock out, tempo steps and clock out pulses (E1.8, T5, T6)
+
+The MIDI clock out and the tempo steps run on the internal timeline, also
+while stopped, straight whatever the shuffle; a start re-phases them to step
+0 (N8). While running a clock out pulse comes every 4 ticks.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.9: Roll, recording phase and skip-once; the same-tick rule (T13, T14)
+
+**Roll (spec 6.6).** At boundary n, every track whose `rollRate()` is r > 0 and whose step s has
+`s % r == 0` gets a roll event:
+- at `n·96 + swing`;
+- with `vel = SEQC_ROLL_VELOCITY` and the step's note and p-locks;
+- with `flags = SEQC_EVF_ROLL`.
+
+Roll events play on muted tracks, as in fw 1.7. They take part in the choke.
+
+**The same-tick rule (N2).** It completes the firing. Per track the core remembers
+`(lastTick, lastStep)`. An event with the same tick and `absStep ≤ lastStep` is dropped, so of a note
+and a roll at the same tick and step only the note plays.
+
+**Recording phase (spec 6.7).** `seqc_stepPhase()` is 0 at the boundary of step n and 0.5 at
+`n·96 + (96 + swing)/2`, halfway between the swung grid times of steps n and n+1. It is linear
+between those points, with `swing = round(shuffle·64/127)` whatever the parity of n. It is 0 while
+stopped or armed, and before the first step.
+
+**Skip-once (D6).** `seqc_skipOnce(t, s)` marks the next occurrence of step s on track t, in the
+active pattern:
+- its queued early hits are removed at once;
+- at the track's next boundary the occurrence is not generated if the track arrives there
+  (`skipDrops` counts it);
+- the marker is cleared at that boundary in any case.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
+- Test: `tests/test_roll.c` (ctest ids `T13`, `T14`)
+
+- [ ] **Step 1: Write the failing test `tests/test_roll.c`**
+
+```c
+/*
+ * test_roll.c
+ *
+ * - T13: roll (spec 6.6): a roll event at every step s with s % rate == 0 of
+ *   the track, on the swung grid, velocity 100, with the step's note; rolls play
+ *   on muted tracks and lose to a note event at the same tick.
+ * - T14: the recording phase (spec 6.7, swing-aware) and the skip-once rule
+ *   (D6): a note recorded at half a step or later goes to the next step, which
+ *   then does not play again in that occurrence.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+#include "seqc_test.h"
+
+static const fake_rec_t *trig[256];
+
+static void start(fake_host_t *h)
+{
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+}
+
+/* run at 120 BPM until the time of tick (fine steps, for the phase checks) */
+static void runToTick(fake_host_t *h, double tick)
+{
+	fake_runUntil(h, (seqc_time_t)(fake_tickCycles(120.0) * tick) + 1, fake_msToCycles(0.01));
+}
+
+static seqc_stats_t stats(void)
+{
+	seqc_stats_t s;
+	seqc_stats(&s);
+	return s;
+}
+
+TEST(T13_roll_at_every_rate)
+{
+	static const uint8_t rates[] = { 16, 8, 4, 2, 1 };
+	for (size_t i = 0; i < sizeof rates; i++)
+	{
+		fake_host_t *h = fake_init();
+		h->rollRate[3] = rates[i];
+		fake_setStepData(h, 0, 3, 0, 127, 62, 100);	/* the roll takes the step's note */
+		start(h);
+		runToTick(h, 32 * 96 - 1);
+		const size_t n = fake_triggers(h, 3, trig, 64);
+		ASSERT_EQ(n, 32u / rates[i]);
+		for (size_t k = 0; k < n; k++)
+		{
+			const seqc_event_t *ev = &trig[k]->ev;
+			ASSERT_EQ(ev->absStep, k * rates[i]);
+			ASSERT_EQ(ev->tick, (int64_t)(k * rates[i]) * 96);
+			ASSERT_EQ(ev->flags, SEQC_EVF_ROLL);
+			ASSERT_EQ(ev->vel, SEQC_ROLL_VELOCITY);
+			ASSERT_EQ(ev->hit, 0);
+			ASSERT_EQ(ev->note, ev->step == 0 ? 62 : FAKE_DEFAULT_NOTE);
+		}
+		ASSERT_EQ(h->errors, 0);
+	}
+}
+
+TEST(T13_roll_is_swung)
+{
+	fake_host_t *h = fake_init();
+	h->shuffle = 127;
+	h->rollRate[0] = 1;
+	start(h);
+	runToTick(h, 4 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 4);
+	ASSERT_EQ(trig[0]->ev.tick, 0);
+	ASSERT_EQ(trig[1]->ev.tick, 96 + 64);
+	ASSERT_EQ(trig[2]->ev.tick, 192);
+	ASSERT_EQ(trig[3]->ev.tick, 288 + 64);
+}
+
+TEST(T13_roll_follows_the_track_step)
+{
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 2, 6);
+	h->rollRate[2] = 4;				/* track steps 0 and 4 */
+	start(h);
+	runToTick(h, 18 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 16), 6);
+	static const uint32_t abs[] = { 0, 4, 6, 10, 12, 16 };
+	for (int k = 0; k < 6; k++)
+		ASSERT_EQ(trig[k]->ev.absStep, abs[k]);
+}
+
+TEST(T13_roll_plays_on_a_muted_track)
+{
+	fake_host_t *h = fake_init();
+	h->rollRate[5] = 2;
+	h->muted[5] = true;
+	fake_setStep(h, 0, 5, 1, true);			/* a step event: muted */
+	start(h);
+	runToTick(h, 4 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 5, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(trig[1]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(stats().muteDrops, 1);
+}
+
+TEST(T13_note_wins_over_a_roll_at_the_same_tick)
+{
+	fake_host_t *h = fake_init();
+	h->rollRate[2] = 4;
+	fake_setStep(h, 0, 2, 4, true);			/* same tick and step as the roll */
+	fake_setStepData(h, 0, 2, 4, 80, 60, 100);
+	start(h);
+	runToTick(h, 9 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 3);
+	ASSERT_EQ(trig[0]->ev.flags, SEQC_EVF_ROLL);	/* step 0 */
+	ASSERT_EQ(trig[1]->ev.absStep, 4);
+	ASSERT_EQ(trig[1]->ev.flags, 0);		/* the note, not the roll */
+	ASSERT_EQ(trig[1]->ev.vel, 80);
+	ASSERT_EQ(trig[2]->ev.absStep, 8);
+	ASSERT_EQ(trig[2]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(stats().chokeDrops, 1);
+}
+
+TEST(T13_roll_hit_is_recorded_at_its_own_step)
+{
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	h->rollRate[1] = 8;
+	start(h);
+	runToTick(h, 8 * 96 + 10);
+	/* the glue records each roll hit at its step (N11): steps 0 and 8 */
+	ASSERT_EQ(h->mainSteps[0][1], (1ull << 0) | (1ull << 8));
+	ASSERT_EQ(h->steps[0][1][8].volume, SEQC_ROLL_VELOCITY | FAKE_STEP_ACTIVE_MASK);
+	/* in the next loop the recorded step plays, and the roll on it is dropped */
+	runToTick(h, 17 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 8), 3);
+	ASSERT_EQ(trig[2]->ev.absStep, 16);
+	ASSERT_EQ(trig[2]->ev.flags, 0);
+}
+
+TEST(T14_phase_is_linear_without_shuffle)
+{
+	fake_host_t *h = fake_init();
+	ASSERT_EQ(seqc_stepPhase(), 0.0f);		/* stopped */
+	start(h);
+	static const double at[] = { 0.0, 12.0, 48.0, 72.0, 95.0 };
+	for (size_t i = 0; i < sizeof at / sizeof at[0]; i++)
+	{
+		runToTick(h, 5 * 96 + at[i]);
+		ASSERT_EQ(seqc_absStep(), 5);
+		ASSERT_NEAR(seqc_stepPhase(), at[i] / 96.0, 0.002);
+	}
+}
+
+TEST(T14_phase_with_shuffle_is_half_between_the_swung_hits)
+{
+	fake_host_t *h = fake_init();
+	h->shuffle = 127;				/* swing 64: half at 80 */
+	start(h);
+	runToTick(h, 3 * 96 + 40);
+	ASSERT_NEAR(seqc_stepPhase(), 0.25, 0.002);
+	runToTick(h, 3 * 96 + 80);
+	ASSERT_NEAR(seqc_stepPhase(), 0.5, 0.002);
+	runToTick(h, 3 * 96 + 88);
+	ASSERT_NEAR(seqc_stepPhase(), 0.75, 0.002);
+	/* the same rule on an even step: halfway between 4 * 96 and the swung 5 */
+	runToTick(h, 4 * 96 + 80);
+	ASSERT_NEAR(seqc_stepPhase(), 0.5, 0.002);
+}
+
+TEST(T14_phase_is_zero_when_stopped)
+{
+	fake_host_t *h = fake_init();
+	start(h);
+	runToTick(h, 2 * 96 + 50);
+	ASSERT_TRUE(seqc_stepPhase() > 0.5f);
+	seqc_stop();
+	ASSERT_EQ(seqc_stepPhase(), 0.0f);
+}
+
+TEST(T14_late_note_goes_to_the_next_step_and_plays_once)
+{
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	start(h);
+	runToTick(h, 3 * 96 + 60);			/* phase 0.625 in step 3 */
+	fake_addNote(h, 4, 100, 64);
+	ASSERT_TRUE((h->mainSteps[0][4] >> 4) & 1u);	/* recorded on step 4 */
+	runToTick(h, 21 * 96 - 1);
+	/* the live hit was the note: step 4 does not play at 4, but at 20 */
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 20);
+	ASSERT_EQ(trig[0]->ev.note, 64);
+	ASSERT_EQ(stats().skipDrops, 1);
+}
+
+TEST(T14_early_note_stays_on_the_current_step)
+{
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	start(h);
+	runToTick(h, 3 * 96 + 40);			/* phase 0.42 */
+	fake_addNote(h, 4, 100, 64);
+	ASSERT_TRUE((h->mainSteps[0][4] >> 3) & 1u);
+	runToTick(h, 20 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 19);
+	ASSERT_EQ(stats().skipDrops, 0);
+}
+
+TEST(T14_skip_once_removes_the_queued_early_hits)
+{
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	fake_setStep(h, 0, 4, 4, true);
+	fake_setTiming(h, 0, 4, 4, 1, -2);		/* 360 early, 408 late */
+	start(h);
+	runToTick(h, 3 * 96 + 50);			/* the early hit is queued */
+	fake_addNote(h, 4, 100, 64);
+	runToTick(h, 6 * 96);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 0);
+	ASSERT_EQ(stats().skipDrops, 1);
+}
+
+TEST(T14_marker_is_cleared_at_the_next_boundary)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 9, true);
+	start(h);
+	runToTick(h, 3 * 96 + 50);
+	seqc_skipOnce(2, 9);				/* the track arrives at 4, not 9 */
+	runToTick(h, 10 * 96);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 9);
+	ASSERT_EQ(stats().skipDrops, 0);
+}
+
+TEST(T14_skip_once_is_ignored_when_stopped_or_out_of_range)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 2, 0, true);
+	seqc_skipOnce(2, 0);				/* stopped */
+	start(h);
+	seqc_skipOnce(7, 1);
+	seqc_skipOnce(2, 64);
+	runToTick(h, 17 * 96);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 2);
+	ASSERT_EQ(stats().skipDrops, 0);
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `88% tests passed, 2 tests failed out of 17`, `16 - T13 (Failed)`, `17 - T14 (Failed)`,
+`exit 1`.
+
+Run: `build/host-tests/test_roll`
+
+Expected: three T14 tests pass already, because the placeholder `seqc_skipOnce()` does the "no skip"
+they expect: `T14_early_note_stays_on_the_current_step`, `T14_marker_is_cleared_at_the_next_boundary`
+and `T14_skip_once_is_ignored_when_stopped_or_out_of_range`. All the others fail:
+```
+.../tests/test_roll.c:55: ASSERT_EQ(n, 32u / rates[i]) failed: 0 != 2
+FAIL T13_roll_at_every_rate
+...
+.../tests/test_roll.c:156: ASSERT_NEAR(seqc_stepPhase(), at[i] / 96.0, 0.002) failed: 0 vs 0.125
+FAIL T14_phase_is_linear_without_shuffle
+...
+3 of 14 tests passed
+```
+
+- [ ] **Step 3: Implement roll, phase and skip-once in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+Replace `seqc_fire_t` with:
+
+```c
+/** per-track firing state: note-off and the same-tick rule (N2) */
+typedef struct
+{
+	bool		offPending[SEQC_NUM_TRACKS];
+	seqc_tick_t	offTick[SEQC_NUM_TRACKS];
+	bool		fired[SEQC_NUM_TRACKS];		/**< lastTick and lastStep are valid */
+	seqc_tick_t	lastTick[SEQC_NUM_TRACKS];
+	uint32_t	lastStep[SEQC_NUM_TRACKS];
+} seqc_fire_t;
+```
+
+Insert after `seqc_outputs_t` (`seqc_skip_t`):
+
+```c
+//------------------------------------------------------------------------------
+/** the skip-once marker (D6) */
+typedef struct
+{
+	bool		valid;
+	uint8_t		track;
+	uint8_t		pattern;
+	uint8_t		step;
+	uint32_t	absStep;	/**< the occurrence it applies to */
+} seqc_skip_t;
+```
+
+Replace the state variables block (`/* the state, one part per area */`) with:
+
+```c
+/* the state, one part per area */
+static seqc_core_t seqc;
+static seqc_tracks_t seqc_trk;
+static seqc_gen_t seqc_gen;
+static seqc_queue_t seqc_queue;
+static seqc_fire_t seqc_fire;
+static seqc_outputs_t seqc_out;
+static seqc_skip_t seqc_skip;
+```
+
+Insert after `seqc_queueChoke()` (`seqc_queueRemoveStep()`):
+
+```c
+//------------------------------------------------------------------------------
+/** remove the queued step hits of one occurrence (skip-once) */
+static void seqc_queueRemoveStep(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step)
+{
+	uint16_t kept = 0;
+	for (uint16_t i = 0; i < seqc_queue.count; i++)
+	{
+		const seqc_event_t *ev = &seqc_queue.events[i];
+		if (ev->track == track && ev->absStep == absStep && ev->pattern == pattern && ev->step == step
+				&& (ev->flags & SEQC_EVF_ROLL) == 0)
+			continue;
+		seqc_queue.events[kept++] = *ev;
+	}
+	seqc_queue.count = kept;
+}
+```
+
+Replace `seqc_fireNext()` with:
+
+```c
+/** the next queued event is due: mutes, the same-tick rule, choke, note-off,
+ * trigger (spec 6.4, N2) */
+static void seqc_fireNext(void)
+{
+	const seqc_event_t ev = seqc_queue.events[--seqc_queue.count];
+	const uint8_t t = ev.track;
+
+	seqc.pos = (double)ev.tick;
+	if ((ev.flags & SEQC_EVF_ROLL) == 0 && seqc.host.muted(seqc.host.ctx, t))
+	{
+		seqc.stats.muteDrops++;
+		return;
+	}
+	if (seqc_fire.fired[t] && seqc_fire.lastTick[t] == ev.tick && ev.absStep <= seqc_fire.lastStep[t])
+	{
+		seqc.stats.chokeDrops++;
+		return;
+	}
+	seqc.stats.chokeDrops += seqc_queueChoke(t, ev.absStep);
+	if (seqc_fire.offPending[t])
+		seqc.host.noteOff(seqc.host.ctx, t);
+	seqc_fire.fired[t] = true;
+	seqc_fire.lastTick[t] = ev.tick;
+	seqc_fire.lastStep[t] = ev.absStep;
+	seqc_fire.offPending[t] = true;
+	seqc_fire.offTick[t] = ev.tick + SEQC_NOTE_OFF_TICKS;
+	seqc.host.trigger(seqc.host.ctx, &ev);
+}
+```
+
+Insert after `seqc_generate()` (`seqc_skipLate()`, `seqc_skipEarly()`, `seqc_queueRolls()`):
+
+```c
+//------------------------------------------------------------------------------
+/** true if the skip-once marker drops occurrence (track, n) at its boundary. A
+ * marker for n is cleared here, whether it matches or not. */
+static bool seqc_skipLate(uint8_t track, uint32_t n, uint8_t pattern, uint8_t step)
+{
+	if (!seqc_skip.valid || seqc_skip.track != track || seqc_skip.absStep > n)
+		return false;
+	seqc_skip.valid = false;
+	if (seqc_skip.absStep != n || seqc_skip.pattern != pattern || seqc_skip.step != step)
+		return false;
+	seqc.stats.skipDrops++;
+	return true;
+}
+//------------------------------------------------------------------------------
+/** true if the skip-once marker drops the early part of occurrence (track, n) */
+static bool seqc_skipEarly(uint8_t track, uint32_t n, uint8_t pattern, uint8_t step)
+{
+	return seqc_skip.valid && seqc_skip.track == track && seqc_skip.absStep == n
+			&& seqc_skip.pattern == pattern && seqc_skip.step == step;
+}
+//------------------------------------------------------------------------------
+/** boundary step 4: the roll events of step n (spec 6.6). They are at the swung
+ * grid position of the step and carry the step's note and p-locks. */
+static void seqc_queueRolls(uint32_t n, uint8_t pattern)
+{
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		const uint8_t rate = seqc.host.rollRate(seqc.host.ctx, t);
+		const uint8_t step = (uint8_t)seqc_trk.index[t];
+		if (rate == 0 || step % rate != 0)
+			continue;
+		const Step *data = seqc.host.step(seqc.host.ctx, pattern, t, step);
+		const seqc_event_t ev = {
+			.tick = (seqc_tick_t)n * SEQC_TICKS_PER_STEP + ((n & 1u) ? seqc_gen.swing : 0),
+			.absStep = n, .track = t, .pattern = pattern, .step = step, .hit = 0,
+			.vel = SEQC_ROLL_VELOCITY, .note = data->note, .flags = SEQC_EVF_ROLL, .reserved = 0,
+			.p1Nr = data->param1Nr, .p1Val = data->param1Val, .p2Nr = data->param2Nr, .p2Val = data->param2Val,
+		};
+		seqc_queueInsert(&ev);
+	}
+}
+```
+
+Replace `seqc_generateLate()` with:
+
+```c
+/** boundary step 5: the late part of step n */
+static void seqc_generateLate(uint32_t n, uint8_t pattern)
+{
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		const uint8_t step = (uint8_t)seqc_trk.index[t];
+		if (seqc_skipLate(t, n, pattern, step))
+			continue;
+		seqc_generate(t, n, pattern, step, false);
+	}
+}
+```
+
+Replace `seqc_generateEarly()` with:
+
+```c
+/** boundary step 6: the early part of step n+1. If the master track wraps at
+ * n+1, peekNextPattern() tells the pattern and whether the indices restart. */
+static void seqc_generateEarly(uint32_t n, uint8_t pattern)
+{
+	const uint8_t m = seqc_trk.master;
+	uint8_t next = pattern;
+	bool restart = false;
+
+	if (seqc_nextIndex(seqc_trk.index[m], seqc_trackLength(pattern, m)) == 0)
+	{
+		restart = seqc.host.peekNextPattern(seqc.host.ctx, &next);
+		if (next == SEQC_NO_PATTERN)
+			return;			/* the song ends at n+1 */
+	}
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		const uint8_t step = restart ? 0 : (uint8_t)seqc_nextIndex(seqc_trk.index[t], seqc_trackLength(next, t));
+		if (seqc_skipEarly(t, n + 1u, next, step))
+			continue;
+		seqc_generate(t, n + 1u, next, step, true);
+	}
+}
+```
+
+Replace `seqc_clearRun()` with:
+
+```c
+/** clear what belongs to the current run: queue, note-offs, draws, same-tick
+ * state and the skip-once marker (rewind) */
+static void seqc_clearRun(void)
+{
+	seqc_queue.count = 0;
+	seqc_flushNoteOffs();
+	memset(seqc_gen.draw, 0, sizeof seqc_gen.draw);
+	memset(seqc_fire.fired, 0, sizeof seqc_fire.fired);
+	seqc_skip.valid = false;
+}
+```
+
+Replace `seqc_boundary()` with:
+
+```c
+/** the step boundary at tick (seq_core.h, "Processing order") */
+static void seqc_boundary(seqc_tick_t tick)
+{
+	seqc.pos = (double)tick;
+	if (!seqc_advanceCounters())
+		return;
+	const uint32_t n = (uint32_t)seqc.absStep;
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+
+	seqc_trk.master = seqc_longestTrack(pattern);
+	seqc_gen.swing = seqc_swingTicks(seqc.host.shuffle(seqc.host.ctx));
+	seqc.host.stepBoundary(seqc.host.ctx, n);
+	seqc_queueRolls(n, pattern);
+	seqc_generateLate(n, pattern);
+	seqc_generateEarly(n, pattern);
+}
+```
+
+Replace `seqc_init()` with:
+
+```c
+void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
+{
+	memset(&seqc, 0, sizeof seqc);
+	memset(&seqc_trk, 0, sizeof seqc_trk);
+	memset(&seqc_gen, 0, sizeof seqc_gen);
+	memset(&seqc_queue, 0, sizeof seqc_queue);
+	memset(&seqc_fire, 0, sizeof seqc_fire);
+	memset(&seqc_out, 0, sizeof seqc_out);
+	memset(&seqc_skip, 0, sizeof seqc_skip);
+
+	seqc.host = *host;
+	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
+	seqc.masterBpm = SEQC_DEFAULT_BPM;
+	seqc.ticksPerCycle = seqc_ticksPerCycle(seqc.masterBpm);
+	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
+	seqc.state = SEQC_STOPPED;
+	seqc.atStart = true;
+	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+}
+```
+
+Replace `seqc_skipOnce()` with:
+
+```c
+void seqc_skipOnce(uint8_t track, uint8_t step)
+{
+	if (seqc.state == SEQC_STOPPED || track >= SEQC_NUM_TRACKS || step >= SEQC_NUM_STEPS)
+		return;
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+	const uint32_t n = seqc_nextBoundaryStep();
+
+	seqc_skip.valid = true;
+	seqc_skip.track = track;
+	seqc_skip.pattern = pattern;
+	seqc_skip.step = step;
+	seqc_skip.absStep = n;
+	seqc_queueRemoveStep(track, n, pattern, step);
+}
+```
+
+Replace `seqc_stepPhase()` with:
+
+```c
+float seqc_stepPhase(void)
+{
+	if (seqc.state != SEQC_RUNNING || seqc.absStep < 0)
+		return 0.0f;
+	const double x = seqc_position() - (double)seqc.absStep * SEQC_TICKS_PER_STEP;
+	if (x <= 0.0)
+		return 0.0f;
+	/* 0.5 halfway between the swung grid times of steps n and n+1 (spec 6.7) */
+	const double half = (SEQC_TICKS_PER_STEP + seqc_gen.swing) / 2.0;
+	const double phase = x < half ? 0.5 * x / half
+			: 0.5 + 0.5 * (x - half) / (SEQC_TICKS_PER_STEP - half);
+	return phase < 1.0 ? (float)phase : 0.999999f;
+}
+```
+
+- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `... with CRLF line terminators`
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 17`, image `274688/1015808 B`,
+`== compiler warnings: 0`, `exit 0`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c tests/test_roll.c
+git commit -F - <<'EOF'
+seq_core: roll, recording phase and skip-once (E1.9, T13, T14)
+
+Roll events on the swung grid at the roll rate, also on muted tracks; a note
+wins over a roll at the same tick (same-tick rule of N2). The recording phase
+is 0.5 halfway between the swung grid times, and skip-once keeps a note
+recorded on the next step from playing twice (D6).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.10: Slave sync: MIDI clock and the clock in jack (T16, T18)
+
+The slave modes (spec 5, N4, N9).
+
+**Sync mode and clocks.**
+- `seqc_setSyncMode()` keeps the transport state and the position, and clears the estimate and the
+  clock count.
+- `seqc_syncEvent()` first handles everything due up to the stamp. It then applies `SEQC_EV_CLOCK`
+  (MIDI mode) or `SEQC_EV_PULSE` (analog mode). Any other event or mode is ignored and counted in
+  `syncIgnored`. Start, Continue, Stop and the reset input follow in E1.11.
+- **Ticks per clock.** One clock is 16 ticks for MIDI and for the jack at 24 PPQ, and 96 ticks
+  (one step) for the jack at 4 PPQ (`seqc_setAnalogPpq()`). In analog sync a PPQ post restarts
+  the clock count and clears the estimate; in the other modes the value is only kept (decision 11).
+- **Clock count.** It runs all the time. A clock "begins a step" when `count % clocksPerStep == 0`
+  (6, or 1 at 4 PPQ). Such a clock calls `tempoStep()`.
+- **Local start.** `seqc_start()` in a slave mode arms the transport until a clock that begins a
+  step, so playback starts on the master's 16th grid.
+
+**Position (N9).**
+- While running, each clock moves the position to `lastClockPos + ticksPerClock`. Everything due
+  on the way is handled in order: late, but never dropped.
+- Between clocks the position follows the estimated tempo. It is clamped to the next clock, the
+  clamp included, and never goes back.
+
+**Tempo estimate.**
+- It is the mean of the last 24 intervals, or 4 at 4 PPQ, taken from the raw stamps.
+- An interval more than 50% off the mean is left out (`intervalsExcluded`).
+- It is clamped to 20–300 BPM. Without a measured interval the last known tempo is used.
+- **Dropout (N15).** After the dropout time without a clock the estimate is cleared and the
+  position holds (`dropouts`). The dropout time is `max(500 ms, 2 × the expected clock interval)`:
+  the interval comes from the estimate, or from 20 BPM while there is none (1.5 s at 4 PPQ). So a
+  4 PPQ clock below 30 BPM still works. The next clock resumes playback, and its interval is not
+  used.
+
+**Time to the next item (N10).** In slave mode `nextDue` is capped at the clamp time and at the
+dropout timeout.
+
+The MIDI clock out and the internal tempo steps run only in internal sync. Switching from a slave
+mode to internal sync starts an armed transport at once.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
+- Test: `tests/test_slave.c` (ctest ids `T16`, `T18`)
+
+- [ ] **Step 1: Write the failing test `tests/test_slave.c`**
+
+```c
+/*
+ * test_slave.c
+ *
+ * Slave modes (spec 5, N4, N9):
+ * - T16: MIDI clock: a steady clock, USB-like jitter of +-1 ms, a tempo ramp
+ *   from 120 to 140 BPM, early, late and bunched clocks without a lost event,
+ *   the clamp to the next clock, outliers, a dropout and the resume, the local
+ *   start on the master's step grid, and the sync mode switches;
+ * - T18: the clock in jack at 4 and 24 PPQ.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+#include "seqc_test.h"
+
+#define MAX_CLOCKS 1024
+
+static const fake_rec_t *trig[1024];
+static seqc_time_t stamps[MAX_CLOCKS];
+
+static seqc_stats_t stats(void)
+{
+	seqc_stats_t s;
+	seqc_stats(&s);
+	return s;
+}
+
+/* deliver count clocks with the given stamps (ascending) the way seq_tick() does:
+ * every interval cycles, the clocks stamped up to then, then seqc_process() */
+static void deliver(fake_host_t *h, seqc_sync_ev_t ev, const seqc_time_t *at, size_t count, seqc_time_t interval)
+{
+	size_t i = 0;
+	seqc_time_t t = h->now;
+	while (i < count)
+	{
+		t += interval;
+		while (i < count && at[i] <= t)
+			fake_sync(h, ev, at[i++]);
+		fake_process(h, t);
+	}
+}
+
+/* a slave in mode, with every 16th of track 0 on, armed by a local start */
+static fake_host_t *slaveWithGrid(seqc_sync_t mode)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	for (uint8_t s = 0; s < 16; s++)
+		fake_setStep(h, 0, 0, s, true);
+	seqc_setSyncMode(mode);
+	fake_process(h, fake_msToCycles(1.0));
+	return h;
+}
+
+/* a deterministic jitter in [-1, +1] ms */
+static uint64_t lcg = 12345;
+static double jitterMs(void)
+{
+	lcg = lcg * 6364136223846793005ull + 1442695040888963407ull;
+	return (double)(lcg >> 11) / (double)(1ull << 53) * 2.0 - 1.0;
+}
+
+TEST(T16_steady_clock)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	for (uint8_t s = 0; s < 16; s += 4)
+		fake_setStep(h, 0, 0, s, true);
+	fake_setStep(h, 0, 1, 2, true);
+	fake_setTiming(h, 0, 1, 2, 3, 0);		/* x4: 192, 216, 240, 264 */
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	ASSERT_EQ(seqc_position(), -16.0);		/* one clock before step 0 */
+	fake_process(h, fake_msToCycles(1.0));
+	seqc_start();
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	ASSERT_TRUE(seqc_isRunning());			/* armed counts as running (N7) */
+	const double per = fake_clockCycles(125.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 6 * 32 + 1, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(seqc_absStep(), 32);
+
+	/* every boundary at the stamp of its clock */
+	size_t pos = 0;
+	const fake_rec_t *r;
+	uint32_t n = 0;
+	while ((r = fake_next(h, FAKE_STEP_BOUNDARY, &pos)) != NULL)
+	{
+		ASSERT_EQ(r->arg, n);
+		ASSERT_EQ(r->time, t0 + (seqc_time_t)(6.0 * n * per + 0.5));
+		n++;
+	}
+	ASSERT_EQ(n, 33);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 9);
+	for (int k = 0; k < 9; k++)
+		ASSERT_EQ(trig[k]->time, t0 + (seqc_time_t)(24.0 * k * per + 0.5));
+	/* the ratchet hits between clocks come from the interpolation */
+	ASSERT_EQ(fake_triggers(h, 1, trig, 64), 8);
+	for (int k = 0; k < 4; k++)
+	{
+		const double ideal = (double)t0 + (192.0 + 24.0 * k) / 16.0 * per;
+		ASSERT_NEAR((double)trig[k]->time, ideal, fake_msToCycles(0.1) + 2.0);
+	}
+	ASSERT_NEAR(seqc_currentBpm(), 125.0, 1e-3);
+	ASSERT_EQ(h->calls[FAKE_MIDI_CLOCK], 0);	/* no MIDI clock out in slave modes */
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], 33);	/* one per step of the clock count */
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T16_usb_like_jitter)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(125.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	const size_t count = 6 * 64 + 1;
+	lcg = 12345;
+	for (size_t i = 0; i < count; i++)
+		stamps[i] = (seqc_time_t)((double)t0 + (double)i * per + jitterMs() * (double)fake_msToCycles(1.0));
+	deliver(h, SEQC_EV_CLOCK, stamps, count, fake_msToCycles(0.1));
+	/* no step lost, in order, each within the jitter of its ideal time */
+	const size_t n = fake_triggers(h, 0, trig, 1024);
+	ASSERT_EQ(n, 65);
+	for (size_t k = 0; k < n; k++)
+	{
+		ASSERT_EQ(trig[k]->ev.absStep, k);
+		const double ideal = (double)t0 + 6.0 * (double)k * per;
+		ASSERT_NEAR((double)trig[k]->time, ideal, fake_msToCycles(1.1));
+	}
+	ASSERT_NEAR(seqc_currentBpm(), 125.0, 0.5);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+}
+
+TEST(T16_tempo_ramp_120_to_140)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	/* 96 clocks (one bar) ramping from 120 to 140 BPM, then 48 clocks at 140 */
+	const size_t count = 96 + 48 + 1;
+	double t = (double)fake_msToCycles(10.0);
+	for (size_t i = 0; i < count; i++)
+	{
+		stamps[i] = (seqc_time_t)(t + 0.5);
+		const double bpm = i < 96 ? 120.0 + 20.0 * (double)i / 96.0 : 140.0;
+		t += fake_clockCycles(bpm);
+	}
+	deliver(h, SEQC_EV_CLOCK, stamps, count, fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 0, trig, 1024), count / 6 + 1);
+	for (size_t k = 0; k <= count / 6; k++)
+		ASSERT_EQ(trig[k]->time, stamps[6 * k]);	/* each step at its clock */
+	ASSERT_NEAR(seqc_currentBpm(), 140.0, 0.01);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+}
+
+TEST(T16_bunched_clocks_lose_no_event)
+{
+	/* USB: three clocks in one packet share a stamp; the gaps in between are
+	 * three intervals long. The position follows every clock. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	fake_setStep(h, 0, 1, 1, true);
+	fake_setTiming(h, 0, 1, 1, 5, 3);		/* x8 between the clocks */
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	const size_t count = 6 * 16 + 1;
+	for (size_t i = 0; i < count; i++)
+		stamps[i] = t0 + (seqc_time_t)((double)(i / 3 * 3 + 2) * per);
+	size_t i = 0;
+	seqc_time_t t = h->now;
+	double last = -1e9;
+	while (i < count)
+	{
+		t += fake_msToCycles(0.1);
+		while (i < count && stamps[i] <= t)
+			fake_sync(h, SEQC_EV_CLOCK, stamps[i++]);
+		fake_process(h, t);
+		ASSERT_TRUE(seqc_position() >= last);	/* never back */
+		last = seqc_position();
+	}
+	ASSERT_EQ(fake_triggers(h, 0, trig, 1024), 17);
+	const size_t n = fake_triggers(h, 1, trig, 1024);
+	ASSERT_EQ(n, 8);
+	for (size_t k = 1; k < n; k++)
+		ASSERT_TRUE(trig[k]->ev.tick > trig[k - 1]->ev.tick);
+	ASSERT_TRUE(stats().intervalsExcluded > 0);
+}
+
+TEST(T16_position_is_clamped_to_the_next_clock)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 21, fake_msToCycles(0.1));	/* clock 20: tick 320 */
+	/* the next clock is late: three intervals instead of one */
+	fake_runUntil(h, t0 + (seqc_time_t)(23.0 * per), fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_position(), 336.0, 1e-9);	/* clamped to 320 + 16 */
+	ASSERT_EQ(seqc_absStep(), 3);
+	fake_sync(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(23.0 * per));
+	ASSERT_NEAR(seqc_position(), 336.0, 1e-9);	/* the clock confirms the clamp */
+	fake_runClocks(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(24.0 * per), per, 3, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 4);			/* 384 with the third clock */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 5);
+}
+
+TEST(T16_outlier_interval_is_left_out)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	const size_t count = 60;
+	for (size_t i = 0; i < count; i++)
+		stamps[i] = t0 + (seqc_time_t)((double)i * per + (i == 40 ? 0.8 * per : 0.0));
+	deliver(h, SEQC_EV_CLOCK, stamps, count, fake_msToCycles(0.1));
+	/* 1.8 and 0.2 intervals around clock 40: both left out */
+	ASSERT_EQ(stats().intervalsExcluded, 2);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 10);	/* steps 0..9 */
+}
+
+TEST(T16_dropout_and_resume)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 48, fake_msToCycles(0.1));	/* clock 47: tick 752 */
+	const seqc_time_t lastClock = t0 + (seqc_time_t)(47.0 * per + 0.5);
+	/* no clock for 800 ms */
+	fake_runUntil(h, lastClock + fake_msToCycles(499.0), fake_msToCycles(0.1));
+	ASSERT_EQ(stats().dropouts, 0);
+	ASSERT_NEAR(seqc_position(), 768.0, 1e-9);	/* the clamp includes boundary 8 */
+	ASSERT_EQ(seqc_absStep(), 8);
+	fake_runUntil(h, lastClock + fake_msToCycles(800.0), fake_msToCycles(0.1));
+	ASSERT_EQ(stats().dropouts, 1);
+	ASSERT_NEAR(seqc_position(), 768.0, 1e-9);	/* holds */
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);	/* the last known tempo */
+	/* resume: the gap is not used for the estimate */
+	const seqc_time_t t1 = lastClock + fake_msToCycles(800.0) + 1000;
+	fake_sync(h, SEQC_EV_CLOCK, t1);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_NEAR(seqc_position(), 768.0, 1e-9);	/* this clock is the one at 768 */
+	fake_runClocks(h, SEQC_EV_CLOCK, t1 + (seqc_time_t)per, per, 12, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 10);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 11);	/* steps 0..10, none lost or doubled */
+	for (size_t k = 0; k < 11; k++)
+		ASSERT_EQ(trig[k]->ev.absStep, k);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().dropouts, 1);
+}
+
+TEST(T16_local_start_waits_for_the_masters_step)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 3, fake_msToCycles(0.1));	/* count 3 */
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], 1);	/* clock 0 began a step */
+	seqc_start();
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(3.0 * per), per, 3, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);		/* clocks 3, 4, 5 */
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(6.0 * per), per, 1, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);		/* clock 6 starts step 0 */
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_STEP_BOUNDARY, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->arg, 0);
+	ASSERT_EQ(r->time, t0 + (seqc_time_t)(6.0 * per + 0.5));
+	pos = 0;
+	uint8_t tr[4];
+	size_t n = 0;
+	while ((r = fake_next(h, FAKE_TRANSPORT, &pos)) != NULL)
+		if (n < 4)
+			tr[n++] = r->value;
+	ASSERT_EQ(n, 2);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_ARM);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_START);
+}
+
+TEST(T16_tempo_estimate_is_clamped)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	fake_runClocks(h, SEQC_EV_CLOCK, fake_msToCycles(10.0), fake_clockCycles(400.0), 30, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), SEQC_SLAVE_BPM_MAX, 1e-3);
+	h = slaveWithGrid(SEQC_SYNC_MIDI);
+	fake_runClocks(h, SEQC_EV_CLOCK, fake_msToCycles(10.0), fake_clockCycles(12.0), 30, fake_msToCycles(0.5));
+	ASSERT_NEAR(seqc_currentBpm(), SEQC_SLAVE_BPM_MIN, 1e-3);
+}
+
+TEST(T16_clock_only_in_midi_sync)
+{
+	fake_host_t *h = fake_init();
+	fake_process(h, 0);
+	fake_sync(h, SEQC_EV_CLOCK, 100);		/* internal sync */
+	ASSERT_EQ(stats().syncIgnored, 1);
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);
+	fake_sync(h, SEQC_EV_CLOCK, 200);
+	ASSERT_EQ(stats().syncIgnored, 2);
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	fake_sync(h, SEQC_EV_CLOCK, 300);
+	fake_sync(h, SEQC_EV_PULSE, 400);
+	ASSERT_EQ(stats().syncIgnored, 3);
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], 2);	/* the internal one at time 0, and the MIDI clock's */
+}
+
+TEST(T16_switch_from_internal_while_running)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_runUntil(h, (seqc_time_t)(fake_tickCycles(120.0) * 100.0), fake_msToCycles(0.1));
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	const double at = seqc_position();
+	ASSERT_NEAR(at, 100.0, 0.1);
+	/* the next clock adds 16 ticks to the position */
+	const double per = fake_clockCycles(120.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, h->now + 1000, per, 6, fake_msToCycles(0.1));
+	/* 6 clocks: 96 ticks, plus the interpolation up to the last process call */
+	ASSERT_TRUE(seqc_position() >= at + 96.0 && seqc_position() < at + 96.1);
+	ASSERT_EQ(seqc_absStep(), 2);
+}
+
+TEST(T16_switch_to_internal_starts_an_armed_transport)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	seqc_setSyncMode(SEQC_SYNC_INTERNAL);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(seqc_position(), 0.0);
+	fake_process(h, h->now + 10);
+	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 4), 1);
+	size_t pos = 0, n = 0;
+	const fake_rec_t *r;
+	uint8_t tr[4];
+	while ((r = fake_next(h, FAKE_TRANSPORT, &pos)) != NULL)
+		if (n < 4)
+			tr[n++] = r->value;
+	ASSERT_EQ(n, 2);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_ARM);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_START);
+}
+
+TEST(T18_jack_4ppq_one_pulse_per_step)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	ASSERT_EQ(seqc_position(), -96.0);		/* one pulse is a step */
+	fake_setStep(h, 0, 1, 1, true);
+	fake_setTiming(h, 0, 1, 1, 3, 0);		/* x4 between two pulses */
+	seqc_start();
+	const double per = fake_stepCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_PULSE, t0, per, 9, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 8);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 9);
+	for (int k = 0; k < 9; k++)
+		ASSERT_EQ(trig[k]->time, t0 + (seqc_time_t)(k * per + 0.5));
+	ASSERT_EQ(fake_triggers(h, 1, trig, 64), 4);
+	for (int k = 0; k < 4; k++)
+		ASSERT_NEAR((double)trig[k]->time, (double)t0 + per * (1.0 + k / 4.0), fake_msToCycles(0.1) + 2.0);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], 9);	/* every pulse begins a step */
+}
+
+TEST(T18_jack_4ppq_estimate_uses_4_intervals)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_PULSE, t0, fake_stepCycles(120.0), 9, fake_msToCycles(0.1));
+	const seqc_time_t t1 = t0 + (seqc_time_t)(9.0 * fake_stepCycles(120.0));
+	fake_runClocks(h, SEQC_EV_PULSE, t1, fake_stepCycles(100.0), 3, fake_msToCycles(0.1));
+	ASSERT_TRUE(seqc_currentBpm() < 119.0);		/* moving, 3 of 4 intervals at 100 */
+	fake_runClocks(h, SEQC_EV_PULSE, t1 + (seqc_time_t)(3.0 * fake_stepCycles(100.0)),
+			fake_stepCycles(100.0), 2, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);	/* 4 intervals at 100 */
+}
+
+TEST(T18_jack_24ppq_six_pulses_per_step)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_setAnalogPpq(24);
+	ASSERT_EQ(seqc_position(), -16.0);
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_PULSE, t0, per, 4, fake_msToCycles(0.1));	/* count 4 */
+	seqc_start();
+	fake_runClocks(h, SEQC_EV_PULSE, t0 + (seqc_time_t)(4.0 * per), per, 2, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	fake_runClocks(h, SEQC_EV_PULSE, t0 + (seqc_time_t)(6.0 * per), per, 6 * 4 + 1, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 4);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 5);
+	ASSERT_EQ(trig[0]->time, t0 + (seqc_time_t)(6.0 * per + 0.5));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+}
+
+TEST(T18_ppq_change_restarts_the_count)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_setAnalogPpq(24);
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_PULSE, t0, per, 3, fake_msToCycles(0.1));	/* count 3 */
+	seqc_setAnalogPpq(24);				/* count 0 again */
+	seqc_start();
+	fake_runClocks(h, SEQC_EV_PULSE, t0 + (seqc_time_t)(3.0 * per), per, 1, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(seqc_absStep(), 0);
+	seqc_setAnalogPpq(7);				/* any other value counts as 4 */
+	fake_runClocks(h, SEQC_EV_PULSE, t0 + (seqc_time_t)(4.0 * per), per, 1, fake_msToCycles(0.1));
+	/* this pulse is a whole step, plus the interpolation up to the last process call */
+	ASSERT_TRUE(seqc_position() >= 96.0 && seqc_position() < 96.1);
+}
+
+TEST(T18_slow_4ppq_clock_is_not_a_dropout)
+{
+	/* N15: at 25 BPM the pulses are 600 ms apart, longer than SEQC_DROPOUT_MS.
+	 * The dropout time is two expected intervals: 1.5 s before the first
+	 * estimate (20 BPM), then 1.2 s. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_start();
+	const double per = fake_stepCycles(25.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_PULSE, t0, per, 6, fake_msToCycles(1.0));
+	ASSERT_EQ(stats().dropouts, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 25.0, 1e-3);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 6);
+	const seqc_time_t last = t0 + (seqc_time_t)(5.0 * per + 0.5);
+	fake_runUntil(h, last + fake_msToCycles(1150.0), fake_msToCycles(1.0));
+	ASSERT_EQ(stats().dropouts, 0);
+	fake_runUntil(h, last + fake_msToCycles(1250.0), fake_msToCycles(1.0));
+	ASSERT_EQ(stats().dropouts, 1);
+}
+
+TEST(T18_pulse_only_in_analog_sync)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	fake_sync(h, SEQC_EV_CLOCK, fake_msToCycles(2.0));
+	ASSERT_EQ(stats().syncIgnored, 1);
+	fake_sync(h, SEQC_EV_PULSE, fake_msToCycles(3.0));
+	ASSERT_EQ(stats().syncIgnored, 1);
+}
+
+/* D7: the hits of a swung step that run past the next clocks and the next step
+ * boundaries all play, in order. fw 1.7 dropped the pulses that the next clock's
+ * step left unprocessed. */
+static void checkSwungSpillOver(bool bunched)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	h->shuffle = 127;				/* swing 64 on odd steps */
+	fake_setStep(h, 0, 1, 1, true);
+	fake_setTiming(h, 0, 1, 1, 5, 7);		/* x8 at +7: 96 + 64 + 84 + 12 j, up to 328 */
+	seqc_start();
+	const double per = fake_clockCycles(100.0);	/* not the internal 120 BPM */
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	const size_t count = 6 * 6 + 1;			/* up to step 6 */
+	for (size_t i = 0; i < count; i++)
+		stamps[i] = t0 + (seqc_time_t)((double)(bunched ? i / 3 * 3 + 2 : i) * per);
+	deliver(h, SEQC_EV_CLOCK, stamps, count, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 6);
+	const size_t n = fake_triggers(h, 1, trig, 64);
+	ASSERT_EQ(n, 8);
+	for (size_t j = 0; j < n; j++)
+	{
+		ASSERT_EQ(trig[j]->ev.absStep, 1);
+		ASSERT_EQ(trig[j]->ev.hit, j);
+		ASSERT_EQ(trig[j]->ev.tick, 96 + 64 + 84 + 12 * (int64_t)j);
+		if (j > 0)
+			ASSERT_TRUE(trig[j]->time >= trig[j - 1]->time);
+	}
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 7);	/* the grid, steps 0..6 */
+}
+
+TEST(T16_swung_ratchet_spills_past_the_next_clock)
+{
+	checkSwungSpillOver(false);
+}
+
+TEST(T16_swung_ratchet_spills_past_bunched_clocks)
+{
+	checkSwungSpillOver(true);
+}
+
+TEST(T18_ppq_change_in_midi_sync_keeps_the_count)
+{
+	/* the jack PPQ has no part in MIDI sync: a post of it (the globals of every
+	 * project load send it) leaves the MIDI clock count alone, so tempoStep()
+	 * stays on the step boundaries. The value is kept for analog sync. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 6 * 4 + 4, fake_msToCycles(0.1));	/* clock 27: tick 432 */
+	seqc_setAnalogPpq(4);
+	seqc_setAnalogPpq(24);
+	fake_clearLog(h);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(28.0 * per), per, 6 * 3, fake_msToCycles(0.1));
+	size_t pos = 0, steps = 0;
+	const fake_rec_t *r;
+	while ((r = fake_next(h, FAKE_TEMPO_STEP, &pos)) != NULL)
+	{
+		ASSERT_EQ((long long)r->tick % 96, 0);	/* clocks 30, 36 and 42 */
+		steps++;
+	}
+	ASSERT_EQ(steps, 3);
+	/* in analog sync the kept 24 PPQ applies: the next pulse is 16 ticks */
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);
+	const double at = seqc_position();
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + 1000, per, 1, fake_msToCycles(0.1));
+	ASSERT_TRUE(seqc_position() >= at + 16.0 && seqc_position() < at + 16.1);
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `89% tests passed, 2 tests failed out of 19`, `18 - T16 (Failed)`, `19 - T18 (Failed)`,
+`exit 1`.
+
+Run: `build/host-tests/test_slave`
+
+Expected:
+```
+.../tests/test_slave.c:77: ASSERT_EQ(seqc_position(), -16.0) failed: 0 != -16
+FAIL T16_steady_clock
+...
+.../tests/test_slave.c:202: ASSERT_NEAR(seqc_position(), 336.0, 1e-9) failed: 374.8352 vs 336
+FAIL T16_position_is_clamped_to_the_next_clock
+...
+0 of 21 tests passed
+```
+
+- [ ] **Step 3: Implement the slave modes in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+Replace `seqc_core_t` with:
+
+```c
+/** time base, musical clock and transport */
+typedef struct
+{
+	seqc_host_t	host;
+	uint32_t	cyclesPerSecond;
+	bool		busy;		/**< inside a seqc_ call that can run callbacks */
+	bool		haveTime;	/**< seqc_process() or seqc_syncEvent() has set the time */
+	seqc_time_t	now;		/**< the core's current time */
+	seqc_time_t	nextDue;	/**< N10: nothing is due before this time */
+
+	seqc_sync_t	mode;
+	double		masterBpm;
+	double		ticksPerCycle;	/**< of the master tempo */
+	double		cyclesPerTick;
+
+	/* Internal sync (N1): the timeline is at tick
+	 * anchorTick + (t - anchorTime) * ticksPerCycle at time t. It runs all the
+	 * time. While the transport runs, the position is on it: a start re-anchors
+	 * it at tick 0. */
+	seqc_time_t	anchorTime;
+	double		anchorTick;
+
+	seqc_state_t	state;
+	bool		startPending;	/**< internal start: step 0 at the next seqc_process() */
+	bool		atStart;	/**< rewound, and nothing has played since */
+	double		pos;		/**< the position handled so far, ticks */
+	int32_t		absStep;	/**< n of the current step, -1 before the first */
+	seqc_stats_t	stats;
+} seqc_core_t;
+```
+
+Insert after `seqc_skip_t` (`seqc_slave_t`):
+
+```c
+//------------------------------------------------------------------------------
+/** slave modes: clock count, tempo estimate and the interpolation (N9) */
+typedef struct
+{
+	uint8_t		ppq;		/**< clock in jack: 4 or 24 */
+	uint32_t	clockCount;	/**< clocks since the last reset of the count */
+	bool		haveStamp;
+	seqc_time_t	lastStamp;	/**< stamp of the last clock, in any state */
+	double		lastClockPos;	/**< position of the last clock while running, ticks */
+	seqc_time_t	lastClockTime;	/**< its stamp */
+	bool		droppedOut;	/**< no clock for the dropout time (N15): the position holds */
+	double		bpm;		/**< the estimate, or the last known tempo */
+	double		ticksPerCycle;	/**< of bpm */
+	double		cyclesPerTick;
+	uint32_t	interval[SEQC_TEMPO_WINDOW];	/**< clock intervals, cycles */
+	uint8_t		intervalCount;
+	uint8_t		intervalNext;
+	uint64_t	intervalSum;
+} seqc_slave_t;
+```
+
+Replace the state variables block (`/* the state, one part per area */`) with:
+
+```c
+/* the state, one part per area */
+static seqc_core_t seqc;
+static seqc_tracks_t seqc_trk;
+static seqc_gen_t seqc_gen;
+static seqc_queue_t seqc_queue;
+static seqc_fire_t seqc_fire;
+static seqc_outputs_t seqc_out;
+static seqc_skip_t seqc_skip;
+static seqc_slave_t seqc_sl;
+```
+
+Insert after `seqc_shiftTicks()` (`seqc_floor()`, `seqc_nextMultiple()`, `seqc_ticksPerClock()`, `seqc_clocksPerStep()`, `seqc_startPosition()`, `seqc_dropoutCycles()`):
+
+```c
+//------------------------------------------------------------------------------
+/** floor() for ticks; seq_core does not use <math.h> (spec 4.1) */
+static seqc_tick_t seqc_floor(double x)
+{
+	seqc_tick_t i = (seqc_tick_t)x;
+	if ((double)i > x)
+		i--;
+	return i;
+}
+//------------------------------------------------------------------------------
+/** the first multiple of m above x */
+static seqc_tick_t seqc_nextMultiple(double x, seqc_tick_t m)
+{
+	const seqc_tick_t i = seqc_floor(x);
+	seqc_tick_t q = i / m;
+	if (i % m != 0 && i < 0)
+		q--;
+	return (q + 1) * m;
+}
+//------------------------------------------------------------------------------
+/** ticks of one clock: a MIDI clock or a jack pulse */
+static double seqc_ticksPerClock(void)
+{
+	if (seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24)
+		return SEQC_TICKS_PER_STEP;
+	return SEQC_TICKS_PER_MIDI_CLOCK;
+}
+//------------------------------------------------------------------------------
+/** clocks of one step: 6, or 1 for the jack at 4 PPQ */
+static uint32_t seqc_clocksPerStep(void)
+{
+	if (seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24)
+		return 1;
+	return SEQC_MIDI_CLOCKS_PER_STEP;
+}
+//------------------------------------------------------------------------------
+/** the position before step 0: 0 in internal sync, minus one clock in the slave
+ * modes, so that the next clock brings it to 0 */
+static double seqc_startPosition(void)
+{
+	return seqc.mode == SEQC_SYNC_INTERNAL ? 0.0 : -seqc_ticksPerClock();
+}
+//------------------------------------------------------------------------------
+/** the dropout time (N15): SEQC_DROPOUT_MS, or two expected clock intervals if
+ * that is longer. Without an estimate the interval is the one at
+ * SEQC_SLAVE_BPM_MIN, so that a slow clock can still build its first estimate. */
+static seqc_time_t seqc_dropoutCycles(void)
+{
+	const double cyclesPerTick = seqc_sl.intervalCount > 0 ? seqc_sl.cyclesPerTick
+			: 1.0 / seqc_ticksPerCycle(SEQC_SLAVE_BPM_MIN);
+	const double twoClocks = 2.0 * seqc_ticksPerClock() * cyclesPerTick;
+	const double minimum = (double)seqc.cyclesPerSecond * SEQC_DROPOUT_MS / 1000.0;
+	return (seqc_time_t)(twoClocks > minimum ? twoClocks : minimum);
+}
+```
+
+Insert after `seqc_internalTime()` (`seqc_slaveTarget()`):
+
+```c
+//------------------------------------------------------------------------------
+/** slave modes, while running: the position at time t (N9). It is interpolated
+ * from the last clock at the estimated tempo, clamped to the next clock and never
+ * goes back. After a dropout it holds. */
+static double seqc_slaveTarget(seqc_time_t t)
+{
+	if (seqc_sl.droppedOut)
+		return seqc.pos;
+	const double limit = seqc_sl.lastClockPos + seqc_ticksPerClock();
+	double p = seqc_sl.lastClockPos;
+	if (t > seqc_sl.lastClockTime)
+		p += (double)(t - seqc_sl.lastClockTime) * seqc_sl.ticksPerCycle;
+	if (p > limit)
+		p = limit;
+	return p > seqc.pos ? p : seqc.pos;
+}
+```
+
+Replace `seqc_positionAt()` with:
+
+```c
+/** the position at time t, at or after the core's current time */
+static double seqc_positionAt(seqc_time_t t)
+{
+	if (seqc.state != SEQC_RUNNING || seqc.startPending)
+		return seqc.pos;
+	const double p = seqc.mode == SEQC_SYNC_INTERNAL ? seqc_internalTick(t) : seqc_slaveTarget(t);
+	return p > seqc.pos ? p : seqc.pos;
+}
+```
+
+Replace `seqc_rewindTransport()` with:
+
+```c
+/** back to the start, before step 0 */
+static void seqc_rewindTransport(void)
+{
+	const bool wasAtStart = seqc.atStart;
+
+	seqc_clearRun();
+	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+	seqc_trk.master = 0;
+	seqc.pos = seqc_startPosition();
+	seqc_sl.lastClockPos = seqc.pos;
+	seqc_out.nextPulse = 0;
+	seqc.atStart = true;
+	if (!wasAtStart)
+		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_REWIND);
+}
+```
+
+Insert after `seqc_rewindTransport()` (`seqc_arm()`):
+
+```c
+//------------------------------------------------------------------------------
+/** arm: playback starts with the next clock that begins a step */
+static void seqc_arm(void)
+{
+	seqc.state = SEQC_ARMED;
+	seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_ARM);
+}
+```
+
+Replace `seqc_localStart()` with:
+
+```c
+/** local start (seqc_start()): from the beginning; a slave arms */
+static void seqc_localStart(void)
+{
+	if (!seqc.atStart)
+		seqc_rewindTransport();
+	if (seqc.mode == SEQC_SYNC_INTERNAL)
+	{
+		seqc.state = SEQC_RUNNING;
+		seqc.startPending = true;
+		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_START);
+	}
+	else
+		seqc_arm();
+}
+```
+
+Insert after `seqc_boundary()` (the section banner `// Tempo estimate (slave modes)`, `seqc_setSlaveBpm()`, `seqc_clearEstimate()`, `seqc_tempoInterval()`, `seqc_tempoClock()`):
+
+```c
+//------------------------------------------------------------------------------
+// Tempo estimate (slave modes)
+//------------------------------------------------------------------------------
+/** the tempo estimate from bpm, clamped (N9) */
+static void seqc_setSlaveBpm(double bpm)
+{
+	if (bpm < SEQC_SLAVE_BPM_MIN)
+		bpm = SEQC_SLAVE_BPM_MIN;
+	if (bpm > SEQC_SLAVE_BPM_MAX)
+		bpm = SEQC_SLAVE_BPM_MAX;
+	seqc_sl.bpm = bpm;
+	seqc_sl.ticksPerCycle = seqc_ticksPerCycle(bpm);
+	seqc_sl.cyclesPerTick = 1.0 / seqc_sl.ticksPerCycle;
+}
+//------------------------------------------------------------------------------
+/** forget the measured intervals (the last known tempo stays) */
+static void seqc_clearEstimate(void)
+{
+	seqc_sl.intervalCount = 0;
+	seqc_sl.intervalNext = 0;
+	seqc_sl.intervalSum = 0;
+}
+//------------------------------------------------------------------------------
+/** a measured clock interval, in cycles. An interval more than
+ * SEQC_TEMPO_OUTLIER_PCT off the mean is left out. */
+static void seqc_tempoInterval(uint32_t dt)
+{
+	const uint8_t window = (seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24)
+			? SEQC_TEMPO_WINDOW_4PPQ : SEQC_TEMPO_WINDOW;
+	if (seqc_sl.intervalCount > 0)
+	{
+		/* |dt - mean| > mean * pct / 100, with mean = sum / count */
+		const uint64_t scaled = (uint64_t)dt * seqc_sl.intervalCount;
+		const uint64_t dev = scaled > seqc_sl.intervalSum ? scaled - seqc_sl.intervalSum
+				: seqc_sl.intervalSum - scaled;
+		if (dev * 100u > seqc_sl.intervalSum * SEQC_TEMPO_OUTLIER_PCT)
+		{
+			seqc.stats.intervalsExcluded++;
+			return;
+		}
+	}
+	else if (dt == 0)
+	{
+		seqc.stats.intervalsExcluded++;
+		return;
+	}
+	if (seqc_sl.intervalCount < window)
+		seqc_sl.intervalCount++;
+	else
+		seqc_sl.intervalSum -= seqc_sl.interval[seqc_sl.intervalNext];
+	seqc_sl.interval[seqc_sl.intervalNext] = dt;
+	seqc_sl.intervalSum += dt;
+	seqc_sl.intervalNext = (uint8_t)((seqc_sl.intervalNext + 1u) % window);
+
+	const double mean = (double)seqc_sl.intervalSum / seqc_sl.intervalCount;
+	seqc_setSlaveBpm(seqc_ticksPerClock() / mean * (double)seqc.cyclesPerSecond * 60.0 / SEQC_TICKS_PER_BEAT);
+}
+//------------------------------------------------------------------------------
+/** the tempo part of a clock: the interval since the last clock, from the raw
+ * stamps. After a dropout the interval is not used. */
+static void seqc_tempoClock(seqc_time_t stamp)
+{
+	if (seqc_sl.haveStamp)
+	{
+		const seqc_time_t dt = stamp > seqc_sl.lastStamp ? stamp - seqc_sl.lastStamp : 0u;
+		if (seqc_sl.droppedOut || dt > seqc_dropoutCycles())
+		{
+			if (!seqc_sl.droppedOut)
+				seqc.stats.dropouts++;
+			seqc_clearEstimate();
+		}
+		else
+			seqc_tempoInterval((uint32_t)dt);
+	}
+	seqc_sl.haveStamp = true;
+	seqc_sl.lastStamp = stamp;
+	seqc_sl.droppedOut = false;
+}
+```
+
+Replace `seqc_nextItem()` with:
+
+```c
+/** the next item of the timeline: its kind, tick and track (note-offs) */
+static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
+{
+	seqc_item_t best = SEQC_ITEM_NONE;
+	*tick = SEQC_NO_TICK;
+	*track = 0;
+	if (seqc.mode == SEQC_SYNC_INTERNAL)
+	{
+		seqc_consider(SEQC_ITEM_TEMPO_STEP, seqc_out.nextTempoStep, 0, &best, tick, track);
+		seqc_consider(SEQC_ITEM_MIDI_CLOCK, seqc_out.nextMidiClock, 0, &best, tick, track);
+	}
+	if (seqc.state == SEQC_RUNNING && !seqc.startPending)
+	{
+		seqc_consider(SEQC_ITEM_BOUNDARY, (seqc_tick_t)seqc_nextBoundaryStep() * SEQC_TICKS_PER_STEP, 0,
+				&best, tick, track);
+		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+			if (seqc_fire.offPending[t])
+				seqc_consider(SEQC_ITEM_NOTE_OFF, seqc_fire.offTick[t], t, &best, tick, track);
+		if (seqc_queue.count > 0)
+			seqc_consider(SEQC_ITEM_EVENT, seqc_queue.events[seqc_queue.count - 1u].tick, 0, &best, tick, track);
+		seqc_consider(SEQC_ITEM_PULSE, seqc_out.nextPulse, 0, &best, tick, track);
+	}
+	return best;
+}
+```
+
+Insert after `seqc_runInternal()` (`seqc_runSlave()`):
+
+```c
+//------------------------------------------------------------------------------
+/** slave modes: while running, the position follows the interpolation (N9).
+ * After the dropout time (N15) without a clock it holds and the estimate is
+ * cleared. */
+static void seqc_runSlave(void)
+{
+	if (seqc.state != SEQC_RUNNING)
+		return;
+	const seqc_time_t limit = seqc_sl.lastClockTime + seqc_dropoutCycles();
+	if (!seqc_sl.droppedOut && seqc.now > limit)
+	{
+		seqc_runTo(seqc_slaveTarget(limit));
+		seqc_sl.droppedOut = true;
+		seqc_clearEstimate();
+		seqc.stats.dropouts++;
+		return;
+	}
+	seqc_runTo(seqc_slaveTarget(seqc.now));
+}
+```
+
+Replace `seqc_advance()` with:
+
+```c
+/** move the core's time to t (never back) and handle everything due up to it */
+static void seqc_advance(seqc_time_t t)
+{
+	if (!seqc.haveTime)
+	{
+		/* the first time: the internal timeline starts here */
+		seqc.haveTime = true;
+		seqc.now = t;
+		seqc.anchorTime = t;
+		seqc_sl.lastClockTime = t;
+	}
+	else if (t > seqc.now)
+		seqc.now = t;
+	if (seqc.mode == SEQC_SYNC_INTERNAL)
+		seqc_runInternal();
+	else
+		seqc_runSlave();
+}
+```
+
+Insert after `seqc_advance()` (`seqc_slaveDue()`):
+
+```c
+//------------------------------------------------------------------------------
+/** slave modes: the time at which the next item falls due, capped at the clamp
+ * time and the dropout timeout (N10) */
+static seqc_time_t seqc_slaveDue(seqc_item_t item, seqc_tick_t tick)
+{
+	if (seqc.state != SEQC_RUNNING || seqc_sl.droppedOut)
+		return SEQC_NEVER;
+	seqc_time_t due = seqc_sl.lastClockTime + seqc_dropoutCycles();
+	double until = seqc_sl.lastClockPos + seqc_ticksPerClock();
+	if (item != SEQC_ITEM_NONE && (double)tick < until)
+		until = (double)tick;
+	if (until > seqc.pos)
+	{
+		const double cycles = (until - seqc_sl.lastClockPos) * seqc_sl.cyclesPerTick;
+		const seqc_time_t t = seqc_sl.lastClockTime + (cycles > 0.0 ? (seqc_time_t)cycles : 0u);
+		if (t < due)
+			due = t;
+	}
+	return due;
+}
+```
+
+Replace `seqc_schedule()` with:
+
+```c
+/** work out nextDue (N10) */
+static void seqc_schedule(void)
+{
+	if (!seqc.haveTime || seqc.startPending)
+	{
+		seqc.nextDue = 0;
+		return;
+	}
+	seqc_tick_t tick;
+	uint8_t track;
+	const seqc_item_t item = seqc_nextItem(&tick, &track);
+	if (seqc.mode != SEQC_SYNC_INTERNAL)
+		seqc.nextDue = seqc_slaveDue(item, tick);
+	else if (item == SEQC_ITEM_NONE)
+		seqc.nextDue = SEQC_NEVER;
+	else
+		seqc.nextDue = seqc_internalTime(tick);
+}
+```
+
+Insert after `seqc_schedule()` (the section banner `// Slave clocks`, `seqc_slaveClock()`):
+
+```c
+//------------------------------------------------------------------------------
+// Slave clocks
+//------------------------------------------------------------------------------
+/** a MIDI clock or a jack pulse in its sync mode (seq_core.h, "Slave position") */
+static void seqc_slaveClock(seqc_time_t stamp)
+{
+	const bool stepClock = seqc_sl.clockCount % seqc_clocksPerStep() == 0;
+
+	seqc_sl.clockCount++;
+	seqc_tempoClock(stamp);
+	if (seqc.state == SEQC_ARMED && stepClock)
+	{
+		seqc.state = SEQC_RUNNING;
+		seqc.host.transport(seqc.host.ctx, seqc.atStart ? SEQC_TRANSPORT_START : SEQC_TRANSPORT_CONTINUE);
+	}
+	if (stepClock)
+		seqc.host.tempoStep(seqc.host.ctx);
+	if (seqc.state == SEQC_RUNNING)
+	{
+		/* the position jumps to the clock, and everything due on the way is handled */
+		seqc_sl.lastClockPos += seqc_ticksPerClock();
+		seqc_sl.lastClockTime = stamp;
+		seqc_runTo(seqc_sl.lastClockPos);
+	}
+}
+```
+
+Replace `seqc_init()` with:
+
+```c
+void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
+{
+	memset(&seqc, 0, sizeof seqc);
+	memset(&seqc_trk, 0, sizeof seqc_trk);
+	memset(&seqc_gen, 0, sizeof seqc_gen);
+	memset(&seqc_queue, 0, sizeof seqc_queue);
+	memset(&seqc_fire, 0, sizeof seqc_fire);
+	memset(&seqc_out, 0, sizeof seqc_out);
+	memset(&seqc_skip, 0, sizeof seqc_skip);
+	memset(&seqc_sl, 0, sizeof seqc_sl);
+
+	seqc.host = *host;
+	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
+	seqc.mode = SEQC_SYNC_INTERNAL;
+	seqc.masterBpm = SEQC_DEFAULT_BPM;
+	seqc.ticksPerCycle = seqc_ticksPerCycle(seqc.masterBpm);
+	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
+	seqc.state = SEQC_STOPPED;
+	seqc.atStart = true;
+	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+	seqc_sl.ppq = 4;
+	seqc_setSlaveBpm(seqc.masterBpm);
+}
+```
+
+Replace `seqc_setSyncMode()` with:
+
+```c
+void seqc_setSyncMode(seqc_sync_t mode)
+{
+	if (!seqc_enter())
+		return;
+	if (mode != seqc.mode && (mode == SEQC_SYNC_INTERNAL || mode == SEQC_SYNC_ANALOG || mode == SEQC_SYNC_MIDI))
+	{
+		seqc.pos = seqc_positionAt(seqc.now);
+		seqc.startPending = false;
+		seqc.mode = mode;
+		seqc_clearEstimate();
+		seqc_sl.clockCount = 0;
+		seqc_sl.haveStamp = false;
+		seqc_sl.droppedOut = false;
+		seqc_setSlaveBpm(seqc.masterBpm);
+		if (seqc.atStart)
+			seqc.pos = seqc_startPosition();
+		if (mode == SEQC_SYNC_INTERNAL)
+		{
+			/* the position continues at the master tempo; an armed transport starts */
+			seqc.anchorTime = seqc.now;
+			seqc.anchorTick = seqc.pos;
+			seqc_out.nextMidiClock = seqc_nextMultiple(seqc.pos, SEQC_TICKS_PER_MIDI_CLOCK);
+			seqc_out.nextTempoStep = seqc_nextMultiple(seqc.pos, SEQC_TICKS_PER_STEP);
+			if (seqc.state == SEQC_ARMED)
+			{
+				seqc.state = SEQC_RUNNING;
+				seqc.startPending = seqc.atStart;
+				seqc.host.transport(seqc.host.ctx, seqc.atStart ? SEQC_TRANSPORT_START : SEQC_TRANSPORT_CONTINUE);
+			}
+		}
+		else
+		{
+			/* the next clock adds one clock to the position */
+			seqc_sl.lastClockPos = seqc.pos;
+			seqc_sl.lastClockTime = seqc.now;
+		}
+	}
+	seqc_leave();
+}
+```
+
+Replace `seqc_setTempo()` with:
+
+```c
+void seqc_setTempo(float bpm)
+{
+	if (!seqc_enter())
+		return;
+	double b = bpm;
+	if (b < SEQC_MASTER_BPM_MIN)
+		b = SEQC_MASTER_BPM_MIN;
+	if (b > SEQC_MASTER_BPM_MAX)
+		b = SEQC_MASTER_BPM_MAX;
+	if (seqc.haveTime)
+	{
+		/* re-anchor, so that the timeline and the position stay continuous */
+		seqc.anchorTick = seqc_internalTick(seqc.now);
+		seqc.anchorTime = seqc.now;
+	}
+	seqc.masterBpm = b;
+	seqc.ticksPerCycle = seqc_ticksPerCycle(b);
+	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
+	if (seqc_sl.intervalCount == 0)
+		seqc_setSlaveBpm(b);	/* the first estimate while nothing is measured */
+	seqc_leave();
+}
+```
+
+Replace `seqc_setAnalogPpq()` with:
+
+```c
+void seqc_setAnalogPpq(uint8_t ppq)
+{
+	if (!seqc_enter())
+		return;
+	seqc_sl.ppq = ppq == 24 ? 24 : 4;
+	if (seqc.mode == SEQC_SYNC_ANALOG)
+	{
+		/* only the jack's count and estimate depend on the PPQ; in the other
+		 * modes it is kept, and the switch to analog sync clears both */
+		seqc_clearEstimate();
+		seqc_sl.clockCount = 0;
+		seqc_sl.haveStamp = false;
+		if (seqc.atStart)
+		{
+			seqc.pos = seqc_startPosition();
+			seqc_sl.lastClockPos = seqc.pos;
+		}
+	}
+	seqc_leave();
+}
+```
+
+Replace `seqc_syncEvent()` with:
+
+```c
+void seqc_syncEvent(seqc_sync_ev_t ev, seqc_time_t stamp)
+{
+	if (!seqc_enter())
+		return;
+	seqc_advance(stamp);
+
+	const bool midi = seqc.mode == SEQC_SYNC_MIDI;
+	const bool analog = seqc.mode == SEQC_SYNC_ANALOG;
+	bool used = false;
+	switch (ev)
+	{
+	case SEQC_EV_CLOCK:
+	case SEQC_EV_PULSE:
+		used = ev == SEQC_EV_CLOCK ? midi : analog;
+		if (used)
+			seqc_slaveClock(stamp);
+		break;
+	default:
+		break;			/* the transport events are not handled yet */
+	}
+	if (!used)
+		seqc.stats.syncIgnored++;
+	seqc_leave();
+}
+```
+
+Replace `seqc_currentBpm()` with:
+
+```c
+float seqc_currentBpm(void)
+{
+	return (float)(seqc.mode == SEQC_SYNC_INTERNAL ? seqc.masterBpm : seqc_sl.bpm);
+}
+```
+
+- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `... with CRLF line terminators`
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 19`, image `274688/1015808 B`,
+`== compiler warnings: 0`, `exit 0`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c tests/test_slave.c
+git commit -F - <<'EOF'
+seq_core: MIDI clock and clock in jack slave modes (E1.10, T16, T18)
+
+Each clock moves the position one clock on, late events are handled in order
+and never dropped; between clocks it follows the estimated tempo, clamped to
+the next clock (N9). The estimate averages 24 intervals (4 at 4 PPQ), leaves
+out outliers, is clamped to 20-300 BPM and is cleared after a dropout of
+max(500 ms, 2 clock intervals) (N15). A local start waits for the master's
+step grid. A swung step's hits that run past the next clocks all play (D7).
+The jack PPQ restarts the count only in analog sync.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.11: Transport events and Song Position Pointer (T17)
+
+The slave transport (spec 5, N4, N6), with the transport callbacks in the order STOP, REWIND, then
+ARM, START or CONTINUE:
+- **`SEQC_EV_START`** (MIDI or analog sync): stop if running or armed, rewind, reset the clock count,
+  arm. The next clock starts step 0.
+- **`SEQC_EV_CONTINUE`**, while stopped: arm. The next clock resumes one clock after the position of
+  the last clock, which was kept at the stop or set by a song position. At the start position it
+  starts step 0 instead.
+- **`SEQC_EV_STOP`**: like `seqc_stop()`, it stops and keeps the position and the queue.
+- **`SEQC_EV_RESET_ON`** (analog sync only): stop, rewind and reset the count. In fw 1.7 the reset
+  input is a run gate (N4).
+- **`SEQC_EV_RESET_OFF`**, while stopped: a local start, armed until a pulse that begins a step.
+- **`seqc_songPosition()`** (slave modes, while stopped or armed). It seeks at once:
+  - `absStep` becomes the SPP value, so the swing parity follows the master;
+  - the track indices come from `seekPosition()` (N6);
+  - the last clock position is set to SPP·96 minus one clock;
+  - the queue is cleared and the clock count is reset.
+
+  The first boundary after it advances nothing and calls no `patternEnd()`. In song mode a song
+  position inside the run of the pattern that is active already changes no pattern: the fake host,
+  like the glue (E2.2), requests no reload there, so no unsaved edit is lost and no kit is loaded
+  again (`T17_spp_within_the_active_pattern_does_not_reload_it`).
+
+An event that does nothing is counted in `syncIgnored`: a Continue while armed or running, a Stop
+while stopped, a reset release while not stopped, an SPP while running or in internal sync.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
+- Test: `tests/test_transport.c` (ctest id `T17`)
+
+- [ ] **Step 1: Write the failing test `tests/test_transport.c`**
+
+```c
+/*
+ * test_transport.c
+ *
+ * T17: the slave transport (spec 5, N4, N6): MIDI Start, Continue and Stop,
+ * Song Position Pointer in pattern mode and in song mode (identical consecutive
+ * entries, SONG_LOOP, past SONG_END, no reload inside the active pattern's run),
+ * the clock jack run gate, and which sync mode accepts which event.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+#include "seqc_test.h"
+
+static const fake_rec_t *trig[256];
+
+static seqc_stats_t stats(void)
+{
+	seqc_stats_t s;
+	seqc_stats(&s);
+	return s;
+}
+
+/* the logged transport() values from log entry from on; returns how many */
+static size_t transports(const fake_host_t *h, size_t from, uint8_t *out, size_t max)
+{
+	size_t n = 0, pos = from;
+	const fake_rec_t *r;
+	while ((r = fake_next(h, FAKE_TRANSPORT, &pos)) != NULL)
+	{
+		if (n < max)
+			out[n] = r->value;
+		n++;
+	}
+	return n;
+}
+
+/* a MIDI slave at 120 BPM; clocks go through clocks() */
+static fake_host_t *midiSlave(void)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	fake_process(h, fake_msToCycles(1.0));
+	return h;
+}
+
+/* count MIDI clocks at 120 BPM, the first one a clock period after h->now */
+static void clocks(fake_host_t *h, uint32_t count)
+{
+	const double per = fake_clockCycles(120.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, h->now + (seqc_time_t)per, per, count, fake_msToCycles(0.1));
+}
+
+static void sync(fake_host_t *h, seqc_sync_ev_t ev)
+{
+	fake_sync(h, ev, h->now + 100);
+}
+
+TEST(T17_midi_start_arms_and_the_next_clock_starts)
+{
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 0, true);
+	sync(h, SEQC_EV_START);
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	uint8_t tr[8];
+	ASSERT_EQ(transports(h, 0, tr, 8), 1);		/* at the start already: no REWIND */
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_ARM);
+	clocks(h, 1);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(transports(h, 0, tr, 8), 2);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_START);
+	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	clocks(h, 6 * 3);
+	ASSERT_EQ(seqc_absStep(), 3);
+}
+
+TEST(T17_midi_start_while_running_restarts)
+{
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 0, true);
+	fake_setStep(h, 0, 0, 2, true);
+	sync(h, SEQC_EV_START);
+	clocks(h, 6 * 2 + 1);				/* steps 0..2 */
+	ASSERT_EQ(seqc_absStep(), 2);
+	const size_t from = h->logCount;
+	sync(h, SEQC_EV_START);
+	uint8_t tr[8];
+	ASSERT_EQ(transports(h, from, tr, 8), 3);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_STOP);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_REWIND);
+	ASSERT_EQ(tr[2], SEQC_TRANSPORT_ARM);
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 2);	/* the pending one went out with the STOP */
+	ASSERT_EQ(seqc_absStep(), -1);
+	ASSERT_EQ(seqc_position(), -16.0);
+	clocks(h, 1);
+	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 3);
+	ASSERT_EQ(trig[2]->ev.absStep, 0);
+}
+
+TEST(T17_stop_and_continue_resume_in_place)
+{
+	fake_host_t *h = midiSlave();
+	fake_setLength(h, 0, 1, 12);
+	fake_setStep(h, 0, 1, 5, true);
+	fake_setTiming(h, 0, 1, 5, 5, 0);		/* x8: 480 + 12j */
+	sync(h, SEQC_EV_START);
+	clocks(h, 6 * 5 + 2);				/* tick 496: hits 480 and 492 played */
+	ASSERT_EQ(fake_triggers(h, 1, trig, 16), 2);
+	sync(h, SEQC_EV_STOP);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	const double held = seqc_position();
+	ASSERT_TRUE(held >= 496.0 && held <= 512.0);
+	clocks(h, 10);					/* the master's clock runs on */
+	ASSERT_EQ(seqc_position(), held);
+	ASSERT_EQ(seqc_absStep(), 5);
+	sync(h, SEQC_EV_CONTINUE);
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	clocks(h, 6 * 2);
+	uint8_t tr[8];
+	const size_t n = transports(h, 0, tr, 8);
+	ASSERT_EQ(n, 5);				/* ARM, START, STOP, ARM, CONTINUE */
+	ASSERT_EQ(tr[2], SEQC_TRANSPORT_STOP);
+	ASSERT_EQ(tr[3], SEQC_TRANSPORT_ARM);
+	ASSERT_EQ(tr[4], SEQC_TRANSPORT_CONTINUE);
+	/* the rest of the ratchet, then steps 6 and 7 with the indices kept */
+	ASSERT_EQ(fake_triggers(h, 1, trig, 16), 8);
+	ASSERT_EQ(trig[7]->ev.tick, 480 + 84);
+	ASSERT_EQ(seqc_absStep(), 7);
+	ASSERT_EQ(seqc_trackStep(1), 7);
+	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 1);	/* only at step 0 */
+}
+
+TEST(T17_continue_at_the_start_is_a_start)
+{
+	fake_host_t *h = midiSlave();
+	sync(h, SEQC_EV_CONTINUE);
+	clocks(h, 1);
+	uint8_t tr[8];
+	ASSERT_EQ(transports(h, 0, tr, 8), 2);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_ARM);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_START);
+	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 1);
+}
+
+TEST(T17_events_that_do_nothing_are_counted)
+{
+	fake_host_t *h = midiSlave();
+	sync(h, SEQC_EV_STOP);				/* stopped already */
+	ASSERT_EQ(stats().syncIgnored, 1);
+	sync(h, SEQC_EV_START);
+	sync(h, SEQC_EV_CONTINUE);			/* armed */
+	ASSERT_EQ(stats().syncIgnored, 2);
+	clocks(h, 1);
+	sync(h, SEQC_EV_CONTINUE);			/* running */
+	ASSERT_EQ(stats().syncIgnored, 3);
+	sync(h, SEQC_EV_RESET_ON);			/* the jack: analog sync only */
+	sync(h, SEQC_EV_RESET_OFF);
+	ASSERT_EQ(stats().syncIgnored, 5);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+}
+
+TEST(T17_transport_events_are_ignored_in_internal_sync)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_process(h, 0);
+	sync(h, SEQC_EV_START);
+	sync(h, SEQC_EV_CONTINUE);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	seqc_start();
+	fake_process(h, h->now + 10);
+	sync(h, SEQC_EV_STOP);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(stats().syncIgnored, 3);
+	seqc_songPosition(8);
+	ASSERT_EQ(stats().syncIgnored, 4);
+	ASSERT_EQ(seqc_absStep(), 0);
+}
+
+TEST(T17_spp_in_pattern_mode)
+{
+	fake_host_t *h = midiSlave();
+	h->shuffle = 127;
+	fake_setLength(h, 0, 1, 12);
+	fake_setLength(h, 0, 2, 7);
+	fake_setStep(h, 0, 0, 37 % 16, true);
+	fake_setStep(h, 0, 1, 37 % 12, true);
+	fake_setStep(h, 0, 2, 37 % 7, true);
+	seqc_songPosition(37);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	ASSERT_EQ(seqc_absStep(), 37);
+	ASSERT_EQ(seqc_trackStep(0), 5);
+	ASSERT_EQ(seqc_trackStep(1), 1);
+	ASSERT_EQ(seqc_trackStep(2), 2);
+	ASSERT_EQ(seqc_position(), 37.0 * 96 - 16);
+	size_t pos = 0;
+	const fake_rec_t *r = fake_next(h, FAKE_SEEK, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->arg, 37);
+	ASSERT_EQ(r->result, 37);
+	sync(h, SEQC_EV_CONTINUE);
+	clocks(h, 1);
+	uint8_t tr[8];
+	ASSERT_EQ(transports(h, 0, tr, 8), 2);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_CONTINUE);
+	clocks(h, 6);
+	/* the first boundary plays step 37 without a pattern end; 37 is odd: swung */
+	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 0);
+	ASSERT_EQ(fake_triggers(h, -1, trig, 8), 3);
+	for (int k = 0; k < 3; k++)
+	{
+		ASSERT_EQ(trig[k]->ev.absStep, 37);
+		ASSERT_EQ(trig[k]->ev.tick, 37 * 96 + 64);
+		ASSERT_EQ(trig[k]->ev.track, k);
+	}
+	ASSERT_EQ(seqc_absStep(), 38);
+	ASSERT_EQ(seqc_trackStep(1), 2);
+}
+
+TEST(T17_spp_in_song_mode_with_identical_entries)
+{
+	fake_host_t *h = midiSlave();
+	static const uint8_t song[] = { 1, 1, 2 };
+	fake_setSong(h, song, 3);
+	fake_setSongMode(h, true);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		fake_setLength(h, 2, t, 8);
+	fake_setStep(h, 1, 0, 4, true);
+	fake_setStep(h, 2, 0, 0, true);
+	seqc_songPosition(20);				/* in the second A: its run began at 0 */
+	ASSERT_EQ(h->activePattern, 1);
+	ASSERT_EQ(h->songPos, 1);
+	ASSERT_EQ(seqc_trackStep(0), 4);
+	sync(h, SEQC_EV_CONTINUE);
+	clocks(h, 1 + 6 * 13);				/* steps 20..33 */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.absStep, 20);
+	ASSERT_EQ(trig[0]->ev.pattern, 1);
+	ASSERT_EQ(trig[1]->ev.absStep, 32);		/* the song moved on to B */
+	ASSERT_EQ(trig[1]->ev.pattern, 2);
+	ASSERT_EQ(h->songPos, 2);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T17_spp_with_song_loop)
+{
+	fake_host_t *h = midiSlave();
+	static const uint8_t song[] = { 1, 2, FAKE_SONG_LOOP };
+	fake_setSong(h, song, 3);
+	fake_setSongMode(h, true);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		fake_setLength(h, 2, t, 8);
+	seqc_songPosition(50);				/* 24 steps per loop: entry 0, step 2 */
+	ASSERT_EQ(h->activePattern, 1);
+	ASSERT_EQ(h->songPos, 0);
+	ASSERT_EQ(seqc_trackStep(0), 2);
+	ASSERT_EQ(seqc_absStep(), 50);
+}
+
+TEST(T17_spp_past_the_song_end_stops_at_the_next_pattern_end)
+{
+	fake_host_t *h = midiSlave();
+	static const uint8_t song[] = { 1, 2 };
+	fake_setSong(h, song, 2);
+	fake_setSongMode(h, true);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		fake_setLength(h, 2, t, 8);
+	fake_setStep(h, 2, 0, 7, true);
+	seqc_songPosition(100);				/* the last step of the last entry */
+	ASSERT_EQ(h->activePattern, 2);
+	ASSERT_EQ(seqc_trackStep(0), 7);
+	sync(h, SEQC_EV_CONTINUE);
+	clocks(h, 1 + 6 + 6);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 100);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);		/* the song ended at 101 */
+	ASSERT_EQ(seqc_absStep(), -1);
+}
+
+TEST(T17_spp_within_the_active_pattern_does_not_reload_it)
+{
+	/* N6, song mode: a locate into the run of the pattern that plays already
+	 * changes no pattern, as the song walk at a pattern end does not: no reload,
+	 * so no unsaved edit is lost and the kit is not loaded again. A locate into
+	 * another pattern's entry switches with the usual side effects. */
+	fake_host_t *h = midiSlave();
+	static const uint8_t song[] = { 0, 0, 2 };
+	fake_setSong(h, song, 3);
+	fake_setSongMode(h, true);
+	const uint32_t changes = h->patternChanges;
+	seqc_songPosition(20);				/* the second entry of pattern 0 */
+	ASSERT_EQ(h->activePattern, 0);
+	ASSERT_EQ(h->songPos, 1);
+	ASSERT_EQ(h->patternChanges, changes);
+	ASSERT_EQ(seqc_trackStep(0), 4);		/* its run began at 0 */
+	seqc_songPosition(35);				/* pattern 2 */
+	ASSERT_EQ(h->activePattern, 2);
+	ASSERT_EQ(h->songPos, 2);
+	ASSERT_EQ(h->patternChanges, changes + 1);
+	seqc_songPosition(3);				/* back to pattern 0 */
+	ASSERT_EQ(h->activePattern, 0);
+	ASSERT_EQ(h->songPos, 0);
+	ASSERT_EQ(h->patternChanges, changes + 2);
+}
+
+TEST(T17_spp_while_running_is_ignored)
+{
+	fake_host_t *h = midiSlave();
+	sync(h, SEQC_EV_START);
+	clocks(h, 7);
+	seqc_songPosition(16);
+	ASSERT_EQ(stats().syncIgnored, 1);
+	ASSERT_EQ(seqc_absStep(), 1);
+}
+
+TEST(T17_spp_while_armed_seeks)
+{
+	/* a Continue can be applied before the SPP parsed in the same seq_tick() */
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 8, true);
+	sync(h, SEQC_EV_CONTINUE);
+	seqc_songPosition(8);
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	clocks(h, 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 8);
+}
+
+TEST(T17_spp_clears_the_queue_and_restarts_the_count)
+{
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 1, 1, true);
+	fake_setTiming(h, 0, 1, 1, 5, 7);		/* x8 from 180 to 264 */
+	sync(h, SEQC_EV_START);
+	clocks(h, 1 + 6 + 6);				/* tick 192: hits 180 and 192 */
+	ASSERT_EQ(fake_triggers(h, 1, trig, 16), 2);
+	sync(h, SEQC_EV_STOP);
+	clocks(h, 2);					/* count 15 since the Start */
+	const uint32_t tempoSteps = h->calls[FAKE_TEMPO_STEP];
+	seqc_songPosition(4);
+	sync(h, SEQC_EV_CONTINUE);
+	clocks(h, 1);					/* the count restarted: this clock begins a step */
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], tempoSteps + 1);
+	clocks(h, 6 * 4);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 16), 2);	/* the rest of the ratchet is gone */
+	ASSERT_EQ(seqc_absStep(), 8);
+}
+
+TEST(T17_midi_start_in_analog_sync_starts_with_the_next_pulse)
+{
+	/* N13.10: MIDI Start resets the clock count, so at 24 PPQ the next pulse
+	 * starts step 0; fw 1.7 waited for its own 6-pulse grid */
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);
+	seqc_setAnalogPpq(24);
+	fake_process(h, fake_msToCycles(1.0));
+	const double per = fake_clockCycles(120.0);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 3, fake_msToCycles(0.1));
+	sync(h, SEQC_EV_START);
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 1, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(seqc_absStep(), 0);
+}
+
+TEST(T17_jack_run_gate)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_setStep(h, 0, 0, 0, true);
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);		/* 4 PPQ: one pulse per step */
+	fake_process(h, fake_msToCycles(1.0));
+	const double per = fake_stepCycles(120.0);
+	sync(h, SEQC_EV_RESET_OFF);			/* released: like a local start */
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 3, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 2);
+	sync(h, SEQC_EV_RESET_OFF);			/* running: does nothing */
+	ASSERT_EQ(stats().syncIgnored, 1);
+	const size_t from = h->logCount;
+	sync(h, SEQC_EV_RESET_ON);			/* active: stop and rewind */
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	ASSERT_EQ(seqc_absStep(), -1);
+	uint8_t tr[8];
+	ASSERT_EQ(transports(h, from, tr, 8), 2);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_STOP);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_REWIND);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 2, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), -1);			/* held while the gate is active */
+	sync(h, SEQC_EV_RESET_OFF);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 1, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 0);			/* the next pulse plays step 0 */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 2);
+	sync(h, SEQC_EV_START);				/* MIDI Start is accepted in analog sync */
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `95% tests passed, 1 tests failed out of 20`, `20 - T17 (Failed)`, `exit 1`.
+
+Run: `build/host-tests/test_transport`
+
+Expected:
+```
+.../tests/test_transport.c:69: ASSERT_EQ(seqc_state(), SEQC_ARMED) failed: 0 != 1
+FAIL T17_midi_start_arms_and_the_next_clock_starts
+...
+.../tests/test_transport.c:199: ASSERT_EQ(seqc_absStep(), 37) failed: -1 != 37
+FAIL T17_spp_in_pattern_mode
+...
+0 of 16 tests passed
+```
+
+- [ ] **Step 3: Implement the transport events in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+Replace `seqc_tracks_t` with:
+
+```c
+/** per-track step counters */
+typedef struct
+{
+	int8_t		index[SEQC_NUM_TRACKS];	/**< track step, -1 before the first step */
+	uint8_t		master;			/**< master track of the last boundary */
+	bool		seeked;			/**< after a song position: the next boundary is absStep itself */
+} seqc_tracks_t;
+```
+
+Insert after `seqc_skip_t` (`seqc_arm_t`):
+
+```c
+//------------------------------------------------------------------------------
+/** how an armed transport starts */
+typedef enum
+{
+	SEQC_ARM_STEP_CLOCK = 0,	/**< local start: with the next clock that begins a step */
+	SEQC_ARM_NEXT_CLOCK,		/**< MIDI Start or Continue: with the next clock */
+} seqc_arm_t;
+```
+
+Replace `seqc_slave_t` with:
+
+```c
+/** slave modes: clock count, tempo estimate and the interpolation (N9) */
+typedef struct
+{
+	uint8_t		ppq;		/**< clock in jack: 4 or 24 */
+	seqc_arm_t	arm;
+	uint32_t	clockCount;	/**< clocks since the last reset of the count */
+	bool		haveStamp;
+	seqc_time_t	lastStamp;	/**< stamp of the last clock, in any state */
+	double		lastClockPos;	/**< position of the last clock while running, ticks */
+	seqc_time_t	lastClockTime;	/**< its stamp */
+	bool		droppedOut;	/**< no clock for the dropout time (N15): the position holds */
+	double		bpm;		/**< the estimate, or the last known tempo */
+	double		ticksPerCycle;	/**< of bpm */
+	double		cyclesPerTick;
+	uint32_t	interval[SEQC_TEMPO_WINDOW];	/**< clock intervals, cycles */
+	uint8_t		intervalCount;
+	uint8_t		intervalNext;
+	uint64_t	intervalSum;
+} seqc_slave_t;
+```
+
+Replace `seqc_nextBoundaryStep()` with:
+
+```c
+/** the absolute step of the next boundary */
+static uint32_t seqc_nextBoundaryStep(void)
+{
+	return (uint32_t)(seqc_trk.seeked ? seqc.absStep : seqc.absStep + 1);
+}
+```
+
+Replace `seqc_clearRun()` with:
+
+```c
+/** clear what belongs to the current run: queue, note-offs, draws, same-tick
+ * state and the skip-once marker (rewind and seek) */
+static void seqc_clearRun(void)
+{
+	seqc_queue.count = 0;
+	seqc_flushNoteOffs();
+	memset(seqc_gen.draw, 0, sizeof seqc_gen.draw);
+	memset(seqc_fire.fired, 0, sizeof seqc_fire.fired);
+	seqc_skip.valid = false;
+}
+```
+
+Replace `seqc_rewindTransport()` with:
+
+```c
+/** back to the start, before step 0 */
+static void seqc_rewindTransport(void)
+{
+	const bool wasAtStart = seqc.atStart;
+
+	seqc_clearRun();
+	seqc.absStep = -1;
+	memset(seqc_trk.index, -1, sizeof seqc_trk.index);
+	seqc_trk.master = 0;
+	seqc_trk.seeked = false;
+	seqc.pos = seqc_startPosition();
+	seqc_sl.lastClockPos = seqc.pos;
+	seqc_out.nextPulse = 0;
+	seqc.atStart = true;
+	if (!wasAtStart)
+		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_REWIND);
+}
+```
+
+Replace `seqc_arm()` with:
+
+```c
+/** arm: playback starts with a later clock */
+static void seqc_arm(seqc_arm_t how)
+{
+	seqc.state = SEQC_ARMED;
+	seqc_sl.arm = how;
+	seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_ARM);
+}
+```
+
+Replace `seqc_localStart()` with:
+
+```c
+/** local start (seqc_start(), jack reset release): from the beginning; a slave
+ * arms */
+static void seqc_localStart(void)
+{
+	if (!seqc.atStart)
+		seqc_rewindTransport();
+	if (seqc.mode == SEQC_SYNC_INTERNAL)
+	{
+		seqc.state = SEQC_RUNNING;
+		seqc.startPending = true;
+		seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_START);
+	}
+	else
+		seqc_arm(SEQC_ARM_STEP_CLOCK);
+}
+```
+
+Insert after `seqc_localStart()` (`seqc_seek()`):
+
+```c
+//------------------------------------------------------------------------------
+/** song position (N6): seek to step sixteenths */
+static void seqc_seek(uint16_t sixteenths)
+{
+	seqc_clearRun();
+	const uint32_t steps = seqc.host.seekPosition(seqc.host.ctx, sixteenths);
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		seqc_trk.index[t] = (int8_t)(steps % seqc_trackLength(pattern, t));
+	seqc_trk.master = seqc_longestTrack(pattern);
+	seqc_trk.seeked = true;
+	seqc.absStep = sixteenths;
+	seqc.atStart = false;
+	seqc.pos = (double)sixteenths * SEQC_TICKS_PER_STEP - seqc_ticksPerClock();
+	seqc_sl.lastClockPos = seqc.pos;
+	seqc_out.nextPulse = (seqc_tick_t)sixteenths * SEQC_TICKS_PER_STEP;
+	seqc_sl.clockCount = 0;
+}
+```
+
+Replace `seqc_advanceCounters()` with:
+
+```c
+/** boundary steps 1 and 2: advance the counters, and call patternEnd() if the
+ * master track wraps. Returns false if the song ended there. */
+static bool seqc_advanceCounters(void)
+{
+	if (seqc_trk.seeked)
+	{
+		/* the first boundary after a song position: the counters are set */
+		seqc_trk.seeked = false;
+		return true;
+	}
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+	const uint8_t master = seqc_longestTrack(pattern);
+	const bool wrap = seqc_nextIndex(seqc_trk.index[master], seqc_trackLength(pattern, master)) == 0;
+
+	seqc.absStep++;
+	seqc.atStart = false;
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		seqc_trk.index[t] = seqc_nextIndex(seqc_trk.index[t], seqc_trackLength(pattern, t));
+	if (!wrap)
+		return true;
+	switch (seqc.host.patternEnd(seqc.host.ctx))
+	{
+	case SEQC_PAT_CHANGED:
+		memset(seqc_trk.index, 0, sizeof seqc_trk.index);
+		return true;
+	case SEQC_PAT_STOP:
+		seqc_stopTransport();
+		seqc_rewindTransport();
+		return false;
+	default:
+		return true;
+	}
+}
+```
+
+Replace `seqc_slaveClock()` with:
+
+```c
+/** a MIDI clock or a jack pulse in its sync mode (seq_core.h, "Slave position") */
+static void seqc_slaveClock(seqc_time_t stamp)
+{
+	const bool stepClock = seqc_sl.clockCount % seqc_clocksPerStep() == 0;
+
+	seqc_sl.clockCount++;
+	seqc_tempoClock(stamp);
+	if (seqc.state == SEQC_ARMED && (stepClock || seqc_sl.arm == SEQC_ARM_NEXT_CLOCK))
+	{
+		seqc.state = SEQC_RUNNING;
+		seqc.host.transport(seqc.host.ctx, seqc.atStart ? SEQC_TRANSPORT_START : SEQC_TRANSPORT_CONTINUE);
+	}
+	if (stepClock)
+		seqc.host.tempoStep(seqc.host.ctx);
+	if (seqc.state == SEQC_RUNNING)
+	{
+		/* the position jumps to the clock, and everything due on the way is handled */
+		seqc_sl.lastClockPos += seqc_ticksPerClock();
+		seqc_sl.lastClockTime = stamp;
+		seqc_runTo(seqc_sl.lastClockPos);
+	}
+}
+```
+
+Insert after `seqc_slaveClock()` (`seqc_syncReset()`):
+
+```c
+//------------------------------------------------------------------------------
+/** MIDI Start, or the clock jack reset input: stop, rewind and reset the count */
+static void seqc_syncReset(void)
+{
+	if (seqc.state != SEQC_STOPPED)
+		seqc_stopTransport();
+	seqc_rewindTransport();
+	seqc_sl.clockCount = 0;
+}
+```
+
+Replace `seqc_syncEvent()` with:
+
+```c
+void seqc_syncEvent(seqc_sync_ev_t ev, seqc_time_t stamp)
+{
+	if (!seqc_enter())
+		return;
+	seqc_advance(stamp);
+
+	const bool midi = seqc.mode == SEQC_SYNC_MIDI;
+	const bool analog = seqc.mode == SEQC_SYNC_ANALOG;
+	bool used = false;
+	switch (ev)
+	{
+	case SEQC_EV_CLOCK:
+	case SEQC_EV_PULSE:
+		used = ev == SEQC_EV_CLOCK ? midi : analog;
+		if (used)
+			seqc_slaveClock(stamp);
+		break;
+	case SEQC_EV_START:
+		used = midi || analog;
+		if (used)
+		{
+			seqc_syncReset();
+			seqc_arm(SEQC_ARM_NEXT_CLOCK);
+		}
+		break;
+	case SEQC_EV_CONTINUE:
+		used = (midi || analog) && seqc.state == SEQC_STOPPED;
+		if (used)
+			seqc_arm(SEQC_ARM_NEXT_CLOCK);
+		break;
+	case SEQC_EV_STOP:
+		used = (midi || analog) && seqc.state != SEQC_STOPPED;
+		if (used)
+		{
+			seqc.pos = seqc_positionAt(seqc.now);
+			seqc_stopTransport();
+		}
+		break;
+	case SEQC_EV_RESET_ON:
+		used = analog;
+		if (used)
+			seqc_syncReset();
+		break;
+	case SEQC_EV_RESET_OFF:
+		used = analog && seqc.state == SEQC_STOPPED;
+		if (used)
+			seqc_localStart();
+		break;
+	default:
+		break;
+	}
+	if (!used)
+		seqc.stats.syncIgnored++;
+	seqc_leave();
+}
+```
+
+Replace `seqc_songPosition()` with:
+
+```c
+void seqc_songPosition(uint16_t sixteenths)
+{
+	if (!seqc_enter())
+		return;
+	if (seqc.mode == SEQC_SYNC_INTERNAL || seqc.state == SEQC_RUNNING)
+		seqc.stats.syncIgnored++;
+	else
+		seqc_seek(sixteenths);
+	seqc_leave();
+}
+```
+
+- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `... with CRLF line terminators`
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 20`, image `274688/1015808 B`,
+`== compiler warnings: 0`, `exit 0`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c tests/test_transport.c
+git commit -F - <<'EOF'
+seq_core: Start, Continue, Stop, song position and the jack run gate (E1.11, T17)
+
+MIDI Start arms for step 0, Continue resumes one clock after the last clock
+position, Stop keeps the position. A song position seeks at once through
+seekPosition() (N6), in pattern and song mode. The clock jack reset input is a
+run gate, as in fw 1.7 (N4).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.12: Queue overflow and statistics (T19)
+
+The statistics for the CPU page are completed in this task:
+- `queueOverflow`, for an event rejected by a full queue (spec 11);
+- `queueMax`, and `queueDepth`, which `seqc_stats()` fills from the live count;
+- `reentries`, for a call from inside a callback (counted by `seqc_enter()` and
+  `seqc_resetStats()`).
+
+`seqc_resetStats()` clears everything but the live depth.
+
+7 tracks cannot fill the 256-entry queue. At most about 170 events are pending: per track, the spill
+of step n−1, the hits of n and the early hits of n+1, 8 each, plus a roll, and the choke trims that.
+So the core gets `SEQC_QUEUE_CAPACITY` (default `SEQC_QUEUE_SIZE`). `tests/CMakeLists.txt` builds a
+second copy with 16 entries, and `test_overflow` links it through a new `CORE` argument of
+`seqc_add_test()`. The firmware never defines the macro.
+
+**Files:**
+- Modify: `tests/CMakeLists.txt` (the `seqc_add_test()` function, a second core library, the `test_overflow` line)
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
+- Test: `tests/test_overflow.c` (ctest id `T19`)
+
+- [ ] **Step 1: Write the failing test `tests/test_overflow.c`**
+
+```c
+/*
+ * test_overflow.c
+ *
+ * T19: a full event queue rejects the new event and counts it, and the core
+ * keeps running (spec 11, N2); the statistics for the CPU page; calls from
+ * inside a callback are ignored and counted.
+ *
+ * 7 tracks cannot fill the 256-entry queue of the firmware, so this file runs
+ * against a copy of the core with a 16-entry queue (seq_core_small_queue in
+ * tests/CMakeLists.txt, SEQC_QUEUE_CAPACITY in seq_core.c).
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "fake_host.h"
+#include "seqc_test.h"
+
+#define CAPACITY 16	/* SEQC_QUEUE_CAPACITY of seq_core_small_queue */
+
+static const fake_rec_t *trig[256];
+
+static seqc_stats_t stats(void)
+{
+	seqc_stats_t s;
+	seqc_stats(&s);
+	return s;
+}
+
+static void start(fake_host_t *h)
+{
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+}
+
+static void runToTick(fake_host_t *h, double tick)
+{
+	fake_runUntil(h, (seqc_time_t)(fake_tickCycles(120.0) * tick) + 1, fake_msToCycles(0.1));
+}
+
+/* x8 on step 1 of every track: 56 events at boundary 1 */
+static void setUpFlood(fake_host_t *h)
+{
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		fake_setStep(h, 0, t, 1, true);
+		fake_setTiming(h, 0, t, 1, 5, 0);
+	}
+	fake_setStep(h, 0, 6, 5, true);
+}
+
+TEST(T19_full_queue_rejects_and_counts)
+{
+	fake_host_t *h = fake_init();
+	setUpFlood(h);
+	start(h);
+	runToTick(h, 96);				/* boundary 1 */
+	seqc_stats_t s = stats();
+	ASSERT_EQ(s.queueDepth, CAPACITY - 2);		/* the hits of tracks 0 and 1 at 96 fired */
+	ASSERT_EQ(s.queueMax, CAPACITY);
+	ASSERT_EQ(s.queueOverflow, 7 * 8 - CAPACITY);
+	/* the queue keeps what it accepted first: tracks 0 and 1 */
+	runToTick(h, 6 * 96);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 16), 8);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 16), 8);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 16), 0);
+	/* and the core keeps running */
+	ASSERT_EQ(fake_triggers(h, 6, trig, 16), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 5);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(stats().queueDepth, 0);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T19_queue_depth_is_live)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 3, 2, true);
+	fake_setTiming(h, 0, 3, 2, 3, 0);		/* x4: 192, 216, 240, 264 */
+	start(h);
+	runToTick(h, 192 + 30);				/* two fired */
+	seqc_stats_t s = stats();
+	ASSERT_EQ(s.queueDepth, 2);
+	ASSERT_EQ(s.queueMax, 4);
+	seqc_resetStats();				/* every counter to 0, the depth stays live */
+	s = stats();
+	ASSERT_EQ(s.queueDepth, 2);
+	ASSERT_EQ(s.queueMax, 0);
+	runToTick(h, 300);
+	s = stats();
+	ASSERT_EQ(s.queueDepth, 0);
+	ASSERT_EQ(s.queueMax, 0);			/* it only grows when an event is queued */
+}
+
+static int nestedCalls;
+static void callBackIntoTheCore(fake_host_t *h, uint32_t absStep)
+{
+	if (absStep != 2 || nestedCalls++ > 0)
+		return;
+	/* a kit autoload, say, that runs seq_tick() again: all of these are ignored */
+	seqc_process(h->now + 1000);
+	seqc_stop();
+	seqc_start();
+	seqc_rewind();
+	seqc_setTempo(60.0f);
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	seqc_setAnalogPpq(24);
+	seqc_syncEvent(SEQC_EV_CLOCK, h->now);
+	seqc_songPosition(9);
+	seqc_resetStats();
+	/* queries and seqc_skipOnce() are allowed */
+	ASSERT_EQ(seqc_absStep(), 2);
+	ASSERT_NEAR(seqc_position(), 192.0, 1e-9);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	seqc_skipOnce(4, 3);
+}
+
+TEST(T19_calls_from_a_callback_are_ignored_and_counted)
+{
+	fake_host_t *h = fake_init();
+	nestedCalls = 0;
+	h->onStepBoundary = callBackIntoTheCore;
+	fake_setStep(h, 0, 4, 3, true);			/* skipped by the nested skipOnce */
+	fake_setStep(h, 0, 5, 3, true);
+	start(h);
+	runToTick(h, 4 * 96);
+	ASSERT_EQ(nestedCalls, 1);
+	seqc_stats_t s = stats();
+	ASSERT_EQ(s.reentries, 10);
+	ASSERT_EQ(s.skipDrops, 1);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-6);
+	ASSERT_EQ(seqc_absStep(), 4);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 0);
+	ASSERT_EQ(fake_triggers(h, 5, trig, 8), 1);
+}
+
+TEST(T19_reset_stats_clears_every_counter)
+{
+	fake_host_t *h = fake_init();
+	setUpFlood(h);
+	h->muted[6] = true;
+	start(h);
+	runToTick(h, 6 * 96);
+	fake_sync(h, SEQC_EV_CLOCK, h->now);		/* ignored in internal sync */
+	seqc_stats_t s = stats();
+	ASSERT_TRUE(s.queueOverflow > 0);
+	ASSERT_TRUE(s.muteDrops > 0);
+	ASSERT_EQ(s.syncIgnored, 1);
+	seqc_resetStats();
+	s = stats();
+	ASSERT_EQ(s.queueMax, 0);
+	ASSERT_EQ(s.queueOverflow, 0);
+	ASSERT_EQ(s.chokeDrops, 0);
+	ASSERT_EQ(s.muteDrops, 0);
+	ASSERT_EQ(s.skipDrops, 0);
+	ASSERT_EQ(s.syncIgnored, 0);
+	ASSERT_EQ(s.intervalsExcluded, 0);
+	ASSERT_EQ(s.dropouts, 0);
+	ASSERT_EQ(s.reentries, 0);
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 2: Build `test_overflow` against a 16-entry core in `tests/CMakeLists.txt`**
+
+Replace:
+```cmake
+# seqc_add_test(<name> IDS <id>... [EXTRA <source>...])
+#
+# Builds <name>.c (plus the EXTRA sources) with the fake host into the executable
+# <name>, and registers one ctest test per id: ctest runs "<name> <id>", which
+# runs the tests named <id> and <id>_... (seqc_test.h). The ids are the test ids
+# of the spec (§13.1). Until a test file exists, its line here only prints a
+# note; with SEQC_REQUIRE_ALL_TESTS a missing file is an error.
+function(seqc_add_test name)
+    cmake_parse_arguments(ARG "" "" "IDS;EXTRA" ${ARGN})
+```
+with:
+```cmake
+# T19 fills the event queue, which 7 tracks cannot do with SEQC_QUEUE_SIZE
+# entries (see SEQC_QUEUE_CAPACITY in seq_core.c). It runs against a second copy
+# of the core with a 16-entry queue.
+add_library(seq_core_small_queue OBJECT "${SEQC_CORE_SOURCE}")
+target_include_directories(seq_core_small_queue PUBLIC "${LXR_ROOT}/Core/Inc")
+target_compile_definitions(seq_core_small_queue PRIVATE SEQC_QUEUE_CAPACITY=16)
+target_compile_options(seq_core_small_queue PRIVATE -ffast-math -freciprocal-math)
+target_link_libraries(seq_core_small_queue PUBLIC seqc_options)
+
+# seqc_add_test(<name> IDS <id>... [EXTRA <source>...] [CORE <library>])
+#
+# Builds <name>.c (plus the EXTRA sources) with the fake host into the executable
+# <name>, and registers one ctest test per id: ctest runs "<name> <id>", which
+# runs the tests named <id> and <id>_... (seqc_test.h). The ids are the test ids
+# of the spec (§13.1). CORE picks the core library (default seq_core). Until a
+# test file exists, its line here only prints a note; with SEQC_REQUIRE_ALL_TESTS
+# a missing file is an error.
+function(seqc_add_test name)
+    cmake_parse_arguments(ARG "" "CORE" "IDS;EXTRA" ${ARGN})
+    if(NOT ARG_CORE)
+        set(ARG_CORE seq_core)
+    endif()
+```
+Replace:
+```cmake
+    target_link_libraries(${name} PRIVATE seqc_fake_host seq_core)
+```
+with:
+```cmake
+    target_link_libraries(${name} PRIVATE seqc_fake_host ${ARG_CORE})
+```
+Replace:
+```cmake
+seqc_add_test(test_overflow  IDS T19)                # E1.12 queue overflow, stats
+```
+with:
+```cmake
+seqc_add_test(test_overflow  IDS T19 CORE seq_core_small_queue)  # E1.12 queue overflow, stats
+```
+`seqc_fake_host` links `seq_core` only for its include path and options. CMake does not pass the
+objects of an OBJECT library on through another OBJECT library, so `test_overflow` contains exactly
+one core: the small one.
+
+- [ ] **Step 3: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `95% tests passed, 1 tests failed out of 21`, `21 - T19 (Failed)`, `exit 1`. The core
+does not use `SEQC_QUEUE_CAPACITY` yet, so its queue still has 256 entries.
+
+Run: `build/host-tests/test_overflow`
+
+Expected:
+```
+.../tests/test_overflow.c:64: ASSERT_EQ(s.queueDepth, CAPACITY - 2) failed: 0 != 14
+FAIL T19_full_queue_rejects_and_counts
+...
+.../tests/test_overflow.c:134: ASSERT_EQ(s.reentries, 10) failed: 0 != 10
+FAIL T19_calls_from_a_callback_are_ignored_and_counted
+...
+0 of 4 tests passed
+```
+
+- [ ] **Step 4: Implement the statistics in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+Insert after the constants (`SEQC_NEVER`, `SEQC_NO_TICK`) (the `SEQC_QUEUE_CAPACITY` block):
+
+```c
+//------------------------------------------------------------------------------
+/* Entries of the event queue. 7 tracks cannot fill SEQC_QUEUE_SIZE: at most
+ * about 170 events are pending (3 steps of 8 hits and a roll per track). The
+ * host test of a full queue (T19) builds a copy of the core with a smaller one. */
+#ifndef SEQC_QUEUE_CAPACITY
+#define SEQC_QUEUE_CAPACITY	SEQC_QUEUE_SIZE
+#endif
+```
+
+Replace `seqc_queue_t` with:
+
+```c
+/** the event queue, sorted so that events[count - 1] fires next (N2) */
+typedef struct
+{
+	seqc_event_t	events[SEQC_QUEUE_CAPACITY];
+	uint16_t	count;
+} seqc_queue_t;
+```
+
+Replace `seqc_queueInsert()` with:
+
+```c
+/** queue an event, in firing order: a binary search plus memmove (N2). A full
+ * queue rejects it. */
+static void seqc_queueInsert(const seqc_event_t *ev)
+{
+	if (seqc_queue.count >= SEQC_QUEUE_CAPACITY)
+	{
+		seqc.stats.queueOverflow++;
+		return;
+	}
+	/* the first event that fires before ev, and all above it, move up one */
+	uint16_t lo = 0;
+	uint16_t hi = seqc_queue.count;
+	while (lo < hi)
+	{
+		const uint16_t mid = (uint16_t)((lo + hi) / 2u);
+		if (seqc_firesBefore(&seqc_queue.events[mid], ev))
+			hi = mid;
+		else
+			lo = (uint16_t)(mid + 1u);
+	}
+	memmove(&seqc_queue.events[lo + 1u], &seqc_queue.events[lo],
+			(size_t)(seqc_queue.count - lo) * sizeof seqc_queue.events[0]);
+	seqc_queue.events[lo] = *ev;
+	seqc_queue.count++;
+	if (seqc_queue.count > seqc.stats.queueMax)
+		seqc.stats.queueMax = seqc_queue.count;
+}
+```
+
+Replace `seqc_enter()` with:
+
+```c
+/** Start of a seqc_ call that changes the state. A call from inside a callback
+ * is ignored and counted (seq_core.h, "Execution context"). */
+static bool seqc_enter(void)
+{
+	if (seqc.busy)
+	{
+		seqc.stats.reentries++;
+		return false;
+	}
+	seqc.busy = true;
+	seqc.nextDue = 0;	/* so that a nested seqc_process() reaches seqc_enter() */
+	return true;
+}
+```
+
+Replace `seqc_stats()` with:
+
+```c
+void seqc_stats(seqc_stats_t *out)
+{
+	*out = seqc.stats;
+	out->queueDepth = seqc_queue.count;
+}
+```
+
+Replace `seqc_resetStats()` with:
+
+```c
+void seqc_resetStats(void)
+{
+	if (seqc.busy)
+	{
+		seqc.stats.reentries++;
+		return;
+	}
+	memset(&seqc.stats, 0, sizeof seqc.stats);
+}
+```
+
+This completes `seq_core.c`. It now matches the final file the verification section refers to.
+
+- [ ] **Step 5: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `... with CRLF line terminators`
+
+- [ ] **Step 6: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 21`, image `274688/1015808 B`,
+`== compiler warnings: 0`, `exit 0`.
+
+Run: `bash -c 'source tools/env.sh && arm-none-eabi-size build/release/Core/CMakeFiles/lxr_sequencer.dir/Src/Soundengine/Sequencer/seq_core.c.obj'`
+
+Expected: `text` 15422 and `bss` 6973 with Arm GNU 14.3.rel1 for darwin-arm64 (the object of the
+firmware build, with its `-O3`, `-ffunction-sections` and FPU flags), so about 15 KB of flash and
+6.8 KB of RAM once E2 calls the core. That is at the top of the spec's +10–15 KB of flash, before the
+glue and the sync queues, and within its 7.5 KB of RAM. The `bss` is the 6 KB queue (N2) plus the
+rest of the state. Review row R6.3 (E4.1) checks the whole image.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c tests/CMakeLists.txt tests/test_overflow.c
+git commit -F - <<'EOF'
+seq_core: queue overflow and statistics (E1.12, T19)
+
+A full queue rejects the new event and counts it, and the core keeps running;
+queueMax, the live queueDepth and the re-entry count complete the statistics
+for the CPU page. 7 tracks cannot fill 256 entries, so T19 runs against a
+second build of the core with SEQC_QUEUE_CAPACITY 16.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Task E1.13: Equivalence with the fw 1.7 replica (T20)
+
+T20 (spec §13.1): with shuffle 0, every hit of the core lands on the same 1/24-step pulse as in the
+replica of the fw 1.7 timing, `tests/reference/fw17_replica.c`. The tempo error of fw 1.7 (D3) is
+allowed, because hits are compared by step and pulse.
+
+**Linking the replica.** The replica is a standalone program with its own `StepTiming`, so it cannot
+share a translation unit with `seq_core.h`.
+- `tests/fw17_adapter.c` includes it with `FW17_REPLICA_NO_MAIN` defined.
+- The minimal refactor of the replica puts `#ifndef FW17_REPLICA_NO_MAIN` around the report:
+  `stepLenFromTempo()`, `printTrigs()` and `main()`. It still builds and runs standalone.
+- `fw17_adapter.h` offers plain types: reset, set a step, set a length, run.
+
+**What the comparison leaves out.** Two intended differences, plus one effect at a start. The spec
+allows only the tempo error; the other two follow from its own rules (§6.4 and §6.1), so they are
+pinned by tests of their own and listed in the stage 1 report and the release notes (E4.1, E4.3):
+- **D2.** The replica runs with per-track choke flags. One test shows that its fw 1.7 global flags
+  lose the two hits of the D2 scenario.
+- **Choke flags reset per step.** fw 1.7 clears its flags at every step, so a spill-over hit can play
+  after a newer step's hit; the core drops it (spec 6.4). The random patterns keep the steps of a
+  track at least 3 steps apart, also across the wrap, so their hits never overlap.
+  `T20_spill_over_after_a_newer_step_is_choked` shows the difference: step 1 at x2 +5 and step 2 at
+  −2, where fw 1.7 plays one hit more.
+- **The start.** fw 1.7 plays the spill-over of each track's last step at the start, because index
+  −1 is "previous" to step 0. The core has no step before step 0, so those replica hits are filtered
+  out. `T20_no_spill_over_of_the_last_step_at_the_start` shows the difference on step 15 at x2 +7.
+
+The core is complete after E1.12. The failing steps here are the build failures that the adapter
+and the refactor resolve.
+
+**Files:**
+- Modify: `tests/reference/fw17_replica.c:13` (comment), `:230` and `:313` (the `#ifndef` around the report)
+- Create: `tests/fw17_adapter.h`, `tests/fw17_adapter.c`
+- Test: `tests/test_fw17.c` (ctest id `T20`)
+
+- [ ] **Step 1: Write the adapter interface `tests/fw17_adapter.h`**
+
+```c
+/*
+ * fw17_adapter.h
+ *
+ * The fw 1.7 timing replica (tests/reference/fw17_replica.c) behind plain
+ * types, for T20. The replica declares its own StepTiming, so it cannot share a
+ * translation unit with seq_core.h; fw17_adapter.c compiles it on its own.
+ *
+ * The replica has one pattern of 7 tracks with 64 steps, no shuffle, prob 100,
+ * and runs the internal clock branch of fw 1.7 seq_tick() at the TIM2 rate.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#ifndef FW17_ADAPTER_H_
+#define FW17_ADAPTER_H_
+
+/** one hit of the replica */
+typedef struct
+{
+	int track;
+	int step;	/**< the track step the hit belongs to */
+	int seqStep;	/**< the step (frame) it fired in, counted from 0 at the start */
+	int pulse;	/**< 0..23 within that step */
+} fw17_hit_t;
+
+/** Reset: every step off, length 16, flam 0, shift 7 (none), at bpm. With
+ * perTrackChoke the choke flags are per track (the fix of D2); otherwise they
+ * are global, as in fw 1.7. */
+void fw17_reset(unsigned bpm, int perTrackChoke);
+/** switch a step on, with its raw StepTiming values (flam 0..15, shift 0..15) */
+void fw17_setStep(int track, int step, int flam, int shift);
+/** the track length, 1..64 */
+void fw17_setLength(int track, int length);
+/** Run until step `steps` has begun. Stores up to max hits of the steps before
+ * it in out, and returns how many there are. */
+int fw17_run(int steps, fw17_hit_t *out, int max);
+
+#endif /* FW17_ADAPTER_H_ */
+```
+
+- [ ] **Step 2: Write the failing test `tests/test_fw17.c`**
+
+```c
+/*
+ * test_fw17.c
+ *
+ * T20: equivalence with fw 1.7. With shuffle 0, every hit of the core lands on
+ * the same 1/24-step pulse as in the replica of the fw 1.7 timing
+ * (tests/reference/fw17_replica.c, through fw17_adapter.h). The tempo error of
+ * fw 1.7 (D3) does not matter here: hits are compared by step and pulse.
+ *
+ * Two differences are intended and kept out of the comparison:
+ * - D2: fw 1.7 shares its choke flags between tracks. The replica runs with
+ *   per-track flags, except in the test that shows the defect.
+ * - fw 1.7 resets its choke flags at every step, so a hit that spills over a
+ *   step boundary can play after a newer step's hit; the core drops it (spec
+ *   6.4). The random patterns keep the steps of a track 3 steps apart, so their
+ *   hits never overlap.
+ * At a start fw 1.7 also plays the spill-over of the last step of each track
+ * (index -1 is "previous" to step 0); the core has no step before step 0, so
+ * those hits are left out of the replica's list. The last two tests pin both
+ * differences.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include <stdlib.h>
+
+#include "fake_host.h"
+#include "fw17_adapter.h"
+#include "seqc_test.h"
+
+#define MAX_HITS 4096
+
+typedef struct
+{
+	uint8_t length[SEQC_NUM_TRACKS];
+	bool on[SEQC_NUM_TRACKS][SEQC_NUM_STEPS];
+	uint8_t flam[SEQC_NUM_TRACKS][SEQC_NUM_STEPS];
+	uint8_t shift[SEQC_NUM_TRACKS][SEQC_NUM_STEPS];	/* raw, 0..15 */
+} scenario_t;
+
+static fw17_hit_t ref[MAX_HITS];
+static fw17_hit_t got[MAX_HITS];
+static const fake_rec_t *trig[MAX_HITS];
+
+static void clearScenario(scenario_t *sc)
+{
+	memset(sc, 0, sizeof *sc);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		sc->length[t] = 16;
+		for (uint8_t s = 0; s < SEQC_NUM_STEPS; s++)
+			sc->shift[t][s] = SEQC_SHIFT_CENTER;
+	}
+}
+
+static int compareHits(const void *a, const void *b)
+{
+	const fw17_hit_t *x = a, *y = b;
+	if (x->seqStep != y->seqStep)
+		return x->seqStep - y->seqStep;
+	if (x->pulse != y->pulse)
+		return x->pulse - y->pulse;
+	if (x->track != y->track)
+		return x->track - y->track;
+	return x->step - y->step;
+}
+
+/* the replica's hits of steps 0..steps-1, sorted, without the spill-over of the
+ * step before step 0 */
+static int runReplica(const scenario_t *sc, int steps, int perTrackChoke)
+{
+	fw17_reset(130, perTrackChoke);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		fw17_setLength(t, sc->length[t]);
+		for (uint8_t s = 0; s < sc->length[t]; s++)
+			if (sc->on[t][s])
+				fw17_setStep(t, s, sc->flam[t][s], sc->shift[t][s]);
+	}
+	const int all = fw17_run(steps, ref, MAX_HITS);
+	int n = 0;
+	for (int i = 0; i < all && i < MAX_HITS; i++)
+	{
+		const fw17_hit_t *r = &ref[i];
+		if (r->seqStep == 0 && r->step == sc->length[r->track] - 1)
+			continue;
+		ref[n++] = *r;
+	}
+	qsort(ref, (size_t)n, sizeof ref[0], compareHits);
+	return n;
+}
+
+/* the core's hits of steps 0..steps-1, as step and pulse, sorted */
+static int runCore(const scenario_t *sc, int steps)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_BIT(FAKE_TRIGGER);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		fake_setLength(h, 0, t, sc->length[t]);
+		for (uint8_t s = 0; s < sc->length[t]; s++)
+			if (sc->on[t][s])
+			{
+				fake_setStep(h, 0, t, s, true);
+				h->timing[0][t][s] = (StepTiming){ .flam = sc->flam[t][s], .shift = sc->shift[t][s] };
+			}
+	}
+	seqc_setTempo(130.0f);
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(130.0) * steps) - 1, fake_msToCycles(0.1));
+	const int n = (int)fake_triggers(h, -1, trig, MAX_HITS);
+	for (int i = 0; i < n && i < MAX_HITS; i++)
+	{
+		const seqc_event_t *ev = &trig[i]->ev;
+		got[i] = (fw17_hit_t){ ev->track, ev->step, (int)(ev->tick / 96), (int)(ev->tick % 96 / 4) };
+		if (ev->tick % 4 != 0)
+			got[i].pulse = -1;			/* off the 96 PPQN grid: never equal */
+	}
+	qsort(got, (size_t)n, sizeof got[0], compareHits);
+	return n;
+}
+
+/* compare core and replica; on a difference print the first one */
+static void checkEquivalent(const scenario_t *sc, int steps)
+{
+	const int nr = runReplica(sc, steps, 1);
+	const int nc = runCore(sc, steps);
+	ASSERT_TRUE(nr > 0);
+	for (int i = 0; i < nr && i < nc; i++)
+	{
+		if (compareHits(&ref[i], &got[i]) != 0)
+		{
+			printf("hit %d: fw 1.7 track %d step %d at step %d pulse %d, core track %d step %d at step %d pulse %d\n",
+					i, ref[i].track, ref[i].step, ref[i].seqStep, ref[i].pulse,
+					got[i].track, got[i].step, got[i].seqStep, got[i].pulse);
+			ASSERT_TRUE(false);
+		}
+	}
+	ASSERT_EQ(nc, nr);
+}
+
+TEST(T20_every_ratchet_and_shift)
+{
+	/* each (flam, shift) pair once, three steps apart, on all tracks */
+	scenario_t sc;
+	clearScenario(&sc);
+	int k = 0;
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		sc.length[t] = 64;
+		for (uint8_t s = 1; s + 3 < 64; s += 3)
+		{
+			sc.on[t][s] = true;
+			sc.flam[t][s] = (uint8_t)(k % 6);
+			sc.shift[t][s] = (uint8_t)((k / 6) % 16);
+			k++;
+		}
+	}
+	checkEquivalent(&sc, 130);
+}
+
+TEST(T20_random_patterns)
+{
+	srand(20261024);
+	for (int round = 0; round < 25; round++)
+	{
+		scenario_t sc;
+		clearScenario(&sc);
+		static const uint8_t lengths[] = { 16, 12, 7, 64, 24, 5, 9, 32 };
+		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		{
+			const uint8_t len = lengths[rand() % 8];
+			sc.length[t] = len;
+			/* steps at least 3 apart, also across the wrap */
+			int first = -1, last = -1;
+			for (int s = rand() % 3; s < len; s += 3 + rand() % 3)
+			{
+				if (first >= 0 && first + len - s < 3)
+					break;
+				sc.on[t][s] = true;
+				sc.flam[t][s] = (uint8_t)(rand() % 16);
+				sc.shift[t][s] = (uint8_t)(rand() % 16);
+				if (first < 0)
+					first = s;
+				last = s;
+			}
+			(void)last;
+		}
+		checkEquivalent(&sc, 100);
+		if (seqc_test_failed_)
+		{
+			printf("random round %d\n", round);
+			return;
+		}
+	}
+}
+
+/* the replica scenario 6 of the spec, D2 */
+static void setUpD2(scenario_t *sc)
+{
+	clearScenario(sc);
+	sc->on[5][0] = true;	/* hat x4 */
+	sc->flam[5][0] = 3;
+	sc->on[3][1] = true;	/* snare -2 */
+	sc->shift[3][1] = 5;
+	sc->on[0][3] = true;	/* kick */
+	sc->on[5][2] = true;	/* hat x2 +4 */
+	sc->flam[5][2] = 1;
+	sc->shift[5][2] = 11;
+}
+
+TEST(T20_d2_scenario_matches_per_track_flags)
+{
+	scenario_t sc;
+	setUpD2(&sc);
+	checkEquivalent(&sc, 6);
+}
+
+TEST(T20_global_choke_flags_of_fw17_drop_hits)
+{
+	/* the replica with fw 1.7's global flags loses the two hits of D2 */
+	scenario_t sc;
+	setUpD2(&sc);
+	const int fixed = runReplica(&sc, 6, 1);
+	const int fw17 = runReplica(&sc, 6, 0);
+	ASSERT_EQ(fixed - fw17, 2);
+	ASSERT_EQ(runCore(&sc, 6), fixed);
+}
+
+/* The two intended differences that the comparison above leaves out, pinned
+ * (stage 1 report). */
+TEST(T20_spill_over_after_a_newer_step_is_choked)
+{
+	/* fw 1.7 clears its choke flags at every step. Step 1 is x2 at +5 (pulse 15
+	 * of step 1 and pulse 3 of step 2), step 2 at -2 plays early, at pulse 18 of
+	 * step 1. In step 2 the flags are clear again, so fw 1.7 still plays the
+	 * second hit of step 1 after the newer hit. The core's per-track choke (spec
+	 * 6.4) drops it. */
+	scenario_t sc;
+	clearScenario(&sc);
+	sc.on[0][1] = true;
+	sc.flam[0][1] = 1;
+	sc.shift[0][1] = 12;
+	sc.on[0][2] = true;
+	sc.shift[0][2] = 5;
+	const int nr = runReplica(&sc, 4, 1);
+	const int nc = runCore(&sc, 4);
+	ASSERT_EQ(nr, 3);
+	ASSERT_EQ(nc, 2);
+	ASSERT_EQ(compareHits(&ref[0], &got[0]), 0);	/* step 1 at pulse 15 */
+	ASSERT_EQ(compareHits(&ref[1], &got[1]), 0);	/* step 2 at pulse 18 of step 1 */
+	ASSERT_EQ(ref[2].step, 1);			/* fw 1.7 only: step 1 at pulse 3 of step 2 */
+	ASSERT_EQ(ref[2].seqStep, 2);
+	ASSERT_EQ(ref[2].pulse, 3);
+}
+
+TEST(T20_no_spill_over_of_the_last_step_at_the_start)
+{
+	/* at a start fw 1.7 takes index -1 as the step before step 0, so the late hit
+	 * of the last step (step 15, x2 at +7: its second hit at pulse 9 of the next
+	 * step) also plays at pulse 9 of step 0. The core has no step before step 0.
+	 * After the first wrap both play it. */
+	scenario_t sc;
+	clearScenario(&sc);
+	sc.on[0][15] = true;
+	sc.flam[0][15] = 1;
+	sc.shift[0][15] = 14;
+	fw17_reset(130, 1);
+	fw17_setStep(0, 15, 1, 14);
+	const int nr = fw17_run(20, ref, MAX_HITS);
+	qsort(ref, (size_t)nr, sizeof ref[0], compareHits);
+	const int nc = runCore(&sc, 20);
+	ASSERT_EQ(nr, 3);
+	ASSERT_EQ(nc, 2);
+	ASSERT_EQ(ref[0].step, 15);			/* fw 1.7 only */
+	ASSERT_EQ(ref[0].seqStep, 0);
+	ASSERT_EQ(ref[0].pulse, 9);
+	ASSERT_EQ(compareHits(&ref[1], &got[0]), 0);	/* step 15, pulse 21 */
+	ASSERT_EQ(compareHits(&ref[2], &got[1]), 0);	/* pulse 9 of step 16 */
+}
+
+TEST_MAIN()
+```
+
+- [ ] **Step 3: Run it to verify it fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `host test build FAILED`, `exit 1`. The line `seqc_add_test(test_fw17 IDS T20 EXTRA fw17_adapter.c)`
+names a source that does not exist yet.
+
+Run: `grep -A3 "CMake Error" build/check.log`
+
+Expected:
+```
+CMake Error at CMakeLists.txt:107 (add_executable):
+  Cannot find source file:
+
+    fw17_adapter.c
+```
+
+- [ ] **Step 4: Write the adapter `tests/fw17_adapter.c`**
+
+```c
+/*
+ * fw17_adapter.c
+ *
+ * Compiles the fw 1.7 timing replica without its report and gives T20 access to
+ * it, see fw17_adapter.h.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#define FW17_REPLICA_NO_MAIN
+#include "reference/fw17_replica.c"
+
+#include "fw17_adapter.h"
+
+void fw17_reset(unsigned bpm, int perTrackChoke)
+{
+	reset((uint16_t)bpm, 0.0f, perTrackChoke);
+}
+
+void fw17_setStep(int track, int step, int flam, int shift)
+{
+	mainStep[track][step] = 1;
+	timing[track][step].flam = (uint8_t)(flam & 0x0f);
+	timing[track][step].shift = (uint8_t)(shift & 0x0f);
+}
+
+void fw17_setLength(int track, int length)
+{
+	trackLen[track] = (uint8_t)length;
+}
+
+int fw17_run(int steps, fw17_hit_t *out, int max)
+{
+	run(steps);
+	int n = 0;
+	for (int i = 0; i < ntrigs; i++)
+	{
+		if (trigs[i].seqStep >= steps)
+			continue;		/* pulse 0 of step `steps` ran as well */
+		if (n < max)
+			out[n] = (fw17_hit_t){ trigs[i].track, trigs[i].step, trigs[i].seqStep, trigs[i].idx };
+		n++;
+	}
+	return n;
+}
+```
+
+- [ ] **Step 5: Run it to verify it still fails**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `host test build FAILED`, with the link error `cc: error: linker command failed with exit code 1`,
+and `exit 1`. The replica's `main()` collides with the runner's. `grep -B4 "linker command failed" build/check.log`
+shows `duplicate symbol '_main' in:` with Apple ld, or `multiple definition of 'main'` with GNU ld.
+
+- [ ] **Step 6: Leave the report out of the replica when `FW17_REPLICA_NO_MAIN` is defined**
+
+In `tests/reference/fw17_replica.c` (LF), replace:
+```c
+ * Build and run on the host: cc -O2 -o fw17_replica fw17_replica.c -lm && ./fw17_replica
+ *
+```
+with:
+```c
+ * Build and run on the host: cc -O2 -o fw17_replica fw17_replica.c -lm && ./fw17_replica
+ *
+ * T20 links its logic: tests/fw17_adapter.c includes this file with
+ * FW17_REPLICA_NO_MAIN defined, which leaves out the report (main() and its
+ * helpers).
+ *
+```
+Replace:
+```c
+static double stepLenFromTempo(uint16_t bpm) { return 60.0 / bpm / 4.0; }
+```
+with:
+```c
+#ifndef FW17_REPLICA_NO_MAIN
+static double stepLenFromTempo(uint16_t bpm) { return 60.0 / bpm / 4.0; }
+```
+At the very end of the file, after the closing brace of `main()`, add:
+```c
+#endif /* FW17_REPLICA_NO_MAIN */
+```
+
+- [ ] **Step 7: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected:
+```
+22/22 Test #22: T20 ..............................   Passed
+100% tests passed, 0 tests failed out of 22
+...
+== compiler warnings: 0
+exit 0
+```
+Run: `cc -O2 -o build/fw17_replica tests/reference/fw17_replica.c -lm && ./build/fw17_replica | head -n 2`
+
+Expected: the standalone report still runs and prints:
+```
+== 1. Tempo accuracy (internal clock, integer division in seq_calcDeltaT) ==
+  set 120 BPM -> plays 119.991 BPM (-0.008%)
+```
+Run: `bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests-all -G Ninja -DSEQC_REQUIRE_ALL_TESTS=ON > /dev/null && echo "all test files present"'`
+
+Expected: `all test files present`. Every file listed in `tests/CMakeLists.txt` now exists.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add tests/reference/fw17_replica.c tests/fw17_adapter.h tests/fw17_adapter.c tests/test_fw17.c
+git commit -F - <<'EOF'
+tests: fw 1.7 equivalence against the replica (E1.13, T20)
+
+With shuffle 0 every hit of seq_core lands on the same 1/24-step pulse as in
+the fw 1.7 replica: every ratchet and shift, 25 random polymetric patterns and
+the D2 scenario with per-track choke flags. Two tests pin the intended
+differences: the per-track choke drops a spill-over hit after a newer step's
+early hit, and no spill-over of the last step plays at the start. The replica
+gets an #ifndef around its report so that fw17_adapter.c can link its logic.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+---
+
+### Coverage of the spec and the notes
+
+**Host tests (spec §13.1).** Every test name starts with its id, so `ctest` and
+`build/host-tests/<file> <id>` select them.
+
+| Id | Tests | Task |
+|---|---|---|
+| T1 | `T1_tempo_accuracy_{60,120,128,137,200}_bpm`, `T1_start_at_next_process`, `T1_start_before_the_first_process`, `T1_stop_keeps_the_position_and_start_rewinds`, `T1_rewind_only_when_stopped`, `T1_tempo_change_is_continuous`, `T1_tempo_is_clamped`, `T1_time_never_goes_back` | E1.3 |
+| T2 | `T2_straight_grid`, `T2_event_carries_its_step_data` (D5), `T2_flam_out_of_range_plays_one_hit` | E1.5 |
+| T3 | `T3_swing_{0,32,64,127}`, `T3_shuffle_above_127_counts_as_127`, `T3_parity_counts_from_the_start`, `T3_shuffle_is_read_at_every_boundary`, `T3_shuffle_change_after_the_early_part_plays_once`, `T3_shuffle_change_after_the_early_part_loses_nothing` | E1.5 |
+| T4 | `T4_shift_on_every_ratchet_type` (6 × 16 cases), `T4_negative_shift_on_step_0_of_the_next_loop`, `T4_late_hits_spill_into_the_next_steps`, `T4_shift_edit_after_the_early_part_plays_each_hit_once`, `T4_shift_edit_into_the_past_loses_nothing`, `T4_timing_edit_before_the_boundary_applies`; for the next *pattern*: `T11_early_hit_of_the_next_pattern` | E1.5, E1.7 |
+| T5 | `T5_midi_clock_spacing_shuffle_{0,64,127}`, `T5_midi_clock_runs_while_stopped`, `T5_start_rephases_the_clock`, `T5_tempo_steps_come_with_the_boundaries`, `T5_tempo_change_keeps_the_clock_continuous` | E1.8 |
+| T6 | `T6_pulses_every_4_ticks_while_running`, `T6_output_ppq_prescalers_divide_evenly` | E1.8 |
+| T7 | `T7_d2_snare_does_not_choke_the_hat`, `T7_d2_kick_does_not_choke_the_spill_over`, `T7_newer_step_chokes_the_older_hits`, `T7_same_tick_highest_step_wins`, `T7_same_tick_on_other_tracks_fire_in_track_order`; a note against a roll: `T13_note_wins_over_a_roll_at_the_same_tick` | E1.6, E1.9 |
+| T8 | `T8_draws_come_from_the_generator`, `T8_probability_is_deterministic`, `T8_ratchet_hits_play_all_or_none` | E1.5 |
+| T9 | `T9_mute_during_a_ratchet_drops_the_rest`, `T9_mute_is_read_when_the_event_fires` | E1.6 |
+| T10 | `T10_no_track_step_before_the_first_step`, `T10_polymeter_wrap_per_track`, `T10_raw_zero_loses_to_any_other_length`, `T10_tie_goes_to_the_lowest_track`, `T10_same_pattern_keeps_the_indices_running`, `T10_pattern_change_restarts_every_track`, `T10_reload_of_the_same_pattern_restarts`, `T10_first_boundary_starts_the_song`, `T10_song_end_stops_and_rewinds` | E1.4 |
+| T11 | `T11_early_hit_of_the_next_pattern`, `T11_late_change_of_the_pending_pattern`, `T11_restart_takes_step_0_of_every_track`, `T11_same_pattern_keeps_the_indices`, `T11_no_early_hits_after_the_song_end`, `T11_late_hits_of_the_old_pattern_after_the_switch` (spec §6.5, D5) | E1.7 |
+| T12 | `T12_step_switched_on_before_its_boundary_plays`, `T12_step_switched_off_before_its_boundary_does_not_play`, `T12_early_hits_use_the_state_one_step_earlier`, `T12_erase_at_the_boundary_wins`, `T12_track_length_change_before_the_boundary` | E1.7 |
+| T13 | `T13_roll_at_every_rate`, `T13_roll_is_swung`, `T13_roll_follows_the_track_step`, `T13_roll_plays_on_a_muted_track`, `T13_note_wins_over_a_roll_at_the_same_tick`, `T13_roll_hit_is_recorded_at_its_own_step` | E1.9 |
+| T14 | `T14_phase_is_linear_without_shuffle`, `T14_phase_with_shuffle_is_half_between_the_swung_hits`, `T14_phase_is_zero_when_stopped`, `T14_late_note_goes_to_the_next_step_and_plays_once` (D6), `T14_early_note_stays_on_the_current_step`, `T14_skip_once_removes_the_queued_early_hits`, `T14_marker_is_cleared_at_the_next_boundary`, `T14_skip_once_is_ignored_when_stopped_or_out_of_range`; one marker per track (N18.1) in E1.14 | E1.9, E1.14 |
+| T15 | `T15_note_off_4_ticks_after_the_trigger`, `T15_note_off_comes_right_before_a_retrigger`, `T15_stop_sends_the_pending_note_offs` | E1.6 |
+| T16 | `T16_steady_clock`, `T16_usb_like_jitter`, `T16_tempo_ramp_120_to_140`, `T16_bunched_clocks_lose_no_event`, `T16_position_is_clamped_to_the_next_clock`, `T16_outlier_interval_is_left_out`, `T16_dropout_and_resume`, `T16_local_start_waits_for_the_masters_step`, `T16_tempo_estimate_is_clamped`, `T16_clock_only_in_midi_sync`, `T16_switch_from_internal_while_running`, `T16_switch_to_internal_starts_an_armed_transport`, `T16_swung_ratchet_spills_past_the_next_clock` and `T16_swung_ratchet_spills_past_bunched_clocks` (D7); the tempo jumps of N16 in E1.14 | E1.10, E1.14 |
+| T17 | `T17_midi_start_arms_and_the_next_clock_starts`, `T17_midi_start_while_running_restarts`, `T17_stop_and_continue_resume_in_place`, `T17_continue_at_the_start_is_a_start`, `T17_events_that_do_nothing_are_counted`, `T17_transport_events_are_ignored_in_internal_sync`, `T17_spp_in_pattern_mode`, `T17_spp_in_song_mode_with_identical_entries`, `T17_spp_with_song_loop`, `T17_spp_past_the_song_end_stops_at_the_next_pattern_end`, `T17_spp_within_the_active_pattern_does_not_reload_it`, `T17_spp_while_running_is_ignored`, `T17_spp_while_armed_seeks`, `T17_spp_clears_the_queue_and_restarts_the_count`, `T17_midi_start_in_analog_sync_starts_with_the_next_pulse` (N13.10), `T17_jack_run_gate` | E1.11 |
+| T18 | `T18_jack_4ppq_one_pulse_per_step`, `T18_jack_4ppq_estimate_uses_4_intervals`, `T18_jack_24ppq_six_pulses_per_step`, `T18_ppq_change_restarts_the_count`, `T18_slow_4ppq_clock_is_not_a_dropout` (N15), `T18_pulse_only_in_analog_sync`, `T18_ppq_change_in_midi_sync_keeps_the_count` (decision 11); the 4 PPQ tempo jump (N16) and the note-off at a dropout (N17) in E1.14 | E1.10, E1.14 |
+| T19 | `T19_full_queue_rejects_and_counts`, `T19_queue_depth_is_live`, `T19_calls_from_a_callback_are_ignored_and_counted`, `T19_reset_stats_clears_every_counter` | E1.12 |
+| T20 | `T20_every_ratchet_and_shift`, `T20_random_patterns`, `T20_d2_scenario_matches_per_track_flags`, `T20_global_choke_flags_of_fw17_drop_hits`; the two intended differences: `T20_spill_over_after_a_newer_step_is_choked`, `T20_no_spill_over_of_the_last_step_at_the_start` | E1.13 |
+
+**Spec sections and notes.**
+
+| Requirement | Where |
+|---|---|
+| N1, position from an anchor; spec §5 master accuracy | E1.3: `seqc_internalTick()`, the re-anchor in `seqc_setTempo()` and at the start (T1) |
+| N2, sorted queue and its order | E1.5: `seqc_firesBefore()`, `seqc_queueInsert()` |
+| N2, choke | E1.6 |
+| N2, same-tick rule | E1.9 |
+| N2, overflow | E1.12 |
+| N3, early and late parts with two draw slots | E1.5 (`seqc_generate()`, `seqc_draw()`; the early part fixes the timing, decision 9), E1.7 (prediction) |
+| N4, starts and the first boundary: internal start, step-0 wrap | E1.3, E1.4 |
+| N4, local start in a slave mode | E1.10 |
+| N4, MIDI Start, Continue and Stop, the run gate, per-mode gating | E1.10, E1.11 |
+| N5, callbacks and the master wrap | the API (E1.1), E1.4 (`seqc_longestTrack()`, `seqc_nextIndex()`) |
+| N6, song position | core side E1.11 (`seqc_seek()`); glue side `cb_seekPosition()` in the fake host (E1.1) |
+| N7, single context | E1.3 (`seqc_enter()`, `seqc_leave()`), counted in E1.12. The mailbox itself is E2. |
+| N8, clock outputs and `tempoStep()` | E1.8 (internal), E1.10 (slave clocks) |
+| N9, slave estimate, clamp and dropout | E1.10 |
+| N10, early exit | E1.3 (`seqc_schedule()`), E1.10 (slave caps) |
+| N11, core runs from flash | E1.3 (not in `LXR_ITCM_SOURCES`). The rest of N11 is E2. |
+| N12, main-loop context | No core change. `seqc_process()` runs at least once per audio block, and the `nextDue` early exit stays. The nesting guard is in E2's `seq_tick()`. |
+| N13, API decisions | `seq_core.h` (E1.1). Items 1, 2, 4, 5, 6, 7, 8 and 9 are tested in T17, T14, T13, `test_layout`, T15 and T19; item 10 in `T17_midi_start_in_analog_sync_starts_with_the_next_pulse`; item 11 in the fake host and T10. |
+| N14, SPP in the sync queues | E2.4. The core side is `seqc_songPosition()` while stopped or armed (T17). |
+| N15, dropout threshold | E1.10: `seqc_dropoutCycles()`, `T18_slow_4ppq_clock_is_not_a_dropout` |
+| N16, N17, N18.1 | E1.14 (its section is inserted after E1.13) |
+| N18.2, N18.3, N18.4 | E2.2 `seq_cbTransport()`, E2.3 `seq_triggerVoice()`, E2.1 `seqq_usbMessage()` |
+| Spec §6.1–6.7 | the T2–T15 rows above |
+| Spec §11: queue full, dropout, intervals that don't fit, late stamps, 64-bit time | T19; T16 (dropout, outliers, bunched clocks); the 64-bit `seqc_time_t` everywhere |
+| Spec §10 budget | E1.12 Step 6: `text` 15422 B, `bss` 6973 B (Arm GNU 14.3.rel1, darwin-arm64) |
+| Spec §9.1, host tests: C11, `-Wall -Wextra -Werror`, fake host, runner, ctest, replica for T20 | E1.1, E1.13 |
+| G5, the firmware builds after every task with zero warnings | every task's last run of `tools/check.sh` |
+
+### How this section was verified (2026-10-24, on the reference Mac)
+
+- **Every version of `seq_core.c`.** The final file and every intermediate version (E1.1, E1.3–E1.12)
+  were generated from one template. Each version compiles without a warning with:
+  - Apple clang 17: `-std=c11 -Wall -Wextra -Werror -ffast-math -freciprocal-math`;
+  - Arm GNU 14.3.rel1: `-std=gnu11 -O3 -Wall -Wextra -Werror` with the firmware's MCU and math flags.
+- **The diffs.** For every task, a tool applied the listed replace and insert operations to the
+  previous version and got exactly the next version.
+- **A full replay.** All tasks were replayed in order in a copy of the repository at commit
+  `1179a1f`, which already has N12–N15 and the zsh-safe `tools/env.sh`. `tools/check.sh` ran at
+  each step.
+  - Each new test file failed before its implementation, with the outputs quoted above, and passed
+    after it.
+  - The warning count stayed 0, and the image (274 688 B) and ITCM (15 000 B) did not change.
+  - E1.2 left the `.bin` byte-identical.
+- **Test files with GCC.** All test files also compile with GCC 14 at `-O0` and `-O2` with
+  `-Werror`.
+- **The tests can fail.** T20 was mutation-checked: a shift unit of 11 ticks instead of 12, and a
+  dropped last ratchet hit, both make it fail. `T18_slow_4ppq_clock_is_not_a_dropout` fails (5
+  dropouts) against the plain 500 ms rule that N15 replaces.
+- **Not run here.** The AddressSanitizer build hangs inside the macOS sandbox, so it was not run, and
+  neither was a Linux/x86_64 build. CI (E3.4) covers both.
+- **Toolchain dependence.** The image hash and the object sizes quoted are those of Arm GNU
+  14.3.rel1 for darwin-arm64.
+- **The plan review (2026-10-24).** The fixes to E1.1 (header rules, `cb_seekPosition()`), E1.5
+  (the timing kept by the early part), E1.7, E1.10 (`seqc_setAnalogPpq()`), E1.11, E1.12 and E1.13
+  were replayed from the plan text with the same block model, task by task, building with Apple
+  clang 17 and UBSan: every new test failed before its task (or passes already where the text says
+  so) and every test passed after it. The final core compiles without a warning with the firmware's
+  flags, and the new tests fail against the core of the plan before the review (the probes of the
+  review: a shuffle change after the early part played a hit twice, an edit into the past lost it).
+
+### Open issues of this section
+
+1. **The tempo estimate can get stuck after a tempo jump beyond the ±50% band of the clock
+   intervals** (the tempo more than doubles, or drops below two thirds). Every new interval is then
+   an outlier, and the spec's rule has no way back. Settled by N16: after 4 outliers in a row on the
+   same side of the mean (2 for the jack at 4 PPQ) the window restarts from them. Task E1.14
+   implements it.
+2. **"The clamp included" (N9).** A boundary at the next clock's tick can be handled by the
+   interpolation before that clock arrives. After a dropout, one more step therefore plays than
+   clocks arrived (`T16_dropout_and_resume`).
+3. **T19 needs a knob beyond the API.** It uses a test-only `SEQC_QUEUE_CAPACITY` in `seq_core.c`,
+   and `tests/CMakeLists.txt` changes beyond its API version.
+4. **The N10 early exit does a little more than one compare.** It also keeps `now` for the queries,
+   as decision 1 describes.
+5. **T12 passes before E1.7.** It is a regression test there, not the failing test (decision 6).
+6. **A start right after a free-running MIDI clock** sends the next clock less than 16 ticks later.
+   This is the re-phase of N8, and fw 1.7 did the same.
+7. **`seqc_masterTrack()` after a song position** returns the seeked pattern's master track instead
+   of 0 (decision 5).
+8. **Note-offs wait during a dropout.** While the position holds after a dropout, a pending
+   note-off, due 4 ticks after its trigger, waits for the next clock or a Stop. Settled by N17: a
+   dropout sends the pending note-offs, as a stop does. Task E1.14 implements it.
+9. **Expected outputs are from the reference Mac.** They were captured with Apple clang 17 and Arm
+   GNU 14.3.rel1 for darwin-arm64. A different toolchain changes the image hash, the object sizes
+   and the absolute paths in failure messages, but not the pass/fail results.
+10. **The header text on the dropout is out of date.** `seq_core.h` still says "no clock for this
+    long: the estimate is cleared" with a plain 500 ms. N15 wins, and the core follows N15. E1.14
+    updates the comment, together with the other comments that N16, N17 and N18.1 change.
+11. **Settled by notes written during planning.** The dropout threshold for slow 4 PPQ clocks is
+    settled by N15, done in E1.10. SPP ordering against Continue is settled by N14, which is E2.4.
+12. **Overlaps with the tooling part (Part 3 of this plan) for the assembly.** Both are fixed there
+    now, in E3.3 Steps 1 and 3.
+    - E1.3 already puts `seq_core.c` into `lxr_sequencer`, and adds a `set_property(... -Wextra)`
+      line for it. `grep -n 'Sequencer/seq_core.c' Core/CMakeLists.txt` (E3.3 Step 1) therefore
+      prints two lines, not one. E2 must not add the source again.
+    - E1.12 inserts 13 lines above `seqc_add_test()` in `tests/CMakeLists.txt`. The
+      `add_executable` error that E3.3 Step 3 expects at `CMakeLists.txt:94` is at `:107` after
+      E1.12. E3.3's new `seqc_add_test(test_cpumeter …)` line needs no `CORE` argument.
+
+---
+
+## Epic E2: firmware integration (tasks E2.1-E2.6)
+
+**Goal:** the firmware runs on `seq_core` (E1): DWT time base, timestamped sync input, the glue in
+`sequencer.c`, the MIDI fixes D4, D7 and D8, and the clock jacks. Every task leaves a firmware that
+builds with zero warnings.
+
+**Architecture:**
+- **Inputs.** The interrupt handlers only stamp sync events into three SPSC queues: USART3 RX,
+  `USBD_CDC_DataOut`, and EXTI4/EXTI9_5 for the jacks.
+- **The core's context.** Only `seq_tick()` calls the core. It applies a mailbox that the other
+  contexts post to, drains the queues in stamp order, runs `seqc_process()`, then parses MIDI with
+  a budget.
+- **The glue.** `sequencer.c` keeps the public `seq_*` API and the pattern and song data. It
+  implements the core's callbacks with the side effects fw 1.7 had in `seq_nextStep()`,
+  `seq_setRunning()` and `seq_resetPosition()`.
+
+### Before you start
+
+E2 builds on E1. It needs:
+- `Core/Inc/Soundengine/Sequencer/seq_core.h`, as E1.1 created it and E1.14 updated its comments (CRLF);
+- a `seq_core.c` that passes T1-T20;
+- the host test project in `tests/` (`seqc_add_test()`, `seqc_test.h`, `fake_host.c`);
+- the `SeqStepTypes.h` split (E1.2).
+
+E1.3 adds `seq_core.c` to the firmware's `lxr_sequencer` library, and E2.1 extends that block.
+
+Line numbers in this section are those of the fw 1.7 sources on branch `timing-core`. They did
+not change between `851cf88` and `1179a1f`, the HEAD when this section was written. E1 changes only
+one of the fw 1.7 files that E2 edits, `Core/CMakeLists.txt`, and E2.1 quotes E1's version of it.
+Each "before" block was copied from those texts, and the whole section was checked on a scratch copy
+of the repository (see the end of the section). Implementation notes N12-N15 apply as well; this
+section follows them.
+
+Order: E2.1 → E2.2 → E2.3 → E2.4 → E2.5 → E2.6. Each task needs the one before it:
+
+| Task | Firmware state after the task |
+|---|---|
+| E2.1 | Platform layer built but not linked; the image is unchanged. |
+| E2.2 | The core drives the sequencer in internal sync; MIDI clock and the jacks do not reach it yet. |
+| E2.3 | MIDI notes fixed (D4). |
+| E2.4 | MIDI slave over DIN and USB works, with SPP (D7, D8). |
+| E2.5 | Clock jack slave works. |
+| E2.6 | Dead code gone; the final E2 image. |
+
+### Files
+
+| File | Responsibility | Task |
+|---|---|---|
+| `Core/Inc/Soundengine/Sequencer/seq_syncq.h`, `Core/Src/Soundengine/Sequencer/seq_syncq.c` (new) | SPSC queues, MIDI realtime and SPP decoding, stamp unwrap and merge, 64-bit counter extension. Plain C, host-tested. | E2.1 |
+| `Core/Inc/Soundengine/Sequencer/seq_platform.h`, `Core/Src/Soundengine/Sequencer/seq_platform.c` (new) | DWT time base, the three queue instances, entry points for the interrupt handlers, merged drain. | E2.1 |
+| `tests/test_syncq.c` (new) | Host tests of `seq_syncq` (ctest id `syncq`). | E2.1 |
+| `Core/Src/Soundengine/Sequencer/sequencer.c` | The glue: mailbox, copies for other contexts, host callbacks, `seq_tick()`, per-voice MIDI note bookkeeping. | E2.2-E2.4, E2.6 |
+| `Core/Inc/Soundengine/Sequencer/sequencer.h` | Public API: `seq_recordNoteAtStep()`, `seq_setClockInPpq()` and `seq_sendVoiceNoteOn/Off()` are new; the pulse-machine prototypes go. | E2.2, E2.3, E2.6 |
+| `tools/fw_checks.sh` (new) | ELF and source checks that stand in for unit tests of the firmware glue. | E2.2-E2.6 |
+| `Core/Src/Soundengine/MIDI/MidiVoiceControl.c` | No MIDI in `voiceControl_noteOn()`; Note Offs per voice. | E2.3 |
+| `Core/Src/Soundengine/MIDI/MidiParser.c` | Echo per voice; realtime cases only route; realtime bytes inside DIN messages. | E2.3, E2.4 |
+| `Core/Src/Soundengine/MIDI/Uart.c/.h`, `usbd_cdc.c` | Stamps and the realtime and SPP intercept in the receive interrupts; the DIN parse budget; the USB queue full check. | E2.4 |
+| `Core/Src/main.c`, `Soundengine.c`, `stm32f7xx_it.c` | MIDI parsing calls removed. | E2.4 |
+| `Core/Src/Soundengine/TriggerOut.c/.h`, `CortexParser.c` | Jack interrupts into the jack queue; the clock-in PPQ posted to the core. | E2.5 |
+| `clockSync.c/.h` | Deleted. | E2.6 |
+
+### Conventions for every task
+
+- **Where commands run.** From the repository root. Anything that needs CMake or the Arm tools
+  runs as `bash -c 'source tools/env.sh && …'` or through `tools/check.sh`. That works in any shell;
+  `tools/env.sh` itself works in bash and zsh since `5911417`.
+- **Line endings.**
+  - CRLF: the C files under `Core/` and `usbd_cdc.c`.
+  - LF: `tests/`, the CMake files, `tools/` and the Markdown files.
+  - The Edit tool keeps a file's line endings, but each task ends with a normalisation script for
+    the CRLF files it touched. That script reads a file completely before it writes it. Never use
+    `open(p,'wb').write(open(p,'rb').read()…)`: the write truncates the file before the read.
+- **Edits.**
+  - A plain "replace" or "delete" step is an Edit-tool edit. The "before" text is exact: tabs at
+    the start of lines included. Copy it from the file if the plan's rendering is in doubt.
+  - Where the old text has tabs inside lines or mixes tabs and spaces, the step is a Python
+    script with escaped bytes instead.
+  - Large dead blocks are deleted by a script. It finds the first line, checks the block's SHA-256
+    against the fw 1.7 text, and deletes up to a stop line that stays. If a hash check fails, stop:
+    the file is not what the plan expects.
+  - Where a "before" block quotes code from an earlier E2 task, it assumes that code was written
+    as given. If such an edit does not match, read the function and make the same change to what
+    is there.
+- **Checks.** After each task:
+  - `tools/check.sh` must report `compiler warnings: 0` and pass the host tests;
+  - `tools/fw_checks.sh <tasks>` must print `PASS` for every task done so far;
+  - ITCM must fit, and RAM must stay within the spec budget (§10).
+- **Commits.** Each task ends with one commit that lists its files explicitly (never `git add -A`)
+  and ends with the `Co-Authored-By` trailer. Tracker updates follow `docs/lichomat/HANDOFF.md`
+  and are not repeated here.
+
+### Decisions in this section
+
+Two of them follow the notes:
+1. **SPP goes through the sync queues (N14),** not from the parser as N7 had it. The receive
+   interrupts decode the SPP: a 3-byte state machine on DIN, CIN 0x3 on USB. They queue it with its
+   stamp, and the drain calls `seqc_songPosition()` at its place in the merged order. Otherwise a
+   Continue and its first clock, drained in step 2 of `seq_tick()`, would start the transport before
+   step 4 parsed the SPP.
+2. **The jack reset gate goes through the jack queue (N13.2)** as `SEQC_EV_RESET_ON/OFF`, in order
+   with the pulses. The task list says "via mailbox"; N13.2 is the later decision.
+
+The others go beyond the spec and the notes:
+
+3. **The platform layer is split in two.** The queue logic (`seq_syncq`) builds on the host and
+   has tests. The DWT and instance part (`seq_platform`) is firmware only.
+4. **Two more mailbox slots.** They hold the skip-once marker of `seq_addNote()` (D6) and the
+   one-shot roll. The callers run outside `seq_tick()`: the front-panel roll in the main loop, and
+   MIDI recording until E2.4. The context rule (§4.3) says they may not call the core. The skip-once
+   slot keeps one marker per track; E1.14 makes the core keep one per track as well (N18.1).
+5. **MIDI notes are remembered per voice** (E2.3). fw 1.7 remembered them per channel, which left
+   hanging notes whenever voices share a channel, and that is the default setup and the usual drum
+   map. This is needed for "no hanging notes" (§12, H11).
+6. **Transitional shims.** `clockSync.c` is deleted in E2.6, as assigned. Until then E2.2 keeps
+   empty `seq_nextStep()`, `seq_MidiSyncQueue()`, `seq_getDeltaTShuffleDelay()`,
+   `seq_getMasterStepCnt()`, `seq_prescaleCounter` and `seq_sync()`, so the build stays green
+   between the tasks.
+7. **The `transport` callback** gives every transport change the same side effects:
+   - the start/stop button and LED follow the change (fw 1.7: only for MTC);
+   - in internal sync every stop sends MIDI Stop, song end included, and every start MIDI Start;
+   - in the slave modes it sends no Start, Stop or Continue (N18.2): MIDI thru, when on, forwards
+     what arrives, so downstream gear gets no duplicates. A resume, which only the slave modes do,
+     therefore sends nothing. `seq_coreSyncMode` is the mode the core runs in; `seq_isSyncExternal`
+     changes one `seq_tick()` earlier. Question Q7 for the owner.
+8. **`tools/fw_checks.sh`.** The glue needs the hardware, so each firmware task's failing test is a
+   set of checks on the release ELF (symbols, calls from the disassembly, ITCM contents) and on the
+   sources.
+9. **Within D8:**
+   - the DIN byte parser routes realtime bytes without breaking the message in progress;
+   - a full USB message queue drops the new message instead of overwriting the queue.
+10. **Clock out phase.** N8 keeps the phase with `trigger_reset(1)` at a start, which puts the
+    divider at 0: right for a start at step 0, not for a Continue from inside a step or after a
+    song position (N4). So `clockOutPulse` sets the divider's count from the position before each
+    pulse (`trigger_setClockPhase()`, new in `TriggerOut.c`): `(absStep % 4) · 24 + pulseInStep`,
+    the 96 pulses of four steps, which every output PPQ divides.
+11. **`seq_tick()` does only what is needed (N10).** It runs once or more per audio block and,
+    while the SD card is busy, at about 36 kHz from TIM2, and the CPU meter (E3.3) counts the calls
+    that render nothing. So a post sets `seq_mailboxPosted` and the mailbox is applied only then,
+    the step copies are refreshed only when the absolute step moved or a post or a sync event came,
+    and the phase only while recording. A call with nothing to do reads two flags and the queue
+    indices, and the core returns after its compare.
+12. **A song position inside the active pattern's run changes no pattern.** N6 activates the entry
+    "with the normal pattern-change side effects"; when the entry's pattern is the one that plays,
+    there is no change, as at a pattern end of the song walk. `seekPosition` therefore does not set
+    `seq_loadPendigFlag`, which would copy the backup buffer back (losing unsaved edits), load the
+    kit again and send a Program Change on every locate in the DAW.
+13. **A skip-once marker made inside `seq_tick()` goes to the core at once.** `seq_postSkipOnce()`
+    calls `seqc_skipOnce()` directly while `seq_inTick` is set: the one-shot roll in
+    `seq_applyMailbox()`, and MIDI recording from E2.4 on. A posted marker would wait for the next
+    `seq_tick()`, and the boundary of its step could pass in between (D6).
+
+---
+
+### Task E2.1: seq_platform: DWT time base and SPSC sync queues
+
+The platform layer that the glue (E2.2) and the interrupt handlers (E2.4, E2.5) use. It has
+two parts:
+
+- **`seq_syncq.c/.h`**: plain C11, no HAL, so the host tests build it.
+  - One single-producer, single-consumer (SPSC) queue of `{type, 32-bit cycle stamp}` entries
+    per source, 64 entries of 8 bytes each.
+  - The decoders that turn received MIDI bytes (DIN) and USB MIDI packets into entries: the
+    realtime messages F8, FA, FB, FC, and the Song Position Pointer F2 (N14). Over USB realtime
+    counts with CIN 0xF and, because some hosts send it that way, with CIN 0x5 (N18.4).
+  - The 32-bit stamp unwrap and the merge of the queues in stamp order.
+  - The 64-bit extension of the cycle counter.
+- **`seq_platform.c/.h`**: firmware only.
+  - It enables the DWT cycle counter: TRCENA, the `DWT->LAR` unlock that the Cortex-M7 needs,
+    then CYCCNTENA. It never writes `DWT->CYCCNT`: `lcd.c` measures its non-blocking delays with
+    it, and `DWT_Delay_Init()` (`main.c:295`) already zeroed it at boot.
+  - `seqp_now()` returns the 64-bit time. Only `seq_tick()` calls it, and it runs far more often
+    than once per 19.9 s.
+  - It holds the three queue instances (DIN, USB, jack) and the entry points for the interrupt
+    handlers.
+  - `seqp_syncPop()` gives `seq_tick()` the queued events of all sources merged in stamp order.
+
+Nothing calls the new code yet, so `--gc-sections` drops it and the image does not change.
+
+**Files:**
+- Create: `Core/Inc/Soundengine/Sequencer/seq_syncq.h`
+- Create: `Core/Src/Soundengine/Sequencer/seq_syncq.c`
+- Create: `Core/Inc/Soundengine/Sequencer/seq_platform.h`
+- Create: `Core/Src/Soundengine/Sequencer/seq_platform.c`
+- Modify: `tests/CMakeLists.txt` (one line after the `test_fw17` line)
+- Modify: `Core/CMakeLists.txt` (the `lxr_sequencer` library as E1.3 left it)
+- Test: `tests/test_syncq.c`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/test_syncq.c`:
+
+```c
+/*
+ * test_syncq.c
+ *
+ * Host tests of the sync input queues (Core/Src/Soundengine/Sequencer/seq_syncq.c,
+ * task E2.1): the SPSC queue, the stamp unwrap, the merge of the queues in stamp
+ * order, the 64-bit counter extension, and the decoding of MIDI DIN bytes and USB
+ * MIDI packets into sync events and song positions.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include <string.h>
+#include "Soundengine/Sequencer/seq_syncq.h"
+#include "seqc_test.h"
+
+static seqq_t qa, qb, qc;
+
+static void reset(void)
+{
+	memset(&qa, 0, sizeof qa);
+	memset(&qb, 0, sizeof qb);
+	memset(&qc, 0, sizeof qc);
+}
+
+/** take every entry of q, oldest first; returns how many there were */
+static int takeAll(seqq_t *q, seqq_entry_t *out, int max)
+{
+	int n = 0;
+	seqq_entry_t e;
+	while (n < max && seqq_peek(q, &e))
+	{
+		out[n++] = e;
+		seqq_drop(q);
+	}
+	return n;
+}
+
+TEST(syncq_fifo)
+{
+	reset();
+	seqq_entry_t e;
+	ASSERT_FALSE(seqq_peek(&qa, &e));
+	ASSERT_TRUE(seqq_push(&qa, SEQC_EV_START, 0, 100));
+	ASSERT_TRUE(seqq_push(&qa, SEQC_EV_CLOCK, 0, 200));
+	ASSERT_TRUE(seqq_peek(&qa, &e));
+	ASSERT_EQ(e.type, SEQC_EV_START);
+	ASSERT_EQ(e.stamp, 100);
+	ASSERT_TRUE(seqq_peek(&qa, &e));	/* peek does not remove */
+	ASSERT_EQ(e.type, SEQC_EV_START);
+	seqq_drop(&qa);
+	ASSERT_TRUE(seqq_peek(&qa, &e));
+	ASSERT_EQ(e.type, SEQC_EV_CLOCK);
+	ASSERT_EQ(e.stamp, 200);
+	ASSERT_EQ(e.value, 0);
+	ASSERT_EQ(e.reserved, 0);
+	seqq_drop(&qa);
+	ASSERT_FALSE(seqq_peek(&qa, &e));
+	seqq_drop(&qa);				/* dropping from an empty queue does nothing */
+	ASSERT_EQ(qa.read, qa.write);
+	ASSERT_EQ(qa.overflow, 0);
+}
+
+TEST(syncq_full)
+{
+	reset();
+	seqq_entry_t e;
+	for (uint32_t i = 0; i < SEQQ_SIZE - 1u; i++)
+		ASSERT_TRUE(seqq_push(&qa, SEQC_EV_CLOCK, 0, i));
+	ASSERT_FALSE(seqq_push(&qa, SEQC_EV_CLOCK, 0, 999));	/* one slot stays free */
+	ASSERT_EQ(qa.overflow, 1);
+	ASSERT_TRUE(seqq_peek(&qa, &e));
+	ASSERT_EQ(e.stamp, 0);
+	seqq_drop(&qa);
+	ASSERT_TRUE(seqq_push(&qa, SEQC_EV_CLOCK, 0, 1000));
+	/* the order survives the wrap of the indices */
+	for (uint32_t i = 1; i < SEQQ_SIZE - 1u; i++)
+	{
+		ASSERT_TRUE(seqq_peek(&qa, &e));
+		ASSERT_EQ(e.stamp, i);
+		seqq_drop(&qa);
+	}
+	ASSERT_TRUE(seqq_peek(&qa, &e));
+	ASSERT_EQ(e.stamp, 1000);
+	seqq_drop(&qa);
+	ASSERT_FALSE(seqq_peek(&qa, &e));
+	ASSERT_EQ(qa.overflow, 1);
+}
+
+TEST(syncq_unwrap)
+{
+	ASSERT_EQ(seqq_unwrap(1000, 900), 900);
+	ASSERT_EQ(seqq_unwrap(1000, 1000), 1000);
+	ASSERT_EQ(seqq_unwrap(1000, 1100), 1000);			/* stamped after now: now */
+	ASSERT_EQ(seqq_unwrap(0x100000010ull, 0xFFFFFFF0u), 0xFFFFFFF0ull);	/* across a counter wrap */
+	ASSERT_EQ(seqq_unwrap(0x300000005ull, 0x00000001u), 0x300000001ull);
+	ASSERT_EQ(seqq_unwrap(0x180000000ull, 0x00000001u), 0x100000001ull);	/* 2^31 - 1 cycles old */
+	ASSERT_EQ(seqq_unwrap(50, 0xFFFFFF00u), 0);			/* before the time origin: 0 */
+}
+
+TEST(syncq_merge)
+{
+	reset();
+	seqq_t *const qs[3] = { &qa, &qb, &qc };
+	ASSERT_TRUE(seqq_push(&qb, SEQC_EV_CLOCK, 0, 300));
+	ASSERT_TRUE(seqq_push(&qa, SEQC_EV_CLOCK, 0, 100));
+	ASSERT_TRUE(seqq_push(&qc, SEQC_EV_PULSE, 0, 200));
+	ASSERT_TRUE(seqq_push(&qa, SEQC_EV_STOP, 0, 400));
+	ASSERT_TRUE(seqq_push(&qb, SEQC_EV_START, 0, 400));	/* the same stamp as the DIN stop */
+	const uint32_t stamps[5] = { 100, 200, 300, 400, 400 };
+	const unsigned sources[5] = { 0, 2, 1, 0, 1 };		/* equal stamps: lower index first */
+	const uint8_t types[5] = { SEQC_EV_CLOCK, SEQC_EV_PULSE, SEQC_EV_CLOCK, SEQC_EV_STOP, SEQC_EV_START };
+	for (int i = 0; i < 5; i++)
+	{
+		unsigned src = 9;
+		seqq_entry_t e;
+		uint64_t t = 0;
+		ASSERT_TRUE(seqq_popEarliest(qs, 3, 1000, &src, &e, &t));
+		ASSERT_EQ(src, sources[i]);
+		ASSERT_EQ(t, stamps[i]);
+		ASSERT_EQ(e.stamp, stamps[i]);
+		ASSERT_EQ(e.type, types[i]);
+	}
+	unsigned src;
+	seqq_entry_t e;
+	uint64_t t;
+	ASSERT_FALSE(seqq_popEarliest(qs, 3, 1000, &src, &e, &t));
+}
+
+TEST(syncq_merge_wrap)
+{
+	reset();
+	seqq_t *const qs[3] = { &qa, &qb, &qc };
+	ASSERT_TRUE(seqq_push(&qb, SEQC_EV_CLOCK, 0, 0x00000050u));	/* after the counter wrapped */
+	ASSERT_TRUE(seqq_push(&qa, SEQC_EV_CLOCK, 0, 0xFFFFFF00u));	/* before the wrap: earlier */
+	unsigned src;
+	seqq_entry_t e;
+	uint64_t t;
+	ASSERT_TRUE(seqq_popEarliest(qs, 3, 0x100000100ull, &src, &e, &t));
+	ASSERT_EQ(src, 0);
+	ASSERT_EQ(t, 0xFFFFFF00ull);
+	ASSERT_TRUE(seqq_popEarliest(qs, 3, 0x100000100ull, &src, &e, &t));
+	ASSERT_EQ(src, 1);
+	ASSERT_EQ(t, 0x100000050ull);
+}
+
+TEST(syncq_extend)
+{
+	uint64_t time = 0xFFFFFF00u;
+	uint32_t last = 0xFFFFFF00u;
+	ASSERT_EQ(seqq_extend(&time, &last, 0xFFFFFFF0u), 0xFFFFFFF0ull);
+	ASSERT_EQ(seqq_extend(&time, &last, 0x00000010u), 0x100000010ull);	/* the counter wrapped */
+	ASSERT_EQ(last, 0x00000010u);
+	ASSERT_EQ(seqq_extend(&time, &last, 0x00000010u), 0x100000010ull);	/* no time passed */
+	ASSERT_EQ(seqq_extend(&time, &last, 0x80000000u), 0x180000000ull);
+}
+
+TEST(syncq_din)
+{
+	reset();
+	seqq_din_t d = { 0, 0 };
+	/* a note on with a clock between its data bytes, then SPP 272 = 0x10 + 0x02 * 128
+	 * with a clock between its data bytes, then the transport and two ignored bytes */
+	const uint8_t bytes[] = { 0x90, 0x3C, 0xF8, 0x64, 0xF2, 0x10, 0xF8, 0x02, 0xFB, 0xFE, 0xFA, 0xFC, 0xF9 };
+	for (unsigned i = 0; i < sizeof bytes; i++)
+		seqq_dinByte(&d, &qa, bytes[i], 1000u + i);
+	seqq_entry_t e[16];
+	ASSERT_EQ(takeAll(&qa, e, 16), 6);
+	ASSERT_EQ(e[0].type, SEQC_EV_CLOCK);
+	ASSERT_EQ(e[0].stamp, 1002);
+	ASSERT_EQ(e[1].type, SEQC_EV_CLOCK);
+	ASSERT_EQ(e[1].stamp, 1006);
+	ASSERT_EQ(e[2].type, SEQQ_SONG_POSITION);
+	ASSERT_EQ(e[2].value, 272);
+	ASSERT_EQ(e[2].stamp, 1007);
+	ASSERT_EQ(e[3].type, SEQC_EV_CONTINUE);
+	ASSERT_EQ(e[3].stamp, 1008);
+	ASSERT_EQ(e[4].type, SEQC_EV_START);
+	ASSERT_EQ(e[4].stamp, 1010);
+	ASSERT_EQ(e[5].type, SEQC_EV_STOP);
+	ASSERT_EQ(e[5].stamp, 1011);
+}
+
+TEST(syncq_din_spp_cut)
+{
+	reset();
+	seqq_din_t d = { 0, 0 };
+	/* an SPP cut short by a note on is dropped; data bytes outside an SPP are ignored */
+	const uint8_t bytes[] = { 0xF2, 0x10, 0x90, 0x02, 0x40, 0xF2, 0x7F, 0x7F, 0x05 };
+	for (unsigned i = 0; i < sizeof bytes; i++)
+		seqq_dinByte(&d, &qa, bytes[i], 2000u + i);
+	seqq_entry_t e[8];
+	ASSERT_EQ(takeAll(&qa, e, 8), 1);
+	ASSERT_EQ(e[0].type, SEQQ_SONG_POSITION);
+	ASSERT_EQ(e[0].value, 16383);
+	ASSERT_EQ(e[0].stamp, 2007);
+}
+
+TEST(syncq_usb)
+{
+	reset();
+	seqq_usbMessage(&qb, 0x0F, 0xF8, 0x00, 0x00, 10);	/* clock */
+	seqq_usbMessage(&qb, 0x09, 0x90, 0x3C, 0x64, 11);	/* note on: not a sync event */
+	seqq_usbMessage(&qb, 0x03, 0xF2, 0x10, 0x02, 12);	/* SPP 272 */
+	seqq_usbMessage(&qb, 0x0F, 0xFB, 0x00, 0x00, 13);	/* continue */
+	seqq_usbMessage(&qb, 0x1F, 0xF8, 0x00, 0x00, 14);	/* cable 1: ignored */
+	seqq_usbMessage(&qb, 0x0F, 0xFE, 0x00, 0x00, 15);	/* active sensing: ignored */
+	seqq_usbMessage(&qb, 0x05, 0xF8, 0x00, 0x00, 16);	/* realtime with CIN 0x5, as some hosts send it (N18.4) */
+	seqq_usbMessage(&qb, 0x05, 0xF7, 0x00, 0x00, 17);	/* CIN 0x5 with the end of a SysEx: ignored */
+	seqq_usbMessage(&qb, 0x0F, 0xFC, 0x00, 0x00, 18);	/* stop */
+	seqq_usbMessage(&qb, 0x05, 0xFA, 0x00, 0x00, 19);	/* start with CIN 0x5 */
+	seqq_entry_t e[8];
+	ASSERT_EQ(takeAll(&qb, e, 8), 6);
+	ASSERT_EQ(e[0].type, SEQC_EV_CLOCK);
+	ASSERT_EQ(e[0].stamp, 10);
+	ASSERT_EQ(e[1].type, SEQQ_SONG_POSITION);
+	ASSERT_EQ(e[1].value, 272);
+	ASSERT_EQ(e[1].stamp, 12);
+	ASSERT_EQ(e[2].type, SEQC_EV_CONTINUE);
+	ASSERT_EQ(e[2].stamp, 13);
+	ASSERT_EQ(e[3].type, SEQC_EV_CLOCK);
+	ASSERT_EQ(e[3].stamp, 16);
+	ASSERT_EQ(e[4].type, SEQC_EV_STOP);
+	ASSERT_EQ(e[4].stamp, 18);
+	ASSERT_EQ(e[5].type, SEQC_EV_START);
+	ASSERT_EQ(e[5].stamp, 19);
+}
+
+TEST_MAIN()
+```
+
+Register it with the host tests. The test id `syncq` is not a spec id; it names the platform queues.
+
+`tests/CMakeLists.txt`, replace:
+
+```cmake
+seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c)  # E1.13 fw 1.7 replica (reference/)
+```
+
+with:
+
+```cmake
+seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c)  # E1.13 fw 1.7 replica (reference/)
+seqc_add_test(test_syncq     IDS syncq EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/seq_syncq.c)  # E2.1  sync input queues (seq_platform)
+```
+
+- [ ] **Step 2: Run it and see it fail**
+
+Run:
+
+```bash
+bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug'
+```
+
+Expected: the configure step stops with
+
+```
+CMake Error at CMakeLists.txt:<line> (add_executable):
+  Cannot find source file:
+
+    <repo>/Core/Src/Soundengine/Sequencer/seq_syncq.c
+...
+CMake Generate step failed.  Build files cannot be regenerated correctly.
+```
+
+- [ ] **Step 3: Write `seq_syncq.h`**
+
+Create `Core/Inc/Soundengine/Sequencer/seq_syncq.h`:
+
+```c
+/*
+ * seq_syncq.h
+ *
+ * Sync input queues of the LICHOMAT sequencer (spec 4.3, 4.4, 7.2):
+ * - one single-producer, single-consumer (SPSC) queue of timestamped sync events
+ *   per source: MIDI DIN, USB MIDI and the clock jacks;
+ * - the decoding of received MIDI bytes and USB MIDI messages into queue entries:
+ *   the realtime messages F8, FA, FB, FC and the Song Position Pointer F2;
+ * - the 32-bit stamp unwrap and the merge of the queues in stamp order;
+ * - the 64-bit extension of the 32-bit cycle counter.
+ *
+ * Plain C11 without HAL or CMSIS, so the host tests (tests/test_syncq.c) build it
+ * as well. The firmware instances, the DWT time base and the entry points for the
+ * interrupt handlers are in seq_platform.c.
+ *
+ * Producer and consumer
+ * ---------------------
+ * - Each queue has one producer, the interrupt handler of its source, and one
+ *   consumer, seq_tick().
+ * - The producer writes the entry, then the write index. The consumer reads the
+ *   entry, then advances the read index. Both indices are aligned 32-bit words, so
+ *   one store publishes them on the Cortex-M7. The interrupt runs on the same core,
+ *   like a signal handler in a thread, so atomic_signal_fence() is the barrier
+ *   that keeps the compiler from moving the entry accesses across the index
+ *   accesses.
+ * - A full queue rejects the new entry and counts it in overflow. One slot always
+ *   stays free, so a queue holds SEQQ_SIZE - 1 entries.
+ * - A zeroed queue is empty, so the queues need no initialisation.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+
+#ifndef SEQ_SYNCQ_H_
+#define SEQ_SYNCQ_H_
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "Soundengine/Sequencer/seq_core.h"
+
+#define SEQQ_SIZE              64u   /**< entries per queue, a power of two */
+#define SEQQ_SONG_POSITION   0x80u   /**< entry type of a Song Position Pointer; value = sixteenths */
+
+/** one queue entry, 8 bytes */
+typedef struct seqq_entry
+{
+	uint8_t		type;		/**< a seqc_sync_ev_t, or SEQQ_SONG_POSITION */
+	uint8_t		reserved;	/**< 0 */
+	uint16_t	value;		/**< SEQQ_SONG_POSITION: sixteenths, 0..16383; otherwise 0 */
+	uint32_t	stamp;		/**< DWT->CYCCNT when the interrupt handler received it */
+} seqq_entry_t;
+
+_Static_assert(sizeof(seqq_entry_t) == 8, "a sync queue entry is 8 bytes (spec 10)");
+
+/** an SPSC queue; all zero is an empty queue */
+typedef struct seqq
+{
+	volatile uint32_t	write;		/**< next slot the producer fills */
+	volatile uint32_t	read;		/**< next slot the consumer takes */
+	volatile uint32_t	overflow;	/**< entries rejected because the queue was full */
+	seqq_entry_t		buf[SEQQ_SIZE];
+} seqq_t;
+
+/** DIN decoder state for the three bytes of a Song Position Pointer; all zero is idle */
+typedef struct seqq_din
+{
+	uint8_t state;		/**< 0 idle, 1 after F2, 2 after the LSB */
+	uint8_t lsb;
+} seqq_din_t;
+
+//------------------------------------------------------------------------------
+// Producer side: only the interrupt handler of the queue's source
+//------------------------------------------------------------------------------
+/** append an entry; false if the queue is full (counted in q->overflow) */
+bool seqq_push(seqq_t *q, uint8_t type, uint16_t value, uint32_t stamp);
+//------------------------------------------------------------------------------
+/** One byte received on MIDI DIN. F8, FA, FB and FC become SEQC_EV_CLOCK,
+ * SEQC_EV_START, SEQC_EV_CONTINUE and SEQC_EV_STOP, also between the data bytes of
+ * another message. A complete F2 <lsb> <msb> becomes SEQQ_SONG_POSITION, stamped
+ * with its last byte; any other status byte cancels an incomplete one. All other
+ * bytes are ignored here: the MIDI parser gets every byte through the RX FIFO. */
+void seqq_dinByte(seqq_din_t *d, seqq_t *q, uint8_t byte, uint32_t stamp);
+//------------------------------------------------------------------------------
+/** One USB MIDI event packet (cable number and code index in cin). On cable 0, F8,
+ * FA, FB or FC with CIN 0xF (single byte) becomes the sync event, and so does the
+ * same byte with CIN 0x5, which some hosts send for realtime (N18.4). CIN 0x3 with
+ * F2 becomes SEQQ_SONG_POSITION. Everything else is ignored here. */
+void seqq_usbMessage(seqq_t *q, uint8_t cin, uint8_t status, uint8_t data1, uint8_t data2, uint32_t stamp);
+
+//------------------------------------------------------------------------------
+// Consumer side: only seq_tick()
+//------------------------------------------------------------------------------
+/** copy the oldest entry into out; false if the queue is empty */
+bool seqq_peek(const seqq_t *q, seqq_entry_t *out);
+//------------------------------------------------------------------------------
+/** remove the oldest entry; nothing if the queue is empty */
+void seqq_drop(seqq_t *q);
+//------------------------------------------------------------------------------
+/** The 64-bit time of a 32-bit stamp, given the 64-bit time now of the same counter.
+ * A stamp up to 2^31 cycles (9.9 s at 216 MHz) old unwraps exactly. A stamp later
+ * than now, possible through preemption, counts as now (spec 4.4). A stamp before
+ * the time origin counts as 0. */
+uint64_t seqq_unwrap(uint64_t now, uint32_t stamp);
+//------------------------------------------------------------------------------
+/** Remove and return the entry with the earliest stamp of all count queues. On
+ * equal stamps the queue with the lower index comes first. Sets *source to that
+ * index, *entry to the entry and *time to its unwrapped stamp. false if all queues
+ * are empty. */
+bool seqq_popEarliest(seqq_t *const queues[], unsigned count, uint64_t now,
+		unsigned *source, seqq_entry_t *entry, uint64_t *time);
+//------------------------------------------------------------------------------
+/** Extend a free-running 32-bit counter to 64 bits: *time advances by the counts
+ * since *last, and *last becomes cycles. Correct while it is called at least once
+ * per 2^32 counts (19.9 s at 216 MHz). */
+static inline uint64_t seqq_extend(uint64_t *time, uint32_t *last, uint32_t cycles)
+{
+	*time += (uint32_t)(cycles - *last);
+	*last = cycles;
+	return *time;
+}
+
+#endif /* SEQ_SYNCQ_H_ */
+```
+
+- [ ] **Step 4: Write `seq_syncq.c`**
+
+Create `Core/Src/Soundengine/Sequencer/seq_syncq.c`:
+
+```c
+/*
+ * seq_syncq.c
+ *
+ * Sync input queues of the LICHOMAT sequencer, see seq_syncq.h.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+
+#include "Soundengine/Sequencer/seq_syncq.h"
+#include <stdatomic.h>
+
+#define SEQQ_MASK		(SEQQ_SIZE - 1u)
+
+/* MIDI status bytes, as in MidiMessages.h (which needs the HAL) */
+#define SEQQ_MIDI_SPP		0xF2u
+#define SEQQ_MIDI_CLOCK		0xF8u
+#define SEQQ_MIDI_START		0xFAu
+#define SEQQ_MIDI_CONTINUE	0xFBu
+#define SEQQ_MIDI_STOP		0xFCu
+
+/* USB MIDI code index numbers, as in usbd_cdc.h */
+#define SEQQ_CIN_THREE_BYTE	0x03u	/**< three-byte system common message, e.g. SPP */
+#define SEQQ_CIN_COMMON_1	0x05u	/**< single-byte system common or SysEx end; some hosts send realtime with it */
+#define SEQQ_CIN_SINGLE_BYTE	0x0Fu	/**< single byte, e.g. realtime */
+
+_Static_assert((SEQQ_SIZE & SEQQ_MASK) == 0, "SEQQ_SIZE must be a power of two");
+
+//------------------------------------------------------------------------------
+bool seqq_push(seqq_t *q, uint8_t type, uint16_t value, uint32_t stamp)
+{
+	const uint32_t w = q->write;
+	const uint32_t next = (w + 1u) & SEQQ_MASK;
+
+	if (next == q->read)
+	{
+		q->overflow++;
+		return false;
+	}
+	q->buf[w] = (seqq_entry_t){ .type = type, .reserved = 0, .value = value, .stamp = stamp };
+	atomic_signal_fence(memory_order_release);	/* the entry before the index */
+	q->write = next;
+	return true;
+}
+//------------------------------------------------------------------------------
+/** a realtime status byte: the transport bytes and the clock become sync events */
+static void seqq_realtime(seqq_t *q, uint8_t status, uint32_t stamp)
+{
+	switch (status)
+	{
+	case SEQQ_MIDI_CLOCK:
+		seqq_push(q, SEQC_EV_CLOCK, 0, stamp);
+		break;
+	case SEQQ_MIDI_START:
+		seqq_push(q, SEQC_EV_START, 0, stamp);
+		break;
+	case SEQQ_MIDI_CONTINUE:
+		seqq_push(q, SEQC_EV_CONTINUE, 0, stamp);
+		break;
+	case SEQQ_MIDI_STOP:
+		seqq_push(q, SEQC_EV_STOP, 0, stamp);
+		break;
+	default:			/* F9, FD, FE (active sensing), FF (reset) */
+		break;
+	}
+}
+//------------------------------------------------------------------------------
+void seqq_dinByte(seqq_din_t *d, seqq_t *q, uint8_t byte, uint32_t stamp)
+{
+	if (byte >= SEQQ_MIDI_CLOCK)
+	{
+		/* realtime bytes may come anywhere, also inside an SPP */
+		seqq_realtime(q, byte, stamp);
+		return;
+	}
+	if (byte & 0x80u)
+	{
+		/* any other status byte starts a new message */
+		d->state = byte == SEQQ_MIDI_SPP ? 1u : 0u;
+		return;
+	}
+	if (d->state == 1u)
+	{
+		d->lsb = byte;
+		d->state = 2u;
+	}
+	else if (d->state == 2u)
+	{
+		seqq_push(q, SEQQ_SONG_POSITION, (uint16_t)(d->lsb | ((unsigned)byte << 7)), stamp);
+		d->state = 0u;
+	}
+}
+//------------------------------------------------------------------------------
+void seqq_usbMessage(seqq_t *q, uint8_t cin, uint8_t status, uint8_t data1, uint8_t data2, uint32_t stamp)
+{
+	if ((cin & 0xF0u) != 0)
+		return;		/* cable 0 only, as USBD_CDC_DataOut() */
+
+	const uint8_t code = cin & 0x0Fu;
+	if (code == SEQQ_CIN_SINGLE_BYTE || (code == SEQQ_CIN_COMMON_1 && status >= SEQQ_MIDI_CLOCK))
+		seqq_realtime(q, status, stamp);	/* N18.4: realtime with CIN 0x5 as well */
+	else if (code == SEQQ_CIN_THREE_BYTE && status == SEQQ_MIDI_SPP)
+		seqq_push(q, SEQQ_SONG_POSITION, (uint16_t)((data1 & 0x7Fu) | ((unsigned)(data2 & 0x7Fu) << 7)), stamp);
+}
+//------------------------------------------------------------------------------
+bool seqq_peek(const seqq_t *q, seqq_entry_t *out)
+{
+	const uint32_t r = q->read;
+
+	if (r == q->write)
+		return false;
+	atomic_signal_fence(memory_order_acquire);	/* the index before the entry */
+	*out = q->buf[r];
+	return true;
+}
+//------------------------------------------------------------------------------
+void seqq_drop(seqq_t *q)
+{
+	const uint32_t r = q->read;
+
+	if (r == q->write)
+		return;
+	atomic_signal_fence(memory_order_release);	/* the entry was read before the slot is freed */
+	q->read = (r + 1u) & SEQQ_MASK;
+}
+//------------------------------------------------------------------------------
+uint64_t seqq_unwrap(uint64_t now, uint32_t stamp)
+{
+	const uint32_t age = (uint32_t)now - stamp;	/* cycles from the stamp to now, modulo 2^32 */
+
+	if (age > 0x7FFFFFFFu)
+		return now;				/* stamped after now */
+	return age > now ? 0 : now - age;
+}
+//------------------------------------------------------------------------------
+bool seqq_popEarliest(seqq_t *const queues[], unsigned count, uint64_t now,
+		unsigned *source, seqq_entry_t *entry, uint64_t *time)
+{
+	unsigned best = count;
+	uint64_t bestTime = 0;
+
+	for (unsigned i = 0; i < count; i++)
+	{
+		seqq_entry_t e;
+		if (!seqq_peek(queues[i], &e))
+			continue;
+		const uint64_t t = seqq_unwrap(now, e.stamp);
+		if (best == count || t < bestTime)
+		{
+			best = i;
+			bestTime = t;
+			*entry = e;
+		}
+	}
+	if (best == count)
+		return false;
+	seqq_drop(queues[best]);
+	*source = best;
+	*time = bestTime;
+	return true;
+}
+```
+
+- [ ] **Step 5: Run the test and see it pass**
+
+Run:
+
+```bash
+bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug >/dev/null \
+  && cmake --build build/host-tests && build/host-tests/test_syncq syncq'
+```
+
+Expected, at the end:
+
+```
+PASS syncq_fifo
+PASS syncq_full
+PASS syncq_unwrap
+PASS syncq_merge
+PASS syncq_merge_wrap
+PASS syncq_extend
+PASS syncq_din
+PASS syncq_din_spp_cut
+PASS syncq_usb
+9 of 9 tests passed
+```
+
+- [ ] **Step 6: Write `seq_platform.h`**
+
+Create `Core/Inc/Soundengine/Sequencer/seq_platform.h`:
+
+```c
+/*
+ * seq_platform.h
+ *
+ * Firmware platform layer of the LICHOMAT sequencer (spec 4.1, 4.4):
+ * - the time base: DWT->CYCCNT at SEQC_CPU_HZ, extended to 64 bits by seqp_now();
+ * - the three sync input queues (seq_syncq.h): MIDI DIN, USB MIDI, clock jacks;
+ * - the entry points for the interrupt handlers that fill them;
+ * - the merged drain for seq_tick().
+ *
+ * Contexts
+ * --------
+ * - seqp_stamp(): any context. Each interrupt handler reads it first.
+ * - seqp_dinByteIn(): only USART3_IRQHandler (Uart.c).
+ * - seqp_usbMessageIn(): only USBD_CDC_DataOut() (usbd_cdc.c), in OTG_FS_IRQHandler.
+ * - seqp_jackIn(): only EXTI4_IRQHandler and EXTI9_5_IRQHandler (TriggerOut.c).
+ *   The two share the jack queue. Both run at preemption priority 3 (main.c), so
+ *   neither interrupts the other, and the queue keeps one producer at a time.
+ * - seqp_now(), seqp_syncPop(): only seq_tick(), the consumer.
+ * - seqp_syncOverflows(): any context (a sum of counters, for the CPU page).
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+
+#ifndef SEQ_PLATFORM_H_
+#define SEQ_PLATFORM_H_
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "stm32f7xx.h"
+#include "Soundengine/Sequencer/seq_core.h"
+#include "Soundengine/Sequencer/seq_syncq.h"
+
+/** the sources of sync events, also the queue order on equal stamps */
+typedef enum
+{
+	SEQP_SRC_DIN = 0,	/**< MIDI DIN in (USART3) */
+	SEQP_SRC_USB,		/**< USB MIDI in */
+	SEQP_SRC_JACK,		/**< clock in and reset in jacks */
+	SEQP_NUM_SOURCES
+} seqp_src_t;
+
+//------------------------------------------------------------------------------
+/** the raw cycle counter, for interrupt stamps; any context */
+static inline uint32_t seqp_stamp(void)
+{
+	return DWT->CYCCNT;
+}
+//------------------------------------------------------------------------------
+/** Enable the cycle counter and start the 64-bit time. Called once by seq_init()
+ * before the first seqp_now(). It sets TRCENA, unlocks the DWT (DWT->LAR, which
+ * the Cortex-M7 needs) and sets CYCCNTENA. It never writes DWT->CYCCNT: the
+ * non-blocking LCD delays (lcd.c) measure with it, and DWT_Delay_Init() (main.c)
+ * already zeroed it at boot. The queues are not touched: zeroed memory is an empty
+ * queue, and the interrupt handlers may already have queued events. */
+void seqp_init(void);
+//------------------------------------------------------------------------------
+/** The current time in cycles, DWT->CYCCNT extended to 64 bits. seq_tick() context
+ * only, and at least once per 19.9 s (2^32 cycles). */
+seqc_time_t seqp_now(void);
+//------------------------------------------------------------------------------
+/** USART3 RX: one received MIDI byte, see seqq_dinByte() */
+void seqp_dinByteIn(uint8_t byte, uint32_t stamp);
+//------------------------------------------------------------------------------
+/** USB MIDI OUT endpoint: one received event packet, see seqq_usbMessage() */
+void seqp_usbMessageIn(uint8_t cin, uint8_t status, uint8_t data1, uint8_t data2, uint32_t stamp);
+//------------------------------------------------------------------------------
+/** EXTI4 or EXTI9_5: a clock in pulse (SEQC_EV_PULSE) or a reset in edge
+ * (SEQC_EV_RESET_ON, SEQC_EV_RESET_OFF) */
+void seqp_jackIn(seqc_sync_ev_t ev, uint32_t stamp);
+//------------------------------------------------------------------------------
+/** The queued entry with the earliest stamp of all sources, removed from its queue;
+ * see seqq_popEarliest(). *stamp is the entry's stamp as 64-bit time, never later
+ * than now. false if no entry is queued. seq_tick() context only. */
+bool seqp_syncPop(seqc_time_t now, seqp_src_t *source, seqq_entry_t *entry, seqc_time_t *stamp);
+//------------------------------------------------------------------------------
+/** sync events rejected because their queue was full, all sources together */
+uint32_t seqp_syncOverflows(void);
+
+#endif /* SEQ_PLATFORM_H_ */
+```
+
+- [ ] **Step 7: Write `seq_platform.c`**
+
+Create `Core/Src/Soundengine/Sequencer/seq_platform.c`:
+
+```c
+/*
+ * seq_platform.c
+ *
+ * Firmware platform layer of the LICHOMAT sequencer, see seq_platform.h.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+
+#include "Soundengine/Sequencer/seq_platform.h"
+
+/* zeroed at startup, which makes them empty queues and an idle SPP decoder */
+static seqq_t seqp_queues[SEQP_NUM_SOURCES];
+static seqq_din_t seqp_dinDecoder;
+static seqq_t *const seqp_queueList[SEQP_NUM_SOURCES] = {
+	&seqp_queues[SEQP_SRC_DIN], &seqp_queues[SEQP_SRC_USB], &seqp_queues[SEQP_SRC_JACK] };
+
+/* the 64-bit time; seq_tick() context only */
+static uint64_t seqp_time;
+static uint32_t seqp_lastCycles;
+
+//------------------------------------------------------------------------------
+void seqp_init(void)
+{
+	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+	DWT->LAR = 0xC5ACCE55u;
+	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+	seqp_lastCycles = DWT->CYCCNT;
+	seqp_time = seqp_lastCycles;
+}
+//------------------------------------------------------------------------------
+seqc_time_t seqp_now(void)
+{
+	return seqq_extend(&seqp_time, &seqp_lastCycles, DWT->CYCCNT);
+}
+//------------------------------------------------------------------------------
+void seqp_dinByteIn(uint8_t byte, uint32_t stamp)
+{
+	seqq_dinByte(&seqp_dinDecoder, &seqp_queues[SEQP_SRC_DIN], byte, stamp);
+}
+//------------------------------------------------------------------------------
+void seqp_usbMessageIn(uint8_t cin, uint8_t status, uint8_t data1, uint8_t data2, uint32_t stamp)
+{
+	seqq_usbMessage(&seqp_queues[SEQP_SRC_USB], cin, status, data1, data2, stamp);
+}
+//------------------------------------------------------------------------------
+void seqp_jackIn(seqc_sync_ev_t ev, uint32_t stamp)
+{
+	seqq_push(&seqp_queues[SEQP_SRC_JACK], (uint8_t)ev, 0, stamp);
+}
+//------------------------------------------------------------------------------
+bool seqp_syncPop(seqc_time_t now, seqp_src_t *source, seqq_entry_t *entry, seqc_time_t *stamp)
+{
+	unsigned src;
+
+	if (!seqq_popEarliest(seqp_queueList, SEQP_NUM_SOURCES, now, &src, entry, stamp))
+		return false;
+	*source = (seqp_src_t)src;
+	return true;
+}
+//------------------------------------------------------------------------------
+uint32_t seqp_syncOverflows(void)
+{
+	return seqp_queues[SEQP_SRC_DIN].overflow + seqp_queues[SEQP_SRC_USB].overflow
+			+ seqp_queues[SEQP_SRC_JACK].overflow;
+}
+```
+
+- [ ] **Step 8: Add the new sources to the firmware build**
+
+The `lxr_sequencer` block as E1.3 left it, with `seq_core.c` and its `-Wextra` property
+(`Core/CMakeLists.txt` uses LF). If it differs, replace whatever the block holds, so that the
+result is exactly the new text. `-Wextra` is appended after the target options, as the
+`ResonantFilter.c` rule further down does.
+
+`Core/CMakeLists.txt`, replace:
+
+```cmake
+# Step sequencer, Euclidean generator, external clock sync, and the timing core
+# seq_core (also built by the host tests in tests/).
+add_library(lxr_sequencer OBJECT
+    Src/Soundengine/Sequencer/clockSync.c
+    Src/Soundengine/Sequencer/EuklidGenerator.c
+    Src/Soundengine/Sequencer/seq_core.c
+    Src/Soundengine/Sequencer/sequencer.c
+)
+# The host tests build seq_core.c with -Wall -Wextra -Werror; warn about the same here.
+set_property(SOURCE Src/Soundengine/Sequencer/seq_core.c APPEND PROPERTY COMPILE_OPTIONS -Wextra)
+```
+
+with:
+
+```cmake
+# Step sequencer: the timing core (seq_core) and the sync input queues (seq_syncq),
+# which the host tests in tests/ build as well, the platform layer (seq_platform:
+# DWT time base, queue instances), the glue (sequencer), the Euclidean generator
+# and the fw 1.7 MIDI clock sync (clockSync).
+add_library(lxr_sequencer OBJECT
+    Src/Soundengine/Sequencer/clockSync.c
+    Src/Soundengine/Sequencer/EuklidGenerator.c
+    Src/Soundengine/Sequencer/seq_core.c
+    Src/Soundengine/Sequencer/seq_platform.c
+    Src/Soundengine/Sequencer/seq_syncq.c
+    Src/Soundengine/Sequencer/sequencer.c
+)
+# The host tests build seq_core.c and seq_syncq.c with -Wall -Wextra -Werror; the
+# firmware warns about the same for them and for seq_platform.c.
+set_property(SOURCE
+    Src/Soundengine/Sequencer/seq_core.c
+    Src/Soundengine/Sequencer/seq_platform.c
+    Src/Soundengine/Sequencer/seq_syncq.c
+    APPEND PROPERTY COMPILE_OPTIONS -Wextra)
+```
+
+- [ ] **Step 9: Give the new Core files CRLF line endings**
+
+155 of the 157 C files under `Core/` use CRLF, and so does `seq_core.h`. Normalise the four new
+files (the script reads each file completely before it writes it):
+
+```bash
+python3 - Core/Inc/Soundengine/Sequencer/seq_syncq.h Core/Src/Soundengine/Sequencer/seq_syncq.c \
+  Core/Inc/Soundengine/Sequencer/seq_platform.h Core/Src/Soundengine/Sequencer/seq_platform.c <<'EOF'
+import sys
+for path in sys.argv[1:]:
+    with open(path, 'rb') as f:
+        data = f.read()
+    data = data.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+    with open(path, 'wb') as f:
+        f.write(data)
+    print('CRLF', path)
+EOF
+```
+
+Expected: four lines starting with `CRLF`. `tests/test_syncq.c` stays LF, like the rest of `tests/`.
+
+- [ ] **Step 10: Run the full check**
+
+Run:
+
+```bash
+tools/check.sh
+```
+
+Expected: all host tests pass (E1's and the new `syncq`), and the output ends with
+
+```
+== firmware build (release)
+memory: ITCM 15000/16384 B (91.6%, free 1384)  DTCM 107388/131072 B (81.9%, rest is stack)  RAM <n>/393216 B (...)  image <n>/1015808 B (...)
+image: <repo>/build/release/LXR_V2_V1.7.img
+== compiler warnings: 0
+```
+
+ITCM, RAM and the image size are the same as before this task: nothing calls the new code yet.
+The exit status is 0.
+
+- [ ] **Step 11: Review**
+
+Check the new code against these points before committing:
+
+- [ ] `seqq_push()` writes the entry before the write index and `seqq_drop()` reads it before the
+  read index moves. The `atomic_signal_fence()` calls sit between them.
+- [ ] One slot stays free; a full queue counts in `overflow` and keeps its entries.
+- [ ] `seqp_init()` never writes `DWT->CYCCNT` and does not clear the queues.
+- [ ] `seqq_dinByte()` handles realtime bytes inside an SPP, and drops an SPP when another status
+  byte cuts it short.
+- [ ] `seqq_usbMessage()` takes cable 0 only, realtime with CIN 0xF and, for the hosts that send it
+  that way, realtime bytes F8–FF with CIN 0x5 (N18.4), and SPP only with CIN 0x3.
+- [ ] On equal stamps, DIN comes before USB, and USB before the jacks.
+- [ ] RAM budget (spec §10): 3 queues × (12 + 64 × 8) B = 1572 B, plus 18 B of state. It is used
+  once E2.2 links it.
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add tests/test_syncq.c tests/CMakeLists.txt Core/CMakeLists.txt \
+  Core/Inc/Soundengine/Sequencer/seq_syncq.h Core/Src/Soundengine/Sequencer/seq_syncq.c \
+  Core/Inc/Soundengine/Sequencer/seq_platform.h Core/Src/Soundengine/Sequencer/seq_platform.c
+git commit -m "Add the sequencer platform layer: DWT time base and sync input queues (E2.1)
+
+seq_syncq is plain C and host-tested: SPSC queues of stamped sync events
+per source, MIDI realtime and SPP decoding, stamp unwrap and merge.
+seq_platform enables the DWT counter, extends it to 64 bits and holds
+the DIN, USB and jack queues. Nothing calls it yet.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+**Hardware checks:** none yet. Nothing calls the new code until E2.2. The queues prepare H6 and
+H7 (E2.4) and the clock jack (E2.5).
+
+---
+
+### Task E2.2: sequencer.c glue around seq_core instead of the pulse machine
+
+The core takes over the timing. `sequencer.c` keeps the pattern data, the song, the mutes and
+every public `seq_*` function, and it implements the `seqc_host_t` callbacks with the fw 1.7 side
+effects (spec §4.1, §8; N5, N7, N11).
+
+**What changes:**
+- **Removed:** the 24-pulse machine. That is `seq_tick()`'s old body, `seq_nextStep()`,
+  `seq_processFlam()`, `seq_getShiftFlamPattern()`, `getShiftValue()`, `flamIdxToPattern()`,
+  `seq_calcDeltaT()`, `seq_getLongestTrack()`, `seq_setDeltaT()`, `seq_triggerNextMasterStep()`,
+  `seq_setStepIndexToStart()` and their variables.
+- **Callbacks:**
+  - `seq_nextStep()` becomes the `patternEnd`, `stepBoundary` and `tempoStep` callbacks.
+  - The `trigger` callback applies the event's own p-locks (D5).
+  - `transport` does what `seq_setRunning()` and `seq_resetPosition()` did. MIDI Start, Stop and
+    Continue go out only in internal sync (N18.2).
+  - `clockOutPulse` sets the clock out divider from the position before each pulse, so the jack
+    stays on the step grid after a Continue (decision 10).
+  - `seekPosition` changes no pattern inside the run of the active one (decision 12).
+- **Mailbox (N7):** `seq_setRunning()`, `seq_resetPosition()`, `seq_setExtSync()`, `seq_setBpm()`,
+  the one-shot roll and the skip-once marker of `seq_addNote()` (D6) post to it. Each post
+  masks interrupts (PRIMASK) for a few instructions. `seq_tick()` applies the posts first.
+- **`seq_isRunning()`** keeps the fw 1.7 meaning (N7): it is set when a start is requested, armed
+  included, and cleared on stop.
+- **Copies:** `seq_getStepIndex()`, `seq_recordAutomation()`, `seq_addNote()` and
+  `seq_getElapsedStepTimePercent()` read copies of the step indices and the step phase.
+  `seq_tick()` refreshes them after `seqc_process()`, where they can have changed (the phase only
+  while recording). Before the first step they hold 255 (fw 1.7: index -1), and the three writers
+  skip that case instead of indexing step 255.
+- **New `seq_tick()`:**
+  1. a nesting guard (a kit autoload inside a callback runs `soundengine_process()` again);
+  2. the mailbox;
+  3. the sync queues, merged in stamp order;
+  4. `seqc_process()`;
+  5. the copies, and in the slave modes the rounded tempo for `seq_getBpm()` and the LFOs (N9).
+
+  A call that finds no post, no queued event and nothing due costs a few compares (decision 11).
+  MIDI parsing joins it in E2.4.
+- **ITCM (N11):** `IN_ITCM_RAM` comes off `seq_setPendingPatternActive()` and `seq_setMute()`;
+  `seq_nextStep()` is gone. That frees 1872 B of ITCM.
+
+**Transitional code.** `clockSync.c` stays in the build until E2.6 and calls `seq_nextStep()`,
+`seq_MidiSyncQueue()`, `seq_getDeltaTShuffleDelay()`, `seq_getMasterStepCnt()` and
+`seq_prescaleCounter`. `MidiParser.c` calls `seq_sync()` until E2.4. These names stay as empty
+shims. `seq_sync()` does nothing, so `sync_tick()` never runs, and the linker drops all of them.
+MIDI Start, Continue and Stop from the parser still reach the core through `clockSync.c`, which calls
+`seq_resetPosition()` and `seq_setRunning()`. MIDI clocks reach it only from E2.4 on, and the
+jack only from E2.5 on. **Do not test the slave modes on a build between E2.2 and E2.5.**
+
+**Files:**
+- Create: `tools/fw_checks.sh`
+- Modify: `Core/Src/Soundengine/Sequencer/sequencer.c` (regions listed per step)
+- Modify: `Core/Inc/Soundengine/Sequencer/sequencer.h` (prototypes)
+- Modify: `Core/Src/Soundengine/TriggerOut.c`, `Core/Inc/Soundengine/TriggerOut.h` (`trigger_setClockPhase()`, Step 23)
+- Modify: `docs/lichomat/HANDOFF.md` (one line in the toolchain block)
+- Test: `tools/fw_checks.sh E2.2` (release ELF and sources); the host tests must stay green
+
+- [ ] **Step 1: Write the failing check**
+
+The glue needs the hardware, so its tests are checks of the release ELF and of the sources:
+- symbols that must be linked or gone;
+- calls that a function must or must not make, read from its disassembly;
+- what sits in ITCM.
+
+This task creates the script with the E2.2 checks. E2.3 to E2.6 add theirs.
+
+Create `tools/fw_checks.sh`:
+
+```bash
+#!/bin/bash
+# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.6), on the
+# release build and on the sources: symbols that must or must not be linked, calls
+# that a function must or must not make, what sits in ITCM, and source patterns.
+# They stand in for unit tests where the code needs the hardware.
+#
+#   tools/check.sh             first: it builds build/release
+#   tools/fw_checks.sh         every check
+#   tools/fw_checks.sh E2.3    the checks of one task
+#
+# Prints one line per failed check and "PASS <task>" per task without failures.
+# The exit status is 1 if a check failed.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+set -u -o pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT" || exit 1
+# shellcheck source=env.sh
+source "$ROOT/tools/env.sh"
+ELF="$ROOT/build/release/LXR_V2_STM32F765.elf"
+[ -f "$ELF" ] || { echo "no $ELF: run tools/check.sh first"; exit 1; }
+
+SYMS="$(arm-none-eabi-nm "$ELF" | awk '{print $NF}' | sort -u)"
+ITCM="$(arm-none-eabi-objdump -t "$ELF" | grep -F '.itcm_text' | awk '{print $NF}')"
+task=""
+failed=0
+task_failed=0
+
+fail() { echo "FAIL $task: $*"; failed=1; task_failed=1; }
+
+# the symbol names of a function: the name and its compiler clones (name.part.0, ...)
+names() { grep -E "^$1(\\.[a-z]+\\.[0-9]+)*\$" <<<"$SYMS"; }
+linked() { [ -n "$(names "$1")" ]; }
+# the targets that function $1 branches to, from its disassembly (all its clones)
+calls_of() {
+	local n
+	for n in $(names "$1"); do
+		arm-none-eabi-objdump -d --disassemble="$n" "$ELF" | grep -oE '<[^>+]+>' | tr -d '<>'
+	done
+}
+# does function $1 call $2 (directly, through a veneer or a clone)?
+calls() { calls_of "$1" | grep -qE "^(__)?$2(\\.[a-z]+\\.[0-9]+)*(_veneer)?\$"; }
+
+need()        { local s; for s in "$@"; do linked "$s" || fail "$s is not linked"; done; }
+gone()        { local s; for s in "$@"; do linked "$s" && fail "$s is still linked"; done; }
+must_call()   { local f="$1" s; shift; linked "$f" || { fail "$f is not linked"; return; }
+                for s in "$@"; do calls "$f" "$s" || fail "$f does not call $s"; done; }
+must_not_call() { local f="$1" s; shift; for s in "$@"; do calls "$f" "$s" && fail "$f still calls $s"; done; }
+no_itcm()     { local s; for s in $(grep -E "^$1" <<<"$ITCM"); do fail "$s is in ITCM"; done; }
+no_source()   { local pattern="$1" hits; shift
+                hits="$(grep -nE "$pattern" "$@" 2>/dev/null)" && fail "'$pattern' found: $(head -n 3 <<<"$hits" | tr -d '\r' | paste -sd ' ' -)"; }
+no_file()     { local f; for f in "$@"; do [ -e "$f" ] && fail "$f still exists"; done; }
+no_tree()     { local pattern="$1" hits; shift
+                hits="$(grep -rnE "$pattern" "$@" 2>/dev/null)" && fail "'$pattern' found: $(head -n 3 <<<"$hits" | tr -d '\r' | paste -sd ' ' -)"; }
+has_source()  { local pattern="$1"; shift
+                grep -qE "$pattern" "$@" 2>/dev/null || fail "'$pattern' not found in $*"; }
+
+# ---- E2.2: seq_core drives the sequencer, the pulse machine is gone ----------
+check_E2_2() {
+	need seqc_init seqc_process seqp_init seqp_now seqp_syncPop seq_tick seq_cbTransport seq_cbTrigger \
+		seq_cbPatternEnd seq_cbStepBoundary
+	must_call seq_tick seqc_process seqp_now
+	gone seq_processFlam seq_getShiftFlamPattern seq_nextStep seq_MidiSyncQueue seq_triggerNextMasterStep \
+		seq_setDeltaT sync_tick chokeCurrent chokeNext lastWasNoteOn isStepShuffled seq_stepIndex seq_deltaT \
+		seq_lastTick seq_rndValue seq_lastShuffle seq_masterStepCnt seq_stepToSkip seq_lastMasterStep
+	no_itcm 'seq_'
+	no_source 'IN_ITCM_RAM' Core/Src/Soundengine/Sequencer/sequencer.c
+	# N18.2: MIDI Start, Stop and Continue go out only as master, through seq_sendTransport()
+	has_source 'seq_coreSyncMode == SEQC_SYNC_INTERNAL' Core/Src/Soundengine/Sequencer/sequencer.c
+	no_source 'seq_sendRealtime\(MIDI_(STOP|START|CONTINUE)\)' Core/Src/Soundengine/Sequencer/sequencer.c
+	# the clock out divider follows the position, so a Continue inside a step stays on the grid
+	must_call seq_cbClockOutPulse trigger_setClockPhase trigger_clockTick
+}
+
+check_tasks="E2.2"
+
+if [ $# -gt 0 ]; then check_tasks="$*"; fi
+for task in $check_tasks; do
+	fn="check_${task//./_}"
+	if ! declare -F "$fn" >/dev/null; then echo "unknown task $task"; exit 2; fi
+	task_failed=0
+	"$fn"
+	[ $task_failed -eq 0 ] && echo "PASS $task"
+done
+exit $failed
+```
+
+Run:
+
+```bash
+chmod +x tools/fw_checks.sh
+```
+
+- [ ] **Step 2: Run it and see it fail**
+
+Run:
+
+```bash
+tools/check.sh && tools/fw_checks.sh E2.2
+```
+
+Expected: `check.sh` passes as at the end of E2.1. Then the checks fail:
+
+```
+FAIL E2.2: seqc_init is not linked
+FAIL E2.2: seqc_process is not linked
+FAIL E2.2: seqp_init is not linked
+FAIL E2.2: seqp_now is not linked
+FAIL E2.2: seqp_syncPop is not linked
+FAIL E2.2: seq_cbTransport is not linked
+FAIL E2.2: seq_cbTrigger is not linked
+FAIL E2.2: seq_cbPatternEnd is not linked
+FAIL E2.2: seq_cbStepBoundary is not linked
+FAIL E2.2: seq_tick does not call seqc_process
+FAIL E2.2: seq_tick does not call seqp_now
+FAIL E2.2: seq_processFlam is still linked
+FAIL E2.2: seq_getShiftFlamPattern is still linked
+FAIL E2.2: seq_nextStep is still linked
+FAIL E2.2: seq_MidiSyncQueue is still linked
+FAIL E2.2: sync_tick is still linked
+FAIL E2.2: chokeCurrent is still linked
+FAIL E2.2: chokeNext is still linked
+FAIL E2.2: lastWasNoteOn is still linked
+FAIL E2.2: isStepShuffled is still linked
+FAIL E2.2: seq_stepIndex is still linked
+FAIL E2.2: seq_deltaT is still linked
+FAIL E2.2: seq_lastTick is still linked
+FAIL E2.2: seq_rndValue is still linked
+FAIL E2.2: seq_lastShuffle is still linked
+FAIL E2.2: seq_masterStepCnt is still linked
+FAIL E2.2: seq_stepToSkip is still linked
+FAIL E2.2: seq_lastMasterStep is still linked
+FAIL E2.2: seq_setPendingPatternActive is in ITCM
+FAIL E2.2: seq_setMute is in ITCM
+FAIL E2.2: seq_nextStep is in ITCM
+FAIL E2.2: 'IN_ITCM_RAM' found: 602:IN_ITCM_RAM void seq_setPendingPatternActive() 1254:IN_ITCM_RAM void seq_nextStep() 1650:/*IN_ITCM_RAM*/ void seq_tick()
+FAIL E2.2: 'seq_coreSyncMode == SEQC_SYNC_INTERNAL' not found in Core/Src/Soundengine/Sequencer/sequencer.c
+FAIL E2.2: 'seq_sendRealtime\(MIDI_(STOP|START|CONTINUE)\)' found: 1938:	seq_sendRealtime(MIDI_STOP); 1970:		seq_sendRealtime(MIDI_START);
+FAIL E2.2: seq_cbClockOutPulse is not linked
+```
+
+The exit status is 1.
+
+- [ ] **Step 3: Include the core and the platform layer**
+
+Lines 25-30 of `Core/Src/Soundengine/Sequencer/sequencer.c` (fw 1.7). `clockSync.h` is not needed any more; `clockSync.c` still has it.
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+#include "Soundengine/Sequencer/sequencer.h"
+#include <string.h>
+#include <Soundengine/MIDI/CortexParser.h>
+#include "Soundengine/USB/usb_manager.h"
+#include "Soundengine/Sequencer/clockSync.h"
+#include "Soundengine/MIDI/MidiParser.h"
+```
+
+with:
+
+```c
+#include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Sequencer/seq_core.h"
+#include "Soundengine/Sequencer/seq_platform.h"
+#include <string.h>
+#include <Soundengine/MIDI/CortexParser.h>
+#include "Soundengine/USB/usb_manager.h"
+#include "Soundengine/MIDI/MidiParser.h"
+```
+
+- [ ] **Step 4: Remove the variables of the pulse machine**
+
+These sit in fw 1.7 lines 45-75:
+- the prescaler masks, `seq_prescaleCounter` (it returns as a shim in Step 6) and
+  `seq_masterStepCnt`;
+- `seq_stepIndex`, `seq_lastTick`, `isStepShuffled` and `seq_deltaT`;
+- `seq_delayedSyncStepFlag`, `seq_lastMasterStep` and `seq_stepToSkip`.
+
+They are aligned with tabs, so a script removes them.
+
+Run this script on `Core/Src/Soundengine/Sequencer/sequencer.c`. It deletes these exact pieces; each must be in the file once:
+
+```bash
+python3 - <<'EOF'
+path = 'Core/Src/Soundengine/Sequencer/sequencer.c'
+pieces = [
+    b'#define SEQ_PRESCALER_MASK \t0x03\r\n#define MIDI_PRESCALER_MASK\t0x04\r\nuint8_t seq_prescaleCounter = 0;\r\n\r\nuint8_t seq_masterStepCnt=0;\t\t\t\t/** keeps track of the played steps between 0 and 127 independent from the track counters*/\r\n',
+    b'static int8_t \tseq_stepIndex[NUM_TRACKS];\t/**< we have 16 steps con 4 bars = 64 steps.\r\n\t\t\t\t\t\t\t\t\t\t\t     each track has its own counter to allow different pattern lengths */\r\n\r\n',
+    b'static uint32_t\tseq_lastTick = 0;\t\t\t/**< stores the time the last step change occured*/\r\nuint8_t isStepShuffled=0;\r\nstatic float\tseq_deltaT;\t\t\t\t\t/**< time in [ms] until the next step\r\n \t \t \t \t \t \t \t \t \t \t \t 1000ms = 1 sec\r\n \t \t \t \t \t \t \t \t \t \t \t 1 min = 60 sec*/\r\n',
+    b'uint8_t seq_delayedSyncStepFlag = 0;\t\t//normally sync steps will only be advanced by external midi clocks in ext. sync mode\r\n\t\t\t\t\t\t\t\t\t\t\t//if the shuffle needs a delayed sync step, it is indicated here.\r\n\r\n',
+    b'uint8_t seq_lastMasterStep[NUM_TRACKS];\t\t//keeps track of the last triggered master sync step of each track\r\n',
+    b'int8_t seq_stepToSkip[NUM_TRACKS];\r\n\r\n',
+]
+data = open(path, 'rb').read()
+for piece in pieces:
+    assert data.count(piece) == 1, piece
+    data = data.replace(piece, b'')
+open(path, 'wb').write(data)
+print('deleted', len(pieces), 'pieces from', path)
+EOF
+```
+
+Expected output: `deleted 6 pieces from Core/Src/Soundengine/Sequencer/sequencer.c`
+
+- [ ] **Step 5: Remove the random values and the shuffle table**
+
+`seq_rndValue` (fw 1.7 lines 98-105), `seq_shuffleTable` and `seq_lastShuffle` (lines 119-139). The core draws the probability (§6.1) and computes the swing.
+
+Run this script on `Core/Src/Soundengine/Sequencer/sequencer.c`. It deletes these exact pieces; each must be in the file once:
+
+```bash
+python3 - <<'EOF'
+path = 'Core/Src/Soundengine/Sequencer/sequencer.c'
+pieces = [
+    b'/**< random value for probability function*/\r\nstruct\r\n{\r\n\tuint8_t prev;\r\n\tuint8_t current;\r\n\tuint8_t next;\r\n}seq_rndValue[NUM_TRACKS];\r\n\r\n',
+    b'const float seq_shuffleTable[16] =\r\n{\r\n\t\t0.f,\r\n\t\t0.015625f,\r\n\t\t0.0625f,\r\n\t\t0.140625f,\r\n\t\t0.25f,\r\n\t\t0.390625f,\r\n\t\t0.5625f,\r\n\t\t0.765625f,\r\n\t\t1.f,\r\n\t\t0.984375f,\r\n\t\t0.9375f,\r\n\t\t0.859375f,\r\n\t\t0.75f,\r\n\t\t0.609375f,\r\n\t\t0.4375f,\r\n\t\t0.234375f,\r\n};\r\n\r\nfloat seq_lastShuffle = 0;\r\n',
+]
+data = open(path, 'rb').read()
+for piece in pieces:
+    assert data.count(piece) == 1, piece
+    data = data.replace(piece, b'')
+open(path, 'wb').write(data)
+print('deleted', len(pieces), 'pieces from', path)
+EOF
+```
+
+Expected output: `deleted 2 pieces from Core/Src/Soundengine/Sequencer/sequencer.c`
+
+- [ ] **Step 6: Add the glue state, the mailbox and the transitional shims**
+
+This replaces fw 1.7 lines 171-179: the prototype of `seq_setStepIndexToStart()`, `lastWasNoteOn`
+and `seq_getMasterStepCnt()`. In their place come:
+- the forward declaration of `seq_initCore()`;
+- the mailbox with its post functions, which also holds the clock-in PPQ slot that E2.5 starts to
+  post. Every post sets `seq_mailboxPosted`, so a `seq_tick()` without posts skips the mailbox
+  (decision 11). A skip-once marker made inside `seq_tick()` goes to the core at once (decision 13),
+  and the clock-in PPQ is posted only when it changes (decision 11 of epic E1);
+- the copies for the other contexts, and `seq_coreSyncMode`, the sync mode the core runs in, for
+  the `transport` callback (N18.2);
+- the shims for `clockSync.c` and `MidiParser.c`, which E2.6 removes.
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+static void seq_setStepIndexToStart();
+
+
+uint8_t lastWasNoteOn[NUM_TRACKS];
+//------------------------------------------------------------------------------
+uint8_t seq_getMasterStepCnt()
+{
+	return seq_masterStepCnt;
+}
+```
+
+with:
+
+```c
+static void seq_initCore(void);
+
+//------------------------------------------------------------------------------
+// LICHOMAT: glue around the timing core seq_core (spec 4.3, N7).
+// Only seq_tick() calls the core; the callbacks, which run inside it, read the
+// core's state with its queries. Everything else that changes the transport or
+// the core's settings (buttons and menu in the main loop, MIDI parsing, interrupt
+// handlers) posts a request to the mailbox below, and seq_tick() applies the posts
+// first thing. The copies below serve the readers of the core's state outside
+// seq_tick().
+//------------------------------------------------------------------------------
+#define SEQ_MB_STOP     0x01    /**< seqc_stop() */
+#define SEQ_MB_REWIND   0x02    /**< seqc_rewind() */
+#define SEQ_MB_START    0x04    /**< seqc_start() */
+
+/** one slot per kind of request; a newer post of a kind replaces the older one */
+typedef struct
+{
+	uint8_t transport;              /**< SEQ_MB_* bits, applied as stop, rewind, start */
+	uint8_t syncValid;              /**< syncMode holds a post */
+	uint8_t syncMode;               /**< seqc_sync_t, as seq_setExtSync() */
+	uint8_t ppqValid;               /**< ppq holds a post */
+	uint8_t ppq;                    /**< clock in jack PPQ, 4 or 24 */
+	uint8_t tempoValid;             /**< tempo holds a post */
+	uint16_t tempo;                 /**< master tempo in BPM */
+	uint8_t rollMask;               /**< one-shot roll triggers, one bit per voice */
+	uint8_t skipMask;               /**< skip-once markers (D6), one bit per track */
+	uint8_t skipStep[NUM_TRACKS];   /**< the step of each skip-once marker */
+} SeqMailbox;
+
+static SeqMailbox seq_mailbox;
+static volatile uint8_t seq_mailboxPosted;          /**< a post waits; seq_tick() reads this without masking */
+
+static volatile uint8_t seq_stepCopy[NUM_TRACKS];   /**< seqc_trackStep(); SEQC_NO_STEP before the first step */
+static volatile float seq_phaseCopy;                /**< seqc_stepPhase(), while recording */
+static volatile uint8_t seq_inTick;                 /**< seq_tick() is running */
+static volatile uint8_t seq_coreReady;              /**< seq_init() has set up the core */
+static uint8_t seq_coreSyncMode = SEQC_SYNC_INTERNAL; /**< the sync mode applied to the core; seq_isSyncExternal changes one seq_tick() earlier */
+
+//------------------------------------------------------------------------------
+/** mask interrupts for a mailbox access; any context */
+static uint32_t seq_mailboxLock(void)
+{
+	const uint32_t primask = __get_PRIMASK();
+	__disable_irq();
+	return primask;
+}
+//------------------------------------------------------------------------------
+static void seq_mailboxUnlock(uint32_t primask)
+{
+	__set_PRIMASK(primask);
+}
+//------------------------------------------------------------------------------
+/** start, stop or rewind; a stop cancels a start posted before it */
+static void seq_postTransport(uint8_t request)
+{
+	const uint32_t primask = seq_mailboxLock();
+	if(request == SEQ_MB_STOP)
+		seq_mailbox.transport &= (uint8_t)~SEQ_MB_START;
+	seq_mailbox.transport |= request;
+	seq_mailboxPosted = 1;
+	seq_mailboxUnlock(primask);
+}
+//------------------------------------------------------------------------------
+static void seq_postSyncMode(uint8_t mode)
+{
+	const uint32_t primask = seq_mailboxLock();
+	seq_mailbox.syncMode = mode;
+	seq_mailbox.syncValid = 1;
+	seq_mailboxPosted = 1;
+	seq_mailboxUnlock(primask);
+}
+//------------------------------------------------------------------------------
+static void seq_postTempo(uint16_t bpm)
+{
+	const uint32_t primask = seq_mailboxLock();
+	seq_mailbox.tempo = bpm;
+	seq_mailbox.tempoValid = 1;
+	seq_mailboxPosted = 1;
+	seq_mailboxUnlock(primask);
+}
+//------------------------------------------------------------------------------
+static void seq_postOneShotRoll(uint8_t voice)
+{
+	const uint32_t primask = seq_mailboxLock();
+	seq_mailbox.rollMask |= (uint8_t)(1 << voice);
+	seq_mailboxPosted = 1;
+	seq_mailboxUnlock(primask);
+}
+//------------------------------------------------------------------------------
+/** D6: the next occurrence of step on track must not play. Inside seq_tick() (the
+ * one-shot roll of seq_applyMailbox(), and from E2.4 on MIDI recording) the core
+ * is in reach, so the marker goes in at once, before seqc_process() reaches the
+ * step; from any other context it is posted. */
+static void seq_postSkipOnce(uint8_t track, uint8_t step)
+{
+	if(seq_inTick)
+	{
+		seqc_skipOnce(track, step);
+		return;
+	}
+	const uint32_t primask = seq_mailboxLock();
+	seq_mailbox.skipMask |= (uint8_t)(1 << track);
+	seq_mailbox.skipStep[track] = step;
+	seq_mailboxPosted = 1;
+	seq_mailboxUnlock(primask);
+}
+//------------------------------------------------------------------------------
+/** The clock in jack's PPQ, posted only when it changes: the globals of every
+ * project load send it again, and in analog sync each post restarts the core's
+ * clock count and clears its tempo estimate. */
+void seq_setClockInPpq(uint8_t ppq)
+{
+	static uint8_t posted = 0;      //nothing posted yet; the core starts at 4
+	const uint32_t primask = seq_mailboxLock();
+	if(ppq != posted)
+	{
+		posted = ppq;
+		seq_mailbox.ppq = ppq;
+		seq_mailbox.ppqValid = 1;
+		seq_mailboxPosted = 1;
+	}
+	seq_mailboxUnlock(primask);
+}
+//------------------------------------------------------------------------------
+// Transitional: clockSync.c compiles against these until it is deleted (task
+// E2.6). None of them runs: seq_sync() does nothing, so sync_tick() is never called.
+//------------------------------------------------------------------------------
+uint8_t seq_prescaleCounter = 0;
+//------------------------------------------------------------------------------
+uint8_t seq_getMasterStepCnt()
+{
+	return 0;
+}
+//------------------------------------------------------------------------------
+float seq_getDeltaTShuffleDelay(uint16_t bpm)
+{
+	(void)bpm;
+	return 0.f;
+}
+//------------------------------------------------------------------------------
+void seq_nextStep()
+{
+}
+//------------------------------------------------------------------------------
+void seq_MidiSyncQueue(uint8_t cnt)
+{
+	(void)cnt;
+}
+//------------------------------------------------------------------------------
+void seq_sync()
+{
+}
+```
+
+- [ ] **Step 7: Set up the core in `seq_init()`**
+
+The skip markers and the step indices are the core's now (fw 1.7 lines 192-199).
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+		autoNode_init(&seq_automationNodes[i][0]);
+		autoNode_init(&seq_automationNodes[i][1]);
+
+		seq_stepToSkip[i] = -1;
+	}
+
+	memset(seq_stepIndex,0,NUM_TRACKS);
+	memset(seq_lastMasterStep,0,NUM_TRACKS);
+```
+
+with:
+
+```c
+		autoNode_init(&seq_automationNodes[i][0]);
+		autoNode_init(&seq_automationNodes[i][1]);
+	}
+```
+
+At the end of `seq_init()` (fw 1.7 lines 206-209):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+		seq_clearPattern(i); // will clear all tracks in the pattern
+	}
+
+}
+```
+
+with:
+
+```c
+		seq_clearPattern(i); // will clear all tracks in the pattern
+	}
+
+	//the timing core, its time base and the sync input queues
+	seq_initCore();
+}
+```
+
+- [ ] **Step 8: Remove `seq_getDeltaTShuffleDelay()` and `seq_calcDeltaT()`**
+
+fw 1.7 lines 354-436. `seq_getDeltaTShuffleDelay()` returns as a shim in the block of Step 6.
+
+Run this script on `Core/Src/Soundengine/Sequencer/sequencer.c`. It checks the SHA-256 of the block, then deletes its 83 lines, from `first` up to `stop`, which stays:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/Sequencer/sequencer.c'
+first = b'float seq_getDeltaTShuffleDelay(uint16_t bpm)\r\n{\r\n\tif(bpm==0) return 1;\r\n'
+stop = b'void seq_setBpm(uint16_t bpm)\r\n'
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == 'f5d7f37fbbffd6d5304b1bc8c56a207a51b5e40f8d6b1431f9dcaffc4ca4dcc6', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 83 lines from Core/Src/Soundengine/Sequencer/sequencer.c`
+
+- [ ] **Step 9: Post the master tempo; remove `seq_sync()`**
+
+In `seq_setBpm()` (fw 1.7 lines 440-441):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+	//seq_calcDeltaT(bpm);
+	lfo_recalcSync();
+```
+
+with:
+
+```c
+	//the core takes the new master tempo at the next seq_tick()
+	seq_postTempo(bpm);
+	lfo_recalcSync();
+```
+
+`seq_sync()` (fw 1.7 lines 448-455) moves to the shim block of Step 6, where it does nothing:
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, delete:
+
+```c
+//------------------------------------------------------------------------------
+void seq_sync()
+{
+  if (seq_getExtSync() == 2)
+  {
+    sync_tick();
+  }
+}
+```
+
+- [ ] **Step 10: Rewind after a pattern switch while stopped**
+
+In fw 1.7 the switch reset the track indices (`seq_setStepIndexToStart()` inside
+`seq_setPendingPatternActive()`). Now the core has to rewind, or a MIDI Continue would resume the
+new pattern at the old indices. `seq_setNextPattern()` runs in the main loop or in MIDI parsing,
+so it posts the rewind (fw 1.7 lines 463-467):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+	if(!seq_running)
+	{
+		//immediately change pattern
+		seq_setPendingPatternActive();
+	}
+```
+
+with:
+
+```c
+	if(!seq_running)
+	{
+		//immediately change pattern, and restart it from step 0 (fw 1.7: seq_setStepIndexToStart())
+		seq_setPendingPatternActive();
+		seq_postTransport(SEQ_MB_REWIND);
+	}
+```
+
+- [ ] **Step 11: `seq_triggerVoice()`: the step from the copy, never step -1**
+
+`seq_triggerVoice()` now serves only the one-shot roll (N11), and `seq_tick()` calls it. It keeps
+the current step's p-locks, as fw 1.7 did. Before the first step it uses none, and it sends the
+voice velocity. fw 1.7 read index -1 there. The `USE_PATTERN_EDIT_BUFFER` branches go (the macro
+is 0, and its comment asks for removal). E2.3 changes the MIDI send.
+
+The trigger callback passes a `const` p-lock copy, so the parameter becomes `const` (fw 1.7 line 482):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+static void seq_parseAutomationNodes(uint8_t track, Step* stepData)
+```
+
+with:
+
+```c
+static void seq_parseAutomationNodes(uint8_t track, const Step* stepData)
+```
+
+fw 1.7 lines 500-504:
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+#if USE_PATTERN_EDIT_BUFFER
+	seq_parseAutomationNodes(voiceNr, &patternBackupBuffer.seq_subStepPattern[voiceNr][seq_stepIndex[voiceNr]]);
+#else
+	seq_parseAutomationNodes(voiceNr, &seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][seq_stepIndex[voiceNr]]);
+#endif
+```
+
+with:
+
+```c
+	//the p-locks and the MIDI velocity of the track's current step; none before the
+	//first step (fw 1.7 read step -1 there)
+	const uint8_t step = seq_stepCopy[voiceNr];
+	const Step *stepData = (step < NUM_STEPS) ? &seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][step] : NULL;
+	if(stepData)
+		seq_parseAutomationNodes(voiceNr, stepData);
+```
+
+fw 1.7 lines 536-540:
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+#if USE_PATTERN_EDIT_BUFFER
+	seq_sendMidiNoteOn(midiChan, midiNote, patternBackupBuffer.seq_subStepPattern[voiceNr][seq_stepIndex[voiceNr]].volume&STEP_VOLUME_MASK);
+#else
+	seq_sendMidiNoteOn(midiChan, midiNote, seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][seq_stepIndex[voiceNr]].volume&STEP_VOLUME_MASK);
+#endif
+```
+
+with:
+
+```c
+	seq_sendMidiNoteOn(midiChan, midiNote, stepData ? (stepData->volume&STEP_VOLUME_MASK) : vol);
+```
+
+- [ ] **Step 12: `seq_setPendingPatternActive()`: out of ITCM, no index reset**
+
+The duplicate `#include "Soundengine/MIDI/Uart.h"` above the function goes. So do `IN_ITCM_RAM`
+(N11) and the writes of the write-only flag `midi_process_block`. The index reset goes too: the
+core restarts the indices when `patternEnd()` returns `SEQC_PAT_CHANGED`, and Step 10 rewinds
+after a switch while stopped. Everything else stays: backup buffer, shuffle, kit autoload, LEDs,
+Program Change and notes off.
+
+fw 1.7 lines 600-607:
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+#include "Soundengine/MIDI/Uart.h"
+
+IN_ITCM_RAM void seq_setPendingPatternActive()
+{
+  midi_process_block = 1;
+	if((seq_activePattern != seq_pendingPattern) || seq_loadPendigFlag)
+	{
+    seq_setStepIndexToStart();
+```
+
+with:
+
+```c
+void seq_setPendingPatternActive()
+{
+	if((seq_activePattern != seq_pendingPattern) || seq_loadPendigFlag)
+	{
+```
+
+At the end of the function (fw 1.7 lines 824-828):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+				menu_repaintAll();
+			}
+
+  midi_process_block = 0;
+}
+```
+
+with:
+
+```c
+				menu_repaintAll();
+			}
+
+}
+```
+
+- [ ] **Step 13: Remove `seq_getLongestTrack()`, the pulse machine and `seq_nextStep()`**
+
+fw 1.7 lines 829-1516:
+- `seq_getLongestTrack()`, `getShiftValue()`, `flamIdxToPattern()` and `seq_getShiftFlamPattern()`;
+- `chokeCurrent` and `chokeNext` (D2) and `seq_processFlam()`;
+- `seq_MidiSyncQueue()` and `seq_nextStep()`.
+
+The callbacks of Step 22 take over what `seq_nextStep()` did. The master-track rule is in the core
+now (N5), and the glue keeps it only for the song walk of `seekPosition()`.
+
+Run this script on `Core/Src/Soundengine/Sequencer/sequencer.c`. It checks the SHA-256 of the block, then deletes its 688 lines, from `first` up to `stop`, which stays:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/Sequencer/sequencer.c'
+first = b'\r\n\r\nuint8_t seq_getLongestTrack()\r\n'
+stop = b'//------------------------------------------------------------------------------\r\nuint8_t seq_getExtSync()\r\n'
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == '767ca62ab0ec96a2ef74daa2b7fededfdb93e5adf3552b9e363e39ce41ccbad3', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 688 lines from Core/Src/Soundengine/Sequencer/sequencer.c`
+
+- [ ] **Step 14: Post the sync mode in `seq_setExtSync()`**
+
+fw 1.7 lines 1523-1526:
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+void seq_setExtSync(uint8_t isExt)
+{
+	seq_isSyncExternal = isExt;
+}
+```
+
+with:
+
+```c
+void seq_setExtSync(uint8_t isExt)
+{
+	//the interrupt handlers and the MIDI parser gate with the new mode at once;
+	//the core switches at the next seq_tick()
+	seq_isSyncExternal = isExt;
+	seq_postSyncMode(isExt);
+}
+```
+
+- [ ] **Step 15: Remove the old `seq_tick()`; the step phase comes from the core**
+
+fw 1.7 lines 1538-1857:
+- `seq_setDeltaT()`, `seq_triggerNextMasterStep()` and the commented `seq_resetDeltaAndTick()`;
+- the old `seq_getElapsedStepTimePercent()` and the old `seq_tick()`.
+
+The new `seq_tick()` comes with the glue in Step 22.
+
+Run this script on `Core/Src/Soundengine/Sequencer/sequencer.c`. It checks the SHA-256 of the block, then deletes its 320 lines, from `first` up to `stop`, which stays:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/Sequencer/sequencer.c'
+first = b'//------------------------------------------------------------------------------\r\nvoid seq_setDeltaT(float delta)\r\n'
+stop = b'\r\n//------------------------------------------------------------------------------\r\nvoid seq_setQuantisation(uint8_t value)\r\n'
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == '21c48e92f1de0053bb01f27ce227a174ca923571b53123b9dd232f041915ade1', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 320 lines from Core/Src/Soundengine/Sequencer/sequencer.c`
+
+Then put the new `seq_getElapsedStepTimePercent()` where they were (spec §6.7):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+//------------------------------------------------------------------------------
+void seq_setQuantisation(uint8_t value)
+```
+
+with:
+
+```c
+//------------------------------------------------------------------------------
+//returns how many % [0:100) of the current step have elapsed, for the MIDI record
+//quantisation: from 50% on, a note goes to the next step (spec 6.7).
+//It is seqc_stepPhase() x 100, which reaches 50 halfway between the swung grid times
+//of this step and the next one. 0 while stopped and before the first step.
+float seq_getElapsedStepTimePercent()
+{
+	return seq_phaseCopy * 100.f;
+}
+//------------------------------------------------------------------------------
+void seq_setQuantisation(uint8_t value)
+```
+
+- [ ] **Step 16: `seq_resetPosition()` and `seq_setRunning()` post to the mailbox**
+
+fw 1.7 lines 1913-1981. Their side effects move to the `transport` callback (Step 22):
+- MIDI Stop and MIDI Start;
+- all notes off;
+- `trigger_reset()`;
+- the blink timer reset;
+- the song pointer reset;
+- the save timers;
+- the MTC check.
+
+Run this script on `Core/Src/Soundengine/Sequencer/sequencer.c`. It checks the SHA-256 of the block, then deletes its 69 lines, from `first` up to `stop`, which stays:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/Sequencer/sequencer.c'
+first = b'//------------------------------------------------------------------------------\r\nvoid seq_resetPosition()\r\n'
+stop = b'//------------------------------------------------------------------------------\r\nvoid seq_setSongModeEnabled(uint8_t onOff)\r\n'
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == 'a244740afe026f0903f19e94311d57a8f96a629dff3f65da8ca1a216caf3a13f', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 69 lines from Core/Src/Soundengine/Sequencer/sequencer.c`
+
+Then put the new versions in their place:
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+//------------------------------------------------------------------------------
+void seq_setSongModeEnabled(uint8_t onOff)
+```
+
+with:
+
+```c
+//------------------------------------------------------------------------------
+void seq_resetPosition()
+{
+	//back to the start at the next seq_tick(); the core reports it with the REWIND
+	//transport, and seq_cbTransport() does the fw 1.7 side effects
+	seq_postTransport(SEQ_MB_REWIND);
+}
+//------------------------------------------------------------------------------
+void seq_setRunning(uint8_t isRunning)
+{
+	//N7: seq_isRunning() follows the request at once, armed counts as running.
+	//The core starts or stops at the next seq_tick(); the side effects (MIDI Start
+	//and Stop, clock out reset, save timers) are in seq_cbTransport().
+	seq_running = isRunning ? 1 : 0;
+	seq_postTransport(isRunning ? SEQ_MB_START : SEQ_MB_STOP);
+}
+//------------------------------------------------------------------------------
+void seq_setSongModeEnabled(uint8_t onOff)
+```
+
+- [ ] **Step 17: `seq_setMute()` out of ITCM**
+
+N11 (fw 1.7 line 2047):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+IN_ITCM_RAM void seq_setMute(uint8_t trackNr, uint8_t isMuted)
+```
+
+with:
+
+```c
+void seq_setMute(uint8_t trackNr, uint8_t isMuted)
+```
+
+- [ ] **Step 18: One-shot roll through the mailbox**
+
+`seq_setRoll()` runs in the main loop (front panel). The one-shot trigger and its recording need
+the core's step and phase, so `seq_tick()` does them (fw 1.7 lines 2161-2164). The periodic roll
+is the core's (`rollRate()` callback).
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+			//trigger one shot
+			seq_triggerVoice(voice,ROLL_VOLUME,SEQ_DEFAULT_NOTE);
+			//record roll notes
+			seq_addNote(voice,ROLL_VOLUME,SEQ_DEFAULT_NOTE);
+```
+
+with:
+
+```c
+			//trigger one shot and record it, in seq_tick() (seq_applyMailbox())
+			seq_postOneShotRoll(voice);
+```
+
+- [ ] **Step 19: `seq_recordAutomation()` reads the step copy**
+
+It runs in the main loop (front-panel knobs) and in MIDI parsing. Before the first step it records nothing; fw 1.7 read `seq_mainSteps[15]` there (fw 1.7 lines 2309-2312).
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+	if(seq_recordActive)
+	{
+		//uint8_t quantizedStep = seq_quantize(seq_stepIndex[voice]);
+		const uint8_t step = seq_stepIndex[voice];
+```
+
+with:
+
+```c
+	if(seq_recordActive && (voice < NUM_TRACKS) && (seq_stepCopy[voice] < NUM_STEPS))
+	{
+		const uint8_t step = seq_stepCopy[voice];
+```
+
+- [ ] **Step 20: `seq_addNote()` with the skip-once marker, and `seq_recordNoteAtStep()`**
+
+The head of `seq_addNote()` (fw 1.7 lines 2363-2408) has dead code with tabs inside lines, so a
+script removes it first. Then the new head goes in:
+- **step and phase:** from the copies (spec §6.7);
+- **track length:** the effective length (fw 1.7 divided by the raw length, by 0 for a raw 0);
+- **skip-once (D6):** a posted marker when the note moves to the next step;
+- **`seq_recordNoteAtStep()`** (N11): a new function that writes the note into a given step. Its
+  body is the fw 1.7 write part, which stays below the new head unchanged. The parameter keeps the
+  name `targetPattern`, so the kept lines compile as they are.
+
+Run this script on `Core/Src/Soundengine/Sequencer/sequencer.c`. It checks the SHA-256 of the block, then deletes its 46 lines, from `first` up to `stop`, which stays:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/Sequencer/sequencer.c'
+first = b'//------------------------------------------------------------------------\r\nvoid seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note)\r\n'
+stop = b'\t\t//set the current step in the requested track active\r\n'
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == 'ead9e6182683eff5d7322ee027606e5d6f83542b5406c8d9603b2817952f15b7', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 46 lines from Core/Src/Soundengine/Sequencer/sequencer.c`
+
+Then:
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+		//set the current step in the requested track active
+```
+
+with:
+
+```c
+//------------------------------------------------------------------------
+void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note)
+{
+	//only record notes when seq is running and recording
+	if(!(seq_running && seq_recordActive) || (trackNr >= NUM_TRACKS))
+		return;
+
+	//nothing is recorded before the first step (fw 1.7 wrote step 255)
+	const uint8_t current = seq_stepCopy[trackNr];
+	if(current >= NUM_STEPS)
+		return;
+
+	//the effective track length: raw 0 means 16 (fw 1.7 divided by the raw length)
+	uint8_t len = seq_patternSet.length[seq_activePattern][trackNr];
+	if(len == 0)
+		len = 16;
+	else if(len > NUM_STEPS)
+		len = NUM_STEPS;
+
+	//from half the step on, the note belongs to the next step, and the sequencer
+	//must not play that step again when it gets there (D6)
+	uint8_t step = current;
+	if(seq_getElapsedStepTimePercent() >= 50.f)
+		step = (uint8_t)((current + 1) % len);
+	if(step != current)
+		seq_postSkipOnce(trackNr, step);
+
+	seq_recordNoteAtStep(seq_activePattern, trackNr, step, vel, note);
+}
+//------------------------------------------------------------------------
+void seq_recordNoteAtStep(uint8_t targetPattern, uint8_t trackNr, uint8_t step, uint8_t vel, uint8_t note)
+{
+	Step *stepPtr;
+	if((targetPattern < NUM_PATTERN) && (trackNr < NUM_TRACKS) && (step < NUM_STEPS))
+	{
+		//set the current step in the requested track active
+```
+
+- [ ] **Step 21: `seq_getStepIndex()` reads the step copy**
+
+Its only caller is `buttonHandler.c:1528`, in the main loop, and it tests for 255 (fw 1.7 lines 2745-2748).
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+uint8_t seq_getStepIndex(uint8_t trackNr)
+{
+	return seq_stepIndex[trackNr];
+}
+```
+
+with:
+
+```c
+uint8_t seq_getStepIndex(uint8_t trackNr)
+{
+	//255 before the first step, as fw 1.7 (buttonHandler.c tests for it)
+	return (trackNr < NUM_TRACKS) ? seq_stepCopy[trackNr] : SEQC_NO_STEP;
+}
+```
+
+- [ ] **Step 22: Replace `seq_setStepIndexToStart()` with the callbacks and the new `seq_tick()`**
+
+`seq_setStepIndexToStart()` and its comment end the file (fw 1.7 lines 2766-2803). The core owns
+the indices now. Delete it first:
+
+Run this script on `Core/Src/Soundengine/Sequencer/sequencer.c`. It checks the SHA-256 of the block, then deletes its 39 lines, from `first` to the end of the file:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/Sequencer/sequencer.c'
+first = b'\r\n/* **PATROT set the step starting index to the position where the pattern rotation would have it start.\r\n'
+stop = None
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == '33cb2eab1ba60cc963652d17afa6cf2b6e0a95514704fe69869a6c5fdcd23f87', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 39 lines from Core/Src/Soundengine/Sequencer/sequencer.c`
+
+Then append the glue after `seq_sendProgChg()`, which is now the last function. It holds:
+- **the callbacks**, with the fw 1.7 side effects. `stepBoundary` is the rest of `seq_nextStep()`:
+  beat LED, erase, follow-bar, chase light, MTC check. `patternEnd` and `peekNextPattern` hold the
+  song logic. `seekPosition` does the song walk of N6.
+- **the host table**;
+- **`seq_initCore()`**;
+- **the mailbox apply**;
+- **the queue drain**, which applies the RX filter `MIDI_FILTER_SYSTEM` to MIDI events and passes a
+  queued Song Position Pointer to `seqc_songPosition()`;
+- **the copy refresh**;
+- **the new `seq_tick()`**.
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+	msg.bits.length=1;
+	seq_sendMidi(msg);
+}
+```
+
+with:
+
+```c
+	msg.bits.length=1;
+	seq_sendMidi(msg);
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT: host callbacks of seq_core (seq_core.h, N5). The core calls them from
+// inside its own functions, so they run in the seq_tick() context.
+//------------------------------------------------------------------------------
+static bool seq_cbStepOn(void *ctx, uint8_t pattern, uint8_t track, uint8_t step)
+{
+	(void)ctx;
+	return seq_intIsMainStepActive(track, step, pattern) != 0;
+}
+//------------------------------------------------------------------------------
+static const Step *seq_cbStep(void *ctx, uint8_t pattern, uint8_t track, uint8_t step)
+{
+	(void)ctx;
+	return &seq_patternSet.seq_subStepPattern[pattern][track][step];
+}
+//------------------------------------------------------------------------------
+static StepTiming seq_cbTiming(void *ctx, uint8_t pattern, uint8_t track, uint8_t step)
+{
+	(void)ctx;
+	return seq_patternSet.seq_stepTiming[pattern][track][step];
+}
+//------------------------------------------------------------------------------
+static uint8_t seq_cbTrackLength(void *ctx, uint8_t pattern, uint8_t track)
+{
+	(void)ctx;
+	return seq_patternSet.length[pattern][track];
+}
+//------------------------------------------------------------------------------
+/** PAR_SHUFFLE 0..127: seq_setShuffle() stores it divided by 127 */
+static uint8_t seq_cbShuffle(void *ctx)
+{
+	(void)ctx;
+	const float shuffle = seq_shuffle * 127.f + 0.5f;
+	if(shuffle <= 0.f)
+		return 0;
+	return shuffle >= 127.f ? 127 : (uint8_t)shuffle;
+}
+//------------------------------------------------------------------------------
+static bool seq_cbMuted(void *ctx, uint8_t track)
+{
+	(void)ctx;
+	return (seq_mutedTracks & (1 << track)) != 0;
+}
+//------------------------------------------------------------------------------
+/** the periodic roll rate in steps; 0 when the track's roll is off or in one-shot mode */
+static uint8_t seq_cbRollRate(void *ctx, uint8_t track)
+{
+	(void)ctx;
+	if((seq_rollRate == 0xff) || !(seq_rollState & (1 << track)))
+		return 0;
+	return seq_rollRate;
+}
+//------------------------------------------------------------------------------
+static uint8_t seq_cbActivePattern(void *ctx)
+{
+	(void)ctx;
+	return seq_activePattern;
+}
+//------------------------------------------------------------------------------
+/** The pattern-end block of fw 1.7 seq_nextStep(): pick the next pattern (song mode
+ * or a pending pattern) and switch to it with seq_setPendingPatternActive(). That
+ * also runs when the same pattern continues: UI refresh, SKIP_NEXT_KIT_AUTOLOAD. */
+static seqc_pat_t seq_cbPatternEnd(void *ctx)
+{
+	(void)ctx;
+	//the song advances only when no other pattern is pending
+	if(seq_activePattern == seq_pendingPattern)
+	{
+		uint8_t next = seq_determineNextPattern(1);
+		if((next >= MAX_PATTERN) && (next != SONG_LOOP))
+		{
+			//SONG_END: the core stops and rewinds, and the REWIND transport puts the song
+			//pointer before entry 0, so the next start plays the song from entry 0 once.
+			//fw 1.7 set pending = song[0] and the pointer to 0 here, which played entry 0
+			//twice after the usual stop press.
+			seq_pendingPattern = seq_activePattern;
+			return SEQC_PAT_STOP;
+		}
+		if(next == SONG_LOOP)
+		{
+			//reset to song start; a marker in entry 0 plays pattern 0 (fw 1.7 did not check it)
+			next = seq_activeSong[0] < MAX_PATTERN ? seq_activeSong[0] : 0;
+			seq_songPositionPointer = 0;
+		}
+		seq_pendingPattern = next;
+	}
+	const uint8_t changed = (seq_activePattern != seq_pendingPattern) || seq_loadPendigFlag;
+	seq_setPendingPatternActive();
+	return changed ? SEQC_PAT_CHANGED : SEQC_PAT_SAME;
+}
+//------------------------------------------------------------------------------
+/** what seq_cbPatternEnd() will do at the next pattern end, without side effects */
+static bool seq_cbPeekNextPattern(void *ctx, uint8_t *pattern)
+{
+	(void)ctx;
+	uint8_t next = seq_pendingPattern;
+	if(seq_activePattern == seq_pendingPattern)
+	{
+		next = seq_determineNextPattern(0);
+		if(next == SONG_LOOP)
+			next = seq_activeSong[0] < MAX_PATTERN ? seq_activeSong[0] : 0;
+	}
+	if(next >= MAX_PATTERN)
+	{
+		*pattern = SEQC_NO_PATTERN;     //the song ends at the next pattern end
+		return false;
+	}
+	*pattern = next;
+	return (next != seq_activePattern) || seq_loadPendigFlag;
+}
+//------------------------------------------------------------------------------
+/** the effective length of the longest track of a pattern (fw 1.7 seq_getLongestTrack()) */
+static uint8_t seq_masterLength(uint8_t pattern)
+{
+	uint8_t master = 0;
+	for(uint8_t i=1;i<NUM_TRACKS;i++)
+	{
+		if(seq_patternSet.length[pattern][i] > seq_patternSet.length[pattern][master])
+			master = i;
+	}
+	const uint8_t len = seq_patternSet.length[pattern][master];
+	if(len == 0)
+		return 16;
+	return len > NUM_STEPS ? NUM_STEPS : len;
+}
+//------------------------------------------------------------------------------
+/** N6: a Song Position Pointer while stopped or armed. In song mode, walk the song to
+ * absStep and activate that entry; returns the steps since its run of identical
+ * entries began. In pattern mode the pattern has looped since step 0. */
+static uint32_t seq_cbSeekPosition(void *ctx, uint32_t absStep)
+{
+	(void)ctx;
+	if(!seq_songModeEnabled || (seq_activeSong[0] >= MAX_PATTERN))
+		return absStep;
+
+	uint32_t entryStart = 0;    //absolute step where entry idx begins
+	uint32_t runStart = 0;      //absolute step where the run of identical entries began
+	uint32_t lastEnd = 0;       //end of the last entry walked through completely
+	uint32_t lastRunStart = 0;
+	uint32_t steps = 0;
+	uint8_t idx = 0;
+	uint8_t lastIdx = 0;
+	uint8_t prev = SONG_END;    //pattern of the entry before idx
+	uint8_t found = 0;
+
+	//every pass adds an entry of at least one step, or wraps at SONG_LOOP to entry 0,
+	//which is a pattern, so the walk ends
+	for(;;)
+	{
+		const uint8_t entry = seq_activeSong[idx];
+		if(entry == SONG_LOOP)
+		{
+			idx = 0;
+			continue;
+		}
+		if(entry >= MAX_PATTERN)
+			break;      //SONG_END
+		if(entry != prev)
+			runStart = entryStart;
+		const uint32_t len = seq_masterLength(entry);
+		if(absStep < entryStart + len)
+		{
+			steps = absStep - runStart;
+			found = 1;
+			break;
+		}
+		prev = entry;
+		lastIdx = idx;
+		lastRunStart = runStart;
+		entryStart += len;
+		lastEnd = entryStart;
+		idx = (uint8_t)((idx + 1) % MAX_SONG_LENGTH);
+	}
+	if(!found)
+	{
+		//past SONG_END: the last step of the last entry
+		idx = lastIdx;
+		steps = lastEnd - 1 - lastRunStart;
+	}
+
+	//activate the entry with the normal pattern-change side effects. Inside the run of
+	//the active pattern nothing changes and nothing reloads, as at a pattern end of the
+	//song walk: a locate in the DAW loses no unsaved edit and loads no kit again. The
+	//call still refreshes the song screen and the LEDs.
+	seq_songPositionPointer = idx;
+	seq_pendingPattern = seq_activeSong[idx];
+	seq_setPendingPatternActive();
+	return steps;
+}
+//------------------------------------------------------------------------------
+/** An event fires (spec 6.4): note off the voice's last note, apply the event's own
+ * p-locks (D5), trigger the voice, send the MIDI Note On with the event's velocity
+ * and the note override. A roll hit is recorded at its own step (N11). */
+static void seq_cbTrigger(void *ctx, const seqc_event_t *ev)
+{
+	(void)ctx;
+	const uint8_t voiceNr = ev->track;
+	const Step plocks = { .param1Nr = ev->p1Nr, .param1Val = ev->p1Val, .param2Nr = ev->p2Nr, .param2Val = ev->p2Val };
+
+	// if a note is on for that voice send note-off first
+	voiceControl_noteOff(voiceNr);
+
+	seq_parseAutomationNodes(voiceNr, &plocks);
+
+	//Trigger internal synth voice
+	voiceControl_noteOn(voiceNr, ev->note, ev->vel);
+
+	// the note that is played will be whatever is received unless we have a note override set
+	// A note override is any non-zero value for this parameter
+	const uint8_t midiNote = activeParameters[PAR_MIDI_NOTE1 + voiceNr] == 0 ? ev->note : activeParameters[PAR_MIDI_NOTE1 + voiceNr];
+	seq_sendMidiNoteOn(midi_MidiChannels[voiceNr], midiNote, ev->vel);
+
+	//record roll notes at their own step
+	if((ev->flags & SEQC_EVF_ROLL) && seq_recordActive)
+		seq_recordNoteAtStep(ev->pattern, voiceNr, ev->step, ev->vel, ev->note);
+}
+//------------------------------------------------------------------------------
+/** MIDI Note Off one pulse after the trigger (fw 1.7 seq_processFlam()) */
+static void seq_cbNoteOff(void *ctx, uint8_t track)
+{
+	(void)ctx;
+	voiceControl_noteOff(track);
+}
+//------------------------------------------------------------------------------
+/** Step boundary, the rest of fw 1.7 seq_nextStep(): beat LED, erase on the active
+ * track, follow-bar, chase light and the MTC check. The erase runs before the core
+ * generates the step, so an erased step does not play. */
+static void seq_cbStepBoundary(void *ctx, uint32_t absStep)
+{
+	(void)ctx;
+	(void)absStep;
+
+	//---------- now check if the master track is at a full beat position to flash the start/stop button --------
+	const uint8_t masterStepPos = seqc_trackStep(seqc_masterTrack());
+	if((masterStepPos&3) == 0)
+	{
+		//a quarter beat occured (multiple of 4 steps in the 16 step pattern)
+		//turn on the start/stop led (beat indicator)
+		led_setValue(1,LED_START_STOP);
+	}
+	else if ((masterStepPos&3) == 1)
+	{
+		//turn it of again on the next step
+		led_setValue(0,LED_START_STOP);
+	}
+
+	// **RECORD if we are in erase mode (shift clear while record and playing)
+	// and this is the active track on the front, we erase the note value
+	const uint8_t eraseTrack = frontParser_activeTrack;
+	if(seq_eraseActive && (eraseTrack < NUM_TRACKS) && !(seq_mutedTracks & (1<<eraseTrack)))
+	{
+		const uint8_t eraseStep = seqc_trackStep(eraseTrack);
+		if((eraseStep < NUM_STEPS) && seq_intIsMainStepActive(eraseTrack,eraseStep,seq_activePattern))
+		{
+			//sub steps are ditched, so only remove main step
+			seq_setMainStep(seq_activePattern, eraseTrack, eraseStep,0);
+			//if steps are shown, (active bar) turn off LED
+			if( (eraseStep >= (menu_activeBar*16)) && (eraseStep < (menu_activeBar+1)*16))
+			{
+				led_setValue(0,led_idx2StepLed(eraseStep%16));
+			}
+		}
+	}
+
+	//step display follows bars
+	if(activeParameters[PAR_FOLLOW] & FOLLOW_BAR ) {
+
+		//only update if bar changed
+		if(menu_activeBar != seqc_trackStep(menu_getActiveVoice())/16)
+		{
+			if( menu_activePage < PATTERN_LOAD_PAGE || menu_activePage > SONG_MODE_PAGE)
+			{
+				menu_setShownPattern(seq_activePattern);
+				led_clearSequencerLeds();
+				//query current sequencer step states and light up the corresponding leds
+				const uint8_t trackNr = menu_getActiveVoice(); //max 6 => 0x6 = 0b110
+
+				//update menu_activeBar and Bar LEDs
+				menu_activeBar = seqc_trackStep(trackNr)/16;
+
+				led_updateSeqLeds();
+			}
+		}
+	}
+
+	//chase light on the step LEDs
+	const uint8_t shownPattern = menu_getViewedPattern();
+	const uint8_t playedPattern = menu_playedPattern;
+
+	const uint8_t stepIdx = seqc_trackStep(frontParser_activeTrack);
+
+	const uint8_t isOnActivePage = (stepIdx >= menu_activeBar*16) && (stepIdx < (menu_activeBar*16+16));
+
+	if( (shownPattern == playedPattern) && (isOnActivePage)) {
+		//only update chaselight LED when in step edit mode
+		if( (menu_activePage < MENU_MIDI_PAGE) || menu_activePage == PERF_PAGE ||menu_activePage == SEQ_PAGE || menu_activePage == EUKLID_PAGE) {
+			led_setActive_step(stepIdx%16);
+		}
+	} else {
+		led_clearActive_step();
+	}
+
+	// check mtc, which might stop the sequencer if we haven't seen one in a while
+	midiParser_checkMtc();
+}
+//------------------------------------------------------------------------------
+/** every step of the tempo, also while stopped (N8) */
+static void seq_cbTempoStep(void *ctx)
+{
+	(void)ctx;
+	led_blinkHandler(); //blink leds in sync to tempo/seq
+}
+//------------------------------------------------------------------------------
+/** internal sync only: one MIDI clock */
+static void seq_cbMidiClockOut(void *ctx)
+{
+	(void)ctx;
+	seq_sendRealtime(MIDI_CLOCK);
+}
+//------------------------------------------------------------------------------
+/** while running, every 4 ticks: one pulse of the clock out jack. The output PPQ
+ * prescaler counts the pulses itself (N8). Its count is set from the position
+ * first, so that a Continue from inside a step or after a song position stays on
+ * the step grid: trigger_reset(1) only puts it at 0, which is right for a start
+ * at step 0. The count runs over four steps, so 2 PPQ stays on every second step
+ * counted from the start of the song. */
+static void seq_cbClockOutPulse(void *ctx, uint8_t pulseInStep)
+{
+	(void)ctx;
+	trigger_setClockPhase((uint8_t)(((uint32_t)seqc_absStep() % 4u) * SEQC_PULSES_PER_STEP + pulseInStep));
+	trigger_clockTick(0, 0);
+}
+//------------------------------------------------------------------------------
+/** N18.2: MIDI Start, Stop and Continue go out only when the LXR is the master. As
+ * a slave it sends none; MIDI thru, when on, forwards what arrives, so downstream
+ * gear gets no duplicates. seq_coreSyncMode is the mode the core runs in. */
+static void seq_sendTransport(const uint8_t status)
+{
+	if(seq_coreSyncMode == SEQC_SYNC_INTERNAL)
+		seq_sendRealtime(status);
+}
+//------------------------------------------------------------------------------
+/** A transport change: the side effects of fw 1.7 seq_setRunning() and
+ * seq_resetPosition(), the run state of seq_isRunning(), and the start/stop
+ * button and LED, which now follow every change (fw 1.7 only told them about MTC) */
+static void seq_cbTransport(void *ctx, seqc_transport_t change)
+{
+	(void)ctx;
+	switch(change)
+	{
+	case SEQC_TRANSPORT_STOP:
+		seq_running = 0;
+		preset_touchTimer(PRESET_PAT_TIMER);
+		seq_sendTransport(MIDI_STOP);
+		trigger_reset(0);
+		// if mtc was doing it's thing, tell it to stop it.
+		midiParser_checkMtc();
+		break;
+
+	case SEQC_TRANSPORT_REWIND:
+		led_resetBlinkTimer();
+		seq_songPositionPointer = 0xff;     //before entry 0: the first pattern end moves it to 0
+		// send notes off on all channels that have notes playing and reset our bitmap to reflect that
+		voiceControl_noteOff(0xFF);
+		break;
+
+	case SEQC_TRANSPORT_ARM:
+		seq_running = 1;
+		//abort pattern save timer, since seq is running again...
+		preset_touchTimer(PRESET_STOP_PAT_TIMER);
+		break;
+
+	case SEQC_TRANSPORT_START:
+	case SEQC_TRANSPORT_CONTINUE:
+		seq_running = 1;
+		//abort pattern save timer, since seq is running again...
+		preset_touchTimer(PRESET_STOP_PAT_TIMER);
+		seq_sendTransport(change == SEQC_TRANSPORT_START ? MIDI_START : MIDI_CONTINUE);
+		trigger_reset(1);
+		break;
+	}
+
+	uart_sendFrontpanelByte(FRONT_SEQ_CC);
+	uart_sendFrontpanelByte(FRONT_SEQ_RUN_STOP);
+	uart_sendFrontpanelByte(seq_running);
+}
+//------------------------------------------------------------------------------
+/** the probability draw: the core uses 1 + random() % 100 */
+static uint32_t seq_cbRandom(void *ctx)
+{
+	(void)ctx;
+	return GetRngValue();
+}
+//------------------------------------------------------------------------------
+static const seqc_host_t seq_host =
+{
+	.ctx = NULL,
+	.stepOn = seq_cbStepOn,
+	.step = seq_cbStep,
+	.timing = seq_cbTiming,
+	.trackLength = seq_cbTrackLength,
+	.shuffle = seq_cbShuffle,
+	.muted = seq_cbMuted,
+	.rollRate = seq_cbRollRate,
+	.activePattern = seq_cbActivePattern,
+	.patternEnd = seq_cbPatternEnd,
+	.peekNextPattern = seq_cbPeekNextPattern,
+	.seekPosition = seq_cbSeekPosition,
+	.trigger = seq_cbTrigger,
+	.noteOff = seq_cbNoteOff,
+	.stepBoundary = seq_cbStepBoundary,
+	.tempoStep = seq_cbTempoStep,
+	.midiClockOut = seq_cbMidiClockOut,
+	.clockOutPulse = seq_cbClockOutPulse,
+	.transport = seq_cbTransport,
+	.random = seq_cbRandom,
+};
+//------------------------------------------------------------------------------
+static void seq_initCore(void)
+{
+	for(uint8_t i=0;i<NUM_TRACKS;i++)
+		seq_stepCopy[i] = SEQC_NO_STEP;
+	seq_phaseCopy = 0.f;
+
+	seqp_init();
+	seqc_init(&seq_host, SEQC_CPU_HZ);
+	seq_coreReady = 1;
+}
+//------------------------------------------------------------------------------
+/** apply the posts of the other contexts, in the order sync mode, clock in PPQ,
+ * tempo, stop, rewind, start, one-shot rolls, skip-once markers */
+static void seq_applyMailbox(void)
+{
+	SeqMailbox mb;
+	const uint32_t primask = seq_mailboxLock();
+	mb = seq_mailbox;
+	memset(&seq_mailbox, 0, sizeof seq_mailbox);
+	seq_mailboxPosted = 0;
+	seq_mailboxUnlock(primask);
+
+	if(mb.syncValid)
+	{
+		//the copy first: a transport change that the switch causes (an armed start in
+		//internal sync) goes out as the new mode wants (N18.2)
+		if(mb.syncMode <= SEQC_SYNC_MIDI)
+			seq_coreSyncMode = mb.syncMode;
+		seqc_setSyncMode((seqc_sync_t)mb.syncMode);
+	}
+	if(mb.ppqValid)
+		seqc_setAnalogPpq(mb.ppq);
+	if(mb.tempoValid)
+		seqc_setTempo((float)mb.tempo);
+
+	if(mb.transport & SEQ_MB_STOP)
+		seqc_stop();
+	if(mb.transport & SEQ_MB_REWIND)
+	{
+		seqc_rewind();
+		//fw 1.7 seq_resetPosition() sent all notes off on every stop press, also when stopped already
+		voiceControl_noteOff(0xFF);
+	}
+	if(mb.transport & SEQ_MB_START)
+		seqc_start();
+
+	for(uint8_t i=0;i<NUM_TRACKS;i++)
+	{
+		if(mb.rollMask & (1 << i))
+		{
+			//one-shot roll (seq_setRoll()): trigger, and record while running. A note
+			//recorded on the next step sets its skip-once marker in the core at once
+			//(seq_postSkipOnce() inside seq_tick()), before seqc_process() reaches it
+			seq_triggerVoice(i,ROLL_VOLUME,SEQ_DEFAULT_NOTE);
+			seq_addNote(i,ROLL_VOLUME,SEQ_DEFAULT_NOTE);
+		}
+	}
+	for(uint8_t i=0;i<NUM_TRACKS;i++)
+	{
+		if(mb.skipMask & (1 << i))
+			seqc_skipOnce(i, mb.skipStep[i]);
+	}
+}
+//------------------------------------------------------------------------------
+/** feed the queued sync events to the core, oldest first; returns 1 if there was one */
+static uint8_t seq_drainSyncQueues(seqc_time_t now)
+{
+	seqp_src_t source;
+	seqq_entry_t entry;
+	seqc_time_t stamp;
+	uint8_t drained = 0;
+
+	while(seqp_syncPop(now, &source, &entry, &stamp))
+	{
+		drained = 1;
+		//the RX filter for MIDI system messages; the core checks the sync mode
+		if((source != SEQP_SRC_JACK) && !(midiParser_txRxFilter & MIDI_FILTER_SYSTEM))
+			continue;
+		if(entry.type == SEQQ_SONG_POSITION)
+			seqc_songPosition(entry.value);
+		else
+			seqc_syncEvent((seqc_sync_ev_t)entry.type, stamp);
+	}
+	return drained;
+}
+//------------------------------------------------------------------------------
+/** Copy the core state that other contexts read (N7), only what can have changed:
+ * - the step indices change at a step boundary, which moves the absolute step, or
+ *   through a post or a sync event (a rewind, a song position);
+ * - the phase, the costly one, is read only by recording (seq_addNote());
+ * - in the slave modes seq_getBpm() shows the incoming tempo, rounded, and the
+ *   LFOs follow it (N9); it changes only with a clock. */
+static void seq_refreshCopies(uint8_t changed)
+{
+	static int32_t lastAbsStep = -2;    //never an absolute step: the first call copies
+	const int32_t absStep = seqc_absStep();
+	if(changed || (absStep != lastAbsStep))
+	{
+		lastAbsStep = absStep;
+		for(uint8_t i=0;i<NUM_TRACKS;i++)
+			seq_stepCopy[i] = seqc_trackStep(i);
+	}
+	if(seq_recordActive)
+		seq_phaseCopy = seqc_stepPhase();
+
+	if(changed && seq_isSyncExternal)
+	{
+		const uint16_t bpm = (uint16_t)(seqc_currentBpm() + 0.5f);
+		if(bpm != seq_tempo)
+		{
+			seq_tempo = bpm;
+			lfo_recalcSync();
+		}
+	}
+}
+//------------------------------------------------------------------------------
+/** call periodically to check if the next step has to be processed (spec 4.3, N7).
+ * Called from soundengine_process() with the TIM2 interrupt disabled, and from the
+ * TIM2 interrupt; the two never overlap. Most calls find nothing to do: they read
+ * the post flag and the queue indices, the core returns at once (N10), and the
+ * copies are refreshed only where something changed. */
+void seq_tick()
+{
+	//a kit autoload inside a core callback runs soundengine_process() and so seq_tick()
+	//again: the nested call must not touch the mailbox, the queues or the core
+	if(seq_inTick || !seq_coreReady)
+		return;
+	seq_inTick = 1;
+
+	uint8_t changed = 0;
+	if(seq_mailboxPosted)
+	{
+		seq_applyMailbox();
+		changed = 1;
+	}
+
+	const seqc_time_t now = seqp_now();
+	if(seq_drainSyncQueues(now))
+		changed = 1;
+	seqc_process(now);
+
+	seq_refreshCopies(changed);
+
+	seq_inTick = 0;
+}
+```
+
+- [ ] **Step 23: Update the prototypes in `sequencer.h`; add `trigger_setClockPhase()`**
+
+`seq_processFlam()` is gone (fw 1.7 header lines 172-175). `seq_nextStep()` stays declared for `clockSync.c` until E2.6:
+
+`Core/Inc/Soundengine/Sequencer/sequencer.h`, replace:
+
+```c
+void seq_nextStep();
+//------------------------------------------------------------------------------
+void seq_processFlam(uint8_t idx);
+//------------------------------------------------------------------------------
+```
+
+with:
+
+```c
+void seq_nextStep();
+//------------------------------------------------------------------------------
+```
+
+Both are gone and had no live callers (header lines 203-206):
+
+`Core/Inc/Soundengine/Sequencer/sequencer.h`, delete:
+
+```c
+void seq_setDeltaT(float delta);
+//------------------------------------------------------------------------------
+void seq_triggerNextMasterStep(uint8_t stepSize);
+//------------------------------------------------------------------------------
+```
+
+The new recording function:
+
+`Core/Inc/Soundengine/Sequencer/sequencer.h`, replace:
+
+```c
+/** add a note to the current pattern position*/
+void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note);
+```
+
+with:
+
+```c
+/** add a note to the current pattern position*/
+void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note);
+//------------------------------------------------------------------------------
+/** write a recorded note into a step: note, velocity, probability 100, main step on (N11) */
+void seq_recordNoteAtStep(uint8_t targetPattern, uint8_t trackNr, uint8_t step, uint8_t vel, uint8_t note);
+```
+
+The clock-in PPQ post, called from `CortexParser.c` from E2.5 on:
+
+`Core/Inc/Soundengine/Sequencer/sequencer.h`, replace:
+
+```c
+void seq_setExtSync(uint8_t isExt);
+```
+
+with:
+
+```c
+void seq_setExtSync(uint8_t isExt);
+//------------------------------------------------------------------------------
+/** set the PPQ of the clock in jack, 4 or 24; applied by the next seq_tick() */
+void seq_setClockInPpq(uint8_t ppq);
+```
+
+The clock out divider's count, which `seq_cbClockOutPulse()` sets from the position (decision 10).
+The function goes right above `trigger_reset()` (fw 1.7 `TriggerOut.c` lines 557-559), outside
+the blocks that E2.5 and E2.6 delete:
+
+`Core/Src/Soundengine/TriggerOut.c`, replace:
+
+```c
+void trigger_reset(uint8_t value)
+{
+	trigger_setPin(TRIGGER_RESET,1-value);
+```
+
+with:
+
+```c
+/** LICHOMAT: put the clock out divider at pulse 0..95 of the 96 PPQN grid, counted
+ * over four steps, before the next trigger_clockTick(). The sequencer calls it with
+ * the transport position, so the output stays on the step grid after a Continue
+ * from inside a step or after a song position. */
+void trigger_setClockPhase(uint8_t pulse)
+{
+	trigger_nextPulseOut1 = pulse % 96;
+}
+//--------------------------------------------------
+void trigger_reset(uint8_t value)
+{
+	trigger_setPin(TRIGGER_RESET,1-value);
+```
+
+`Core/Inc/Soundengine/TriggerOut.h`, replace:
+
+```c
+void trigger_reset(uint8_t value);
+```
+
+with:
+
+```c
+void trigger_reset(uint8_t value);
+void trigger_setClockPhase(uint8_t pulse);//the clock out divider's count, 0..95 over four steps
+```
+
+- [ ] **Step 24: Mention the checks in the handoff guide**
+
+`docs/lichomat/HANDOFF.md`, replace:
+
+```markdown
+tools/check.sh             # host tests + release build + memory summary + warning count; non-zero exit on failure
+```
+
+with:
+
+```markdown
+tools/check.sh             # host tests + release build + memory summary + warning count; non-zero exit on failure
+tools/fw_checks.sh         # after check.sh: ELF and source checks of the firmware integration (E2.2-E2.6)
+```
+
+- [ ] **Step 25: Give the edited files CRLF line endings**
+
+The Edit tool keeps the line endings of a file, but text it inserts may come out as LF.
+Normalise both files (the script reads each file completely before it writes it):
+
+```bash
+python3 - Core/Src/Soundengine/Sequencer/sequencer.c Core/Inc/Soundengine/Sequencer/sequencer.h \
+  Core/Src/Soundengine/TriggerOut.c Core/Inc/Soundengine/TriggerOut.h <<'EOF'
+import sys
+for path in sys.argv[1:]:
+    with open(path, 'rb') as f:
+        data = f.read()
+    data = data.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+    with open(path, 'wb') as f:
+        f.write(data)
+    print('CRLF', path)
+EOF
+```
+
+Expected: four lines starting with `CRLF`.
+
+- [ ] **Step 26: Build and run the checks**
+
+Run:
+
+```bash
+tools/check.sh && tools/fw_checks.sh E2.2
+```
+
+Expected:
+
+```
+== firmware build (release)
+memory: ITCM 13128/16384 B (80.1%, free 3256)  DTCM 107388/131072 B (81.9%, rest is stack)  RAM <n>/393216 B (...)  image <n>/1015808 B (...)
+image: <repo>/build/release/LXR_V2_V1.7.img
+== compiler warnings: 0
+PASS E2.2
+```
+
+- ITCM drops from 15000 B to 13128 B.
+- RAM and the image grow by the core's queue and state, and by the sync queues. With the E1 core
+  of this plan (E1.1–E1.13, Arm GNU 14.3.rel1): RAM 279516 B (+8484 B), image 289868 B (+15180 B);
+  after E2.6, RAM 279492 B (+8460 B) and image 290436 B (+15748 B).
+  The spec budgets about 7.5 KB of RAM (§10). With the 24-byte events of N2 the event queue alone
+  is 6 KB, so expect about 8.5 KB.
+- If a warning shows up, fix it: the count must be 0.
+
+- [ ] **Step 27: Review against fw 1.7**
+
+Read the diff (`git diff -- Core/Src/Soundengine/Sequencer/sequencer.c`) with this list. Each item
+is fw 1.7 behaviour that must survive:
+
+- [ ] The tempo LED blinks while stopped (`tempoStep` → `led_blinkHandler()`).
+- [ ] MIDI clock out runs while stopped in internal sync, and not at all in the slave modes. It goes
+  out through `seq_sendRealtime()` (TX filter).
+- [ ] **Start** (`transport` START) sends MIDI Start in internal sync, `trigger_reset(1)` and the
+  save-timer abort, before the first note of step 0.
+- [ ] **Stop** (STOP, then REWIND) sends MIDI Stop in internal sync, `trigger_reset(0)`, all notes
+  off, the blink timer reset and song pointer 255. It also arms the save timer and runs the MTC
+  check.
+- [ ] In the slave modes no MIDI Start, Stop or Continue goes out (N18.2): every transport send goes
+  through `seq_sendTransport()`, which checks `seq_coreSyncMode`. The checks cover this.
+- [ ] Clock out: `seq_cbClockOutPulse()` sets the divider from `seqc_absStep()` and `pulseInStep`
+  before `trigger_clockTick()`, so after a Continue inside a step, or a song position, the jack
+  pulses stay on the step grid at every output PPQ.
+- [ ] A song position in song mode that lands in the run of the active pattern changes no pattern:
+  `seq_loadPendigFlag` is not set, so `seq_setPendingPatternActive()` only refreshes the screen.
+- [ ] A `seq_tick()` without a post, a queued event or anything due masks no interrupt and copies
+  nothing but what changed; the phase copy is refreshed only while recording.
+- [ ] A second stop press still sends all notes off (the mailbox applies it on every rewind post).
+- [ ] At a pattern end, the song advances only when no other pattern is pending. `SONG_LOOP`
+  restarts at entry 0. The same pattern still runs `seq_setPendingPatternActive()`, which refreshes
+  the UI and consumes `SKIP_NEXT_KIT_AUTOLOAD`.
+- [ ] A pattern change still copies the backup buffer, loads the kit, sends Program Change and all
+  notes off, and updates the LEDs. All of that is in `seq_setPendingPatternActive()`.
+- [ ] The beat LED follows the master track's local step (`&3`).
+- [ ] Erase works on the front's active track when the track is not muted and the main step is set,
+  and the step LED goes off.
+- [ ] Follow-bar and the chase light use the new indices. The MTC check runs on every step.
+- [ ] Roll: the period counts on the track-local index, and a roll plays on muted tracks too, as
+  in fw 1.7 (the core exempts roll events from mutes). A roll is recorded at its own step. The
+  one-shot roll fires when stopped or in one-shot mode.
+- [ ] `seq_isRunning()` is 1 while armed. `seq_getStepIndex()` returns 255 before the first step.
+- [ ] Recording: from 50 % of the step a note goes to the next step and posts a skip-once marker
+  (D6), or sets it in the core at once when it is recorded inside `seq_tick()` (the one-shot roll).
+  Nothing is written before the first step. One marker per track reaches the core; the per-track
+  markers of the core come with E1.14 (N18.1).
+- [ ] A kit autoload inside a callback runs `soundengine_process()`. The nested `seq_tick()` returns
+  at once (`seq_inTick`).
+
+Intended changes, for the stage 1 report (spec §12; E4.1 collects them):
+- **Song end:** it now sends all notes off, and MIDI Stop when the LXR is the master, and the
+  start/stop button shows the stop. fw 1.7 did neither.
+- **Start/stop button and LED:** the `transport` callback sends `FRONT_SEQ_RUN_STOP` on every
+  change. fw 1.7 did this only for MTC, so the button got out of step after a MIDI or song-end stop.
+- **MIDI transport out as a slave (N18.2):** none. fw 1.7 answered a received Start with Stop and
+  Start, and a received Continue with Start, also with thru on. In internal sync Start and Stop go
+  out as before; a resume, which only the slave modes do, sends nothing. Question Q7.
+- **Clock out after a Continue or a song position:** the jack pulses follow the position, on the
+  step grid. fw 1.7 always restarted from step 1, where its divider restarted too.
+- **Song position in song mode inside the active pattern:** nothing reloads (no lost edits, no kit
+  load).
+- **One-shot roll:** it triggers up to one `seq_tick()` later, in the core's context. Its MIDI
+  velocity is the roll velocity when no step is current.
+
+- [ ] **Step 28: Commit**
+
+```bash
+git add tools/fw_checks.sh docs/lichomat/HANDOFF.md \
+  Core/Src/Soundengine/Sequencer/sequencer.c Core/Inc/Soundengine/Sequencer/sequencer.h \
+  Core/Src/Soundengine/TriggerOut.c Core/Inc/Soundengine/TriggerOut.h
+git commit -m "Drive the sequencer with seq_core; remove the pulse machine (E2.2)
+
+sequencer.c implements the seq_core host callbacks with the fw 1.7 side
+effects (pattern end, step boundary, transport, trigger with the event's
+own p-locks). The public seq_* API posts to a PRIMASK mailbox that
+seq_tick() applies, then seq_tick() drains the sync queues and runs
+seqc_process(). seq_nextStep(), seq_processFlam() and the deltaT timing
+are gone; seq_setPendingPatternActive() and seq_setMute() leave ITCM.
+MIDI Start, Stop and Continue go out only in internal sync (N18.2), the
+clock out divider follows the position (trigger_setClockPhase()), and a
+seq_tick() with nothing to do returns after a few compares.
+Empty shims keep clockSync.c building until E2.6.
+tools/fw_checks.sh checks the ELF and the sources.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+**Hardware checks affected:**
+- H2: 1.7 projects play.
+- H3: the grid.
+- H4: shuffle with ratchets and shift.
+- H5: MIDI clock out with shuffle.
+- H8: choke.
+- H9: pattern change with shifted notes.
+- H10: recording without doubles (D6).
+- H12: the CPU meter (E3.3) measures this `seq_tick()`.
+
+H6, H7 and the clock jack are not testable on this build (see "Transitional code").
+
+---
+
+### Task E2.3: one MIDI Note On per trigger, Note Offs per voice, echo once (D4)
+
+D4: every sequencer trigger sends two Note Ons. `voiceControl_noteOn()` sends one with the plain
+note and the trigger velocity. `seq_triggerVoice()`, and from E2.2 on the `trigger` callback, sends
+one with the note override.
+
+**The changes:**
+- **`voiceControl_noteOn()`** stops sending MIDI (spec §7.1). It keeps the voice trigger, the
+  `active_voices` bit and the front-panel note message.
+- **One Note On per trigger.** The `trigger` callback and `seq_triggerVoice()` send the only Note
+  On, with the override applied. `seq_triggerVoice()` keeps fw 1.7's MIDI velocity, the volume of
+  the track's current step (N18.3), and uses the velocity the voice plays only before the first
+  step, where there is no current step.
+- **Note Offs per voice.** fw 1.7 remembered one note per MIDI channel. With the default globals
+  all voices share channel 1, and drum maps put all voices on one channel with different notes.
+  A kick and a hat on the same step then left the first note hanging, because its Note Off went
+  out with the second note's number. New `seq_sendVoiceNoteOn()` and `seq_sendVoiceNoteOff()`
+  remember the channel and note per voice, and `voiceControl_noteOff()` uses them. This is what
+  "no hanging notes" (spec §12, H11) needs. The per-channel functions stay for the API.
+- **Echo once.** `midiParser_noteOn()` already sends its echo in both play and record mode (its
+  `do_rec` is always 1). Without the second Note On from `voiceControl_noteOn()` the echo is
+  sent once in both modes, as Note Off of the voice's last note and then the Note On (N11). It now
+  goes through the per-voice functions.
+- **`seq_setMute()` bug.** It passed the track's MIDI channel to `voiceControl_noteOff()`, which
+  takes a voice index. It now passes the track. This is outside D1-D8 and is listed in the report.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/MIDI/MidiVoiceControl.c` (fw 1.7 lines 54-59 and 66-86)
+- Modify: `Core/Src/Soundengine/Sequencer/sequencer.c` (globals, `seq_triggerVoice()`,
+  `seq_setMute()`, after `seq_sendMidiNoteOn()`, the `trigger` callback)
+- Modify: `Core/Inc/Soundengine/Sequencer/sequencer.h`
+- Modify: `Core/Src/Soundengine/MIDI/MidiParser.c` (fw 1.7 lines 1517-1530)
+- Test: `tools/fw_checks.sh E2.3`
+
+- [ ] **Step 1: Write the failing check**
+
+Add the E2.3 checks before the task list:
+
+`tools/fw_checks.sh`, replace:
+
+```bash
+check_tasks="E2.2"
+```
+
+with:
+
+```bash
+# ---- E2.3: one MIDI Note On per trigger, Note Offs per voice (D4) ------------
+check_E2_3() {
+	need seq_sendVoiceNoteOn seq_sendVoiceNoteOff
+	must_not_call voiceControl_noteOn seq_sendMidiNoteOn seq_sendVoiceNoteOn
+	must_call voiceControl_noteOff seq_sendVoiceNoteOff
+	must_call midiParser_noteOn seq_sendVoiceNoteOn
+	must_not_call midiParser_noteOn seq_sendMidiNoteOn seq_midiNoteOff
+	no_source '^[[:space:]]+seq_sendMidiNoteOn\(' Core/Src/Soundengine/Sequencer/sequencer.c \
+		Core/Src/Soundengine/MIDI/MidiVoiceControl.c Core/Src/Soundengine/MIDI/MidiParser.c
+	no_source 'voiceControl_noteOff\(midi_MidiChannels' Core/Src/Soundengine/Sequencer/sequencer.c
+}
+
+check_tasks="E2.2 E2.3"
+```
+
+- [ ] **Step 2: Run it and see it fail**
+
+Run:
+
+```bash
+tools/fw_checks.sh E2.3
+```
+
+The ELF is still the one from E2.2. Expected:
+
+```
+FAIL E2.3: seq_sendVoiceNoteOn is not linked
+FAIL E2.3: seq_sendVoiceNoteOff is not linked
+FAIL E2.3: voiceControl_noteOn still calls seq_sendMidiNoteOn
+FAIL E2.3: voiceControl_noteOff does not call seq_sendVoiceNoteOff
+FAIL E2.3: midiParser_noteOn does not call seq_sendVoiceNoteOn
+FAIL E2.3: midiParser_noteOn still calls seq_sendMidiNoteOn
+FAIL E2.3: midiParser_noteOn still calls seq_midiNoteOff
+FAIL E2.3: '^[[:space:]]+seq_sendMidiNoteOn\(' found: Core/Src/Soundengine/Sequencer/sequencer.c:542:	seq_sendMidiNoteOn(midiChan, midiNote, stepData ? (stepData->volume&STEP_VOLUME_MASK) : vol); Core/Src/Soundengine/Sequencer/sequencer.c:1912:	seq_sendMidiNoteOn(midi_MidiChannels[voiceNr], midiNote, ev->vel); Core/Src/Soundengine/MIDI/MidiVoiceControl.c:57:		seq_sendMidiNoteOn(midiChan, note, vel);
+FAIL E2.3: 'voiceControl_noteOff\(midi_MidiChannels' found: 1007:			voiceControl_noteOff(midi_MidiChannels[trackNr]);
+```
+
+- [ ] **Step 3: `voiceControl_noteOn()` without MIDI; `voiceControl_noteOff()` per voice**
+
+fw 1.7 lines 52-59:
+
+`Core/Src/Soundengine/MIDI/MidiVoiceControl.c`, replace:
+
+```c
+	*/
+
+	if (active_voices & (1<<voice))
+	{
+    uint8_t midiChan = midi_MidiChannels[voice];
+		seq_sendMidiNoteOn(midiChan, note, vel);
+	}
+
+```
+
+with:
+
+```c
+	*/
+
+	//no MIDI Note On here: the caller sends exactly one (D4)
+
+```
+
+fw 1.7 lines 66-86. The Note Off no longer depends on `active_voices`: it depends on whether the voice has a MIDI note on.
+
+`Core/Src/Soundengine/MIDI/MidiVoiceControl.c`, replace:
+
+```c
+void voiceControl_noteOff(uint8_t voice)
+{
+	uint8_t midiChan; // which midi channel to send a note on
+
+	if(voice==0xff)
+	{
+		active_voices = 0;
+		seq_midiNoteOff(0xff);
+		return;
+	}
+
+	//only set voice inactive and send MIDI off when voice is currently playing
+	if(active_voices & (1<<voice))
+	{
+		active_voices &= (~(1<<voice));
+
+		//send midi note off
+		midiChan = midi_MidiChannels[voice];
+		seq_midiNoteOff(midiChan);
+	}
+}
+```
+
+with:
+
+```c
+void voiceControl_noteOff(uint8_t voice)
+{
+	if(voice==0xff)
+	{
+		active_voices = 0;
+		//the note of every voice, then any channel note sent without a voice
+		for(uint8_t i=0;i<NUM_TRACKS;i++)
+			seq_sendVoiceNoteOff(i);
+		seq_midiNoteOff(0xff);
+		return;
+	}
+
+	active_voices &= (~(1<<voice));
+
+	//send midi note off: the voice's last note, on the channel it was sent on
+	seq_sendVoiceNoteOff(voice);
+}
+```
+
+- [ ] **Step 4: Note bookkeeping per voice in `sequencer.c`**
+
+After `seq_resetBarOnPatternChange` (fw 1.7 line 113):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+uint8_t seq_resetBarOnPatternChange=0;
+```
+
+with:
+
+```c
+uint8_t seq_resetBarOnPatternChange=0;
+
+//LICHOMAT: the MIDI note of each voice, so that its Note Off matches its Note On also
+//when several voices share a MIDI channel (D4, spec 12)
+static uint8_t midi_voiceChan[NUM_TRACKS];	/**< channel of the voice's last Note On */
+static uint8_t midi_voiceNote[NUM_TRACKS];	/**< note of the voice's last Note On */
+static uint8_t midi_voicesOn=0;			/**< voices with a MIDI note on, one bit each */
+```
+
+At the end of `seq_sendMidiNoteOn()` (fw 1.7 lines 2737-2742), add the two functions:
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+	// keep track of which notes are on so we can turn them off later
+	midi_chan_notes[channel]=note;
+	midi_notes_on |= (1 << channel);
+
+}
+```
+
+with:
+
+```c
+	// keep track of which notes are on so we can turn them off later
+	midi_chan_notes[channel]=note;
+	midi_notes_on |= (1 << channel);
+
+}
+//------------------------------------------------------------------------------
+/* LICHOMAT: send the MIDI Note On of a voice on its channel and remember the channel
+ * and the note. A note of the voice that is still on gets its Note Off first, so a
+ * voice has at most one MIDI note on. Filtered like seq_sendMidiNoteOn(). */
+void seq_sendVoiceNoteOn(const uint8_t voice, const uint8_t note, const uint8_t veloc)
+{
+	MidiMsg msg = {0};
+
+	if(voice >= NUM_TRACKS)
+		return;
+	seq_sendVoiceNoteOff(voice);
+
+	// FILT filter out note msgs if appropriate
+	if((midiParser_txRxFilter & (MIDI_FILTER_NOTES<<4))==0)
+		return;
+
+	const uint8_t channel = midi_MidiChannels[voice];
+	msg.status = NOTE_ON | channel;
+	msg.data1 = note;
+	msg.data2 = veloc;
+	msg.bits.length = 2;
+	seq_sendMidi(msg);
+
+	midi_voiceChan[voice] = channel;
+	midi_voiceNote[voice] = note;
+	midi_voicesOn |= (uint8_t)(1 << voice);
+}
+//------------------------------------------------------------------------------
+/* LICHOMAT: the Note Off of the voice's last Note On, on the channel and with the note
+ * it was sent with, if it is still on. Not filtered, like seq_midiNoteOff(): the
+ * filter may have been switched on while the note sounds. */
+void seq_sendVoiceNoteOff(const uint8_t voice)
+{
+	MidiMsg msg = {0};
+
+	if((voice >= NUM_TRACKS) || !(midi_voicesOn & (1 << voice)))
+		return;
+	midi_voicesOn &= (uint8_t)~(1 << voice);
+
+	msg.status = NOTE_OFF | midi_voiceChan[voice];
+	msg.data1 = midi_voiceNote[voice];
+	msg.data2 = 0;
+	msg.bits.length = 2;
+	seq_sendMidi(msg);
+}
+```
+
+- [ ] **Step 5: Declare them in `sequencer.h`**
+
+`Core/Inc/Soundengine/Sequencer/sequencer.h`, replace:
+
+```c
+void seq_sendMidiNoteOn(const uint8_t channel, const uint8_t note, const uint8_t veloc);
+```
+
+with:
+
+```c
+void seq_sendMidiNoteOn(const uint8_t channel, const uint8_t note, const uint8_t veloc);
+//------------------------------------------------------------------------------
+// MIDI Note On and Note Off of a voice (track) on its channel; the Note Off always
+// matches the voice's last Note On, also when voices share a channel
+void seq_sendVoiceNoteOn(const uint8_t voice, const uint8_t note, const uint8_t veloc);
+void seq_sendVoiceNoteOff(const uint8_t voice);
+```
+
+- [ ] **Step 6: Send per voice from the triggers; fix `seq_setMute()`**
+
+`seq_triggerVoice()` as E2.2 left it. Its single Note On keeps fw 1.7's velocity, the volume of
+the track's current step (N18.3); before the first step, where fw 1.7 read step -1, it sends `vol`,
+the velocity the voice plays. The current-step copy `stepData` therefore stays, and only `midiChan`
+goes: `seq_sendVoiceNoteOn()` takes the voice's channel itself.
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+	uint8_t midiChan; // which midi channel to send a note on
+	uint8_t midiNote; // which midi note to send
+```
+
+with:
+
+```c
+	uint8_t midiNote; // which midi note to send
+```
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, delete:
+
+```c
+	midiChan = midi_MidiChannels[voiceNr];
+
+```
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+	//send the new note to midi/usb out
+	seq_sendMidiNoteOn(midiChan, midiNote, stepData ? (stepData->volume&STEP_VOLUME_MASK) : vol);
+```
+
+with:
+
+```c
+	//send the new note to midi/usb out: the only Note On (D4), with the current step's volume
+	//as in fw 1.7 (N18.3), or the voice's velocity before the first step
+	seq_sendVoiceNoteOn(voiceNr, midiNote, stepData ? (stepData->volume&STEP_VOLUME_MASK) : vol);
+```
+
+In the `trigger` callback `seq_cbTrigger()` (from E2.2):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+	seq_sendMidiNoteOn(midi_MidiChannels[voiceNr], midiNote, ev->vel);
+```
+
+with:
+
+```c
+	seq_sendVoiceNoteOn(voiceNr, midiNote, ev->vel);
+```
+
+In `seq_setMute()` (fw 1.7 lines 2058-2059):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+			// turn off the midi note that may be playing on that track
+			voiceControl_noteOff(midi_MidiChannels[trackNr]);
+```
+
+with:
+
+```c
+			// turn off the midi note that may be playing on that track
+			// (fw 1.7 passed the MIDI channel here, which turned off another voice)
+			voiceControl_noteOff(trackNr);
+```
+
+- [ ] **Step 7: Echo incoming notes per voice**
+
+In `midiParser_noteOn()`, fw 1.7 lines 1517-1525 and 1529-1530. The comment lines 1526-1528 stay between the two pieces.
+
+`Core/Src/Soundengine/MIDI/MidiParser.c`, replace:
+
+```c
+		if(do_rec) {
+			const uint8_t chan=midi_MidiChannels[voice];
+
+			// record note if rec is on
+			seq_addNote(voice,vel, note);
+
+			//if a note is on for that channel send note-off first
+			seq_midiNoteOff(chan);
+			//send the new note to midi/usb out
+```
+
+with:
+
+```c
+		if(do_rec) {
+			// record note if rec is on
+			seq_addNote(voice,vel, note);
+
+			//echo the note on the voice's channel, once in play and in record mode (D4):
+			//the voice's last note gets its Note Off first, then the new Note On is sent
+```
+
+`Core/Src/Soundengine/MIDI/MidiParser.c`, replace:
+
+```c
+			seq_sendMidiNoteOn(chan, note, vel);
+		}
+```
+
+with:
+
+```c
+			seq_sendVoiceNoteOn(voice, note, vel);
+		}
+```
+
+- [ ] **Step 8: Give the edited files CRLF line endings**
+
+```bash
+python3 - Core/Src/Soundengine/MIDI/MidiVoiceControl.c Core/Src/Soundengine/Sequencer/sequencer.c \
+  Core/Inc/Soundengine/Sequencer/sequencer.h Core/Src/Soundengine/MIDI/MidiParser.c <<'EOF'
+import sys
+for path in sys.argv[1:]:
+    with open(path, 'rb') as f:
+        data = f.read()
+    data = data.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+    with open(path, 'wb') as f:
+        f.write(data)
+    print('CRLF', path)
+EOF
+```
+
+Expected: four lines starting with `CRLF`.
+
+- [ ] **Step 9: Build and run the checks**
+
+Run:
+
+```bash
+tools/check.sh && tools/fw_checks.sh E2.2 E2.3
+```
+
+Expected:
+
+```
+== firmware build (release)
+memory: ITCM 13128/16384 B (80.1%, free 3256)  DTCM 107388/131072 B (81.9%, rest is stack)  RAM <n>/393216 B (...)  image <n>/1015808 B (...)
+image: <repo>/build/release/LXR_V2_V1.7.img
+== compiler warnings: 0
+PASS E2.2
+PASS E2.3
+```
+
+- [ ] **Step 10: Review**
+
+- [ ] There is no `seq_sendMidiNoteOn(` call left in `sequencer.c`, `MidiVoiceControl.c` or
+  `MidiParser.c` (the definition stays). The checks cover this.
+- [ ] Every path that triggers a voice sends at most one Note On:
+  - the sequencer (`trigger` callback);
+  - the one-shot roll (`seq_triggerVoice()`);
+  - an incoming MIDI note (echo);
+  - a front-panel pad: CortexParser calls `voiceControl_noteOn()` and sends no MIDI.
+- [ ] `voiceControl_noteOff(0xFF)`, sent on a pattern change and on a rewind, ends every voice's
+  note and every per-channel note.
+- [ ] `CortexParser.c:822` calls `voiceControl_noteOff(voice)` before it changes a voice's channel.
+  The Note Off therefore goes out on the old channel, which is what the per-voice record holds.
+- [ ] The TX note filter still gates Note Ons only. Note Offs go out unfiltered, as fw 1.7 did.
+
+- [ ] The one-shot roll's Note On has the current step's volume, as in fw 1.7 (N18.3), and the
+  voice's velocity only before the first step.
+
+Intended changes for the report:
+- one Note On per trigger, and Note Offs match per voice;
+- muting a track turns off that track's note.
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add tools/fw_checks.sh Core/Src/Soundengine/MIDI/MidiVoiceControl.c Core/Src/Soundengine/Sequencer/sequencer.c \
+  Core/Inc/Soundengine/Sequencer/sequencer.h Core/Src/Soundengine/MIDI/MidiParser.c
+git commit -m "Send one MIDI Note On per trigger and match Note Offs per voice (D4, E2.3)
+
+voiceControl_noteOn() no longer sends MIDI; the trigger callback,
+seq_triggerVoice() and the incoming-note echo send the only Note On.
+Notes are remembered per voice, so voices that share a channel no
+longer leave hanging notes. seq_setMute() turns off the muted track's
+note instead of the voice whose index equals its channel.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+**Hardware checks affected:**
+- H10: live recording from MIDI, no doubled echo.
+- H11: MIDI out with a note override, one Note On per hit and no hanging notes. Test it with two
+  tracks on the same channel and different notes too.
+
+---
+
+### Task E2.4: MIDI input only in seq_tick(), realtime and SPP from the interrupts (D7, D8)
+
+D8: in fw 1.7 the DIN receive FIFO has two consumers:
+- the main loop, directly and at the end of `soundengine_process()`;
+- the TIM2 interrupt, which runs only while the SD card is busy (N12). The two race only then.
+
+USB MIDI is parsed in the main loop, one message per pass. And the parser drives the MIDI sync
+directly. After this task:
+
+- **USART3 RX and `USBD_CDC_DataOut`:**
+  - Each takes a DWT stamp first.
+  - The realtime messages F8, FA, FB, FC go to their source's sync queue, through the E2.1
+    decoders. Every byte and message also goes into the normal receive queues, so routing and thru
+    keep working (spec §7.2).
+  - So do Song Position Pointers (N14): in the queue, an SPP stays in order with the Continue and
+    the clocks after it.
+- **Parsing:**
+  - Only `seq_tick()` parses: at most 32 DIN bytes and 8 USB messages per call.
+  - The calls in the main loop, in `soundengine_process()` and in `TIM2_IRQHandler` are removed.
+  - The nesting guard of `seq_tick()` also stops a nested parse (a Program Change that loads a
+    kit).
+- **The parser's realtime cases** only route (spec §8). Its SPP case is implemented by the queue
+  (D7).
+- **Realtime bytes inside a DIN message.** `midiParser_parseUartData()` handled them as a new
+  status. Thru then sent F8 with the data bytes of the last message, and a clock between the two
+  data bytes of an SPP turned it into a Note On. A realtime byte now goes out alone and leaves the
+  message in progress alone.
+- **The USB message queue** had no full check, so the 65th message wiped the queue. A full queue
+  now drops the new message.
+
+From this task on the MIDI slave works again: clocks, Start, Continue, Stop and SPP from DIN and
+USB reach the core with their stamps. The `seq_sync()` and `sync_*` calls are gone, so
+`clockSync.c` is dead code until E2.6 deletes it.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/MIDI/Uart.c` (include, `USART3_IRQHandler`, `uart_processMidi()`)
+- Modify: `Core/Inc/Soundengine/MIDI/Uart.h` (prototype of `uart_processMidi()`)
+- Modify: `Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c` (include, `USBD_CDC_DataOut()`)
+- Modify: `Core/Src/Soundengine/MIDI/MidiParser.c` (include, realtime and SPP cases, `midiParser_parseUartData()`)
+- Modify: `Core/Src/Soundengine/Sequencer/sequencer.c` (`seq_tick()`)
+- Modify: `Core/Src/main.c` (main loop, fw 1.7 lines 982-989)
+- Modify: `Core/Src/Soundengine/Soundengine.c` (fw 1.7 lines 98-99)
+- Modify: `Core/Src/stm32f7xx_it.c` (fw 1.7 line 273)
+- Modify: `Core/Inc/Soundengine/Sequencer/seq_core.h` (the comment on the execution context only)
+- Test: `tools/fw_checks.sh E2.4`
+
+- [ ] **Step 1: Write the failing check**
+
+Add the E2.4 checks before the task list:
+
+`tools/fw_checks.sh`, replace:
+
+```bash
+check_tasks="E2.2 E2.3"
+```
+
+with:
+
+```bash
+# ---- E2.4: MIDI input only in seq_tick(), realtime and SPP from the ISRs (D7, D8)
+check_E2_4() {
+	must_call USART3_IRQHandler seqp_dinByteIn
+	must_call USBD_CDC_DataOut seqp_usbMessageIn
+	need uart_processMidi usb_getMidi
+	must_not_call main uart_processMidi usb_getMidi midiParser_parseMidiMessage
+	must_not_call soundengine_process uart_processMidi
+	must_not_call TIM2_IRQHandler uart_processMidi
+	gone seq_sync sync_midiResetPosition sync_midiStartStop
+	no_source 'clockSync\.h' Core/Src/Soundengine/MIDI/MidiParser.c
+}
+
+check_tasks="E2.2 E2.3 E2.4"
+```
+
+- [ ] **Step 2: Run it and see it fail**
+
+```bash
+tools/fw_checks.sh E2.4
+```
+
+Expected:
+
+```
+FAIL E2.4: USART3_IRQHandler does not call seqp_dinByteIn
+FAIL E2.4: USBD_CDC_DataOut does not call seqp_usbMessageIn
+FAIL E2.4: main still calls uart_processMidi
+FAIL E2.4: main still calls usb_getMidi
+FAIL E2.4: main still calls midiParser_parseMidiMessage
+FAIL E2.4: soundengine_process still calls uart_processMidi
+FAIL E2.4: TIM2_IRQHandler still calls uart_processMidi
+FAIL E2.4: seq_sync is still linked
+FAIL E2.4: sync_midiResetPosition is still linked
+FAIL E2.4: sync_midiStartStop is still linked
+FAIL E2.4: 'clockSync\.h' found: 25:#include "Soundengine/Sequencer/clockSync.h"
+```
+
+- [ ] **Step 3: DIN: stamp and queue in the RX interrupt; parse with a budget**
+
+The include (fw 1.7 lines 17-18):
+
+`Core/Src/Soundengine/MIDI/Uart.c`, replace:
+
+```c
+#include "Soundengine/config.h"
+#include "main.h"
+```
+
+with:
+
+```c
+#include "Soundengine/config.h"
+#include "Soundengine/Sequencer/seq_platform.h"
+#include "main.h"
+```
+
+The stamp, as the first statement of the handler (fw 1.7 lines 48-50):
+
+`Core/Src/Soundengine/MIDI/Uart.c`, replace:
+
+```c
+void USART3_IRQHandler(void)
+{
+	uint32_t isrflags
+```
+
+with:
+
+```c
+void USART3_IRQHandler(void)
+{
+	//LICHOMAT: the time stamp first, as close to the arrival of the byte as possible
+	const uint32_t stamp = seqp_stamp();
+	uint32_t isrflags
+```
+
+The queue, right after the byte is read (fw 1.7 line 59):
+
+`Core/Src/Soundengine/MIDI/Uart.c`, replace:
+
+```c
+		data = (uint8_t)(USART3->RDR & (uint16_t)0xFF);
+```
+
+with:
+
+```c
+		data = (uint8_t)(USART3->RDR & (uint16_t)0xFF);
+
+		//LICHOMAT (D8): realtime bytes and Song Position Pointers go to the DIN sync queue
+		//with the stamp; every byte also goes to the RX FIFO below, for the MIDI parser
+		seqp_dinByteIn(data, stamp);
+```
+
+The budget (fw 1.7 lines 87-91):
+
+`Core/Src/Soundengine/MIDI/Uart.c`, replace:
+
+```c
+//-----------------------------------------------------------------------------
+void uart_processMidi()
+{
+	uint8_t data;
+	while(fifo_bufferOut(&fifo_midiRx, &data))
+```
+
+with:
+
+```c
+//-----------------------------------------------------------------------------
+//LICHOMAT (D8): only seq_tick() parses the received bytes, at most maxBytes per call
+void uart_processMidi(uint8_t maxBytes)
+{
+	uint8_t data;
+	while(maxBytes-- && fifo_bufferOut(&fifo_midiRx, &data))
+```
+
+The prototype (fw 1.7 lines 28-29). The old `()` declaration would clash with the new definition under gnu11:
+
+`Core/Inc/Soundengine/MIDI/Uart.h`, replace:
+
+```c
+//check if there is some received data in the Rx buffer and send it to the midi parser
+void uart_processMidi();
+```
+
+with:
+
+```c
+//send up to maxBytes received bytes from the Rx buffer to the midi parser; only seq_tick() calls it
+void uart_processMidi(uint8_t maxBytes);
+```
+
+- [ ] **Step 4: USB: stamp and queue in `USBD_CDC_DataOut()`; drop on a full queue**
+
+`usbd_cdc.c` is compiled with `-w`, so `check.sh` does not see its warnings. Step 11 compiles it once
+with warnings on. The new logic itself sits in `seq_syncq.c`, which is compiled with `-Wall -Wextra`.
+
+The include (fw 1.7 line 61):
+
+`Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c`, replace:
+
+```c
+#include "usbd_ctlreq.h"
+```
+
+with:
+
+```c
+#include "usbd_ctlreq.h"
+#include "Soundengine/Sequencer/seq_platform.h"
+```
+
+The stamp (fw 1.7 lines 931-932):
+
+`Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c`, replace:
+
+```c
+static uint8_t  USBD_CDC_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum)
+{
+```
+
+with:
+
+```c
+static uint8_t  USBD_CDC_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum)
+{
+  //LICHOMAT: one time stamp for all the events of the packet
+  const uint32_t stamp = seqp_stamp();
+```
+
+The queue and the full check, before the message is stored (fw 1.7 lines 1019-1020):
+
+`Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c`, replace:
+
+```c
+		if(length != 0)
+		{
+```
+
+with:
+
+```c
+		if(length != 0)
+		{
+			//LICHOMAT (D8): realtime messages and Song Position Pointers go to the USB sync
+			//queue with the stamp; every message also goes to the message queue, for the parser
+			seqp_usbMessageIn(usbData.cin, usbData.status, usbData.data1, usbData.data2, stamp);
+
+			//a full message queue keeps its messages and drops the new one (it used to overwrite them all)
+			if(((usb_MidiMessagesWrite + 1) & USB_MIDI_INPUT_BUFFER_MASK) == usb_MidiMessagesRead)
+				continue;
+
+```
+
+- [ ] **Step 5: The parser: realtime only routes, SPP comes from the queue, realtime bytes inside messages**
+
+`clockSync.h` goes (fw 1.7 lines 24-25):
+
+`Core/Src/Soundengine/MIDI/MidiParser.c`, replace:
+
+```c
+#include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Sequencer/clockSync.h"
+```
+
+with:
+
+```c
+#include "Soundengine/Sequencer/sequencer.h"
+```
+
+In `midiParser_parseMidiMessage()`, the realtime and SPP cases (fw 1.7 lines 1750-1782):
+
+`Core/Src/Soundengine/MIDI/MidiParser.c`, replace:
+
+```c
+      case MIDI_CLOCK:
+        if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
+          seq_sync();
+        break;
+      case MIDI_START:
+        if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
+        {
+          sync_midiResetPosition();
+          sync_midiStartStop(1);
+        }
+        break;
+      case MIDI_CONTINUE:
+        if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
+          sync_midiStartStop(1);
+        break;
+      case MIDI_STOP:
+        if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
+          sync_midiStartStop(0);
+        break;
+      case MIDI_SONG_POSITION_POINTER:
+        {
+          /* Two data bytes follow the status. Just like with the Pitch Wheel,
+          * these two bytes are combined into a 14-bit value. (See Pitch Wheel).
+          * This 14-bit value is the MIDI Beat upon which to start the song.
+          * Songs are always assumed to start on a MIDI Beat of 0. Each MIDI
+          * Beat spans 6 MIDI Clocks. In other words, each MIDI Beat is a 16th
+          * note (since there are 24 MIDI Clocks in a quarter note).
+          *
+          */
+          // TODO song position pointer is not implemented yet:
+          // position = msg.data1 | (msg.data2<<7)  (in MIDI beats = 16th notes)
+        }
+        break;
+```
+
+with:
+
+```c
+      case MIDI_CLOCK:
+      case MIDI_START:
+      case MIDI_CONTINUE:
+      case MIDI_STOP:
+        // routed above. The interrupt handlers also put them in the sync queues with
+        // their time stamp, and seq_tick() hands them to the timing core, applying the
+        // RX filter MIDI_FILTER_SYSTEM; the core checks the sync mode (D8).
+        break;
+      case MIDI_SONG_POSITION_POINTER:
+        // routed above. The interrupt handlers queue it as well, so that it stays in
+        // order with the Continue and the clocks after it; seq_tick() seeks there (D7).
+        // One unit (MIDI Beat) is a 16th note, one step.
+        break;
+```
+
+At the top of `midiParser_parseUartData()`, in place of the commented F8 test (fw 1.7 lines 1967-1972):
+
+`Core/Src/Soundengine/MIDI/MidiParser.c`, replace:
+
+```c
+  uint8_t parseMsg = 0;
+
+  // if (data == 0xF8)
+  // {
+  //   return;
+  // }
+```
+
+with:
+
+```c
+  uint8_t parseMsg = 0;
+
+  // system realtime bytes may come anywhere, also between the data bytes of another
+  // message: route them on their own and leave the message in progress alone
+  // (fw 1.7 routed them with the data bytes of the last message and lost the message)
+  if(data >= MIDI_CLOCK)
+  {
+    MidiMsg realtime = {0};
+    realtime.status = data;
+    realtime.bits.source = midiSourceMIDI;
+    midiParser_parseMidiMessage(realtime);
+    return;
+  }
+```
+
+The F8 case of the system-message switch can no longer be reached (fw 1.7 lines 1985-1987). The old text ends at `break;`: the two spaces after it in the file stay where they are.
+
+`Core/Src/Soundengine/MIDI/MidiParser.c`, replace:
+
+```c
+        case MIDI_CLOCK:
+          parseMsg = 1;
+          break;
+```
+
+with:
+
+```c
+        /* MIDI_CLOCK and the other realtime bytes are handled at the top of this function */
+```
+
+- [ ] **Step 6: Parse MIDI in `seq_tick()`**
+
+Before `seq_tick()` (from E2.2):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+//------------------------------------------------------------------------------
+/** call periodically to check if the next step has to be processed (spec 4.3, N7).
+```
+
+with:
+
+```c
+//------------------------------------------------------------------------------
+#define SEQ_DIN_BYTES_PER_TICK      32  /**< MIDI DIN bytes parsed per seq_tick() (spec 7.2) */
+#define SEQ_USB_MESSAGES_PER_TICK   8   /**< USB MIDI messages parsed per seq_tick() */
+
+/** MIDI input (D8): DIN and USB are parsed only here, in the seq_tick() context,
+ * with a budget per call. The handlers reach the core only through the mailbox. */
+static void seq_parseMidiInput(void)
+{
+	MidiMsg msg;
+
+	uart_processMidi(SEQ_DIN_BYTES_PER_TICK);
+	for(uint8_t i=0;(i<SEQ_USB_MESSAGES_PER_TICK) && usb_getMidi(&msg);i++)
+		midiParser_parseMidiMessage(msg);
+}
+//------------------------------------------------------------------------------
+/** call periodically to check if the next step has to be processed (spec 4.3, N7).
+```
+
+In `seq_tick()`:
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, replace:
+
+```c
+	seq_refreshCopies(changed);
+
+	seq_inTick = 0;
+```
+
+with:
+
+```c
+	seq_refreshCopies(changed);
+
+	//last, so that recording sees the state of this call. A note recorded here sets
+	//its skip-once marker in the core at once (seq_postSkipOnce() inside seq_tick())
+	seq_parseMidiInput();
+
+	seq_inTick = 0;
+```
+
+- [ ] **Step 7: Remove the other MIDI parsing calls**
+
+The main loop (fw 1.7 lines 982-990):
+
+Run this script on `Core/Src/main.c`. The old text mixes tabs and spaces, so the script replaces it:
+
+```bash
+python3 - <<'EOF'
+path = 'Core/Src/main.c'
+old = b'\t  //check if we have some usb midi messages and process them\r\n\t  MidiMsg msg;\r\n\t  if(usb_getMidi(&msg)) {\r\n\t\t  midiParser_parseMidiMessage(msg);\r\n\t  }\r\n\r\n\t\t//process midi on midi port\r\n\t\t\tuart_processMidi();\r\n\r\n'
+new = b'\t  //MIDI input (DIN and USB) is parsed in seq_tick() (D8)\r\n\r\n'
+data = open(path, 'rb').read()
+assert data.count(old) == 1, 'the old text is not in the file exactly once'
+open(path, 'wb').write(data.replace(old, new))
+print('replaced in', path)
+EOF
+```
+
+Expected output: `replaced in Core/Src/main.c`
+
+`soundengine_process()` (fw 1.7 lines 98-99):
+
+`Core/Src/Soundengine/Soundengine.c`, replace:
+
+```c
+		//process midi on midi port
+		uart_processMidi();
+```
+
+with:
+
+```c
+		//MIDI input is parsed in seq_tick() (D8)
+```
+
+`TIM2_IRQHandler` (fw 1.7 lines 271-273). E3.3 wraps these lines with the CPU meter later:
+
+`Core/Src/stm32f7xx_it.c`, replace:
+
+```c
+	seq_tick();
+	soundengine_calcNextSampleBlock();
+  uart_processMidi();
+```
+
+with:
+
+```c
+	seq_tick();
+	soundengine_calcNextSampleBlock();
+```
+
+- [ ] **Step 8: Correct the execution-context comment in `seq_core.h`**
+
+The comment describes how the firmware calls the core. The mailbox also carries the skip-once marker, and the queue drain also seeks. Only the comment changes.
+
+`Core/Inc/Soundengine/Sequencer/seq_core.h`, replace:
+
+```c
+ *   1. applies the mailbox of sequencer.c: seqc_start(), seqc_stop(), seqc_rewind(),
+ *      seqc_setSyncMode(), seqc_setTempo(), seqc_setAnalogPpq();
+ *   2. drains the DIN, USB and jack sync queues, merged in stamp order, into
+ *      seqc_syncEvent();
+ *   3. calls seqc_process(seqp_now());
+ *   4. parses MIDI input, which can call seqc_songPosition() and seqc_skipOnce().
+```
+
+with:
+
+```c
+ *   1. applies the mailbox of sequencer.c: seqc_setSyncMode(), seqc_setAnalogPpq(),
+ *      seqc_setTempo(), seqc_stop(), seqc_rewind(), seqc_start(), and seqc_skipOnce()
+ *      for the notes that seq_addNote() moved to the next step;
+ *   2. drains the DIN, USB and jack sync queues, merged in stamp order, into
+ *      seqc_syncEvent(), and a queued Song Position Pointer into seqc_songPosition();
+ *   3. calls seqc_process(seqp_now());
+ *   4. parses MIDI input, which reaches the core only through the mailbox.
+```
+
+- [ ] **Step 9: Give the edited files CRLF line endings**
+
+```bash
+python3 - Core/Src/Soundengine/MIDI/Uart.c Core/Inc/Soundengine/MIDI/Uart.h \
+  Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c Core/Src/Soundengine/MIDI/MidiParser.c \
+  Core/Src/Soundengine/Sequencer/sequencer.c Core/Src/main.c Core/Src/Soundengine/Soundengine.c \
+  Core/Src/stm32f7xx_it.c Core/Inc/Soundengine/Sequencer/seq_core.h <<'EOF'
+import sys
+for path in sys.argv[1:]:
+    with open(path, 'rb') as f:
+        data = f.read()
+    data = data.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+    with open(path, 'wb') as f:
+        f.write(data)
+    print('CRLF', path)
+EOF
+```
+
+Expected: nine lines starting with `CRLF`.
+
+- [ ] **Step 10: Build and run the checks**
+
+```bash
+tools/check.sh && tools/fw_checks.sh E2.2 E2.3 E2.4
+```
+
+Expected:
+
+```
+== firmware build (release)
+memory: ITCM 13128/16384 B (80.1%, free 3256)  DTCM 107388/131072 B (81.9%, rest is stack)  RAM <n>/393216 B (...)  image <n>/1015808 B (...)
+image: <repo>/build/release/LXR_V2_V1.7.img
+== compiler warnings: 0
+PASS E2.2
+PASS E2.3
+PASS E2.4
+```
+
+- [ ] **Step 11: Compile `usbd_cdc.c` once with warnings on**
+
+The middleware is built with `-w`. Recompile it from its recorded command with `-Wall -Wextra`
+instead, and look for warnings in the lines this task added:
+
+```bash
+python3 - <<'EOF'
+import json, re, subprocess
+entry = next(e for e in json.load(open('build/release/compile_commands.json')) if e['file'].endswith('usbd_cdc.c'))
+cmd = re.sub(r'(^| )-w( |$)', r'\1-Wall -Wextra\2', entry['command'])
+cmd = re.sub(r' -o \S+', ' -o /dev/null', cmd)
+out = subprocess.run(cmd, shell=True, cwd=entry['directory'], capture_output=True, text=True).stderr
+lines = [l for l in out.splitlines() if 'warning:' in l and 'usbd_cdc.c' in l]
+print(len(lines), 'warnings in usbd_cdc.c')
+for l in lines:
+    m = re.search(r'usbd_cdc\.c:(\d+)', l)
+    if m and 925 <= int(m.group(1)) <= 1060:
+        print('NEW?', l)
+EOF
+```
+
+Expected: `2 warnings in usbd_cdc.c`, both from fw 1.7 code (unused parameters at lines 692 and
+770), and no `NEW?` line. The recorded command names the compiler by its full path, so no `PATH`
+setup is needed.
+
+- [ ] **Step 12: Review**
+
+- [ ] Each queue has one producer:
+  - DIN: only `USART3_IRQHandler`.
+  - USB: only `USBD_CDC_DataOut` (OTG_FS interrupt).
+  - Both interrupts run at preemption priority 3 (`stm32f7xx_hal_msp.c:774`, `:844`).
+  - The consumer, `seq_tick()`, runs at thread level or in TIM2 (priority 4).
+- [ ] `fifo_midiRx` has one consumer, `seq_tick()` (D8). `usb_getMidi()` has one caller, `seq_tick()`.
+- [ ] Routing and thru are unchanged:
+  - realtime bytes reach `midiParser_parseMidiMessage()` and its routing block;
+  - DIN realtime bytes are routed alone (`bits.length` 0), USB realtime as single-byte packets.
+- [ ] The RX filter `MIDI_FILTER_SYSTEM` gates the queued events in `seq_drainSyncQueues()`, as it
+  gated the realtime cases in fw 1.7. The core applies the sync-mode gating (N4).
+- [ ] MTC (F1) and Program Change keep their paths. The MTC start and timeout call
+  `seq_setRunning()`, which posts to the mailbox.
+- [ ] Incoming notes trigger voices from `seq_tick()`, in the same context as the renderer.
+- [ ] The echo and the recording behave as after E2.3.
+
+Intended changes for the report:
+- SPP is supported (D7);
+- realtime bytes inside DIN messages no longer break them;
+- USB MIDI is parsed 8 messages per `seq_tick()` instead of 1 per main-loop pass, and keeps going
+  while the SD card is busy (TIM2 runs `seq_tick()` then);
+- a full USB queue drops new messages instead of wiping the queue.
+
+- [ ] **Step 13: Commit**
+
+```bash
+git add tools/fw_checks.sh Core/Src/Soundengine/MIDI/Uart.c Core/Inc/Soundengine/MIDI/Uart.h \
+  Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c Core/Src/Soundengine/MIDI/MidiParser.c \
+  Core/Src/Soundengine/Sequencer/sequencer.c Core/Src/main.c Core/Src/Soundengine/Soundengine.c \
+  Core/Src/stm32f7xx_it.c Core/Inc/Soundengine/Sequencer/seq_core.h
+git commit -m "Parse MIDI only in seq_tick(); realtime and SPP from the interrupts (D7, D8, E2.4)
+
+USART3 RX and USBD_CDC_DataOut stamp the MIDI realtime messages and the
+Song Position Pointer into their sync queues; seq_tick() feeds them to
+the core in stamp order. DIN and USB parsing move into seq_tick() with a
+budget per call and leave the main loop, soundengine_process() and TIM2.
+The DIN parser routes realtime bytes without breaking the message in
+progress, and a full USB message queue drops new messages.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+**Hardware checks affected:**
+- H6: slave over DIN.
+- H7: slave over USB, including locate with Continue (SPP) and staying in sync during an SD save.
+- H10: recording from MIDI.
+- H11: MIDI out.
+
+---
+
+### Task E2.5: clock in and reset in jacks through the jack sync queue
+
+In fw 1.7 the jack interrupts did the sequencing themselves:
+- `EXTI4_IRQHandler` (clock in) counted steps into `trigger_clockReceived`, which `seq_tick()`
+  drained. On every pulse it also computed an integer BPM and called `seq_setBpm()`, so
+  `lfo_recalcSync()` ran in the interrupt.
+- `EXTI9_5_IRQHandler` (reset in) called `seq_setRunning()` and `seq_resetPosition()` from the
+  interrupt. Those sent MIDI and touched the voice state.
+
+After this task both interrupts only stamp an event into the jack sync queue (spec §7.2), in sync
+mode 1 as before:
+- **A clock pulse** becomes `SEQC_EV_PULSE`. The core counts the pulses into steps: 1 pulse per
+  step at 4 PPQ, 6 at 24 PPQ. It also measures the tempo.
+- **The reset input is a run gate (N4).** Active becomes `SEQC_EV_RESET_ON` (stop, rewind, clear
+  the pulse count); released becomes `SEQC_EV_RESET_OFF` (a start armed for the next pulse that
+  begins a step). N13.2 puts these events in the jack queue, where they stay in order with the
+  pulses. A mailbox post could not guarantee that; the task list's "via mailbox" predates N13.2.
+- **The clock-in PPQ.** The front panel's `FRONT_SEQ_TRIGGER_IN_PPQ` now also posts the PPQ to the
+  core (`seq_setClockInPpq()`, the mailbox slot from E2.2). The globals of every project load send
+  it; `seq_setClockInPpq()` posts only a change, and the core restarts its count only in analog
+  sync (decision 11 of epic E1).
+- **Tempo display.** `seq_getBpm()` shows the core's estimate in the slave modes, rounded, and the
+  LFOs follow it (N9). E2.2's `seq_refreshCopies()` does this, and with the old `seq_setBpm()` call
+  gone it is the only source.
+- **Clock out.** The `clockOutPulse` and `transport` callbacks from E2.2 already drive it:
+  `trigger_setClockPhase()` from the position and `trigger_clockTick(0, 0)` every 4 ticks while
+  running (N8, E2 decision 10), `trigger_reset(1)` on start and continue, `trigger_reset(0)` on
+  every stop.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/TriggerOut.c` (include, `trigger_prescaleCounterClockInput`, fw 1.7 lines 104-256)
+- Modify: `Core/Inc/Soundengine/TriggerOut.h` (fw 1.7 lines 40-45 and 106-107)
+- Modify: `Core/Src/Soundengine/MIDI/CortexParser.c` (`FRONT_SEQ_TRIGGER_IN_PPQ`, fw 1.7 lines 1065-1069)
+- Test: `tools/fw_checks.sh E2.5`
+
+- [ ] **Step 1: Write the failing check**
+
+Add the E2.5 checks before the task list:
+
+`tools/fw_checks.sh`, replace:
+
+```bash
+check_tasks="E2.2 E2.3 E2.4"
+```
+
+with:
+
+```bash
+# ---- E2.5: clock in and reset in jacks through the jack sync queue ----------
+check_E2_5() {
+	must_call EXTI4_IRQHandler seqp_jackIn
+	must_call EXTI9_5_IRQHandler seqp_jackIn
+	must_not_call EXTI4_IRQHandler seq_setBpm
+	must_not_call EXTI9_5_IRQHandler seq_setRunning seq_resetPosition
+	need seq_setClockInPpq
+	gone trigger_clockReceived trigger_calcBpm trigger_timeLast trigger_clockCnt syncTrigger_writePos \
+		trigger_ResetPosition trigger_prescaleCounterClockInput
+}
+
+check_tasks="E2.2 E2.3 E2.4 E2.5"
+```
+
+- [ ] **Step 2: Run it and see it fail**
+
+```bash
+tools/fw_checks.sh E2.5
+```
+
+Expected:
+
+```
+FAIL E2.5: EXTI4_IRQHandler does not call seqp_jackIn
+FAIL E2.5: EXTI9_5_IRQHandler does not call seqp_jackIn
+FAIL E2.5: EXTI4_IRQHandler still calls seq_setBpm
+FAIL E2.5: EXTI9_5_IRQHandler still calls seq_setRunning
+FAIL E2.5: EXTI9_5_IRQHandler still calls seq_resetPosition
+FAIL E2.5: seq_setClockInPpq is not linked
+FAIL E2.5: trigger_clockReceived is still linked
+FAIL E2.5: trigger_timeLast is still linked
+FAIL E2.5: trigger_clockCnt is still linked
+FAIL E2.5: syncTrigger_writePos is still linked
+FAIL E2.5: trigger_prescaleCounterClockInput is still linked
+```
+
+- [ ] **Step 3: Replace the jack interrupt handlers**
+
+The include (fw 1.7 line 18):
+
+`Core/Src/Soundengine/TriggerOut.c`, replace:
+
+```c
+#include "Soundengine/Sequencer/sequencer.h"
+```
+
+with:
+
+```c
+#include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Sequencer/seq_platform.h"
+```
+
+The reset handler was the last user of this counter outside dead code (fw 1.7 line 29):
+
+`Core/Src/Soundengine/TriggerOut.c`, delete:
+
+```c
+uint8_t trigger_prescaleCounterClockInput = 0;
+
+```
+
+Delete the old handlers and what only they used (fw 1.7 lines 104-256):
+- `trigger_clockReceived`;
+- the BPM window, `trigger_calcBpm()` and `trigger_ResetPosition()`;
+- both EXTI handlers.
+
+The `#else` above and the `#endif` below stay until E2.6.
+
+Run this script on `Core/Src/Soundengine/TriggerOut.c`. It checks the SHA-256 of the block, then deletes its 153 lines, from `first` up to `stop`, which stays:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/TriggerOut.c'
+first = b'#if !HANDLE_SEQ_IN_CLOCK_INTERRUPT\r\nuint8_t trigger_clockReceived = 0;\r\n'
+stop = b'#endif\r\n//--------------------------------------------------\r\nvoid trigger_setPin(uint8_t index, uint8_t isOn)\r\n'
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == 'e1ea3b85cb5a556a1211b9b2b6c743b1041e83496c69c4ab09ea5c3f836fd8e5', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 153 lines from Core/Src/Soundengine/TriggerOut.c`
+
+Then put the new handlers between them:
+
+`Core/Src/Soundengine/TriggerOut.c`, replace:
+
+```c
+#else
+
+#endif
+//--------------------------------------------------
+void trigger_setPin(uint8_t index, uint8_t isOn)
+```
+
+with:
+
+```c
+#else
+
+//Clock In Interrupt. In sync mode 1 every pulse goes to the jack sync queue with its
+//time stamp; the timing core counts the pulses into steps (4 or 24 PPQ, see
+//seq_setClockInPpq()) and measures the tempo from the stamps.
+void EXTI4_IRQHandler(void)
+{
+	//the time stamp first, as close to the edge as possible
+	const uint32_t stamp = seqp_stamp();
+
+	/* EXTI line interrupt detected */
+	if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_4) != RESET)
+	{
+		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_4);
+
+		if(seq_getExtSync() == 1)
+		{
+			seqp_jackIn(SEQC_EV_PULSE, stamp);
+		}
+	}
+}
+
+//Reset In Interrupt. In sync mode 1 the reset input is a run gate (N4): its edges go to
+//the jack sync queue, in order with the clock pulses. Active stops the sequencer and
+//rewinds it; released arms a start at the next pulse that begins a step.
+void EXTI9_5_IRQHandler(void)
+{
+	const uint32_t stamp = seqp_stamp();
+
+	/* EXTI line interrupt detected */
+	if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_5) != RESET)
+	{
+		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
+
+		if(seq_getExtSync() == 1)
+		{
+			//the input is inverted: a low pin means the reset is active
+			const uint16_t pinState = (Reset_In_EXTI5_GPIO_Port->IDR & Reset_In_EXTI5_Pin);
+			seqp_jackIn(pinState ? SEQC_EV_RESET_OFF : SEQC_EV_RESET_ON, stamp);
+		}
+		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
+	}
+}
+#endif
+//--------------------------------------------------
+void trigger_setPin(uint8_t index, uint8_t isOn)
+```
+
+- [ ] **Step 4: `TriggerOut.h`: drop the old declarations**
+
+fw 1.7 lines 40-45:
+
+`Core/Inc/Soundengine/TriggerOut.h`, delete:
+
+```c
+#define HANDLE_SEQ_IN_CLOCK_INTERRUPT 0
+
+#if !HANDLE_SEQ_IN_CLOCK_INTERRUPT
+extern uint8_t trigger_clockReceived;
+#endif
+
+```
+
+fw 1.7 lines 106-107:
+
+`Core/Inc/Soundengine/TriggerOut.h`, replace:
+
+```c
+//void trigger_allOff();
+void trigger_ResetPosition();
+```
+
+with:
+
+```c
+//void trigger_allOff();
+```
+
+- [ ] **Step 5: Post the clock-in PPQ**
+
+At the end of the `FRONT_SEQ_TRIGGER_IN_PPQ` case (fw 1.7 lines 1065-1069). The globals load sends this message at boot, so the core gets the stored PPQ:
+
+`Core/Src/Soundengine/MIDI/CortexParser.c`, replace:
+
+```c
+			trigger_prescalerClockInput = PRE_24_PPQ_IN;
+			break;
+
+		}
+		break;
+```
+
+with:
+
+```c
+			trigger_prescalerClockInput = PRE_24_PPQ_IN;
+			break;
+
+		}
+		//the timing core counts the clock in pulses into steps with this PPQ
+		seq_setClockInPpq(trigger_prescalerClockInput == PRE_24_PPQ_IN ? 24 : 4);
+		break;
+```
+
+- [ ] **Step 6: Give the edited files CRLF line endings**
+
+```bash
+python3 - Core/Src/Soundengine/TriggerOut.c Core/Inc/Soundengine/TriggerOut.h \
+  Core/Src/Soundengine/MIDI/CortexParser.c <<'EOF'
+import sys
+for path in sys.argv[1:]:
+    with open(path, 'rb') as f:
+        data = f.read()
+    data = data.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+    with open(path, 'wb') as f:
+        f.write(data)
+    print('CRLF', path)
+EOF
+```
+
+Expected: three lines starting with `CRLF`.
+
+- [ ] **Step 7: Build and run the checks**
+
+```bash
+tools/check.sh && tools/fw_checks.sh E2.2 E2.3 E2.4 E2.5
+```
+
+Expected:
+
+```
+== firmware build (release)
+memory: ITCM 13128/16384 B (80.1%, free 3256)  DTCM 107388/131072 B (81.9%, rest is stack)  RAM <n>/393216 B (...)  image <n>/1015808 B (...)
+image: <repo>/build/release/LXR_V2_V1.7.img
+== compiler warnings: 0
+PASS E2.2
+PASS E2.3
+PASS E2.4
+PASS E2.5
+```
+
+- [ ] **Step 8: Review**
+
+- [ ] Both handlers read the stamp first and clear the pending bit as fw 1.7 did. They act only in
+  sync mode 1, and they call nothing but `seqp_jackIn()`.
+- [ ] Polarity: a low pin (`!pinState`) was "stop and reset" in fw 1.7 and is `SEQC_EV_RESET_ON` now.
+- [ ] Both handlers run at preemption priority 3 (`main.c:913-917`). They never interrupt each
+  other, so the shared jack queue has one producer at a time.
+- [ ] `seq_getBpm()` follows the jack tempo through `seq_refreshCopies()` (E2.2), not `seq_setBpm()`.
+  The master tempo stays as the user set it.
+- [ ] Clock out (E2.2 callbacks): `trigger_setClockPhase()` from the position, then
+  `trigger_clockTick(0, 0)`, every 4 ticks while running; `trigger_reset(1)` on START and CONTINUE;
+  `trigger_reset(0)` on STOP. The output PPQ prescaler is unchanged.
+
+Intended changes for the report:
+- The reset gate's side effects run in `seq_tick()` instead of the interrupt. This includes all
+  notes off. They happen up to one `seq_tick()` later. MIDI Stop and Start no longer go out for
+  the gate: sync mode 1 is a slave mode, and as a slave the LXR sends no transport messages
+  (N18.2).
+- In fw 1.7 the clock-out counter restarted at every slave step, so the 2 PPQ setting gave 4 PPQ
+  in slave mode. Now it gives 2 PPQ. The divider follows the position (E2 decision 10), so after a
+  Continue, or an SPP at an odd step, the pulses stay on the grid of the song: at 2 PPQ on every
+  second step, counted from the start of the song.
+- `PAR_PRESCALER_CLOCK_IN` is posted to the core when the front panel sends a new value.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add tools/fw_checks.sh Core/Src/Soundengine/TriggerOut.c Core/Inc/Soundengine/TriggerOut.h \
+  Core/Src/Soundengine/MIDI/CortexParser.c
+git commit -m "Feed the clock and reset jacks to seq_core through the jack queue (E2.5)
+
+EXTI4 stamps each clock in pulse and EXTI9_5 each reset gate edge into
+the jack sync queue, in sync mode 1. The core counts the pulses at 4 or
+24 PPQ (posted from the front panel setting) and measures the tempo;
+the step counting, BPM window and transport calls in the interrupts
+are gone.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+**Hardware checks affected:** the H list of the spec has no jack check. Proposed for E4.2:
+- clock in at 4 PPQ and at 24 PPQ;
+- the reset gate (run while released, stop and rewind while active);
+- clock out at each PPQ setting, also with shuffle.
+
+Until then T18 (host) is the only cover.
+
+---
+
+### Task E2.6: remove clockSync and the dead timing code; ITCM check
+
+After E2.4 and E2.5 nothing calls `clockSync.c`, the shims of E2.2 or the variables of the old
+timing. This task deletes them, together with:
+- the commented-out code that refers to removed state (`seq_stepIndex`, `seq_deltaT`,
+  `seq_prescaleCounter`, `seq_setDeltaT()`);
+- the old `#if 0` jack handlers;
+- the write-only flag `midi_process_block`;
+- the dangling `extern seq_newPatternAvailable` (declared, never defined).
+
+It also takes `sequencer.c` out of `LXR_ITCM_SOURCES`, since the file has no ITCM code left (N11),
+and records the ITCM figure.
+
+**Files:**
+- Delete: `Core/Src/Soundengine/Sequencer/clockSync.c`, `Core/Inc/Soundengine/Sequencer/clockSync.h`
+- Modify: `Core/CMakeLists.txt` (the `lxr_sequencer` library from E2.1, `LXR_ITCM_SOURCES`)
+- Modify: `Core/Src/Soundengine/Sequencer/sequencer.c` (shims, dead comment blocks)
+- Modify: `Core/Inc/Soundengine/Sequencer/sequencer.h` (stale declarations)
+- Modify: `Core/Src/Soundengine/TriggerOut.c` (dead code, `medianFilter.h` include)
+- Modify: `Core/Src/Soundengine/MIDI/Uart.c`, `Core/Inc/Soundengine/MIDI/Uart.h` (`midi_process_block`)
+- Modify: `README.md` (the `lxr_sequencer` row of the module table)
+- Test: `tools/fw_checks.sh` (all tasks)
+
+- [ ] **Step 1: Write the failing check**
+
+Add the E2.6 checks before the task list:
+
+`tools/fw_checks.sh`, replace:
+
+```bash
+check_tasks="E2.2 E2.3 E2.4 E2.5"
+```
+
+with:
+
+```bash
+# ---- E2.6: clockSync and the dead timing code are gone; ITCM holds no sequencer code
+check_E2_6() {
+	no_file Core/Src/Soundengine/Sequencer/clockSync.c Core/Inc/Soundengine/Sequencer/clockSync.h
+	no_tree 'clockSync|seq_MidiSyncQueue|seq_getDeltaTShuffleDelay|seq_getMasterStepCnt|seq_prescaleCounter|seq_sync\(|midi_process_block|HANDLE_SEQ_IN_CLOCK_INTERRUPT|trigger_clockReceived' \
+		Core/Src/Soundengine Core/Inc/Soundengine Core/CMakeLists.txt
+	no_source 'seq_newPatternAvailable' Core/Inc/Soundengine/Sequencer/sequencer.h
+	no_source 'medianFilter' Core/Src/Soundengine/TriggerOut.c
+	sed -n '/^set(LXR_ITCM_SOURCES/,/^)/p' Core/CMakeLists.txt | grep -q 'sequencer\.c' \
+		&& fail "sequencer.c is still in LXR_ITCM_SOURCES"
+	no_itcm 'seq'
+	gone sync_tick sync_window sync_timeLast sync_clockCnt sync_writePos sync_delayedStepTimer
+}
+
+check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6"
+```
+
+- [ ] **Step 2: Run it and see it fail**
+
+```bash
+tools/fw_checks.sh E2.6
+```
+
+Expected:
+
+```
+FAIL E2.6: Core/Src/Soundengine/Sequencer/clockSync.c still exists
+FAIL E2.6: Core/Inc/Soundengine/Sequencer/clockSync.h still exists
+FAIL E2.6: 'clockSync|seq_MidiSyncQueue|seq_getDeltaTShuffleDelay|seq_getMasterStepCnt|seq_prescaleCounter|seq_sync\(|midi_process_block|HANDLE_SEQ_IN_CLOCK_INTERRUPT|trigger_clockReceived' found: Core/Src/Soundengine/MIDI/Uart.c:34:uint8_t midi_process_block = 0; Core/Src/Soundengine/MIDI/Uart.c:73:    //  if (!midi_process_block) Core/Src/Soundengine/Sequencer/sequencer.c:255:// Transitional: clockSync.c compiles against these until it is deleted (task
+FAIL E2.6: 'seq_newPatternAvailable' found: 130:extern uint8_t seq_newPatternAvailable;
+FAIL E2.6: 'medianFilter' found: 22:#include "Soundengine/DSPAudio/medianFilter.h" 76:			uint32_t counter = medianFilter(TIM_GetCounter(TIM2));
+FAIL E2.6: sequencer.c is still in LXR_ITCM_SOURCES
+```
+
+- [ ] **Step 3: Delete clockSync and take `sequencer.c` out of the ITCM list**
+
+Run:
+
+```bash
+git rm Core/Src/Soundengine/Sequencer/clockSync.c Core/Inc/Soundengine/Sequencer/clockSync.h
+```
+
+The library from E2.1:
+
+`Core/CMakeLists.txt`, replace:
+
+```cmake
+# DWT time base, queue instances), the glue (sequencer), the Euclidean generator
+# and the fw 1.7 MIDI clock sync (clockSync).
+add_library(lxr_sequencer OBJECT
+    Src/Soundengine/Sequencer/clockSync.c
+    Src/Soundengine/Sequencer/EuklidGenerator.c
+```
+
+with:
+
+```cmake
+# DWT time base, queue instances), the glue (sequencer) and the Euclidean generator.
+add_library(lxr_sequencer OBJECT
+    Src/Soundengine/Sequencer/EuklidGenerator.c
+```
+
+The end of `LXR_ITCM_SOURCES`, the list of files with ITCM code (fw 1.7 lines 176-179):
+
+`Core/CMakeLists.txt`, replace:
+
+```cmake
+    Src/Soundengine/MIDI/ParameterArray.c
+    Src/Soundengine/Sequencer/sequencer.c
+)
+if(LXR_ITCM_OPT)
+```
+
+with:
+
+```cmake
+    Src/Soundengine/MIDI/ParameterArray.c
+)
+if(LXR_ITCM_OPT)
+```
+
+- [ ] **Step 4: `sequencer.c`: remove the shims and the dead comment blocks**
+
+The transitional shims of E2.2, between `seq_setClockInPpq()` and `seq_init()`:
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, delete:
+
+```c
+//------------------------------------------------------------------------------
+// Transitional: clockSync.c compiles against these until it is deleted (task
+// E2.6). None of them runs: seq_sync() does nothing, so sync_tick() is never called.
+//------------------------------------------------------------------------------
+uint8_t seq_prescaleCounter = 0;
+//------------------------------------------------------------------------------
+uint8_t seq_getMasterStepCnt()
+{
+	return 0;
+}
+//------------------------------------------------------------------------------
+float seq_getDeltaTShuffleDelay(uint16_t bpm)
+{
+	(void)bpm;
+	return 0.f;
+}
+//------------------------------------------------------------------------------
+void seq_nextStep()
+{
+}
+//------------------------------------------------------------------------------
+void seq_MidiSyncQueue(uint8_t cnt)
+{
+	(void)cnt;
+}
+//------------------------------------------------------------------------------
+void seq_sync()
+{
+}
+```
+
+A stale prototype comment (fw 1.7 line 167):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, delete:
+
+```c
+//static uint8_t seq_isNextStepSyncStep();
+```
+
+The commented `seq_setTrackRotation()` and `seq_getTrackRotation()` (fw 1.7 lines 307-352). They refer to `seq_stepIndex`:
+
+Run this script on `Core/Src/Soundengine/Sequencer/sequencer.c`. It checks the SHA-256 of the block, then deletes its 46 lines, from `first` up to `stop`, which stays:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/Sequencer/sequencer.c'
+first = b'//------------------------------------------------------------------------------\r\n// **PATROT\r\n//TODO check if rotation is working with new 4 bar layout\r\n'
+stop = b'//------------------------------------------------------------------------------\r\nvoid seq_setBpm(uint16_t bpm)\r\n'
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == '59a72f032ff2b89a1f25a978337295e259685d4e25ca0d22e5d0f54c4e83bb7b', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 46 lines from Core/Src/Soundengine/Sequencer/sequencer.c`
+
+The commented `seq_isNextStepSyncStep()` (fw 1.7 lines 2661-2676):
+
+Run this script on `Core/Src/Soundengine/Sequencer/sequencer.c`. It checks the SHA-256 of the block, then deletes its 16 lines, from `first` up to `stop`, which stays:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/Sequencer/sequencer.c'
+first = b'//------------------------------------------------------------------------------\r\n/*\r\nstatic uint8_t seq_isNextStepSyncStep()\r\n'
+stop = b'//------------------------------------------------------------------------------\r\n\r\nvoid seq_midiNoteOff(uint8_t chan)\r\n'
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == '08d07cc2aaa16d3fefe9467bbc0ef7cf574064e2301d8d2b9396e13fc314f7a4', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 16 lines from Core/Src/Soundengine/Sequencer/sequencer.c`
+
+In `seq_setPendingPatternActive()`, the commented index reset (fw 1.7 lines 661-663):
+
+`Core/Src/Soundengine/Sequencer/sequencer.c`, delete:
+
+```c
+		//reset pattern position to pattern rotate starting position for the active pattern **PATROT
+		// seq_setStepIndexToStart();
+
+```
+
+- [ ] **Step 5: `sequencer.h`: remove the stale declarations**
+
+`seq_newPatternAvailable` was never defined; `seq_prescaleCounter` was a shim (fw 1.7 lines 130-131):
+
+`Core/Inc/Soundengine/Sequencer/sequencer.h`, delete:
+
+```c
+extern uint8_t seq_newPatternAvailable;
+extern uint8_t seq_prescaleCounter;
+```
+
+`Core/Inc/Soundengine/Sequencer/sequencer.h`, replace:
+
+```c
+//------------------------------------------------------------------------------
+void seq_MidiSyncQueue(uint8_t cnt);
+//------------------------------------------------------------------------------
+uint8_t seq_isAutomationStepArmed();
+//------------------------------------------------------------------------------
+void seq_nextStep();
+//------------------------------------------------------------------------------
+```
+
+with:
+
+```c
+//------------------------------------------------------------------------------
+uint8_t seq_isAutomationStepArmed();
+//------------------------------------------------------------------------------
+```
+
+`Core/Inc/Soundengine/Sequencer/sequencer.h`, delete:
+
+```c
+float seq_getDeltaTShuffleDelay(uint16_t bpm);
+//------------------------------------------------------------------------------
+```
+
+`Core/Inc/Soundengine/Sequencer/sequencer.h`, delete:
+
+```c
+//void seq_resetDeltaAndTick();
+//------------------------------------------------------------------------------
+```
+
+`Core/Inc/Soundengine/Sequencer/sequencer.h`, delete:
+
+```c
+void seq_sync();
+//------------------------------------------------------------------------------
+uint8_t seq_getMasterStepCnt();
+//------------------------------------------------------------------------------
+//void seq_nextStep();
+//------------------------------------------------------------------------------
+```
+
+`Core/Inc/Soundengine/Sequencer/sequencer.h`, delete:
+
+```c
+//uint8_t seq_isNextStepSyncStep();
+//------------------------------------------------------------------------------
+```
+
+- [ ] **Step 6: `TriggerOut.c`: remove the dead code**
+
+`medianFilter.h` defines a non-static function and was used only by dead code (fw 1.7 lines 20-21):
+
+`Core/Src/Soundengine/TriggerOut.c`, replace:
+
+```c
+#include "Soundengine/config.h"
+#include "Soundengine/DSPAudio/medianFilter.h"
+```
+
+with:
+
+```c
+#include "Soundengine/config.h"
+```
+
+`trigger_phase`, `trigger_phaseInc` and `COUNTER_DURATION`, used only by dead code (fw 1.7 lines 40-49):
+
+Run this script on `Core/Src/Soundengine/TriggerOut.c`. It deletes these exact pieces; each must be in the file once:
+
+```bash
+python3 - <<'EOF'
+path = 'Core/Src/Soundengine/TriggerOut.c'
+pieces = [
+    b'\r\n\r\n\r\nvolatile float trigger_phase = 0;\r\nvolatile float trigger_phaseInc = 0;\r\n//static uint8_t trigger_phaseWrapCounter = 1;\t// count how many times the phase increased by 1.0\r\n\t\t\t\t\t\t\t\t\t\t\t\t// with a preascaler of 8 (4ppq) 1 clock pulse\r\n\t\t\t\t\t\t\t\t\t\t\t\t// has to increment the sequencer by 8 steps\r\n#define COUNTER_DURATION (1.0f/42000000l)\r\n\r\n',
+]
+data = open(path, 'rb').read()
+for piece in pieces:
+    assert data.count(piece) == 1, piece
+    data = data.replace(piece, b'')
+open(path, 'wb').write(data)
+print('deleted', len(pieces), 'pieces from', path)
+EOF
+```
+
+Expected output: `deleted 1 pieces from Core/Src/Soundengine/TriggerOut.c`
+
+The `#if 0` handlers of an older board and the `#else` after them (fw 1.7 lines 50-103), up to the E2.5 handlers:
+
+Run this script on `Core/Src/Soundengine/TriggerOut.c`. It checks the SHA-256 of the block, then deletes its 54 lines, from `first` up to `stop`, which stays:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/TriggerOut.c'
+first = b'//--------------------------------------------------\r\n#if 0\r\nvoid EXTI9_5_IRQHandler()\r\n'
+stop = b'//Clock In Interrupt. In sync mode 1 every pulse goes to the jack sync queue with its\r\n'
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == 'c52643cb1944df51c85e07202ea9d252e50814f28b29fd451000908a645f3ec0', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 54 lines from Core/Src/Soundengine/TriggerOut.c`
+
+The `#endif` after the E2.5 handlers:
+
+`Core/Src/Soundengine/TriggerOut.c`, replace:
+
+```c
+#endif
+//--------------------------------------------------
+void trigger_setPin(uint8_t index, uint8_t isOn)
+```
+
+with:
+
+```c
+//--------------------------------------------------
+void trigger_setPin(uint8_t index, uint8_t isOn)
+```
+
+The commented `trigger_tickPhaseCounter()`, which calls the removed `seq_setDeltaT()` (fw 1.7 lines 572-594):
+
+Run this script on `Core/Src/Soundengine/TriggerOut.c`. It checks the SHA-256 of the block, then deletes its 23 lines, from `first` up to `stop`, which stays:
+
+```bash
+python3 - <<'EOF'
+import hashlib
+path = 'Core/Src/Soundengine/TriggerOut.c'
+first = b'/*\r\nvoid trigger_tickPhaseCounter()\r\n'
+stop = b'/*\r\nuint8_t trigger_isGateModeOn()\r\n'
+data = open(path, 'rb').read()
+assert data.count(first) == 1, 'the first line is not in the file exactly once'
+i = data.index(first)
+j = len(data) if stop is None else data.index(stop, i)
+assert hashlib.sha256(data[i:j]).hexdigest() == '4898afc5aee6fdb0e056be81af6ec504ab7ca7d6611da5df93a1d1202bb79786', 'the block differs from the plan'
+open(path, 'wb').write(data[:i] + data[j:])
+print('deleted', data[i:j].count(b'\n'), 'lines from', path)
+EOF
+```
+
+Expected output: `deleted 23 lines from Core/Src/Soundengine/TriggerOut.c`
+
+- [ ] **Step 7: Remove `midi_process_block`**
+
+E2.2 removed its last writers; its only reader had long been commented out.
+
+`Core/Inc/Soundengine/MIDI/Uart.h`, delete:
+
+```c
+extern uint8_t midi_process_block;
+
+```
+
+`Core/Src/Soundengine/MIDI/Uart.c`, delete:
+
+```c
+uint8_t midi_process_block = 0;
+
+```
+
+`Core/Src/Soundengine/MIDI/Uart.c`, delete:
+
+```c
+    //  if (!midi_process_block)
+    //  {
+    //    uart_processMidi();
+    //  }
+```
+
+- [ ] **Step 8: Update the module table in the README**
+
+`README.md`, replace:
+
+```markdown
+| `lxr_sequencer` | `Core/Src/Soundengine/Sequencer`                | Step sequencer, Euclidean generator, clock sync       |
+```
+
+with:
+
+```markdown
+| `lxr_sequencer` | `Core/Src/Soundengine/Sequencer`                | Timing core, sync queues, glue, Euclidean generator   |
+```
+
+- [ ] **Step 9: Give the edited files CRLF line endings**
+
+```bash
+python3 - Core/Src/Soundengine/Sequencer/sequencer.c Core/Inc/Soundengine/Sequencer/sequencer.h \
+  Core/Src/Soundengine/TriggerOut.c Core/Src/Soundengine/MIDI/Uart.c Core/Inc/Soundengine/MIDI/Uart.h <<'EOF'
+import sys
+for path in sys.argv[1:]:
+    with open(path, 'rb') as f:
+        data = f.read()
+    data = data.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+    with open(path, 'wb') as f:
+        f.write(data)
+    print('CRLF', path)
+EOF
+```
+
+Expected: five lines starting with `CRLF`. `Core/CMakeLists.txt` and `README.md` stay LF.
+
+- [ ] **Step 10: Build, run every check, record ITCM**
+
+```bash
+tools/check.sh && tools/fw_checks.sh
+```
+
+Expected:
+
+```
+== firmware build (release)
+memory: ITCM 13128/16384 B (80.1%, free 3256)  DTCM 107388/131072 B (81.9%, rest is stack)  RAM <n>/393216 B (...)  image <n>/1015808 B (...)
+image: <repo>/build/release/LXR_V2_V1.7.img
+== compiler warnings: 0
+PASS E2.2
+PASS E2.3
+PASS E2.4
+PASS E2.5
+PASS E2.6
+```
+
+ITCM: 13128 of 16384 B, against 15000 B in fw 1.7. That frees 1872 B:
+- 1660 B of sequencer functions;
+- the veneers to the LED, menu and preset functions they called.
+
+`seq_core.c` runs from flash (N11). The sequencer's only ITCM entry is the linker veneer
+`__seq_getBpm_veneer`, through which the ITCM code of `lfo.c` reaches `seq_getBpm()`. Show the ITCM
+contents with:
+
+```bash
+bash -c 'source tools/env.sh && arm-none-eabi-objdump -t build/release/LXR_V2_STM32F765.elf' \
+  | grep -F .itcm_text | awk '{print $NF}' | grep -i seq
+```
+
+Expected: `__seq_getBpm_veneer` only.
+
+- [ ] **Step 11: Review**
+
+- [ ] `git grep -n "clockSync" -- Core` and `git grep -n "seq_stepIndex" -- Core/Src/Soundengine` find
+  nothing.
+- [ ] The release image is the same size as after E2.5, or a few bytes smaller. Only dead code and
+  unreferenced symbols went.
+- [ ] `README.md` lists the module correctly.
+- [ ] The stage 1 report (E4.1 Step 4) gets these numbers:
+  - the ITCM figure above;
+  - the RAM and image deltas against fw 1.7, from the `memory:` line that `tools/check.sh` prints
+    (it is not in `build/check.log`).
+
+- [ ] **Step 12: Commit**
+
+`git rm` in Step 3 already staged the deleted files.
+
+```bash
+git add tools/fw_checks.sh Core/CMakeLists.txt Core/Src/Soundengine/Sequencer/sequencer.c \
+  Core/Inc/Soundengine/Sequencer/sequencer.h Core/Src/Soundengine/TriggerOut.c \
+  Core/Src/Soundengine/MIDI/Uart.c Core/Inc/Soundengine/MIDI/Uart.h README.md
+git commit -m "Remove clockSync and the dead timing code; sequencer.c leaves ITCM (E2.6)
+
+clockSync.c/.h, the transitional shims of E2.2, the commented code that
+used the removed timing state, the old #if 0 jack handlers and the
+write-only midi_process_block are gone. sequencer.c has had no ITCM
+code since E2.2 and leaves LXR_ITCM_SOURCES (ITCM: 13128 of 16384 B).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+**Hardware checks affected:** none on their own: the task only removes code. The finished E2
+image is the one to run H2-H11 on (E4.2).
+
+---
+
+### E2: spec coverage
+
+| Spec / notes | Where |
+|---|---|
+| §4.1 `seq_platform`: DWT, 64-bit `seqp_now()`, one SPSC queue per source | E2.1 |
+| §4.1, §8 `sequencer.c` as glue; public API kept; pulse machine removed | E2.2 |
+| §4.1, §8 `clockSync.c/.h` removed | E2.6 (shims E2.2-E2.5) |
+| §4.3 only `seq_tick()` calls the core: mailbox, queue drain, `seqc_process()`, MIDI parsing | E2.2 (steps 1-3), E2.4 (step 4) |
+| §4.3 interrupt handlers only produce sync events | E2.4 (DIN, USB), E2.5 (jacks) |
+| §4.3, N7 mailbox with PRIMASK, one slot per command | E2.2 |
+| N12 nesting guard in `seq_tick()`; `seq_tick()` from `soundengine_process()` and TIM2 | E2.2 |
+| N13.2 reset gate as RESET_ON/OFF in the jack queue | E2.5 |
+| N13.3 a local stop is stop then rewind; rewind after a pattern switch while stopped | E2.2 |
+| N13.11 song end: pending stays active, REWIND resets the song pointer | E2.2 |
+| N14 SPP in the sync queues, `{type, value, stamp}` entries of 8 bytes | E2.1, E2.4, E2.2 (drain) |
+| N7 `seq_isRunning()` set on request, armed included | E2.2 |
+| §4.4 TRCENA, LAR unlock, CYCCNTENA; unwrap relative to now; a later stamp counts as now; `systick_ticks` stays | E2.1 |
+| §5, N4 transport side effects: MIDI Start/Stop (internal sync only, N18.2), `trigger_reset()`, notes off, song pointer | E2.2 (`transport` callback, `seq_sendTransport()`) |
+| N18.2 no MIDI transport out as a slave; N18.3 one-shot roll velocity; N18.4 USB realtime with CIN 0x5 | E2.2; E2.3; E2.1 |
+| §5 MIDI Start, Continue, Stop, SPP from DIN and USB | E2.4 (queues), E2.2 (drain, `seekPosition`) |
+| §5, N4 clock jack reset as a run gate | E2.5 |
+| §5, N8 MIDI clock out (internal only), clock out jack, `tempoStep` LED | E2.2 (callbacks) |
+| §5, N9 tempo for display and LFO sync from `seqc_currentBpm()` | E2.2 (`seq_refreshCopies()`); E2.5 removes the old jack path |
+| §6.4 trigger callback: note off, the event's own p-locks (D5), voice, one Note On | E2.2, E2.3 |
+| §6.5, N5 pattern end with the side effects of `seq_setPendingPatternActive()` | E2.2 (`patternEnd`, `peekNextPattern`) |
+| N6 SPP seek in song mode | E2.2 (`seekPosition`) |
+| §6.6, N11 roll recording at its own step; one-shot roll in `seq_setRoll()` | E2.2 |
+| §6.7 recording phase, skip-once (D6), `seqc_trackStep()` for recording, LEDs and erase | E2.2 |
+| §7.1 D4: no MIDI in `voiceControl_noteOn()`, one Note On, echo once | E2.3 |
+| §7.2 D8: intercept in USART3 RX and `USBD_CDC_DataOut`, parsing only in `seq_tick()` with budgets 32/8, removed from the main loop and `soundengine_process()` | E2.4 |
+| §7.2 SPP | E2.4 (through the queues, N14) |
+| §8 `TriggerOut.c`: pulses to the jack queue, clock out from `clockOutPulse` (with `trigger_setClockPhase()`, decision 10) | E2.5, E2.2 |
+| §10 ITCM net ≤ 0 | E2.2 (−1872 B), E2.6 (`LXR_ITCM_SOURCES`) |
+| §11 a full sync queue rejects and counts | E2.1 (`seqp_syncOverflows()` for the CPU page of E3.3) |
+| N11 `IN_ITCM_RAM` off `seq_setPendingPatternActive()` and `seq_setMute()` | E2.2 |
+
+Not in E2: the splash and the version (E3.1), the CPU meter hooks in `TIM2_IRQHandler` and
+`soundengine_process()` (E3.3, on top of the E2.4 versions of these lines), CI (E3.4) and the
+hardware checklist (E4.2).
+
+### E2: how this section was checked
+
+Every task was applied, in order, to a scratch copy of the repository at `1179a1f`. E1 was
+simulated:
+- the API's `seq_core.h` and the `SeqStepTypes.h` split;
+- the `tests/` harness of E1.1;
+- the `lxr_sequencer` block of E1.3;
+- the scratch prototype from the API review as a stand-in `seq_core.c`.
+
+After each task:
+- `tools/check.sh` reported 0 compiler warnings and passing host tests;
+- `tools/fw_checks.sh` failed before the task and passed after it (all earlier tasks included).
+
+The outputs shown in the steps are the captured ones. RAM and image sizes depend on E1's real
+core; ITCM does not (13128 B after E2.2). Not checked: E1's final `seq_core.c`, and anything that
+needs the LXR-02 (the H checks).
+
+**After the plan review (2026-10-24)** the section was replayed again, with the fixes of the review,
+on a copy of the repository with E3.2 and the final E1.1–E1.13 of this plan (the real core, not the
+stand-in): every replace, delete and script of E2.1–E2.6 applied as written, `tools/fw_checks.sh`
+printed the failures quoted in each Step 2 before its task and `PASS` for every task after it,
+`tools/check.sh` passed with 0 warnings after each task, and the line numbers, RAM and image sizes
+quoted here are the ones of that replay. E1.14 was not in it.
+
+### E2: open issues (owner decisions and follow-ups)
+
+1. **Single skip-once marker.** The API says "a new call replaces the marker". Suppose notes
+   recorded on two tracks land in the second half of the same step, for example a MIDI chord. The
+   first marker is lost, and that track plays its recorded note twice (D6 half fixed). A per-track
+   marker in `seq_core` would fix it; that is an E1/API decision. *Settled by N18.1; E1.14 gives
+   the core one marker per track, and the mailbox already passes one per track.*
+2. **MIDI transport out in the slave modes.** *Settled by N18.2 and done in E2.2:* the `transport`
+   callback sends Start, Stop and Continue only in internal sync (`seq_sendTransport()`, checked by
+   `tools/fw_checks.sh E2.2`); as a slave the LXR sends none, and thru forwards what arrives. Owner
+   question Q7.
+3. **A resume sends Continue (FB).** *Superseded by N18.2: only the slave modes resume, and they
+   send nothing.*
+4. **One-shot roll MIDI velocity.** *Settled by N18.3 and done in E2.3:* the current step's volume,
+   as in fw 1.7.
+5. **Echo note.** When an incoming note matches a voice's note override, the echo stays note 60
+   (`SEQ_DEFAULT_NOTE`), as in fw 1.7.
+6. **USB realtime with CIN 0x5** (non-standard hosts). *Settled by N18.4 and done in E2.1:*
+   `seqq_usbMessage()` takes realtime bytes F8–FF with CIN 0x5 as well (`syncq_usb`).
+7. **Clock out at 2 PPQ.**
+   - The divider follows the position (decision 10), so after a Continue or an SPP the pulses stay
+     on the step grid; at 2 PPQ on every second step from the start of the song.
+   - In the slave modes it now gives true 2 PPQ; fw 1.7 gave 4 PPQ there.
+8. **No hardware check covers the jacks.** E4.2 should add:
+   - clock in at 4 and 24 PPQ, including a 4 PPQ clock below 30 BPM (the N15 case);
+   - the reset gate;
+   - clock out at each PPQ.
+9. **Output jitter (N12).** `seq_tick()` runs from `soundengine_process()`, at least once per audio
+   block, and from TIM2 only while the SD card is busy. So MIDI clock out and the clock out jack
+   jitter by up to about one block (1.45 ms), as the triggers do. The spacing has not been measured;
+   E3.3 and H12 should record it.
+10. **USB MIDI out defects, outside D1-D8, not fixed here.** `usb_flushMidi()` sends 128 bytes past
+    its ring on every wrap, drops data while the endpoint is busy, and `usb_sendMidi()` uses the
+    wrong CIN for system common messages. They affect the LXR's USB MIDI out. *Tracker task E2.8,
+    written as a section of its own. Until it is done the hardware checks that watch the LXR's MIDI
+    out use DIN (E4.2), and review row R8.5 puts them into the release notes' known limitations.*
+11. **MIDI sends from the main loop remain.** The mute Note Off, the channel change and a pattern
+    change while stopped still send MIDI from the main loop. They can race with `seq_tick()` sends
+    only while TIM2 runs, the same race class as in fw 1.7.
+12. **Intermediate builds.** E2.2 and E2.3 have no MIDI clock input, and E2.2 to E2.4 have no jack
+    input. Do not test the slave modes on them.
+13. **Spec wording.** D4 and §7.1 say fw 1.7 echoed once in play mode. It echoed twice in both
+    modes (`do_rec` is always 1). E2.3 gives once in both modes, so H10 should say "once".
+14. **E1 assumptions.** Three edits anchor on text that E1 writes:
+    - E2.1: the `test_fw17` line in `tests/CMakeLists.txt` and the `lxr_sequencer` block of E1.3;
+    - E2.4: the execution-context comment in `seq_core.h`.
+
+    Epic E1 of this plan has all three exactly as quoted here (checked again when the plan was
+    assembled). If E1 changes them, adapt these edits.
+15. **RAM.** With the stand-in core, E2.2 adds 8464 B of RAM for the core, the sync queues and the
+    glue. The spec estimates about 7.5 KB for them (§10), but the 24-byte events (N2, N13.7) make
+    the event queue 6 KB. Confirm with E1's core. *With the E1 core of this plan: +8484 B after
+    E2.2, +8460 B after E2.6; review row R6.2 allows 8704 B. E1.14 adds 80 B.*
+16. **The dropout of N15 is E1's.** E2 has no dropout logic of its own. The API header still names
+    a fixed `SEQC_DROPOUT_MS` (500 ms), which stops a 4 PPQ jack clock below 30 BPM. N15 sets
+    `max(500 ms, 2 × the expected clock interval)`, so check that E1's core implements it.
+17. **E2.7 is not in this section.** The tracker task for the fw 1.7 bug in the global menu (a step
+    button without SHIFT sets every track length) was added after this section was assigned. *Its
+    section is written on its own and inserted after the plan review.*
+18. **Sync queue overflows on the CPU page.** `seqp_syncOverflows()` (E2.1) counts the sync events
+    that full queues rejected (spec §11). E3.3's page shows only the event queue counters, but
+    could show this count as well.
+
+---
+
+## Part 3: tooling and branding (E3), verification and release (E4)
+
+This part brands the firmware, closes the gap in the linker's FLASH check, adds the CPU meter and its
+menu page, CI and the README section (E3), and then reviews stage 1, prepares the hardware checklist
+for the owner and drafts the v0.1 release notes (E4). Nothing in this part pushes, tags or publishes
+anything.
+
+**Goal:** a LICHOMAT 0.1 image that says so on its start-up screen, fails to link if it outgrows FLASH,
+shows its CPU load, is built and tested by CI, and is reviewed and documented for the hardware checks
+and the release.
+
+**Architecture:** the CPU meter's logic (`cpuMeter.c`) is plain C without the HAL, so the host tests
+build and test it like `seq_core`; the firmware feeds it `DWT->CYCCNT` from the two places the audio
+work runs (`TIM2_IRQHandler()` and `soundengine_process()`, N12), and a custom routine draws it on a
+third sub-page of the global menu. Branding is one CMake cache variable plus `project(VERSION)`, checked
+after every build by `tools/check_image.py`. CI is checked locally with `tools/ci_dry_run.rb`, because
+nothing may be pushed.
+
+**Tech stack:** CMake 3.31 and Ninja, Arm GNU Toolchain 14.3.rel1, the host test runner `tests/seqc_test.h`,
+Python 3 (standard library), Ruby (macOS system Ruby, for the workflow dry run), GitHub Actions.
+
+### Before you start
+
+**Preconditions.**
+- E1.1–E1.14 are done: `tests/CMakeLists.txt`, `tests/seqc_test.h`, `tests/fake_host.c`/`.h` and the
+  13 test files exist, and `Core/Inc/Soundengine/Sequencer/seq_core.h` declares
+  `void seqc_stats(seqc_stats_t *out);`.
+- E2.1–E2.6 are done: `seq_core.c` is linked into the firmware (`lxr_sequencer` in
+  `Core/CMakeLists.txt`), `seq_tick()` has its nesting guard (N12), and D4–D8 are fixed.
+- E3.1, E3.2 and E3.5 touch only build files, tools and docs and would also work before E2. E3.3 needs
+  `seqc_stats()` in the firmware build. E3.4's host-test job needs every E1 test file, because it
+  configures with `SEQC_REQUIRE_ALL_TESTS=ON`.
+- This plan runs E3.2 first and E3.1 right after E2.6, because the expected outputs of E1 and E2
+  show the fw 1.7 update file `LXR_V2_V1.7.img` and image size (see "Task order and dependencies").
+
+**Conventions for every task in this part.**
+1. Run every command from the repository root, `/Users/tk/Code/lxr`.
+2. The Bash tool runs zsh. `source tools/env.sh` works in zsh since commit `5911417`, which made E3.5
+   Steps 1–6 ahead of this plan. The commands of E3.1–E3.4 that call `cmake`, `ctest`, `ninja` or an
+   `arm-none-eabi-*` tool directly still run as `bash -c 'source tools/env.sh && …'`, which works in
+   any shell. `tools/check.sh` is a bash script and always works.
+3. Line endings. The C files and headers under `Core/` and `STM32F765VGTX_FLASH.ld` use CRLF; the
+   CMake files, `tests/`, `tools/`, `docs/`, `.github/` and `README.md` use LF. Make every change with
+   the Edit tool. Text it inserts into a CRLF file may come out with LF, so every step that edits a
+   CRLF file ends with `perl -pi -e 's/\r?\n/\r\n/' <files>`, which gives pure CRLF and changes
+   nothing in a file that has it already (the shared rule under "Task order and dependencies").
+   Then check with `file <path>`: a CRLF file says `with CRLF line terminators`, an LF file does not
+   mention CRLF, and `with CRLF, LF line terminators` means a mixed file. New files under `Core/` are
+   converted to CRLF in their task.
+4. A "replace … with …" step is one Edit tool call: `old_string` is the first block and `new_string`
+   the second, copied exactly, tabs included.
+5. After each task `tools/check.sh` exits 0 and prints `== compiler warnings: 0`.
+6. Commits: add the files by name (never `git add -A`), end the message with the trailer
+   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, and never push, tag or switch branches.
+7. After each commit, log it in the tracker as `docs/lichomat/HANDOFF.md` describes
+   (`python3 tools/tracker_note.py "…"`, the task's status in `docs/lichomat/tracker.json`); tracker
+   changes go into their own commits.
+8. Scratch files of the checks go under `build/`, which git ignores.
+
+### File map
+
+| File | Task | Responsibility |
+|---|---|---|
+| `CMakeLists.txt` | E3.1 | `LICHOMAT_NAME`, `project(VERSION 0.1)`, `LXR_BASE_VERSION`, `LXR_IMAGE_NAME` |
+| `Core/CMakeLists.txt` | E3.1, E3.3 | splash defines for `main.c`; `cpuMeter.c` in `lxr_engine` |
+| `Core/Src/main.c` | E3.1 | start-up screen `LICHOMAT` / `v0.1 unofficial` |
+| `tools/check_image.py` (new) | E3.1 | checks the update file: name, header, splash strings |
+| `tools/check.sh` | E3.1 | runs `check_image.py`; works from any directory |
+| `STM32F765VGTX_FLASH.ld` | E3.2 | `ASSERT` that the AT() load images end inside FLASH |
+| `Core/Inc/Soundengine/cpuMeter.h`, `Core/Src/Soundengine/cpuMeter.c` (new) | E3.3 | CPU meter: block load, 1 s average and peak, nesting rule |
+| `tests/test_cpumeter.c` (new), `tests/CMakeLists.txt` | E3.3 | host tests of the CPU meter |
+| `Core/Src/Soundengine/Soundengine.c`, `Core/Inc/Soundengine/Soundengine.h` | E3.3 | `soundengine_cpuBegin()`/`soundengine_cpuEnd()` around the audio work |
+| `Core/Src/stm32f7xx_it.c` | E3.3 | the same around the work in `TIM2_IRQHandler()` |
+| `Core/Inc/menu/menu.h`, `Core/Inc/menu/menuPages.h`, `Core/Src/menu/menu.c` | E3.3 | the read-only CPU page, 3rd sub-page of the global menu |
+| `.github/workflows/build.yml` (new) | E3.4 | CI: host tests, firmware build, artifacts, memory summary |
+| `tools/ci_dry_run.rb` (new) | E3.4 | checks the workflow and runs its steps locally |
+| `docs/lichomat/HANDOFF.md` | E3.4, E3.5 | mentions the new tools |
+| `tools/env.sh` | E3.5 | works in zsh; no empty `PATH` entries |
+| `README.md` | E3.5, E4.3 | LICHOMAT section, new file names, link to the release notes |
+| `docs/lichomat/reports/stage1-review.md` (new) | E4.1 | review checklist, findings, result |
+| `docs/lichomat/hardware-checklist.md` (new) | E4.2 | H1–H13 procedures and the run sheet |
+| `docs/lichomat/release-notes-v0.1.md` (new) | E4.3 | draft of the v0.1 release text |
+
+### Task E3.1: name, version 0.1, start-up screen and update file name
+
+Spec §9.5 and G7. The name comes from the cache variable `LICHOMAT_NAME` (default `LICHOMAT`), the
+version from `project(VERSION 0.1)`, and the upstream base is recorded as `LXR_BASE_VERSION 1.7`.
+Line 1 of the start-up screen is the name, line 2 `v0.1 unofficial` (NOTICE.md 7(c)); the LCD has
+16 characters per line. The update file becomes `LXR_V2_LICHOMAT_0.1.img`: the bootloader installs
+only files named `LXR*.img`, so the prefix stays, and so does the image magic `LXRV2IMG`
+(`cmake/firmware_outputs.cmake` and `cmake/tools/mkimage.py` need no change). The project name
+`LXR_V2_STM32F765` stays too: the `.elf`, `.bin` and `.map` names depend on it, and `tools/check.sh`
+uses them.
+
+**Files:**
+- Create: `tools/check_image.py`
+- Modify: `CMakeLists.txt:22-26` (project and branding block), `CMakeLists.txt:88`, `CMakeLists.txt:154-156`, `CMakeLists.txt:187`
+- Modify: `Core/CMakeLists.txt:32-35`
+- Modify: `Core/Src/main.c:56-59`, `Core/Src/main.c:352-358`
+- Modify: `tools/check.sh:5`, `tools/check.sh:14`, `tools/check.sh:42`
+- Test: `python3 tools/check_image.py build/release`
+
+- [ ] **Step 1: Build the current state**
+
+Run: `tools/check.sh`
+Expected: exit 0, and the last lines are
+
+```
+memory: ITCM … image … B (…%)
+image: /Users/tk/Code/lxr/build/release/LXR_V2_V1.7.img
+== compiler warnings: 0
+```
+
+- [ ] **Step 2: Write the failing test**
+
+Create `tools/check_image.py`:
+
+```python
+#!/usr/bin/env python3
+"""Check the SD-card update file of a LICHOMAT firmware build.
+
+    python3 tools/check_image.py [BUILD_DIR] [--name NAME] [--version VERSION]
+
+BUILD_DIR defaults to build/release. NAME and VERSION default to LICHOMAT_NAME and
+CMAKE_PROJECT_VERSION from BUILD_DIR/CMakeCache.txt. The check passes when:
+- BUILD_DIR holds exactly one update file, LXR_V2_<NAME>_<VERSION>.img. The
+  bootloader installs the first LXR*.img it finds, so a stale image next to it
+  is an error;
+- its 16-byte header (see cmake/tools/mkimage.py) has the desktop magic LXRV2IMG
+  and the size and checksum of LXR_V2_STM32F765.bin, and the .bin follows it
+  unchanged;
+- the .bin holds both splash screen lines as C strings, "<NAME>" and
+  "v<VERSION> unofficial", and each fits the 16 characters of the LCD.
+
+Exit status 0 if the check passes, 1 if not.
+
+Copyright (C) 2026 Tomasz Krzywicki
+SPDX-License-Identifier: GPL-3.0-only
+"""
+import argparse
+import os
+import re
+import struct
+import sys
+
+MAGIC = b"LXRV2IMG"
+HEADER = "<8sIB3x"          # magic, payload size, checksum, padding
+LCD_COLUMNS = 16
+BIN_NAME = "LXR_V2_STM32F765.bin"
+
+
+def cache_value(build_dir, key):
+    """value of KEY in BUILD_DIR/CMakeCache.txt, or None"""
+    try:
+        with open(os.path.join(build_dir, "CMakeCache.txt"), encoding="utf-8") as f:
+            for line in f:
+                m = re.match(r"%s:[A-Z]+=(.*)$" % re.escape(key), line.rstrip("\r\n"))
+                if m:
+                    return m.group(1)
+    except OSError:
+        pass
+    return None
+
+
+def check(build_dir, name, version):
+    """the problems found (none if the image is fine), the expected image name and the firmware size"""
+    problems = []
+    image_name = "LXR_V2_%s_%s.img" % (name, version)
+    images = sorted(f for f in os.listdir(build_dir) if f.endswith(".img"))
+    if images != [image_name]:
+        problems.append("expected exactly one update file %s in %s, found: %s"
+                        % (image_name, build_dir, ", ".join(images) or "none"))
+
+    with open(os.path.join(build_dir, BIN_NAME), "rb") as f:
+        payload = f.read()
+    if image_name in images:
+        with open(os.path.join(build_dir, image_name), "rb") as f:
+            image = f.read()
+        magic, size, checksum = struct.unpack(HEADER, image[:struct.calcsize(HEADER)])
+        if magic != MAGIC:
+            problems.append("%s: magic %r, expected %r" % (image_name, magic, MAGIC))
+        if size != len(payload) or image[struct.calcsize(HEADER):] != payload:
+            problems.append("%s does not contain %s (%d bytes)" % (image_name, BIN_NAME, len(payload)))
+        if checksum != 0xFF - (sum(payload) & 0xFF):
+            problems.append("%s: wrong checksum 0x%02X" % (image_name, checksum))
+
+    for line in (name, "v%s unofficial" % version):
+        if len(line) > LCD_COLUMNS:
+            problems.append("splash line '%s' is longer than %d characters" % (line, LCD_COLUMNS))
+        if line.encode("ascii") + b"\0" not in payload:
+            problems.append("splash line '%s' not found in %s" % (line, BIN_NAME))
+    return problems, image_name, len(payload)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("build_dir", nargs="?", default="build/release")
+    ap.add_argument("--name", help="expected LICHOMAT_NAME (default: from CMakeCache.txt)")
+    ap.add_argument("--version", help="expected project version (default: from CMakeCache.txt)")
+    args = ap.parse_args()
+
+    name = args.name or cache_value(args.build_dir, "LICHOMAT_NAME")
+    version = args.version or cache_value(args.build_dir, "CMAKE_PROJECT_VERSION")
+    if not name or not version:
+        print("image check FAILED: no LICHOMAT_NAME or CMAKE_PROJECT_VERSION in %s/CMakeCache.txt"
+              % args.build_dir)
+        return 1
+
+    problems, image_name, size = check(args.build_dir, name, version)
+    for p in problems:
+        print("image check FAILED: %s" % p)
+    if problems:
+        return 1
+    print('image: %s OK (%d bytes of firmware, magic %s, splash "%s" / "v%s unofficial")'
+          % (image_name, size, MAGIC.decode(), name, version))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+- [ ] **Step 3: Run it to see it fail**
+
+Run: `python3 tools/check_image.py build/release --name LICHOMAT --version 0.1; echo "exit=$?"`
+Expected:
+
+```
+image check FAILED: expected exactly one update file LXR_V2_LICHOMAT_0.1.img in build/release, found: LXR_V2_V1.7.img
+image check FAILED: splash line 'LICHOMAT' not found in LXR_V2_STM32F765.bin
+image check FAILED: splash line 'v0.1 unofficial' not found in LXR_V2_STM32F765.bin
+exit=1
+```
+
+- [ ] **Step 4: Name, version and image name in `CMakeLists.txt`**
+
+In `CMakeLists.txt`, replace:
+
+```cmake
+project(LXR_V2_STM32F765
+    VERSION 1.7
+    DESCRIPTION "LXR V2 drum machine firmware"
+    LANGUAGES C ASM
+)
+```
+
+with:
+
+```cmake
+project(LXR_V2_STM32F765
+    VERSION 0.1
+    DESCRIPTION "LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02"
+    LANGUAGES C ASM
+)
+
+# LICHOMAT branding (spec 9.5). Line 1 of the splash screen is the name, line 2 is
+# "v<version> unofficial": modified firmware must say so on its start-up screen
+# (NOTICE.md, 7(c)). The LCD has 16 characters per line.
+set(LICHOMAT_NAME "LICHOMAT" CACHE STRING "Firmware name on the splash screen and in the update file name")
+string(LENGTH "${LICHOMAT_NAME}" lichomat_name_length)
+string(LENGTH "v${PROJECT_VERSION} unofficial" lichomat_version_length)
+if(NOT LICHOMAT_NAME MATCHES "^[A-Za-z0-9_.-]+$" OR lichomat_name_length GREATER 16)
+    message(FATAL_ERROR "LICHOMAT_NAME '${LICHOMAT_NAME}': use 1 to 16 characters of A-Z a-z 0-9 _ . -")
+endif()
+if(lichomat_version_length GREATER 16)
+    message(FATAL_ERROR "'v${PROJECT_VERSION} unofficial' does not fit the 16 characters of the splash screen")
+endif()
+# The upstream firmware this fork is based on: erica-synths/lxr-desktop-app at a43cd4f.
+set(LXR_BASE_VERSION 1.7)
+# SD-card update file. The bootloader only installs files named LXR*.img, so the
+# LXR prefix is a technical file name, not branding.
+set(LXR_IMAGE_NAME "LXR_V2_${LICHOMAT_NAME}_${PROJECT_VERSION}")
+message(STATUS "${LICHOMAT_NAME} ${PROJECT_VERSION}, based on LXR firmware ${LXR_BASE_VERSION}: ${LXR_IMAGE_NAME}.img")
+```
+
+In `CMakeLists.txt`, replace:
+
+```cmake
+lxr_add_firmware_outputs(${PROJECT_NAME} IMAGE_MAGIC LXRV2IMG IMAGE_NAME LXR_V2_V${PROJECT_VERSION})
+```
+
+with:
+
+```cmake
+lxr_add_firmware_outputs(${PROJECT_NAME} IMAGE_MAGIC LXRV2IMG IMAGE_NAME ${LXR_IMAGE_NAME})
+```
+
+In `CMakeLists.txt`, replace:
+
+```cmake
+    # LXR_V2_V<version>_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
+    lxr_add_combined_image(full_image
+        OUTPUT_NAME LXR_V2_V${PROJECT_VERSION}_full
+```
+
+with:
+
+```cmake
+    # <LXR_IMAGE_NAME>_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
+    lxr_add_combined_image(full_image
+        OUTPUT_NAME ${LXR_IMAGE_NAME}_full
+```
+
+In `CMakeLists.txt`, replace:
+
+```cmake
+    IMAGE ${CMAKE_CURRENT_BINARY_DIR}/LXR_V2_V${PROJECT_VERSION}.img
+```
+
+with:
+
+```cmake
+    IMAGE ${CMAKE_CURRENT_BINARY_DIR}/${LXR_IMAGE_NAME}.img
+```
+
+- [ ] **Step 5: Pass the name and version to `main.c`**
+
+In `Core/CMakeLists.txt`, replace:
+
+```cmake
+# Shown on the boot splash screen; comes from project(VERSION) in the top-level CMakeLists.txt.
+set_source_files_properties(Src/main.c PROPERTIES
+    COMPILE_DEFINITIONS "FIRMWARE_VERSION=\" ${PROJECT_VERSION}\""
+)
+```
+
+with:
+
+```cmake
+# Shown on the boot splash screen; LICHOMAT_NAME and project(VERSION) come from the
+# top-level CMakeLists.txt.
+set_source_files_properties(Src/main.c PROPERTIES
+    COMPILE_DEFINITIONS "FIRMWARE_NAME=\"${LICHOMAT_NAME}\";FIRMWARE_VERSION=\"${PROJECT_VERSION}\""
+)
+```
+
+- [ ] **Step 6: The start-up screen**
+
+In `Core/Src/main.c`, replace:
+
+```c
+// The CMake build passes FIRMWARE_VERSION from project(VERSION); this is the fallback for STM32CubeIDE.
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION " 2.00"
+#endif
+```
+
+with:
+
+```c
+// The CMake build passes FIRMWARE_NAME (LICHOMAT_NAME) and FIRMWARE_VERSION (project(VERSION));
+// these are the fallbacks for other builds.
+#ifndef FIRMWARE_NAME
+#define FIRMWARE_NAME "LICHOMAT"
+#endif
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION "0.1"
+#endif
+```
+
+In `Core/Src/main.c`, replace:
+
+```c
+	//print boot up message
+lcd_clear();
+lcd_string("Sonic Potions");
+//goto 2nd line
+lcd_setcursor(0,2);
+lcd_string("LXR2 Drums V");
+lcd_string(FIRMWARE_VERSION);
+```
+
+with:
+
+```c
+	//print boot up message: LICHOMAT is modified firmware, and its start-up screen
+	//must say so (NOTICE.md, 7(c))
+lcd_clear();
+lcd_string(FIRMWARE_NAME);
+//goto 2nd line
+lcd_setcursor(0,2);
+lcd_string("v" FIRMWARE_VERSION " unofficial");
+```
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/main.c && file Core/Src/main.c`
+Expected: `Core/Src/main.c: c program text, ASCII text, with CRLF line terminators`
+
+- [ ] **Step 7: Remove the stale image and rebuild**
+
+The old `LXR_V2_V1.7.img` is no longer a build output, so the build never deletes it, and the
+updater would install whichever `LXR*.img` it finds first. CI always starts from a clean tree.
+
+Run: `rm -f build/release/LXR_V2_V1.7.img && tools/check.sh`
+Expected: exit 0, and
+
+```
+image: /Users/tk/Code/lxr/build/release/LXR_V2_LICHOMAT_0.1.img
+== compiler warnings: 0
+```
+
+- [ ] **Step 8: Run the test to see it pass**
+
+Run: `python3 tools/check_image.py build/release; echo "exit=$?"`
+Expected, where N is the size of the firmware (`wc -c < build/release/LXR_V2_STM32F765.bin`):
+
+```
+image: LXR_V2_LICHOMAT_0.1.img OK (N bytes of firmware, magic LXRV2IMG, splash "LICHOMAT" / "v0.1 unofficial")
+exit=0
+```
+
+Run: `grep -- '-- LICHOMAT 0.1' build/check.log; grep -o 'FIRMWARE_[A-Z]*=[^ ]*' build/release/compile_commands.json | sort -u`
+Expected:
+
+```
+-- LICHOMAT 0.1, based on LXR firmware 1.7: LXR_V2_LICHOMAT_0.1.img
+FIRMWARE_NAME=\\\"LICHOMAT\\\"
+FIRMWARE_VERSION=\\\"0.1\\\"
+```
+
+- [ ] **Step 9: Check that a name the screen or the card can't take is refused**
+
+Run:
+
+```bash
+bash -c 'source tools/env.sh && cmake -S . -B build/e3-name-check -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -DARM_TOOLCHAIN_DIR="$ARM_TOOLCHAIN_DIR" -DLICHOMAT_NAME="TOO LONG NAME 1234" 2>&1 | grep -A2 "CMake Error"'; rm -rf build/e3-name-check
+```
+
+Expected:
+
+```
+CMake Error at CMakeLists.txt:35 (message):
+  LICHOMAT_NAME 'TOO LONG NAME 1234': use 1 to 16 characters of A-Z a-z 0-9 _
+  .  -
+```
+
+- [ ] **Step 10: Let `tools/check.sh` check the update file**
+
+The check replaces the plain listing of `*.img` files. `cd "$ROOT"` makes the script work from any
+directory: `cmake --build --preset` reads `CMakePresets.json` from the current directory.
+
+In `tools/check.sh`, replace:
+
+```bash
+#   3. compiler warning count (must stay 0)
+```
+
+with:
+
+```bash
+#   3. update file check (tools/check_image.py: name, header, splash screen)
+#   4. compiler warning count (must stay 0)
+```
+
+In `tools/check.sh`, replace:
+
+```bash
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+```
+
+with:
+
+```bash
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"  # "cmake --build --preset" reads CMakePresets.json from the current directory
+```
+
+In `tools/check.sh`, replace:
+
+```bash
+  ls -1 "$B"/*.img 2>/dev/null | sed 's/^/image: /'
+```
+
+with:
+
+```bash
+  python3 "$ROOT/tools/check_image.py" "$B" 2>&1 | tee -a "$LOG" || status=1
+```
+
+- [ ] **Step 11: Run `tools/check.sh` from another directory**
+
+Run: `(cd build && ../tools/check.sh)`
+Expected: exit 0, and the last lines are
+
+```
+memory: ITCM … image … B (…%)
+image: LXR_V2_LICHOMAT_0.1.img OK (… bytes of firmware, magic LXRV2IMG, splash "LICHOMAT" / "v0.1 unofficial")
+== compiler warnings: 0
+```
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add tools/check_image.py CMakeLists.txt Core/CMakeLists.txt Core/Src/main.c tools/check.sh
+git commit -m "Brand the firmware as LICHOMAT 0.1" \
+  -m "The cache variable LICHOMAT_NAME and project(VERSION 0.1) set the start-up screen, LICHOMAT and v0.1 unofficial, and the update file name LXR_V2_LICHOMAT_0.1.img, which keeps the LXR prefix and the LXRV2IMG magic the bootloader needs. The upstream base is recorded as LXR_BASE_VERSION 1.7. tools/check_image.py checks the update file, and tools/check.sh runs it." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Task E3.2: linker check that the image fits in FLASH
+
+Spec §9.4. `.data`, `.dtcm` and `.itcm_text` are loaded from FLASH (`AT()`), behind the code, and the
+`FLASH:` line of `--print-memory-usage` leaves the last two out: the fw 1.7 image is 274688 bytes,
+but that line says 222692 B. Without a check, ld links an image that is larger than FLASH without a word.
+`.itcm_text` is the last load image, so its end is the end of the image. The `.bin` must stay
+byte-identical.
+
+**Files:**
+- Modify: `STM32F765VGTX_FLASH.ld:251-252` (insert after line 252)
+- Test: `build/e3-ldcheck/relink_small.sh` (a scratch script, not committed)
+
+- [ ] **Step 1: Record the current image**
+
+Run: `tools/check.sh && mkdir -p build/e3-ldcheck && shasum -a 256 build/release/LXR_V2_STM32F765.bin | tee build/e3-ldcheck/before.sha256`
+Expected: exit 0, `== compiler warnings: 0`, then one line `<64 hex digits>  build/release/LXR_V2_STM32F765.bin`
+
+- [ ] **Step 2: Write the failing test**
+
+The test relinks the release objects with a copy of the linker script whose FLASH is 256 KB, smaller
+than the image, and expects the link to fail.
+
+Create `build/e3-ldcheck/relink_small.sh`:
+
+```bash
+#!/bin/bash
+# Relink the release firmware with FLASH cut to 256K, below the size of the image.
+# Expected after E3.2: the link fails with "image too large for FLASH".
+set -u -o pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+D="$ROOT/build/e3-ldcheck"
+source "$ROOT/tools/env.sh"
+bin=$(wc -c < "$ROOT/build/release/LXR_V2_STM32F765.bin")
+[ "$bin" -gt 262144 ] || { echo "the image ($bin B) is not larger than 256K: pick a smaller FLASH length"; exit 2; }
+sed -e 's/LENGTH = 992K/LENGTH = 256K/' "$ROOT/STM32F765VGTX_FLASH.ld" > "$D/small.ld"
+grep -q "LENGTH = 256K" "$D/small.ld" || { echo "FLASH line not found in the linker script"; exit 2; }
+link=$(ninja -C "$ROOT/build/release" -t commands LXR_V2_STM32F765.elf | tail -n 1 | sed -e 's/^: && //' -e 's/ && .*$//')
+link=$(printf '%s' "$link" | sed -e "s#-T[^ ]*#-T$D/small.ld#" -e "s#-Wl,-Map=[^ ]*#-Wl,-Map=$D/small.map#" -e "s# -o [^ ]*# -o $D/small.elf#")
+rm -f "$D/small.elf"
+(cd "$ROOT/build/release" && eval "$link") > "$D/small.log" 2>&1
+rc=$?
+grep -E "image too large for FLASH|region .* overflowed" "$D/small.log"
+if [ $rc -eq 0 ]; then
+  echo "linker exit 0: an image larger than FLASH was accepted"
+  exit 1
+fi
+echo "linker exit $rc: the oversized image is rejected"
+exit 0
+```
+
+- [ ] **Step 3: Run it to see it fail**
+
+Run: `bash build/e3-ldcheck/relink_small.sh; echo "exit=$?"`
+Expected:
+
+```
+linker exit 0: an image larger than FLASH was accepted
+exit=1
+```
+
+- [ ] **Step 4: Add the assertion**
+
+In `STM32F765VGTX_FLASH.ld`, replace:
+
+```text
+    /* Check we didn't overflow CCM */
+  ASSERT(_sccmstack + _Min_Stack_Size <= _dtcm_stack, "CCM overflow")
+```
+
+with:
+
+```text
+    /* Check we didn't overflow CCM */
+  ASSERT(_sccmstack + _Min_Stack_Size <= _dtcm_stack, "CCM overflow")
+
+  /* Check that the load images of .data, .dtcm and .itcm_text, which are placed
+     with AT() behind the code, still end inside FLASH. The FLASH line of
+     --print-memory-usage leaves them out. */
+  ASSERT(_siitcm + SIZEOF(.itcm_text) <= ORIGIN(FLASH) + LENGTH(FLASH), "image too large for FLASH")
+```
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' STM32F765VGTX_FLASH.ld && file STM32F765VGTX_FLASH.ld`
+Expected: `STM32F765VGTX_FLASH.ld: assembler source text, ASCII text, with CRLF line terminators`
+
+- [ ] **Step 5: Rebuild and compare the image**
+
+The build relinks because the linker script is a link dependency (`LINK_DEPENDS` in
+`cmake/firmware_outputs.cmake`).
+
+Run: `tools/check.sh && shasum -a 256 -c build/e3-ldcheck/before.sha256`
+Expected: exit 0, `== compiler warnings: 0`, and `build/release/LXR_V2_STM32F765.bin: OK`
+
+- [ ] **Step 6: Run the test to see it pass**
+
+Run: `bash build/e3-ldcheck/relink_small.sh; echo "exit=$?"`
+Expected:
+
+```
+/Users/tk/Code/lxr/.toolchain/arm-gnu-toolchain-14.3.rel1-darwin-arm64-arm-none-eabi/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld: image too large for FLASH
+linker exit 1: the oversized image is rejected
+exit=0
+```
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add STM32F765VGTX_FLASH.ld
+git commit -m "Linker: fail when the image does not fit in FLASH" \
+  -m "The .data, .dtcm and .itcm_text load images are placed with AT() and were not checked against FLASH. The assertion leaves the image byte-identical." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Task E3.3: CPU meter and the CPU page of the global menu
+
+Spec §9.3, G6, N12. What is measured: the DWT cycles of the audio work, `seq_tick()` (which parses MIDI
+after D8) plus the render of a sample block, in both places it runs: `TIM2_IRQHandler()` while the SD
+card is busy, and `soundengine_process()` from the main loop otherwise (N12). The cycles since the
+last rendered block are the load of the block that is rendered, compared with the time one block
+lasts: 64 / 44140 Hz × 216 MHz = 313185 cycles. Once a second the meter publishes the mean block load
+and the highest block load of that second (the peak is held for one second), in percent, clamped to
+999, plus the event queue's `queueMax` and `queueOverflow` from `seqc_stats()`.
+
+Three rules come from the code around it:
+- A kit autoload inside `seq_tick()` runs `soundengine_process()` again (N12), so measured pieces
+  nest. The nested pieces are counted; the outer piece is not, because the rest of it is the kit load,
+  not audio work. Without this rule every pattern change with kit autoload would show a peak of
+  several thousand percent.
+- `soundengine_cpuEnd()` calls `seqc_stats()`. That is allowed: it runs in the `seq_tick()` context,
+  right after `seq_tick()` in the same TIM2-masked window or in the TIM2 interrupt, and queries are
+  allowed there, also inside callbacks (`seq_core.h`, "Execution context"; N13.9).
+- The menu runs in the TIM14 interrupt (`menu_tick()`) and only copies the published reading. A torn
+  read can only mix two readings on the display.
+
+The page is drawn by its own routine and adds no `activeParameters` entries, so `glo.cfg` keeps its 30
+bytes (G8). In fw 1.7 the global menu could not reach a third sub-page: `menu_switchSubPage()` wraps to
+the first sub-page whenever the current one has no second screen, and the second sub-page has none, so
+this task changes that branch to move on when a next sub-page exists. The SEQ page keeps its
+behaviour, because its third sub-page is empty. Entering the global menu is SHIFT + step 12 (`SEQ_CONFIG`),
+and each further press moves on: first sub-page, its second screen, second sub-page, CPU page. Coming
+from the second screen of another page, the menu opens on the first sub-page's second screen
+(`menu_switchSubPage(0, 0)` keeps the screen), so the CPU page is then the 3rd press, not the 4th.
+
+**Files:**
+- Create: `Core/Inc/Soundengine/cpuMeter.h`, `Core/Src/Soundengine/cpuMeter.c`
+- Create: `tests/test_cpumeter.c`
+- Modify: `tests/CMakeLists.txt` (after the `test_syncq` line of E2.1)
+- Modify: `Core/CMakeLists.txt:103-105` (`lxr_engine`)
+- Modify: `Core/Inc/Soundengine/Soundengine.h:33-35`
+- Modify: `Core/Src/Soundengine/Soundengine.c:18-19`, `Core/Src/Soundengine/Soundengine.c:81-84`, `Core/Src/Soundengine/Soundengine.c:112-116`
+- Modify: `Core/Src/stm32f7xx_it.c:270-274` (`TIM2_IRQHandler`)
+- Modify: `Core/Inc/menu/menu.h:33-34`, `Core/Inc/menu/menu.h:272-275`
+- Modify: `Core/Inc/menu/menuPages.h:379-380`
+- Modify: `Core/Src/menu/menu.c:33-34`, `:251`, `:691`, `:1018-1024`, `:1805-1807`, `:1824-1828`, `:2744-2746`, `:3171-3174`, `:3917-3920`
+- Test: `tests/test_cpumeter.c` (host), plus symbol and string checks of the firmware
+
+- [ ] **Step 1: Check the preconditions**
+
+Run:
+
+```bash
+grep -n 'void seqc_stats(seqc_stats_t \*out);' Core/Inc/Soundengine/Sequencer/seq_core.h
+grep -n 'Sequencer/seq_core.c' Core/CMakeLists.txt
+grep -n -A4 'GPIO_PIN_2, GPIO_PIN_SET' Core/Src/stm32f7xx_it.c
+grep -n -A3 'HAL_TIM_Base_Stop_IT(&htim2);' Core/Src/Soundengine/Soundengine.c
+```
+
+Expected:
+- one line with `void seqc_stats(seqc_stats_t *out);`;
+- two lines `    Src/Soundengine/Sequencer/seq_core.c`: one in the `add_library(lxr_sequencer OBJECT …)`
+  list (E1.3) and one in the `set_property(SOURCE …)` list that adds `-Wextra` (E2.1);
+- in `TIM2_IRQHandler()`: `HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_SET);`, `seq_tick();`,
+  `soundengine_calcNextSampleBlock();`, then `HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_RESET);`.
+  E2.4 removed the `uart_processMidi();` that fw 1.7 had before the last line; if it is still
+  there, the edits below work the same and measure it too;
+- in `soundengine_process()`: `//HAL_TIM_Base_Stop_IT(&htim2);`, `seq_tick();`,
+  `soundengine_calcNextSampleBlock();`, `__HAL_TIM_SetCounter(&htim2, 1950);`.
+
+If any of them differs, stop: E1 or E2 is not finished.
+
+- [ ] **Step 2: Write the failing test**
+
+Create `tests/test_cpumeter.c`:
+
+```c
+/*
+ * test_cpumeter.c
+ *
+ * Host tests of the CPU meter (Core/Src/Soundengine/cpuMeter.c, spec 9.3): the
+ * block load in percent of CPUMETER_BLOCK_CYCLES, the 1 s average and peak, the
+ * nesting rule for a kit autoload, the clamp and the 32-bit counter wrap.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "seqc_test.h"
+#include "Soundengine/cpuMeter.h"
+
+/* CPUMETER_BLOCK_CYCLES = 313185 = 15 x 20879, so 20879 x k cycles is exactly
+ * 20 x k / 3 % of a block: 62637 cycles are 20 %, 250548 cycles are 80 % */
+#define PCT20 62637u
+#define PCT80 250548u
+
+/* One audio block period starting at *t: one call of `work` cycles that renders
+ * the block. Returns what cpuMeter_end() returned. */
+static uint8_t block(uint32_t *t, uint32_t work)
+{
+	cpuMeter_begin(*t);
+	const uint8_t published = cpuMeter_end(*t + work, 1);
+	*t += CPUMETER_BLOCK_CYCLES;
+	return published;
+}
+
+/* blocks of `work` cycles until a reading is published; returns how many ran */
+static uint32_t blocksUntilReading(uint32_t *t, uint32_t work)
+{
+	for (uint32_t n = 1; n <= 2000; n++)
+		if (block(t, work))
+			return n;
+	return 0;
+}
+
+TEST(cpumeter_first_reading_after_one_second)
+{
+	cpuMeter_reset();
+	uint32_t t = 1000;
+	/* the window opens at the end of the first block and closes at the first
+	 * block that ends 216000000 cycles later: 216000000 / 313185 = 689.7 */
+	ASSERT_EQ(blocksUntilReading(&t, PCT20), 691);
+
+	cpuMeter_reading_t r;
+	cpuMeter_get(&r);
+	ASSERT_EQ(r.avgPct, 20);
+	ASSERT_EQ(r.peakPct, 20);
+}
+
+TEST(cpumeter_nothing_before_the_first_reading)
+{
+	cpuMeter_reset();
+	uint32_t t = 0;
+	for (int i = 0; i < 600; i++)
+		ASSERT_EQ(block(&t, PCT80), 0);
+
+	cpuMeter_reading_t r;
+	cpuMeter_get(&r);
+	ASSERT_EQ(r.avgPct, 0);
+	ASSERT_EQ(r.peakPct, 0);
+}
+
+TEST(cpumeter_average_and_peak)
+{
+	cpuMeter_reset();
+	uint32_t t = 0;
+	ASSERT_EQ(block(&t, PCT80), 0);		/* one heavy block, then light ones */
+	ASSERT_EQ(blocksUntilReading(&t, PCT20), 691);
+
+	cpuMeter_reading_t r;
+	cpuMeter_get(&r);
+	/* (250548 + 691 x 62637) x 100 / (692 x 313185) = 20.09 */
+	ASSERT_EQ(r.avgPct, 20);
+	ASSERT_EQ(r.peakPct, 80);
+}
+
+TEST(cpumeter_peak_is_held_for_one_window)
+{
+	cpuMeter_reset();
+	uint32_t t = 0;
+	ASSERT_EQ(block(&t, PCT80), 0);
+	ASSERT_TRUE(blocksUntilReading(&t, PCT20) > 0);
+	ASSERT_TRUE(blocksUntilReading(&t, PCT20) > 0);	/* the next second is light only */
+
+	cpuMeter_reading_t r;
+	cpuMeter_get(&r);
+	ASSERT_EQ(r.avgPct, 20);
+	ASSERT_EQ(r.peakPct, 20);
+}
+
+TEST(cpumeter_calls_without_a_block_count_for_the_next_block)
+{
+	cpuMeter_reset();
+	uint32_t t = 0;
+	uint8_t published = 0;
+	/* seq_tick() runs several times per block: three calls of 20 % each, and
+	 * only the third renders, so every block carries 60 % */
+	for (int i = 0; i < 2000 && !published; i++)
+	{
+		cpuMeter_begin(t);
+		ASSERT_EQ(cpuMeter_end(t + PCT20, 0), 0);
+		cpuMeter_begin(t + 100000);
+		ASSERT_EQ(cpuMeter_end(t + 100000 + PCT20, 0), 0);
+		cpuMeter_begin(t + 200000);
+		published = cpuMeter_end(t + 200000 + PCT20, 1);
+		t += CPUMETER_BLOCK_CYCLES;
+	}
+	ASSERT_TRUE(published);
+
+	cpuMeter_reading_t r;
+	cpuMeter_get(&r);
+	ASSERT_EQ(r.avgPct, 60);
+	ASSERT_EQ(r.peakPct, 60);
+}
+
+TEST(cpumeter_kit_autoload_outer_call_is_not_counted)
+{
+	cpuMeter_reset();
+	uint32_t t = 0;
+	ASSERT_EQ(block(&t, PCT20), 0);
+
+	/* A pattern change with kit autoload: seq_tick() calls soundengine_process()
+	 * again from inside, which renders blocks. The nested calls count; the
+	 * outer call (44 ms in all, mostly the kit load) does not. */
+	cpuMeter_begin(t);
+	for (int i = 0; i < 30; i++)
+	{
+		cpuMeter_begin(t + 1000);
+		ASSERT_EQ(cpuMeter_end(t + 1000 + PCT20, 1), 0);
+		t += CPUMETER_BLOCK_CYCLES;
+	}
+	ASSERT_EQ(cpuMeter_end(t, 1), 0);
+
+	ASSERT_TRUE(blocksUntilReading(&t, PCT20) > 0);
+	cpuMeter_reading_t r;
+	cpuMeter_get(&r);
+	ASSERT_EQ(r.avgPct, 20);
+	ASSERT_EQ(r.peakPct, 20);
+}
+
+TEST(cpumeter_clamps_to_three_digits)
+{
+	cpuMeter_reset();
+	uint32_t t = 0;
+	/* a stall of 20 blocks in one call: 2000 % */
+	cpuMeter_begin(t);
+	ASSERT_EQ(cpuMeter_end(t + 20u * CPUMETER_BLOCK_CYCLES, 1), 0);
+	t += 21u * CPUMETER_BLOCK_CYCLES;
+	ASSERT_TRUE(blocksUntilReading(&t, PCT20) > 0);
+
+	cpuMeter_reading_t r;
+	cpuMeter_get(&r);
+	ASSERT_EQ(r.peakPct, CPUMETER_MAX_PCT);
+}
+
+TEST(cpumeter_counter_wrap)
+{
+	cpuMeter_reset();
+	uint32_t t = 0xFFFFFFFFu - 100000000u;	/* DWT->CYCCNT wraps in this window */
+	ASSERT_EQ(blocksUntilReading(&t, PCT20), 691);
+
+	cpuMeter_reading_t r;
+	cpuMeter_get(&r);
+	ASSERT_EQ(r.avgPct, 20);
+	ASSERT_EQ(r.peakPct, 20);
+}
+
+TEST(cpumeter_end_without_begin_is_ignored)
+{
+	cpuMeter_reset();
+	ASSERT_EQ(cpuMeter_end(5000, 1), 0);
+	uint32_t t = 10000;
+	ASSERT_EQ(blocksUntilReading(&t, PCT20), 691);
+}
+
+TEST(cpumeter_queue_stats)
+{
+	cpuMeter_reset();
+	cpuMeter_setQueueStats(12, 3);
+
+	cpuMeter_reading_t r;
+	cpuMeter_get(&r);
+	ASSERT_EQ(r.queueMax, 12);
+	ASSERT_EQ(r.queueOverflow, 3);
+}
+
+TEST_MAIN()
+```
+
+Register it after the `test_syncq` line that E2.1 added, so the list stays in task order.
+
+In `tests/CMakeLists.txt`, replace:
+
+```cmake
+seqc_add_test(test_syncq     IDS syncq EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/seq_syncq.c)  # E2.1  sync input queues (seq_platform)
+```
+
+with:
+
+```cmake
+seqc_add_test(test_syncq     IDS syncq EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/seq_syncq.c)  # E2.1  sync input queues (seq_platform)
+seqc_add_test(test_cpumeter  IDS cpumeter EXTRA ${LXR_ROOT}/Core/Src/Soundengine/cpuMeter.c)  # E3.3 CPU meter
+```
+
+- [ ] **Step 3: Run it to see it fail**
+
+Run: `bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug' 2>&1 | grep -A3 'CMake Error'`
+Expected (the line number is that of `add_executable` in `seqc_add_test()`: 107, since E1.12 added
+13 lines above it):
+
+```
+CMake Error at CMakeLists.txt:107 (add_executable):
+  Cannot find source file:
+
+    /Users/tk/Code/lxr/Core/Src/Soundengine/cpuMeter.c
+```
+
+- [ ] **Step 4: Write the CPU meter**
+
+Create `Core/Inc/Soundengine/cpuMeter.h`:
+
+```c
+/*
+ * cpuMeter.h
+ *
+ * CPU meter of the LICHOMAT audio engine (spec 9.3). It adds up the cycles of the
+ * audio work, seq_tick() and the render of a sample block, per rendered block and
+ * compares them with the time one block lasts:
+ *   64 samples / 44140 Hz x 216 MHz = 313185 cycles.
+ * Once a second it publishes a reading: the mean block load and the highest block
+ * load of that second, in percent. The CPU page of the global menu shows it.
+ *
+ * Plain C11 without the HAL, so the host tests build it too (tests/test_cpumeter.c).
+ * The firmware calls it through soundengine_cpuBegin() and soundengine_cpuEnd() in
+ * Soundengine.c, which pass DWT->CYCCNT. Those run in the seq_tick() context only
+ * (TIM2_IRQHandler, or soundengine_process() with the TIM2 interrupt masked), so
+ * the counters need no locking. The menu reads the published reading from the
+ * TIM14 interrupt; a torn read only mixes two readings on the display.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#ifndef CPUMETER_H_
+#define CPUMETER_H_
+
+#include <stdint.h>
+
+#define CPUMETER_BLOCK_CYCLES	313185u		/**< one sample block: 64 / 44140 Hz x 216 MHz, rounded */
+#define CPUMETER_WINDOW_CYCLES	216000000u	/**< one reading per second of DWT->CYCCNT at 216 MHz */
+#define CPUMETER_MAX_PCT	999u		/**< readings are clamped to the 3 digits of the CPU page */
+
+/** one reading, see cpuMeter_get() */
+typedef struct cpuMeter_reading
+{
+	uint16_t avgPct;		/**< mean load of the blocks of the last full second, % of a block */
+	uint16_t peakPct;		/**< highest load of a single block in that second */
+	uint16_t queueMax;		/**< seqc_stats_t.queueMax at the time of the reading */
+	uint32_t queueOverflow;		/**< seqc_stats_t.queueOverflow at the time of the reading */
+} cpuMeter_reading_t;
+
+/** Start of a measured piece of audio work, now = DWT->CYCCNT. The pieces may
+ * nest: a kit autoload inside seq_tick() runs soundengine_process() again. */
+void cpuMeter_begin(uint32_t now);
+//------------------------------------------------------------------------------
+/** End of the piece of the matching cpuMeter_begin(); blockRendered: it rendered a
+ * sample block. Work that rendered no block counts for the next block. A piece
+ * that had nested pieces is not counted: those were counted, and the rest of it
+ * is the kit load, not audio work. Returns 1 if this call published a reading. */
+uint8_t cpuMeter_end(uint32_t now, uint8_t blockRendered);
+//------------------------------------------------------------------------------
+/** set the event queue counters of the latest reading */
+void cpuMeter_setQueueStats(uint16_t queueMax, uint32_t queueOverflow);
+//------------------------------------------------------------------------------
+/** copy the latest reading; all zero before the first one */
+void cpuMeter_get(cpuMeter_reading_t *out);
+//------------------------------------------------------------------------------
+/** forget everything (host tests) */
+void cpuMeter_reset(void);
+
+#endif /* CPUMETER_H_ */
+```
+
+Create `Core/Src/Soundengine/cpuMeter.c`:
+
+```c
+/*
+ * cpuMeter.c
+ *
+ * CPU meter of the LICHOMAT audio engine, see cpuMeter.h.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include "Soundengine/cpuMeter.h"
+
+#define CPUMETER_MAX_DEPTH 2u	/* a kit autoload nests one level */
+
+static uint32_t cpuMeter_start[CPUMETER_MAX_DEPTH];	/* cpuMeter_begin() time per level */
+static uint8_t cpuMeter_depth;				/* pieces in progress */
+static uint8_t cpuMeter_nested;				/* the outermost piece in progress had a nested one */
+static uint64_t cpuMeter_blockCycles;			/* work since the last rendered block */
+
+static uint8_t cpuMeter_windowOpen;			/* cpuMeter_windowStart is set */
+static uint32_t cpuMeter_windowStart;			/* end of the first block of this second */
+static uint64_t cpuMeter_windowCycles;			/* work of the blocks of this second */
+static uint32_t cpuMeter_windowBlocks;
+static uint64_t cpuMeter_windowPeak;			/* highest block load of this second, % */
+
+static volatile cpuMeter_reading_t cpuMeter_reading;	/* the latest reading */
+
+//------------------------------------------------------------------------------
+static uint16_t cpuMeter_clamp(uint64_t pct)
+{
+	return (uint16_t)(pct > CPUMETER_MAX_PCT ? CPUMETER_MAX_PCT : pct);
+}
+//------------------------------------------------------------------------------
+void cpuMeter_begin(uint32_t now)
+{
+	if(cpuMeter_depth < CPUMETER_MAX_DEPTH)
+		cpuMeter_start[cpuMeter_depth] = now;
+	if(cpuMeter_depth > 0)
+		cpuMeter_nested = 1;
+	if(cpuMeter_depth < UINT8_MAX)
+		cpuMeter_depth++;
+}
+//------------------------------------------------------------------------------
+uint8_t cpuMeter_end(uint32_t now, uint8_t blockRendered)
+{
+	if(cpuMeter_depth == 0)
+		return 0;		/* no matching cpuMeter_begin() */
+	cpuMeter_depth--;
+	if(cpuMeter_depth >= CPUMETER_MAX_DEPTH)
+		return 0;		/* nested deeper than a kit autoload: not measured */
+	if(cpuMeter_depth == 0 && cpuMeter_nested)
+	{
+		cpuMeter_nested = 0;	/* around a kit autoload: its nested pieces were counted */
+		return 0;
+	}
+
+	cpuMeter_blockCycles += (uint32_t)(now - cpuMeter_start[cpuMeter_depth]);
+	if(!blockRendered)
+		return 0;
+
+	const uint64_t pct = cpuMeter_blockCycles * 100u / CPUMETER_BLOCK_CYCLES;
+	if(!cpuMeter_windowOpen)
+	{
+		cpuMeter_windowOpen = 1;
+		cpuMeter_windowStart = now;
+	}
+	cpuMeter_windowCycles += cpuMeter_blockCycles;
+	cpuMeter_windowBlocks++;
+	if(pct > cpuMeter_windowPeak)
+		cpuMeter_windowPeak = pct;
+	cpuMeter_blockCycles = 0;
+
+	if((uint32_t)(now - cpuMeter_windowStart) < CPUMETER_WINDOW_CYCLES)
+		return 0;
+
+	cpuMeter_reading.avgPct = cpuMeter_clamp(cpuMeter_windowCycles * 100u
+			/ ((uint64_t)cpuMeter_windowBlocks * CPUMETER_BLOCK_CYCLES));
+	cpuMeter_reading.peakPct = cpuMeter_clamp(cpuMeter_windowPeak);
+	cpuMeter_windowStart = now;
+	cpuMeter_windowCycles = 0;
+	cpuMeter_windowBlocks = 0;
+	cpuMeter_windowPeak = 0;
+	return 1;
+}
+//------------------------------------------------------------------------------
+void cpuMeter_setQueueStats(uint16_t queueMax, uint32_t queueOverflow)
+{
+	cpuMeter_reading.queueMax = queueMax;
+	cpuMeter_reading.queueOverflow = queueOverflow;
+}
+//------------------------------------------------------------------------------
+void cpuMeter_get(cpuMeter_reading_t *out)
+{
+	out->avgPct = cpuMeter_reading.avgPct;
+	out->peakPct = cpuMeter_reading.peakPct;
+	out->queueMax = cpuMeter_reading.queueMax;
+	out->queueOverflow = cpuMeter_reading.queueOverflow;
+}
+//------------------------------------------------------------------------------
+void cpuMeter_reset(void)
+{
+	for(uint8_t i = 0; i < CPUMETER_MAX_DEPTH; i++)
+		cpuMeter_start[i] = 0;
+	cpuMeter_depth = 0;
+	cpuMeter_nested = 0;
+	cpuMeter_blockCycles = 0;
+	cpuMeter_windowOpen = 0;
+	cpuMeter_windowStart = 0;
+	cpuMeter_windowCycles = 0;
+	cpuMeter_windowBlocks = 0;
+	cpuMeter_windowPeak = 0;
+	cpuMeter_reading.avgPct = 0;
+	cpuMeter_reading.peakPct = 0;
+	cpuMeter_reading.queueMax = 0;
+	cpuMeter_reading.queueOverflow = 0;
+}
+```
+
+Convert both to CRLF, like the other files in `Core/`:
+
+```bash
+python3 -c 'import sys
+for p in sys.argv[1:]:
+    d = open(p, "rb").read().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+    open(p, "wb").write(d)' Core/Inc/Soundengine/cpuMeter.h Core/Src/Soundengine/cpuMeter.c
+file Core/Inc/Soundengine/cpuMeter.h Core/Src/Soundengine/cpuMeter.c
+```
+
+Expected:
+
+```
+Core/Inc/Soundengine/cpuMeter.h: c program text, ASCII text, with CRLF line terminators
+Core/Src/Soundengine/cpuMeter.c: c program text, ASCII text, with CRLF line terminators
+```
+
+- [ ] **Step 5: Run the test to see it pass**
+
+Run: `bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug > /dev/null && cmake --build build/host-tests > /dev/null && build/host-tests/test_cpumeter'`
+Expected:
+
+```
+PASS cpumeter_first_reading_after_one_second
+PASS cpumeter_nothing_before_the_first_reading
+PASS cpumeter_average_and_peak
+PASS cpumeter_peak_is_held_for_one_window
+PASS cpumeter_calls_without_a_block_count_for_the_next_block
+PASS cpumeter_kit_autoload_outer_call_is_not_counted
+PASS cpumeter_clamps_to_three_digits
+PASS cpumeter_counter_wrap
+PASS cpumeter_end_without_begin_is_ignored
+PASS cpumeter_queue_stats
+10 of 10 tests passed
+```
+
+- [ ] **Step 6: Run `tools/check.sh`**
+
+Run: `tools/check.sh`
+Expected: exit 0; the host test summary lists `cpumeter` and ends with
+`100% tests passed, 0 tests failed out of 24` (the 22 ids registered in E1, `syncq` from E2.1 and
+`cpumeter`), and
+`== compiler warnings: 0`.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add tests/test_cpumeter.c tests/CMakeLists.txt Core/Inc/Soundengine/cpuMeter.h Core/Src/Soundengine/cpuMeter.c
+git commit -m "Add the CPU meter, with host tests" \
+  -m "cpuMeter.c adds up the cycles of the audio work per rendered block and publishes the mean and the peak block load of each second, in percent of the 313185 cycles of a block. A piece of work around a kit autoload is not counted; the pieces nested in it are. Plain C, so the host tests build it." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 8: Write the failing check for the firmware**
+
+Run: `bash -c 'source tools/env.sh && arm-none-eabi-nm build/release/LXR_V2_STM32F765.elf' | grep -E ' T (soundengine_cpuBegin|soundengine_cpuEnd|cpuMeter_end)$'; echo "exit=$?"`
+Expected: `exit=1`, no symbol lines: the firmware does not measure anything yet.
+
+- [ ] **Step 9: Build the meter into the firmware**
+
+In `Core/CMakeLists.txt`, replace:
+
+```cmake
+# Audio engine: codec/I2S DMA, sample block rendering, FX bus, clock/trigger I/O.
+add_library(lxr_engine OBJECT
+    Src/Soundengine/AudioCodecManager.c
+```
+
+with:
+
+```cmake
+# Audio engine: codec/I2S DMA, sample block rendering, FX bus, clock/trigger I/O,
+# CPU meter.
+add_library(lxr_engine OBJECT
+    Src/Soundengine/AudioCodecManager.c
+    Src/Soundengine/cpuMeter.c
+```
+
+- [ ] **Step 10: The measuring calls in `Soundengine.c`**
+
+In `Core/Inc/Soundengine/Soundengine.h`, replace:
+
+```c
+void soundengine_init();
+void soundengine_process();
+uint8_t soundengine_calcNextSampleBlock();
+```
+
+with:
+
+```c
+void soundengine_init();
+void soundengine_process();
+uint8_t soundengine_calcNextSampleBlock();
+/** LICHOMAT CPU meter (cpuMeter.h): call around the audio work, in TIM2_IRQHandler()
+ * and in soundengine_process(); blockRendered is what soundengine_calcNextSampleBlock()
+ * returned */
+void soundengine_cpuBegin(void);
+void soundengine_cpuEnd(uint8_t blockRendered);
+```
+
+In `Core/Src/Soundengine/Soundengine.c`, replace:
+
+```c
+#include "Soundengine/USB/usb_manager.h"
+#include "Soundengine/MIDI/Uart.h"
+```
+
+with:
+
+```c
+#include "Soundengine/USB/usb_manager.h"
+#include "Soundengine/MIDI/Uart.h"
+#include "Soundengine/cpuMeter.h"
+#include "Soundengine/Sequencer/seq_core.h"
+```
+
+In `Core/Src/Soundengine/Soundengine.c`, replace:
+
+```c
+	//HAL_TIM_Base_Stop_IT(&htim2);
+	seq_tick();
+	soundengine_calcNextSampleBlock();
+	__HAL_TIM_SetCounter(&htim2, 1950);
+```
+
+with:
+
+```c
+	//HAL_TIM_Base_Stop_IT(&htim2);
+	soundengine_cpuBegin();
+	seq_tick();
+	soundengine_cpuEnd(soundengine_calcNextSampleBlock());
+	__HAL_TIM_SetCounter(&htim2, 1950);
+```
+
+In `Core/Src/Soundengine/Soundengine.c`, replace:
+
+```c
+	preset_morph_tick();
+	//preset_morph_tick();
+	//preset_morph_tick();
+
+}
+```
+
+with:
+
+```c
+	preset_morph_tick();
+	//preset_morph_tick();
+	//preset_morph_tick();
+
+}
+//------------------------------------------------------------------------------
+// LICHOMAT: CPU meter (spec 9.3), see cpuMeter.h. Both run in the seq_tick()
+// context, around the audio work.
+void soundengine_cpuBegin(void)
+{
+	cpuMeter_begin(DWT->CYCCNT);
+}
+//------------------------------------------------------------------------------
+void soundengine_cpuEnd(uint8_t blockRendered)
+{
+	if(cpuMeter_end(DWT->CYCCNT, blockRendered))
+	{
+		//a new reading, once a second: add the event queue counters. The core
+		//may be queried here, this is its context.
+		seqc_stats_t stats;
+		seqc_stats(&stats);
+		cpuMeter_setQueueStats(stats.queueMax, stats.queueOverflow);
+	}
+}
+```
+
+- [ ] **Step 11: The measuring calls in `TIM2_IRQHandler()`**
+
+In `Core/Src/stm32f7xx_it.c`, replace:
+
+```c
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_SET);
+	seq_tick();
+	soundengine_calcNextSampleBlock();
+```
+
+with:
+
+```c
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_SET);
+	soundengine_cpuBegin();	//LICHOMAT: CPU meter
+	seq_tick();
+	const uint8_t blockRendered = soundengine_calcNextSampleBlock();
+```
+
+In `Core/Src/stm32f7xx_it.c`, replace:
+
+```c
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_RESET);
+```
+
+with:
+
+```c
+	soundengine_cpuEnd(blockRendered);
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_RESET);
+```
+
+- [ ] **Step 12: Run the check to see it pass**
+
+First give the three files of Steps 10 and 11 pure CRLF line endings (Part 3, convention 3):
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Inc/Soundengine/Soundengine.h Core/Src/Soundengine/Soundengine.c Core/Src/stm32f7xx_it.c`
+
+Run: `tools/check.sh`
+Expected: exit 0, `== compiler warnings: 0`.
+
+Run: `bash -c 'source tools/env.sh && arm-none-eabi-nm build/release/LXR_V2_STM32F765.elf' | grep -E ' T (soundengine_cpuBegin|soundengine_cpuEnd|cpuMeter_end)$'`
+Expected, with the addresses of this build:
+
+```
+<address> T cpuMeter_end
+<address> T soundengine_cpuBegin
+<address> T soundengine_cpuEnd
+```
+
+Run: `file Core/Inc/Soundengine/Soundengine.h Core/Src/Soundengine/Soundengine.c Core/Src/stm32f7xx_it.c`
+Expected: each `… with CRLF line terminators`.
+
+- [ ] **Step 13: Commit**
+
+```bash
+git add Core/CMakeLists.txt Core/Inc/Soundengine/Soundengine.h Core/Src/Soundengine/Soundengine.c Core/Src/stm32f7xx_it.c
+git commit -m "Measure the audio work for the CPU meter" \
+  -m "soundengine_cpuBegin() and soundengine_cpuEnd() take DWT->CYCCNT around seq_tick() and the block render, in soundengine_process() and in TIM2_IRQHandler(), and add the event queue counters from seqc_stats() to each reading." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 14: Write the failing check for the page**
+
+Run: `strings -a build/release/LXR_V2_STM32F765.bin | grep -c -e '^CPU    % pk    %' -e '^Qmax     ovf'`
+Expected: `0`
+
+- [ ] **Step 15: The CPU sub-page in the menu tables**
+
+In `Core/Inc/menu/menu.h`, replace:
+
+```c
+#define MASK_PAGE 0xf8
+#define PAGE_SHIFT 3
+```
+
+with:
+
+```c
+#define MASK_PAGE 0xf8
+#define PAGE_SHIFT 3
+// LICHOMAT: the 3rd sub-page of MENU_MIDI_PAGE is the read-only CPU meter (menu_repaintCpuPage)
+#define MENU_CPU_SUB_PAGE 2
+```
+
+In `Core/Inc/menu/menu.h`, replace:
+
+```c
+	TEXT_PATTERN_MODE,
+
+
+	NUM_NAMES
+```
+
+with:
+
+```c
+	TEXT_PATTERN_MODE,
+	TEXT_CPU_METER,	// LICHOMAT: marks the CPU meter sub-page, it has no parameter
+
+
+	NUM_NAMES
+```
+
+In `Core/Inc/menu/menuPages.h`, replace:
+
+```c
+		},{ // GMENU can expand into all these too
+			TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,
+```
+
+with:
+
+```c
+		},{ // LICHOMAT: CPU meter, read only, drawn by menu_repaintCpuPage(); no parameters, nothing is saved
+			TEXT_CPU_METER,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,
+```
+
+- [ ] **Step 16: Draw the page, keep it read only, make it reachable**
+
+In `Core/Src/menu/menu.c`, nine edits:
+
+In `Core/Src/menu/menu.c`, replace:
+
+```c
+#include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Soundengine.h"
+```
+
+with:
+
+```c
+#include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Soundengine.h"
+#include "Soundengine/cpuMeter.h"
+```
+
+In `Core/Src/menu/menu.c`, replace:
+
+```c
+		{SHORT_KCM, CAT_GLOBAL, LONG_PATTERN_MODE},/*TEXT_AUTO_SWITCH_KIT*/
+```
+
+with:
+
+```c
+		{SHORT_KCM, CAT_GLOBAL, LONG_PATTERN_MODE},/*TEXT_AUTO_SWITCH_KIT*/
+		{SHORT_EMPTY, CAT_GLOBAL, LONG_EMPTY},/*TEXT_CPU_METER: the page has its own layout*/
+```
+
+In `Core/Src/menu/menu.c`, replace:
+
+```c
+static uint8_t lastEncoderButton = 0;		/**< stores the state of the encoder button so the edit mode is only switched once when the button is pressed*/
+```
+
+with:
+
+```c
+static uint8_t lastEncoderButton = 0;		/**< stores the state of the encoder button so the edit mode is only switched once when the button is pressed*/
+static uint32_t menu_cpuPageTimer = 0;		/**< LICHOMAT: systick_ticks of the last CPU page repaint */
+
+/** LICHOMAT: true while the read-only CPU meter sub-page of the global menu is shown */
+static uint8_t menu_isCpuPage(void)
+{
+	return (menu_activePage == MENU_MIDI_PAGE) && (((menuIndex & MASK_PAGE) >> PAGE_SHIFT) == MENU_CPU_SUB_PAGE);
+}
+```
+
+In `Core/Src/menu/menu.c`, replace:
+
+```c
+		//TODO could possibly be sped up by aborting and restarting running transfer instead of queing a new one
+	}
+
+
+
+	sendDisplayBuffer();
+}
+```
+
+with:
+
+```c
+		//TODO could possibly be sped up by aborting and restarting running transfer instead of queing a new one
+	}
+
+	//LICHOMAT: the CPU page shows live values, repaint it twice a second (systick_ticks run at 4 kHz)
+	if(menu_isCpuPage() && (display_refresh_state == 0) && (systick_ticks - menu_cpuPageTimer >= 2000))
+	{
+		menu_cpuPageTimer = systick_ticks;
+		menu_repaint();
+	}
+
+	sendDisplayBuffer();
+}
+```
+
+In `Core/Src/menu/menu.c`, replace:
+
+```c
+		}	// for 1 to 4 .. each menu item
+	} // if editmode not active
+}
+```
+
+with:
+
+```c
+		}	// for 1 to 4 .. each menu item
+	} // if editmode not active
+}
+//-----------------------------------------------------------------
+// LICHOMAT: num as a right-aligned decimal number in width characters, padded
+// with spaces and clamped to the largest number that fits
+static void menu_numToStrRight(char *buf, uint32_t num, uint8_t width)
+{
+	uint32_t max = 9;
+	for(uint8_t i = 1; i < width; i++)
+		max = max * 10 + 9;
+	if(num > max)
+		num = max;
+	for(int8_t i = (int8_t)(width - 1); i >= 0; i--)
+	{
+		buf[i] = (num || (i == width - 1)) ? (char)('0' + num % 10) : ' ';
+		num /= 10;
+	}
+}
+//-----------------------------------------------------------------
+// LICHOMAT: the read-only CPU meter page, 3rd sub-page of the global menu (spec 9.3).
+// It has no parameters, so activeParameters and the globals file are not affected.
+//  0123456789012345
+// "CPU  42% pk  67%"   mean block load over 1 s, highest block load of that second
+// "Qmax  12 ovf   0"   event queue: highest depth, events rejected because it was full
+static void menu_repaintCpuPage(void)
+{
+	cpuMeter_reading_t r;
+	cpuMeter_get(&r);
+
+	memcpy(&editDisplayBuffer[0][0], "CPU    % pk    %", 16);
+	menu_numToStrRight(&editDisplayBuffer[0][4], r.avgPct, 3);
+	menu_numToStrRight(&editDisplayBuffer[0][12], r.peakPct, 3);
+
+	memcpy(&editDisplayBuffer[1][0], "Qmax     ovf    ", 16);
+	menu_numToStrRight(&editDisplayBuffer[1][5], r.queueMax, 3);
+	menu_numToStrRight(&editDisplayBuffer[1][13], r.queueOverflow, 3);
+}
+```
+
+In `Core/Src/menu/menu.c`, replace:
+
+```c
+		menu_repaintSimplePage();
+	}
+	else {
+		menu_repaintGeneric();
+	}
+```
+
+with:
+
+```c
+		menu_repaintSimplePage();
+	}
+	else if(menu_isCpuPage())
+	{
+		//LICHOMAT: read-only CPU meter page with its own layout
+		menu_repaintCpuPage();
+	}
+	else {
+		menu_repaintGeneric();
+	}
+```
+
+In `Core/Src/menu/menu.c`, replace:
+
+```c
+			// toggle edit mode
+				if(!screensaver_Active)
+					editModeActive = (uint8_t)(1-editModeActive);
+```
+
+with:
+
+```c
+			// toggle edit mode
+				if(!screensaver_Active && !menu_isCpuPage()) // LICHOMAT: the CPU page is read only
+					editModeActive = (uint8_t)(1-editModeActive);
+```
+
+In `Core/Src/menu/menu.c`, replace:
+
+```c
+			else if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)){ // special case for global - wrap around to first
+				activePage=0;
+				activeParameter=0;
+			}
+```
+
+with:
+
+```c
+			else if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)){ // special case for global - next sub-page, or wrap around to first
+				// LICHOMAT: fw 1.7 always wrapped here, so a sub-page after one without a 2nd screen was unreachable
+				if(activePage < NUM_SUB_PAGES-1 &&
+				   pgm_read_byte(&menuPages[menu_activePage][activePage+1].top1) != TEXT_EMPTY) {
+					activePage++;
+				} else {
+					activePage=0;
+				}
+				activeParameter=0;
+			}
+```
+
+In `Core/Src/menu/menu.c`, replace:
+
+```c
+uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
+{
+	screensaver_touch();
+	preset_touchTimer(PRESET_KIT_TIMER);
+```
+
+with:
+
+```c
+uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
+{
+	screensaver_touch();
+	if(menu_isCpuPage())
+		return 0; // LICHOMAT: the CPU page is read only, the pots do nothing there
+	preset_touchTimer(PRESET_KIT_TIMER);
+```
+
+- [ ] **Step 17: Run the check to see it pass**
+
+First give the three files of Steps 15 and 16 pure CRLF line endings (Part 3, convention 3):
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Inc/menu/menu.h Core/Inc/menu/menuPages.h Core/Src/menu/menu.c`
+
+Run: `tools/check.sh`
+Expected: exit 0, `== compiler warnings: 0`.
+
+Run: `strings -a build/release/LXR_V2_STM32F765.bin | grep -c -e '^CPU    % pk    %' -e '^Qmax     ovf'`
+Expected: `2`
+
+Run: `file Core/Inc/menu/menu.h Core/Inc/menu/menuPages.h Core/Src/menu/menu.c`
+Expected: each `… with CRLF line terminators`.
+
+The page itself is checked on the device in H12 (E4.2).
+
+- [ ] **Step 18: Commit**
+
+```bash
+git add Core/Inc/menu/menu.h Core/Inc/menu/menuPages.h Core/Src/menu/menu.c
+git commit -m "Show the CPU meter on a third page of the global menu" \
+  -m "The page is drawn by menu_repaintCpuPage() and repainted twice a second; it adds no parameters, so glo.cfg does not change. Edit mode and the pots do nothing on it. menu_switchSubPage() now moves on to a next sub-page after one without a second screen, which makes the third global sub-page reachable with SHIFT + step 12." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Task E3.4: CI, host tests and the firmware build
+
+Spec §9.2. `.github/workflows/build.yml` runs on push and pull_request, with two jobs on
+`ubuntu-latest`:
+- **Host tests:** `tests/` with AddressSanitizer and UBSan and with `SEQC_REQUIRE_ALL_TESTS=ON`, so a
+  missing test file fails the run.
+- **Firmware:** Arm GNU Toolchain 14.3.rel1 for x86_64 Linux, downloaded from developer.arm.com,
+  checked against its SHA-256 and cached; the `release` preset; the warning gate; the update file
+  check; the memory table of the linker, the image size and the update file's SHA-256 in the job
+  summary; the `.img`, `.elf` and `.map` as the artifact `lichomat-firmware-<commit>`.
+
+Checked on 2026-10-24: `actions/checkout@v7`, `actions/cache/restore@v6` and `actions/cache/save@v6`,
+and `actions/upload-artifact@v7` exist and run on node24; the toolchain's SHA-256 is the one in Arm's
+`arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi.tar.xz.sha256asc`. An explicit `shell: bash` makes
+GitHub run each step with `-eo pipefail`, which the `| tee` of the build step needs; the separate
+restore and save steps store the toolchain even when a later step fails.
+
+Nothing may be pushed, so the workflow is checked locally with `tools/ci_dry_run.rb`: it checks what
+the spec fixes about the workflow and runs the steps of a job with GitHub's shell options. On the Mac
+it uses the toolchain in `.toolchain/`, skips the download step, and runs the host tests with UBSan
+only, because AddressSanitizer binaries hang in the macOS sandbox that Claude Code runs commands in.
+
+**Files:**
+- Create: `tools/ci_dry_run.rb`
+- Create: `.github/workflows/build.yml`
+- Modify: `docs/lichomat/HANDOFF.md:24-25` (toolchain commands, as E2.2 Step 24 left them)
+- Test: `ruby tools/ci_dry_run.rb firmware`, `ruby tools/ci_dry_run.rb host-tests`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tools/ci_dry_run.rb`:
+
+```ruby
+#!/usr/bin/env ruby
+# Dry run of the CI workflow (.github/workflows/build.yml) on this machine, to
+# check it without pushing anything:
+#
+#   ruby tools/ci_dry_run.rb firmware                    # every run step of the job
+#   ruby tools/ci_dry_run.rb host-tests
+#   ruby tools/ci_dry_run.rb firmware "Memory usage"     # one step
+#
+# It first checks what the spec fixes about the workflow (triggers, jobs, runner,
+# toolchain and its checksum, sanitizers, artifacts). Then it runs the run steps of
+# the job from the repository root the way GitHub does, with
+# bash --noprofile --norc -eo pipefail and the workflow's env. Local differences:
+# - the Arm toolchain is the one in .toolchain/ (tools/env.sh), and the download
+#   step is skipped, as on CI when the toolchain cache hits;
+# - the host tests run with UBSan only, because AddressSanitizer binaries hang in
+#   the macOS sandbox that Claude Code runs commands in.
+# The job summary goes to build/ci-dry-run/summary.md.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+require "fileutils"
+require "yaml"
+
+$stdout.sync = true	# keep this script's lines in order with the output of the steps
+
+root = File.expand_path("..", __dir__)
+Dir.chdir(root)
+job_name, only = ARGV
+abort("usage: ruby tools/ci_dry_run.rb host-tests|firmware [step name]") unless job_name
+
+wf = YAML.load_file(".github/workflows/build.yml")
+on = wf["on"] || wf[true]	# YAML 1.1 reads the key "on" as true
+jobs = wf.fetch("jobs")
+steps = ->(name) { jobs.fetch(name, {}).fetch("steps", []) }
+checks = {
+  "it runs on push and pull_request" =>
+    on.is_a?(Hash) && on.key?("push") && on.key?("pull_request"),
+  "the jobs are host-tests and firmware, on ubuntu-latest" =>
+    jobs.keys.sort == %w[firmware host-tests] && jobs.values.all? { |j| j["runs-on"] == "ubuntu-latest" },
+  "the toolchain is Arm GNU 14.3.rel1 for x86_64 Linux, with its SHA-256" =>
+    wf["env"]["ARM_GNU_PKG"] == "arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi" &&
+    wf["env"]["ARM_GNU_SHA256"] == "8f6903f8ceb084d9227b9ef991490413014d991874a1e34074443c2a72b14dbd",
+  "the toolchain is cached" =>
+    steps.call("firmware").any? { |s| s["uses"].to_s.start_with?("actions/cache/restore@") } &&
+    steps.call("firmware").any? { |s| s["uses"].to_s.start_with?("actions/cache/save@") },
+  "the host tests use ASan and UBSan and need every test file" =>
+    steps.call("host-tests").any? { |s| s["run"].to_s.include?("-DSEQC_SANITIZE=address,undefined -DSEQC_REQUIRE_ALL_TESTS=ON") },
+  "the firmware artifact holds the .img, .elf and .map" =>
+    steps.call("firmware").any? { |s| s["uses"].to_s.start_with?("actions/upload-artifact@") &&
+      %w[img elf map].all? { |e| s.fetch("with", {})["path"].to_s.include?("build/release/*.#{e}") } },
+}
+checks.each { |what, ok| puts "#{ok ? 'ok' : 'FAILED'}: #{what}" }
+abort("the workflow check failed") unless checks.values.all?
+
+tc, path = IO.popen(["bash", "-c", 'source tools/env.sh >/dev/null 2>&1; printf "%s\n%s" "$ARM_TOOLCHAIN_DIR" "$PATH"'], &:read).split("\n", 2)
+abort("no Arm toolchain in .toolchain/: run tools/setup-toolchain.sh") if tc.to_s.empty?
+FileUtils.mkdir_p("build/ci-dry-run")
+env = wf.fetch("env").transform_values(&:to_s)
+env["ARM_GNU_PKG"] = File.basename(File.dirname(tc))
+env["GITHUB_WORKSPACE"] = root
+env["GITHUB_STEP_SUMMARY"] = File.join(root, "build/ci-dry-run/summary.md")
+env["PATH"] = path
+
+ran = 0
+steps.call(job_name).each do |step|
+  next unless step["run"]
+  name = step["name"]
+  next if only && name != only
+  if name == "Download the Arm GNU Toolchain"
+    puts "== skipped: #{name}"
+    next
+  end
+  script = step["run"].gsub("-DSEQC_SANITIZE=address,undefined", "-DSEQC_SANITIZE=undefined")
+  puts "== #{name}"
+  ok = system(env, "bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script)
+  abort("FAILED: #{name}") unless ok
+  ran += 1
+end
+abort("no run step of job #{job_name}#{only ? " named #{only}" : ''}") if ran.zero?
+puts "dry run of #{job_name}: #{ran} steps passed"
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `ruby tools/ci_dry_run.rb firmware 2> build/e3-ci-dry-run.err; echo "exit=$?"; head -n 1 build/e3-ci-dry-run.err`
+Expected:
+
+```
+exit=1
+/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0/psych.rb:577:in `initialize': No such file or directory @ rb_sysopen - .github/workflows/build.yml (Errno::ENOENT)
+```
+
+- [ ] **Step 3: Write the workflow**
+
+Create `.github/workflows/build.yml`:
+
+````yaml
+# CI for LICHOMAT (spec 9.2): host tests of the sequencer timing core, and the
+# firmware release build with its SD-card update file. It only builds and tests:
+# nothing is pushed, tagged or released from here.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash  # an explicit bash runs with -o pipefail, which "| tee" needs
+
+env:
+  ARM_GNU_VERSION: 14.3.rel1
+  ARM_GNU_PKG: arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
+  # from arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi.tar.xz.sha256asc on developer.arm.com
+  ARM_GNU_SHA256: 8f6903f8ceb084d9227b9ef991490413014d991874a1e34074443c2a72b14dbd
+
+jobs:
+  host-tests:
+    name: Host tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure
+        run: >-
+          cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DSEQC_SANITIZE=address,undefined -DSEQC_REQUIRE_ALL_TESTS=ON
+
+      - name: Build
+        run: cmake --build build/host-tests
+
+      - name: Test
+        run: ctest --test-dir build/host-tests --output-on-failure
+
+  firmware:
+    name: Firmware (release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Restore the Arm GNU Toolchain
+        id: toolchain
+        uses: actions/cache/restore@v6
+        with:
+          path: .toolchain/${{ env.ARM_GNU_PKG }}
+          key: ${{ env.ARM_GNU_PKG }}-${{ env.ARM_GNU_SHA256 }}
+
+      - name: Download the Arm GNU Toolchain
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .toolchain/dl
+          curl -fL --retry 3 -o ".toolchain/dl/$ARM_GNU_PKG.tar.xz" \
+            "https://developer.arm.com/-/media/Files/downloads/gnu/$ARM_GNU_VERSION/binrel/$ARM_GNU_PKG.tar.xz"
+          echo "$ARM_GNU_SHA256  .toolchain/dl/$ARM_GNU_PKG.tar.xz" | sha256sum -c -
+          tar -xJf ".toolchain/dl/$ARM_GNU_PKG.tar.xz" -C .toolchain
+          rm -rf .toolchain/dl
+
+      - name: Save the Arm GNU Toolchain
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .toolchain/${{ env.ARM_GNU_PKG }}
+          key: ${{ env.ARM_GNU_PKG }}-${{ env.ARM_GNU_SHA256 }}
+
+      - name: Configure (release preset)
+        run: cmake --preset release -DARM_TOOLCHAIN_DIR="$GITHUB_WORKSPACE/.toolchain/$ARM_GNU_PKG/bin"
+
+      - name: Build
+        run: cmake --build --preset release 2>&1 | tee build/release/build.log
+
+      - name: Check for compiler warnings
+        run: |
+          n=$(grep -c "warning:" build/release/build.log || true)
+          echo "compiler warnings: $n"
+          if [ "$n" -ne 0 ]; then grep "warning:" build/release/build.log | sort -u; exit 1; fi
+
+      - name: Check the update file
+        run: python3 tools/check_image.py build/release
+
+      - name: Memory usage
+        run: |
+          B=build/release
+          img=$(ls -1 "$B"/*.img)
+          {
+            echo "### Memory usage"
+            echo
+            echo '```'
+            awk '/^Memory region/ {p=1; print; next}
+                 p && /^[ \t]*[A-Za-z0-9_]+:[ \t]+[0-9]+ [KMG]?B/ {print; next}
+                 p {p=0}' "$B/build.log"
+            echo '```'
+            echo
+            echo "Image: $(wc -c < "$B/LXR_V2_STM32F765.bin" | tr -d ' ') of 1015808 bytes of FLASH" \
+                 "(the FLASH line above leaves out the .dtcm and .itcm_text load images)."
+            echo
+            echo "Update file: \`$(basename "$img")\`, SHA-256 \`$(sha256sum "$img" | cut -d ' ' -f 1)\`"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: lichomat-firmware-${{ github.sha }}
+          path: |
+            build/release/*.img
+            build/release/*.elf
+            build/release/*.map
+          if-no-files-found: error
+````
+
+- [ ] **Step 4: Run the firmware job to see it pass**
+
+Deleting the `.elf` forces a link, so the build log has the linker's memory table.
+
+Run: `rm -f build/release/LXR_V2_STM32F765.elf && ruby tools/ci_dry_run.rb firmware 2>&1 | grep -E '^(ok|FAILED): |^== |^dry run|compiler warnings|^image:|^Update file'`
+Expected:
+
+```
+ok: it runs on push and pull_request
+ok: the jobs are host-tests and firmware, on ubuntu-latest
+ok: the toolchain is Arm GNU 14.3.rel1 for x86_64 Linux, with its SHA-256
+ok: the toolchain is cached
+ok: the host tests use ASan and UBSan and need every test file
+ok: the firmware artifact holds the .img, .elf and .map
+== skipped: Download the Arm GNU Toolchain
+== Configure (release preset)
+== Build
+== Check for compiler warnings
+compiler warnings: 0
+== Check the update file
+image: LXR_V2_LICHOMAT_0.1.img OK (… bytes of firmware, magic LXRV2IMG, splash "LICHOMAT" / "v0.1 unofficial")
+== Memory usage
+Update file: `LXR_V2_LICHOMAT_0.1.img`, SHA-256 `…`
+dry run of firmware: 5 steps passed
+```
+
+Run: `cat build/ci-dry-run/summary.md`
+Expected: the heading `### Memory usage`, a code block with `Memory region` and the lines
+`ITCM_RAM:`, `DTCM:`, `RAM:` and `FLASH:`, then `Image: … of 1015808 bytes of FLASH …` and the
+`Update file:` line.
+
+- [ ] **Step 5: Run the host-test job to see it pass**
+
+Run: `ruby tools/ci_dry_run.rb host-tests 2>&1 | grep -E '^(ok|FAILED): |^== |tests passed|^dry run'`
+Expected: the six `ok:` lines, then
+
+```
+== Configure
+== Build
+== Test
+100% tests passed, 0 tests failed out of 24
+dry run of host-tests: 3 steps passed
+```
+
+- [ ] **Step 6: Check that the warning gate fails on a warning**
+
+Run:
+
+```bash
+cp build/release/build.log build/ci-dry-run/build.log.saved
+echo "Core/Src/x.c:1:1: warning: test warning" >> build/release/build.log
+ruby tools/ci_dry_run.rb firmware "Check for compiler warnings" 2>&1 | grep -E '^== |compiler warnings|warning: test|^FAILED'
+cp build/ci-dry-run/build.log.saved build/release/build.log
+```
+
+Expected:
+
+```
+== Check for compiler warnings
+compiler warnings: 1
+Core/Src/x.c:1:1: warning: test warning
+FAILED: Check for compiler warnings
+```
+
+- [ ] **Step 7: Mention the tools in the handoff guide**
+
+In `docs/lichomat/HANDOFF.md`, replace the end of the toolchain block as E2.2 Step 24 left it:
+
+````markdown
+tools/check.sh             # host tests + release build + memory summary + warning count; non-zero exit on failure
+tools/fw_checks.sh         # after check.sh: ELF and source checks of the firmware integration (E2.2-E2.6)
+```
+````
+
+with:
+
+````markdown
+tools/check.sh             # host tests + release build + memory summary + update file check + warning count; non-zero exit on failure
+tools/fw_checks.sh         # after check.sh: ELF and source checks of the firmware integration (E2.2-E2.6)
+ruby tools/ci_dry_run.rb firmware   # dry run of the CI workflow's firmware job (or host-tests); nothing is pushed
+```
+````
+
+- [ ] **Step 8: Run `tools/check.sh`**
+
+Run: `tools/check.sh`
+Expected: exit 0, `== compiler warnings: 0`.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add .github/workflows/build.yml tools/ci_dry_run.rb docs/lichomat/HANDOFF.md
+git commit -m "Add CI: host tests and the firmware build" \
+  -m "Two jobs on ubuntu-latest: the host tests with ASan, UBSan and every test file required, and the release build with Arm GNU 14.3.rel1 (checksum-verified, cached), the warning gate, the update file check, the memory summary and the .img, .elf and .map as artifacts. tools/ci_dry_run.rb checks the workflow and runs its steps locally, because nothing is pushed yet." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Task E3.5: README section and `tools/env.sh` for zsh
+
+Spec §9.5 asks for a short LICHOMAT section: "unofficial custom firmware for the Erica Synths LXR-02",
+how to install it and how to go back to the official firmware. It also says how to build with
+`tools/setup-toolchain.sh` and `tools/check.sh`. Before that, `source tools/env.sh` has to work in
+zsh, the default shell on macOS: in zsh a glob that matches nothing is an error, so the line that
+looks for `cmake-*/bin` leaves CMake off `PATH`. The fix uses `find` instead of globs, and adds only
+directories that exist to `PATH`, because an empty entry would mean the current directory. The rest
+of the README gets the new file names, the `LICHOMAT_NAME` option, the actual `LXR_ITCM_OPT` default
+(empty; the README said `-O2`) and a note on the linker's FLASH check from E3.2.
+
+**Already done.** Steps 1–6, the `tools/env.sh` fix and its `HANDOFF.md` line, went in ahead of this
+plan as commit `5911417`: `tools/env.sh` is byte-identical to the file of Step 2, so Step 1 no longer
+fails. Check it with `zsh -f -c 'source tools/env.sh && command -v cmake'`, which prints the CMake
+path, and start at Step 7.
+
+**Files:**
+- Modify: `tools/env.sh` (whole file)
+- Modify: `docs/lichomat/HANDOFF.md:22`
+- Modify: `README.md:11-13` (new section), `:18`, `:66`, `:70-71`, `:75`, `:107`, `:117`, `:163-165`, `:187`, `:221`
+- Test: `zsh -f -c 'source tools/env.sh && command -v cmake'`, `build/e3-readme-check.sh` (a scratch script, not committed)
+
+- [ ] **Step 1: Write the failing test for `tools/env.sh`**
+
+Run: `zsh -f -c 'source tools/env.sh && command -v cmake'; echo "exit=$?"`
+Expected:
+
+```
+tools/env.sh:16: no matches found: /Users/tk/Code/lxr/.toolchain/cmake-*/bin
+exit=1
+```
+
+- [ ] **Step 2: Rewrite `tools/env.sh`**
+
+Replace the whole file with:
+
+```bash
+# Source this file to put the repo-local build tools on PATH (bash or zsh):
+#
+#   source tools/env.sh
+#
+# The tools live in .toolchain/ (git-ignored) and are installed by
+# tools/setup-toolchain.sh. Nothing is installed system-wide.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+
+_lxr_root="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+_lxr_tc="$_lxr_root/.toolchain"
+
+export LXR_ROOT="$_lxr_root"
+# find, not shell globs: in zsh a glob that matches nothing is an error, which left
+# CMake off PATH. -H follows a .toolchain that is a symlink.
+export ARM_TOOLCHAIN_DIR="$(find -H "$_lxr_tc" -maxdepth 2 -type d -path "$_lxr_tc/arm-gnu-toolchain-*/bin" 2>/dev/null | sort | head -n 1)"
+_lxr_cmake_bin="$(find -H "$_lxr_tc" -maxdepth 4 -type d \( -path "$_lxr_tc/cmake-*/CMake.app/Contents/bin" -o -path "$_lxr_tc/cmake-*/bin" \) 2>/dev/null | sort | head -n 1)"
+# only directories that exist: an empty PATH entry would mean the current directory
+for _lxr_dir in "$ARM_TOOLCHAIN_DIR" "$_lxr_tc/bin" "$_lxr_cmake_bin"; do
+  if [ -n "$_lxr_dir" ] && [ -d "$_lxr_dir" ]; then PATH="$_lxr_dir:$PATH"; fi
+done
+export PATH
+
+unset _lxr_root _lxr_tc _lxr_cmake_bin _lxr_dir
+```
+
+- [ ] **Step 3: Run the test to see it pass, in zsh and in bash**
+
+Run:
+
+```bash
+zsh -f -c 'source tools/env.sh && command -v cmake ninja arm-none-eabi-gcc'
+bash --noprofile --norc -c 'source tools/env.sh && command -v cmake ninja arm-none-eabi-gcc'
+```
+
+Expected, twice:
+
+```
+/Users/tk/Code/lxr/.toolchain/cmake-3.31.12-macos-universal/CMake.app/Contents/bin/cmake
+/Users/tk/Code/lxr/.toolchain/bin/ninja
+/Users/tk/Code/lxr/.toolchain/arm-gnu-toolchain-14.3.rel1-darwin-arm64-arm-none-eabi/bin/arm-none-eabi-gcc
+```
+
+Without a toolchain the variables are empty and `PATH` gets no empty entry:
+
+```bash
+mkdir -p build/e3-env/tools && cp tools/env.sh build/e3-env/tools/
+zsh -f -c 'source build/e3-env/tools/env.sh && echo "ARM_TOOLCHAIN_DIR=[$ARM_TOOLCHAIN_DIR]" && case ":$PATH:" in *::*) echo "empty PATH entry";; *) echo "PATH ok";; esac'
+```
+
+Expected:
+
+```
+ARM_TOOLCHAIN_DIR=[]
+PATH ok
+```
+
+- [ ] **Step 4: The scripts that source it**
+
+Run: `tools/setup-toolchain.sh && tools/check.sh`
+Expected: `setup-toolchain.sh` downloads nothing and prints
+
+```
+arm-none-eabi-gcc (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 14.3.1 20250623
+cmake version 3.31.12
+ninja 1.13.2
+toolchain ready in /Users/tk/Code/lxr/.toolchain; run: source tools/env.sh
+```
+
+and `tools/check.sh` exits 0 with `== compiler warnings: 0`.
+
+- [ ] **Step 5: Update the handoff guide**
+
+In `docs/lichomat/HANDOFF.md`, replace:
+
+```markdown
+source tools/env.sh        # puts them on PATH, sets ARM_TOOLCHAIN_DIR
+```
+
+with:
+
+```markdown
+source tools/env.sh        # puts them on PATH (bash or zsh), sets ARM_TOOLCHAIN_DIR
+```
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add tools/env.sh docs/lichomat/HANDOFF.md
+git commit -m "Make tools/env.sh work in zsh" \
+  -m "In zsh a glob without a match is an error, which left CMake off PATH. find replaces the globs, and only directories that exist go on PATH." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 7: Write the failing test for the README**
+
+Create `build/e3-readme-check.sh`:
+
+```bash
+#!/bin/bash
+# README check for E3.5: the LICHOMAT section is there and the old file names are gone.
+f=README.md; ok=1
+for s in 'unofficial custom firmware for the Erica Synths LXR-02' 'tools/setup-toolchain.sh' \
+         'tools/check.sh' 'source tools/env.sh' 'a43cd4f' 'LXR_V2_LICHOMAT_<version>.img' \
+         'Going back to the official firmware' 'LICHOMAT_NAME'; do
+  grep -qF -- "$s" "$f" || { echo "missing: $s"; ok=0; }
+done
+for s in 'LXR_V2_V<version>' '_app/build/release/LXR_V2_V1.7.img' 'default `-O2`'; do
+  if grep -nF -- "$s" "$f"; then echo "stale: $s"; ok=0; fi
+done
+if [ "$ok" = 1 ]; then echo "README check passed"; else echo "README check FAILED"; exit 1; fi
+```
+
+- [ ] **Step 8: Run it to see it fail**
+
+Run: `bash build/e3-readme-check.sh; echo "exit=$?"`
+Expected:
+
+```
+missing: unofficial custom firmware for the Erica Synths LXR-02
+missing: tools/setup-toolchain.sh
+missing: tools/check.sh
+missing: source tools/env.sh
+missing: a43cd4f
+missing: LXR_V2_LICHOMAT_<version>.img
+missing: Going back to the official firmware
+missing: LICHOMAT_NAME
+18:1. [Build the firmware](#building-the-firmware). This creates the update file `LXR_V2_V<version>.img`.
+75:1. Copy `LXR_V2_V<version>.img` from `build/release/` to the top folder of the SD card. Delete any
+117:| `LXR_V2_V<version>.img`  | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
+221:bootloader are rejected. It then also writes `LXR_V2_V<version>_full.hex`/`.bin` (bootloader +
+stale: LXR_V2_V<version>
+66:    .../lxr_desktop_app/build/release/LXR_V2_V1.7.img
+stale: _app/build/release/LXR_V2_V1.7.img
+107:| `-DLXR_ITCM_OPT=<flag>` | Optimisation for the code in the fast ITCM memory, see [Memory map](#memory-map) (default `-O2`) |
+164:units that contain ITCM code are compiled with `LXR_ITCM_OPT` (default `-O2`). The linker prints
+stale: default `-O2`
+README check FAILED
+exit=1
+```
+
+- [ ] **Step 9: The LICHOMAT section**
+
+In `README.md`, replace:
+
+```markdown
+> [Licence, trademarks and hardware](#licence-trademarks-and-hardware) below and [NOTICE.md](NOTICE.md).
+
+## Updating your LXR
+```
+
+with:
+
+````markdown
+> [Licence, trademarks and hardware](#licence-trademarks-and-hardware) below and [NOTICE.md](NOTICE.md).
+
+## LICHOMAT
+
+This fork is **LICHOMAT**, unofficial custom firmware for the Erica Synths LXR-02. It is not made,
+approved or supported by Erica Synths. It is based on the official firmware 1.7
+([erica-synths/lxr-desktop-app](https://github.com/erica-synths/lxr-desktop-app) at commit `a43cd4f`)
+and is aimed at groove techno: rolling percussion, swung hats over a straight kick, polymetric loops.
+
+Version 0.1 gives the step sequencer a new timing core and fixes the timing and MIDI problems of 1.7:
+
+- Shuffle moves whole steps, ratchets and microshift included. MIDI clock out and the clock out jack
+  stay straight.
+- The master tempo is exact; 1.7 played up to 0.2 % fast.
+- As a MIDI clock slave over DIN or USB no note is dropped, and Start, Stop, Continue and Song
+  Position Pointer work.
+- One track no longer swallows the ratchets of another, shifted notes keep their own parameter locks
+  and velocity, and a note recorded slightly early no longer plays twice.
+- Exactly one MIDI Note On per hit, and no hanging notes with a MIDI note override.
+- A CPU meter on a new page of the global menu: hold SHIFT and press step button 12 until it
+  appears, right after the page with the clock in and clock out PPQ.
+
+Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged. The start-up
+screen shows `LICHOMAT` and `v0.1 unofficial`.
+
+### Installing LICHOMAT
+
+Install `LXR_V2_LICHOMAT_<version>.img` like any other update, see
+[Installing the update](#installing-the-update). First delete every other `LXR*.img` file from the SD
+card: the updater installs the first one it finds. After the update the start-up screen shows
+`LICHOMAT` and `v0.1 unofficial`.
+
+### Going back to the official firmware
+
+The updater itself is never changed, so you can always go back:
+
+1. Get the official update file `LXR_V2_V1.7.img`, either from Erica Synths or by building the
+   upstream source code:
+
+   ```sh
+   git clone https://github.com/erica-synths/lxr-desktop-app.git lxr-official
+   cd lxr-official
+   git checkout a43cd4f
+   cmake --preset release
+   cmake --build --preset release      # writes build/release/LXR_V2_V1.7.img
+   ```
+
+2. Delete `LXR_V2_LICHOMAT_*.img` from the SD card, copy `LXR_V2_V1.7.img` to its top folder and
+   install it the same way. The start-up screen then shows `Sonic Potions` and `LXR2 Drums V 1.7`.
+
+Your kits, patterns, projects and songs stay on the card, and 1.7 loads them as before: LICHOMAT 0.1
+changes no file format.
+
+### Building LICHOMAT on a Mac
+
+On a Mac with Apple Silicon two scripts do everything inside this folder, with no system-wide
+installs and no admin rights:
+
+```sh
+tools/setup-toolchain.sh   # once: Arm GNU Toolchain 14.3.rel1, CMake 3.31.12 and Ninja 1.13.2 into .toolchain/
+tools/check.sh             # host tests, release build, memory summary, update file check, warning count
+```
+
+`tools/check.sh` exits with an error if any step fails; the full log is in `build/check.log`, and the
+update file is `build/release/LXR_V2_LICHOMAT_<version>.img`. To run CMake, Ninja or the compiler by
+hand, first `source tools/env.sh` (bash or zsh). On other systems follow
+[Building the firmware](#building-the-firmware) below.
+
+## Updating your LXR
+````
+
+- [ ] **Step 10: The new file names and options in the rest of the README**
+
+In `README.md`, replace:
+
+```markdown
+1. [Build the firmware](#building-the-firmware). This creates the update file `LXR_V2_V<version>.img`.
+```
+
+with:
+
+```markdown
+1. [Build the firmware](#building-the-firmware). This creates the update file `LXR_V2_LICHOMAT_<version>.img`.
+```
+
+In `README.md`, replace:
+
+```markdown
+    .../lxr_desktop_app/build/release/LXR_V2_V1.7.img
+```
+
+with:
+
+```markdown
+    .../lxr-desktop-app/build/release/LXR_V2_LICHOMAT_0.1.img
+```
+
+In `README.md`, replace:
+
+```markdown
+The version in the file name, and on the LXR's start-up screen, is set by `project(VERSION ...)` in
+[CMakeLists.txt](CMakeLists.txt).
+```
+
+with:
+
+```markdown
+The version in the file name, and on the LXR's start-up screen, is set by `project(VERSION ...)` in
+[CMakeLists.txt](CMakeLists.txt), and the name by the CMake option `LICHOMAT_NAME`.
+```
+
+In `README.md`, replace:
+
+```markdown
+1. Copy `LXR_V2_V<version>.img` from `build/release/` to the top folder of the SD card. Delete any
+```
+
+with:
+
+```markdown
+1. Copy `LXR_V2_LICHOMAT_<version>.img` from `build/release/` to the top folder of the SD card. Delete any
+```
+
+In `README.md`, replace:
+
+```markdown
+| `-DLXR_ITCM_OPT=<flag>` | Optimisation for the code in the fast ITCM memory, see [Memory map](#memory-map) (default `-O2`) |
+```
+
+with:
+
+```markdown
+| `-DLXR_ITCM_OPT=<flag>` | Optimisation for the code in the fast ITCM memory, see [Memory map](#memory-map) (default: empty, the same `-O3` as the rest) |
+| `-DLICHOMAT_NAME=<name>` | Firmware name on the start-up screen and in the update file name (default `LICHOMAT`; up to 16 characters of `A-Z a-z 0-9 _ . -`) |
+```
+
+In `README.md`, replace:
+
+```markdown
+| `LXR_V2_V<version>.img`  | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
+```
+
+with:
+
+```markdown
+| `LXR_V2_LICHOMAT_<version>.img` | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
+```
+
+In `README.md`, replace:
+
+```markdown
+The ITCM is tight. Current GCC releases generate too much code at `-O3` for it, so the translation
+units that contain ITCM code are compiled with `LXR_ITCM_OPT` (default `-O2`). The linker prints
+region usage after every build.
+```
+
+with:
+
+```markdown
+The ITCM is tight. If a compiler generates too much code for it at `-O3`, set `LXR_ITCM_OPT` (for
+example `-O2`) for the translation units that contain ITCM code; by default it is empty, and they are
+compiled with `-O3` like the rest. The linker prints region usage after every build, and the link
+fails with "image too large for FLASH" if the image does not fit.
+```
+
+In `README.md`, replace:
+
+```markdown
+| `lxr_engine`    | `Core/Src/Soundengine/*.c`                      | Codec/I2S DMA, sample block rendering, FX bus, clock in/out |
+```
+
+with:
+
+```markdown
+| `lxr_engine`    | `Core/Src/Soundengine/*.c`                      | Codec/I2S DMA, sample block rendering, FX bus, clock in/out, CPU meter |
+```
+
+The `lxr_sequencer` row stays as E2.6 Step 8 left it (`Timing core, sync queues, glue, Euclidean
+generator`): it already names the timing core, so this task does not change it.
+
+In `README.md`, replace:
+
+```markdown
+bootloader are rejected. It then also writes `LXR_V2_V<version>_full.hex`/`.bin` (bootloader +
+```
+
+with:
+
+```markdown
+bootloader are rejected. It then also writes `LXR_V2_LICHOMAT_<version>_full.hex`/`.bin` (bootloader +
+```
+
+- [ ] **Step 11: Run the test to see it pass**
+
+Run: `bash build/e3-readme-check.sh; echo "exit=$?"`
+Expected:
+
+```
+README check passed
+exit=0
+```
+
+- [ ] **Step 12: Run `tools/check.sh`**
+
+Run: `tools/check.sh`
+Expected: exit 0, `== compiler warnings: 0`.
+
+- [ ] **Step 13: Commit**
+
+```bash
+git add README.md
+git commit -m "README: add the LICHOMAT section" \
+  -m "What LICHOMAT is (unofficial custom firmware for the Erica Synths LXR-02), how to install it and go back to the official 1.7, and how to build it with tools/setup-toolchain.sh and tools/check.sh. The rest of the README now names LXR_V2_LICHOMAT_<version>.img and LICHOMAT_NAME, gives the real LXR_ITCM_OPT default and mentions the FLASH check." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Task E4.1: multi-dimension review and fixes
+
+The review of everything stage 1 changed, `git diff a43cd4f..HEAD`, before the hardware checks. It
+lives in `docs/lichomat/reports/stage1-review.md`: 51 rows in eleven dimensions (spec and notes, the
+defects D1–D8, host tests, execution contexts, real time, memory budget, file compatibility, MIDI,
+build hygiene, branding and licence, documentation), each with how to check it and when it passes,
+then a findings table and the procedure that fixes findings test-first, one commit each. The test of
+this task is the review's own gate: it counts the rows that are still `open` and the findings that are
+still `fix`, and the review is complete when it prints 0. What the notes call the stage 1 report of
+deviations is a file of its own, `docs/lichomat/reports/stage1-report.md` (Step 4): every deviation
+from the spec with the note or plan decision that allows it, every intended change against fw 1.7
+collected from the "Intended changes" lists of E2.2–E2.5 as N18 amended them, and the resources.
+Row R1.4 checks it, and the release notes (E4.3) take the user-visible changes from it.
+
+**Files:**
+- Create: `docs/lichomat/reports/stage1-review.md`
+- Create: `docs/lichomat/reports/stage1-report.md`
+- Modify: the files each finding names (one commit per finding)
+- Test: `grep -cE '\| (open|fix) \|' docs/lichomat/reports/stage1-review.md` must print `0`
+
+- [ ] **Step 1: Write the checklist**
+
+Create `docs/lichomat/reports/stage1-review.md`:
+
+````markdown
+# LICHOMAT stage 1: review
+
+The review of stage 1 (tracker E4.1), before the hardware checks and the release. Every row of the
+checklist is checked against the code and gets a result; every problem found becomes a finding, and
+findings are fixed as described under [Fixing findings](#fixing-findings). The review is complete when
+no row is `open` and no finding is `fix`:
+
+```sh
+grep -cE '\| (open|fix) \|' docs/lichomat/reports/stage1-review.md    # must print 0
+```
+
+| | |
+|---|---|
+| Spec | `docs/superpowers/specs/2026-10-23-timing-core-design.md` |
+| Decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md`, N1–N18; they win where the two differ |
+| Base | `a43cd4f`, the official firmware 1.7 |
+| Changes reviewed | `git diff a43cd4f..HEAD` on branch `timing-core` |
+
+## How to review
+
+1. From the repository root run `tools/check.sh`: it builds `build/host-tests` and `build/release`,
+   which the rows use. Then run every row marked **A** (automated), in a shell that has sourced
+   `tools/env.sh` (bash or zsh) for `cmake` and `ctest`, and write the result into the row: `pass`, or
+   `F<n>` with a new finding. Commands with a pipe are under [Commands](#commands).
+2. Review the rows marked **M** (manual) by reading the code. They are grouped by dimension, R1–R11,
+   so that one reviewer per dimension can work in parallel; give each reviewer the spec, the notes,
+   this file and `git diff a43cd4f..HEAD`, and ask for findings with file and line.
+3. Fix the findings (below), then rerun the rows a fix touches.
+
+A result is `pass` only if the row's "Pass when" holds as written. If it holds with a reservation,
+write the finding anyway and decide it as `accepted`.
+
+## Checklist
+
+### R1 Spec and notes conformance
+
+| Row | Kind | Check | Pass when | Result |
+|---|---|---|---|---|
+| R1.1 | M | Spec §4–§11, item by item, against the code | every item is implemented, or differs as a note N1–N18 says | open |
+| R1.2 | M | Notes N1–N18, item by item, against the code | every note is implemented as written; for N13 the reference is `seq_core.h`, as N13 says (the `transport()` order is STOP, then REWIND, then ARM, START or CONTINUE) | open |
+| R1.3 | M | The comments of `seq_core.h` against `seq_core.c` | they describe what the code does | open |
+| R1.4 | M | Deviations from the spec, against `docs/lichomat/reports/stage1-report.md` | the report lists each deviation with the note or plan decision that allows it, and every intended change against fw 1.7; a deviation in the code that is in neither list is a finding | open |
+
+### R2 Defects D1–D8 (spec §3)
+
+| Row | Kind | Check | Pass when | Result |
+|---|---|---|---|---|
+| R2.1 | A | D1 swing: `ctest --test-dir build/host-tests -R '^T[35]$' --output-on-failure` | T3 and T5 pass | open |
+| R2.2 | A | D2 choke: `ctest --test-dir build/host-tests -R '^T7$' --output-on-failure` | passes | open |
+| R2.3 | A | D3 tempo: `ctest --test-dir build/host-tests -R '^T1$' --output-on-failure` | passes | open |
+| R2.4 | A | D4: `grep -n 'seq_sendMidiNoteOn' Core/Src/Soundengine/MIDI/MidiVoiceControl.c` | no output | open |
+| R2.5 | M | D4: the trigger callback and `seq_triggerVoice()` send one Note On each; `midiParser_noteOn()` echoes once (N11) | as stated | open |
+| R2.6 | M | D5: the trigger callback applies the event's own p-locks and velocity, never the current step index | as stated | open |
+| R2.7 | A | D6: `ctest --test-dir build/host-tests -R '^T14$' --output-on-failure`, and `grep -n -e seq_postSkipOnce -e seqc_skipOnce Core/Src/Soundengine/Sequencer/sequencer.c` | test passes; `seq_addNote()` hands the marker to `seq_postSkipOnce()`, which calls `seqc_skipOnce()` at once inside `seq_tick()` and posts it otherwise, and `seq_applyMailbox()` passes a posted marker to `seqc_skipOnce()`, one per track | open |
+| R2.8 | A | D7: `ctest --test-dir build/host-tests -R '^T1[678]$' --output-on-failure` | T16, T17 and T18 pass | open |
+| R2.9 | A | D8: `grep -rn -e uart_processMidi -e usb_getMidi -e midiParser_parseMidiMessage Core/Src` | apart from the definitions, comments and the parser's own calls in `MidiParser.c`, the only calls are in `seq_parseMidiInput()` in `sequencer.c`, which only `seq_tick()` calls | open |
+
+### R3 Host tests
+
+| Row | Kind | Check | Pass when | Result |
+|---|---|---|---|---|
+| R3.1 | A | `cmake -S tests -B build/review-host -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSEQC_REQUIRE_ALL_TESTS=ON && cmake --build build/review-host && ctest --test-dir build/review-host` | `100% tests passed, 0 tests failed out of 24` | open |
+| R3.2 | A | `ruby tools/ci_dry_run.rb host-tests` | ends with `dry run of host-tests: 3 steps passed` | open |
+| R3.3 | M | Each spec test T1–T20 asserts what spec §13.1 asks for (tolerances, scenarios) | every test does | open |
+| R3.4 | A | Determinism: run R3.1's `ctest` twice | the same tests pass both times | open |
+
+### R4 Execution contexts (spec §4.3, N7, N12, N13.9)
+
+| Row | Kind | Check | Pass when | Result |
+|---|---|---|---|---|
+| R4.1 | A | Calls into the core, see [Commands](#commands) | every call is in the `seq_tick()` path of `sequencer.c` or in its callbacks, or is `seqc_init()` in `seq_initCore()` at boot, before `seq_tick()` runs, or `seqc_stats()` in `soundengine_cpuEnd()`, or `seqc_skipOnce()` in `seq_postSkipOnce()`, which calls it only while `seq_inTick` is set | open |
+| R4.2 | M | The USART3, `USBD_CDC_DataOut`, EXTI4 and EXTI9_5 handlers | they only take a stamp and push sync events (and keep writing the RX FIFO) | open |
+| R4.3 | M | The mailbox of `sequencer.c` | each slot is written with interrupts masked and applied at the top of `seq_tick()` | open |
+| R4.4 | M | `seq_tick()` nesting guard (N12) | a nested call skips the mailbox, the drain, `seqc_process()` and MIDI parsing | open |
+| R4.5 | A | `grep -rn 'GetRngValue' Core/Src --include='*.c'` | only the seq_tick and render context calls it | open |
+| R4.6 | A | `grep -n 'seqc_' Core/Src/menu/menu.c Core/Src/buttonHandler.c Core/Src/ledHandler.c Core/Src/Soundengine/MIDI/CortexParser.c` | no output: the UI reads glue copies and `cpuMeter_get()` only | open |
+
+### R5 Real time and CPU
+
+| Row | Kind | Check | Pass when | Result |
+|---|---|---|---|---|
+| R5.1 | M | `seqc_process()` early exit (N10), and `seq_tick()` with nothing to do | nothing due: the 64-bit compare and the store of `now` (epic E1, decision 1), then return; `seq_tick()` without a post or a queued event masks no interrupt and refreshes only the copies that changed (epic E2, decision 11) | open |
+| R5.2 | M | Interrupt handlers | no loops over queues or patterns, no blocking calls | open |
+| R5.3 | A | `ctest --test-dir build/host-tests -R '^cpumeter$' --output-on-failure` | passes | open |
+
+### R6 Memory budget (spec §10, N2, N14)
+
+The fw 1.7 baseline, as the `memory:` line of `tools/check.sh` reports it: ITCM 15000 B, DTCM 107388 B,
+RAM 271032 B, image 274688 B.
+
+| Row | Kind | Check | Pass when | Result |
+|---|---|---|---|---|
+| R6.1 | A | `tools/check.sh`, the `memory:` line | ITCM fits (≤ 16384 B) | open |
+| R6.2 | A | the same line | DTCM + RAM is at most 387124 B: the baseline 378420 B plus 8704 B (event queue 6 KB, sync queues 1.5 KB, other state under 1 KB) | open |
+| R6.3 | A | the same line | the image grew by about 15 KB (the core alone has 15.4 KB of code, E1.12 Step 6; spec §10: +10–15 KB); more than 30 KB is a finding | open |
+
+### R7 Compatibility (G8: no file format changes)
+
+| Row | Kind | Check | Pass when | Result |
+|---|---|---|---|---|
+| R7.1 | A | `ctest --test-dir build/host-tests -R '^layout$' --output-on-failure` | passes | open |
+| R7.2 | A | `git diff --stat a43cd4f -- Core/Inc/Parameters.h Core/Src/Preset Core/Inc/Preset` | only `SeqStep.h` and `SeqStepTypes.h` (E1.1, E1.2), and any other change is a reviewed one that does not touch file I/O | open |
+| R7.3 | M | `presetManager.c` reads and writes | unchanged sizes and order for kits, patterns, songs, projects and `glo.cfg` | open |
+
+### R8 MIDI behaviour (spec §7, N11, N14)
+
+| Row | Kind | Check | Pass when | Result |
+|---|---|---|---|---|
+| R8.1 | M | Realtime and SPP intercepts in the USART3 handler and in `USBD_CDC_DataOut` | the bytes still reach the RX FIFO and the USB message queue, so routing and thru work | open |
+| R8.2 | M | Sync event gating | the RX filter `MIDI_FILTER_SYSTEM` and the sync mode gate each event once, at the drain or in the core (N4) | open |
+| R8.3 | M | SPP (N14) | it travels in the sync queues, in order with Continue and Clock | open |
+| R8.4 | M | Note-offs | stop and rewind send the pending note-offs; muting a track sends the note-off of that track's voice | open |
+| R8.5 | M | USB MIDI out (`usb_flushMidi()`, `usb_sendMidi()`) | fixed, or an `accepted` finding listed in the release notes | open |
+
+### R9 Build and code hygiene
+
+| Row | Kind | Check | Pass when | Result |
+|---|---|---|---|---|
+| R9.1 | A | `tools/check.sh` | exit 0 and `== compiler warnings: 0` | open |
+| R9.2 | A | `ruby tools/ci_dry_run.rb firmware` | ends with `dry run of firmware: 5 steps passed` | open |
+| R9.3 | A | `usbd_cdc.c` is built with `-w`: compile it once with `-Wall`, see [Commands](#commands) | `usbd_cdc.c: no warnings without -w` | open |
+| R9.4 | A | Line endings, see [Commands](#commands) | Core sources CRLF only (no mixed files); tests, tools, docs, CI and CMake files LF only | open |
+| R9.5 | A | Licence headers of new files, see [Commands](#commands) | no output | open |
+| R9.6 | A | `grep -rn -e seq_processFlam -e seq_calcDeltaT -e seq_prescaleCounter -e trigger_clockReceived -e clockSync Core` | no output, or only comments that explain the removal: the pulse machine and `clockSync` are gone (spec §8) | open |
+| R9.7 | M | Debug leftovers | no `printf`, test hooks or commented-out new code in the firmware | open |
+
+### R10 Branding and licence (G7, NOTICE.md)
+
+| Row | Kind | Check | Pass when | Result |
+|---|---|---|---|---|
+| R10.1 | A | `python3 tools/check_image.py build/release` | `image: LXR_V2_LICHOMAT_0.1.img OK …` | open |
+| R10.2 | A | `grep -c 'unofficial custom firmware for the Erica Synths LXR-02' README.md` | at least 1 | open |
+| R10.3 | M | README and release notes | LICHOMAT is never presented as official, and "Erica Synths" and "LXR" appear only in truthful references | open |
+| R10.4 | M | Source headers | new files: `Copyright (C) 2026 Tomasz Krzywicki`, SPDX and the NOTICE.md reference; modified files keep their headers | open |
+
+### R11 Documentation
+
+| Row | Kind | Check | Pass when | Result |
+|---|---|---|---|---|
+| R11.1 | M | README: install, rollback and build instructions | they match the code and the tools | open |
+| R11.2 | M | `docs/lichomat/HANDOFF.md` and the notes | current; every new tool is mentioned where it is used | open |
+| R11.3 | M | Tracker | every task of the plan up to E3.5 done, E1.14, E2.7 and E2.8 included once their sections are in the plan; a task the owner moved out of stage 1 is marked so in the tracker and named in the release notes; E4.1 in progress; questions current | open |
+
+## Commands
+
+R4.1, every call into the core outside `seq_core.c`:
+
+```sh
+grep -rn 'seqc_[A-Za-z]*(' Core/Src --include='*.c' | grep -v 'Sequencer/seq_core.c'
+```
+
+R9.3, `usbd_cdc.c` without `-w` (it is part of `usb_midi`, which is built with `-w`):
+
+```sh
+python3 - <<'EOF'
+import json, shlex, subprocess
+db = json.load(open("build/release/compile_commands.json"))
+e = next(x for x in db if x["file"].endswith("Class/CDC/Src/usbd_cdc.c"))
+args = [a for a in shlex.split(e["command"]) if a != "-w"]
+i = args.index("-o"); args[i + 1] = "/dev/null"
+args.insert(1, "-Wall")
+r = subprocess.run(args, cwd=e["directory"], capture_output=True, text=True)
+print(r.stderr.strip() or "usbd_cdc.c: no warnings without -w")
+EOF
+```
+
+R9.4, line endings (each loop must print nothing):
+
+```sh
+git diff --name-only a43cd4f -- Core ':!Core/CMakeLists.txt' | while read -r f; do [ -f "$f" ] && file "$f"; done | grep -v 'with CRLF line terminators'
+git diff --name-only a43cd4f -- tests tools docs .github CMakeLists.txt Core/CMakeLists.txt README.md | while read -r f; do [ -f "$f" ] && file "$f"; done | grep 'CRLF'
+```
+
+R9.5, licence headers (must print nothing):
+
+```sh
+git diff --name-only --diff-filter=A a43cd4f -- Core tests tools .github | while read -r f; do grep -L 'SPDX-License-Identifier: GPL-3.0-only' "$f"; done
+```
+
+## Fixing findings
+
+1. Add the finding to the table below with the next number, the row, the file and line, what is
+   wrong, and its severity: `blocker` (wrong behaviour, a broken build or a broken file format),
+   `major` (a spec or note requirement not met) or `minor` (anything else).
+2. Decide it:
+   - `fix`: fixed now;
+   - `accepted`: a known limitation, listed in the release notes (E4.3) under "Known limitations";
+   - `question`: the owner decides. Add it to `questions` in `docs/lichomat/tracker.json` with the
+     reversible default you keep working with (HANDOFF.md).
+   Blockers and majors are `fix`, unless the owner has to decide.
+3. For each `fix`, test first:
+   - logic of `seq_core` or `cpuMeter`: a host test in `tests/` that fails, named after the spec test
+     it extends (`TEST(T7_...)`), or after the module (`TEST(cpumeter_...)`);
+   - firmware glue: the smallest check that fails, such as a `grep` on the source, a build that shows
+     the warning, or a host test of logic that can be moved out of the glue.
+   Run it and see it fail.
+4. Fix it with the smallest change; run the test, then `tools/check.sh` (zero warnings).
+5. Commit each finding on its own, adding the files by name:
+   `git commit -m "Fix F<n>: <what was wrong>" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"`.
+6. Set the finding to `fixed <short commit>` and rerun the checklist rows it touches.
+
+## Findings
+
+| F | Row | Where | Finding | Severity | Status |
+|---|---|---|---|---|---|
+
+## Result
+
+Filled in when the review is complete: the reviewed commit, the date, and the counts of findings by
+severity and status.
+````
+
+- [ ] **Step 2: Run the gate to see it fail**
+
+Run: `grep -cE '\| (open|fix) \|' docs/lichomat/reports/stage1-review.md`
+Expected: `51`
+
+- [ ] **Step 3: Commit the checklist**
+
+```bash
+git add docs/lichomat/reports/stage1-review.md
+git commit -m "Add the stage 1 review checklist" \
+  -m "51 checks in eleven dimensions, from spec conformance to licence headers, with the procedure that fixes findings test-first." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 4: Write the stage 1 report**
+
+The notes say that the deviations are listed in the stage 1 report; R1.4 checks it, and E4.3 takes the
+user-visible changes from it. It collects what the plan decided on the way: the decision lists of
+epics E1 and E2, the notes N1–N18, and the "Intended changes" lists of E2.2–E2.5 as N18 amended them.
+If a task was carried out differently from the plan, add that deviation as well, with its reason.
+
+Create `docs/lichomat/reports/stage1-report.md`:
+
+````markdown
+# LICHOMAT stage 1: report of deviations and intended changes
+
+The implementation notes (`docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md`)
+win where they and the spec (`docs/superpowers/specs/2026-10-23-timing-core-design.md`) disagree,
+and they say that the deviations are listed in the stage 1 report. This is that report. It lists:
+
+1. every place where stage 1 does something other than the spec says, with the note (N1–N18) or the
+   decision of the plan (`docs/superpowers/plans/2026-10-23-timing-core.md`) that allows it;
+2. every intended change of behaviour against the official firmware 1.7, and whether the release
+   notes (`docs/lichomat/release-notes-v0.1.md`) tell users about it;
+3. the resources stage 1 uses (spec §10).
+
+Review row R1.4 (`docs/lichomat/reports/stage1-review.md`) checks it: a deviation in the code that is
+in neither list is a finding.
+
+## 1. Deviations from the spec
+
+| Spec | The spec says | Stage 1 does | Allowed by |
+|---|---|---|---|
+| §5 position | Q48.16 fixed point | a `double` in ticks, computed from an anchor | N1 |
+| §4.2, §10 event | 20 bytes, `uint32_t` tick; queue 5 KB | 24 bytes, `int64_t` tick and the ratchet hit index; queue 6 KB | N2, N13.7 |
+| §6.2 regeneration | remove the on-time events of step n at its boundary and generate them again | an early part (at boundary n−1) and a late part (at boundary n), each hit generated once | N3 |
+| §6.2 edits before the boundary | apply to the step | apply to the step, except a change of the shuffle or of the step's timing after the step's early part queued a hit, or one that would put a hit before the boundary: then the step keeps the timing of its early part (no hit twice, none lost) | plan, epic E1, decision 9 |
+| §4.2 interface | `seqc_command()` mailbox in the core; `peekNextPattern()`, `songPatternAt()`, `songMode()`; `transport(bool)` | the mailbox in `sequencer.c`; direct functions; the callbacks of N5 with `seekPosition()` and `transport(seqc_transport_t)` | N5, N7, N13.1, N13.3 |
+| §4.3 execution context | `seq_tick()` from the TIM2 interrupt at about 36 kHz | from `soundengine_process()` in the main loop, and from TIM2 only while the SD card is busy; a nesting guard | N12 |
+| §4.1 platform layer | `seq_platform.c` | `seq_syncq.c` (host-tested queues and decoding) and `seq_platform.c` (DWT, instances) | plan, epic E2, decision 3 |
+| §5 MIDI Start | `pos` 0, armed | `pos` one clock before step 0, armed; the first clock brings it to 0 | N4 |
+| §5 reset input of the clock jack | back to step 0 at the next pulse | a run gate, as in fw 1.7: active stops and rewinds, released arms a start | N4, N13.2 |
+| §5 transport messages out | MIDI Start at an internal start; it says nothing about the slave modes (fw 1.7 sent Start and Stop there too) | MIDI Start, Stop and Continue go out only in internal sync; none in the slave modes | N18.2 |
+| §5 dropout | 500 ms | `max(500 ms, 2 × the expected clock interval)` | N15 |
+| §5 tempo estimate | intervals more than 50% off the estimate are left out | the same; after 4 such intervals in a row on one side (2 for the jack at 4 PPQ) the estimate restarts from them | N16 (E1.14) |
+| §5, §11 dropout | the position holds | the position holds and the pending note-offs are sent | N17 (E1.14) |
+| §5 clock in PPQ | a command | it restarts the clock count and clears the estimate only in analog sync | plan, epic E1, decision 11 |
+| §5 clock out jack | `trigger_clockTick(0, pulseInStep)` | `trigger_clockTick(0, 0)`, after `trigger_setClockPhase()` has set the divider from the position | N8; plan, epic E2, decision 10 |
+| §6.4 mutes | an event of a muted track is dropped when it fires | roll events play on muted tracks, as in fw 1.7 | N13.6 |
+| §6.5, N6 song position in song mode | the entry is activated with the normal pattern-change side effects | inside the run of the pattern that plays already nothing is activated or reloaded | plan, epic E2, decision 12 |
+| §6.6 roll recording | through `seq_addNote()` | at the roll event's own step, with `seq_recordNoteAtStep()` | N11 |
+| §6.7 recording phase | `seqc_stepPhase()` × 100 | the same, swing-aware: 0.5 halfway between the swung grid times of steps n and n+1 | N13.5 |
+| §6.7, §4.2 skip-once | `seqc_skipOnce(t, s)`, one marker | one marker per track | N18.1 (E1.14) |
+| §7.2 SPP | the normal parser path and the mailbox | intercepted in the receive interrupts and queued in order with the realtime events | N14 |
+| §7.2 USB realtime | CIN 0xF | CIN 0xF, and realtime bytes F8–FF with CIN 0x5 | N18.4 |
+| N10 early exit | one 64-bit compare | the compare, and `now` is kept for the queries | plan, epic E1, decision 1 |
+| N13.1 transport order | "STOP, START, CONTINUE, ARM and REWIND, always reported in that order" | STOP, then REWIND, then ARM, START or CONTINUE, as `seq_core.h` says | N13 (the header is the reference); plan, epic E1, decision 10 |
+| `seq_core.h` | `seqc_masterTrack()` is 0 before the first boundary | after a song position it is the master track of the seeked pattern | plan, epic E1, decision 5 |
+| §13.1 T20 | every hit on the same pulse as in fw 1.7; only the tempo error differs | two more differences, which follow from §6.4 and §6.1 and are pinned by tests: the per-track choke drops a spill-over hit after a newer step's early hit (`T20_spill_over_after_a_newer_step_is_choked`), and no spill-over of the last step plays at the start (`T20_no_spill_over_of_the_last_step_at_the_start`) | plan, task E1.13 |
+| §13.1 T19 | queue overflow | tested against a second build of the core with a 16-entry queue | plan, epic E1, decision 4 |
+| §9.3 CPU page | SHIFT + LOAD/SAVE, then page forward twice | SHIFT + step 12 (the code's real global menu), the 4th press, or the 3rd from a second screen | plan, Part 3 |
+| §9.3 block budget | 313 186 cycles | 313 185 (64 × 216 MHz / 44 140 Hz = 313 185.3) | plan, Part 3 |
+| §9.3 the counts shown | the event queue's maximum depth and the overflow counts | the event queue's; the sync queues' overflow count (`seqp_syncOverflows()`) is not on the page | open: question for the owner, Part 3 item 1 |
+| §8 `MenuText.h` | changed for the CPU page | unchanged: the page draws its own text | plan, Part 3 |
+
+## 2. Intended changes against fw 1.7
+
+"Notes" says whether the release notes list the change (Changed behaviour or Fixed) or why not.
+
+| Change | Where | Notes |
+|---|---|---|
+| Shuffle moves whole steps, ratchets and shift included (D1) | E1.5, spec §12 | Fixed |
+| MIDI clock out and the clock out jack stay straight with shuffle (D1) | E1.8, spec §12 | Fixed, Changed |
+| Choke per track (D2) | E1.6, spec §12 | Fixed |
+| A spill-over ratchet hit no longer plays after a newer early hit of the same track; at a start, the last step's spill-over no longer plays on step 1 | E1.13 | Changed |
+| Exact master tempo (D3) | E1.3, spec §12 | Fixed |
+| One MIDI Note On per hit, Note Offs per voice, also for voices that share a channel (D4) | E2.3, spec §12 | Fixed, Changed |
+| An incoming MIDI note is echoed once, also in record mode | E2.3, spec §12 | Changed |
+| Muting a track turns off that track's MIDI note (fw 1.7 turned off another voice's) | E2.3 | Changed |
+| Shifted notes keep their own p-locks and velocity, also across a pattern change (D5) | E1.5, E1.7, spec §12 | Fixed |
+| A note recorded slightly early does not play twice (D6) | E1.9, E2.2, spec §12 | Fixed |
+| The recording quantize follows the shuffle | E1.9 (N13.5) | Changed |
+| Roll notes are recorded at the step where they play (fw 1.7: the current step) | E2.2 (N11) | Changed |
+| Slave mode: fractional tempo, no dropped late notes, SPP (D7) | E1.10, E1.11, E2.4 | Fixed |
+| MIDI Continue resumes where playback stopped or where SPP put it (fw 1.7 restarted from step 1) | E1.11 (N4) | Changed |
+| SPP is followed while stopped; in song mode the pattern at that position loads at once | E1.11, E2.2 (N6) | Changed |
+| After a song end the next start plays the song from its first entry, and that entry once | E1.4, E2.2 (N13.11) | Changed |
+| Song end sends all notes off, and MIDI Stop as master; the start/stop button shows the stop | E2.2 | Changed |
+| The start/stop button and LED follow every start and stop, also from MIDI and the song end | E2.2 | Changed |
+| As a slave the LXR sends no MIDI Start, Stop or Continue (fw 1.7 answered a received Start with Stop and Start, and a Continue with Start) | E2.2 (N18.2) | Changed; owner question Q7 |
+| In `EXT` sync a MIDI Start makes the next jack pulse start playback | E1.11 (N13.10) | Changed |
+| At 2 PPQ the clock out jack gives 2 PPQ in the slave modes too (fw 1.7: 4), and after a Continue or SPP its pulses stay on the step grid | E2.2, E2.5 | Changed |
+| MIDI input (D8): stamped realtime and SPP, one parsing context, USB clock keeps going while the card is busy | E2.4 | Fixed |
+| Realtime bytes inside a DIN message no longer break the message | E2.4 | covered by Fixed (D8) |
+| A full USB MIDI input queue drops new messages instead of wiping the queue | E2.4 | no: only under overload |
+| The reset gate's side effects (all notes off) run up to one `seq_tick()` later, outside the interrupt | E2.5 | no: under 1.5 ms |
+| The one-shot roll triggers up to one `seq_tick()` later, in the core's context | E2.2 | no: under 1.5 ms |
+| A change of the shuffle or of a step's timing while the step has started to play early applies from that step's next turn | E1.5 | no: a corner of editing while playing |
+| The start-up screen shows `LICHOMAT` and `v0.1 unofficial`; the global menu has a CPU page | E3.1, E3.3 | Changed, New |
+
+## 3. Resources
+
+Filled in by E4.1 Step 4 from `build/check.log` (the `memory:` line of `tools/check.sh`).
+````
+
+Fill in the resources from the memory line of `tools/check.sh` (it prints it; `build/check.log` does
+not have it):
+
+```bash
+tools/check.sh | tee build/e4-check.txt | tail -n 4
+python3 - <<'EOF'
+import re
+p = "docs/lichomat/reports/stage1-report.md"
+out = open("build/e4-check.txt").read()
+m = re.search(r"memory: ITCM (\d+)/\d+ B.*?DTCM (\d+)/\d+ B.*?RAM (\d+)/\d+ B.*?image (\d+)/\d+ B", out)
+assert m, "no memory: line in the output of tools/check.sh"
+now = dict(zip(("ITCM", "DTCM", "RAM", "image"), map(int, m.groups())))
+base = {"ITCM": 15000, "DTCM": 107388, "RAM": 271032, "image": 274688}
+rows = ["| | fw 1.7 | stage 1 | change |", "|---|---|---|---|"]
+for k in ("ITCM", "DTCM", "RAM", "image"):
+    rows.append("| %s | %d B | %d B | %+d B |" % (k, base[k], now[k], now[k] - base[k]))
+rows += ["", "Spec §10: about +7.5 KB of DTCM and RAM (review row R6.2 allows +8704 B), about +10–15 KB of",
+         "flash, and no net growth of ITCM."]
+s = open(p).read()
+marker = "Filled in by E4.1 Step 4 from `build/check.log` (the `memory:` line of `tools/check.sh`).\n"
+assert s.count(marker) == 1, "the resources marker is not there"
+open(p, "w").write(s.replace(marker, "\n".join(rows) + "\n"))
+print("\n".join(rows[2:6]))
+EOF
+```
+
+Expected: `tools/check.sh` exits 0 with `== compiler warnings: 0`, then four rows, ITCM, DTCM, RAM and
+image, each with the fw 1.7 value, this build's and the change.
+
+Commit it:
+
+```bash
+git add docs/lichomat/reports/stage1-report.md
+git commit -m "Add the stage 1 report: deviations and intended changes" \
+  -m "Each deviation from the spec with the note or plan decision that allows it, the intended changes against fw 1.7 with whether the release notes list them, and the resources." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 5: Run the automated rows**
+
+Run `tools/check.sh`, then each row marked **A** in R2–R10 and the commands under "Commands", from
+the repository root. Each Bash call is a new shell, so start every command that uses `cmake` or `ctest`
+with `source tools/env.sh && ` (E3.5 made it work in zsh). Write `pass` into the row's Result cell
+when its "Pass when" holds; otherwise add a finding (Step 7) and write its number, `F<n>`, into the
+cell.
+
+- [ ] **Step 6: Review the manual rows in parallel**
+
+Use superpowers:dispatching-parallel-agents with five reviewers. None of them changes a file. Give
+each this prompt, with its group of rows:
+
+```
+You review LICHOMAT stage 1, rows <ROWS> of docs/lichomat/reports/stage1-review.md.
+Read docs/superpowers/specs/2026-10-23-timing-core-design.md and
+docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md first; the notes N1-N18 win
+where they differ from the spec. docs/lichomat/reports/stage1-report.md lists the deviations and the
+intended changes that the plan decided. Review the changes since the official firmware 1.7,
+`git diff a43cd4f..HEAD`, for these rows only, and read the code around each change. Do not change
+any file. For each row answer "pass", or give findings: file and line, what is wrong, which spec
+section or note it breaks, and a severity: blocker (wrong behaviour, a broken build or a broken file
+format), major (a requirement of the spec or the notes not met) or minor (anything else).
+```
+
+The groups:
+1. R1.1, R1.2, R1.3, R1.4 (spec and notes, and the stage 1 report)
+2. R2.5, R2.6, R8.1, R8.2, R8.3, R8.4, R8.5 (MIDI)
+3. R3.3, R5.1, R5.2 (tests and real time)
+4. R4.2, R4.3, R4.4, R7.3 (contexts and file formats)
+5. R9.7, R10.3, R10.4, R11.1, R11.2, R11.3 (hygiene, branding, docs)
+
+Write each answer into the rows and the findings table.
+
+- [ ] **Step 7: Fix the findings**
+
+Follow "Fixing findings" in the review file for every finding: decide it (`fix`, `accepted` or
+`question`), and for each `fix` write the failing test first, see it fail, fix, see it pass, run
+`tools/check.sh`, and commit that finding alone with the files it touched added by name. If the fix
+adds, removes or changes a deviation or an intended change, update `stage1-report.md` in the same
+commit:
+
+```bash
+git add <the files of this finding>
+git commit -m "Fix F<n>: <what was wrong>" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+Then set the finding's status to `fixed <short commit>`, and rerun the checklist rows the fix touches.
+Add each `question` to `questions` in `docs/lichomat/tracker.json` with its reversible default.
+
+- [ ] **Step 8: Fill in the result**
+
+Run:
+
+```bash
+python3 - <<'EOF'
+import datetime, re, subprocess
+p = "docs/lichomat/reports/stage1-review.md"
+s = open(p).read()
+rows = re.findall(r"^\| F\d+ \|[^|]*\|[^|]*\|[^|]*\| (blocker|major|minor) \| (fixed|accepted|question)\b[^|]*\|$", s, re.M)
+count = lambda i, v: sum(1 for r in rows if r[i] == v)
+head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
+text = ("Reviewed `timing-core` at `%s` on %s. Findings: %d (blocker %d, major %d, minor %d); "
+        "fixed %d, accepted %d, owner question %d.\n"
+        % (head, datetime.date.today().isoformat(), len(rows), count(0, "blocker"), count(0, "major"),
+           count(0, "minor"), count(1, "fixed"), count(1, "accepted"), count(1, "question")))
+old = "Filled in when the review is complete: the reviewed commit, the date, and the counts of findings by\nseverity and status.\n"
+assert s.count(old) == 1, "the Result placeholder sentence is not there"
+open(p, "w").write(s.replace(old, text))
+print(text, end="")
+EOF
+```
+
+Expected: one line `Reviewed timing-core at <commit> on <date>. Findings: …`, with the counts of the
+findings table.
+
+- [ ] **Step 9: Run the gate to see it pass**
+
+Run: `grep -cE '\| (open|fix) \|' docs/lichomat/reports/stage1-review.md; tools/check.sh`
+Expected: `0`, then `tools/check.sh` exits 0 with `== compiler warnings: 0`.
+
+- [ ] **Step 10: Commit the result**
+
+```bash
+git add docs/lichomat/reports/stage1-review.md docs/lichomat/reports/stage1-report.md
+git commit -m "Stage 1 review: results" \
+  -m "Every check has a result; the findings are fixed, accepted as known limitations, or open questions for the owner." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Task E4.2: hardware checklist H1–H13
+
+Spec §13.2 lists the hardware checks in one line each; only the owner can run them on the LXR-02, and
+HANDOFF.md says they are prepared but never claimed. This task turns each into a procedure the owner
+can follow on the device: setup, steps, the expected result with numbers (computed from the spec's
+timing: a step is 96 ticks, swing is `round(shuffle × 64 / 127)` ticks on odd steps, shift is 12 ticks
+per unit, ratchet hit j of k is j·96/k ticks into the step), and what to record. Three optional jack
+checks (X1–X3) cover the clock jacks, which E2.5 rewired but the spec's list does not test. It also
+builds the two update files the checks need, LICHOMAT and the official 1.7 from `a43cd4f`, and records
+their SHA-256 in the checklist's run sheet.
+
+**Files:**
+- Create: `docs/lichomat/hardware-checklist.md`
+- Test: `build/e4-checklist-check.sh` (a scratch script, not committed)
+
+- [ ] **Step 1: Write the failing test**
+
+Create `build/e4-checklist-check.sh`:
+
+```bash
+#!/bin/bash
+# Check of docs/lichomat/hardware-checklist.md (E4.2): each of H1-H13 says what to expect and what
+# to record, and the run sheet names both update files with their SHA-256.
+f=docs/lichomat/hardware-checklist.md; ok=1
+[ -f "$f" ] || { echo "missing: $f"; exit 1; }
+for i in $(seq 1 13); do
+  awk -v h="## H$i:" 'index($0, h) == 1 {s = 1; next} /^## / {s = 0}
+      s && /^\*\*Expected/ {e = 1} s && /^\*\*Record:\*\*/ {r = 1} END {exit !(e && r)}' "$f" \
+    || { echo "H$i: no Expected or no Record"; ok=0; }
+done
+for img in LXR_V2_LICHOMAT_0.1.img LXR_V2_V1.7.img; do
+  grep -qE "^\| \`$img\` \| \`[0-9a-f]{64}\` \|" "$f" || { echo "run sheet: no SHA-256 for $img"; ok=0; }
+done
+if [ "$ok" = 1 ]; then echo "checklist check passed"; else echo "checklist check FAILED"; exit 1; fi
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `bash build/e4-checklist-check.sh; echo "exit=$?"`
+Expected:
+
+```
+missing: docs/lichomat/hardware-checklist.md
+exit=1
+```
+
+- [ ] **Step 3: Build the official 1.7 update file for H13**
+
+`git archive` exports the upstream sources without touching the work tree or the branch.
+
+Run:
+
+```bash
+rm -rf build/official-1.7 && mkdir -p build/official-1.7/src
+git archive a43cd4f | tar -x -C build/official-1.7/src
+source tools/env.sh && cmake --preset release -S build/official-1.7/src -DARM_TOOLCHAIN_DIR="$ARM_TOOLCHAIN_DIR" > build/official-1.7/configure.log 2>&1 && cmake --build build/official-1.7/src/build/release > build/official-1.7/build.log 2>&1; echo "exit=$?"
+grep -c "warning:" build/official-1.7/build.log
+shasum -a 256 build/official-1.7/src/build/release/LXR_V2_V1.7.img
+```
+
+Expected:
+
+```
+exit=0
+0
+cdb1ca371599149083bd0b61564d6864f031b599ccdcead2047a711e0b679db4  build/official-1.7/src/build/release/LXR_V2_V1.7.img
+```
+
+(The 1.7 sources built with Arm GNU 14.3.rel1 give this file byte for byte. A different hash means a
+different compiler; the file is still the official 1.7, but write the hash down.)
+
+- [ ] **Step 4: Build LICHOMAT**
+
+Run: `tools/check.sh`
+Expected: exit 0, `image: LXR_V2_LICHOMAT_0.1.img OK (…)` and `== compiler warnings: 0`.
+
+- [ ] **Step 5: Write the checklist**
+
+Create `docs/lichomat/hardware-checklist.md`:
+
+````markdown
+# LICHOMAT 0.1: hardware checklist (H1–H13)
+
+These are the checks of spec §13.2, written out as procedures for the LXR-02. Only the owner can run
+them, on the real device; nothing here is ever marked as passed by an agent. Record every result in
+the [run sheet](#run-sheet) at the end and report it back (a message, or the tracker).
+
+The spec is `docs/superpowers/specs/2026-10-23-timing-core-design.md`, the decisions beyond it are in
+`docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N18).
+
+## Before you start
+
+**Back up the SD card.** Copy the whole card to the computer. LICHOMAT reads and writes the same
+files as 1.7 (no format changes), but it is unofficial firmware.
+
+**What you need**
+
+- The LXR-02, its SD card and a card reader.
+- The two update files of the [run sheet](#run-sheet): `LXR_V2_LICHOMAT_0.1.img` (LICHOMAT) and
+  `LXR_V2_V1.7.img` (official 1.7, for H13 and for comparisons).
+- A computer with a DAW that can record the LXR's audio output and send and receive MIDI over USB
+  (and over DIN through a MIDI interface).
+- A MIDI monitor that shows time stamps, for example MIDI Monitor on macOS. Watch the LXR's MIDI
+  out on DIN, through the MIDI interface: H5, H6, H8, H10 and H11 are written for it. The LXR's USB
+  MIDI out keeps the fw 1.7 defects of tracker task E2.8 until that task is done (it can lose or
+  garble data); check it over USB only after E2.8.
+- For H6: a MIDI clock master on DIN (the DAW through a MIDI interface, or a hardware sequencer).
+- For H11: a synth, or the MIDI monitor, on the LXR's MIDI out.
+
+**Installing an update file** (as for any update; also in README.md)
+
+1. Copy the `.img` file to the top folder of the card. Delete every other `LXR*.img` file there: the
+   updater installs the first one it finds.
+2. Switch the LXR off, put the card in, hold down the encoder button and switch the LXR on. Keep
+   holding the button until `LXR Updater` appears.
+3. The display shows `Checking Firmware...`, then `Loading Firmware` with a percentage, then
+   `Update OK!`, and the LXR restarts by itself.
+
+If an update fails, switch off and install again; the updater itself is never changed. If LICHOMAT
+misbehaves badly, go back to 1.7 with H13 and report what happened.
+
+**Where things are on the LXR**
+
+- Global menu: hold SHIFT and press step button 12. Each further SHIFT + step 12 moves on, in this
+  order: the first sub-page (BPM, shuffle, MIDI channel, screensaver), its second screen (MIDI
+  transmit filter, receive filter, routing, follow), the second sub-page (kit autoload, clock in PPQ,
+  clock out PPQ), **the new CPU page**, and back to the first sub-page. Coming from the second
+  screen of another page, the menu opens on the MIDI filter screen, so the CPU page is one press
+  sooner.
+- Sync mode: the global menu's BPM value. Below 2 it shows `MID` (1: MIDI clock, DIN and USB) or
+  `EXT` (0: clock in jack). 2 and above is the internal tempo.
+- Step timing: in step mode select a step; its page shows velocity, note and probability, and its
+  second screen flam (ratchet: `off`, `x2`, `x3`, `x4`, `x6`, `x8`) and shift (`-7`…`+7`, in 1/8
+  of a step).
+- A voice's MIDI channel and note (the note override) are on the second screen of its MIX sub-page
+  (select button 8).
+
+**Caution, unchanged from 1.7:** while the global menu is open, a step button pressed **without**
+SHIFT sets the length of all tracks. Use only SHIFT + step 12 there.
+
+**Measuring times in a recording.** Record the LXR's main output at 48 kHz. Find a hit's onset by
+zooming in on the waveform (or with the DAW's transient detection), and measure from a reference hit.
+One audio block of the LXR is 64 samples at 44.14 kHz, 1.45 ms: in fw 1.7 and in LICHOMAT a voice
+starts at the beginning of the block after its event is due, so ±1.5 ms around the expected time is
+on time. At 120 BPM a step (a 16th) is 125 ms, and 1/96 of a step (a tick) is 1.30 ms.
+
+## H1: start-up screen
+
+1. Install `LXR_V2_LICHOMAT_0.1.img`.
+2. Watch the display while the LXR starts after `Update OK!`, and once more after switching it off
+   and on.
+
+**Expected:** for about a second line 1 shows `LICHOMAT` and line 2 `v0.1 unofficial`; then the
+normal screen. Nothing says `Sonic Potions` or `LXR2 Drums`.
+
+**Record:** both lines as shown; anything unexpected during the update.
+
+## H2: files from 1.7
+
+Use the card with your own projects saved by fw 1.7.
+
+1. Switch on with LICHOMAT. The LXR loads the global settings and the last used project, as 1.7
+   does.
+2. Play a few patterns of that project, switch patterns while it plays, and check that the kits sound
+   as before (the kit of a pattern loads on the pattern change when kit autoload is on).
+3. Load another project and play it.
+4. Play a song in song mode: hold SHIFT and press START.
+
+**Expected:** no `glo.cfg error` at start-up; the global settings are the ones you set in 1.7 (MIDI
+channels, filters, sync mode); every pattern, kit, song and project loads and plays as in 1.7. Swing
+and ratchets may sound different where both are used together: that is D1, see H4.
+
+**Record:** project names used; any file that fails to load or sounds different (and how).
+
+## H3: straight timing and exact tempo
+
+1. LXR: internal sync, BPM **137**, shuffle 0. A pattern with one short sound (e.g. the closed hat,
+   short decay) on all 16 steps, nothing else.
+2. DAW: tempo 137 BPM, record the LXR for at least 30 s while it plays (press START after the
+   recording runs).
+3. Move the recording so that the first hit sits exactly on a bar line.
+4. Measure the onset of hit 257 (16 bars later; the first hit is hit 1) against its grid line, and
+   look at the hits in between.
+
+**Expected:**
+- Hit 257 is 28.029 s after hit 1 and lies on its grid line within ±3 ms (±1.5 ms block,
+  plus up to about 1.5 ms for the difference between the two devices' crystals). fw 1.7 plays 137 BPM
+  as 137.29 BPM, so with 1.7 hit 257 comes about 59 ms early (D3).
+- Every hit lies within ±1.5 ms of its grid line (spread of one audio block).
+
+**Record:** offset of hit 257 in ms; the largest offset of any hit.
+
+## H4: shuffle with ratchets and shift
+
+1. LXR: internal sync, BPM 120, shuffle **64** (first sub-page of the global menu).
+2. Pattern:
+   - voice 1 (kick): steps 1 and 9;
+   - voice 6 (closed hat): all 16 steps;
+   - voice 4 (snare): step 2 with flam `x4`;
+   - voice 2: step 4 with shift `+3`.
+3. Record the LXR in the DAW and measure from the kick on step 1.
+
+**Expected** (shuffle 64 is a swing of 32 ticks, 41.7 ms; steps 2, 4, 6 … are the swung ones):
+- hats on odd steps at 0, 250, 500 … ms; on even steps 41.7 ms late: 166.7, 416.7 … ms;
+- the four snare hits at 166.7, 197.9, 229.2 and 260.4 ms: the whole ratchet moves with the swing and
+  stays evenly spaced (31.25 ms). fw 1.7 played them as a burst at the start of the step (D1);
+- voice 2 at 463.5 ms (375 + 41.7 swing + 46.9 shift);
+- the kick on step 9 at 1000.0 ms: the straight steps do not move;
+- each time within ±1.5 ms.
+
+**Record:** the measured times of the four snare hits, of voice 2 and of the step 9 kick.
+
+## H5: MIDI clock out with shuffle
+
+1. LXR: internal sync, BPM 120, shuffle **127**, a pattern running.
+2. MIDI out of the LXR (DIN, through the interface) to the MIDI monitor and to a device or DAW that
+   follows MIDI clock and shows the tempo it receives.
+3. Watch for a minute; then stop the LXR and watch again.
+
+**Expected:**
+- The receiving device shows a steady 120 BPM, without wobble. With fw 1.7 and shuffle on, the clock
+  intervals ranged from 0.1 to 58 ms (D1).
+- In the MIDI monitor, on DIN through the MIDI interface, the clock (F8) intervals are 20.8 ms, nearly
+  all within ±2 ms, and never below 15 or above 27 ms.
+- While stopped the clock keeps running, as in 1.7. START sends Start (FA) followed by a clock.
+
+**Record:** the tempo the device shows; the smallest and largest F8 interval in the monitor.
+
+## H6: MIDI clock slave over DIN
+
+1. LXR: BPM set to `MID`; MIDI receive filter passes realtime messages (the default does). The
+   master's clock goes to the LXR's DIN MIDI in. The LXR's DIN MIDI out goes to the MIDI monitor,
+   with MIDI routing (thru) off.
+2. Pattern: voice 1 on steps 1, 5, 9, 13 (quarter notes); voice 6 on all 16 steps; all tracks 16
+   steps long.
+3. Master at 120 BPM. In the DAW record the LXR together with the master's click (or a reference
+   track on the beats).
+4. Press Start on the master; let it run 2 minutes; Stop.
+5. Continue on the master (without moving its position).
+6. Change the master's tempo while running, from 120 to 140 BPM (a ramp if it can do one).
+7. Swung ratchets past the next clock (D7). Master back at 120 BPM, stopped. LXR: shuffle 127; voice 4
+   on step 2 with flam `x8` and shift `+7`. Start the master and record 4 bars.
+
+**Expected:**
+- After Start, the LXR starts at step 1 on the master's first beat; its kicks stay on the master's
+  beats for the 2 minutes, without drift, within ±2 ms around a constant MIDI delay.
+- Stop stops the LXR.
+- Continue resumes where it stopped (the step after the last one played). fw 1.7 restarted from
+  step 1 (an intended change, N4).
+- The LXR follows the tempo change; no hat is missing: count the hats over 8 bars, 128.
+- The monitor shows the LXR sending no Start, Stop or Continue of its own (N18.2; fw 1.7 answered
+  a Start with Stop and Start). It sends no MIDI clock either.
+- 7: all 8 hits of voice 4 play in every bar, 15.6 ms apart, the first 317.7 ms after step 1 (125 ms
+  to step 2, 83.3 ms of swing, 109.4 ms of shift), the last 427.1 ms after it, inside step 4. fw 1.7
+  dropped the hits that the next clock's step left unprocessed (D7).
+
+**Record:** the kick offsets at the start and after 2 minutes; Continue behaviour; hats counted
+during the tempo change; anything the LXR sent in the monitor; in 7, the voice 4 hits counted per
+bar and the spread of their spacing.
+
+## H7: MIDI clock slave over USB, Song Position Pointer, SD saves
+
+The DAW sends MIDI clock and Song Position Pointer to the LXR's USB MIDI port (it still calls itself
+`Sonic Potions USB MIDI`). LXR BPM set to `MID`.
+
+1. Start, Stop, Continue as in H6.
+2. Locate in pattern mode. Make a 64-step pattern (all tracks 64 steps long, four bars): step 1
+   voice 1, step 17 voice 4, step 33 voice 6, step 49 voice 5, nothing else. With the DAW stopped,
+   put its playhead on bar 3, beat 1, and start the DAW from there.
+3. Locate inside a step run: playhead on bar 2, beat 3, then start.
+4. Locate in song mode. Song: pattern A (16 steps), A again, then pattern B (32 steps, voice 4 on its
+   step 1). On the LXR hold SHIFT and press START, then hold SHIFT and press START again: it is now in
+   song mode and stopped. Locate the DAW to bar 3, beat 1 and start the DAW.
+5. Saving while synced: with the DAW playing and the LXR following, save the current pattern (and
+   then a kit) to the SD card.
+
+**Expected:**
+- 1: as in H6.
+- 2: the first sound is voice 6 (step 33) exactly on the DAW's bar 3.
+- 3: nothing for 2 beats, then voice 6 on bar 3 in time: the LXR started at step 25 of the pattern.
+- 4: pattern B starts on bar 3 with voice 4 on its first step (A and A last 32 steps together).
+- 5: the LXR stays in time with the DAW during and after the save; no drift and no stutter in the
+  clock (D8: in 1.7 USB clock stalled while the card was written).
+
+**Record:** for 2–4 what played first and where; for 5 any drift you hear or measure.
+
+## H8: per-track choke (D2)
+
+1. Internal sync, BPM 120, shuffle 0. Set each voice to its own MIDI channel (voice n on channel n)
+   and watch the LXR's MIDI out in the MIDI monitor; record the audio as well.
+2. Scenario a: voice 6 (closed hat) step 1 with flam `x4`; voice 4 (snare) step 2 with shift `-2`.
+   Nothing else.
+3. Scenario b: voice 1 (kick) step 4; voice 6 step 3 with flam `x2` and shift `+4`. Nothing else.
+
+**Expected:**
+- a: four hat hits at 0, 31.25, 62.5 and 93.75 ms, and the snare together with the fourth hat hit
+  (93.75 ms). In fw 1.7 the snare swallowed the fourth hat hit.
+- b: hat hits at 312.5 and 375.0 ms after step 1, the second together with the kick on step 4. In
+  fw 1.7 the kick swallowed the second hat hit.
+- The monitor shows one Note On per hit on the hat's channel: 4 per loop in a, 2 in b.
+
+**Record:** hits counted per voice in each scenario.
+
+## H9: pattern change with shifted first and last steps (D5)
+
+1. Internal sync, BPM 120.
+2. Pattern A: voice 2 step 16, shift `+7`, with a parameter lock that changes its sound clearly
+   (e.g. a much higher pitch) and velocity 127.
+3. Pattern B: voice 3 step 1, shift `-7`, with a different, clearly audible parameter lock, and
+   velocity 40.
+4. Play A, select B during the first half of A, and let A end. Record, and watch MIDI out.
+
+**Expected:**
+- Voice 3's note from B plays 109.4 ms before the bar line (7/8 of a step early), already while A
+  is playing, with B's parameter lock and MIDI velocity 40.
+- Voice 2's note from A plays 15.6 ms before the bar line with A's parameter lock and velocity 127.
+- Each plays exactly once. Then B continues normally.
+- Repeat with A looping (no pattern change): voice 3 does not play.
+
+**Record:** order and times of the two notes before the bar line; whether each had its own sound and
+velocity.
+
+## H10: live recording (D6) and the MIDI echo
+
+1. Internal sync, BPM 100, a pattern running with voice 6 on all steps as a guide; voice 1's track
+   empty. Turn recording on (REC).
+2. Play voice 1 slightly **before** step 5, in the second half of step 4, a few times on different
+   loops: from its button, and from a MIDI keyboard on voice 1's channel.
+3. Watch the LXR's MIDI out in the monitor in play mode and in record mode while you play notes from
+   the keyboard.
+
+**Expected:**
+- The note is recorded on step 5 and you hear it once when you play it; the sequencer does not play
+  step 5 again right after it in the same loop (in fw 1.7 it played twice). From the next loop on,
+  step 5 plays from the pattern.
+- Every incoming note that triggers a voice comes back on MIDI out exactly once, as one Note On on the
+  voice's channel, in play mode and in record mode (a Note Off for the voice's previous note may come
+  just before it). fw 1.7 sent it twice.
+
+**Record:** doubled notes heard (yes or no); echoes per incoming note in each mode.
+
+## H11: MIDI out with a note override (D4)
+
+1. Voice 1: MIDI channel 1, note override 36 (MIX page). Its steps keep their own note (default 60).
+2. Pattern: voice 1 on steps 1 and 9, step 5 with flam `x4`, step 13 with shift `+3`. Internal
+   sync, BPM 120. LXR MIDI out (DIN) to the synth and to the MIDI monitor.
+3. Run for a few loops, mute and unmute voice 1 while it plays, then STOP.
+
+**Expected:**
+- Exactly one Note On per hit, all with note 36: 7 per loop (1 + 4 + 1 + 1). fw 1.7 sent two per hit
+  (60 and 36) and never sent a Note Off for the 60.
+- Every Note On is followed by a Note Off for note 36 before the next Note On on that channel.
+- After muting and after STOP no note keeps sounding on the synth, and the monitor shows no Note On
+  without its Note Off.
+
+**Record:** Note Ons per loop; any hanging note.
+
+## H12: CPU meter
+
+1. Open the CPU page: SHIFT + step 12 until the page after clock in and clock out PPQ. It shows
+
+   ```
+   CPU  ..% pk  ..%
+   Qmax ... ovf ...
+   ```
+
+   `CPU` is the mean load of the audio work (sequencer and sound) over the last second, in percent of
+   the time one audio block lasts; `pk` the highest load of a single block in that second; `Qmax` the
+   most events the sequencer had queued; `ovf` events rejected because the queue was full. The page
+   updates twice a second; the knobs and the encoder do nothing on it.
+2. Read the values stopped, with the kit you use most.
+3. Heavy case: a kit with all 7 voices busy (distortion and filters on), the delay effect on, all 7
+   tracks playing 16ths with several `x8` ratchets, BPM 140. Read the values for 30 s.
+4. The same with the delay off.
+5. Change the pattern while it plays, with kit autoload on.
+
+**Expected:** `CPU` and `pk` below 100 in steps 2–4, and `ovf` 0. In step 5 the values stay
+plausible: the meter leaves the kit load itself out. These numbers are the input for stage 3
+(effects); there is no pass mark beyond `ovf` 0 and no audible dropouts.
+
+**Record:** `CPU`, `pk`, `Qmax`, `ovf` for steps 2–5, with the kit name, the effect settings and the
+BPM.
+
+## H13: back to the official firmware
+
+1. Install `LXR_V2_V1.7.img`.
+2. Start the LXR, load the project from H2 and play it.
+3. Afterwards install `LXR_V2_LICHOMAT_0.1.img` again if you want to keep using LICHOMAT.
+
+**Expected:** the start-up screen shows `Sonic Potions` and `LXR2 Drums V 1.7`; the project loads and
+plays as before; nothing written by LICHOMAT disturbs 1.7.
+
+**Record:** the start-up screen; whether the project played normally.
+
+## Optional: clock jacks
+
+Not in the spec's list, but stage 1 changed how the jacks are driven (tracker E2.5).
+
+- **X1, clock out.** Internal sync, shuffle 127, clock out PPQ 4 and then 24. On a scope or a
+  clocked module the pulses are evenly spaced (at 120 BPM: 125 ms at 4 PPQ, 20.8 ms at 24 PPQ),
+  shuffle or not, and only while running.
+- **X2, clock in.** BPM set to `EXT`, clock in PPQ 4, a 4 PPQ clock (16ths) into the clock in jack:
+  the LXR follows within one pulse and plays every step. Again with 24 PPQ.
+- **X3, reset input.** In `EXT` mode, while a high gate is at the reset input the LXR stays stopped at
+  the start; when the gate goes low it starts with the next clock pulse (the reset input works as a
+  run gate, as in 1.7).
+
+**Record:** what you saw for X1–X3.
+
+## Run sheet
+
+Update files under test (filled in when the files were built):
+
+Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **Record**):
+
+| Check | Result | Date | Values and notes |
+|---|---|---|---|
+| H1 | | | |
+| H2 | | | |
+| H3 | | | |
+| H4 | | | |
+| H5 | | | |
+| H6 | | | |
+| H7 | | | |
+| H8 | | | |
+| H9 | | | |
+| H10 | | | |
+| H11 | | | |
+| H12 | | | |
+| H13 | | | |
+| X1 | | | |
+| X2 | | | |
+| X3 | | | |
+````
+
+- [ ] **Step 6: Fill in the run sheet**
+
+Run:
+
+```bash
+python3 - <<'EOF'
+import hashlib, subprocess
+def sha(p):
+    with open(p, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+rows = [
+    "",
+    "| File | SHA-256 | Built from | Where |",
+    "|---|---|---|---|",
+    "| `LXR_V2_LICHOMAT_0.1.img` | `%s` | `timing-core` at `%s` | `build/release/` |"
+    % (sha("build/release/LXR_V2_LICHOMAT_0.1.img"), head),
+    "| `LXR_V2_V1.7.img` | `%s` | `a43cd4f`, the official 1.7 sources | `build/official-1.7/src/build/release/` |"
+    % sha("build/official-1.7/src/build/release/LXR_V2_V1.7.img"),
+]
+p = "docs/lichomat/hardware-checklist.md"
+s = open(p).read()
+marker = "Update files under test (filled in when the files were built):\n"
+assert s.count(marker) == 1, "run sheet marker not found"
+open(p, "w").write(s.replace(marker, marker + "\n".join(rows) + "\n"))
+print("run sheet filled in")
+EOF
+```
+
+Expected: `run sheet filled in`; the run sheet now has a table with both files, their SHA-256, the
+commit and the folder.
+
+- [ ] **Step 7: Run the test to see it pass**
+
+Run: `bash build/e4-checklist-check.sh; echo "exit=$?"`
+Expected:
+
+```
+checklist check passed
+exit=0
+```
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add docs/lichomat/hardware-checklist.md
+git commit -m "Add the hardware checklist H1-H13" \
+  -m "Step-by-step procedures for the checks of spec 13.2 on the LXR-02, with expected results and what to record, three optional clock jack checks, and a run sheet with the SHA-256 of the LICHOMAT and official 1.7 update files. Only the owner runs them." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+Then log in the tracker that the checklist and both update files are ready for the owner (question
+Q6). Nothing in H1–H13 is marked as done until the owner reports the results.
+
+### Task E4.3: release notes v0.1 (draft, nothing is pushed)
+
+Spec §14: release v0.1 is a GitHub release on the fork with the CI-built `.img`, and its notes list
+D1–D8 and the behaviour changes of §12. This task writes those notes as a draft: what LICHOMAT is,
+installing and going back to 1.7, the fixes D1–D8 in user terms, the intended changes (spec §12, N4,
+N13 and N18, and the user-visible changes of the stage 1 report, `docs/lichomat/reports/stage1-report.md`),
+what stays as in 1.7, the CPU page, the known limitations (including the findings E4.1 accepted),
+the files with their SHA-256, the licence, and how the owner publishes it. Every claim is traced to a
+host test, a review row or a hardware check before the notes are committed. Nothing is pushed, tagged
+or released here (Q5 is still open).
+
+**Files:**
+- Create: `docs/lichomat/release-notes-v0.1.md`
+- Modify: `README.md` (the LICHOMAT section links to the notes)
+- Test: `build/e4-notes-check.sh` (a scratch script, not committed)
+
+- [ ] **Step 1: Write the failing test**
+
+Create `build/e4-notes-check.sh`:
+
+```bash
+#!/bin/bash
+# Check of docs/lichomat/release-notes-v0.1.md (E4.3): the sections and the eight defects are there,
+# the update file has its SHA-256, and the README links to the notes.
+f=docs/lichomat/release-notes-v0.1.md; ok=1
+[ -f "$f" ] || { echo "missing: $f"; exit 1; }
+for s in '> **Draft.**' 'unofficial custom firmware for the Erica Synths LXR-02' '## Installing' \
+         '## Going back to the official firmware' '## Fixed' '## Changed behaviour' '## Unchanged' \
+         '## New: CPU page' '## Known limitations' '## Files' '## Licence' \
+         '(D1)' '(D2)' '(D3)' '(D4)' '(D5)' '(D6)' '(D7)' '(D8)'; do
+  grep -qF -- "$s" "$f" || { echo "missing: $s"; ok=0; }
+done
+grep -qE '^- `LXR_V2_LICHOMAT_0\.1\.img`.*`[0-9a-f]{64}`' "$f" || { echo "Files: no SHA-256 of the update file"; ok=0; }
+grep -qF '](docs/lichomat/release-notes-v0.1.md)' README.md || { echo "README: no link to the release notes"; ok=0; }
+if [ "$ok" = 1 ]; then echo "release notes check passed"; else echo "release notes check FAILED"; exit 1; fi
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `bash build/e4-notes-check.sh; echo "exit=$?"`
+Expected:
+
+```
+missing: docs/lichomat/release-notes-v0.1.md
+exit=1
+```
+
+- [ ] **Step 3: Write the release notes**
+
+Create `docs/lichomat/release-notes-v0.1.md`:
+
+```markdown
+# LICHOMAT v0.1: release notes (draft)
+
+> **Draft.** Not published. It becomes the text of the GitHub release `v0.1` of
+> `isthar/lxr-desktop-app` after the owner has run the hardware checklist
+> (`docs/lichomat/hardware-checklist.md`) and agreed to push. Nothing has been pushed, tagged or
+> released.
+
+LICHOMAT is unofficial custom firmware for the Erica Synths LXR-02. It is not made, approved or
+supported by Erica Synths. Version 0.1 is based on the official firmware 1.7 (`erica-synths/lxr-desktop-app`
+at commit `a43cd4f`). It gives the step sequencer a new timing core, on which the next versions
+(groove features, effects) build, and it fixes the timing and MIDI defects of 1.7 listed below.
+
+Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged, and 1.7 loads
+everything LICHOMAT saves: no file format has changed.
+
+## Installing
+
+1. Copy `LXR_V2_LICHOMAT_0.1.img` to the top folder of the SD card and delete every other `LXR*.img`
+   file there: the updater installs the first one it finds.
+2. Switch the LXR off, put the card in, hold down the encoder button and switch the LXR on. Keep
+   holding it until `LXR Updater` appears.
+3. Wait for `Update OK!`; the LXR restarts by itself. The start-up screen shows `LICHOMAT` and
+   `v0.1 unofficial`.
+
+## Going back to the official firmware
+
+The updater is never changed by an update, so you can always go back. Install the official update
+file `LXR_V2_V1.7.img` the same way, after deleting `LXR_V2_LICHOMAT_*.img` from the card. Take it
+from Erica Synths, or build it from the upstream sources at commit `a43cd4f` as README.md describes.
+The start-up screen then shows `Sonic Potions` and `LXR2 Drums V 1.7`.
+
+## Fixed
+
+- **Shuffle with ratchets and microshift (D1).** In 1.7 shuffle delayed only the first pulse of a
+  swung step, and the rest of the step followed in a burst: a ×4 ratchet played its hits 0, 0.2, 19
+  and 48 ms after the step instead of evenly, and a shifted note landed far from where it should. Now
+  shuffle moves whole steps, ratchets and shift included.
+- **Steady clock outputs with shuffle (D1).** With shuffle on, 1.7's MIDI clock out jumped between
+  0.1 and 58 ms intervals. MIDI clock out and the clock out jack now stay straight.
+- **Choke between tracks (D2).** In 1.7 the notes of one track could swallow the ratchet hits and
+  the spill-over notes of another, for example a shifted snare took the fourth hit of a hi-hat ratchet.
+  The choke now works within each track only.
+- **Exact master tempo (D3).** 1.7 computed the step time in whole numbers and played up to 0.2 %
+  fast (137 BPM as 137.29). The tempo is now exact, within 0.01 %.
+- **One MIDI Note On per hit (D4).** 1.7 sent every sequencer note twice, and with a MIDI note
+  override the first of the two never got its Note Off, which left notes hanging on external synths.
+  Now each hit sends one Note On, with the override, and its Note Off.
+- **Shifted notes keep their own data (D5).** A note moved into the neighbouring step by shift or a
+  ratchet took the parameter locks and the MIDI velocity of the step that was playing. Each note now
+  plays with its own step's parameter locks and velocity, also across a pattern change.
+- **No doubled notes when recording (D6).** A note played slightly before a step is recorded on that
+  step; 1.7 then played it a second time. Now it plays once.
+- **MIDI clock slave (D7).** The tempo of the master is followed as a fractional value, late notes on
+  swung steps are no longer dropped, and Song Position Pointer works, in pattern mode and in song mode.
+- **MIDI input (D8).** MIDI clock, Start, Continue, Stop and Song Position Pointer are time-stamped
+  when they arrive, over DIN and over USB, and all MIDI input is handled in one place. This removes
+  rare duplicated or garbled bytes, and USB clock no longer stalls while a preset is saved to the
+  card.
+
+## Changed behaviour
+
+These are intended; they come with the fixes above.
+
+- Patterns that use shuffle together with ratchets or shift sound different: the whole step moves.
+- MIDI clock out and the clock out jack stay straight while shuffle is on.
+- A note played on a swung step while recording is recorded on that step (the recording quantize
+  follows the shuffle).
+- A ratchet hit that spills over into the next step no longer plays after an early (negatively
+  shifted) hit of a newer step of the same track: the newer step cuts it, as the choke within a
+  track does elsewhere. At a start, the spill-over of a track's last step no longer plays on step 1.
+- In MIDI slave mode, Continue resumes where playback stopped, or where Song Position Pointer put
+  it. 1.7 restarted from the first step.
+- Song Position Pointer is followed while the LXR is stopped; in song mode the pattern at that
+  position is loaded at once, with its kit if kit autoload is on, unless that pattern is playing
+  already.
+- After a song ends, the next start plays the song from its first entry, and that entry once.
+- At a song end the LXR turns all notes off, and sends MIDI Stop when it is the master; the
+  start/stop button shows the stop. The button and its LED now follow every start and stop, also
+  those that come from MIDI or from the song end.
+- As a MIDI or clock jack slave the LXR sends no MIDI Start, Stop or Continue of its own, so with
+  MIDI thru on the gear behind it gets the master's messages once. 1.7 answered a received Start
+  with Stop and Start, and a Continue with Start.
+- In clock in jack mode (`EXT`), a MIDI Start makes the next jack pulse start playback.
+- The clock out jack at 2 PPQ gives 2 PPQ in the slave modes too (1.7 gave 4 there), and after a
+  Continue or a Song Position Pointer its pulses stay on the step grid.
+- An incoming MIDI note that plays a voice is echoed once on MIDI out, also in record mode (1.7 sent
+  it twice).
+- MIDI Note Offs are sent per voice, so voices that share a MIDI channel no longer leave each
+  other's notes hanging, and muting a track turns off that track's note (1.7 turned off the note of
+  the voice whose number matched the channel).
+- A roll recorded while playing lands on the step where it played.
+- The start-up screen shows `LICHOMAT` and `v0.1 unofficial`, and the global menu has a CPU page
+  (see below).
+
+## Unchanged
+
+- File formats, and the user interface apart from the start-up screen and the CPU page.
+- Roll plays on muted tracks, as in 1.7.
+- A local start in a slave mode waits for the master's next 16th note, as in 1.7.
+- The clock in jack's reset input works as a run gate, as in 1.7: high stops and returns to the
+  start, low starts with the next clock pulse.
+- In internal sync MIDI clock out keeps running while the sequencer is stopped, as in 1.7.
+
+## New: CPU page
+
+Hold SHIFT and press step button 12 until the page after the clock in and clock out PPQ settings
+appears. The page shows the mean load of the sequencer and
+the sound engine over the last second and the highest load of a single audio block in that second,
+both in percent of the time one block lasts (64 samples, 1.45 ms), and the event queue's highest
+depth and overflow count. It is read only and never saved.
+
+## Known limitations
+
+- Voices start at the beginning of an audio block, so hits are placed to within 1.45 ms, as in 1.7.
+  Sample-accurate triggering is planned for later.
+- The tempo in the user interface is a whole number of BPM; the tempo itself is exact.
+- Song Position Pointer is ignored while the LXR is playing, as the MIDI specification expects it
+  only while stopped.
+- Sending MIDI clock to the LXR over DIN and USB at the same time is a configuration error, as in 1.7.
+- The LXR still reports itself over USB as `Sonic Potions USB MIDI`.
+- From 1.7, unchanged: while the global menu is open, a step button pressed without SHIFT sets the
+  length of all tracks.
+- The CPU page counts the sequencer and the sound engine, including the interrupts that run in
+  between, but not the user interface, and leaves out the kit load of a pattern change.
+
+## Files
+
+## Licence
+
+LICHOMAT is free software under the GNU General Public License version 3 (GPL-3.0-only) with the
+additional permission and terms in NOTICE.md; the complete source code is in the repository. It
+comes without any warranty: installing it is at your own risk, and Erica Synths provides no support
+for it. "Erica Synths", "LXR" and "LXR-02" are trademarks of Erica Synths and are used here only to
+say which device this firmware is for.
+
+## Publishing (owner only)
+
+1. Push the branch `timing-core` to `isthar/lxr-desktop-app` and let CI pass (`.github/workflows/build.yml`).
+2. Download the artifact `lichomat-firmware-<commit>` of that run. Its job summary lists the SHA-256
+   of the update file; replace the hash under "Files" with it if the two differ.
+3. Tag the commit `v0.1`, push the tag, and create the GitHub release `v0.1` from it with this text
+   (without this section and the draft note) and `LXR_V2_LICHOMAT_0.1.img` attached.
+```
+
+- [ ] **Step 4: Add the limitations the review accepted**
+
+Run:
+
+```bash
+python3 - <<'EOF'
+import re
+s = open("docs/lichomat/reports/stage1-review.md").read()
+rows = re.findall(r"^\| F\d+ \|.*\| accepted \|$", s, re.M)
+print("\n".join(rows) if rows else "no accepted findings")
+EOF
+```
+
+For each printed row add one bullet at the end of "## Known limitations" that says, for a user of the
+LXR, what does not work as expected and what to do about it. If it prints `no accepted findings`,
+leave the section as it is. Unless tracker task E2.8 fixed the USB MIDI out defects, R8.5 is one of
+these rows: say that the LXR's USB MIDI out can lose or garble data in fw 1.7 and in this version, and
+that its DIN MIDI out is not affected.
+
+- [ ] **Step 5: Trace every claim**
+
+| Claim in the notes | Evidence |
+|---|---|
+| D1 shuffle moves whole steps | T3; H4 |
+| D1 straight MIDI clock out and clock out jack | T5, T6; H5, X1 |
+| D2 choke within a track only | T7; H8 |
+| D3 exact master tempo | T1; H3 |
+| D4 one Note On per hit, Note Off with the override | review R2.4, R2.5, R8.4; H11 |
+| D5 own parameter locks and velocity, across a pattern change | `T2_event_carries_its_step_data` (T2) for the payload, `T11_early_hit_of_the_next_pattern` and `T11_late_hits_of_the_old_pattern_after_the_switch` (T11) across a pattern change, both ways; review R2.6; H9 |
+| D6 no doubled recorded note | T14; H10 |
+| D7 slave tempo, no dropped notes, SPP | T16 (`T16_swung_ratchet_spills_past_the_next_clock` and `T16_swung_ratchet_spills_past_bunched_clocks` for the swung late hits), T17, T18; H6 (step 7), H7 |
+| D8 time-stamped realtime input, one parsing context | review R2.9, R8.1, R8.2, R8.3; H7 step 5 |
+| recording quantize follows the shuffle | T14 |
+| Continue resumes; SPP while stopped; song mode loads at the locate | T17 |
+| after a song end, the first entry plays once | `T10_song_end_stops_and_rewinds` (T10) |
+| `EXT`: MIDI Start, then the next jack pulse starts | `T17_midi_start_in_analog_sync_starts_with_the_next_pulse` (T17) |
+| MIDI echo once | review R2.5; H10 |
+| a spill-over hit cut by a newer early hit; no last-step spill-over at the start | `T20_spill_over_after_a_newer_step_is_choked`, `T20_no_spill_over_of_the_last_step_at_the_start` (T20) |
+| SPP in song mode does not reload the playing pattern | `T17_spp_within_the_active_pattern_does_not_reload_it` (T17) |
+| song end: notes off, MIDI Stop as master; the start/stop button follows every change | `T10_song_end_stops_and_rewinds` (T10); review R1.4, R8.4 |
+| no MIDI Start, Stop or Continue as a slave | `tools/fw_checks.sh E2.2`; H6 |
+| clock out: 2 PPQ as a slave, on the step grid after Continue or SPP | `tools/fw_checks.sh E2.2`; X1 |
+| Note Offs per voice; muting turns off that track's note | review R8.4; H11 |
+| a roll is recorded where it played | `T13_roll_hit_is_recorded_at_its_own_step` (T13) |
+| roll on muted tracks; local slave start on the master's 16th; reset input as a run gate | T13; T16, T18; `T17_jack_run_gate` (T17), X3 |
+| MIDI clock out runs while stopped | T5 |
+| CPU page | `cpumeter`; H12 |
+| no file format change | `layout`; review R7.1, R7.2, R7.3; H2 |
+
+Run:
+
+```bash
+source tools/env.sh && ctest --test-dir build/host-tests -R '^(T1|T2|T3|T5|T6|T7|T10|T11|T13|T14|T16|T17|T18|T20|layout|cpumeter)$' --output-on-failure | tail -n 3
+grep -E '^\| R(1\.4|2\.4|2\.5|2\.6|2\.9|7\.1|7\.2|7\.3|8\.1|8\.2|8\.3|8\.4) \|' docs/lichomat/reports/stage1-review.md
+tools/fw_checks.sh E2.2
+```
+
+Expected: `100% tests passed, 0 tests failed out of 16`, every listed review row ends in `| pass |`,
+and `PASS E2.2`.
+Open each named test and confirm that it asserts the claim. A claim without evidence is either removed
+from the notes, or becomes a finding of the review with a failing test first (E4.1, "Fixing
+findings").
+
+- [ ] **Step 6: Fill in the files**
+
+Run:
+
+```bash
+python3 - <<'EOF'
+import hashlib, subprocess
+def sha(p):
+    with open(p, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+lines = [
+    "",
+    "- `LXR_V2_LICHOMAT_0.1.img`: the SD-card update file. The build for the hardware checks, from"
+    " `timing-core` at `%s`, has the SHA-256 `%s`. The release attaches the file that CI builds from"
+    " the release commit; its SHA-256 is in that run's job summary." % (head, sha("build/release/LXR_V2_LICHOMAT_0.1.img")),
+    "- Source code: branch `timing-core` of `isthar/lxr-desktop-app`.",
+]
+p = "docs/lichomat/release-notes-v0.1.md"
+s = open(p).read()
+marker = "## Files\n"
+assert s.count(marker) == 1, "no '## Files' heading"
+open(p, "w").write(s.replace(marker, marker + "\n".join(lines) + "\n"))
+print("Files section filled in")
+EOF
+```
+
+Expected: `Files section filled in`.
+
+- [ ] **Step 7: Link the notes from the README**
+
+In `README.md`, replace:
+
+```markdown
+Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged. The start-up
+screen shows `LICHOMAT` and `v0.1 unofficial`.
+```
+
+with:
+
+```markdown
+Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged. The start-up
+screen shows `LICHOMAT` and `v0.1 unofficial`. All changes are listed in the
+[release notes](docs/lichomat/release-notes-v0.1.md).
+```
+
+- [ ] **Step 8: Run the test to see it pass**
+
+Run: `bash build/e4-notes-check.sh; echo "exit=$?"; tools/check.sh`
+Expected:
+
+```
+release notes check passed
+exit=0
+```
+
+then `tools/check.sh` exits 0 with `== compiler warnings: 0`.
+
+- [ ] **Step 9: Commit, without pushing**
+
+```bash
+git add docs/lichomat/release-notes-v0.1.md README.md
+git commit -m "Add the v0.1 release notes draft" \
+  -m "D1-D8, the intended behaviour changes, what stays as in 1.7, the CPU page, known limitations, installing and going back to 1.7, and how the owner publishes the release. Nothing is pushed or tagged." \
+  -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+Log the commit in the tracker; Q5 (pushing) stays open for the owner.
+
+### Part 3 self-review: spec coverage
+
+| Spec, notes | Where in this part |
+|---|---|
+| §9.2 CI: two jobs, `ubuntu-latest`, Arm GNU 14.3.rel1 x86_64 cached, `release` settings, `.img`/`.elf`/`.map` artifacts, memory usage in the job summary | E3.4 |
+| §9.3 CPU meter: TIM2 work and `soundengine_process()` path, per-block load against 313185 cycles, 1 s mean and 1 s peak hold in %, queue max depth and overflows, third global sub-page drawn by its own routine, no `activeParameters`, read only, never saved | E3.3 (N12: both render paths) |
+| §9.4 linker `ASSERT`, `.bin` byte-identical | E3.2 |
+| §9.5 branding: `LICHOMAT_NAME`, `project(VERSION 0.1)`, `LXR_BASE_VERSION 1.7`, splash `LICHOMAT` / `v0.1 unofficial`, `LXR_V2_LICHOMAT_0.1.img`, magic `LXRV2IMG` | E3.1 |
+| §9.5 README section; source headers of new files | E3.5; every new file in E3.1–E3.4 carries the 2026 copyright, SPDX and NOTICE.md lines |
+| §8: `main.c` splash, `stm32f7xx_it.c` CPU meter, `menu.c`/`menuPages.h`, the linker script, `CMakeLists.txt`/`Core/CMakeLists.txt`, `.github/workflows/build.yml`, `README.md` | E3.1, E3.3, E3.2, E3.4, E3.5 |
+| §13.2 H1–H13 | E4.2 |
+| §14 release v0.1 with D1–D8 and §12; nothing pushed | E4.3 |
+| HANDOFF: zero warnings after each task, review and owner questions | every task; E4.1 |
+
+Where this part differs from the spec, and why:
+- The global menu is entered with SHIFT + step button 12 (`SEQ_CONFIG` in `buttonHandler.c`), not
+  SHIFT + LOAD/SAVE, and the CPU page comes after the first sub-page, its second screen and the second
+  sub-page: the 4th press, or the 3rd when the menu opens on the second screen. The checklist and the
+  README describe it by what the display shows.
+- `MenuText.h`, listed in spec §8, needs no change: the page draws its own text.
+- The meter shows the event queue's counters from `seqc_stats()`; the sync queues' overflow counter
+  of `seq_platform` (spec §11) is not on the page (see "Questions for the owner" at the end of this
+  plan, Part 3, item 1).
+- The block budget is 313185 cycles (64 × 216 MHz / 44140 Hz = 313185.3); the spec rounds it to
+  313186.
+
+---
+
+## Progress notes
+
+Notes made while executing the plan, one bullet each, newest last: the date, the task, and what
+happened (a deviation from the plan, a surprise, a decision taken on the way).
+
+- 2026-10-24, plan review: Plan reviewed by 3 critics; 29 findings accepted and fixed, 1 rejected.
+
+## Questions for the owner
+
+The open issues the section writers raised, as they gave them. A *Status* line says where a note
+written later (N16–N18), a commit or the assembly of this plan has settled or changed an item. The
+questions the owner has to answer are also kept in the tracker (`docs/lichomat/tracker.json`,
+`questions`, Q1–Q7).
+
+### From Epic E1 (timing core)
+
+1. Tempo estimate can get stuck after a tempo jump of more than 50%: every new interval is then an
+   outlier and the spec's rule has no way back. Proposed fix: restart the window after 4 outliers in
+   a row on the same side. Not implemented, because it goes beyond seq_core.h.
+   *Status: settled by N16 (restart after 4 outliers in a row on the same side, 2 for the jack at
+   4 PPQ; the band is on the clock intervals, so it is needed only when the tempo more than doubles
+   or drops below two thirds). Task E1.14, whose section is written on its own and inserted after
+   E1.13.*
+2. N9 'clamp included': a boundary at the next clock's tick can be handled by the interpolation
+   before that clock arrives, so after a dropout one more step plays than clocks arrived.
+3. T19 cannot fill the 256-entry queue through the API: 7 tracks leave at most about 170 events
+   pending. E1.12 therefore adds a test-only SEQC_QUEUE_CAPACITY knob to seq_core.c and changes
+   tests/CMakeLists.txt beyond its API version (a CORE argument and a 16-entry core library).
+4. The N10 early exit also records now (a compare plus a store), because the header defines the
+   core's current time as the last process call. The header promises 'one 64-bit compare'.
+5. T12 already passes before E1.7, since the late part has been generated at the boundary since
+   E1.5. It is kept as a regression test; T11 is E1.7's failing test.
+6. A start right after a free-running MIDI clock sends the next clock less than 16 ticks later. This
+   is N8's re-phase, and fw 1.7 did the same.
+7. seqc_masterTrack() after a song position returns the seeked pattern's master track, not 0 as the
+   header says.
+8. Pending note-offs are not flushed during a slave dropout, so a MIDI note can hang until the next
+   clock or a Stop. The spec does not ask for a flush.
+   *Status: settled by N17 (a dropout sends the pending note-offs, as a stop does). Task E1.14.*
+9. seq_core.h still describes SEQC_DROPOUT_MS as a plain 500 ms. N15, added during planning, wins
+   and the core follows it (E1.10, T18_slow_4ppq_clock_is_not_a_dropout). The header comment could
+   be updated.
+   *Status: E1.14 updates it.*
+10. Expected outputs (image hash, object sizes, absolute paths in failure messages) come from the
+    reference Mac with Apple clang 17 and Arm GNU 14.3.rel1 darwin-arm64. ASan and Linux builds were
+    not run locally.
+11. Overlap with Part 3, E3.3 Step 1: E1.3 adds two lines matching 'Sequencer/seq_core.c' to
+    Core/CMakeLists.txt (the source and a -Wextra set_property), so its grep finds two lines, not
+    one. E2 must not add seq_core.c again.
+    *Status: fixed while assembling: E3.3 Step 1 now expects the two lines. E2.1 extends the block
+    and does not add the source again.*
+12. Overlap with Part 3, E3.3 Step 3: E1.12 moves add_executable in tests/CMakeLists.txt from line
+    94 to 107, so the CMake error line it expects changes. Its new test_cpumeter line needs no CORE
+    argument.
+    *Status: fixed while assembling: E3.3 Step 3 now expects line 107.*
+13. N14 (SPP carried in the sync queues) is E2.4's work. Until then the core accepts an SPP while
+    armed (T17_spp_while_armed_seeks).
+14. *Added by the plan review.* N13.1 says the `transport()` values are "always reported in that
+    order", listing STOP, START, CONTINUE, ARM, REWIND, the order of the enum. `seq_core.h`, which
+    N13 names as the reference, reports STOP, then REWIND, then ARM, START or CONTINUE, and the tests
+    assert that order (Epic E1, decision 10). The wording of N13.1 could be corrected.
+
+### From Epic E2 (firmware integration)
+
+1. Single skip-once marker in the API: when notes recorded on two tracks land in the second half of
+   the same step (e.g. a MIDI chord), the first marker is lost and that track plays its recorded
+   note twice. A per-track marker is an E1/API decision.
+   *Status: settled by N18.1 (one marker per track; the signature stays). Task E1.14, which also
+   changes the comment of seqc_skipOnce() in seq_core.h to "a new call replaces the marker of its
+   own track only".*
+2. MIDI transport out in the slave modes: the transport callback sends FA/FB/FC in every sync mode.
+   With thru on, downstream gear gets duplicates, and a received Stop now also sends FC (fw 1.7
+   sent nothing). Owner decision.
+   *Status: default settled by N18.2: Start, Stop and Continue go out on MIDI only in internal sync,
+   and nothing in the slave modes. Question Q7 for the owner. Done in the plan review:
+   `seq_cbTransport()` sends through `seq_sendTransport()`, which checks the mode the core runs in
+   (E2.2 Step 22, decision 7, `tools/fw_checks.sh E2.2`).*
+3. A resume sends Continue (FB); fw 1.7 always sent Start (FA). Needs the owner's confirmation.
+   *Status: superseded by N18.2: only the slave modes resume, and they send nothing.*
+4. One-shot roll MIDI velocity is the roll velocity (100); fw 1.7 used the current step's volume.
+   *Status: settled by N18.3: the current step's volume, as in fw 1.7. Done in the plan review: E2.3
+   Step 6 keeps E2.2's `stepData ? (stepData->volume&STEP_VOLUME_MASK) : vol`.*
+5. The echo stays note 60 when the incoming note matches a voice's note override, as in fw 1.7.
+   *Status: confirmed by N18.5. The plan does this.*
+6. USB realtime with CIN 0x5 (non-standard hosts) is ignored; the spec names CIN 0xF only.
+   *Status: settled by N18.4: realtime bytes 0xF8–0xFF sent with CIN 0x5 are taken as well. Done in
+   the plan review: `seqq_usbMessage()` and the test `syncq_usb` (E2.1).*
+7. Clock out at 2 PPQ: after a Continue or SPP at an odd step its phase follows the resume point
+   (N8). The slave modes now give true 2 PPQ; fw 1.7 gave 4 PPQ.
+   *Status: the plan review found that a Continue from inside a step put every output PPQ off the
+   step grid. `seq_cbClockOutPulse()` now sets the divider from the position before each pulse
+   (`trigger_setClockPhase()`, E2 decision 10), so the pulses stay on the grid of the song.*
+8. No hardware check covers the jacks. E4.2 should add: clock in at 4 and 24 PPQ, including 4 PPQ
+   below 30 BPM (the N15 case); the reset gate; clock out at each PPQ.
+   *Status: E4.2 has the optional checks X1–X3: clock out at 4 and 24 PPQ, clock in at 4 and
+   24 PPQ, the reset gate. A 4 PPQ clock below 30 BPM and the other clock out PPQ settings are not
+   in them.*
+9. Output jitter (N12): MIDI clock out and the clock out jack jitter by up to one audio block (about
+   1.45 ms), as the triggers do. Not measured; E3.3/H12 should record it.
+   *Status: H5 (E4.2) records the smallest and the largest MIDI clock interval. The clock out jack
+   is only in the optional X1, which records what was seen, not a number.*
+10. USB MIDI out defects outside D1-D8 are not fixed: usb_flushMidi() sends 128 bytes past its ring
+    on every wrap and drops data while the endpoint is busy, and usb_sendMidi() uses the wrong CIN
+    for system common messages. They affect H5, H7 and H11 over USB.
+    *Status: tracker task E2.8, whose section is written on its own and inserted after the plan
+    review. Until it is done the checks that watch the LXR's MIDI out use DIN (E4.2), and review row
+    R8.5 (E4.1) puts the defects into the release notes' known limitations (E4.3 Step 4).*
+11. MIDI sends from the main loop remain (mute Note Off, channel change, pattern change while
+    stopped). They race with seq_tick() sends only while TIM2 runs, as in fw 1.7.
+12. Intermediate builds: E2.2-E2.3 have no MIDI clock input and E2.2-E2.4 no jack input; do not
+    test the slave modes on them.
+13. Spec wording: D4/§7.1 say fw 1.7 echoed once in play mode, but it echoed twice in both modes.
+    E2.3 echoes once, so H10 should say 'once'.
+    *Status: H10 in E4.2 says "exactly once"; only the spec text is left.*
+14. E1 anchors: E2.1 quotes E1's test_fw17 line and E1.3's lxr_sequencer block; E2.4 quotes the
+    execution-context comment in seq_core.h. All three match Epic E1 of this plan now; adapt them if
+    E1 changes that text.
+    *Status: checked again while assembling: all three match Epic E1 exactly.*
+15. RAM: with the stand-in core, E2.2 adds 8464 B (core, sync queues, glue) against the spec's
+    ~7.5 KB, because 24-byte events make the event queue 6 KB. Confirm with E1's real core.
+    *Status: E1.12 Step 6 gives the core 6973 B of bss; with the plan's E1 core E2.2 adds 8484 B
+    and E2.6 leaves 8460 B; review row R6.2 (E4.1) allows 8704 B in all.*
+16. N15 dropout belongs to E1: Epic E1 still has a fixed SEQC_DROPOUT_MS of 500 ms, which stops a
+    4 PPQ jack clock below 30 BPM. E1 should implement max(500 ms, 2x the expected clock interval).
+    *Status: done in the final Epic E1: E1.10 implements N15 (`seqc_dropoutCycles()`, test
+    `T18_slow_4ppq_clock_is_not_a_dropout`). Only the header comment still says 500 ms (E1 item 9).*
+17. Tracker task E2.7 (fw 1.7 bug: buttonHandler.c:901 assigns SEQ_CONFIG = 11 =
+    SELECT_MODE_LAST_STEP_ALL, so a step button without SHIFT in the global menu sets all track
+    lengths) is not covered by this section.
+    *Status: its section is written on its own and inserted after the plan review. Until then E4.2
+    and E4.3 list the bug as a caution and as a known limitation.*
+18. seqp_syncOverflows() (E2.1, spec §11) is not shown on E3.3's CPU page, which shows only the
+    event queue counters.
+    *Status: open; the same as Part 3 item 1.*
+
+### From Part 3 (tooling, verification and release)
+
+1. Sync-queue overflows are not on the CPU page. seqc_stats() only counts the event queue, and
+   seq_platform (E2.1) has no agreed getter for its sync-queue counter (spec §11). If E2.1 adds one,
+   add it to soundengine_cpuEnd() and to the page's ovf value.
+   *Status: E2.1 adds `uint32_t seqp_syncOverflows(void)`. E3.3 does not use it yet.*
+2. soundengine_cpuEnd() calls seqc_stats() from soundengine_process()/TIM2_IRQHandler, right after
+   seq_tick() in the same exclusive window, not from inside seq_tick(). It is a pure query from the
+   core's context, and review row R4.1 allows it explicitly. The alternative is a publish hook in
+   E2's seq_tick glue; the critics should accept one or the other.
+3. Spec §9.3 says the CPU page is reached with SHIFT + LOAD/SAVE and two page-forwards. The code
+   enters the global menu with SHIFT + step 12 (SEQ_CONFIG). The CPU page comes on the 4th press, or
+   the 3rd if the menu opens on the second screen. The plan, checklist and README describe it by
+   what the display shows; the spec or notes text could be corrected.
+4. fw 1.7 bug, not fixed in this part: SEQ_CONFIG and SELECT_MODE_LAST_STEP_ALL are both 11, so
+   pressing a step button without SHIFT in the global menu sets the length of all tracks. It is
+   listed as a known limitation and as a caution in the checklist. Whether to fix it is a tracker
+   question for the owner.
+   *Status: tracker task E2.7, whose section is written on its own and inserted after the plan
+   review.*
+5. Cross-section risk: `source tools/env.sh` leaves CMake off PATH in zsh until E3.5 fixes it, and
+   that would hit E1/E2 commands too. This part uses `bash -c` or tools/check.sh until then. The
+   orchestrator may want to move the env.sh fix (E3.5 steps 1-6) ahead of E1.1.
+   *Status: resolved: commit `5911417` made E3.5 Steps 1–6 before this plan; `tools/env.sh` is
+   identical to E3.5 Step 2.*
+6. E3.5 edits the lxr_sequencer row of README.md. If E2.6 also edits that row while removing
+   clockSync, the step has a conditional instruction. Coordinate with the E2 section.
+   *Status: resolved while assembling: E2.6 runs before E3.5 and its row names the timing core, so
+   E3.5 Step 10 now leaves the row alone.*
+7. CI has never run on GitHub because nothing is pushed. The host-test job will be the first build
+   with ubuntu-latest's GCC 13 plus ASan under -Werror; locally it was checked only with Apple
+   clang + UBSan and arm-none-eabi-gcc 14. tools/ci_dry_run.rb needs macOS's system Ruby 2.6, which
+   Apple has deprecated.
+8. Expected counts assume E1 registers exactly the 22 test ids of the given tests/CMakeLists.txt (23
+   with cpumeter), and that the add_executable line of seqc_add_test stays at CMakeLists.txt:94.
+   Which test asserts the event payload for D5 depends on E1 (T11 is suggested); E4.3 step 5 checks
+   it.
+   *Status: fixed while assembling: with `syncq` from E2.1 there are 24 ids (E3.3 Step 6, E3.4
+   Step 5, review row R3.1), the line is 107 (E3.3 Step 3), and E4.3 Step 5 names
+   `T2_event_carries_its_step_data` and `T11_early_hit_of_the_next_pattern` for D5.*
+9. The CPU meter leaves out the outer piece of work around a kit autoload, so pattern changes don't
+   show a false peak of several thousand percent. That is a design choice, and the release notes
+   state it. The budget constant is 313185 cycles (313185.3 rounded); the spec says about 313186.
+10. The polarity of the reset input in optional check X3 (a high gate stops) is inferred from code
+    comments in TriggerOut.c's EXTI9_5 handler. The USB device name stays 'Sonic Potions USB MIDI';
+    renaming it would change the DAW port name, so that is a question for the owner.
+11. The SHA-256 of the CI-built release image may differ from the local darwin-arm64 build. The
+    release notes record the local hash and tell the owner to take the CI job summary's value at
+    publishing time.
+12. The implementation notes mention a 'stage 1 report' of deviations. This part covers it as review
+    row R1.4. A separate report under docs/lichomat/reports/, if wanted, is not in this section.
+    *Status: added by the plan review: E4.1 Step 4 writes `docs/lichomat/reports/stage1-report.md`
+    (each deviation with the note or decision that allows it, the intended changes, the resources),
+    R1.4 checks it, and E4.3 takes the user-visible changes from it.*
