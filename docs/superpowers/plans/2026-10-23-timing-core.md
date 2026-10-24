@@ -19443,12 +19443,12 @@ byte-identical.
 - Modify: `STM32F765VGTX_FLASH.ld:251-252` (insert after line 252)
 - Test: `build/e3-ldcheck/relink_small.sh` (a scratch script, not committed)
 
-- [ ] **Step 1: Record the current image**
+- [x] **Step 1: Record the current image**
 
 Run: `tools/check.sh && mkdir -p build/e3-ldcheck && shasum -a 256 build/release/LXR_V2_STM32F765.bin | tee build/e3-ldcheck/before.sha256`
 Expected: exit 0, `== compiler warnings: 0`, then one line `<64 hex digits>  build/release/LXR_V2_STM32F765.bin`
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 The test relinks the release objects with a copy of the linker script whose FLASH is 256 KB, smaller
 than the image, and expects the link to fail.
@@ -19481,7 +19481,7 @@ echo "linker exit $rc: the oversized image is rejected"
 exit 0
 ```
 
-- [ ] **Step 3: Run it to see it fail**
+- [x] **Step 3: Run it to see it fail**
 
 Run: `bash build/e3-ldcheck/relink_small.sh; echo "exit=$?"`
 Expected:
@@ -19491,7 +19491,7 @@ linker exit 0: an image larger than FLASH was accepted
 exit=1
 ```
 
-- [ ] **Step 4: Add the assertion**
+- [x] **Step 4: Add the assertion**
 
 In `STM32F765VGTX_FLASH.ld`, replace:
 
@@ -19515,7 +19515,7 @@ with:
 Run: `perl -pi -e 's/\r?\n/\r\n/' STM32F765VGTX_FLASH.ld && file STM32F765VGTX_FLASH.ld`
 Expected: `STM32F765VGTX_FLASH.ld: assembler source text, ASCII text, with CRLF line terminators`
 
-- [ ] **Step 5: Rebuild and compare the image**
+- [x] **Step 5: Rebuild and compare the image**
 
 The build relinks because the linker script is a link dependency (`LINK_DEPENDS` in
 `cmake/firmware_outputs.cmake`).
@@ -19523,7 +19523,7 @@ The build relinks because the linker script is a link dependency (`LINK_DEPENDS`
 Run: `tools/check.sh && shasum -a 256 -c build/e3-ldcheck/before.sha256`
 Expected: exit 0, `== compiler warnings: 0`, and `build/release/LXR_V2_STM32F765.bin: OK`
 
-- [ ] **Step 6: Run the test to see it pass**
+- [x] **Step 6: Run the test to see it pass**
 
 Run: `bash build/e3-ldcheck/relink_small.sh; echo "exit=$?"`
 Expected:
@@ -19534,7 +19534,7 @@ linker exit 1: the oversized image is rejected
 exit=0
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add STM32F765VGTX_FLASH.ld

@@ -250,6 +250,11 @@ SECTIONS
   
     /* Check we didn't overflow CCM */
   ASSERT(_sccmstack + _Min_Stack_Size <= _dtcm_stack, "CCM overflow")
+
+  /* Check that the load images of .data, .dtcm and .itcm_text, which are placed
+     with AT() behind the code, still end inside FLASH. The FLASH line of
+     --print-memory-usage leaves them out. */
+  ASSERT(_siitcm + SIZEOF(.itcm_text) <= ORIGIN(FLASH) + LENGTH(FLASH), "image too large for FLASH")
     
 
 
