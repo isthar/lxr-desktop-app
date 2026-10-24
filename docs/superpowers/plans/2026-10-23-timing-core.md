@@ -6560,7 +6560,7 @@ active pattern:
 - Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
 - Test: `tests/test_roll.c` (ctest ids `T13`, `T14`)
 
-- [ ] **Step 1: Write the failing test `tests/test_roll.c`**
+- [x] **Step 1: Write the failing test `tests/test_roll.c`**
 
 ```c
 /*
@@ -6821,7 +6821,7 @@ TEST(T14_skip_once_is_ignored_when_stopped_or_out_of_range)
 TEST_MAIN()
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -6843,7 +6843,7 @@ FAIL T14_phase_is_linear_without_shuffle
 3 of 14 tests passed
 ```
 
-- [ ] **Step 3: Implement roll, phase and skip-once in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+- [x] **Step 3: Implement roll, phase and skip-once in `Core/Src/Soundengine/Sequencer/seq_core.c`**
 
 Replace `seqc_fire_t` with:
 
@@ -7127,20 +7127,20 @@ float seqc_stepPhase(void)
 }
 ```
 
-- [ ] **Step 4: Convert `seq_core.c` to CRLF**
+- [x] **Step 4: Convert `seq_core.c` to CRLF**
 
 Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
 
 Expected: `... with CRLF line terminators`
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `tools/check.sh; echo "exit $?"`
 
 Expected: `100% tests passed, 0 tests failed out of 17`, image `274688/1015808 B`,
 `== compiler warnings: 0`, `exit 0`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add Core/Src/Soundengine/Sequencer/seq_core.c tests/test_roll.c

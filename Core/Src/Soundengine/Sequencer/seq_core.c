@@ -113,11 +113,14 @@ typedef struct
 } seqc_queue_t;
 
 //------------------------------------------------------------------------------
-/** per-track firing state: the pending note-off */
+/** per-track firing state: note-off and the same-tick rule (N2) */
 typedef struct
 {
 	bool		offPending[SEQC_NUM_TRACKS];
 	seqc_tick_t	offTick[SEQC_NUM_TRACKS];
+	bool		fired[SEQC_NUM_TRACKS];		/**< lastTick and lastStep are valid */
+	seqc_tick_t	lastTick[SEQC_NUM_TRACKS];
+	uint32_t	lastStep[SEQC_NUM_TRACKS];
 } seqc_fire_t;
 
 //------------------------------------------------------------------------------
@@ -130,6 +133,17 @@ typedef struct
 } seqc_outputs_t;
 
 //------------------------------------------------------------------------------
+/** the skip-once marker (D6) */
+typedef struct
+{
+	bool		valid;
+	uint8_t		track;
+	uint8_t		pattern;
+	uint8_t		step;
+	uint32_t	absStep;	/**< the occurrence it applies to */
+} seqc_skip_t;
+
+//------------------------------------------------------------------------------
 /* the state, one part per area */
 static seqc_core_t seqc;
 static seqc_tracks_t seqc_trk;
@@ -137,6 +151,7 @@ static seqc_gen_t seqc_gen;
 static seqc_queue_t seqc_queue;
 static seqc_fire_t seqc_fire;
 static seqc_outputs_t seqc_out;
+static seqc_skip_t seqc_skip;
 
 //------------------------------------------------------------------------------
 // Helpers
@@ -298,6 +313,21 @@ static uint32_t seqc_queueChoke(uint8_t track, uint32_t absStep)
 	seqc_queue.count = kept;
 	return removed;
 }
+//------------------------------------------------------------------------------
+/** remove the queued step hits of one occurrence (skip-once) */
+static void seqc_queueRemoveStep(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step)
+{
+	uint16_t kept = 0;
+	for (uint16_t i = 0; i < seqc_queue.count; i++)
+	{
+		const seqc_event_t *ev = &seqc_queue.events[i];
+		if (ev->track == track && ev->absStep == absStep && ev->pattern == pattern && ev->step == step
+				&& (ev->flags & SEQC_EVF_ROLL) == 0)
+			continue;
+		seqc_queue.events[kept++] = *ev;
+	}
+	seqc_queue.count = kept;
+}
 
 //------------------------------------------------------------------------------
 // Firing
@@ -323,21 +353,30 @@ static void seqc_noteOffDue(uint8_t track)
 	seqc.host.noteOff(seqc.host.ctx, track);
 }
 //------------------------------------------------------------------------------
-/** the next queued event is due: mute, choke, note-off, trigger (spec 6.4, N2) */
+/** the next queued event is due: mutes, the same-tick rule, choke, note-off,
+ * trigger (spec 6.4, N2) */
 static void seqc_fireNext(void)
 {
 	const seqc_event_t ev = seqc_queue.events[--seqc_queue.count];
 	const uint8_t t = ev.track;
 
 	seqc.pos = (double)ev.tick;
-	if (seqc.host.muted(seqc.host.ctx, t))
+	if ((ev.flags & SEQC_EVF_ROLL) == 0 && seqc.host.muted(seqc.host.ctx, t))
 	{
 		seqc.stats.muteDrops++;
+		return;
+	}
+	if (seqc_fire.fired[t] && seqc_fire.lastTick[t] == ev.tick && ev.absStep <= seqc_fire.lastStep[t])
+	{
+		seqc.stats.chokeDrops++;
 		return;
 	}
 	seqc.stats.chokeDrops += seqc_queueChoke(t, ev.absStep);
 	if (seqc_fire.offPending[t])
 		seqc.host.noteOff(seqc.host.ctx, t);
+	seqc_fire.fired[t] = true;
+	seqc_fire.lastTick[t] = ev.tick;
+	seqc_fire.lastStep[t] = ev.absStep;
 	seqc_fire.offPending[t] = true;
 	seqc_fire.offTick[t] = ev.tick + SEQC_NOTE_OFF_TICKS;
 	seqc.host.trigger(seqc.host.ctx, &ev);
@@ -412,12 +451,55 @@ static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint
 	}
 }
 //------------------------------------------------------------------------------
+/** true if the skip-once marker drops occurrence (track, n) at its boundary. A
+ * marker for n is cleared here, whether it matches or not. */
+static bool seqc_skipLate(uint8_t track, uint32_t n, uint8_t pattern, uint8_t step)
+{
+	if (!seqc_skip.valid || seqc_skip.track != track || seqc_skip.absStep > n)
+		return false;
+	seqc_skip.valid = false;
+	if (seqc_skip.absStep != n || seqc_skip.pattern != pattern || seqc_skip.step != step)
+		return false;
+	seqc.stats.skipDrops++;
+	return true;
+}
+//------------------------------------------------------------------------------
+/** true if the skip-once marker drops the early part of occurrence (track, n) */
+static bool seqc_skipEarly(uint8_t track, uint32_t n, uint8_t pattern, uint8_t step)
+{
+	return seqc_skip.valid && seqc_skip.track == track && seqc_skip.absStep == n
+			&& seqc_skip.pattern == pattern && seqc_skip.step == step;
+}
+//------------------------------------------------------------------------------
+/** boundary step 4: the roll events of step n (spec 6.6). They are at the swung
+ * grid position of the step and carry the step's note and p-locks. */
+static void seqc_queueRolls(uint32_t n, uint8_t pattern)
+{
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		const uint8_t rate = seqc.host.rollRate(seqc.host.ctx, t);
+		const uint8_t step = (uint8_t)seqc_trk.index[t];
+		if (rate == 0 || step % rate != 0)
+			continue;
+		const Step *data = seqc.host.step(seqc.host.ctx, pattern, t, step);
+		const seqc_event_t ev = {
+			.tick = (seqc_tick_t)n * SEQC_TICKS_PER_STEP + ((n & 1u) ? seqc_gen.swing : 0),
+			.absStep = n, .track = t, .pattern = pattern, .step = step, .hit = 0,
+			.vel = SEQC_ROLL_VELOCITY, .note = data->note, .flags = SEQC_EVF_ROLL, .reserved = 0,
+			.p1Nr = data->param1Nr, .p1Val = data->param1Val, .p2Nr = data->param2Nr, .p2Val = data->param2Val,
+		};
+		seqc_queueInsert(&ev);
+	}
+}
+//------------------------------------------------------------------------------
 /** boundary step 5: the late part of step n */
 static void seqc_generateLate(uint32_t n, uint8_t pattern)
 {
 	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
 	{
 		const uint8_t step = (uint8_t)seqc_trk.index[t];
+		if (seqc_skipLate(t, n, pattern, step))
+			continue;
 		seqc_generate(t, n, pattern, step, false);
 	}
 }
@@ -439,6 +521,8 @@ static void seqc_generateEarly(uint32_t n, uint8_t pattern)
 	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
 	{
 		const uint8_t step = restart ? 0 : (uint8_t)seqc_nextIndex(seqc_trk.index[t], seqc_trackLength(next, t));
+		if (seqc_skipEarly(t, n + 1u, next, step))
+			continue;
 		seqc_generate(t, n + 1u, next, step, true);
 	}
 }
@@ -455,13 +539,15 @@ static void seqc_stopTransport(void)
 	seqc.host.transport(seqc.host.ctx, SEQC_TRANSPORT_STOP);
 }
 //------------------------------------------------------------------------------
-/** clear what belongs to the current run: the queue, the note-offs and the
- * draws (rewind) */
+/** clear what belongs to the current run: queue, note-offs, draws, same-tick
+ * state and the skip-once marker (rewind) */
 static void seqc_clearRun(void)
 {
 	seqc_queue.count = 0;
 	seqc_flushNoteOffs();
 	memset(seqc_gen.draw, 0, sizeof seqc_gen.draw);
+	memset(seqc_fire.fired, 0, sizeof seqc_fire.fired);
+	seqc_skip.valid = false;
 }
 //------------------------------------------------------------------------------
 /** back to the start, before step 0 */
@@ -533,6 +619,7 @@ static void seqc_boundary(seqc_tick_t tick)
 	seqc_trk.master = seqc_longestTrack(pattern);
 	seqc_gen.swing = seqc_swingTicks(seqc.host.shuffle(seqc.host.ctx));
 	seqc.host.stepBoundary(seqc.host.ctx, n);
+	seqc_queueRolls(n, pattern);
 	seqc_generateLate(n, pattern);
 	seqc_generateEarly(n, pattern);
 }
@@ -707,6 +794,7 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
 	memset(&seqc_queue, 0, sizeof seqc_queue);
 	memset(&seqc_fire, 0, sizeof seqc_fire);
 	memset(&seqc_out, 0, sizeof seqc_out);
+	memset(&seqc_skip, 0, sizeof seqc_skip);
 
 	seqc.host = *host;
 	seqc.cyclesPerSecond = cyclesPerSecond != 0 ? cyclesPerSecond : SEQC_CPU_HZ;
@@ -808,8 +896,17 @@ void seqc_process(seqc_time_t now)
 //------------------------------------------------------------------------------
 void seqc_skipOnce(uint8_t track, uint8_t step)
 {
-	(void)track;			/* not handled yet */
-	(void)step;
+	if (seqc.state == SEQC_STOPPED || track >= SEQC_NUM_TRACKS || step >= SEQC_NUM_STEPS)
+		return;
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+	const uint32_t n = seqc_nextBoundaryStep();
+
+	seqc_skip.valid = true;
+	seqc_skip.track = track;
+	seqc_skip.pattern = pattern;
+	seqc_skip.step = step;
+	seqc_skip.absStep = n;
+	seqc_queueRemoveStep(track, n, pattern, step);
 }
 //------------------------------------------------------------------------------
 uint8_t seqc_trackStep(uint8_t track)
@@ -836,7 +933,16 @@ double seqc_position(void)
 //------------------------------------------------------------------------------
 float seqc_stepPhase(void)
 {
-	return 0.0f;			/* not handled yet */
+	if (seqc.state != SEQC_RUNNING || seqc.absStep < 0)
+		return 0.0f;
+	const double x = seqc_position() - (double)seqc.absStep * SEQC_TICKS_PER_STEP;
+	if (x <= 0.0)
+		return 0.0f;
+	/* 0.5 halfway between the swung grid times of steps n and n+1 (spec 6.7) */
+	const double half = (SEQC_TICKS_PER_STEP + seqc_gen.swing) / 2.0;
+	const double phase = x < half ? 0.5 * x / half
+			: 0.5 + 0.5 * (x - half) / (SEQC_TICKS_PER_STEP - half);
+	return phase < 1.0 ? (float)phase : 0.999999f;
 }
 //------------------------------------------------------------------------------
 float seqc_currentBpm(void)
