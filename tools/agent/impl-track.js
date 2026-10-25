@@ -19,7 +19,7 @@ export const meta = {
 //   branch: 'timing-core',
 //   plan: 'docs/superpowers/plans/2026-10-23-timing-core.md',
 //   context: 'scene-setting text shared by all tasks of this track',
-//   tasks: [{ id, title, text } | { id, title, file }],  // full task text, or a file holding it (extract_tasks.py --files)
+//   tasks: [{ id, title, text | file, review? }],  // full task text or a file holding it; review: 'full' (default) or 'light'
 //   final: { review: true, attacks: [{ key, prompt }] }   // optional
 // }
 
@@ -198,6 +198,36 @@ Do not edit files and do not commit.
 Severity: critical = bug or broken behaviour; important = test gap, architecture or robustness problem that should be fixed now; minor = polish. ready = yes only without critical or important issues. Each issue needs file, line, the problem and the fix.`
 }
 
+// Light review (owner's choice for tooling and docs tasks, 2026-10-25): one reviewer checks spec
+// compliance and quality together, at high effort, for at most LIGHT_ROUNDS rounds; only critical and
+// important issues block, minor ones are reported.
+const LIGHT_ROUNDS = 2
+
+function lightReviewPrompt(t, impl) {
+  return specReviewPrompt(t, impl) + `
+
+In the same review, also judge code and document quality as a senior reviewer would: correctness, real-time and ISR safety where firmware is touched, tests that verify behaviour, names, matching the surrounding style (CRLF where the file uses it), and no stale or wrong statements in docs. Use severities: critical = bug or broken behaviour; important = must be fixed now; minor = polish. Return compliant=true only if there is no critical or important issue.`
+}
+
+async function lightReview(t, impl) {
+  let current = impl
+  for (let round = 1; round <= LIGHT_ROUNDS; round++) {
+    const review = await agent(lightReviewPrompt(t, current), { label: `review:${t.id}#${round}`, phase: 'Spec review', schema: SPEC, effort: 'high' })
+    if (!review) return { ok: false, reason: 'light reviewer failed', impl: current }
+    const blocking = (review.issues || []).filter((i) => i.severity !== 'minor')
+    if (blocking.length === 0) return { ok: true, review, impl: current, minor: review.issues || [] }
+    if (round === LIGHT_ROUNDS) {
+      const critical = blocking.filter((i) => i.severity === 'critical')
+      if (critical.length === 0) return { ok: true, review, impl: current, minor: review.issues || [] }
+      return { ok: false, reason: `critical issues after ${LIGHT_ROUNDS} light rounds`, review, impl: current }
+    }
+    const fix = await agent(fixPrompt(t, current, blocking, 'light'), { label: `fix:${t.id}:light#${round}`, phase: 'Spec review', schema: IMPL, effort: 'high' })
+    if (!fix || fix.status === 'BLOCKED' || fix.status === 'NEEDS_CONTEXT') return { ok: false, reason: `light fix ${fix ? fix.status : 'failed'}`, fix, impl: current }
+    current = { ...current, head_sha: fix.head_sha, summary: current.summary + ' | fix: ' + fix.summary }
+  }
+  return { ok: false, reason: 'unreachable' }
+}
+
 // A task's full text is given inline (text) or in a file the agents read first (file).
 function taskText(t) {
   return t.text ? t.text : `The full text of this task, exactly as the plan has it, is in the file ${t.file}. Read that whole file first; it is your task description.`
@@ -236,6 +266,16 @@ for (const t of A.tasks) {
   if (!impl || impl.status === 'BLOCKED' || impl.status === 'NEEDS_CONTEXT') {
     results.push({ id: t.id, impl })
     return { stoppedAt: t.id, reason: impl ? impl.status : 'implementer failed', results }
+  }
+  if (t.review === 'light') {
+    const light = await lightReview(t, impl)
+    if (!light.ok) {
+      results.push({ id: t.id, impl, light })
+      return { stoppedAt: t.id, reason: light.reason, results }
+    }
+    results.push({ id: t.id, impl: light.impl, concerns: impl.concerns || [], deviations: impl.deviations || [], minor: light.minor })
+    log(`${t.id}: done (light review) at ${light.impl.head_sha}`)
+    continue
   }
   const spec = await reviewLoop(t, impl, 'spec', specReviewPrompt, SPEC)
   if (!spec.ok) {
