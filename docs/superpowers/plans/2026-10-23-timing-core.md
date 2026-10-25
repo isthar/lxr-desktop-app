@@ -11181,7 +11181,7 @@ EOF
 | N18.2, N18.3, N18.4 | E2.2 `seq_cbTransport()`, E2.3 `seq_triggerVoice()`, E2.1 `seqq_usbMessage()` |
 | Spec §6.1–6.7 | the T2–T15 rows above |
 | Spec §11: queue full, dropout, intervals that don't fit, late stamps, 64-bit time | T19; T16 (dropout, outliers, bunched clocks); the 64-bit `seqc_time_t` everywhere |
-| Spec §10 budget | E1.12 Step 6: `text` 15422 B, `bss` 6973 B; E1.14 Step 8: `text` 15690 B, `bss` 7053 B (Arm GNU 14.3.rel1, darwin-arm64) |
+| Spec §10 budget | E1.12 Step 6: `text` 15422 B, `bss` 6973 B; E1.14 Step 8: `text` 15690 B, `bss` 7053 B (Arm GNU 14.3.rel1, darwin-arm64). Measured with the firmware's compile command (E1.17): 15466/6973 B after E1.13 (7af5fea), 15758/7053 B after E1.14 (da2aa8e), 18602/8245 B after E1.15 (b97c1c6), 19514/8245 B after E1.16 (ceada09), 20158/8269 B after E1.17. The text grew past the plan's figures with review-round code (a8a8bbf's seqc_dueLimit(), 1b924ad's guard); E1.15 is N21's estimator, E1.16 the ring queue, E1.17 its fixes and the 101-point fit ring (+24 B). R6.2 must allow the 24 B on top of N21's 1192 B. |
 | Spec §9.1, host tests: C11, `-Wall -Wextra -Werror`, fake host, runner, ctest, replica for T20 | E1.1, E1.13 |
 | G5, the firmware builds after every task with zero warnings | every task's last run of `tools/check.sh` |
 

@@ -39,6 +39,9 @@ to 0.8–1.2 ms per boundary on a dense pattern. The queue becomes earliest-firs
 - a ring with a head index, where pop is O(1);
 - the common insert, later than everything pending, is an append;
 - elements are moved with struct copies, not `memmove`;
+- an insert between pending events moves the events on its shorter side one slot: those before it
+  towards the head, or those after it towards the tail, so an insert before every pending event moves
+  nothing either (E1.16 review);
 - the choke writes nothing when it removes nothing.
 The ordering key, the choke, the same-tick rule and the overflow behaviour are unchanged.
 
@@ -75,6 +78,10 @@ them again. This is equivalent and simpler:
 - Without an SPP, the transport resumes from the kept position: indices, absStep and pos are
   unchanged.
 - The next clock adds +16.
+- *Amended 2026-10-25 (E1.17).* That clock also gives `clockCount` the step phase of the position it
+  reaches. The master resumes its song position there too, so the tempo steps and a later local start
+  follow the steps that play; before, the count kept the phase of the clocks the master sent while
+  stopped.
 
 **MIDI Stop:**
 - Stops and keeps everything for a later Continue.
@@ -82,7 +89,8 @@ them again. This is equivalent and simpler:
   resuming, and that is what we do. This is listed as an intended change.
 
 **Local start in a slave mode:**
-- The core counts incoming clocks while stopped, in `clockCount`. MIDI Start and SPP reset the count.
+- The core counts incoming clocks while stopped, in `clockCount`. MIDI Start and SPP reset the count
+  (and a Continue re-phases it, see above).
 - A local start arms the transport until the next clock with `clockCount % clocksPerStep == 0`, then
   starts at step 0.
 - `clocksPerStep` is 6 for MIDI and for jack 24 PPQ, and 1 for jack 4 PPQ.
@@ -94,7 +102,9 @@ them again. This is equivalent and simpler:
 **Clock jack reset input (correction to the spec):**
 - In fw 1.7 this input is a *run gate*, not a reset pulse (`EXTI9_5_IRQHandler`):
   - pin active → stop and reset;
-  - pin released → start, armed until the next jack pulse.
+  - pin released → start, armed until the next jack pulse that begins a step of the clock count:
+    every pulse at 4 PPQ, at 24 PPQ every 6th counted from the gate-on, as fw 1.7's
+    `trigger_clockCnt` (wording corrected in E1.17: "the next jack pulse" read as any pulse).
 - This is kept exactly. It acts only in sync mode 1.
 
 **What each sync mode accepts** (as in fw 1.7):
@@ -464,9 +474,13 @@ the clock count.
   - N16's rule for a 0 interval no longer applies.
 - **Limit (qualifies the requirement above).** Near simple clock-to-buffer ratios no estimator reaches
   0.5% after two beats; for example 1:1 is 107.67 BPM with 1024-sample buffers.
-  - Across the 561 tempos from 60 to 200 BPM, the fit stays within 0.74%, 0.79% and 1.37% at 256, 512
-    and 1024 samples.
-  - It misses 0.5% at 3, 8 and 42 of those tempos.
+  - Across the 561 tempos from 60 to 200 BPM, the fit stays within 0.51%, 0.87% and 2.59% at 256, 512
+    and 1024 samples (the worst at 144.25, 143.75 and 108.25 BPM, the last near 1:1).
+  - It misses 0.5% at 1, 8 and 47 of those tempos.
+  - *Re-measured in E1.17* with the stamp model of the committed tests (`usbStamps()` in
+    `tests/test_slave.c`: buffer phase 0.31, 16 beats, the error from clock 48 on), on the core after
+    E1.15 and after E1.17 alike. The design pass's harness had given 0.74%, 0.79% and 1.37%, and 3, 8
+    and 42 tempos.
   - It is exact for transfers of 1 to 16 clocks.
   - DIN with ±0.3 ms jitter stays within 0.007%.
 - **Joining bursts (amended 2026-10-25 during E1.15).**
@@ -474,7 +488,7 @@ the clock count.
     transfer joins it, whether that transfer is still open or was evaluated. The transfer then takes
     the clock's later stamp. If it had been evaluated, the fit is restored from the copy taken before
     it, and an outlier is uncounted.
-  - A transfer that restarted the fit, or was followed by another sync event, takes no more clocks.
+  - A transfer followed by another sync event takes no more clocks.
   - The reason: a DIN burst with clocks 0.32 ms apart reaches the core one clock per `seq_tick()`, so
     the burst's late head would be evaluated alone.
   - Why any evaluated transfer, not only an outlier (amended after the E1.15 quality review): the fit
@@ -484,21 +498,25 @@ the clock count.
     Joining only untested heads instead treats the clocks of one audio buffer differently in the first
     clocks and later, which tilts the line: with DIN-forwarded 1024-sample buffers it failed 0.5% at 218
     of 561 tempos, against 47 for USB. With the rule above DIN-forwarded buffers give the USB numbers
-    (1, 8 and 47 of 561 tempos at 256, 512 and 1024 samples, the scenario harness of the review), and
-    bunches of 2, 3 and 6 anywhere in the first 20 clocks stay within 0.03%.
+    (1, 8 and 47 of 561 tempos at 256, 512 and 1024 samples, as in the Limit bullet), and bunches of 2,
+    3 and 6 anywhere in the first 20 clocks stay within 0.03%.
   - Until the next clock of a burst joins it, the estimate includes the head alone: for less than 2 ms.
-  - The one exception left: a burst whose head is the outlier that restarts the fit. The restart
-    rewrites the ring, so it is not undone; a bunch of 6 there reads up to 1.45% off two beats after
-    the jump.
+  - *Amended in E1.17.* A burst whose head is the outlier that restarts the fit joins as well: the
+    restart is undone and done again, or not, with the whole burst. Until then the restart wrote over
+    the free slot of the 98-point ring, so it could not be undone: a bunch of 6 there read up to 1.45%
+    off two beats after a jump, and a host stall (clocks 0.6 to 1.8 clocks late, then a catch-up burst)
+    restarted the fit although the tempo had not changed. The ring now has `SEQC_TEMPO_RESTART − 1`
+    more points (101), so a restart leaves the points of the fit before it intact; +24 B of bss.
   - Why 2 ms: back-to-back USB transfers in consecutive 1 ms frames join reliably; a few MIDI bytes fit
     between two clocks of a burst; and it is a quarter of a clock at 300 BPM.
   - The jack keeps the plain rule.
   - Check the 2 ms value on hardware, under H6 and H7.
-  - The RAM cost of the estimator is 1192 B of bss over E1.14 (7053 to 8245 B), not 928 B. Review row
-    R6.2 allows that.
 - **Costs and behaviour changes.**
-  - About 1192 B of bss over E1.14: the 98-point ring, the fit copy and the join state. About 2.8 KB of
-    code (text 18618 B against 15854 B). Review row R6.2 is amended for it, as for N20.
+  - 1192 B of bss over E1.14 (7053 to 8245 B): the 98-point ring and the fit (928 B), and the fit copy
+    and the join state (264 B). E1.17's 101-point ring adds 24 B (8269 B). Review row R6.2 is amended
+    for it, as for N20.
+  - About 2.7 KB of code: `seq_core.c.obj` text 18602 B after E1.15 (b97c1c6) against 15854 B after
+    E1.14, measured with the firmware's compile command and Arm GNU 14.3.rel1.
   - A lost DIN clock now costs about 1.5% for about 4 beats, where it cost 0% before. A lost jack pulse
     still costs 0%.
   - Tempo changes on buffered USB settle in 1 to 3 beats.
