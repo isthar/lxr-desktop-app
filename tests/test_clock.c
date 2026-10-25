@@ -131,6 +131,7 @@ TEST(T1_start_before_the_first_process)
 	ASSERT_TRUE(r != NULL);
 	ASSERT_EQ(r->time, 5000);
 	ASSERT_NEAR(seqc_position(), 0.0, 1e-9);
+	ASSERT_EQ(h->errors, 0);
 }
 
 TEST(T1_stop_keeps_the_position_and_start_rewinds)
@@ -189,6 +190,7 @@ TEST(T1_rewind_only_when_stopped)
 	ASSERT_EQ(tr[0], SEQC_TRANSPORT_START);
 	ASSERT_EQ(tr[1], SEQC_TRANSPORT_STOP);
 	ASSERT_EQ(tr[2], SEQC_TRANSPORT_REWIND);
+	ASSERT_EQ(h->errors, 0);
 }
 
 TEST(T1_tempo_change_is_continuous)
@@ -211,6 +213,7 @@ TEST(T1_tempo_change_is_continuous)
 	fake_runUntil(h, t1 + fake_msToCycles(83.4), fake_msToCycles(0.1));
 	ASSERT_EQ(seqc_absStep(), 9);
 	ASSERT_NEAR(seqc_position(), before + idealTicks(90.0, fake_msToCycles(83.4)), 1e-6);
+	ASSERT_EQ(h->errors, 0);
 }
 
 TEST(T1_tempo_is_clamped)
@@ -237,6 +240,7 @@ TEST(T1_tempo_is_clamped)
 	ASSERT_EQ(seqc_absStep(), 1);
 	seqc_setTempo(133.5f);				/* fractional tempos are exact as well */
 	ASSERT_NEAR(seqc_currentBpm(), 133.5, 1e-6);
+	ASSERT_EQ(h->errors, 0);
 }
 
 TEST(T1_time_never_goes_back)
@@ -273,6 +277,7 @@ TEST(T1_time_never_goes_back)
 	ASSERT_EQ(seqc_absStep(), 0);
 	fake_process(h, fake_msToCycles(1010.0));
 	ASSERT_NEAR(seqc_position(), idealTicks(120.0, fake_msToCycles(10.0)), 1e-6);
+	ASSERT_EQ(h->errors, 0);
 }
 
 TEST_MAIN()
