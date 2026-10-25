@@ -979,14 +979,7 @@ lcd_process_display_interrupt = 1;
 	//  menu_tick();
     checkMainLoc = -8;
 
-	  //check if we have some usb midi messages and process them
-	  MidiMsg msg;
-	  if(usb_getMidi(&msg)) {
-		  midiParser_parseMidiMessage(msg);
-	  }
-
-		//process midi on midi port
-			uart_processMidi();
+	  //MIDI input (DIN and USB) is parsed in seq_tick() (D8)
 
 	  //check if we have to save something
 	  preset_processTimer();

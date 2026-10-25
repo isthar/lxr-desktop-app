@@ -2289,6 +2289,20 @@ static void seq_refreshCopies(uint8_t changed)
 	}
 }
 //------------------------------------------------------------------------------
+#define SEQ_DIN_BYTES_PER_TICK      32  /**< MIDI DIN bytes parsed per seq_tick() (spec 7.2) */
+#define SEQ_USB_MESSAGES_PER_TICK   8   /**< USB MIDI messages parsed per seq_tick() */
+
+/** MIDI input (D8): DIN and USB are parsed only here, in the seq_tick() context,
+ * with a budget per call. The handlers reach the core only through the mailbox. */
+static void seq_parseMidiInput(void)
+{
+	MidiMsg msg;
+
+	uart_processMidi(SEQ_DIN_BYTES_PER_TICK);
+	for(uint8_t i=0;(i<SEQ_USB_MESSAGES_PER_TICK) && usb_getMidi(&msg);i++)
+		midiParser_parseMidiMessage(msg);
+}
+//------------------------------------------------------------------------------
 /** call periodically to check if the next step has to be processed (spec 4.3, N7).
  * Called from soundengine_process() with the TIM2 interrupt disabled, and from the
  * TIM2 interrupt; the two never overlap. Most calls find nothing to do: they read
@@ -2315,6 +2329,10 @@ void seq_tick()
 	seqc_process(now);
 
 	seq_refreshCopies(changed);
+
+	//last, so that recording sees the state of this call. A note recorded here sets
+	//its skip-once marker in the core at once (seq_postSkipOnce() inside seq_tick())
+	seq_parseMidiInput();
 
 	seq_inTick = 0;
 }

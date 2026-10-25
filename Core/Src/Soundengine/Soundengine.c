@@ -95,8 +95,7 @@ void soundengine_process()
 
 #endif
 #endif
-		//process midi on midi port
-		uart_processMidi();
+		//MIDI input is parsed in seq_tick() (D8)
 
 		//process the sequencer
 	//	seq_tick(); //moved to tim 14?

@@ -41,12 +41,13 @@
  * --------------------------------
  * The core has a single context. In the firmware only seq_tick() calls it, and on
  * each call it:
- *   1. applies the mailbox of sequencer.c: seqc_start(), seqc_stop(), seqc_rewind(),
- *      seqc_setSyncMode(), seqc_setTempo(), seqc_setAnalogPpq();
+ *   1. applies the mailbox of sequencer.c: seqc_setSyncMode(), seqc_setAnalogPpq(),
+ *      seqc_setTempo(), seqc_stop(), seqc_rewind(), seqc_start(), and seqc_skipOnce()
+ *      for the notes that seq_addNote() moved to the next step;
  *   2. drains the DIN, USB and jack sync queues, merged in stamp order, into
- *      seqc_syncEvent();
+ *      seqc_syncEvent(), and a queued Song Position Pointer into seqc_songPosition();
  *   3. calls seqc_process(seqp_now());
- *   4. parses MIDI input, which can call seqc_songPosition() and seqc_skipOnce().
+ *   4. parses MIDI input, which reaches the core only through the mailbox.
  * Other contexts (main loop, interrupts) never call a seqc_ function. They post
  * to the mailbox in sequencer.c instead.
  *

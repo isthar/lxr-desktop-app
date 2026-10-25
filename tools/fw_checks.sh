@@ -101,7 +101,19 @@ check_E2_3() {
 	must_call seq_setMute voiceControl_noteOff
 }
 
-check_tasks="E2.2 E2.3"
+# ---- E2.4: MIDI input only in seq_tick(), realtime and SPP from the ISRs (D7, D8)
+check_E2_4() {
+	must_call USART3_IRQHandler seqp_dinByteIn
+	must_call USBD_CDC_DataOut seqp_usbMessageIn
+	need uart_processMidi usb_getMidi
+	must_not_call main uart_processMidi usb_getMidi midiParser_parseMidiMessage
+	must_not_call soundengine_process uart_processMidi
+	must_not_call TIM2_IRQHandler uart_processMidi
+	gone seq_sync sync_midiResetPosition sync_midiStartStop
+	no_source 'clockSync\.h' Core/Src/Soundengine/MIDI/MidiParser.c
+}
+
+check_tasks="E2.2 E2.3 E2.4"
 
 if [ $# -gt 0 ]; then check_tasks="$*"; fi
 for task in $check_tasks; do

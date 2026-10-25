@@ -25,8 +25,8 @@ void initMidiUart();
 void uart_sendMidi(MidiMsg msg);
 
 void uart_sendMidiByte(uint8_t data);
-//check if there is some received data in the Rx buffer and send it to the midi parser
-void uart_processMidi();
+//send up to maxBytes received bytes from the Rx buffer to the midi parser; only seq_tick() calls it
+void uart_processMidi(uint8_t maxBytes);
 
 void initFrontpanelUart();
 //check if there is data in the front panel Rx buffer and send it to the front panel parser

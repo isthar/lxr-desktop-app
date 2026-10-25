@@ -59,6 +59,7 @@
 #include "usbd_cdc.h"
 
 #include "usbd_ctlreq.h"
+#include "Soundengine/Sequencer/seq_platform.h"
 
 
 /** @addtogroup STM32_USB_DEVICE_LIBRARY
@@ -930,6 +931,8 @@ static uint8_t  USBD_CDC_DataIn (USBD_HandleTypeDef *pdev, uint8_t epnum)
   */
 static uint8_t  USBD_CDC_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
+  //LICHOMAT: one time stamp for all the events of the packet
+  const uint32_t stamp = seqp_stamp();
   USBD_CDC_HandleTypeDef   *hcdc = (USBD_CDC_HandleTypeDef*) pdev->pClassData;
 
   /* Get the received data length */
@@ -1018,6 +1021,14 @@ static uint8_t  USBD_CDC_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum)
 
 		if(length != 0)
 		{
+			//LICHOMAT (D8): realtime messages and Song Position Pointers go to the USB sync
+			//queue with the stamp; every message also goes to the message queue, for the parser
+			seqp_usbMessageIn(usbData.cin, usbData.status, usbData.data1, usbData.data2, stamp);
+
+			//a full message queue keeps its messages and drops the new one (it used to overwrite them all)
+			if(((usb_MidiMessagesWrite + 1) & USB_MIDI_INPUT_BUFFER_MASK) == usb_MidiMessagesRead)
+				continue;
+
 			usb_MidiMessages[usb_MidiMessagesWrite].status	= usbData.status;
 			usb_MidiMessages[usb_MidiMessagesWrite].data1 	= usbData.data1;
 			usb_MidiMessages[usb_MidiMessagesWrite].data2 	= usbData.data2;

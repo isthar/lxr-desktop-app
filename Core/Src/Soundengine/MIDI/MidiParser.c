@@ -22,7 +22,6 @@
 #include "Soundengine/DSPAudio/CymbalVoice.h"
 #include "Soundengine/MIDI/Uart.h"
 #include "Soundengine/Sequencer/sequencer.h"
-#include "Soundengine/Sequencer/clockSync.h"
 #include "Soundengine/DSPAudio/mixer.h"
 #include "Soundengine/MIDI/valueShaper.h"
 #include "Soundengine/DSPAudio/modulationNode.h"
@@ -1745,37 +1744,17 @@ void midiParser_parseMidiMessage(MidiMsg msg)
 		switch(msg.status)
     {
       case MIDI_CLOCK:
-        if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
-          seq_sync();
-        break;
       case MIDI_START:
-        if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
-        {
-          sync_midiResetPosition();
-          sync_midiStartStop(1);
-        }
-        break;
       case MIDI_CONTINUE:
-        if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
-          sync_midiStartStop(1);
-        break;
       case MIDI_STOP:
-        if((midiParser_txRxFilter & MIDI_FILTER_SYSTEM) && seq_getExtSync())
-          sync_midiStartStop(0);
+        // routed above. The interrupt handlers also put them in the sync queues with
+        // their time stamp, and seq_tick() hands them to the timing core, applying the
+        // RX filter MIDI_FILTER_SYSTEM; the core checks the sync mode (D8).
         break;
       case MIDI_SONG_POSITION_POINTER:
-        {
-          /* Two data bytes follow the status. Just like with the Pitch Wheel,
-          * these two bytes are combined into a 14-bit value. (See Pitch Wheel).
-          * This 14-bit value is the MIDI Beat upon which to start the song.
-          * Songs are always assumed to start on a MIDI Beat of 0. Each MIDI
-          * Beat spans 6 MIDI Clocks. In other words, each MIDI Beat is a 16th
-          * note (since there are 24 MIDI Clocks in a quarter note).
-          *
-          */
-          // TODO song position pointer is not implemented yet:
-          // position = msg.data1 | (msg.data2<<7)  (in MIDI beats = 16th notes)
-        }
+        // routed above. The interrupt handlers queue it as well, so that it stays in
+        // order with the Continue and the clocks after it; seq_tick() seeks there (D7).
+        // One unit (MIDI Beat) is a 16th note, one step.
         break;
       case MIDI_MTC_QFRAME:
         /* Strategy:
@@ -1963,10 +1942,17 @@ void midiParser_parseUartData(unsigned char data)
 
   uint8_t parseMsg = 0;
 
-  // if (data == 0xF8)
-  // {
-  //   return;
-  // }
+  // system realtime bytes may come anywhere, also between the data bytes of another
+  // message: route them on their own and leave the message in progress alone
+  // (fw 1.7 routed them with the data bytes of the last message and lost the message)
+  if(data >= MIDI_CLOCK)
+  {
+    MidiMsg realtime = {0};
+    realtime.status = data;
+    realtime.bits.source = midiSourceMIDI;
+    midiParser_parseMidiMessage(realtime);
+    return;
+  }
 
 	if(data & 0x80)
   {
@@ -1979,9 +1965,7 @@ void midiParser_parseUartData(unsigned char data)
 			midiMsg_tmp.status = data;
 			switch(data)
       {
-        case MIDI_CLOCK:
-          parseMsg = 1;
-          break;  
+        /* MIDI_CLOCK and the other realtime bytes are handled at the top of this function */  
 			  case SYSEX_START: /*  Get into sysex receive mode. any more bytes received until this status changes are considered
 							                to be sysex data. we still need to parse this sysex start, in case we are routing it */
           parserState = SYSEX_DATA;

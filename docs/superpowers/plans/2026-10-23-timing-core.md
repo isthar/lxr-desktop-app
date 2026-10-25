@@ -17191,7 +17191,7 @@ USB reach the core with their stamps. The `seq_sync()` and `sync_*` calls are go
 - Modify: `Core/Inc/Soundengine/Sequencer/seq_core.h` (the comment on the execution context only)
 - Test: `tools/fw_checks.sh E2.4`
 
-- [ ] **Step 1: Write the failing check**
+- [x] **Step 1: Write the failing check**
 
 Add the E2.4 checks before the task list:
 
@@ -17219,7 +17219,7 @@ check_E2_4() {
 check_tasks="E2.2 E2.3 E2.4"
 ```
 
-- [ ] **Step 2: Run it and see it fail**
+- [x] **Step 2: Run it and see it fail**
 
 ```bash
 tools/fw_checks.sh E2.4
@@ -17241,7 +17241,7 @@ FAIL E2.4: sync_midiStartStop is still linked
 FAIL E2.4: 'clockSync\.h' found: 25:#include "Soundengine/Sequencer/clockSync.h"
 ```
 
-- [ ] **Step 3: DIN: stamp and queue in the RX interrupt; parse with a budget**
+- [x] **Step 3: DIN: stamp and queue in the RX interrupt; parse with a budget**
 
 The include (fw 1.7 lines 17-18):
 
@@ -17337,7 +17337,7 @@ with:
 void uart_processMidi(uint8_t maxBytes);
 ```
 
-- [ ] **Step 4: USB: stamp and queue in `USBD_CDC_DataOut()`; drop on a full queue**
+- [x] **Step 4: USB: stamp and queue in `USBD_CDC_DataOut()`; drop on a full queue**
 
 `usbd_cdc.c` is compiled with `-w`, so `check.sh` does not see its warnings. Step 11 compiles it once
 with warnings on. The new logic itself sits in `seq_syncq.c`, which is compiled with `-Wall -Wextra`.
@@ -17399,7 +17399,7 @@ with:
 
 ```
 
-- [ ] **Step 5: The parser: realtime only routes, SPP comes from the queue, realtime bytes inside messages**
+- [x] **Step 5: The parser: realtime only routes, SPP comes from the queue, realtime bytes inside messages**
 
 `clockSync.h` goes (fw 1.7 lines 24-25):
 
@@ -17521,7 +17521,7 @@ with:
         /* MIDI_CLOCK and the other realtime bytes are handled at the top of this function */
 ```
 
-- [ ] **Step 6: Parse MIDI in `seq_tick()`**
+- [x] **Step 6: Parse MIDI in `seq_tick()`**
 
 Before `seq_tick()` (from E2.2):
 
@@ -17575,7 +17575,7 @@ with:
 	seq_inTick = 0;
 ```
 
-- [ ] **Step 7: Remove the other MIDI parsing calls**
+- [x] **Step 7: Remove the other MIDI parsing calls**
 
 The main loop (fw 1.7 lines 982-990):
 
@@ -17627,7 +17627,7 @@ with:
 	soundengine_calcNextSampleBlock();
 ```
 
-- [ ] **Step 8: Correct the execution-context comment in `seq_core.h`**
+- [x] **Step 8: Correct the execution-context comment in `seq_core.h`**
 
 The comment describes how the firmware calls the core. The mailbox also carries the skip-once marker, and the queue drain also seeks. Only the comment changes.
 
@@ -17654,7 +17654,7 @@ with:
  *   4. parses MIDI input, which reaches the core only through the mailbox.
 ```
 
-- [ ] **Step 9: Give the edited files CRLF line endings**
+- [x] **Step 9: Give the edited files CRLF line endings**
 
 ```bash
 python3 - Core/Src/Soundengine/MIDI/Uart.c Core/Inc/Soundengine/MIDI/Uart.h \
@@ -17674,7 +17674,7 @@ EOF
 
 Expected: nine lines starting with `CRLF`.
 
-- [ ] **Step 10: Build and run the checks**
+- [x] **Step 10: Build and run the checks**
 
 ```bash
 tools/check.sh && tools/fw_checks.sh E2.2 E2.3 E2.4
@@ -17692,7 +17692,7 @@ PASS E2.3
 PASS E2.4
 ```
 
-- [ ] **Step 11: Compile `usbd_cdc.c` once with warnings on**
+- [x] **Step 11: Compile `usbd_cdc.c` once with warnings on**
 
 The middleware is built with `-w`. Recompile it from its recorded command with `-Wall -Wextra`
 instead, and look for warnings in the lines this task added:
@@ -17717,23 +17717,23 @@ Expected: `2 warnings in usbd_cdc.c`, both from fw 1.7 code (unused parameters a
 770), and no `NEW?` line. The recorded command names the compiler by its full path, so no `PATH`
 setup is needed.
 
-- [ ] **Step 12: Review**
+- [x] **Step 12: Review**
 
-- [ ] Each queue has one producer:
+- [x] Each queue has one producer:
   - DIN: only `USART3_IRQHandler`.
   - USB: only `USBD_CDC_DataOut` (OTG_FS interrupt).
   - Both interrupts run at preemption priority 3 (`stm32f7xx_hal_msp.c:774`, `:844`).
   - The consumer, `seq_tick()`, runs at thread level or in TIM2 (priority 4).
-- [ ] `fifo_midiRx` has one consumer, `seq_tick()` (D8). `usb_getMidi()` has one caller, `seq_tick()`.
-- [ ] Routing and thru are unchanged:
+- [x] `fifo_midiRx` has one consumer, `seq_tick()` (D8). `usb_getMidi()` has one caller, `seq_tick()`.
+- [x] Routing and thru are unchanged:
   - realtime bytes reach `midiParser_parseMidiMessage()` and its routing block;
   - DIN realtime bytes are routed alone (`bits.length` 0), USB realtime as single-byte packets.
-- [ ] The RX filter `MIDI_FILTER_SYSTEM` gates the queued events in `seq_drainSyncQueues()`, as it
+- [x] The RX filter `MIDI_FILTER_SYSTEM` gates the queued events in `seq_drainSyncQueues()`, as it
   gated the realtime cases in fw 1.7. The core applies the sync-mode gating (N4).
-- [ ] MTC (F1) and Program Change keep their paths. The MTC start and timeout call
+- [x] MTC (F1) and Program Change keep their paths. The MTC start and timeout call
   `seq_setRunning()`, which posts to the mailbox.
-- [ ] Incoming notes trigger voices from `seq_tick()`, in the same context as the renderer.
-- [ ] The echo and the recording behave as after E2.3.
+- [x] Incoming notes trigger voices from `seq_tick()`, in the same context as the renderer.
+- [x] The echo and the recording behave as after E2.3.
 
 Intended changes for the report:
 - SPP is supported (D7);
@@ -17742,7 +17742,7 @@ Intended changes for the report:
   while the SD card is busy (TIM2 runs `seq_tick()` then);
 - a full USB queue drops new messages instead of wiping the queue.
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add tools/fw_checks.sh Core/Src/Soundengine/MIDI/Uart.c Core/Inc/Soundengine/MIDI/Uart.h \

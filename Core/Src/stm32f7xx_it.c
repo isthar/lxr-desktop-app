@@ -270,7 +270,6 @@ void TIM2_IRQHandler(void)
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_SET);
 	seq_tick();
 	soundengine_calcNextSampleBlock();
-  uart_processMidi();
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_RESET);
 
 

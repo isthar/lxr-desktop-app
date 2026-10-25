@@ -15,6 +15,7 @@
 #include "Soundengine/MIDI/Uart.h"
 #include "Soundengine/FIFO.h"
 #include "Soundengine/config.h"
+#include "Soundengine/Sequencer/seq_platform.h"
 #include "main.h"
 
 #include <stdint.h>
@@ -47,6 +48,8 @@ void uart_clearFrontFifo()
 //-----------------------------------------------------------------------------
 void USART3_IRQHandler(void)
 {
+	//LICHOMAT: the time stamp first, as close to the arrival of the byte as possible
+	const uint32_t stamp = seqp_stamp();
 	uint32_t isrflags = READ_REG((&huart3)->Instance->ISR);
 	uint8_t data = 0;
 	
@@ -57,6 +60,10 @@ void USART3_IRQHandler(void)
 	{
 		// UART_Receive_IT(huart);
 		data = (uint8_t)(USART3->RDR & (uint16_t)0xFF);
+
+		//LICHOMAT (D8): realtime bytes and Song Position Pointers go to the DIN sync queue
+		//with the stamp; every byte also goes to the RX FIFO below, for the MIDI parser
+		seqp_dinByteIn(data, stamp);
 
 		// put the received data in the RX midi buffer
     // fifo_bufferIn(&fifo_midiRx, data);
@@ -85,10 +92,11 @@ void USART3_IRQHandler(void)
 }
 
 //-----------------------------------------------------------------------------
-void uart_processMidi()
+//LICHOMAT (D8): only seq_tick() parses the received bytes, at most maxBytes per call
+void uart_processMidi(uint8_t maxBytes)
 {
 	uint8_t data;
-	while(fifo_bufferOut(&fifo_midiRx, &data))
+	while(maxBytes-- && fifo_bufferOut(&fifo_midiRx, &data))
 	{
 		midiParser_parseUartData(data);
 	}
