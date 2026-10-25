@@ -9224,7 +9224,7 @@ second copy with 16 entries, and `test_overflow` links it through a new `CORE` a
 - Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
 - Test: `tests/test_overflow.c` (ctest id `T19`)
 
-- [ ] **Step 1: Write the failing test `tests/test_overflow.c`**
+- [x] **Step 1: Write the failing test `tests/test_overflow.c`**
 
 ```c
 /*
@@ -9397,7 +9397,7 @@ TEST(T19_reset_stats_clears_every_counter)
 TEST_MAIN()
 ```
 
-- [ ] **Step 2: Build `test_overflow` against a 16-entry core in `tests/CMakeLists.txt`**
+- [x] **Step 2: Build `test_overflow` against a 16-entry core in `tests/CMakeLists.txt`**
 
 Replace:
 ```cmake
@@ -9456,7 +9456,7 @@ seqc_add_test(test_overflow  IDS T19 CORE seq_core_small_queue)  # E1.12 queue o
 objects of an OBJECT library on through another OBJECT library, so `test_overflow` contains exactly
 one core: the small one.
 
-- [ ] **Step 3: Run it to verify it fails**
+- [x] **Step 3: Run it to verify it fails**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -9476,7 +9476,7 @@ FAIL T19_calls_from_a_callback_are_ignored_and_counted
 0 of 4 tests passed
 ```
 
-- [ ] **Step 4: Implement the statistics in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+- [x] **Step 4: Implement the statistics in `Core/Src/Soundengine/Sequencer/seq_core.c`**
 
 Insert after the constants (`SEQC_NEVER`, `SEQC_NO_TICK`) (the `SEQC_QUEUE_CAPACITY` block):
 
@@ -9578,13 +9578,13 @@ void seqc_resetStats(void)
 This completes `seq_core.c` for T1–T20 (E1.13 leaves it as it is); E1.14 extends it for N16, N17
 and N18.1. It now matches the E1.12 file the verification section refers to.
 
-- [ ] **Step 5: Convert `seq_core.c` to CRLF**
+- [x] **Step 5: Convert `seq_core.c` to CRLF**
 
 Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
 
 Expected: `... with CRLF line terminators`
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -9599,7 +9599,7 @@ firmware build, with its `-O3`, `-ffunction-sections` and FPU flags), so about 1
 glue and the sync queues, and within its 7.5 KB of RAM. The `bss` is the 6 KB queue (N2) plus the
 rest of the state. Review row R6.3 (E4.1) checks the whole image.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add Core/Src/Soundengine/Sequencer/seq_core.c tests/CMakeLists.txt tests/test_overflow.c

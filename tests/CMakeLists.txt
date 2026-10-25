@@ -75,15 +75,28 @@ target_link_libraries(seqc_fake_host PUBLIC seq_core)
 
 enable_testing()
 
-# seqc_add_test(<name> IDS <id>... [EXTRA <source>...])
+# T19 fills the event queue, which 7 tracks cannot do with SEQC_QUEUE_SIZE
+# entries (see SEQC_QUEUE_CAPACITY in seq_core.c). It runs against a second copy
+# of the core with a 16-entry queue.
+add_library(seq_core_small_queue OBJECT "${SEQC_CORE_SOURCE}")
+target_include_directories(seq_core_small_queue PUBLIC "${LXR_ROOT}/Core/Inc")
+target_compile_definitions(seq_core_small_queue PRIVATE SEQC_QUEUE_CAPACITY=16)
+target_compile_options(seq_core_small_queue PRIVATE -ffast-math -freciprocal-math)
+target_link_libraries(seq_core_small_queue PUBLIC seqc_options)
+
+# seqc_add_test(<name> IDS <id>... [EXTRA <source>...] [CORE <library>])
 #
 # Builds <name>.c (plus the EXTRA sources) with the fake host into the executable
 # <name>, and registers one ctest test per id: ctest runs "<name> <id>", which
 # runs the tests named <id> and <id>_... (seqc_test.h). The ids are the test ids
-# of the spec (§13.1). Until a test file exists, its line here only prints a
-# note; with SEQC_REQUIRE_ALL_TESTS a missing file is an error.
+# of the spec (§13.1). CORE picks the core library (default seq_core). Until a
+# test file exists, its line here only prints a note; with SEQC_REQUIRE_ALL_TESTS
+# a missing file is an error.
 function(seqc_add_test name)
-    cmake_parse_arguments(ARG "" "" "IDS;EXTRA" ${ARGN})
+    cmake_parse_arguments(ARG "" "CORE" "IDS;EXTRA" ${ARGN})
+    if(NOT ARG_CORE)
+        set(ARG_CORE seq_core)
+    endif()
     if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${name}.c")
         if(SEQC_REQUIRE_ALL_TESTS)
             message(FATAL_ERROR "tests/${name}.c is missing (${ARG_IDS})")
@@ -94,7 +107,7 @@ function(seqc_add_test name)
     add_executable(${name} ${name}.c ${ARG_EXTRA})
     # Both, directly: CMake links the objects of an OBJECT library only into
     # targets that name it, not through another OBJECT library.
-    target_link_libraries(${name} PRIVATE seqc_fake_host seq_core)
+    target_link_libraries(${name} PRIVATE seqc_fake_host ${ARG_CORE})
     foreach(id IN LISTS ARG_IDS)
         add_test(NAME ${id} COMMAND ${name} ${id})
         set_tests_properties(${id} PROPERTIES TIMEOUT ${SEQC_TEST_TIMEOUT})
@@ -113,5 +126,5 @@ seqc_add_test(test_clockout  IDS T5 T6)              # E1.8  MIDI clock out, clo
 seqc_add_test(test_roll      IDS T13 T14)            # E1.9  roll, recording phase, skip-once
 seqc_add_test(test_slave     IDS T16 T18)            # E1.10 MIDI and jack slave, tempo estimate
 seqc_add_test(test_transport IDS T17)                # E1.11 Start, Continue, Stop, SPP, song mode
-seqc_add_test(test_overflow  IDS T19)                # E1.12 queue overflow, stats
+seqc_add_test(test_overflow  IDS T19 CORE seq_core_small_queue)  # E1.12 queue overflow, stats
 seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c)  # E1.13 fw 1.7 replica (reference/)

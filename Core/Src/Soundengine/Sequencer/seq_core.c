@@ -28,6 +28,14 @@
 #define SEQC_NO_TICK		INT64_MAX	/**< no item pending */
 
 //------------------------------------------------------------------------------
+/* Entries of the event queue. 7 tracks cannot fill SEQC_QUEUE_SIZE: at most
+ * about 170 events are pending (3 steps of 8 hits and a roll per track). The
+ * host test of a full queue (T19) builds a copy of the core with a smaller one. */
+#ifndef SEQC_QUEUE_CAPACITY
+#define SEQC_QUEUE_CAPACITY	SEQC_QUEUE_SIZE
+#endif
+
+//------------------------------------------------------------------------------
 // State
 //------------------------------------------------------------------------------
 /** The items of the timeline. At equal ticks they are handled in this order
@@ -110,7 +118,7 @@ typedef struct
 /** the event queue, sorted so that events[count - 1] fires next (N2) */
 typedef struct
 {
-	seqc_event_t	events[SEQC_QUEUE_SIZE];
+	seqc_event_t	events[SEQC_QUEUE_CAPACITY];
 	uint16_t	count;
 } seqc_queue_t;
 
@@ -380,8 +388,11 @@ static bool seqc_firesBefore(const seqc_event_t *a, const seqc_event_t *b)
  * queue rejects it. */
 static void seqc_queueInsert(const seqc_event_t *ev)
 {
-	if (seqc_queue.count >= SEQC_QUEUE_SIZE)
+	if (seqc_queue.count >= SEQC_QUEUE_CAPACITY)
+	{
+		seqc.stats.queueOverflow++;
 		return;
+	}
 	/* the first event that fires before ev, and all above it, move up one */
 	uint16_t lo = 0;
 	uint16_t hi = seqc_queue.count;
@@ -397,6 +408,8 @@ static void seqc_queueInsert(const seqc_event_t *ev)
 			(size_t)(seqc_queue.count - lo) * sizeof seqc_queue.events[0]);
 	seqc_queue.events[lo] = *ev;
 	seqc_queue.count++;
+	if (seqc_queue.count > seqc.stats.queueMax)
+		seqc.stats.queueMax = seqc_queue.count;
 }
 //------------------------------------------------------------------------------
 /** choke: remove the queued events of track with an absolute step below absStep.
@@ -1077,7 +1090,10 @@ static void seqc_syncReset(void)
 static bool seqc_enter(void)
 {
 	if (seqc.busy)
+	{
+		seqc.stats.reentries++;
 		return false;
+	}
 	seqc.busy = true;
 	seqc.nextDue = 0;	/* so that a nested seqc_process() reaches seqc_enter() */
 	return true;
@@ -1380,11 +1396,15 @@ bool seqc_isRunning(void)
 void seqc_stats(seqc_stats_t *out)
 {
 	*out = seqc.stats;
+	out->queueDepth = seqc_queue.count;
 }
 //------------------------------------------------------------------------------
 void seqc_resetStats(void)
 {
 	if (seqc.busy)
+	{
+		seqc.stats.reentries++;
 		return;
+	}
 	memset(&seqc.stats, 0, sizeof seqc.stats);
 }
