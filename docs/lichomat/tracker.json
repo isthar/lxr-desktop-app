@@ -1,12 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-25 05:51",
+    "updated": "2026-10-25 14:50",
     "phase": "Etap 1 — rdzeń: E1.15–E1.17",
-    "focus": "Workflow A2: E1.15 (estymator tempa dla spakowanego USB), E1.16 (kolejka jako bufor pierścieniowy), E1.17 (porządki po przeglądach). Potem integracja z firmware E2.1–E2.8.",
+    "focus": "Workflow A2: E1.15–E1.17 gotowe, trwa przegląd końcowy całości. Potem workflow B: E1.18 i integracja E2.1–E2.8.",
     "branch": "timing-core",
-    "head": "47c6f81",
+    "head": "5dad00e",
     "next": "Integracja z firmware (E2.1–E2.8), potem narzędzia i wydanie (E3, E4).",
-    "updated_at": "2026-10-25T05:51:00+01:00"
+    "updated_at": "2026-10-25T14:50:00+01:00",
+    "now": "Przejście z A2 do B: rozdzielam uwagi z przeglądu końcowego, aktualizuję plan, robię commit i push, uruchamiam workflow B (E1.18, E2.1–E2.8)."
   },
   "epics": [
     {
@@ -217,22 +218,36 @@
     {
       "id": "E1.15",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Estymacja tempa przy taktach zegara ze wspólnym znacznikiem czasu (spakowany USB MIDI z DAW), N21",
       "updated": "2026-10-25"
     },
     {
       "id": "E1.16",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Kolejka zdarzeń jako bufor pierścieniowy: tanie typowe wstawienie i choke bez kopiowania (koszt czasu rzeczywistego z przeglądu końcowego)",
       "updated": "2026-10-25"
     },
     {
       "id": "E1.17",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Porządki po przeglądach E1: ASSERT_EQ odrzuca liczby zmiennoprzecinkowe, brakujące testy, 3 podejrzenia błędów do analizy, komentarze, CRLF, T20 z własnym generatorem",
+      "updated": "2026-10-25"
+    },
+    {
+      "id": "E1.18",
+      "epic": "E1",
+      "status": "w toku",
+      "title": "Kolejka: nowe zdarzenia z granicy kroku zbierane, sortowane i scalane jednym przebiegiem. Koszt ograniczony do ok. 400 zapisów niezależnie od wzorca (dziś do 3861, czyli 22–29% bloku)",
+      "updated": "2026-10-25"
+    },
+    {
+      "id": "E1.19",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Estymator tempa slave: pojedynczy fałszywy takt MIDI albo podwójny impuls na jacku nie restartuje estymacji i nie przekłamuje tempa (dziś do 7–18% przez chwilę), N21. Robione po E2.8.",
       "updated": "2026-10-25"
     },
     {
@@ -575,6 +590,13 @@
       "question": "Czy LXR jako slave (sync MIDI lub jack) ma wysyłać dalej Start, Stop i Continue na swoje MIDI out?",
       "assumption": "Nie, jak w fw 1.7: wysyła je tylko jako master. Jeśli thru jest włączone, przekazuje to, co przychodzi.",
       "answer": "Ma być zgodnie ze standardem MIDI; istniejąca obsługa MIDI nie wymaga zmian. Jako slave LXR nie wysyła własnych Start/Stop/Continue (tylko master), a MIDI thru przekazuje dalej to, co przychodzi (N18.2)."
+    },
+    {
+      "id": "Q8",
+      "status": "zamknięte",
+      "question": "Jak przeglądać zadania etapu 1: pełne przeglądy czy szybciej?",
+      "assumption": "Każde zadanie ma przegląd zgodności i przegląd jakości, do 3 rund każdy.",
+      "answer": "24.10 22:40: bez zmian. 25.10 09:45: E1 i E2 z pełnymi przeglądami, E3 i E4 z jednym łącznym (najwyżej 2 rundy). 25.10 12:25: w workflowie B (E1.18, E2.1–E2.8) przegląd zgodności i przegląd jakości idą równolegle, a jeden fixer poprawia obie listy uwag. 25.10 12:55: rundy 2 i 3 są skupione: sprawdzają uwagi poprzedniej rundy i commity poprawek, a nie całe zadanie od nowa (runda 1 zostaje pełna)."
     }
   ],
   "log": [
@@ -907,6 +929,166 @@
       "n": 66,
       "at": "2026-10-25 05:51",
       "text": "Kamień milowy M5: rdzeń seq_core (E1.1–E1.14) gotowy, raport w docs/lichomat/reports/M5-rdzen-etapu-1.md. Przegląd końcowy znalazł ważny problem: kolejka zdarzeń kosztuje na sprzęcie do 0,8–1,2 ms na granicę kroku (memmove z newlib-nano kopiuje bajt po bajcie), co grozi przerwami dźwięku. Rozwiązanie to bufor pierścieniowy (E1.16). Rusza workflow z E1.15, E1.16 i E1.17."
+    },
+    {
+      "n": 67,
+      "at": "2026-10-25 06:05",
+      "text": "E1.15 zaimplementowane (6e9dff5): estymator tempa liczy regresję liniową po pakietach taktów. Implementator dodał regułę dołączania: takt MIDI mniej niż 2 ms po pakiecie dołącza do niego. Dzięki temu przyklejone takty DIN (0,32 ms) nie psują estymacji. W próbnym przebiegu 40–300 BPM błąd najwyżej 0,06%, bez restartów."
+    },
+    {
+      "n": 68,
+      "at": "2026-10-25 06:28",
+      "text": "Przegląd zgodności E1.15, runda 1: 7 uwag. Jedna to prawdziwy błąd: różnica znaczników czasu liczona bez znaku, więc takt ze znacznikiem wcześniejszym niż ostatni punkt (DIN i USB naraz) dawał przepełnienie."
+    },
+    {
+      "n": 69,
+      "at": "2026-10-25 06:37",
+      "text": "Poprawki E1.15 (88f5ed5): różnica znaczników ze znakiem i nowy test na takt ze znacznikiem sprzed ostatniego punktu. Dołożone testy reguły dołączania (mutanty a–d łapane), poprawiony test drugiego skoku tempa i T19."
+    },
+    {
+      "n": 70,
+      "at": "2026-10-25 06:45",
+      "text": "Notatka N21 uzupełniona o regułę dołączania 2 ms i faktyczny koszt RAM estymatora: 1192 B (fe7feed). Sprawdzenie pozostałych odejmowań bez znaku w regresji dopisane do E1.17."
+    },
+    {
+      "n": 71,
+      "at": "2026-10-25 07:00",
+      "text": "Przegląd zgodności E1.15, runda 2: zostały tylko drobne uwagi (komentarze testów, granice reguły dołączania), więc zadanie przechodzi dalej. Teraz przegląd jakości E1.15."
+    },
+    {
+      "n": 72,
+      "at": "2026-10-25 07:34",
+      "text": "Przegląd jakości E1.15, runda 1: 1 ważna uwaga. Dołączanie przyklejonych taktów nie działało przez pierwsze 12 taktów po przełączeniu na MIDI lub po zaniku zegara. Poprawki w toku. Do tego 5 drobnych, m.in. dwa różne koszty RAM w N21; poprawione na 1192 B."
+    },
+    {
+      "n": 73,
+      "at": "2026-10-25 07:36",
+      "text": "Poprawka E1.15 po przeglądzie jakości: przyklejone takty łączą się w pakiet także w pierwszych 12 taktach po przełączeniu na MIDI i po zaniku zegara, mała zmiana w rdzeniu. Teraz druga runda przeglądu jakości."
+    },
+    {
+      "n": 74,
+      "at": "2026-10-25 08:20",
+      "text": "E1.15 gotowe (6e9dff5 + 3 commity poprawek): estymator tempa slave'a to teraz regresja liniowa po pakietach taktów. Dokładny przy pakietach USB 1–16 taktów, przy buforach audio typowo 0,1–0,3%, DIN 0,007%. Przyklejone takty DIN łączą się w jeden pakiet także zaraz po starcie. Przeglądy wyłapały m.in. przepełnienie przy odejmowaniu znaczników bez znaku. Teraz E1.16: kolejka zdarzeń jako bufor pierścieniowy, żeby granica kroku nie kosztowała do 1,2 ms."
+    },
+    {
+      "n": 75,
+      "at": "2026-10-25 08:30",
+      "text": "E1.16 zaimplementowane: kolejka zdarzeń to bufor pierścieniowy, najwcześniejsze zdarzenie na początku. Przy gęstym patternie przesunięć na granicę kroku jest 644 zamiast 4459, szacunkowo 16–20 tys. cykli (5–6% budżetu bloku audio) zamiast 180–270 tys. (57–85%). Choke, który nic nie usuwa, nic nie zapisuje. RAM bez zmian, kod +712 B. Na sprzęcie potwierdzi to licznik CPU (H12). Teraz przeglądy."
+    },
+    {
+      "n": 76,
+      "at": "2026-10-25 08:49",
+      "text": "Przegląd zgodności E1.16: 2 ważne uwagi. Pierwsza: brak testu usuwania skip-once, gdy początek pierścienia nie jest w zerze. Druga: przypadek pesymistyczny (ratchety, przesunięcia +7/−7, shuffle 127) daje do 3878 zapisów na granicę kroku, czyli 19–27% budżetu bloku. Lepsze rozwiązanie to wstawianie od bliższego końca pierścienia, maksimum ok. 1200. Wybrałem je; jeśli poprawka E1.16 go nie wprowadzi, zrobi to E1.17."
+    },
+    {
+      "n": 77,
+      "at": "2026-10-25 08:57",
+      "text": "Poprawki E1.16 (965cec2, 1db187b). Pierścień wstawia teraz od bliższego końca: przypadek pesymistyczny ma 1194 zamiast 3878 zapisów na granicę kroku, zwykły ×8 410 zamiast 644. To ok. 7–10% budżetu bloku, do potwierdzenia na sprzęcie (H12). Dodany test skip-once z przesuniętym początkiem pierścienia i poprawione 3 drobne uwagi. Teraz ponowny przegląd zgodności."
+    },
+    {
+      "n": 78,
+      "at": "2026-10-25 09:18",
+      "text": "Przegląd zgodności E1.16, runda 2: tylko 2 drobne uwagi, więc zadanie przechodzi dalej. Pierwsza to nieaktualny komentarz. Druga to brak testu pilnującego wstawiania od bliższego końca, który dopisze E1.17 (punkt C2). Teraz przegląd jakości E1.16."
+    },
+    {
+      "n": 79,
+      "at": "2026-10-25 09:37",
+      "text": "Przegląd jakości E1.16, runda 1: 2 ważne uwagi. Pierwsza: brak testu wstawiania od bliższego końca (dopisywany teraz). Druga: przypadek pesymistyczny jest gorszy niż zmierzono. Przy przesunięciach dobranych pod najgorszy przypadek wychodzi 3861 zapisów na granicę kroku (22–29% bloku), przy starej kolejce 6727. Nowe zadanie E1.18 ma dać koszt ograniczony do ok. 400 zapisów: nowe zdarzenia zbierane, sortowane i scalane jednym przebiegiem."
+    },
+    {
+      "n": 80,
+      "at": "2026-10-25 10:00",
+      "text": "Twoja decyzja: podejście mieszane. E1 i E2 (kod firmware) zostają z pełnymi przeglądami. E3 i E4 (narzędzia, dokumentacja) dostają jeden łączny przegląd na wysokim wysiłku, maksymalnie 2 rundy. Część równoległa odpada: E2.7 potrzebuje narzędzia z E2.2, a E3.1 i E3.5 zmieniają te same pliki co E2. Szacunek do końca etapu 1: ok. 15–16 h."
+    },
+    {
+      "n": 81,
+      "at": "2026-10-25 10:20",
+      "text": "E1.16 gotowe (e0d0f54, 965cec2, 211c660, ceada09 i inne): kolejka zdarzeń to bufor pierścieniowy ze wstawianiem od bliższego końca. Typowo 410–644 zapisy na granicę kroku zamiast 4459. Przypadek pesymistyczny ograniczy E1.18. Przeglądy dołożyły testy kosztu i skip-once z przesuniętym początkiem pierścienia. Teraz E1.17: porządki po przeglądach E1."
+    },
+    {
+      "n": 82,
+      "at": "2026-10-25 11:10",
+      "text": "E1.17 w toku. A: ASSERT_EQ odrzuca liczby zmiennoprzecinkowe, dotychczasowe porównania przeszły na ASSERT_NEAR (c459ce7). B: brakujące testy z przeglądów E1 (42cb4c0). C: poprawki rzadkich błędów, każda z testem (fad8c89): przełączenie na MIDI zaraz po starcie, Continue bez SPP rozjeżdżający licznik taktów (miganie LED), faza kroku zwracająca 1.0 tuż przed jego końcem, odejmowanie znaczników bez znaku w regresji. Dalej części D–G."
+    },
+    {
+      "n": 83,
+      "at": "2026-10-25 11:29",
+      "text": "E1.17 zaimplementowane w 11 commitach. Agent sprawdził 195 uwag z przeglądów E1 i 81 z E1.13–E1.16. Ok. 110 celowo zepsutych wersji kodu, 99 łapią teraz testy. Krok, którego wczesne uderzenia zagrały, gra wszystkie swoje uderzenia (część D). T20 ma własny generator, więc Mac i Linux testują to samo. Komentarze i notatki poprawione. Teraz przeglądy."
+    },
+    {
+      "n": 84,
+      "at": "2026-10-25 11:47",
+      "text": "Przygotowania do workflowów B i C: wycięte pliki zadań E3.1, E3.3–E3.5 i E4.1–E4.3; skrypt, który dopisze E1.15–E1.18 i sekcję poprawek z wykonania do planu, sprawdzony na kopii (uruchomię go między A2 a B). E1.17: trwa przegląd zgodności ze specyfikacją, runda 1."
+    },
+    {
+      "n": 85,
+      "at": "2026-10-25 11:50",
+      "text": "Raport E1.17 rozdzielony na dalsze zadania: do E1.18 trafiają limit kosztu również dla wywołań bez granicy kroku (7 choke'ów w jednym ticku: 448 zapisów) i testowy akcesor head kolejki; do E2.2 poprawka seq_addNote (znacznik skip-once także na torze o długości 1, D6). Zapisane jako poprawka nr 17 planu."
+    },
+    {
+      "n": 86,
+      "at": "2026-10-25 12:07",
+      "text": "E1.17, przegląd zgodności (runda 1): 1 ważna uwaga i 6 drobnych. Ważna: gdy wczesna część kroku odpadła (krok wyłączony albo nieudane losowanie), a przed granicą krok zostanie włączony, gra sama późna część (5 z 8 uderzeń). Do wyboru: naprawić albo opisać jako trzeci wyjątek. Drobne: 2 testy, które nie łapią swoich mutantów, nieaktualny rozmiar kodu w wierszu R6.3, komentarze, jedno porównanie double przez rzutowanie. Od 12:07 poprawia fixer."
+    },
+    {
+      "n": 87,
+      "at": "2026-10-25 12:19",
+      "text": "E1.17: fixer poprawił wszystkie 7 uwag przeglądu zgodności w jednym commicie 2cb6466 (12:18). Ważną uwagę naprawił w kodzie: jeśli wczesna część kroku odpadła, odpada też późna, więc krok gra cały albo wcale. Pierścień fitu tempa trzyma teraz kolejność znaczników czasu. Od 12:19 trwa runda 2 przeglądu zgodności."
+    },
+    {
+      "n": 88,
+      "at": "2026-10-25 12:25",
+      "text": "Twoja decyzja (12:25): w workflowie B przegląd zgodności i przegląd jakości idą równolegle, a jeden fixer poprawia obie listy uwag. Tryb dopisany do impl-track.js i sprawdzony na symulacji 9 scenariuszy; to ok. 30% mniej czasu na zadanie. Monitor zgłasza teraz także każdy commit, więc commity trafiają do dziennika na bieżąco. W A2 trwa runda 2 przeglądu zgodności E1.17."
+    },
+    {
+      "n": 89,
+      "at": "2026-10-25 12:58",
+      "text": "Twoja decyzja (12:55): w workflowie B rundy 2 i 3 przeglądu są skupione. Dostają uwagi z poprzedniej rundy i sprawdzają tylko, czy zostały naprawione, oraz commity poprawek (z testami i mutantami na zmienionych liniach); runda 1 zostaje pełna. Tryb dopisany do impl-track.js i sprawdzony na symulacji. W A2 nadal trwa runda 2 przeglądu zgodności E1.17, jeszcze w starym trybie: pełny przegląd od nowa."
+    },
+    {
+      "n": 90,
+      "at": "2026-10-25 13:03",
+      "text": "E1.17, przegląd zgodności, runda 2 (koniec 13:03): 1 ważna uwaga. Poprawka z rundy 1 (Continue ustawia licznik taktów od nowa) zamaskowała dwa starsze testy: mutanty, które usuwają zerowanie licznika przy Start i przy SPP, przechodzą wszystkie testy. Fixer dopisuje 2 testy, które je łapią; potem runda 3, ostatnia. 5 drobnych uwag trafia na listę zaległości, m.in. opis kasowania kroku w nagłówku i wiersz R6.2, który poprawię przed workflowem C."
+    },
+    {
+      "n": 91,
+      "at": "2026-10-25 13:04",
+      "text": "Commit 5dad00e (E1.17, poprawka po rundzie 2): zerowanie licznika taktów przy Start i przy SPP znów ma własne testy, które łapią oba mutanty."
+    },
+    {
+      "n": 92,
+      "at": "2026-10-25 13:23",
+      "text": "E1.17, przegląd zgodności, runda 3 (ostatnia, od 13:05): recenzent zrobił już 105 kroków i właśnie uruchamia pierwszą serię mutantów na kodzie po poprawkach. Jeśli runda przejdzie, ruszy przegląd jakości."
+    },
+    {
+      "n": 93,
+      "at": "2026-10-25 13:37",
+      "text": "E1.17: przegląd zgodności zaliczony w rundzie 3 (13:37). Zostało 6 drobnych uwag, m.in. opis kasowania kroku w nagłówku, test ścieżki błędu ASSERT_EQ_DBL i dwa zdania w N21. Dołączę je do E1.18 jako drobne poprawki. Od 13:37 trwa przegląd jakości, runda 1."
+    },
+    {
+      "n": 94,
+      "at": "2026-10-25 13:54",
+      "text": "E1.17, przegląd jakości, runda 1 (od 13:37): recenzent ma za sobą 70 kroków. Przepuścił serię mutantów na poprawkach C1 i C4 i sprawdza, jak poprawka C1 (start przed przełączeniem trybu sync) współgra z planowanym kodem E2.2 (seq_cbTransport)."
+    },
+    {
+      "n": 95,
+      "at": "2026-10-25 14:15",
+      "text": "E1.17 zrobione: przegląd jakości zaliczony w rundzie 1 (14:15), zostało 5 drobnych uwag. Jedna to realny drobny błąd: po SPP, Continue i przełączeniu na sync wewnętrzny krok gra o jeden takt zegara MIDI później (21 ms przy 120 BPM). Wszystkie trafią do E1.18. E1.17 trwało 3 h 55 min (10:20–14:15). Od 14:15 trwa przegląd końcowy E1.15–E1.17."
+    },
+    {
+      "n": 96,
+      "at": "2026-10-25 14:36",
+      "text": "Przegląd końcowy E1.15–E1.17 (od 14:15): recenzent ma za sobą 114 kroków, właśnie kompiluje rdzeń z flagami firmware'u i mierzy rozmiary kodu. Start workflowu B jest przygotowany: aktualizacja planu sprawdzona na kopii, tryb równoległych i skupionych przeglądów gotowy. Poprawka do wpisu #83: E1.17 ma 11 commitów, 9 z implementacji i 2 z poprawek po przeglądzie zgodności."
+    },
+    {
+      "n": 97,
+      "at": "2026-10-25 14:43",
+      "text": "Na dashboardzie w karcie „W toku” jest teraz wiersz „Teraz” z pulsującą kropką: pokazuje pracę, która trwa poza zadaniami planu, na przykład przegląd końcowy, który właśnie trwa."
+    },
+    {
+      "n": 98,
+      "at": "2026-10-25 14:50",
+      "text": "Workflow A2 zakończony (14:50): E1.15–E1.17 zrobione, 24 agentów, 1706 wywołań narzędzi. Przegląd końcowy nie znalazł błędu, który psułby projekt. Ma 1 ważną uwagę, już przypisaną do E1.18 (koszt kolejki), i 3 drobne. Najciekawsza z drobnych: pojedynczy fałszywy takt MIDI albo podwójny impuls na jacku potrafi na chwilę przekłamać tempo o 7–18% i sam zrestartować estymację. Robię z tego zadanie E1.19."
     }
   ]
 }
