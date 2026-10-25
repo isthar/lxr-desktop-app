@@ -17804,7 +17804,7 @@ mode 1 as before:
 - Modify: `Core/Src/Soundengine/MIDI/CortexParser.c` (`FRONT_SEQ_TRIGGER_IN_PPQ`, fw 1.7 lines 1065-1069)
 - Test: `tools/fw_checks.sh E2.5`
 
-- [ ] **Step 1: Write the failing check**
+- [x] **Step 1: Write the failing check**
 
 Add the E2.5 checks before the task list:
 
@@ -17831,7 +17831,7 @@ check_E2_5() {
 check_tasks="E2.2 E2.3 E2.4 E2.5"
 ```
 
-- [ ] **Step 2: Run it and see it fail**
+- [x] **Step 2: Run it and see it fail**
 
 ```bash
 tools/fw_checks.sh E2.5
@@ -17853,7 +17853,7 @@ FAIL E2.5: syncTrigger_writePos is still linked
 FAIL E2.5: trigger_prescaleCounterClockInput is still linked
 ```
 
-- [ ] **Step 3: Replace the jack interrupt handlers**
+- [x] **Step 3: Replace the jack interrupt handlers**
 
 The include (fw 1.7 line 18):
 
@@ -17969,7 +17969,7 @@ void EXTI9_5_IRQHandler(void)
 void trigger_setPin(uint8_t index, uint8_t isOn)
 ```
 
-- [ ] **Step 4: `TriggerOut.h`: drop the old declarations**
+- [x] **Step 4: `TriggerOut.h`: drop the old declarations**
 
 fw 1.7 lines 40-45:
 
@@ -17999,7 +17999,7 @@ with:
 //void trigger_allOff();
 ```
 
-- [ ] **Step 5: Post the clock-in PPQ**
+- [x] **Step 5: Post the clock-in PPQ**
 
 At the end of the `FRONT_SEQ_TRIGGER_IN_PPQ` case (fw 1.7 lines 1065-1069). The globals load sends this message at boot, so the core gets the stored PPQ:
 
@@ -18025,7 +18025,7 @@ with:
 		break;
 ```
 
-- [ ] **Step 6: Give the edited files CRLF line endings**
+- [x] **Step 6: Give the edited files CRLF line endings**
 
 ```bash
 python3 - Core/Src/Soundengine/TriggerOut.c Core/Inc/Soundengine/TriggerOut.h \
@@ -18043,7 +18043,7 @@ EOF
 
 Expected: three lines starting with `CRLF`.
 
-- [ ] **Step 7: Build and run the checks**
+- [x] **Step 7: Build and run the checks**
 
 ```bash
 tools/check.sh && tools/fw_checks.sh E2.2 E2.3 E2.4 E2.5
@@ -18062,16 +18062,16 @@ PASS E2.4
 PASS E2.5
 ```
 
-- [ ] **Step 8: Review**
+- [x] **Step 8: Review**
 
-- [ ] Both handlers read the stamp first and clear the pending bit as fw 1.7 did. They act only in
+- [x] Both handlers read the stamp first and clear the pending bit as fw 1.7 did. They act only in
   sync mode 1, and they call nothing but `seqp_jackIn()`.
-- [ ] Polarity: a low pin (`!pinState`) was "stop and reset" in fw 1.7 and is `SEQC_EV_RESET_ON` now.
-- [ ] Both handlers run at preemption priority 3 (`main.c:913-917`). They never interrupt each
+- [x] Polarity: a low pin (`!pinState`) was "stop and reset" in fw 1.7 and is `SEQC_EV_RESET_ON` now.
+- [x] Both handlers run at preemption priority 3 (`main.c:913-917`). They never interrupt each
   other, so the shared jack queue has one producer at a time.
-- [ ] `seq_getBpm()` follows the jack tempo through `seq_refreshCopies()` (E2.2), not `seq_setBpm()`.
+- [x] `seq_getBpm()` follows the jack tempo through `seq_refreshCopies()` (E2.2), not `seq_setBpm()`.
   The master tempo stays as the user set it.
-- [ ] Clock out (E2.2 callbacks): `trigger_setClockPhase()` from the position, then
+- [x] Clock out (E2.2 callbacks): `trigger_setClockPhase()` from the position, then
   `trigger_clockTick(0, 0)`, every 4 ticks while running; `trigger_reset(1)` on START and CONTINUE;
   `trigger_reset(0)` on STOP. The output PPQ prescaler is unchanged.
 
@@ -18086,7 +18086,7 @@ Intended changes for the report:
   second step, counted from the start of the song.
 - `PAR_PRESCALER_CLOCK_IN` is posted to the core when the front panel sends a new value.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add tools/fw_checks.sh Core/Src/Soundengine/TriggerOut.c Core/Inc/Soundengine/TriggerOut.h \

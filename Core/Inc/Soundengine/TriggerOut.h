@@ -37,12 +37,6 @@
 #define PULSE_LENGTH_MS 20 //[ms]
 #define PULSE_LENGTH (PULSE_LENGTH_MS*4) //systick 0.25ms
 
-#define HANDLE_SEQ_IN_CLOCK_INTERRUPT 0
-
-#if !HANDLE_SEQ_IN_CLOCK_INTERRUPT
-extern uint8_t trigger_clockReceived;
-#endif
-
 enum
 {
 	TRIGGER_1 = 0,
@@ -105,7 +99,6 @@ void trigger_setClockPhase(uint8_t pulse);//the clock out divider's count, 0..95
 //uint8_t trigger_isGateModeOn();
 //void trigger_setGatemode(uint8_t onOff);	//if gate mode is on, the trigger out will be high until a note off is send
 //void trigger_allOff();
-void trigger_ResetPosition();
 
 
 #endif /* TRIGGEROUT_H_ */

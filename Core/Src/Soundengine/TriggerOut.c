@@ -16,6 +16,7 @@
 #include "Soundengine/TriggerOut.h"
 #include "string.h"
 #include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Sequencer/seq_platform.h"
 #include "limits.h"
 #include "Soundengine/config.h"
 #include "Soundengine/DSPAudio/medianFilter.h"
@@ -25,8 +26,6 @@
 uint8_t trigger_dividerClockOut1 = PRE_4_PPQ_OUT;
 //uint8_t trigger_dividerClockOut2 = PRE_4_PPQ;
 uint8_t trigger_prescalerClockInput = PRE_4_PPQ_IN;
-
-uint8_t trigger_prescaleCounterClockInput = 0;
 
 uint8_t trigger_nextPulseOut1 = 0xff;
 //uint8_t trigger_nextPulseOut2 = 0xff;
@@ -101,39 +100,14 @@ void EXTI9_5_IRQHandler()
 }
 #else
 
-#if !HANDLE_SEQ_IN_CLOCK_INTERRUPT
-uint8_t trigger_clockReceived = 0;
-#endif
-
-#define WINDOW_SIZE 8
-#define WINDOW_MASK 0x07
-static float sync_window[WINDOW_SIZE];
-float trigger_timeLast = 0;
-uint8_t syncTrigger_writePos = 0;
-uint8_t trigger_clockCnt = 0;
-
-//---------------------------------------------------------
-uint16_t trigger_calcBpm(float timePerPulse)
-{
-	// 1 Minute has 60 * 1000 [ms]
-	//we have 24 pulses per quarter
-	//120 bpm = 120 quarters per minute
-
-	float quarterDuration = 24 * (timePerPulse/4);
-	float bpm = (60 * 1000) / quarterDuration;
-
-	return bpm>0?bpm:1;
-}
-
-void trigger_ResetPosition()
-{
-	trigger_clockCnt = 0;
-
-}
-
-//Clock In Interrupt
+//Clock In Interrupt. In sync mode 1 every pulse goes to the jack sync queue with its
+//time stamp; the timing core counts the pulses into steps (4 or 24 PPQ, see
+//seq_setClockInPpq()) and measures the tempo from the stamps.
 void EXTI4_IRQHandler(void)
 {
+	//the time stamp first, as close to the edge as possible
+	const uint32_t stamp = seqp_stamp();
+
 	/* EXTI line interrupt detected */
 	if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_4) != RESET)
 	{
@@ -141,115 +115,28 @@ void EXTI4_IRQHandler(void)
 
 		if(seq_getExtSync() == 1)
 		{
-#if !HANDLE_SEQ_IN_CLOCK_INTERRUPT
-
-
-			//Fix for external sync LFO sync calculation
-
-			uint8_t syncFactor = 1;
-			if(trigger_prescalerClockInput == PRE_4_PPQ_IN)
-			{
-				// 4ppq * 6 = 24ppq
-				syncFactor = 6;
-				trigger_clockReceived++;
-			}
-			else if(trigger_prescalerClockInput == PRE_24_PPQ_IN)
-			{
-				syncFactor = 1;
-
-				if(trigger_clockCnt == 0)
-				{
-					trigger_clockReceived++;
-				}
-
-				trigger_clockCnt++;
-				if(trigger_clockCnt >= 6)
-				{
-					trigger_clockCnt = 0;
-
-				}
-			}
-
-
-				float time = systick_ticks - trigger_timeLast;
-				trigger_timeLast = systick_ticks;
-
-				sync_window[syncTrigger_writePos++] = time/syncFactor;
-				syncTrigger_writePos &= WINDOW_MASK;
-
-				//calc average time in [ms] between midi clock pulses
-				int i;
-				float avg=0;
-				for(i=0;i<WINDOW_SIZE;i++)
-				{
-					avg += sync_window[i];
-				}
-				avg /= WINDOW_SIZE;
-				//based on 24ppq midi resolution
-				seq_setBpm(trigger_calcBpm(avg));
-
-#else
-			/*
-			uint32_t counter = medianFilter(__HAL_TIM_GetCounter(&htim2));
-
-			//time for a 128th substep
-			float t =  (counter) * COUNTER_DURATION / (trigger_prescalerClockInput);
-			const float f = (1.f/t);
-			trigger_phaseInc = (1/(REAL_FS/f)) ;
-
-			//divide incoming clocks with prescaler
-			//if(trigger_prescaleCounterClockInput % trigger_prescalerClockInput == 0)
-			{
-				if(seq_isRunning()!=0)
-				{
-					seq_triggerNextMasterStep(trigger_prescalerClockInput);
-					//reset phase counter
-					trigger_phase = 0;
-					trigger_phaseWrapCounter = 1;
-
-				}
-			}
-			//reset measurement timer
-			 *
-			 */
-
-			if(seq_isRunning())
-			{
-				if(trigger_prescaleCounterClockInput % trigger_prescalerClockInput == 0)
-				{
-					seq_nextStep();
-				}
-				trigger_prescaleCounterClockInput++;
-			}
-#endif
+			seqp_jackIn(SEQC_EV_PULSE, stamp);
 		}
-
-		//__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_4);
 	}
 }
 
-//Reset In Interrupt
+//Reset In Interrupt. In sync mode 1 the reset input is a run gate (N4): its edges go to
+//the jack sync queue, in order with the clock pulses. Active stops the sequencer and
+//rewinds it; released arms a start at the next pulse that begins a step.
 void EXTI9_5_IRQHandler(void)
 {
+	const uint32_t stamp = seqp_stamp();
+
 	/* EXTI line interrupt detected */
 	if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_5) != RESET)
 	{
-    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
+		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
 
 		if(seq_getExtSync() == 1)
 		{
+			//the input is inverted: a low pin means the reset is active
 			const uint16_t pinState = (Reset_In_EXTI5_GPIO_Port->IDR & Reset_In_EXTI5_Pin);
-			if(!pinState)
-			{
-				//reset pin is high -> stop and reset sequencer
-				seq_setRunning(0);
-				trigger_ResetPosition();
-				seq_resetPosition();
-				trigger_prescaleCounterClockInput = 0;
-			} else {
-				//reset pin is low -> start sequencer
-				seq_setRunning(1);
-			}
+			seqp_jackIn(pinState ? SEQC_EV_RESET_OFF : SEQC_EV_RESET_ON, stamp);
 		}
 		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
 	}

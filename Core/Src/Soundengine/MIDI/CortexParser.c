@@ -1066,6 +1066,8 @@ static void frontParser_handleSeqCC()
 			break;
 
 		}
+		//the timing core counts the clock in pulses into steps with this PPQ
+		seq_setClockInPpq(trigger_prescalerClockInput == PRE_24_PPQ_IN ? 24 : 4);
 		break;
 	case FRONT_SEQ_TRIGGER_OUT1_PPQ:
 		switch(cortex_midiMsg.data2)

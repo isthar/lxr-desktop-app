@@ -131,7 +131,18 @@ check_E2_4() {
 		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_drainSyncQueues() does not stop after a kit-loading Program Change or SPP"
 }
 
-check_tasks="E2.2 E2.3 E2.4"
+# ---- E2.5: clock in and reset in jacks through the jack sync queue ----------
+check_E2_5() {
+	must_call EXTI4_IRQHandler seqp_jackIn
+	must_call EXTI9_5_IRQHandler seqp_jackIn
+	must_not_call EXTI4_IRQHandler seq_setBpm
+	must_not_call EXTI9_5_IRQHandler seq_setRunning seq_resetPosition
+	need seq_setClockInPpq
+	gone trigger_clockReceived trigger_calcBpm trigger_timeLast trigger_clockCnt syncTrigger_writePos \
+		trigger_ResetPosition trigger_prescaleCounterClockInput
+}
+
+check_tasks="E2.2 E2.3 E2.4 E2.5"
 
 if [ $# -gt 0 ]; then check_tasks="$*"; fi
 for task in $check_tasks; do
