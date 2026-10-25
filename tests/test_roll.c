@@ -283,6 +283,28 @@ TEST(T14_skip_once_removes_the_queued_early_hits)
 	ASSERT_EQ(stats().skipDrops, 1);
 }
 
+TEST(T14_skip_once_removes_every_queued_early_hit)
+{
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	fake_setStep(h, 0, 4, 4, true);
+	fake_setTiming(h, 0, 4, 4, 5, -7);		/* 8 hits, 300 to 384 */
+	fake_setStep(h, 0, 0, 3, true);
+	fake_setTiming(h, 0, 0, 3, 5, 0);		/* 8 hits, 288 to 372: kept between the removed */
+	start(h);
+	runToTick(h, 3 * 96 + 50);			/* 348, 360 and 372 of both tracks are queued */
+	ASSERT_EQ(stats().queueDepth, 6);
+	fake_addNote(h, 4, 100, 64);
+	ASSERT_EQ(stats().queueDepth, 3);
+	runToTick(h, 6 * 96);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 16), 4);	/* 300 to 336 fired before the note */
+	ASSERT_EQ(trig[3]->ev.tick, 336);
+	const size_t n = fake_triggers(h, 0, trig, 16);
+	ASSERT_EQ(n, 8);
+	ASSERT_EQ(trig[n - 1]->ev.tick, 372);
+	ASSERT_EQ(stats().skipDrops, 1);
+}
+
 TEST(T14_skip_once_leaves_other_tracks_alone)
 {
 	fake_host_t *h = fake_init();
