@@ -38,7 +38,10 @@
 /* The tempo fit (N21), see the Tempo estimate section. The windows, the outlier
  * band and the restart counts are in seq_core.h. The tunables can be set with
  * -D for host measurements. */
-#define SEQC_TEMPO_RING		(SEQC_TEMPO_LONG_WINDOW + 2u)	/**< points: a long window and the next one */
+/** ring points: a long window, the next point, and the SEQC_TEMPO_RESTART - 1 more
+ * that a restart writes, so that a restart leaves the points of the fit before it
+ * intact and a joining clock can undo it (seqc_tempoClock()) */
+#define SEQC_TEMPO_RING		(SEQC_TEMPO_LONG_WINDOW + SEQC_TEMPO_RESTART + 1u)
 #define SEQC_TEMPO_SPAN_S	16u	/**< the long window holds at most 16 s, so 32-bit stamps suffice in the ring */
 #ifndef SEQC_TEMPO_BAND_STEP
 #define SEQC_TEMPO_BAND_STEP	1.25	/**< the outlier band is at least this many step amplitudes */
@@ -253,6 +256,7 @@ typedef struct
 	seqc_point_t	transfer;	/**< its stamp, and its last clock so far */
 	bool		joinable;	/**< a MIDI clock less than SEQC_TEMPO_JOIN_MS after the last transfer joins it */
 	bool		joinLeftOut;	/**< that transfer was left out as an outlier */
+	bool		joinRestarted;	/**< that transfer restarted the fit */
 	seqc_fit_t	fitBefore;	/**< the fit before the last MIDI transfer, for a clock that joins it */
 	seqc_fit_t	fit;		/**< the tempo fit (N9, N16, N21) */
 	uint32_t	ringClock[SEQC_TEMPO_RING];	/**< the points of the long window */
@@ -894,6 +898,20 @@ static void seqc_localStart(void)
 		seqc_arm(SEQC_ARM_STEP_CLOCK);
 }
 //------------------------------------------------------------------------------
+/** A transport that waits for its first clock since a rewind or a song position
+ * is one clock before step 0, or before the located step. The clock length
+ * depends on the sync mode and the PPQ, so a change of either moves it. */
+static void seqc_rebaseWaiting(void)
+{
+	if (seqc.atStart)
+		seqc.pos = seqc_startPosition();
+	else if (seqc_trk.seeked && seqc.state != SEQC_RUNNING)
+		seqc.pos = (double)seqc.absStep * SEQC_TICKS_PER_STEP - seqc_ticksPerClock();
+	else
+		return;
+	seqc_sl.lastClockPos = seqc.pos;
+}
+//------------------------------------------------------------------------------
 /** song position (N6): seek to step sixteenths */
 static void seqc_seek(uint16_t sixteenths)
 {
@@ -906,8 +924,7 @@ static void seqc_seek(uint16_t sixteenths)
 	seqc_trk.seeked = true;
 	seqc.absStep = sixteenths;
 	seqc.atStart = false;
-	seqc.pos = (double)sixteenths * SEQC_TICKS_PER_STEP - seqc_ticksPerClock();
-	seqc_sl.lastClockPos = seqc.pos;
+	seqc_rebaseWaiting();			/* one clock before step sixteenths */
 	seqc_out.nextPulse = (seqc_tick_t)sixteenths * SEQC_TICKS_PER_STEP;
 	seqc_sl.clockCount = 0;
 }
@@ -1005,9 +1022,11 @@ static void seqc_setSlaveBpm(double bpm)
  *   the next clock comes the estimate includes the head alone, for less than
  *   SEQC_TEMPO_JOIN_MS. 2 ms takes in USB transfers in consecutive 1 ms frames
  *   and a few MIDI bytes between two clocks, and is a quarter of a clock at
- *   SEQC_SLAVE_BPM_MAX. A transfer that restarted the fit takes no more clocks
- *   (the restart rewrote the ring, so it is not undone), and neither does one
- *   followed by another sync event.
+ *   SEQC_SLAVE_BPM_MAX. A head that completed a tempo jump is taken back too:
+ *   the restart is undone (the ring has room for its points beside the fit
+ *   before it) and done again, or not, with the whole burst, so a host stall
+ *   with a catch-up burst is no tempo jump. A transfer followed by another sync
+ *   event takes no more clocks.
  * - Windows: the points of the last SEQC_TEMPO_WINDOW clocks (short) and of the
  *   last SEQC_TEMPO_LONG_WINDOW clocks (long; the 4PPQ values for the jack at
  *   4 PPQ), and at most SEQC_TEMPO_SPAN_S. The estimate is the slope of the long
@@ -1149,9 +1168,15 @@ static void seqc_fitAdd(seqc_point_t p)
 	if (span > UINT32_MAX)
 		span = UINT32_MAX;	/* the ring keeps 32 bits of each stamp */
 	bool moved = false;
-	while (f->tailL != f->head && (p.clock - seqc_sl.ringClock[f->tailL] > longW
-			|| p.stamp - (f->baseStamp + (uint64_t)seqc_ringY(f->tailL)) > span))
+	while (f->tailL != f->head)
 	{
+		/* The oldest point leaves when it is out of the window. It leaves too if
+		 * p is stamped before it: a stale MIDI clock, untested in the first
+		 * points (a tested one that early is an outlier). The ring keeps stamps
+		 * after the base, so the base must not be later than p. */
+		const uint64_t tail = f->baseStamp + (uint64_t)seqc_ringY(f->tailL);
+		if (p.clock - seqc_sl.ringClock[f->tailL] <= longW && p.stamp >= tail && p.stamp - tail <= span)
+			break;
 		if (f->tailS == f->tailL)
 		{
 			seqc_sumsAdd(&f->sht, seqc_ringX(f->tailS), seqc_ringY(f->tailS), -1.0);
@@ -1251,7 +1276,8 @@ static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
 		if (!jack)
 		{
 			const double x = (double)(uint32_t)(p.clock - f->baseClock);
-			r = (double)(p.stamp - f->baseStamp) - seqc_sumsAt(&f->lng, x, f->slope);
+			/* signed: a stale MIDI clock may be stamped before the base */
+			r = (double)(int64_t)(p.stamp - f->baseStamp) - seqc_sumsAt(&f->lng, x, f->slope);
 		}
 		double band = f->slope * (SEQC_TEMPO_OUTLIER_PCT / 100.0);
 		if (band < SEQC_TEMPO_BAND_STEP * f->step)
@@ -1328,8 +1354,8 @@ static void seqc_clearEstimate(void)
 }
 //------------------------------------------------------------------------------
 /** the transfer being collected is complete: its point goes into the fit, and
- * the estimate follows the slope. A MIDI transfer that did not restart the fit
- * stays joinable: the fit before it is kept, see seqc_tempoClock(). */
+ * the estimate follows the slope. A MIDI transfer stays joinable: the fit before
+ * it is kept, see seqc_tempoClock(). */
 static void seqc_transferDone(void)
 {
 	const bool midi = seqc.mode == SEQC_SYNC_MIDI;
@@ -1337,8 +1363,9 @@ static void seqc_transferDone(void)
 	if (midi)
 		seqc_sl.fitBefore = seqc_sl.fit;
 	const seqc_pointFate_t fate = seqc_fitPoint(seqc_sl.transfer);
-	seqc_sl.joinable = midi && fate != SEQC_POINT_RESTARTED;
+	seqc_sl.joinable = midi;
 	seqc_sl.joinLeftOut = fate == SEQC_POINT_LEFT_OUT;
+	seqc_sl.joinRestarted = fate == SEQC_POINT_RESTARTED;
 	if (seqc_sl.fit.slope > 0.0)
 		seqc_setSlaveBpm(seqc_ticksPerClock() / seqc_sl.fit.slope * (double)seqc.cyclesPerSecond * 60.0
 				/ SEQC_TICKS_PER_BEAT);
@@ -1354,8 +1381,9 @@ static bool seqc_inTransfer(seqc_time_t stamp)
 			&& stamp - t < (seqc_time_t)seqc.cyclesPerSecond * SEQC_TEMPO_JOIN_MS / 1000u);
 }
 //------------------------------------------------------------------------------
-/** true if a sync event is one more clock of the last transfer: a clock of the
- * sync mode that seqc_inTransfer() takes */
+/** true if a sync event can be one more clock of the last transfer: a clock of
+ * the sync mode that seqc_inTransfer() takes. It joins it only while that
+ * transfer is open or joinable (seqc_tempoClock()). */
 static bool seqc_sameTransfer(seqc_sync_ev_t ev, seqc_time_t stamp)
 {
 	const bool clock = (ev == SEQC_EV_CLOCK && seqc.mode == SEQC_SYNC_MIDI)
@@ -1366,8 +1394,10 @@ static bool seqc_sameTransfer(seqc_sync_ev_t ev, seqc_time_t stamp)
 /** the tempo part of a clock (N9, N15, N21). A clock with the stamp of the
  * transfer being collected, or an earlier one, is one more clock of it, and so
  * is a MIDI clock less than SEQC_TEMPO_JOIN_MS after it; any other clock begins
- * the next transfer. After a dropout the fit starts again, and the gap is not
- * used. */
+ * the next transfer. Such a clock also joins the last transfer after it was
+ * evaluated, while it is joinable (see seqc_transferDone()): the fit then goes
+ * back to before that transfer. After a dropout the fit starts again, and the
+ * gap is not used. */
 static void seqc_tempoClock(seqc_time_t stamp)
 {
 	if (seqc_sl.haveStamp)
@@ -1389,12 +1419,15 @@ static void seqc_tempoClock(seqc_time_t stamp)
 	{
 		/* A burst: DIN interfaces forward a late buffer as back-to-back clocks,
 		 * 0.32 ms apart, each in its own seq_tick(). The last transfer was its
-		 * head, left out as an outlier or, untested or inside the band, in the
-		 * fit: the fit goes back to before it (the head took only the free slot
-		 * of the ring), and the transfer takes this clock too. */
+		 * head: left out as an outlier, in the fit (untested or inside the
+		 * band), or the end of a tempo jump that restarted the fit. The fit goes
+		 * back to before it (the head wrote only ring slots that the fit before
+		 * it does not use), and the transfer takes this clock too. */
 		seqc_sl.fit = seqc_sl.fitBefore;
 		if (seqc_sl.joinLeftOut && seqc.stats.intervalsExcluded > 0)
 			seqc.stats.intervalsExcluded--;
+		if (seqc_sl.joinRestarted && seqc.stats.tempoRestarts > 0)
+			seqc.stats.tempoRestarts--;
 		seqc_sl.transferOpen = true;
 	}
 	seqc_sl.joinable = false;
@@ -1608,6 +1641,17 @@ static void seqc_schedule(void)
 /** a MIDI clock or a jack pulse in its sync mode (seq_core.h, "Slave position") */
 static void seqc_slaveClock(seqc_time_t stamp)
 {
+	if (seqc.state == SEQC_ARMED && seqc_sl.arm == SEQC_ARM_NEXT_CLOCK)
+	{
+		/* a Start or Continue resumes with this clock: the count takes the step
+		 * phase of the position the clock reaches, as the master's song
+		 * position does, so that tempoStep() and a later local start follow
+		 * the steps that play (a Start and a song position give 0 anyway) */
+		const double p = seqc_sl.lastClockPos + seqc_ticksPerClock();
+		const seqc_tick_t k = seqc_floor(p / seqc_ticksPerClock());
+		const seqc_tick_t cps = (seqc_tick_t)seqc_clocksPerStep();
+		seqc_sl.clockCount = (uint32_t)(((k % cps) + cps) % cps);
+	}
 	const bool stepClock = seqc_sl.clockCount % seqc_clocksPerStep() == 0;
 
 	seqc_sl.clockCount++;
@@ -1692,6 +1736,7 @@ void seqc_setSyncMode(seqc_sync_t mode)
 		return;
 	if (mode != seqc.mode && (mode == SEQC_SYNC_INTERNAL || mode == SEQC_SYNC_ANALOG || mode == SEQC_SYNC_MIDI))
 	{
+		const bool pendingStart = seqc.startPending;
 		seqc.pos = seqc_positionAt(seqc.now);
 		seqc.startPending = false;
 		seqc.mode = mode;
@@ -1700,8 +1745,7 @@ void seqc_setSyncMode(seqc_sync_t mode)
 		seqc_sl.haveStamp = false;
 		seqc_sl.droppedOut = false;
 		seqc_setSlaveBpm(seqc.masterBpm);
-		if (seqc.atStart)
-			seqc.pos = seqc_startPosition();
+		seqc_rebaseWaiting();
 		if (mode == SEQC_SYNC_INTERNAL)
 		{
 			/* the position continues at the master tempo; an armed transport starts */
@@ -1721,6 +1765,10 @@ void seqc_setSyncMode(seqc_sync_t mode)
 			/* the next clock adds one clock to the position */
 			seqc_sl.lastClockPos = seqc.pos;
 			seqc_sl.lastClockTime = seqc.now;
+			/* an internal start that has not begun is a local start of a slave:
+			 * armed until the clock that begins a step */
+			if (pendingStart)
+				seqc_arm(SEQC_ARM_STEP_CLOCK);
 		}
 	}
 	seqc_leave();
@@ -1741,6 +1789,8 @@ void seqc_setTempo(float bpm)
 		seqc.anchorTick = seqc_internalTick(seqc.now);
 		seqc.anchorTime = seqc.now;
 	}
+	if (seqc.mode != SEQC_SYNC_INTERNAL)
+		seqc.pos = seqc_positionAt(seqc.now);	/* the slave rate may change: keep the position reached */
 	seqc.masterBpm = b;
 	seqc.ticksPerCycle = seqc_ticksPerCycle(b);
 	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
@@ -1753,6 +1803,8 @@ void seqc_setAnalogPpq(uint8_t ppq)
 {
 	if (!seqc_enter())
 		return;
+	if (seqc.mode == SEQC_SYNC_ANALOG)
+		seqc.pos = seqc_positionAt(seqc.now);	/* the clamp may shrink: keep the position reached */
 	seqc_sl.ppq = ppq == 24 ? 24 : 4;
 	if (seqc.mode == SEQC_SYNC_ANALOG)
 	{
@@ -1761,11 +1813,7 @@ void seqc_setAnalogPpq(uint8_t ppq)
 		seqc_clearEstimate();
 		seqc_sl.clockCount = 0;
 		seqc_sl.haveStamp = false;
-		if (seqc.atStart)
-		{
-			seqc.pos = seqc_startPosition();
-			seqc_sl.lastClockPos = seqc.pos;
-		}
+		seqc_rebaseWaiting();
 	}
 	seqc_leave();
 }
@@ -1938,7 +1986,9 @@ float seqc_stepPhase(void)
 	const double half = (SEQC_TICKS_PER_STEP + seqc_gen.swing) / 2.0;
 	const double phase = x < half ? 0.5 * x / half
 			: 0.5 + 0.5 * (x - half) / (SEQC_TICKS_PER_STEP - half);
-	return phase < 1.0 ? (float)phase : 0.999999f;
+	/* clamped after the conversion: a phase within 2^-25 of 1 rounds to 1.0f */
+	const float f = (float)phase;
+	return f < 1.0f ? f : 0.99999994f;
 }
 //------------------------------------------------------------------------------
 float seqc_currentBpm(void)

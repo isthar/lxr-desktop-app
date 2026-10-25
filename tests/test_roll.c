@@ -334,6 +334,23 @@ TEST(T14_phase_is_zero_before_the_first_step)
 	ASSERT_EQ_DBL(seqc_stepPhase(), 0.0);
 }
 
+TEST(T14_phase_stays_below_1)
+{
+	/* at 1 BPM a tick is 33.75 M cycles, so 50 cycles before boundary 1 the
+	 * phase is 1 - 1.5e-8, which rounds to 1.0f as a float. It is clamped after
+	 * the conversion. */
+	fake_host_t *h = fake_init();
+	seqc_setTempo(1.0f);
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	const seqc_time_t step = (seqc_time_t)(fake_stepCycles(1.0) + 0.5);
+	fake_process(h, step - 50);
+	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_TRUE(seqc_stepPhase() < 1.0f);
+	ASSERT_TRUE(seqc_stepPhase() > 0.9999f);
+}
+
 TEST(T14_late_note_goes_to_the_next_step_and_plays_once)
 {
 	fake_host_t *h = fake_init();

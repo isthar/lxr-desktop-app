@@ -419,17 +419,25 @@ typedef struct seqc_host
 void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond);
 //------------------------------------------------------------------------------
 /** Set the sync mode (seq_setExtSync()). The transport state and the position
- * are kept, and the slave tempo estimate and the clock count are cleared.
+ * are kept, and the slave tempo estimate and the clock count are cleared. A call
+ * with the mode in use, or with a value other than 0..2, is ignored.
  * - Internal to slave: the position continues from where it is, and the next
- *   clock adds one clock's worth of ticks.
+ *   clock adds one clock's worth of ticks. A start that has not begun yet
+ *   (seqc_start() with no seqc_process() since) becomes the local start of a
+ *   slave: armed (ARM) until the clock that begins a step.
  * - Slave to internal: the position continues at the master tempo. An armed
- *   transport starts at once (transport START or CONTINUE). */
+ *   transport starts at once (transport START or CONTINUE).
+ * - A transport that waits for its first clock after a rewind or a song
+ *   position stays one clock of the new mode before step 0 or the located
+ *   step. */
 void seqc_setSyncMode(seqc_sync_t mode);
 //------------------------------------------------------------------------------
 /** Set the master tempo in BPM, clamped to SEQC_MASTER_BPM_MIN..MAX. The
  * transport position and the free-running timeline are re-anchored at the core's
  * current time, so both stay continuous. In a slave mode the value is kept for
- * internal sync, and is the first estimate when there is no measured tempo yet. */
+ * internal sync, and is the tempo used while the fit has no slope: before its
+ * second point, so also after a dropout, where it replaces the last known
+ * tempo. A measured estimate stays. */
 void seqc_setTempo(float bpm);
 //------------------------------------------------------------------------------
 /** Set the PPQ of the clock in jack, 4 or 24 (PAR_PRESCALER_CLOCK_IN). Any other
@@ -439,9 +447,10 @@ void seqc_setTempo(float bpm);
  * - 24 PPQ: one pulse is 16 ticks, 6 pulses make a step; the tempo fit uses
  *   windows of 24 and 96 intervals, as for MIDI clock.
  * The change applies from the next pulse. In analog sync the tempo estimate is
- * cleared and the clock count restarts, also when the value is the same. In the
- * other modes the value is only kept for analog sync: the MIDI clock count and
- * the estimate stay. */
+ * cleared and the clock count restarts, also when the value is the same, and a
+ * transport that waits for its first pulse after a rewind or a song position
+ * stays one pulse before its step. In the other modes the value is only kept for
+ * analog sync: the MIDI clock count and the estimate stay. */
 void seqc_setAnalogPpq(uint8_t ppq);
 
 //------------------------------------------------------------------------------
@@ -468,9 +477,13 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *     jack at 24 PPQ, and 1 for the jack at 4 PPQ. The count runs all the time,
  *     and is reset by SEQC_EV_START, a song position and SEQC_EV_RESET_ON, so a
  *     local start lands on the master's 16th grid, as fw 1.7 sync_clockCnt did.
+ *     The clock that resumes playback after a Continue gives the count the step
+ *     phase of the position it reaches, as the master's song position resumes
+ *     there too.
  *   - Ignored while armed or running.
- * - seqc_stop() stops and keeps the position (STOP). The queue is kept for a
- *   later continue, and pending note-offs are sent now. Ignored while stopped.
+ * - seqc_stop() stops and keeps the position (STOP). The queue and the skip-once
+ *   markers are kept for a later continue, and pending note-offs are sent now.
+ *   Ignored while stopped.
  * - seqc_rewind(), while stopped or armed: back to the start (REWIND, only if the
  *   position was not at the start). The queue, the pending note-offs, the
  *   probability draws and the skip-once markers are cleared. Ignored while
@@ -520,15 +533,15 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *   clocks given to seqc_syncEvent() from the next seqc_process() on.
  * - A MIDI clock less than SEQC_TEMPO_JOIN_MS after the newest stamp of the
  *   last transfer joins it, whether that transfer is still open or was
- *   evaluated (left out as an outlier, or in the fit); the transfer then takes
- *   the clock's later stamp. So a burst of clocks forwarded back to back (a DIN
- *   interface sends one 0xF8 per 0.32 ms) is one transfer, even when the core
- *   sees its clocks one by one, also among the first clocks of the fit, which
- *   are not tested. For a transfer already evaluated, the fit goes back to
- *   before it, and intervalsExcluded does not count it; until the next clock
+ *   evaluated (left out as an outlier, in the fit, or the end of a tempo jump
+ *   that restarted the fit); the transfer then takes the clock's later stamp.
+ *   So a burst of clocks forwarded back to back (a DIN interface sends one 0xF8
+ *   per 0.32 ms) is one transfer, even when the core sees its clocks one by
+ *   one, also among the first clocks of the fit, which are not tested. For a
+ *   transfer already evaluated, the fit goes back to before it, and
+ *   intervalsExcluded and tempoRestarts do not count it; until the next clock
  *   joins it, for less than SEQC_TEMPO_JOIN_MS, the estimate includes it. A
- *   transfer that restarted the fit takes no more clocks, and neither does one
- *   followed by another sync event.
+ *   transfer followed by another sync event takes no more clocks.
  * - The fit has two windows: the points of the last SEQC_TEMPO_WINDOW clocks
  *   and of the last SEQC_TEMPO_LONG_WINDOW clocks (SEQC_TEMPO_WINDOW_4PPQ and
  *   SEQC_TEMPO_LONG_WINDOW_4PPQ for the jack at 4 PPQ, where both are the same).
@@ -550,7 +563,8 @@ void seqc_setAnalogPpq(uint8_t ppq);
  * - A tempo jump (N16): after SEQC_TEMPO_RESTART outliers in a row on the same
  *   side, all late or all early (SEQC_TEMPO_RESTART_4PPQ for the jack at
  *   4 PPQ), the fit restarts from those outliers alone, as after a dropout. A
- *   point inside the band, or an outlier on the other side, ends the row. For
+ *   point inside the band ends the row; an outlier on the other side ends it
+ *   and starts a new row of one. For
  *   MIDI clock, a tempo change that takes the clocks out of the band within a
  *   few clocks (about 15% or more) restarts the fit this way too.
  * - The dropout time is SEQC_DROPOUT_MS, or two expected clock intervals if
@@ -564,7 +578,8 @@ void seqc_setAnalogPpq(uint8_t ppq);
 /** local start, see Transport */
 void seqc_start(void);
 //------------------------------------------------------------------------------
-/** stop and keep the position, see Transport */
+/** stop and keep the position, see Transport. The queue and the skip-once
+ * markers are kept for a later continue. */
 void seqc_stop(void);
 //------------------------------------------------------------------------------
 /** go back to the start while stopped or armed, see Transport */
@@ -585,10 +600,14 @@ void seqc_syncEvent(seqc_sync_ev_t ev, seqc_time_t stamp);
 /** MIDI Song Position Pointer, in 16ths (0..16383); one 16th is one step. It is
  * accepted in the slave modes while stopped or armed. It seeks at once:
  * - the absolute step becomes sixteenths, so swing parity follows the master;
- * - the track indices come from seekPosition() (N6);
+ * - the track indices come from seekPosition() (N6), and the master track is
+ *   that of the pattern it activates;
  * - the last clock position is set to sixteenths * 96 minus one clock, so the
- *   next clock plays that step;
- * - the queue is cleared and the clock count reset.
+ *   next clock plays that step (also after a later change of the sync mode or
+ *   the PPQ, see seqc_setSyncMode());
+ * - as at a rewind, the queue, the pending note-offs, the probability draws,
+ *   the same-tick state and the skip-once markers are cleared;
+ * - the clock count is reset.
  * While running, or in internal sync, it is ignored and counted in
  * seqc_stats_t.syncIgnored (the MIDI spec only expects SPP while stopped). */
 void seqc_songPosition(uint16_t sixteenths);

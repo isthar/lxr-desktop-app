@@ -61,6 +61,13 @@ static void sync(fake_host_t *h, seqc_sync_ev_t ev)
 	fake_sync(h, ev, h->now + 100);
 }
 
+/* jack pulses at 24 PPQ and 120 BPM */
+static void pulses(fake_host_t *h, uint32_t count)
+{
+	const double per = fake_clockCycles(120.0);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, count, fake_msToCycles(0.1));
+}
+
 TEST(T17_midi_start_arms_and_the_next_clock_starts)
 {
 	fake_host_t *h = midiSlave();
@@ -161,6 +168,42 @@ TEST(T17_stop_and_continue_resume_in_place)
 	ASSERT_EQ(seqc_absStep(), 7);
 	ASSERT_EQ(seqc_trackStep(1), 7);
 	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 1);	/* only at step 0 */
+}
+
+TEST(T17_continue_rephases_the_clock_count)
+{
+	/* the master's clock ran on for 7 clocks while stopped. Its Continue resumes
+	 * the song where it stopped, and the clock count takes the step phase of
+	 * the resumed position: tempoStep() comes with the step boundaries, and a
+	 * later local start lands on the steps the master plays */
+	fake_host_t *h = midiSlave();
+	sync(h, SEQC_EV_START);
+	clocks(h, 6 * 5 + 2);				/* tick 496 */
+	sync(h, SEQC_EV_STOP);
+	clocks(h, 7);					/* count 39 */
+	sync(h, SEQC_EV_CONTINUE);
+	fake_clearLog(h);
+	clocks(h, 1 + 6 * 3);				/* 512 .. 800: boundaries 6, 7 and 8 */
+	size_t pos = 0, steps = 0;
+	const fake_rec_t *r;
+	while ((r = fake_next(h, FAKE_TEMPO_STEP, &pos)) != NULL)
+	{
+		size_t at = pos;
+		const fake_rec_t *b = fake_next(h, FAKE_STEP_BOUNDARY, &at);
+		ASSERT_TRUE(b != NULL);
+		ASSERT_EQ(b->time, r->time);		/* the boundary of the same clock */
+		steps++;
+	}
+	ASSERT_EQ(steps, 3);
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 3);
+	/* the local stop button and play: step 0 waits for the master's next step */
+	seqc_stop();
+	seqc_rewind();
+	seqc_start();
+	clocks(h, 1);					/* tick 816 of the master: not a step */
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	clocks(h, 5);					/* 896 */
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
 }
 
 TEST(T17_continue_at_the_start_is_a_start)
@@ -532,6 +575,46 @@ static void stopLocateContinue(fake_host_t *h, uint16_t s)
 	clocks(h, 1);
 }
 
+TEST(T17_mode_change_after_an_spp_keeps_the_seek_target)
+{
+	/* SPP 8 in MIDI sync puts the position one MIDI clock before step 8. A
+	 * switch to the jack at 4 PPQ before the Continue moves it to one pulse
+	 * before it, so the first pulse plays step 8 and nothing after it */
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 8, true);
+	fake_setStep(h, 0, 1, 8, true);
+	fake_setTiming(h, 0, 1, 8, 1, 0);		/* x2: 768 and 816 */
+	seqc_songPosition(8);
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);
+	ASSERT_EQ_DBL(seqc_position(), 8.0 * 96 - 96);
+	sync(h, SEQC_EV_CONTINUE);
+	const double per = fake_stepCycles(120.0);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 1, fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 8);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 8), 1);	/* 816 is still to come */
+	ASSERT_TRUE(seqc_position() < 8.0 * 96 + 2);
+}
+
+TEST(T17_ppq_change_after_an_spp_keeps_the_seek_target)
+{
+	/* SPP 8 with the jack at 4 PPQ, then 24 PPQ before the Continue: the first
+	 * pulse plays step 8, one 24 PPQ pulse after the new position */
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_setStep(h, 0, 0, 8, true);
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);
+	fake_process(h, fake_msToCycles(1.0));
+	seqc_songPosition(8);
+	ASSERT_EQ_DBL(seqc_position(), 8.0 * 96 - 96);
+	seqc_setAnalogPpq(24);
+	ASSERT_EQ_DBL(seqc_position(), 8.0 * 96 - 16);
+	sync(h, SEQC_EV_CONTINUE);
+	pulses(h, 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 8);
+}
+
 TEST(T17_spp_clears_the_same_tick_state)
 {
 	/* the master stops just after step 2's hit and locates back to step 2: the
@@ -684,13 +767,6 @@ TEST(T17_jack_run_gate)
 	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 2);
 	sync(h, SEQC_EV_START);				/* MIDI Start is accepted in analog sync */
 	ASSERT_EQ(seqc_state(), SEQC_ARMED);
-}
-
-/* jack pulses at 24 PPQ and 120 BPM */
-static void pulses(fake_host_t *h, uint32_t count)
-{
-	const double per = fake_clockCycles(120.0);
-	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, count, fake_msToCycles(0.1));
 }
 
 TEST(T17_jack_run_gate_at_24_ppq)
