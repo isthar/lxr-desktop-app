@@ -2000,7 +2000,10 @@ void midiParser_parseUartData(unsigned char data)
           break;
         default: /* 0 byte payload messages (we will assume that any system message
                     other than those above has 0 byte payload) */
-          // midiMsg_tmp.bits.length = 0;
+          // LICHOMAT (E2.8): routed alone. fw 1.7 kept the length of the message before
+          // and sent a Tune Request after a Note On as F6 3C 64. As MIDI 1.0 asks, this
+          // also ends running status.
+          midiMsg_tmp.bits.length = 0;
           parseMsg = 1;
           break;
 			}

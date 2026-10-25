@@ -225,6 +225,11 @@ check_E2_8() {
 	no_tree 'usb_MidiIn|usb_sendByte|TOTAL_MIDI_BUF_SIZE|NUM_SUB_BUFFERS' Core/Src Core/Inc Middlewares/JS
 	grep -A1 'case MIDI_SONG_SEL:' Core/Src/Soundengine/MIDI/MidiParser.c | grep -q 'parserState = MIDI_DATA1' \
 		|| fail "the MIDI parser routes a Song Select before its data byte"
+	# a system common message without data (F4, F5, F6) is routed alone, not with the data
+	# bytes of the message before it (fw 1.7 sent a Tune Request after a Note On as F6 3C 64)
+	awk '{sub(/\r$/, "")} /^[[:space:]]+default: \/\* 0 byte payload messages/{f=1} f&&/^[[:space:]]+midiMsg_tmp\.bits\.length = 0;/{ok=1}
+		f&&/break;/{exit} END{exit !ok}' Core/Src/Soundengine/MIDI/MidiParser.c \
+		|| fail "the MIDI parser routes F4, F5 and F6 with the data bytes of the message before"
 }
 
 check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8"
