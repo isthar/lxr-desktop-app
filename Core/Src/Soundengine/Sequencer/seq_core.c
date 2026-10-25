@@ -6,7 +6,7 @@
  * file builds in the firmware and in the host tests (tests/).
  *
  * Design: docs/superpowers/specs/2026-10-23-timing-core-design.md (the spec) and
- * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N11;
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N18;
  * they win where the two differ).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
@@ -143,11 +143,10 @@ typedef struct
 } seqc_outputs_t;
 
 //------------------------------------------------------------------------------
-/** the skip-once marker (D6) */
+/** a skip-once marker (D6); each track has one (N18.1) */
 typedef struct
 {
 	bool		valid;
-	uint8_t		track;
 	uint8_t		pattern;
 	uint8_t		step;
 	uint32_t	absStep;	/**< the occurrence it applies to */
@@ -180,6 +179,9 @@ typedef struct
 	uint8_t		intervalCount;
 	uint8_t		intervalNext;
 	uint64_t	intervalSum;
+	uint32_t	run[SEQC_TEMPO_RESTART];	/**< N16: the outliers in a row, cycles */
+	uint8_t		runCount;
+	bool		runLonger;	/**< they are longer than the mean (else shorter) */
 } seqc_slave_t;
 
 //------------------------------------------------------------------------------
@@ -190,7 +192,7 @@ static seqc_gen_t seqc_gen;
 static seqc_queue_t seqc_queue;
 static seqc_fire_t seqc_fire;
 static seqc_outputs_t seqc_out;
-static seqc_skip_t seqc_skip;
+static seqc_skip_t seqc_skip[SEQC_NUM_TRACKS];
 static seqc_slave_t seqc_sl;
 
 //------------------------------------------------------------------------------
@@ -447,7 +449,7 @@ static void seqc_queueRemoveStep(uint8_t track, uint32_t absStep, uint8_t patter
 //------------------------------------------------------------------------------
 // Firing
 //------------------------------------------------------------------------------
-/** send every pending note-off now (stop, rewind, seek) */
+/** send every pending note-off now (stop, rewind, seek, slave dropout) */
 static void seqc_flushNoteOffs(void)
 {
 	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
@@ -566,24 +568,26 @@ static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint
 	}
 }
 //------------------------------------------------------------------------------
-/** true if the skip-once marker drops occurrence (track, n) at its boundary. A
- * marker for n is cleared here, whether it matches or not. */
+/** true if the track's skip-once marker drops occurrence (track, n) at its
+ * boundary. A marker for n is cleared here, whether it matches or not. */
 static bool seqc_skipLate(uint8_t track, uint32_t n, uint8_t pattern, uint8_t step)
 {
-	if (!seqc_skip.valid || seqc_skip.track != track || seqc_skip.absStep > n)
+	seqc_skip_t *m = &seqc_skip[track];
+	if (!m->valid || m->absStep > n)
 		return false;
-	seqc_skip.valid = false;
-	if (seqc_skip.absStep != n || seqc_skip.pattern != pattern || seqc_skip.step != step)
+	m->valid = false;
+	if (m->absStep != n || m->pattern != pattern || m->step != step)
 		return false;
 	seqc.stats.skipDrops++;
 	return true;
 }
 //------------------------------------------------------------------------------
-/** true if the skip-once marker drops the early part of occurrence (track, n) */
+/** true if the track's skip-once marker drops the early part of occurrence
+ * (track, n) */
 static bool seqc_skipEarly(uint8_t track, uint32_t n, uint8_t pattern, uint8_t step)
 {
-	return seqc_skip.valid && seqc_skip.track == track && seqc_skip.absStep == n
-			&& seqc_skip.pattern == pattern && seqc_skip.step == step;
+	const seqc_skip_t *m = &seqc_skip[track];
+	return m->valid && m->absStep == n && m->pattern == pattern && m->step == step;
 }
 //------------------------------------------------------------------------------
 /** boundary step 4: the roll events of step n (spec 6.6). They are at the swung
@@ -655,14 +659,14 @@ static void seqc_stopTransport(void)
 }
 //------------------------------------------------------------------------------
 /** clear what belongs to the current run: queue, note-offs, draws, same-tick
- * state and the skip-once marker (rewind and seek) */
+ * state and the skip-once markers (rewind and seek) */
 static void seqc_clearRun(void)
 {
 	seqc_queue.count = 0;
 	seqc_flushNoteOffs();
 	memset(seqc_gen.draw, 0, sizeof seqc_gen.draw);
 	memset(seqc_fire.fired, 0, sizeof seqc_fire.fired);
-	seqc_skip.valid = false;
+	memset(seqc_skip, 0, sizeof seqc_skip);
 }
 //------------------------------------------------------------------------------
 /** back to the start, before step 0 */
@@ -794,37 +798,19 @@ static void seqc_setSlaveBpm(double bpm)
 	seqc_sl.cyclesPerTick = 1.0 / seqc_sl.ticksPerCycle;
 }
 //------------------------------------------------------------------------------
-/** forget the measured intervals (the last known tempo stays) */
+/** forget the measured intervals and the outliers in a row (the last known
+ * tempo stays) */
 static void seqc_clearEstimate(void)
 {
 	seqc_sl.intervalCount = 0;
 	seqc_sl.intervalNext = 0;
 	seqc_sl.intervalSum = 0;
+	seqc_sl.runCount = 0;
 }
 //------------------------------------------------------------------------------
-/** a measured clock interval, in cycles. An interval more than
- * SEQC_TEMPO_OUTLIER_PCT off the mean is left out. */
-static void seqc_tempoInterval(uint32_t dt)
+/** add a clock interval to the window of the estimate */
+static void seqc_windowAdd(uint32_t dt, uint8_t window)
 {
-	const uint8_t window = (seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24)
-			? SEQC_TEMPO_WINDOW_4PPQ : SEQC_TEMPO_WINDOW;
-	if (seqc_sl.intervalCount > 0)
-	{
-		/* |dt - mean| > mean * pct / 100, with mean = sum / count */
-		const uint64_t scaled = (uint64_t)dt * seqc_sl.intervalCount;
-		const uint64_t dev = scaled > seqc_sl.intervalSum ? scaled - seqc_sl.intervalSum
-				: seqc_sl.intervalSum - scaled;
-		if (dev * 100u > seqc_sl.intervalSum * SEQC_TEMPO_OUTLIER_PCT)
-		{
-			seqc.stats.intervalsExcluded++;
-			return;
-		}
-	}
-	else if (dt == 0)
-	{
-		seqc.stats.intervalsExcluded++;
-		return;
-	}
 	if (seqc_sl.intervalCount < window)
 		seqc_sl.intervalCount++;
 	else
@@ -832,7 +818,55 @@ static void seqc_tempoInterval(uint32_t dt)
 	seqc_sl.interval[seqc_sl.intervalNext] = dt;
 	seqc_sl.intervalSum += dt;
 	seqc_sl.intervalNext = (uint8_t)((seqc_sl.intervalNext + 1u) % window);
-
+}
+//------------------------------------------------------------------------------
+/** a measured clock interval, in cycles (N9, N16):
+ * - an interval more than SEQC_TEMPO_OUTLIER_PCT off the mean is an outlier and
+ *   is left out, unless it completes a tempo jump;
+ * - a tempo jump is SEQC_TEMPO_RESTART outliers in a row on the same side of
+ *   the mean (SEQC_TEMPO_RESTART_4PPQ for the jack at 4 PPQ): the estimate
+ *   restarts from them alone. An inlier, or an outlier on the other side, ends
+ *   the row;
+ * - an interval of 0 (clocks of one USB packet share a stamp) is left out and
+ *   ends the row: the packet came late, so the interval before the 0 is no
+ *   sign of a new tempo either. */
+static void seqc_tempoInterval(uint32_t dt)
+{
+	const bool jack4 = seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24;
+	const uint8_t window = jack4 ? SEQC_TEMPO_WINDOW_4PPQ : SEQC_TEMPO_WINDOW;
+	if (dt == 0)
+	{
+		seqc.stats.intervalsExcluded++;
+		seqc_sl.runCount = 0;
+		return;
+	}
+	/* |dt - mean| > mean * pct / 100, with mean = sum / count */
+	const uint64_t scaled = (uint64_t)dt * seqc_sl.intervalCount;
+	const bool longer = scaled > seqc_sl.intervalSum;
+	const uint64_t dev = longer ? scaled - seqc_sl.intervalSum : seqc_sl.intervalSum - scaled;
+	if (seqc_sl.intervalCount > 0 && dev * 100u > seqc_sl.intervalSum * SEQC_TEMPO_OUTLIER_PCT)
+	{
+		if (seqc_sl.runCount > 0 && longer != seqc_sl.runLonger)
+			seqc_sl.runCount = 0;
+		seqc_sl.runLonger = longer;
+		seqc_sl.run[seqc_sl.runCount++] = dt;
+		if (seqc_sl.runCount < (jack4 ? SEQC_TEMPO_RESTART_4PPQ : SEQC_TEMPO_RESTART))
+		{
+			seqc.stats.intervalsExcluded++;
+			return;
+		}
+		/* a tempo jump: restart from the row alone, as after a dropout */
+		const uint8_t count = seqc_sl.runCount;
+		seqc_clearEstimate();
+		for (uint8_t i = 0; i < count; i++)
+			seqc_windowAdd(seqc_sl.run[i], window);
+		seqc.stats.tempoRestarts++;
+	}
+	else
+	{
+		seqc_sl.runCount = 0;
+		seqc_windowAdd(dt, window);
+	}
 	const double mean = (double)seqc_sl.intervalSum / seqc_sl.intervalCount;
 	seqc_setSlaveBpm(seqc_ticksPerClock() / mean * (double)seqc.cyclesPerSecond * 60.0 / SEQC_TICKS_PER_BEAT);
 }
@@ -971,8 +1005,8 @@ static void seqc_runInternal(void)
 }
 //------------------------------------------------------------------------------
 /** slave modes: while running, the position follows the interpolation (N9).
- * After the dropout time (N15) without a clock it holds and the estimate is
- * cleared. */
+ * After the dropout time (N15) without a clock it holds, the estimate is
+ * cleared and the pending note-offs are sent (N17). */
 static void seqc_runSlave(void)
 {
 	if (seqc.state != SEQC_RUNNING)
@@ -984,6 +1018,7 @@ static void seqc_runSlave(void)
 		seqc_sl.droppedOut = true;
 		seqc_clearEstimate();
 		seqc.stats.dropouts++;
+		seqc_flushNoteOffs();
 		return;
 	}
 	seqc_runTo(seqc_slaveTarget(seqc.now));
@@ -1333,12 +1368,12 @@ void seqc_skipOnce(uint8_t track, uint8_t step)
 		return;
 	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
 	const uint32_t n = seqc_nextBoundaryStep();
+	seqc_skip_t *m = &seqc_skip[track];	/* N18.1: only this track's marker */
 
-	seqc_skip.valid = true;
-	seqc_skip.track = track;
-	seqc_skip.pattern = pattern;
-	seqc_skip.step = step;
-	seqc_skip.absStep = n;
+	m->valid = true;
+	m->pattern = pattern;
+	m->step = step;
+	m->absStep = n;
 	seqc_queueRemoveStep(track, n, pattern, step);
 }
 //------------------------------------------------------------------------------

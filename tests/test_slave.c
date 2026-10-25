@@ -1,12 +1,14 @@
 /*
  * test_slave.c
  *
- * Slave modes (spec 5, N4, N9):
+ * Slave modes (spec 5, N4, N9, N15, N16, N17):
  * - T16: MIDI clock: a steady clock, USB-like jitter of +-1 ms, a tempo ramp
  *   from 120 to 140 BPM, early, late and bunched clocks without a lost event,
  *   the clamp to the next clock, outliers, a dropout and the resume, the local
- *   start on the master's step grid, and the sync mode switches;
- * - T18: the clock in jack at 4 and 24 PPQ.
+ *   start on the master's step grid, the sync mode switches, tempo jumps beyond
+ *   the outlier band, and bunched clocks that are no tempo jump (N16);
+ * - T18: the clock in jack at 4 and 24 PPQ, a tempo jump at 4 PPQ (N16), and the
+ *   pending note-off sent at a dropout (N17).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -688,6 +690,219 @@ TEST(T18_ppq_change_in_midi_sync_keeps_the_count)
 	const double at = seqc_position();
 	fake_runClocks(h, SEQC_EV_PULSE, h->now + 1000, per, 1, fake_msToCycles(0.1));
 	ASSERT_TRUE(seqc_position() >= at + 16.0 && seqc_position() < at + 16.1);
+}
+
+/* append count clock stamps, period cycles apart, to stamps[] from index n on:
+ * the first one a period after stamps[n - 1], or at 10 ms if n is 0. Returns
+ * the new number of stamps. */
+static size_t appendClocks(size_t n, double period, size_t count)
+{
+	double t = n > 0 ? (double)stamps[n - 1] : (double)fake_msToCycles(10.0) - period;
+	for (size_t i = 0; i < count && n < MAX_CLOCKS; i++)
+	{
+		t += period;
+		stamps[n++] = (seqc_time_t)(t + 0.5);
+	}
+	return n;
+}
+
+/* N16: a MIDI slave settles at from BPM (a full window), then gets clocks at
+ * to BPM, outside the band. The first SEQC_TEMPO_RESTART - 1 of them are left
+ * out, the next one restarts the estimate, and every clock moves the position. */
+static void checkTempoJump(double from, double to)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const size_t settled = appendClocks(0, fake_clockCycles(from), SEQC_TEMPO_WINDOW + 1);
+	const size_t n = appendClocks(settled, fake_clockCycles(to), SEQC_TEMPO_RESTART + 24);
+	deliver(h, SEQC_EV_CLOCK, stamps, settled + SEQC_TEMPO_RESTART - 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), from, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART - 1);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	deliver(h, SEQC_EV_CLOCK, stamps + settled + SEQC_TEMPO_RESTART - 1, 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), to, 1e-3);	/* from the SEQC_TEMPO_RESTART outliers alone */
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	deliver(h, SEQC_EV_CLOCK, stamps + settled + SEQC_TEMPO_RESTART, 24, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), to, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART - 1);
+	/* the position followed every clock: no step lost or doubled */
+	const size_t steps = (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1;
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), steps);
+	for (size_t k = 0; k < steps; k++)
+		ASSERT_EQ(trig[k]->ev.absStep, k);
+}
+
+TEST(T16_tempo_jump_up_is_followed)
+{
+	/* 90 to 200 BPM: the intervals get 55% shorter. A jump up must more than
+	 * double the tempo to leave the band; 120 to 190 BPM (-37%) stays inside
+	 * it and the window follows on its own. */
+	checkTempoJump(90.0, 200.0);
+}
+
+TEST(T16_tempo_jump_down_is_followed)
+{
+	/* 200 to 90 BPM: the intervals get 122% longer */
+	checkTempoJump(200.0, 90.0);
+}
+
+TEST(T16_alternating_outliers_do_not_restart)
+{
+	/* at 120 BPM, 8 outliers alternately 60% longer and 60% shorter: no jump.
+	 * Then SEQC_TEMPO_RESTART longer ones in a row, 1.6 to 1.9 times the
+	 * interval, are one: the estimate restarts from all of them, at their mean
+	 * of 1.75 times the interval. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	for (int k = 0; k < 8; k++)
+		n = appendClocks(n, per * (k % 2 == 0 ? 1.6 : 0.4), 1);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 8);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	const size_t before = n;
+	for (unsigned k = 0; k < SEQC_TEMPO_RESTART; k++)
+		n = appendClocks(n, per * (1.6 + 0.1 * k), 1);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0 / 1.75, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, 8 + SEQC_TEMPO_RESTART - 1);
+}
+
+TEST(T16_inlier_resets_the_outlier_run)
+{
+	/* at 120 BPM: 3 outliers at 270 BPM (intervals 56% shorter), 1 interval at
+	 * 120, 3 more outliers: no restart, the estimate stays. The count started
+	 * again at the inlier, so the next outlier is the 4th in a row. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0), fast = fake_clockCycles(270.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	n = appendClocks(n, fast, 3);
+	n = appendClocks(n, per, 1);
+	n = appendClocks(n, fast, 3);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 6);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	const size_t before = n;
+	n = appendClocks(n, fast, 1);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 270.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	seqc_resetStats();
+	ASSERT_EQ(stats().tempoRestarts, 0);
+}
+
+TEST(T16_bunched_clocks_are_not_a_tempo_jump)
+{
+	/* USB: a late packet brings 6 clocks with one stamp. The first interval is
+	 * an outlier and starts a row, and the 5 intervals of 0 are left out; the
+	 * first of them ends the row (N16). The estimate stays, and the position
+	 * follows every clock. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	const seqc_time_t packet = stamps[n - 1] + (seqc_time_t)(6.0 * per + 0.5);
+	for (int k = 0; k < 6; k++)
+		stamps[n++] = packet;
+	n = appendClocks(n, per, 12);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 6);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+}
+
+TEST(T16_bunched_pairs_are_not_a_tempo_jump)
+{
+	/* USB: 2 * SEQC_TEMPO_RESTART late packets in a row, each with 2 clocks
+	 * and one stamp, so the intervals are 2 clocks long and 0 by turns. The
+	 * long ones are outliers on the same side, but each 0 ends their row (N16):
+	 * the estimate does not restart at half the tempo. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const unsigned pairs = 2 * SEQC_TEMPO_RESTART;
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	for (unsigned k = 0; k < pairs; k++)
+	{
+		n = appendClocks(n, 2.0 * per, 1);
+		stamps[n] = stamps[n - 1];		/* the second clock of the packet */
+		n++;
+	}
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 2 * pairs);	/* both intervals of each packet */
+	const size_t before = n;
+	n = appendClocks(n, per, 12);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 2 * pairs);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+}
+
+TEST(T18_tempo_jump_4ppq_restarts_after_2)
+{
+	/* N16 at 4 PPQ: 100 to 225 BPM, pulses 56% closer. The estimate restarts
+	 * after SEQC_TEMPO_RESTART_4PPQ outliers in a row. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_start();
+	const size_t settled = appendClocks(0, fake_stepCycles(100.0), SEQC_TEMPO_WINDOW_4PPQ + 1);
+	const size_t n = appendClocks(settled, fake_stepCycles(225.0), SEQC_TEMPO_RESTART_4PPQ + 4);
+	deliver(h, SEQC_EV_PULSE, stamps, settled + SEQC_TEMPO_RESTART_4PPQ - 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	deliver(h, SEQC_EV_PULSE, stamps + settled + SEQC_TEMPO_RESTART_4PPQ - 1, 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 225.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART_4PPQ - 1);
+	deliver(h, SEQC_EV_PULSE, stamps + settled + SEQC_TEMPO_RESTART_4PPQ, 4, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 225.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), n);	/* one step per pulse */
+	for (size_t k = 0; k < n; k++)
+		ASSERT_EQ(trig[k]->ev.absStep, k);
+}
+
+TEST(T18_dropout_note_off_is_sent)
+{
+	/* N17, with the jack at 4 PPQ at 120 BPM. After the last pulse (step 4) the
+	 * interpolation reaches the clamp and plays step 5 at tick 480; its note-off,
+	 * due at 484, waits for a pulse that does not come. At the dropout, 500 ms
+	 * after the last pulse, it goes out at once. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_start();
+	const double per = fake_stepCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_PULSE, t0, per, 5, fake_msToCycles(0.1));
+	const seqc_time_t limit = t0 + (seqc_time_t)(4.0 * per + 0.5) + fake_msToCycles(SEQC_DROPOUT_MS);
+	fake_runUntil(h, limit, fake_msToCycles(1.0));
+	ASSERT_EQ(stats().dropouts, 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 6);
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 5);	/* the one of step 5 is pending */
+	fake_runUntil(h, limit + fake_msToCycles(1.0), fake_msToCycles(1.0));
+	ASSERT_EQ(stats().dropouts, 1);
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 6);
+	size_t pos = 0;
+	const fake_rec_t *r, *off = NULL;
+	while ((r = fake_next(h, FAKE_NOTE_OFF, &pos)) != NULL)
+		off = r;
+	ASSERT_EQ(off->track, 0);
+	ASSERT_TRUE(off->time > limit && off->time <= limit + fake_msToCycles(1.0));
+	ASSERT_NEAR(off->tick, 480.0, 1e-9);		/* the position holds at the clamp */
+	/* none later: not while the position holds, and not when the pulses resume */
+	fake_runUntil(h, limit + fake_msToCycles(1000.0), fake_msToCycles(1.0));
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 6);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + fake_msToCycles(1.0), per, 2, fake_msToCycles(0.1));
+	fake_runUntil(h, h->now + fake_msToCycles(10.0), fake_msToCycles(0.1));	/* past 580 */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 7);	/* step 6 at the second pulse */
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 7);	/* one note-off per trigger */
 }
 
 TEST_MAIN()

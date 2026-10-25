@@ -10253,7 +10253,7 @@ No firmware behaviour changes yet: nothing calls the core before E2, so the imag
   `:467-469`, `:503-511`, `:547-548`, `:559-563`, `:578`
 - Test: `tests/test_slave.c` (ctest ids `T16`, `T18`), `tests/test_roll.c` (ctest id `T14`)
 
-- [ ] **Step 1: Write the failing tests in `tests/test_slave.c`**
+- [x] **Step 1: Write the failing tests in `tests/test_slave.c`**
 
 In `tests/test_slave.c` (LF), replace the description at the top:
 
@@ -10496,7 +10496,7 @@ TEST(T18_dropout_note_off_is_sent)
 }
 ```
 
-- [ ] **Step 2: Write the failing tests in `tests/test_roll.c`**
+- [x] **Step 2: Write the failing tests in `tests/test_roll.c`**
 
 In `tests/test_roll.c` (LF), replace:
 
@@ -10561,7 +10561,7 @@ TEST(T14_skip_once_replaces_only_its_track)
 }
 ```
 
-- [ ] **Step 3: Run them to verify they fail**
+- [x] **Step 3: Run them to verify they fail**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -10585,7 +10585,7 @@ memory: ITCM 15000/16384 B (91.6%, free 1384)  ...  image 274688/1015808 B (27.0
 exit 1
 ```
 
-- [ ] **Step 4: Add the restart counts, `tempoRestarts` and the comments to `seq_core.h`**
+- [x] **Step 4: Add the restart counts, `tempoRestarts` and the comments to `seq_core.h`**
 
 `Core/Inc/Soundengine/Sequencer/seq_core.h` is CRLF. Convert it to LF first:
 `perl -pi -e 's/\r\n/\n/' Core/Inc/Soundengine/Sequencer/seq_core.h`. Then make these ten
@@ -10779,7 +10779,7 @@ Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Inc/Soundengine/Sequencer/seq_core.h && f
 
 Expected: `... with CRLF line terminators`
 
-- [ ] **Step 5: Run the tests to verify they fail for the reasons named**
+- [x] **Step 5: Run the tests to verify they fail for the reasons named**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -10814,7 +10814,7 @@ FAIL T14_skip_once_replaces_only_its_track
 14 of 16 tests passed
 ```
 
-- [ ] **Step 6: Implement N16, N17 and N18.1 in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+- [x] **Step 6: Implement N16, N17 and N18.1 in `Core/Src/Soundengine/Sequencer/seq_core.c`**
 
 In the top comment, replace:
 
@@ -11075,13 +11075,13 @@ void seqc_skipOnce(uint8_t track, uint8_t step)
 }
 ```
 
-- [ ] **Step 7: Convert `seq_core.c` to CRLF**
+- [x] **Step 7: Convert `seq_core.c` to CRLF**
 
 Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
 
 Expected: `... with CRLF line terminators`
 
-- [ ] **Step 8: Run the tests to verify they pass**
+- [x] **Step 8: Run the tests to verify they pass**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -11102,7 +11102,7 @@ Expected: `text` 15690 and `bss` 7053 with Arm GNU 14.3.rel1. After E1.13 the sa
 prints `text` 15422 and `bss` 6973. The `bss` grows by the six extra markers and the row of
 outliers.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add Core/Src/Soundengine/Sequencer/seq_core.c Core/Inc/Soundengine/Sequencer/seq_core.h tests/test_slave.c tests/test_roll.c

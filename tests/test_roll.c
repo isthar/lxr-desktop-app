@@ -6,7 +6,8 @@
  *   on muted tracks and lose to a note event at the same tick.
  * - T14: the recording phase (spec 6.7, swing-aware) and the skip-once rule
  *   (D6): a note recorded at half a step or later goes to the next step, which
- *   then does not play again in that occurrence.
+ *   then does not play again in that occurrence. Each track has its own marker
+ *   (N18.1).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -429,6 +430,48 @@ TEST(T14_rewind_clears_the_marker)
 	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 1);
 	ASSERT_EQ(trig[0]->ev.absStep, 4);
 	ASSERT_EQ(stats().skipDrops, 0);
+}
+
+TEST(T14_skip_once_per_track_two_tracks)
+{
+	/* N18.1: a chord recorded on tracks 0 and 2 in the second half of step 3
+	 * goes to step 4 of both tracks, and neither plays it again at 4 */
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	start(h);
+	runToTick(h, 3 * 96 + 60);			/* phase 0.625 in step 3 */
+	fake_addNote(h, 0, 100, 64);
+	fake_addNote(h, 2, 90, 67);
+	ASSERT_TRUE((h->mainSteps[0][0] >> 4) & 1u);	/* recorded on step 4 */
+	ASSERT_TRUE((h->mainSteps[0][2] >> 4) & 1u);
+	runToTick(h, 21 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);	/* at 20, not at 4 */
+	ASSERT_EQ(trig[0]->ev.absStep, 20);
+	ASSERT_EQ(trig[0]->ev.note, 64);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 20);
+	ASSERT_EQ(trig[0]->ev.note, 67);
+	ASSERT_EQ(stats().skipDrops, 2);
+}
+
+TEST(T14_skip_once_replaces_only_its_track)
+{
+	/* N18.1: a call replaces the marker of its own track, and no other */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 4, true);
+	fake_setStep(h, 0, 2, 4, true);
+	start(h);
+	runToTick(h, 3 * 96 + 50);
+	seqc_skipOnce(2, 4);
+	seqc_skipOnce(0, 4);
+	seqc_skipOnce(0, 9);				/* replaces (0, 4): track 0 plays 4 */
+	runToTick(h, 21 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.absStep, 4);
+	ASSERT_EQ(trig[1]->ev.absStep, 20);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 1);	/* track 2 kept its marker */
+	ASSERT_EQ(trig[0]->ev.absStep, 20);
+	ASSERT_EQ(stats().skipDrops, 1);
 }
 
 TEST_MAIN()

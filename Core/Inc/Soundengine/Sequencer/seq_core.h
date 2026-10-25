@@ -9,7 +9,7 @@
  * - the event queue, the per-track choke and the note-off timing;
  * - the sync inputs: MIDI clock and the clock in jack, with the tempo estimate,
  *   the interpolation between clocks, the transport and the song position;
- * - the recording phase and the skip-once marker.
+ * - the recording phase and the skip-once markers.
  *
  * The core is plain C11. It has no HAL, CMSIS, menu, LED or preset code, no
  * interrupts and no allocation, so it builds in the firmware and on the host
@@ -18,7 +18,7 @@
  * the host.
  *
  * Design: docs/superpowers/specs/2026-10-23-timing-core-design.md (the spec) and
- * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N11;
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N18;
  * they win where the two differ).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
@@ -155,7 +155,8 @@
  *   tracks at the same tick fire in track order.
  * - Note-off: noteOff() comes 4 ticks after the trigger. If a track triggers again
  *   while its note-off is still pending, the core calls noteOff() right before the
- *   new trigger(). Stopping and rewinding send all pending note-offs at once.
+ *   new trigger(). Stopping, rewinding and a slave dropout (N17) send all
+ *   pending note-offs at once.
  */
 
 //------------------------------------------------------------------------------
@@ -202,8 +203,10 @@
 #define SEQC_SLAVE_BPM_MAX        300.0f
 #define SEQC_TEMPO_WINDOW           24u   /**< clock intervals averaged: MIDI clock, jack at 24 PPQ */
 #define SEQC_TEMPO_WINDOW_4PPQ       4u   /**< clock intervals averaged: jack at 4 PPQ */
-#define SEQC_TEMPO_OUTLIER_PCT      50u   /**< an interval off the estimate by more than this is left out */
-#define SEQC_DROPOUT_MS            500u   /**< no clock for this long: the estimate is cleared */
+#define SEQC_TEMPO_OUTLIER_PCT      50u   /**< an interval off the mean by more than this is an outlier */
+#define SEQC_TEMPO_RESTART           4u   /**< outliers in a row on one side that restart the estimate (N16) */
+#define SEQC_TEMPO_RESTART_4PPQ      2u   /**< the same for the jack at 4 PPQ */
+#define SEQC_DROPOUT_MS            500u   /**< the shortest dropout time; slow clocks get longer (N15) */
 
 //------------------------------------------------------------------------------
 // Types
@@ -303,8 +306,9 @@ typedef struct seqc_stats
 	uint32_t skipDrops;		/**< step occurrences not played because of seqc_skipOnce() */
 	uint32_t syncIgnored;		/**< sync events and song positions that did nothing (seqc_sync_ev_t) */
 	uint32_t intervalsExcluded;	/**< clock intervals left out of the tempo estimate (outliers) */
-	uint32_t dropouts;		/**< slave clock dropouts (SEQC_DROPOUT_MS without a clock) */
+	uint32_t dropouts;		/**< slave clock dropouts: no clock for the dropout time (N15) */
 	uint32_t reentries;		/**< calls ignored because they came from inside a callback */
+	uint32_t tempoRestarts;		/**< slave tempo estimates restarted after a tempo jump (N16) */
 } seqc_stats_t;
 
 /** The host: pattern data, pattern sequencing and outputs (N5). Every pointer
@@ -465,7 +469,7 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *   later continue, and pending note-offs are sent now. Ignored while stopped.
  * - seqc_rewind(), while stopped or armed: back to the start (REWIND, only if the
  *   position was not at the start). The queue, the pending note-offs, the
- *   probability draws and the skip-once marker are cleared. Ignored while
+ *   probability draws and the skip-once markers are cleared. Ignored while
  *   running.
  *   - The local stop button is seqc_stop() then seqc_rewind(), as fw 1.7
  *     seq_resetPosition() plus seq_setRunning(0).
@@ -502,13 +506,27 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *   to the next target, so it never runs ahead of the incoming clock, and it
  *   never goes back.
  * - The estimate is the mean of the last SEQC_TEMPO_WINDOW intervals
- *   (SEQC_TEMPO_WINDOW_4PPQ for the jack at 4 PPQ). Intervals more than
- *   SEQC_TEMPO_OUTLIER_PCT off the estimate are left out, and the estimate is
- *   clamped to SEQC_SLAVE_BPM_MIN..MAX. Without a measured interval, the last
- *   known tempo is used.
- * - After SEQC_DROPOUT_MS without a clock, the estimate is cleared and the
- *   position holds. The next clock resumes playback, and its interval is not
- *   used for the estimate.
+ *   (SEQC_TEMPO_WINDOW_4PPQ for the jack at 4 PPQ), clamped to
+ *   SEQC_SLAVE_BPM_MIN..MAX. An interval more than SEQC_TEMPO_OUTLIER_PCT
+ *   longer or shorter than the mean is an outlier and is left out, unless it
+ *   completes a tempo jump. Without a measured interval, the last known tempo
+ *   is used.
+ * - A tempo jump (N16): after SEQC_TEMPO_RESTART outliers in a row on the same
+ *   side of the mean, all longer or all shorter (SEQC_TEMPO_RESTART_4PPQ for
+ *   the jack at 4 PPQ), the estimate restarts from those intervals alone. An
+ *   interval inside the band, or an outlier on the other side, ends the row. In
+ *   tempo, the band takes in anything from two thirds of the estimate up to
+ *   twice it.
+ * - An interval of 0 (the clocks of one USB packet share a stamp) is left out
+ *   and ends the row: the packet came late, so the interval before the 0 is no
+ *   sign of a new tempo either.
+ * - The dropout time is SEQC_DROPOUT_MS, or two expected clock intervals if
+ *   that is longer (N15). The interval comes from the estimate, or from
+ *   SEQC_SLAVE_BPM_MIN while there is none, so a slow jack clock at 4 PPQ can
+ *   build its first estimate. After the dropout time without a clock, the
+ *   estimate is cleared, the pending note-offs are sent (N17) and the position
+ *   holds. The next clock resumes playback, and its interval is not used for
+ *   the estimate.
  */
 /** local start, see Transport */
 void seqc_start(void);
@@ -546,7 +564,8 @@ void seqc_songPosition(uint16_t sixteenths);
 // Processing
 //------------------------------------------------------------------------------
 /** Advance to now and handle everything due up to there, see Processing order.
- * When nothing is due it returns after one 64-bit compare (N10). */
+ * When nothing is due yet it returns at once (N10): a 64-bit compare, and now
+ * is kept as the core's current time for the queries. */
 void seqc_process(seqc_time_t now);
 
 //------------------------------------------------------------------------------
@@ -560,8 +579,11 @@ void seqc_process(seqc_time_t now);
  * - At the track's next step boundary, if the track arrives at (pattern, step),
  *   the occurrence is not generated. The marker is cleared at that boundary
  *   whether or not it matched.
- * - A new call replaces the marker. Ignored while stopped, or with track >= 7 or
- *   step >= 64. It may be called from a callback. */
+ * - Each track has its own marker (N18.1), so notes recorded on several tracks
+ *   in the same step, a chord for example, each skip once. A new call replaces
+ *   the marker of its own track only.
+ * - Ignored while stopped, or with track >= 7 or step >= 64. It may be called
+ *   from a callback. */
 void seqc_skipOnce(uint8_t track, uint8_t step);
 
 //------------------------------------------------------------------------------
@@ -576,7 +598,9 @@ uint8_t seqc_trackStep(uint8_t track);
  * start. After a song position it is the SPP value. */
 int32_t seqc_absStep(void);
 //------------------------------------------------------------------------------
-/** The master track chosen at the last step boundary (0 before the first) */
+/** The master track chosen at the last step boundary. After a song position it
+ * is the master track of the pattern that the song position activated. 0 after
+ * seqc_init() and after a rewind, until the first boundary. */
 uint8_t seqc_masterTrack(void);
 //------------------------------------------------------------------------------
 /** The musical position in ticks: its value at the core's current time, or,
