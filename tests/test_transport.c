@@ -428,8 +428,10 @@ TEST(T17_spp_clears_the_queue_and_restarts_the_count)
 
 TEST(T17_midi_start_in_analog_sync_starts_with_the_next_pulse)
 {
-	/* N13.10: MIDI Start resets the clock count, so at 24 PPQ the next pulse
-	 * starts step 0; fw 1.7 waited for its own 6-pulse grid */
+	/* N13.10: at 24 PPQ the NEXT_CLOCK arm starts playback on the next pulse
+	 * (fw 1.7 waited for its own 6-pulse grid), and the count reset puts the
+	 * step grid in line with the Start: tempoStep() comes on that pulse and on
+	 * every 6th after it */
 	fake_host_t *h = fake_init();
 	h->logMask = FAKE_LOG_NO_CLOCKS;
 	seqc_setSyncMode(SEQC_SYNC_ANALOG);
@@ -437,11 +439,35 @@ TEST(T17_midi_start_in_analog_sync_starts_with_the_next_pulse)
 	fake_process(h, fake_msToCycles(1.0));
 	const double per = fake_clockCycles(120.0);
 	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 3, fake_msToCycles(0.1));
+	const uint32_t t0 = h->calls[FAKE_TEMPO_STEP];
 	sync(h, SEQC_EV_START);
 	ASSERT_EQ(seqc_state(), SEQC_ARMED);
 	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 1, fake_msToCycles(0.1));
 	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
 	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], t0 + 1);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 5, fake_msToCycles(0.1));
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], t0 + 1);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 1, fake_msToCycles(0.1));
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], t0 + 2);
+}
+
+TEST(T17_midi_start_resets_the_count_for_a_later_local_start)
+{
+	/* N4, N13.10: the count runs from the Start, so a local start after a
+	 * Start and a Stop lands on the master's step grid */
+	fake_host_t *h = midiSlave();
+	clocks(h, 3);					/* count 3 before the Start */
+	sync(h, SEQC_EV_START);
+	clocks(h, 13);					/* count 13 since the Start */
+	sync(h, SEQC_EV_STOP);
+	seqc_rewind();
+	seqc_start();
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	clocks(h, 5);					/* counts 13..17: off the grid */
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	clocks(h, 1);					/* count 18: begins a step */
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
 }
 
 TEST(T17_jack_run_gate)
