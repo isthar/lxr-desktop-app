@@ -484,9 +484,11 @@ static seqc_event_t *seqc_queueAt(uint16_t i)
 //------------------------------------------------------------------------------
 /** queue an event, in firing order (N2). An event that fires after every pending
  * one, the common case, is appended. Otherwise a binary search finds its place,
- * and the events after it move one slot towards the tail by struct copies
- * (newlib-nano's memmove copies bytes). Of events with the same key, the one
- * queued last fires first. A full queue rejects the event. */
+ * and the events on its shorter side move one slot, by struct copies
+ * (newlib-nano's memmove copies bytes): those before it towards the head if it
+ * is in the first half, else those after it towards the tail. So an event that
+ * fires before every pending one moves nothing. Of events with the same key, the
+ * one queued last fires first. A full queue rejects the event. */
 static void seqc_queueInsert(const seqc_event_t *ev)
 {
 	if (seqc_queue.count >= SEQC_QUEUE_CAPACITY)
@@ -508,13 +510,29 @@ static void seqc_queueInsert(const seqc_event_t *ev)
 			else
 				hi = mid;
 		}
-		for (uint16_t i = seqc_queue.count; i > lo; i--)
+		if (lo < seqc_queue.count - lo)
 		{
-			const uint16_t src = dst > 0 ? (uint16_t)(dst - 1u) : (uint16_t)(SEQC_QUEUE_CAPACITY - 1u);
-			seqc_queue.events[dst] = seqc_queue.events[src];
-			dst = src;
+			/* the slot before the head is free: the queue is not full */
+			dst = seqc_queue.head > 0 ? (uint16_t)(seqc_queue.head - 1u) : (uint16_t)(SEQC_QUEUE_CAPACITY - 1u);
+			seqc_queue.head = dst;
+			for (uint16_t i = 0; i < lo; i++)
+			{
+				const uint16_t src = dst + 1u < SEQC_QUEUE_CAPACITY ? (uint16_t)(dst + 1u) : 0u;
+				seqc_queue.events[dst] = seqc_queue.events[src];
+				dst = src;
+			}
+			SEQC_QUEUE_MOVED(lo);
 		}
-		SEQC_QUEUE_MOVED(seqc_queue.count - lo);
+		else
+		{
+			for (uint16_t i = seqc_queue.count; i > lo; i--)
+			{
+				const uint16_t src = dst > 0 ? (uint16_t)(dst - 1u) : (uint16_t)(SEQC_QUEUE_CAPACITY - 1u);
+				seqc_queue.events[dst] = seqc_queue.events[src];
+				dst = src;
+			}
+			SEQC_QUEUE_MOVED(seqc_queue.count - lo);
+		}
 	}
 	seqc_queue.events[dst] = *ev;
 	SEQC_QUEUE_MOVED(1u);

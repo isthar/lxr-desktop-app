@@ -677,7 +677,8 @@ void seqc_resetStats(void);
 // Test only: the event queue of a core built with -DSEQC_QUEUE_TEST
 // (tests/test_queue.c). The firmware never defines it.
 //------------------------------------------------------------------------------
-/** queue elements written by insert, choke and skip-once since seqc_init() */
+/** queue elements written by insert, choke and skip-once since the program
+ * started; seqc_init() keeps it (the tests take differences) */
 extern uint32_t seqc_queueMoves;
 /** queue ev as an event generator would */
 void seqc_testQueueInsert(const seqc_event_t *ev);

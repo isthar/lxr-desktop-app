@@ -150,9 +150,13 @@ static long runAgainstReference(uint64_t seed, int ops, uint32_t insertPercent)
 	{
 		if (lcg() % 100u < insertPercent)
 		{
+			/* one draw per statement: the order of evaluation of arguments is unspecified */
 			base += lcg() % 2u;
-			const seqc_event_t ev = event(base + lcg() % 4u, lcg() % 4u, lcg() % 4u == 0,
-					(uint8_t)(lcg() % SEQC_NUM_TRACKS), (uint16_t)seq);
+			const seqc_tick_t tick = base + lcg() % 4u;
+			const uint32_t absStep = lcg() % 4u;
+			const bool roll = lcg() % 4u == 0;
+			const uint8_t track = (uint8_t)(lcg() % SEQC_NUM_TRACKS);
+			const seqc_event_t ev = event(tick, absStep, roll, track, (uint16_t)seq);
 			seqc_testQueueInsert(&ev);
 			if (refCount < CAPACITY)
 				ref[refCount++] = (ref_entry_t){ ev, seq };
@@ -174,7 +178,7 @@ static long runAgainstReference(uint64_t seed, int ops, uint32_t insertPercent)
 		if (s.queueDepth != refCount || s.queueOverflow != (uint32_t)rejected)
 		{
 			printf("seed %llu, op %d: depth %u (want %d), overflow %u (want %ld)\n", (unsigned long long)seed,
-					i, s.queueDepth, refCount, s.queueOverflow, rejected);
+					i, (unsigned)s.queueDepth, refCount, (unsigned)s.queueOverflow, rejected);
 			return -1;
 		}
 	}
@@ -378,6 +382,63 @@ TEST(queue_choke_without_removal_moves_nothing)
 		ASSERT_EQ(ev.p1Val, kept[k]);
 	}
 	ASSERT_EQ(stats().queueDepth, 0);
+}
+
+/* skip-once (D6) removes queued hits by their place in the ring, after the start
+ * of the queue has moved on and wrapped. Track 0 plays x8 on every step (hits 12
+ * ticks apart), track 1 x8 on steps 6..15; track 4 step 4 has flam 1 and shift -2
+ * (an early hit 24 ticks before the step, a late one 24 after). At phase 0.52 of
+ * step 3 of each pattern cycle the queue holds track 0's hits at +60, +72 and +84
+ * and track 4's early hit, which orders before track 0's +72 (absStep
+ * descending). Skip-once removes it and moves only track 0's last two. At these
+ * removals the start of the queue is in slots 29, 217, 149, 81, 13, 201, 133, 65,
+ * 253, ...: it wraps, and at 253 the kept events straddle the array's end. */
+#define SKIP_CYCLES	12
+
+static void runToTick(fake_host_t *h, double tick)
+{
+	const double cyclesPerTick = fake_stepCycles(120.0) / 96.0;
+	const seqc_time_t until = (seqc_time_t)(tick * cyclesPerTick);
+	fake_runUntil(h, until, fake_msToCycles(0.1));
+}
+
+TEST(queue_skip_once_with_a_moved_head)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_BIT(FAKE_TRIGGER);
+	h->recordActive = true;
+	for (uint8_t s = 0; s < 16; s++)
+	{
+		fake_setStep(h, 0, 0, s, true);
+		fake_setTiming(h, 0, 0, s, 5, 0);
+	}
+	for (uint8_t s = 6; s < 16; s++)
+	{
+		fake_setStep(h, 0, 1, s, true);
+		fake_setTiming(h, 0, 1, s, 5, 0);
+	}
+	fake_setStep(h, 0, 4, 4, true);
+	fake_setTiming(h, 0, 4, 4, 1, -2);
+	fake_process(h, 0);
+	seqc_start();
+	for (int k = 0; k < SKIP_CYCLES; k++)
+	{
+		runToTick(h, (16 * k + 3) * 96 + 50);
+		const uint32_t m0 = seqc_queueMoves;
+		const unsigned d0 = stats().queueDepth;
+		fake_addNote(h, 4, 100, 64);			/* skip-once of track 4, step 4 */
+		ASSERT_EQ(stats().queueDepth, d0 - 1);
+		ASSERT_EQ(seqc_queueMoves - m0, 2);
+	}
+	runToTick(h, (16 * SKIP_CYCLES - 1) * 96 - 1);
+	const fake_rec_t *trig[1];
+	ASSERT_EQ(fake_triggers(h, 4, trig, 1), 0);	/* track 4 plays none of its hits */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 1), (16 * SKIP_CYCLES - 1) * 8);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 1), (10 * SKIP_CYCLES - 1) * 8);
+	ASSERT_EQ(stats().skipDrops, SKIP_CYCLES);
+	ASSERT_EQ(stats().queueOverflow, 0);
+	ASSERT_EQ(h->errors, 0);
+	ASSERT_EQ(h->logLost, 0);
 }
 
 TEST_MAIN()
