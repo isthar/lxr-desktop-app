@@ -90,6 +90,15 @@ check_E2_3() {
 	no_source '^[[:space:]]+seq_sendMidiNoteOn\(' Core/Src/Soundengine/Sequencer/sequencer.c \
 		Core/Src/Soundengine/MIDI/MidiVoiceControl.c Core/Src/Soundengine/MIDI/MidiParser.c
 	no_source 'voiceControl_noteOff\(midi_MidiChannels' Core/Src/Soundengine/Sequencer/sequencer.c
+	# exactly one Note On per sequencer trigger (D4 is two)
+	local n
+	n=$(calls_of seq_cbTrigger | grep -cE '^seq_sendVoiceNoteOn(\.[a-z]+\.[0-9]+)*(_veneer)?$')
+	[ "$n" -eq 1 ] || fail "seq_cbTrigger calls seq_sendVoiceNoteOn $n times, not once"
+	# seq_triggerVoice() is inlined into seq_tick(), so check its source
+	has_source '^[[:space:]]+seq_sendVoiceNoteOn\(voiceNr, midiNote, stepData' Core/Src/Soundengine/Sequencer/sequencer.c
+	# all notes off (voice 0xFF) ends the Note of every voice, so no note hangs
+	has_source '^[[:space:]]+seq_sendVoiceNoteOff\(i\);' Core/Src/Soundengine/MIDI/MidiVoiceControl.c
+	must_call seq_setMute voiceControl_noteOff
 }
 
 check_tasks="E2.2 E2.3"
