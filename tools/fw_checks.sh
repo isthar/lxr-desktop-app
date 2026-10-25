@@ -1,5 +1,5 @@
 #!/bin/bash
-# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.6), on the
+# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.7), on the
 # release build and on the sources: symbols that must or must not be linked, calls
 # that a function must or must not make, what sits in ITCM, and source patterns.
 # They stand in for unit tests where the code needs the hardware.
@@ -208,7 +208,14 @@ check_E2_6() {
 	gone sync_tick sync_window sync_timeLast sync_clockCnt sync_writePos sync_delayedStepTimer
 }
 
-check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6"
+# ---- E2.7: the global menu has a button mode of its own (SELECT_MODE_MENU) ---
+check_E2_7() {
+	no_source '^[^/]*selectButtonMode[[:space:]]*=[[:space:]]*SEQ_' Core/Src/buttonHandler.c
+	sed -n '/case SEQ_CONFIG:/,/break;/p' Core/Src/buttonHandler.c | grep -q 'selectButtonMode = SELECT_MODE_MENU;' \
+		|| fail "case SEQ_CONFIG (SHIFT + step 12) does not set SELECT_MODE_MENU"
+}
+
+check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7"
 
 if [ $# -gt 0 ]; then check_tasks="$*"; fi
 for task in $check_tasks; do

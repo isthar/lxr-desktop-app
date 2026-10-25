@@ -18724,7 +18724,7 @@ assigned to the mode, and passes once `case SEQ_CONFIG` sets `SELECT_MODE_MENU`.
 - Modify: `Core/Src/buttonHandler.c:900-901` (the `SEQ_CONFIG` case of the SHIFT branch)
 - Test: `tests/test_buttons.c` (ctest id `buttons`), `tools/fw_checks.sh E2.7`
 
-- [ ] **Step 1: The stand-in headers**
+- [x] **Step 1: The stand-in headers**
 
 LF line endings, like everything in `tests/`.
 
@@ -18855,7 +18855,7 @@ extern FxBus fxBus;
 #endif /* HOST_FXBUS_H_ */
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `tests/test_buttons.c`:
 
@@ -19175,7 +19175,7 @@ TEST(buttons_last_step_from_the_global_menu_starts_with_one_track)
 TEST_MAIN()
 ```
 
-- [ ] **Step 3: Register the test**
+- [x] **Step 3: Register the test**
 
 `tests/CMakeLists.txt`, replace:
 
@@ -19202,7 +19202,7 @@ if(TARGET test_buttons)
 endif()
 ```
 
-- [ ] **Step 4: Run it to see it fail**
+- [x] **Step 4: Run it to see it fail**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -19243,7 +19243,7 @@ PASS buttons_last_step_from_the_global_menu_starts_with_one_track
 
 The first line is the bug: the step button set all seven track lengths.
 
-- [ ] **Step 5: Write the failing firmware check**
+- [x] **Step 5: Write the failing firmware check**
 
 `tools/fw_checks.sh`, replace:
 
@@ -19279,7 +19279,7 @@ check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7"
 The first check skips lines with a `/` before the mode, because a comment at `buttonHandler.c:921`
 assigns `SEQ_LAST_STEP_SINGLE_TRACK`.
 
-- [ ] **Step 6: Run it to see it fail**
+- [x] **Step 6: Run it to see it fail**
 
 Run: `tools/fw_checks.sh E2.7`
 
@@ -19290,7 +19290,7 @@ FAIL E2.7: '^[^/]*selectButtonMode[[:space:]]*=[[:space:]]*SEQ_' found: 901:			b
 FAIL E2.7: case SEQ_CONFIG (SHIFT + step 12) does not set SELECT_MODE_MENU
 ```
 
-- [ ] **Step 7: Give the global menu its own mode**
+- [x] **Step 7: Give the global menu its own mode**
 
 `Core/Src/buttonHandler.c`, replace:
 
@@ -19311,7 +19311,7 @@ with:
 			led_clearAllBlinkLeds();
 ```
 
-- [ ] **Step 8: Give `buttonHandler.c` CRLF line endings**
+- [x] **Step 8: Give `buttonHandler.c` CRLF line endings**
 
 The Edit tool keeps the line endings of a file, but text it inserts may come out as LF:
 
@@ -19330,7 +19330,7 @@ EOF
 
 Expected: `CRLF Core/Src/buttonHandler.c`.
 
-- [ ] **Step 9: Run the tests and every check**
+- [x] **Step 9: Run the tests and every check**
 
 Run: `tools/check.sh && tools/fw_checks.sh`
 
@@ -19370,24 +19370,24 @@ PASS buttons_last_step_from_the_global_menu_starts_with_one_track
 8 of 8 tests passed
 ```
 
-- [ ] **Step 10: Review against fw 1.7**
+- [x] **Step 10: Review against fw 1.7**
 
 Read the diff (`git diff -- Core/Src/buttonHandler.c`): one assignment and its comment. Each item is
 fw 1.7 behaviour that must survive; the host test covers those marked (T).
 
-- [ ] SHIFT + step 12 opens the global menu on its first sub-page, and each further press moves on
+- [x] SHIFT + step 12 opens the global menu on its first sub-page, and each further press moves on
   (`menu_switchPage(MENU_MIDI_PAGE)` toggles, unchanged). Step 12 blinks while the menu is open (T).
-- [ ] LOAD + step 12 and SAVE + step 12 do nothing (T).
-- [ ] In the menu the select buttons do nothing, and a voice button selects the voice without
+- [x] LOAD + step 12 and SAVE + step 12 do nothing (T).
+- [x] In the menu the select buttons do nothing, and a voice button selects the voice without
   leaving the menu (T).
-- [ ] The mode buttons leave the menu: mode button 1 returns to the voice pages, where a step button
+- [x] The mode buttons leave the menu: mode button 1 returns to the voice pages, where a step button
   sets a step again (T).
-- [ ] SHIFT + step 14 opens the Last Step page for the active track, also from the menu; a second
+- [x] SHIFT + step 14 opens the Last Step page for the active track, also from the menu; a second
   press switches to all tracks (T). There the step buttons set the length of the active track or of
   all tracks (T), and the encoder does the same (`menu.c:2769-2795`, untouched).
-- [ ] The mode LEDs do not change when the menu opens: `case SEQ_CONFIG` still does not call
+- [x] The mode LEDs do not change when the menu opens: `case SEQ_CONFIG` still does not call
   `led_setMode2()`.
-- [ ] SHIFT + page up or down still sets the active track's length to the end of the bar it moves
+- [x] SHIFT + page up or down still sets the active track's length to the end of the bar it moves
   to, in the menu as in every other mode (`buttonHandler.c:1650-1657`, `:1704-1711`, untouched).
 
 Intended changes, for the stage 1 report (spec §12):
@@ -19402,7 +19402,7 @@ Deviation from the spec, for the stage 1 report (N19):
   `Core/Inc` as a system include directory; `test_buttons.c` and `tests/stubs/` keep
   `-Wall -Wextra -Werror`.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add Core/Src/buttonHandler.c tools/fw_checks.sh tests/CMakeLists.txt tests/test_buttons.c \

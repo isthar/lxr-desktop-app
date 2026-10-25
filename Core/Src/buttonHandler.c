@@ -898,7 +898,10 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			break;
 
 		case SEQ_CONFIG: //config
-			buttonHandler_stateMemory.selectButtonMode = SEQ_CONFIG;
+			//the global menu's own mode (E2.7). fw 1.7 stored SEQ_CONFIG here, a step button
+			//number: 11 is also SELECT_MODE_LAST_STEP_ALL, so a step button without SHIFT set
+			//the length of all tracks.
+			buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_MENU;
 			led_clearAllBlinkLeds();
 			led_setBlinkLed(LED_STEP12,1);
 			menu_switchPage(MENU_MIDI_PAGE);
