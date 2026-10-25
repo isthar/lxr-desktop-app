@@ -131,8 +131,9 @@ check_E2_4() {
 	has_source 'entry\.type == SEQQ_PROGRAM_CHANGE' Core/Src/Soundengine/Sequencer/sequencer.c
 	no_source 'seq_setNextPattern' Core/Src/Soundengine/MIDI/MidiParser.c
 	# the drain stops after a switch while stopped and after an SPP, which can load a kit:
-	# the events after them wait for a fresh now (E2.4 review)
-	awk '/^static uint8_t seq_drainSyncQueues\(/{f=1} f&&/seq_applyMailbox\(\);/{a=1;next} a&&NF{if(/return drained;/)n++; a=0}
+	# the events after them wait for a fresh now (E2.4 review). In the CRLF file a blank
+	# line is a lone \r, one field for NF: strip it first
+	awk '{sub(/\r$/, "")} /^static uint8_t seq_drainSyncQueues\(/{f=1} f&&/seq_applyMailbox\(\);/{a=1;next} a&&NF{if(/return drained;/)n++; a=0}
 		f&&/seqc_songPosition\(entry\.value\);/{b=1;next} b&&NF{if(/return drained;/)n++; b=0} f&&/^}/{exit} END{exit n!=2}' \
 		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_drainSyncQueues() does not stop after a kit-loading Program Change or SPP"
 }
