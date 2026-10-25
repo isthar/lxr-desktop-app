@@ -84,6 +84,15 @@ target_compile_definitions(seq_core_small_queue PRIVATE SEQC_QUEUE_CAPACITY=16)
 target_compile_options(seq_core_small_queue PRIVATE -ffast-math -freciprocal-math)
 target_link_libraries(seq_core_small_queue PUBLIC seqc_options)
 
+# The queue tests (E1.16) count the queue elements the core writes and insert,
+# pop and choke directly, through the test-only block of seq_core.h. They run
+# against a copy of the core with SEQC_QUEUE_TEST, and the firmware's queue size.
+add_library(seq_core_queue_test OBJECT "${SEQC_CORE_SOURCE}")
+target_include_directories(seq_core_queue_test PUBLIC "${LXR_ROOT}/Core/Inc")
+target_compile_definitions(seq_core_queue_test PUBLIC SEQC_QUEUE_TEST)
+target_compile_options(seq_core_queue_test PRIVATE -ffast-math -freciprocal-math)
+target_link_libraries(seq_core_queue_test PUBLIC seqc_options)
+
 # seqc_add_test(<name> IDS <id>... [EXTRA <source>...] [CORE <library>])
 #
 # Builds <name>.c (plus the EXTRA sources) with the fake host into the executable
@@ -128,3 +137,4 @@ seqc_add_test(test_slave     IDS T16 T18)            # E1.10 MIDI and jack slave
 seqc_add_test(test_transport IDS T17)                # E1.11 Start, Continue, Stop, SPP, song mode
 seqc_add_test(test_overflow  IDS T19 CORE seq_core_small_queue)  # E1.12 queue overflow, stats
 seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c)  # E1.13 fw 1.7 replica (reference/)
+seqc_add_test(test_queue     IDS queue CORE seq_core_queue_test)  # E1.16 queue order and real-time cost

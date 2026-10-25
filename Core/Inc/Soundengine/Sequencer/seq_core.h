@@ -672,4 +672,19 @@ void seqc_stats(seqc_stats_t *out);
 /** reset queueMax and every counter to 0; queueDepth stays live */
 void seqc_resetStats(void);
 
+#ifdef SEQC_QUEUE_TEST
+//------------------------------------------------------------------------------
+// Test only: the event queue of a core built with -DSEQC_QUEUE_TEST
+// (tests/test_queue.c). The firmware never defines it.
+//------------------------------------------------------------------------------
+/** queue elements written by insert, choke and skip-once since seqc_init() */
+extern uint32_t seqc_queueMoves;
+/** queue ev as an event generator would */
+void seqc_testQueueInsert(const seqc_event_t *ev);
+/** take the next event; false if the queue is empty */
+bool seqc_testQueuePop(seqc_event_t *out);
+/** the choke of a fired event (track, absStep); returns how many were removed */
+uint32_t seqc_testQueueChoke(uint8_t track, uint32_t absStep);
+#endif
+
 #endif /* SEQ_CORE_H_ */
