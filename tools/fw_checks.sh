@@ -40,19 +40,25 @@ calls_of() {
 		arm-none-eabi-objdump -d --disassemble="$n" "$ELF" | grep -oE '<[^>+]+>' | tr -d '<>'
 	done
 }
-# does function $1 call $2 (directly, through a veneer or a clone)?
-calls() { calls_of "$1" | grep -qE "^(__)?$2(\\.[a-z]+\\.[0-9]+)*(_veneer)?\$"; }
+# does function $1 call $2 (directly, through a veneer or a clone)? The targets are
+# captured first: grep -q on a pipe would stop reading after the first match and the
+# objdump of a second clone would die of SIGPIPE, which pipefail turns into "no call"
+calls() { local targets; targets="$(calls_of "$1")"
+          grep -qE "^(__)?$2(\\.[a-z]+\\.[0-9]+)*(_veneer)?\$" <<<"$targets"; }
 
 need()        { local s; for s in "$@"; do linked "$s" || fail "$s is not linked"; done; }
 gone()        { local s; for s in "$@"; do linked "$s" && fail "$s is still linked"; done; }
 must_call()   { local f="$1" s; shift; linked "$f" || { fail "$f is not linked"; return; }
                 for s in "$@"; do calls "$f" "$s" || fail "$f does not call $s"; done; }
-must_not_call() { local f="$1" s; shift; for s in "$@"; do calls "$f" "$s" && fail "$f still calls $s"; done; }
+must_not_call() { local f="$1" s; shift; linked "$f" || { fail "$f is not linked"; return; }
+                for s in "$@"; do calls "$f" "$s" && fail "$f still calls $s"; done; }
 no_itcm()     { local s; for s in $(grep -E "^$1" <<<"$ITCM"); do fail "$s is in ITCM"; done; }
-no_source()   { local pattern="$1" hits; shift
+# every path must exist: grep exits 2 on a missing one, which would pass silently
+exists()      { local p; for p in "$@"; do [ -e "$p" ] || fail "$p does not exist"; done; }
+no_source()   { local pattern="$1" hits; shift; exists "$@"
                 hits="$(grep -nE "$pattern" "$@" 2>/dev/null)" && fail "'$pattern' found: $(head -n 3 <<<"$hits" | tr -d '\r' | paste -sd ' ' -)"; }
 no_file()     { local f; for f in "$@"; do [ -e "$f" ] && fail "$f still exists"; done; }
-no_tree()     { local pattern="$1" hits; shift
+no_tree()     { local pattern="$1" hits; shift; exists "$@"
                 hits="$(grep -rnE "$pattern" "$@" 2>/dev/null)" && fail "'$pattern' found: $(head -n 3 <<<"$hits" | tr -d '\r' | paste -sd ' ' -)"; }
 has_source()  { local pattern="$1"; shift
                 grep -qE "$pattern" "$@" 2>/dev/null || fail "'$pattern' not found in $*"; }

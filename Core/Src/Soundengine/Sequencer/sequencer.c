@@ -853,6 +853,9 @@ void seq_armAutomationStep(uint8_t stepNr, uint8_t track,uint8_t isArmed)
 //quantisation: from 50% on, a note goes to the next step (spec 6.7).
 //It is seqc_stepPhase() x 100, which reaches 50 halfway between the swung grid times
 //of this step and the next one. 0 while stopped and before the first step.
+//Valid only while recording (seq_recordActive): seq_tick() refreshes the copy only
+//then, so with recording off, and until the first seq_tick() after REC is switched
+//on, it holds the phase of the last tick that ran while recording.
 float seq_getElapsedStepTimePercent()
 {
 	return seq_phaseCopy * 100.f;
@@ -1252,9 +1255,10 @@ uint8_t seq_isAutomationStepArmed()
 //------------------------------------------------------------------------
 void seq_recordAutomation(uint8_t voice, uint8_t dest, uint8_t value)
 {
-	if(seq_recordActive && (voice < NUM_TRACKS) && (seq_stepCopy[voice] < NUM_STEPS))
+	//one read of the copy: a seq_tick() between two reads could make it 255
+	const uint8_t step = (voice < NUM_TRACKS) ? seq_stepCopy[voice] : SEQC_NO_STEP;
+	if(seq_recordActive && (step < NUM_STEPS))
 	{
-		const uint8_t step = seq_stepCopy[voice];
 
 		//only record to active steps
 		/*
@@ -1926,7 +1930,8 @@ static void seq_cbNoteOff(void *ctx, uint8_t track)
 //------------------------------------------------------------------------------
 /** Step boundary, the rest of fw 1.7 seq_nextStep(): beat LED, erase on the active
  * track, follow-bar, chase light and the MTC check. The erase runs before the core
- * generates the step, so an erased step does not play. */
+ * generates the step's late part, so an erased step does not play, unless its early
+ * part already played hits before n * 96; its late hits then follow it (N3). */
 static void seq_cbStepBoundary(void *ctx, uint32_t absStep)
 {
 	(void)ctx;
