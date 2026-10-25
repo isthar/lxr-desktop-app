@@ -140,18 +140,48 @@ TEST(T19_calls_from_a_callback_are_ignored_and_counted)
 	ASSERT_EQ(fake_triggers(h, 5, trig, 8), 1);
 }
 
+static int skipCalls;
+static void skipAndCallBack(fake_host_t *h, uint32_t absStep)
+{
+	(void)h;
+	if (absStep != 4 || skipCalls++ > 0)
+		return;
+	seqc_stop();					/* ignored: a reentry */
+	seqc_skipOnce(2, 5);				/* a skip drop */
+}
+
 TEST(T19_reset_stats_clears_every_counter)
 {
 	fake_host_t *h = fake_init();
-	setUpFlood(h);
-	h->muted[6] = true;
+	skipCalls = 0;
+	h->onStepBoundary = skipAndCallBack;
+	setUpFlood(h);					/* queue overflow and the queue maximum */
+	h->muted[6] = true;				/* a mute drop */
+	fake_setStep(h, 0, 2, 5, true);			/* skipped */
+	fake_setStep(h, 0, 0, 3, true);
+	fake_setTiming(h, 0, 0, 3, 5, 7);		/* x8 at 372..456, choked by step 4 at 384 */
+	fake_setStep(h, 0, 0, 4, true);
 	start(h);
 	runToTick(h, 6 * 96);
 	fake_sync(h, SEQC_EV_CLOCK, h->now);		/* ignored in internal sync */
+	/* MIDI clock: an outlier interval and a dropout */
+	seqc_stop();
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	const seqc_time_t t0 = h->now + fake_msToCycles(1.0);
+	fake_sync(h, SEQC_EV_CLOCK, t0);
+	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(20.833));
+	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(22.833));
+	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(1100.0));
 	seqc_stats_t s = stats();
+	ASSERT_TRUE(s.queueMax > 0);
 	ASSERT_TRUE(s.queueOverflow > 0);
+	ASSERT_TRUE(s.chokeDrops > 0);
 	ASSERT_TRUE(s.muteDrops > 0);
+	ASSERT_TRUE(s.skipDrops > 0);
 	ASSERT_EQ(s.syncIgnored, 1);
+	ASSERT_TRUE(s.intervalsExcluded > 0);
+	ASSERT_TRUE(s.dropouts > 0);
+	ASSERT_TRUE(s.reentries > 0);
 	seqc_resetStats();
 	s = stats();
 	ASSERT_EQ(s.queueMax, 0);
