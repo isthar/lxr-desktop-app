@@ -279,34 +279,63 @@ static call_t processCall(fake_host_t *h, seqc_time_t now)
 	return c;
 }
 
-/* The review's dense pattern: 7 tracks, every step x8 (flam 5), shifted by
- * shift units. 16 steps at 120 BPM, one seqc_process() every 0.1 ms. */
-static fake_host_t *startDense(int8_t shift)
+/* The review's dense pattern: 7 tracks, every step x8 (flam 5), the odd steps
+ * shifted by odd units and the even ones by even units, with shuffle. 16 steps
+ * at 120 BPM, one seqc_process() every 0.1 ms. */
+static fake_host_t *startDenseShuffled(int8_t odd, int8_t even, uint8_t shuffle)
 {
 	fake_host_t *h = fake_init();
 	h->logMask = 0;
+	h->shuffle = shuffle;
 	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
 		for (uint8_t s = 0; s < 16; s++)
 		{
 			fake_setStep(h, 0, t, s, true);
-			fake_setTiming(h, 0, t, s, 5, shift);
+			fake_setTiming(h, 0, t, s, 5, (s & 1) ? odd : even);
 		}
 	fake_process(h, 0);
 	seqc_start();
 	return h;
 }
 
+static fake_host_t *startDense(int8_t shift)
+{
+	return startDenseShuffled(shift, shift, 0);
+}
+
 /* The core generates a boundary's hits track by track. With every track on the
  * same grid, hit j of track t orders before hits j+1..7 of tracks 0..t-1, so a
  * shift towards the tail alone would move t * (7 - j) of the new events:
  * C(7,2) * C(8,2) = 588 in all. Inserting from the nearer end moves at most that
- * (354 without shift). The events still pending from the step before fire before
- * every new one and do not move. */
-#define DENSE_NEW_EVENT_MOVES	(21 * 28)
+ * (354 without shift). Without shuffle the events still pending from the step
+ * before fire before every new one and do not move. */
+#define DENSE_NEW_EVENT_MOVES		(21 * 28)
+#define DENSE_NEW_EVENT_MOVES_NO_SHIFT	354
 
-static void denseBoundaryMovesAreBounded(int8_t shift)
+/* With shuffle, or shifts that alternate between odd and even steps, a step's
+ * hits interleave with those still pending from the step before, and a
+ * boundary queues up to 105 events. The bounds are the writes measured with
+ * the two-ended insert; a tail-only insert writes 3878, 1414 and 1379. */
+typedef struct
 {
-	fake_host_t *h = startDense(shift);
+	int8_t		odd;		/**< the shift of the odd steps */
+	int8_t		even;		/**< the shift of the even steps */
+	uint8_t		shuffle;
+	uint32_t	maxMoves;	/**< the most queue elements one boundary call writes */
+} dense_case_t;
+
+static const dense_case_t denseCases[] = {
+	{ +7, +7,   0, SEQC_NUM_TRACKS * 8 + DENSE_NEW_EVENT_MOVES },	/* a step's hits still pending at the next boundary */
+	{  0,  0,   0, SEQC_NUM_TRACKS * 8 + DENSE_NEW_EVENT_MOVES_NO_SHIFT },	/* tail-only: 644 */
+	{ +7, -7, 127, 1194 },	/* tail-only: 3878 */
+	{ -7, +7, 127,  543 },	/* tail-only: 1414 */
+	{ +7, +7, 127, 1077 },	/* tail-only: 1379 */
+};
+
+static void denseBoundaryMovesAreBounded(const dense_case_t *dc)
+{
+	fake_host_t *h = startDenseShuffled(dc->odd, dc->even, dc->shuffle);
+	const bool lockstep = dc->odd == dc->even && dc->shuffle == 0;
 	const seqc_time_t until = (seqc_time_t)(16.0 * fake_stepCycles(120.0));
 	size_t boundaries = 0;
 	for (seqc_time_t t = 0; t < until; t += fake_msToCycles(0.1))
@@ -315,8 +344,9 @@ static void denseBoundaryMovesAreBounded(int8_t shift)
 		if (c.boundaries == 0)
 			continue;
 		ASSERT_EQ(c.boundaries, 1);
-		ASSERT_EQ(c.inserted, SEQC_NUM_TRACKS * 8);
-		ASSERT_TRUE(c.moves <= (uint32_t)c.inserted + DENSE_NEW_EVENT_MOVES);
+		if (lockstep)
+			ASSERT_EQ(c.inserted, SEQC_NUM_TRACKS * 8);
+		ASSERT_TRUE(c.moves <= dc->maxMoves);
 		boundaries++;
 	}
 	ASSERT_EQ(boundaries, 16);
@@ -327,8 +357,70 @@ static void denseBoundaryMovesAreBounded(int8_t shift)
 
 TEST(queue_dense_boundary_moves_are_bounded)
 {
-	denseBoundaryMovesAreBounded(7);	/* +84 ticks: a step's hits are still pending at the next boundary */
-	denseBoundaryMovesAreBounded(0);
+	for (size_t i = 0; i < sizeof denseCases / sizeof denseCases[0]; i++)
+		denseBoundaryMovesAreBounded(&denseCases[i]);
+}
+
+/* A worst case found by a hill climb over legal settings (the E1.16 review):
+ * every step on, per-step shift and flam, roll rates, shuffle 0. Its boundary
+ * calls write up to 3861 queue elements (5977 with a tail-only insert) and
+ * queue up to 111 events; other calls write up to 289. This is the pattern to
+ * give the CPU meter (H12). The bounds are measured, not derived. */
+static const int8_t adversarialShift[SEQC_NUM_TRACKS][16] = {
+	{ -3, -3, -4, -3, +1, -6, +5, +6, +6, -7, +1, +5, +3, +4, -2, -6 },
+	{ +3, +1, +5, +7, -4, -2, -5, +7, +6, -6, +4, +2, +5, -3, +2, +1 },
+	{ +0, +7, -5, +7, -7, +7, -4, +5, +7, -7, -7, +3, +7, -7, +7, +4 },
+	{ +1, -1, -2, -5, +2, +2, -4, +7, +2, -7, +7, +2, +7, -5, +6, +3 },
+	{ +6, +3, -4, +5, -6, +4, -4, +7, +1, -7, -2, +2, +2, +1, +6, +2 },
+	{ +7, -5, -7, +4, -2, -7, -3, +7, +1, -7, +0, +2, +4, +5, +6, -5 },
+	{ -3, -1, -7, -5, -1, -4, -5, +6, +1, -7, +7, -7, +7, -1, +3, -1 },
+};
+static const uint8_t adversarialFlam[SEQC_NUM_TRACKS][16] = {
+	{ 4, 4, 2, 5, 1, 2, 4, 5, 5, 5, 3, 1, 2, 0, 2, 4 },
+	{ 3, 1, 4, 3, 1, 4, 4, 5, 5, 5, 0, 2, 0, 4, 2, 1 },
+	{ 5, 1, 2, 0, 4, 1, 5, 5, 5, 5, 1, 2, 2, 0, 4, 0 },
+	{ 3, 5, 0, 0, 5, 3, 0, 5, 5, 5, 3, 3, 4, 4, 4, 2 },
+	{ 4, 1, 1, 5, 4, 3, 0, 5, 5, 5, 1, 2, 3, 4, 2, 2 },
+	{ 3, 0, 5, 2, 0, 5, 3, 5, 5, 5, 3, 4, 5, 2, 2, 3 },
+	{ 1, 0, 4, 1, 0, 3, 2, 3, 5, 5, 5, 2, 3, 4, 4, 4 },
+};
+static const uint8_t adversarialRoll[SEQC_NUM_TRACKS] = { 1, 8, 8, 4, 4, 4, 4 };
+
+#define ADVERSARIAL_BOUNDARY_MOVES	3861
+#define ADVERSARIAL_OTHER_MOVES		289
+
+TEST(queue_adversarial_pattern_cost_is_bounded)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = 0;
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+	{
+		h->rollRate[t] = adversarialRoll[t];
+		for (uint8_t s = 0; s < 16; s++)
+		{
+			fake_setStep(h, 0, t, s, true);
+			fake_setTiming(h, 0, t, s, adversarialFlam[t][s], adversarialShift[t][s]);
+		}
+	}
+	fake_process(h, 0);
+	seqc_start();
+	const seqc_time_t until = (seqc_time_t)(16.0 * fake_stepCycles(120.0));
+	size_t boundaries = 0;
+	for (seqc_time_t t = 0; t < until; t += fake_msToCycles(0.1))
+	{
+		const call_t c = processCall(h, t);
+		if (c.boundaries == 0)
+		{
+			ASSERT_TRUE(c.moves <= ADVERSARIAL_OTHER_MOVES);
+			continue;
+		}
+		ASSERT_EQ(c.boundaries, 1);
+		ASSERT_TRUE(c.moves <= ADVERSARIAL_BOUNDARY_MOVES);
+		boundaries++;
+	}
+	ASSERT_EQ(boundaries, 16);
+	ASSERT_EQ(stats().queueOverflow, 0);
+	ASSERT_EQ(h->errors, 0);
 }
 
 /* fires that remove nothing write nothing */
