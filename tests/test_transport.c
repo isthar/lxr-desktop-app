@@ -676,6 +676,10 @@ TEST(T17_stop_keeps_and_spp_clears_every_skip_marker)
 
 TEST(T17_spp_clears_the_queue_and_restarts_the_count)
 {
+	/* the song position clears the ratchet; the step grid after the Continue
+	 * comes from the re-phase of the first clock (seqc_slaveClock), which sets
+	 * the count from the located position: T17_spp_resets_the_count_while_armed
+	 * pins the count reset of the song position itself */
 	fake_host_t *h = midiSlave();
 	fake_setStep(h, 0, 1, 1, true);
 	fake_setTiming(h, 0, 1, 1, 5, 7);		/* x8 from 180 to 264 */
@@ -687,7 +691,7 @@ TEST(T17_spp_clears_the_queue_and_restarts_the_count)
 	const uint32_t tempoSteps = h->calls[FAKE_TEMPO_STEP];
 	seqc_songPosition(4);
 	sync(h, SEQC_EV_CONTINUE);
-	clocks(h, 1);					/* the count restarted: this clock begins a step */
+	clocks(h, 1);					/* re-phased: this clock begins a step */
 	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], tempoSteps + 1);
 	clocks(h, 6 * 4);
 	ASSERT_EQ(fake_triggers(h, 1, trig, 16), 2);	/* the rest of the ratchet is gone */
@@ -697,9 +701,9 @@ TEST(T17_spp_clears_the_queue_and_restarts_the_count)
 TEST(T17_midi_start_in_analog_sync_starts_with_the_next_pulse)
 {
 	/* N13.10: at 24 PPQ the NEXT_CLOCK arm starts playback on the next pulse
-	 * (fw 1.7 waited for its own 6-pulse grid), and the count reset puts the
-	 * step grid in line with the Start: tempoStep() comes on that pulse and on
-	 * every 6th after it */
+	 * (fw 1.7 waited for its own 6-pulse grid), and the re-phase of that pulse
+	 * puts the step grid in line with the Start: tempoStep() comes on that
+	 * pulse and on every 6th after it */
 	fake_host_t *h = fake_init();
 	h->logMask = FAKE_LOG_NO_CLOCKS;
 	seqc_setSyncMode(SEQC_SYNC_ANALOG);
@@ -723,7 +727,9 @@ TEST(T17_midi_start_in_analog_sync_starts_with_the_next_pulse)
 TEST(T17_midi_start_resets_the_count_for_a_later_local_start)
 {
 	/* N4, N13.10: the count runs from the Start, so a local start after a
-	 * Start and a Stop lands on the master's step grid */
+	 * Start and a Stop lands on the master's step grid (here the re-phase of
+	 * the first clock after the Start sets it; without a clock between the
+	 * Start and the Stop the reset does, see the next test) */
 	fake_host_t *h = midiSlave();
 	clocks(h, 3);					/* count 3 before the Start */
 	sync(h, SEQC_EV_START);
@@ -736,6 +742,42 @@ TEST(T17_midi_start_resets_the_count_for_a_later_local_start)
 	ASSERT_EQ(seqc_state(), SEQC_ARMED);
 	clocks(h, 1);					/* count 18: begins a step */
 	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+}
+
+TEST(T17_midi_start_resets_the_count_without_a_clock)
+{
+	/* N4, N13.10: a Start and a Stop with no clock between them: no re-phase
+	 * runs, so only the count reset of the Start puts a later local start on
+	 * the master's step grid */
+	fake_host_t *h = midiSlave();
+	clocks(h, 3);					/* count 3 before the Start */
+	sync(h, SEQC_EV_START);
+	sync(h, SEQC_EV_STOP);				/* count 0 */
+	clocks(h, 13);					/* count 13 since the Start */
+	seqc_rewind();
+	seqc_start();
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	clocks(h, 5);					/* counts 13..17: off the grid */
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	clocks(h, 1);					/* count 18: begins a step */
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+}
+
+TEST(T17_spp_resets_the_count_while_armed)
+{
+	/* N6: a song position while a local start waits for a step clock (the
+	 * Continue that follows is ignored while armed) restarts the count, so the
+	 * next clock begins the located step and plays it on time */
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 8, true);
+	clocks(h, 2);					/* count 2 */
+	seqc_start();
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	seqc_songPosition(8);
+	clocks(h, 1);					/* count 0: begins step 8 */
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 8);
 }
 
 TEST(T17_jack_run_gate)
