@@ -183,6 +183,7 @@ typedef struct
 	uint8_t		runCount;
 	bool		runLonger;	/**< they are longer than the mean (else shorter) */
 } seqc_slave_t;
+_Static_assert(SEQC_TEMPO_RESTART_4PPQ <= SEQC_TEMPO_RESTART, "run[] holds a row at either threshold (N16)");
 
 //------------------------------------------------------------------------------
 /* the state, one part per area */

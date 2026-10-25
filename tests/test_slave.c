@@ -815,6 +815,32 @@ TEST(T16_inlier_resets_the_outlier_run)
 	ASSERT_EQ(stats().tempoRestarts, 0);
 }
 
+TEST(T16_second_jump_right_after_a_restart)
+{
+	/* 200 to 90 BPM restarts the estimate; then 40 BPM, again longer: the
+	 * restart emptied the row, so this outlier starts a new row of one and
+	 * the second jump takes SEQC_TEMPO_RESTART intervals, like the first */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	size_t n = appendClocks(0, fake_clockCycles(200.0), SEQC_TEMPO_WINDOW + 1);
+	n = appendClocks(n, fake_clockCycles(90.0), SEQC_TEMPO_RESTART);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_NEAR(seqc_currentBpm(), 90.0, 1e-3);
+	size_t before = n;
+	n = appendClocks(n, fake_clockCycles(40.0), 1);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 90.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART);	/* a new row of one */
+	before = n;
+	n = appendClocks(n, fake_clockCycles(40.0), SEQC_TEMPO_RESTART - 1);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().tempoRestarts, 2);
+	ASSERT_NEAR(seqc_currentBpm(), 40.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 2 * (SEQC_TEMPO_RESTART - 1));
+}
+
 TEST(T16_bunched_clocks_are_not_a_tempo_jump)
 {
 	/* USB: a late packet brings 6 clocks with one stamp. The first interval is
