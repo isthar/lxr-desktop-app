@@ -519,7 +519,9 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *   twice it.
  * - An interval of 0 (the clocks of one USB packet share a stamp) is left out
  *   and ends the row: the packet came late, so the interval before the 0 is no
- *   sign of a new tempo either.
+ *   sign of a new tempo either. So is any interval shorter than half a clock
+ *   at SEQC_SLAVE_BPM_MAX: bunched clocks with tiny gaps (DIN-forwarded bytes,
+ *   USB transfers stamped microseconds apart) are the same late packet.
  * - The dropout time is SEQC_DROPOUT_MS, or two expected clock intervals if
  *   that is longer (N15). The interval comes from the estimate, or from
  *   SEQC_SLAVE_BPM_MIN while there is none, so a slow jack clock at 4 PPQ can

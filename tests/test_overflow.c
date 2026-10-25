@@ -171,7 +171,7 @@ TEST(T19_reset_stats_clears_every_counter)
 	fake_sync(h, SEQC_EV_CLOCK, t0);
 	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(20.833));
 	for (unsigned k = 0; k < SEQC_TEMPO_RESTART; k++)	/* a row of outliers: a restart */
-		fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(22.833 + 2.0 * k));
+		fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(26.833 + 6.0 * k));	/* above the 4.17 ms guard */
 	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(1100.0));
 	seqc_stats_t s = stats();
 	ASSERT_TRUE(s.queueMax > 0);

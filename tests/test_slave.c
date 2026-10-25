@@ -891,6 +891,45 @@ TEST(T16_bunched_pairs_are_not_a_tempo_jump)
 	ASSERT_EQ(fake_triggers(h, 0, trig, 64), (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
 }
 
+/* a late bunch of 6 clocks gap cycles apart (not one stamp), 6 clocks after the
+ * last one at 120 BPM, then 24 clocks at 120. The first interval is an outlier
+ * and starts a row; the 5 short gaps, under half a clock at
+ * SEQC_SLAVE_BPM_MAX, are left out like a 0 and end the row (N16). */
+static void checkBunchedGaps(double gap)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	stamps[n] = stamps[n - 1] + (seqc_time_t)(6.0 * per + 0.5);
+	n++;
+	n = appendClocks(n, gap, 5);
+	n = appendClocks(n, per, 24);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 0.5);
+	ASSERT_EQ(stats().intervalsExcluded, 6);
+	const size_t steps = (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1;
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), steps);
+	for (size_t k = 0; k < steps; k++)
+	{
+		ASSERT_EQ(trig[k]->ev.absStep, k);
+		ASSERT_TRUE(trig[k]->time >= stamps[SEQC_MIDI_CLOCKS_PER_STEP * k]);	/* never before its clock */
+	}
+}
+
+TEST(T16_din_bunched_clocks_are_not_a_tempo_jump)
+{
+	/* DIN: a forwarded bunch of back-to-back 0xF8 bytes, 0.32 ms apart */
+	checkBunchedGaps((double)fake_msToCycles(0.32));
+}
+
+TEST(T16_usb_bunched_clocks_10us_apart_are_not_a_tempo_jump)
+{
+	/* USB: clocks of one burst in separate transfers, 10 us apart */
+	checkBunchedGaps((double)fake_msToCycles(0.01));
+}
+
 TEST(T18_tempo_jump_4ppq_restarts_after_2)
 {
 	/* N16 at 4 PPQ: 100 to 225 BPM, pulses 56% closer. The estimate restarts

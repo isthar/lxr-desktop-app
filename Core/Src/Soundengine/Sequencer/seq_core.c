@@ -830,12 +830,15 @@ static void seqc_windowAdd(uint32_t dt, uint8_t window)
  *   the row;
  * - an interval of 0 (clocks of one USB packet share a stamp) is left out and
  *   ends the row: the packet came late, so the interval before the 0 is no
- *   sign of a new tempo either. */
+ *   sign of a new tempo either. So is any interval under half a clock at
+ *   SEQC_SLAVE_BPM_MAX (4.17 ms at 24 PPQ, 25 ms at 4 PPQ): a bunch with tiny
+ *   gaps (DIN-forwarded 0xF8 bytes 0.32 ms apart, USB transfers stamped
+ *   microseconds apart) is the same late packet. */
 static void seqc_tempoInterval(uint32_t dt)
 {
 	const bool jack4 = seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24;
 	const uint8_t window = jack4 ? SEQC_TEMPO_WINDOW_4PPQ : SEQC_TEMPO_WINDOW;
-	if (dt == 0)
+	if (dt < (uint32_t)(0.5 * seqc_ticksPerClock() / seqc_ticksPerCycle(SEQC_SLAVE_BPM_MAX)))
 	{
 		seqc.stats.intervalsExcluded++;
 		seqc_sl.runCount = 0;
