@@ -43,6 +43,11 @@
   .lx-tools input:focus-visible, .lx-tools select:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 1px; }
   .lx-empty { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
   .lx-ago { color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+  .lx-now { margin: 0 0 var(--cds-gap-md); display: flex; gap: var(--cds-gap-sm); align-items: baseline; font-size: var(--cds-font-size-body); }
+  .lx-now[hidden] { display: none; }
+  .lx-dot { flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--color-warn); align-self: center; animation: lx-pulse 2s ease-in-out infinite; }
+  @keyframes lx-pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .lx-dot { animation: none; } }
   .lx-box-log { max-height: 22rem; }
   [data-dash-source-state=empty] { color: transparent; }
   [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
@@ -111,6 +116,7 @@
       <section class="lx-card" id="w-toku">
         <h2>W toku</h2>
         <p class="lx-note">Nad tym pracuję teraz.</p>
+        <p class="lx-now" id="lx-now" hidden><span class="lx-dot" aria-hidden="true"></span><span data-source="status" data-field="now" data-row="0">—</span></p>
         <div class="lx-box">
           <table class="lx-t lx-doing" data-source="tasks" data-row-key="id">
             <thead><tr><th data-field="id">ID</th><th data-field="title">Zadanie</th></tr></thead>
@@ -314,6 +320,8 @@ lxEpic.addEventListener('change', lxDrawTables);
 
 dash.onData(() => {
   document.querySelectorAll('[data-source="status"][data-field]').forEach((el) => lxFill(el, 'status', el.dataset.field));
+  const lxNow = document.getElementById('lx-now');
+  lxNow.hidden = lxNow.textContent.trim() === '—';
   document.querySelectorAll('[data-source="overall"][data-field]').forEach((el) => lxFill(el, 'overall', el.dataset.field));
   lxAgo();
   lxDrawEpicOptions();

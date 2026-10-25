@@ -1,11 +1,24 @@
-"""Print one line per new workflow journal event: python3 wf_watch.py <workflow dir> <lines already seen> [label] [finished-only]"""
+"""Print one line per new workflow journal event, and optionally per new commit:
+
+    python3 wf_watch.py <workflow dir> <lines already seen> [label] [finished-only] [--git=<repo>]
+
+With --git, every commit that appears on the repository's HEAD is printed too ("commit HH:MM sha subject"),
+so the tracker can follow the commits agents make between the journal events.
+"""
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
-import json, os, sys, time
+import json, os, subprocess, sys, time
 
-wf, seen = sys.argv[1], int(sys.argv[2])
-tag = (sys.argv[3] + " ") if len(sys.argv) > 3 else ""
-finished_only = len(sys.argv) > 4 and sys.argv[4] == "finished-only"
+git_repo = None
+argv = []
+for a in sys.argv[1:]:
+    if a.startswith("--git="):
+        git_repo = a[len("--git="):]
+    else:
+        argv.append(a)
+wf, seen = argv[0], int(argv[1])
+tag = (argv[2] + " ") if len(argv) > 2 else ""
+finished_only = len(argv) > 3 and argv[3] == "finished-only"
 journal = os.path.join(wf, "journal.jsonl")
 
 def label(agent_id):
@@ -15,7 +28,23 @@ def label(agent_id):
     except (OSError, ValueError):
         return agent_id
 
+def git(*args):
+    try:
+        return subprocess.run(["git", "-C", git_repo, *args], capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+head = git("rev-parse", "HEAD").strip() if git_repo else ""
+
 while True:
+    if git_repo:
+        now_head = git("rev-parse", "HEAD").strip()
+        if now_head and head and now_head != head:
+            now = time.strftime("%H:%M")
+            for line in git("log", "--reverse", "--format=%h %s", f"{head}..{now_head}").splitlines():
+                print(f"{tag}commit {now} {line}", flush=True)
+        if now_head:
+            head = now_head
     try:
         with open(journal) as f:
             complete = f.read().split("\n")[:-1]   # drop a partial last line

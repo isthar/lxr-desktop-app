@@ -51,17 +51,23 @@ log entry for every finished agent step, every commit and every phase change.
    If it is missing or stale, ArtifactData `list` of the `datasets` collection shows both.
 7. The page itself is `files/index.html` in the store (`{text}`). Its source is kept in `docs/lichomat/tracker-page.html`.
 
-While a workflow runs, a Monitor on its `journal.jsonl` reports each agent that starts or finishes, so
-the log can follow the workflow step by step.
+While a workflow runs, a Monitor on its `journal.jsonl` reports each agent that starts or finishes, and
+with `--git` each new commit, so the log can follow the workflow step by step. Log every commit: the
+owner watches the page and reads silence as a stall.
 
 ## Running the plan with agents
 
 The scripts in `tools/agent/` drive the work through Claude Code workflows:
 
 - **`impl-track.js`** is a Workflow script. It runs the plan's tasks in order:
-  - for each task: an implementer (TDD, `tools/check.sh`, commit), then a spec-compliance review, then
-    a quality review;
-  - fix loops of at most 3 rounds after each review;
+  - for each task, an implementer (TDD, `tools/check.sh`, commit), then the reviews of the task's
+    `review` mode:
+    - `full`, the default: a spec-compliance review, then a quality review, each with fix loops of at
+      most 3 rounds;
+    - `parallel`: both reviews at the same time and one fixer for both lists. The first run of each
+      review is full; later runs check the previous findings and review only the fix commits (the
+      owner's choice for E1.18 and E2, 2026-10-25);
+    - `light`: one combined review at high effort, at most 2 rounds (the owner's choice for E3 and E4);
   - the run stops and reports when a task is blocked or does not pass review.
 
   Start it with the Workflow tool, `scriptPath: tools/agent/impl-track.js`, and these args:
@@ -72,15 +78,15 @@ The scripts in `tools/agent/` drive the work through Claude Code workflows:
   | `branch` | the work branch |
   | `plan` | the plan path |
   | `context` | a scene-setting text |
-  | `tasks` | a list of `{id, title, text}`, made by `extract_tasks.py` |
+  | `tasks` | a list of `{id, title, text}` or `{id, title, file}`, made by `extract_tasks.py`, each with an optional `review` mode |
   | `final` | `{review: true}`, optional |
 
 - **`extract_tasks.py`** cuts the full text of the chosen tasks out of the plan:
   `python3 tools/agent/extract_tasks.py <plan> <out.json> E1.1 E1.2 …`. Without ids it lists the tasks
   it finds.
 - **`wf_watch.py`** prints one line per agent that starts or finishes in a workflow's
-  `journal.jsonl`. Run it under a Monitor:
-  `python3 tools/agent/wf_watch.py <workflow transcript dir> <lines already seen> <label> [finished-only]`.
+  `journal.jsonl`, and with `--git=<repo>` one line per new commit. Run it under a Monitor:
+  `python3 tools/agent/wf_watch.py <workflow transcript dir> <lines already seen> <label> [finished-only] [--git=<repo>]`.
 
 A workflow can only be resumed (`resumeFromRunId`) in the session that started it. In a new session:
 1. Look at `git log` and the plan's ticked checkboxes to see where the run stopped.

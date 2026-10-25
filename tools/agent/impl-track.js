@@ -1,6 +1,6 @@
 export const meta = {
   name: 'lichomat-impl-track',
-  description: 'Execute LICHOMAT stage 1 plan tasks in order: implement (TDD), spec review, quality review, fix loops',
+  description: 'Execute LICHOMAT stage 1 plan tasks in order: implement (TDD), spec and quality reviews (in turn, in parallel or one light review), fix loops',
   phases: [
     { title: 'Implement', detail: 'fresh implementer per task, full task text from the plan, check.sh, commit' },
     { title: 'Spec review', detail: 'independent check that the commit does exactly what the task and spec ask' },
@@ -19,7 +19,7 @@ export const meta = {
 //   branch: 'timing-core',
 //   plan: 'docs/superpowers/plans/2026-10-23-timing-core.md',
 //   context: 'scene-setting text shared by all tasks of this track',
-//   tasks: [{ id, title, text | file, review? }],  // full task text or a file holding it; review: 'full' (default) or 'light'
+//   tasks: [{ id, title, text | file, review? }],  // full task text or a file holding it; review: 'full' (default), 'parallel' or 'light'
 //   final: { review: true, attacks: [{ key, prompt }] }   // optional
 // }
 
@@ -32,7 +32,7 @@ const RULES = `Working rules (all mandatory):
 - Every commit message ends with this trailer line: Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - Do not edit docs/lichomat/tracker.json or docs/lichomat/reports/, and do not run tools/tracker_note.py: the controller keeps the tracker. Where the plan tells you to log a commit in the tracker (its convention 7), skip that step and say so in your report.
 - Toolchain: "source tools/env.sh" puts arm-none-eabi-gcc, cmake and ninja on PATH. "tools/check.sh" runs the host tests, the firmware release build, prints the memory summary and the warning count. It must pass with 0 warnings after your work.
-- Authoritative documents: docs/superpowers/specs/2026-10-23-timing-core-design.md (spec), docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (notes N1-N20; they win over the spec), the plan ${A.plan}.
+- Authoritative documents: docs/superpowers/specs/2026-10-23-timing-core-design.md (spec), docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (notes N1-N21; they win over the spec), the plan ${A.plan}.
 - Hardware checks (H1-H13) cannot be run here; never claim them.`
 
 const IMPL = {
@@ -210,6 +210,117 @@ function lightReviewPrompt(t, impl) {
 In the same review, also judge code and document quality as a senior reviewer would: correctness, real-time and ISR safety where firmware is touched, tests that verify behaviour, names, matching the surrounding style (CRLF where the file uses it), and no stale or wrong statements in docs. Use severities: critical = bug or broken behaviour; important = must be fixed now; minor = polish. Return compliant=true only if there is no critical or important issue.`
 }
 
+// Parallel review (owner's choice for workflow B, 2026-10-25 12:25): in each pass the spec and the
+// quality reviewer work at the same time on the same HEAD, and one fixer takes both lists. A spec
+// review that passed stays passed, as in the sequential flow. After every fix the quality review
+// runs again, because in the sequential flow it always saw the code after the spec fixes. Each kind
+// keeps the blocking rules of reviewLoop, where its round is 1 + the fixes its own findings caused,
+// so a quality review that only re-checks a spec fix still counts as that kind's earlier round.
+function parallelNote(t, kind, round) {
+  const other = kind === 'spec' ? 'quality' : 'spec'
+  const dir = `review-${t.id}-${kind}-${round}`
+  return `
+
+## Working beside another reviewer
+
+The ${other} review may be running on the same HEAD at the same time as yours. So that the two of you do not collide:
+- Do not build, run tests or write anything in ${A.repo}: tools/check.sh and ctest write build/ there.
+- To build, test or try mutants, export HEAD into a directory of your own under the scratchpad, named ${dir}:
+  git -C ${A.repo} archive HEAD | tar -x -C <that directory>, then ln -s ${A.repo}/.toolchain <that directory>/.toolchain so tools/env.sh finds the toolchain.
+- Review only what your own review covers; the ${other} reviewer covers the rest.`
+}
+
+// Focused re-review (owner's choice for workflow B, 2026-10-25 12:55): the first run of each kind
+// reviews the whole task; a later run checks the findings it raised before and reviews the fix
+// commits since the HEAD it saw, instead of reviewing the whole task again.
+function focusedReviewPrompt(t, kind, run, seenHead, findings, fix) {
+  const what = kind === 'spec' ? 'compliance with its specification' : 'code quality, as a senior embedded C reviewer'
+  const report = fix ? { summary: fix.summary, concerns: fix.concerns || [], deviations: fix.deviations || [], tests: fix.tests } : {}
+  const verdict = kind === 'spec'
+    ? 'Return compliant=true only if every finding above is fixed and the fix commits break nothing.'
+    : 'Severity: critical = bug or broken behaviour; important = test gap, architecture or robustness problem that should be fixed now; minor = polish. ready = yes only without critical or important issues.'
+  return `You are re-reviewing ${t.id}: ${t.title} of the LICHOMAT stage 1 plan for ${what}. This is run ${run} of the ${kind} review. Run 1 reviewed the whole task, so this run is focused on what changed since your previous run.
+
+## Task description (full text from the plan)
+
+${taskText(t)}
+
+## Context
+
+${A.context}
+
+Authoritative documents: docs/superpowers/specs/2026-10-23-timing-core-design.md, docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (notes win over the spec), the plan ${A.plan}.
+
+## What changed since your previous run
+
+Your previous run reviewed HEAD ${seenHead}. Since then a fixer committed ${seenHead}..HEAD in ${A.repo} (git log and git diff ${seenHead}..HEAD). Its report (do not trust it):
+
+${JSON.stringify(report, null, 1)}
+
+## Findings of your previous run that had to be fixed (JSON)
+
+${findings.length ? JSON.stringify(findings, null, 1) : 'None: your previous run passed. The fix commits answer findings of the other review, and you check that they do not break what you passed.'}
+
+## Your job
+
+1. For each finding above, check the code: is it really fixed, at its cause, with a test where the finding asked for one? Where the fixer rejected a finding (see its concerns), judge the reason. A finding that is not fixed, or fixed wrongly, is an issue again with its original severity.
+2. Review the fix commits, git diff ${seenHead}..HEAD, for ${kind === 'spec' ? 'the task and the spec/notes' : 'correctness (edge cases, overflow, ordering, ISR/main-context safety, real-time cost on the Cortex-M7), tests that verify behaviour, names and the surrounding style (CRLF where the file uses it)'}: new bugs or regressions, broken rules, tests that do not test what their name claims, comments and docs the fix left stale.
+3. Run the host tests and tools/check.sh in your own export of HEAD (see below), and try mutants on the lines the fix commits changed.
+Do not re-review what the earlier runs passed outside the fix commits. Do not edit files and do not commit.
+${verdict} Each issue needs file, line, the problem and the fix.`
+}
+
+async function parallelReview(t, impl) {
+  let current = impl
+  const passed = { spec: null, quality: null }
+  const fixes = { spec: 0, quality: 0 }   // fixes caused by each kind's findings
+  const runs = { spec: 0, quality: 0 }    // reviews run, for the labels
+  const leftovers = { spec: [], quality: [] }
+  const seenAt = { spec: null, quality: null }      // the HEAD each kind last reviewed
+  const findings = { spec: [], quality: [] }        // what each kind's last run sent to the fixer
+  let lastFix = null
+  for (let pass = 1; pass <= 2 * MAX_ROUNDS; pass++) {
+    const kinds = ['spec', 'quality'].filter((k) => !passed[k])
+    for (const k of kinds) runs[k]++
+    const reviews = await parallel(kinds.map((k) => () => agent(
+      (runs[k] === 1
+        ? (k === 'spec' ? specReviewPrompt : qualityReviewPrompt)(t, current)
+        : focusedReviewPrompt(t, k, runs[k], seenAt[k], findings[k], lastFix)) + parallelNote(t, k, runs[k]),
+      { label: `${k}:${t.id}#${runs[k]}`, phase: k === 'spec' ? 'Spec review' : 'Quality review', schema: k === 'spec' ? SPEC : QUALITY })))
+    for (const k of kinds) seenAt[k] = current.head_sha
+    const blocking = []
+    for (let i = 0; i < kinds.length; i++) {
+      const k = kinds[i]
+      const review = reviews[i]
+      if (!review) return { ok: false, reason: `${k} reviewer failed`, impl: current }
+      // The rules of reviewLoop, per kind: critical always; important except in the last quality
+      // round; minor spec issues in the first spec round only.
+      const round = 1 + fixes[k]
+      const lastRound = round >= MAX_ROUNDS
+      const blocks = (x) => x.severity === 'critical'
+        || (x.severity === 'important' && (k === 'spec' || !lastRound))
+        || (x.severity === 'minor' && k === 'spec' && round === 1)
+      const b = (review.issues || []).filter(blocks)
+      leftovers[k] = (review.issues || []).filter((x) => !blocks(x))
+      findings[k] = b
+      if (b.length === 0) {
+        passed[k] = review
+        continue
+      }
+      if (lastRound) return { ok: false, reason: `${k} review not satisfied after ${MAX_ROUNDS} rounds`, review, impl: current }
+      blocking.push(...b.map((x) => ({ ...x, review: k })))
+    }
+    if (blocking.length === 0) return { ok: true, spec: passed.spec, quality: passed.quality, impl: current, minor: [...leftovers.spec, ...leftovers.quality] }
+    const fix = await agent(fixPrompt(t, current, blocking, 'spec and quality'), { label: `fix:${t.id}:review#${pass}`, phase: 'Quality review', schema: IMPL, effort: 'high' })
+    if (!fix || fix.status === 'BLOCKED' || fix.status === 'NEEDS_CONTEXT') return { ok: false, reason: `review fix ${fix ? fix.status : 'failed'}`, fix, impl: current }
+    current = { ...current, head_sha: fix.head_sha, summary: current.summary + ' | fix: ' + fix.summary }
+    lastFix = fix
+    for (const k of new Set(blocking.map((x) => x.review))) fixes[k]++
+    passed.quality = null
+  }
+  return { ok: false, reason: `reviews not settled after ${2 * MAX_ROUNDS} passes`, impl: current }
+}
+
 async function lightReview(t, impl) {
   let current = impl
   for (let round = 1; round <= LIGHT_ROUNDS; round++) {
@@ -278,6 +389,16 @@ for (const t of A.tasks) {
     log(`${t.id}: done (light review) at ${light.impl.head_sha}`)
     continue
   }
+  if (t.review === 'parallel') {
+    const both = await parallelReview(t, impl)
+    if (!both.ok) {
+      results.push({ id: t.id, impl, review: both })
+      return { stoppedAt: t.id, reason: both.reason, results }
+    }
+    results.push({ id: t.id, impl: both.impl, concerns: impl.concerns || [], deviations: impl.deviations || [], minor: both.minor })
+    log(`${t.id}: done (parallel reviews) at ${both.impl.head_sha}`)
+    continue
+  }
   const spec = await reviewLoop(t, impl, 'spec', specReviewPrompt, SPEC)
   if (!spec.ok) {
     results.push({ id: t.id, impl, spec })
@@ -302,7 +423,7 @@ if (A.final && A.final.review && results.length) {
 
 ${A.context}
 
-Authoritative documents: the spec, the notes N1-N20 and the plan ${A.plan}. Range: from ${results[0].impl.base_sha} to HEAD in ${A.repo}.
+Authoritative documents: the spec, the notes N1-N21 and the plan ${A.plan}. Range: from ${results[0].impl.base_sha} to HEAD in ${A.repo}.
 
 Review the combined result as one piece: does it meet the spec and notes for these tasks, are the pieces consistent with each other, are there bugs that only show across tasks, are the tests strong enough to catch regressions? Do not edit files.`, { label: 'final-review', phase: 'Final review', schema: QUALITY })
 }

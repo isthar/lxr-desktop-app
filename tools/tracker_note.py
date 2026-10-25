@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Add a timestamped entry to the work log in docs/lichomat/tracker.json and refresh the status.
 
-    python3 tools/tracker_note.py "text" [--focus TEXT] [--next TEXT] [--phase TEXT]
+    python3 tools/tracker_note.py "text" [--focus TEXT] [--next TEXT] [--phase TEXT] [--now TEXT]
                                          [--head SHA] [--at "YYYY-MM-DD HH:MM"]
 
 The entry time defaults to now (local time). status.updated and status.updated_at take the
-same time, and status.head takes the current git HEAD unless --head is given. Run
+same time, and status.head takes the current git HEAD unless --head is given. --now sets
+status.now, the line the page shows under "W toku" for the work running at the moment (an agent,
+a review); --now "" clears it. Run
 tools/tracker_export.py afterwards to regenerate the files the tracker page reads.
 
 Copyright (C) 2026 Tomasz Krzywicki
@@ -36,6 +38,7 @@ def main():
     ap.add_argument("--focus", help="new status.focus")
     ap.add_argument("--next", help="new status.next")
     ap.add_argument("--phase", help="new status.phase")
+    ap.add_argument("--now", help='new status.now, what runs at the moment ("" clears it)')
     ap.add_argument("--head", help="commit to show as status.head (default: git HEAD)")
     ap.add_argument("--at", help='entry time "YYYY-MM-DD HH:MM" in local time (default: now)')
     args = ap.parse_args()
@@ -62,6 +65,8 @@ def main():
         value = getattr(args, key)
         if value:
             status[key] = value
+    if args.now is not None:
+        status["now"] = args.now
     head = args.head or git_head()
     if head:
         status["head"] = head
