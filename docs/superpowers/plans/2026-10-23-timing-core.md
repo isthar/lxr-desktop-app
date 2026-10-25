@@ -19779,7 +19779,7 @@ takes more than 128 packets at once, or within 100 ms of a host that has stopped
   2008-2010)
 - Test: `tests/test_usbtx.c` (host, ctest id `usbtx`), `tools/fw_checks.sh E2.8`
 
-- [ ] **Step 1: Write the failing host test**
+- [x] **Step 1: Write the failing host test**
 
 The tests pin the packet of every status byte against USB MIDI 1.0 table 4-1 and the ring
 behaviour the glue relies on: order, at most 15 packets per transfer, nothing lost while the
@@ -20100,7 +20100,7 @@ endif()
 seqc_add_test(test_usbtx     IDS usbtx EXTRA ${LXR_ROOT}/Core/Src/Soundengine/USB/usb_midiTx.c)  # E2.8  USB MIDI out packets and ring
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug' 2>&1 | grep -A3 'CMake Error'`
 
@@ -20113,7 +20113,7 @@ CMake Error at CMakeLists.txt:107 (add_executable):
     <repo>/Core/Src/Soundengine/USB/usb_midiTx.c
 ```
 
-- [ ] **Step 3: Write `usb_midiTx.h` and `usb_midiTx.c`**
+- [x] **Step 3: Write `usb_midiTx.h` and `usb_midiTx.c`**
 
 Plain C11, no HAL: the packet builder and the ring. Both files are CRLF like the rest of `Core/`
 (Step 11 normalises them).
@@ -20330,7 +20330,7 @@ uint32_t usbtx_next(usbtx_ring_t *r, bool hostReady, bool busy, uint32_t now, us
 }
 ```
 
-- [ ] **Step 4: Run the host test to see it pass**
+- [x] **Step 4: Run the host test to see it pass**
 
 Run: `bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug > /dev/null && cmake --build build/host-tests > /dev/null && build/host-tests/test_usbtx'`
 
@@ -20363,7 +20363,7 @@ or which that implementation, keeping the 15-packet limit, could not get wrong. 
 without the 100 ms rule (`usbtx_next()` ignoring `now`) only `usbtx_stalled_host_keeps_nothing`
 failed.
 
-- [ ] **Step 5: Write the failing firmware check**
+- [x] **Step 5: Write the failing firmware check**
 
 The glue needs the USB peripheral, so, as in E2.2-E2.7, its failing test is a set of checks on the
 release ELF and the sources: the packet builder and the ring are linked and used by
@@ -20410,7 +20410,7 @@ check_E2_8() {
 check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8"
 ```
 
-- [ ] **Step 6: Run it to see it fail**
+- [x] **Step 6: Run it to see it fail**
 
 Run: `tools/check.sh && tools/fw_checks.sh E2.8`
 
@@ -20437,7 +20437,7 @@ FAIL E2.8: the MIDI parser routes a Song Select before its data byte
 `usb_sendByte` is not in the list of linked symbols: the compiler inlined it into `usb_sendMidi()`
 and the linker dropped its copy, so the source check stands for it.
 
-- [ ] **Step 7: Build the module into the firmware**
+- [x] **Step 7: Build the module into the firmware**
 
 The `lxr_usb_app` library (lines 141-144 after E2.7):
 
@@ -20477,7 +20477,7 @@ with:
 | `lxr_usb_app`   | `Core/Src/Soundengine/USB`                      | USB-MIDI message queue, MIDI out packets and ring     |
 ```
 
-- [ ] **Step 8: `usb_manager.c` and `usb_manager.h`: queue the packet, start the transfer when the endpoint is free**
+- [x] **Step 8: `usb_manager.c` and `usb_manager.h`: queue the packet, start the transfer when the endpoint is free**
 
 The include (fw 1.7 lines 15-16):
 
@@ -20657,7 +20657,7 @@ void usb_midiTxComplete(void);
 uint32_t usb_midiTxDropped(void);
 ```
 
-- [ ] **Step 9: `usbd_cdc.c` and `usbd_cdc.h`: the end of a transfer starts the next; the old ring goes**
+- [x] **Step 9: `usbd_cdc.c` and `usbd_cdc.h`: the end of a transfer starts the next; the old ring goes**
 
 `usbd_cdc.c` is compiled with `-w`; Step 13 compiles it once with warnings on.
 
@@ -20745,7 +20745,7 @@ EOF
 
 Expected output: `deleted 2 pieces from Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h`
 
-- [ ] **Step 10: The MIDI parser waits for the data byte of a Song Select**
+- [x] **Step 10: The MIDI parser waits for the data byte of a Song Select**
 
 `midiParser_parseUartData()` routed F3 at once, before its song number (fw 1.7 lines 2008-2010).
 The routed message carried the data byte of the message before it, and the song number then
@@ -20769,7 +20769,7 @@ EOF
 
 Expected output: `replaced in Core/Src/Soundengine/MIDI/MidiParser.c`
 
-- [ ] **Step 11: Give the edited files CRLF line endings**
+- [x] **Step 11: Give the edited files CRLF line endings**
 
 Run:
 
@@ -20792,7 +20792,7 @@ EOF
 Expected: seven lines starting with `CRLF`. `tests/test_usbtx.c`, `tests/CMakeLists.txt`,
 `tools/fw_checks.sh` and `Core/CMakeLists.txt` stay LF.
 
-- [ ] **Step 12: Build and run the checks**
+- [x] **Step 12: Build and run the checks**
 
 Run: `tools/check.sh && tools/fw_checks.sh`
 
@@ -20816,7 +20816,7 @@ Against E2.7: ITCM 13128 B (unchanged), RAM +444 B, image +752 B. The 444 B go b
 budget (§10) that the E2 conventions check: N20 allows them, and review row R6.2 (E4.1) counts them
 on top of the 8704 B for the timing core, its sync queues and its glue.
 
-- [ ] **Step 13: Compile `usbd_cdc.c` once with warnings on**
+- [x] **Step 13: Compile `usbd_cdc.c` once with warnings on**
 
 The middleware is built with `-w`. Recompile it from its recorded command with `-Wall -Wextra`
 instead, and look for warnings in the lines this task changed (the includes and the ring near the
@@ -20848,9 +20848,9 @@ Expected:
 
 Both warnings are fw 1.7's unused `cfgidx` parameters of `USBD_CDC_Init()` and `USBD_CDC_DeInit()`.
 
-- [ ] **Step 14: Review**
+- [x] **Step 14: Review**
 
-- [ ] Every use of `usb_txRing`, `usb_txBuffer` and the IN endpoint is between `usb_txLock()` and
+- [x] Every use of `usb_txRing`, `usb_txBuffer` and the IN endpoint is between `usb_txLock()` and
   `usb_txUnlock()`, in `usb_sendMidi()`, `usb_flushMidi()` and `usb_midiTxComplete()`.
   - Check it in the release disassembly:
     `bash -c 'source tools/env.sh && arm-none-eabi-objdump -d --disassemble=usb_sendMidi build/release/LXR_V2_STM32F765.elf' | grep -E 'cpsid|msr|bl[[:space:]]+[0-9a-f]+ <'`.
@@ -20859,26 +20859,26 @@ Both warnings are fw 1.7's unused `cfgidx` parameters of `USBD_CDC_Init()` and `
     `bl usbtx_push` (the path with a host, which then branches back to the shared `HAL_GetTick` and
     `usbtx_next`), `bl CDC_Transmit_FS`, `msr PRIMASK`. Every call after `usbtx_packet` lies
     between `cpsid i` and an `msr PRIMASK`.
-- [ ] Contexts:
+- [x] Contexts:
   - `git grep -n 'usb_sendMidi(msg)' -- Core` finds the two callers, `seq_sendMidi()` in
     `sequencer.c` and the routing in `MidiParser.c`. They run in the main loop and in the
     `seq_tick()` context (main loop or TIM2, priority 4).
   - `usb_midiTxComplete()` runs in OTG_FS (priority 3). Neither of the other two can preempt it,
     and it cannot interrupt them while they hold PRIMASK.
-- [ ] The interrupts are masked for at most a copy of 15 packets and the start of a transfer, a few
+- [x] The interrupts are masked for at most a copy of 15 packets and the start of a transfer, a few
   hundred instructions. The USART3 and OTG_FS stamps of E2.4 can be late by that much.
-- [ ] `usb_hostReady()` checks `dev_state` and `pClassData` before `TxState` is read, so
+- [x] `usb_hostReady()` checks `dev_state` and `pClassData` before `TxState` is read, so
   `CDC_Transmit_FS()` never runs without a class handle (defect 4).
-- [ ] The time:
+- [x] The time:
   - `HAL_GetTick()` returns `uwTick`, a volatile 32-bit word, so a read with PRIMASK set is
     atomic.
   - SysTick (priority 0, `TICK_INT_PRIORITY`) counts it in milliseconds, also while TIM2 or
     OTG_FS run.
   - `now - sentAt` is unsigned, so the 49.7-day wrap of the count is harmless
     (`usbtx_stalled_host_keeps_nothing` starts its transfer 64 ms before it).
-- [ ] A transfer has at most 60 bytes, so MIDI never takes the zero-length-packet branch of
+- [x] A transfer has at most 60 bytes, so MIDI never takes the zero-length-packet branch of
   `USBD_CDC_DataIn()`; the call after `TxState = 0` runs at the end of every transfer.
-- [ ] The fw 1.7 behaviour listed above is kept (the channel and realtime packets are pinned by
+- [x] The fw 1.7 behaviour listed above is kept (the channel and realtime packets are pinned by
   `usbtx_channel_messages` and `usbtx_realtime_single_byte`).
 
 Intended changes for the report:
@@ -20893,7 +20893,7 @@ Intended changes for the report:
   packets, as with fw 1.7), and no burst of old messages.
 - A Song Select passed through (DIN to USB, or to DIN out) waits for its song number.
 
-- [ ] **Step 15: Commit**
+- [x] **Step 15: Commit**
 
 ```bash
 git add tests/test_usbtx.c tests/CMakeLists.txt tools/fw_checks.sh Core/CMakeLists.txt \

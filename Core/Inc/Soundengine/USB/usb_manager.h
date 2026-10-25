@@ -33,6 +33,11 @@ void usb_tick();
 void usb_sendMidi(MidiMsg msg);
 uint8_t usb_getMidi(MidiMsg* msg);
 void usb_flushMidi();
+//LICHOMAT (E2.8): USBD_CDC_DataIn() calls this in the OTG_FS interrupt when a transfer
+//on the MIDI IN endpoint has ended; it starts the next one while packets wait
+void usb_midiTxComplete(void);
+//LICHOMAT (E2.8): USB MIDI packets dropped because the transmit ring was full
+uint32_t usb_midiTxDropped(void);
 
 #endif /* USB_MANAGER_H_ */
 

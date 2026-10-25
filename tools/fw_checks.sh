@@ -1,5 +1,5 @@
 #!/bin/bash
-# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.7), on the
+# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.8), on the
 # release build and on the sources: symbols that must or must not be linked, calls
 # that a function must or must not make, what sits in ITCM, and source patterns.
 # They stand in for unit tests where the code needs the hardware.
@@ -215,7 +215,19 @@ check_E2_7() {
 		|| fail "case SEQ_CONFIG (SHIFT + step 12) does not set SELECT_MODE_MENU"
 }
 
-check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7"
+# ---- E2.8: USB MIDI out: packets with their CIN, a ring that waits for the endpoint
+check_E2_8() {
+	need usbtx_packet usbtx_push usbtx_next
+	must_call usb_sendMidi usbtx_packet usbtx_push usbtx_next HAL_GetTick
+	must_call usb_midiTxComplete usbtx_next HAL_GetTick CDC_Transmit_FS
+	must_call USBD_CDC_DataIn usb_midiTxComplete
+	gone usb_MidiInBuff usb_MidiInWrPtr usb_MidiInRdPtr
+	no_tree 'usb_MidiIn|usb_sendByte|TOTAL_MIDI_BUF_SIZE|NUM_SUB_BUFFERS' Core/Src Core/Inc Middlewares/JS
+	grep -A1 'case MIDI_SONG_SEL:' Core/Src/Soundengine/MIDI/MidiParser.c | grep -q 'parserState = MIDI_DATA1' \
+		|| fail "the MIDI parser routes a Song Select before its data byte"
+}
+
+check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8"
 
 if [ $# -gt 0 ]; then check_tasks="$*"; fi
 for task in $check_tasks; do

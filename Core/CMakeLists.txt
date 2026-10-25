@@ -138,10 +138,14 @@ set_property(SOURCE
     Src/Soundengine/Sequencer/seq_syncq.c
     APPEND PROPERTY COMPILE_OPTIONS -Wextra)
 
-# USB-MIDI message queue on top of the USB device stack.
+# USB-MIDI message queue on top of the USB device stack, and the USB MIDI output
+# packets and transmit ring (usb_midiTx), which the host tests in tests/ build as well.
 add_library(lxr_usb_app OBJECT
     Src/Soundengine/USB/usb_manager.c
+    Src/Soundengine/USB/usb_midiTx.c
 )
+# The host tests build usb_midiTx.c with -Wall -Wextra -Werror; warn about the same here.
+set_property(SOURCE Src/Soundengine/USB/usb_midiTx.c APPEND PROPERTY COMPILE_OPTIONS -Wextra)
 
 set(LXR_APP_MODULES
     lxr_platform

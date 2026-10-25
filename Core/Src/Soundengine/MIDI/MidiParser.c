@@ -1987,8 +1987,9 @@ void midiParser_parseUartData(unsigned char data)
           break;
         /* 1 byte payload messages */
         case MIDI_SONG_SEL:		  // passthru only
-          parseMsg = 1;
-          break; 
+          parserState = MIDI_DATA1;     // LICHOMAT (E2.8): wait for the song number;
+          midiMsg_tmp.bits.length = 1;  // fw 1.7 routed F3 without it
+          break;
         case MIDI_MTC_QFRAME: 	// mtc chunk
           parserState = MIDI_DATA1; 	  // we expect the nugget of mtc frame info
           midiMsg_tmp.bits.length = 1;  // we expect 1 data byte

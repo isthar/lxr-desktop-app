@@ -60,6 +60,7 @@
 
 #include "usbd_ctlreq.h"
 #include "Soundengine/Sequencer/seq_platform.h"
+#include "Soundengine/USB/usb_manager.h"
 
 
 /** @addtogroup STM32_USB_DEVICE_LIBRARY
@@ -90,10 +91,6 @@
 MidiMsg usb_MidiMessages[USB_MIDI_INPUT_BUFFER_SIZE];
 uint8_t usb_MidiMessagesRead = 0;
 uint8_t usb_MidiMessagesWrite = 0;
-
-uint8_t  usb_MidiInBuff [TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS];
-uint8_t* usb_MidiInWrPtr = usb_MidiInBuff;
-uint8_t* usb_MidiInRdPtr = usb_MidiInBuff;
 
 
 /**
@@ -913,6 +910,9 @@ static uint8_t  USBD_CDC_DataIn (USBD_HandleTypeDef *pdev, uint8_t epnum)
     else
     {
       hcdc->TxState = 0U;
+
+      //LICHOMAT (E2.8): the transfer has ended; send the USB MIDI packets that wait
+      usb_midiTxComplete();
     }
     return USBD_OK;
   }

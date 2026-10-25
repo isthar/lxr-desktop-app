@@ -156,3 +156,5 @@ if(TARGET test_buttons)
     target_include_directories(test_buttons SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
     set_source_files_properties(${LXR_ROOT}/Core/Src/buttonHandler.c PROPERTIES COMPILE_OPTIONS -w)
 endif()
+
+seqc_add_test(test_usbtx     IDS usbtx EXTRA ${LXR_ROOT}/Core/Src/Soundengine/USB/usb_midiTx.c)  # E2.8  USB MIDI out packets and ring
