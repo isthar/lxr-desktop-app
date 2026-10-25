@@ -122,17 +122,18 @@
  *   probability draw r = 1 + random() % 100 is at most Step.prob.
  * - r is drawn once per (t, n), together with (p, s). If (p, s) differs between
  *   the early and the late part, a new draw is made.
- * - The early part keeps the swing and the StepTiming it used. The late part of
- *   the same (t, n, p, s) takes them instead of the values read at boundary n if
- *   the early part queued a hit, or if the values read now would put a hit before
- *   tick n * 96. So a change of the shuffle or of the step's timing between the
- *   two boundaries plays no hit twice and loses none; otherwise an edit made
- *   before boundary n applies to step n.
- * - If the early part queued a hit, the occurrence has begun: its late part
- *   plays whatever stepOn() and Step.prob read at boundary n (the step data,
- *   velocity, note and p-locks, is read again). Otherwise an edit of either
- *   made before boundary n applies, with the same draw. So the hits of a step
- *   play together or not at all, with two exceptions:
+ * - The early part keeps the swing and the StepTiming it read, whether the step
+ *   played or not. The late part of the same (t, n, p, s) takes them instead of
+ *   the values read at boundary n if they put a hit before tick n * 96, or if
+ *   the values read now would. So a change of the shuffle or of the step's
+ *   timing between the two boundaries plays no hit twice and loses none;
+ *   otherwise an edit made before boundary n applies to step n.
+ * - If the early part had a hit before tick n * 96, the late part follows it:
+ *   it plays if the early part played, whatever stepOn() and Step.prob read at
+ *   boundary n (the step data, velocity, note and p-locks, is read again), and
+ *   otherwise not at all. If it had none, an edit of either made before
+ *   boundary n applies, with the same draw. So the hits of a step play
+ *   together or not at all, with two exceptions:
  *   - if (p, s) at boundary n differs from the early part's (a late change of
  *     the pending pattern, or of a track length), the early hits came from the
  *     prediction, and the late part is that of the step actually reached;

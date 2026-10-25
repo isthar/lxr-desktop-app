@@ -428,16 +428,17 @@ TEST(T16_restart_after_a_stop_waits_for_the_masters_step)
 
 TEST(T16_position_follows_the_tempo_between_clocks)
 {
-	/* between clocks seqc_position() is interpolated at the estimate: 6/16 of a
-	 * clock interval after clock 30 (tick 480) it is 486, not the last handled
-	 * item */
+	/* between clocks seqc_position() is interpolated at the estimate: 2/16 of a
+	 * clock interval after clock 30 (tick 480) it is 482. Nothing is due before
+	 * tick 484 (the note-off of step 5), so the core's own position stays 480 (an
+	 * N10 early exit): the position is not the last handled item */
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
 	seqc_start();
 	const double per = fake_clockCycles(120.0);
 	const seqc_time_t t0 = fake_msToCycles(10.0);
 	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 31, fake_msToCycles(0.1));
-	fake_process(h, t0 + (seqc_time_t)(30.0 * per + 6.0 / 16.0 * per + 0.5));
-	ASSERT_NEAR(seqc_position(), 486.0, 0.01);
+	fake_process(h, t0 + (seqc_time_t)(30.0 * per + 2.0 / 16.0 * per + 0.5));
+	ASSERT_NEAR(seqc_position(), 482.0, 0.01);
 }
 
 TEST(T16_late_clock_anchors_at_its_stamp)
@@ -930,7 +931,7 @@ TEST(T18_ppq_change_in_midi_sync_keeps_the_count)
 	const fake_rec_t *r;
 	while ((r = fake_next(h, FAKE_TEMPO_STEP, &pos)) != NULL)
 	{
-		ASSERT_EQ((long long)r->tick % 96, 0);	/* clocks 30, 36 and 42 */
+		ASSERT_NEAR(fmod(r->tick, 96.0), 0.0, 1e-9);	/* clocks 30, 36 and 42 */
 		steps++;
 	}
 	ASSERT_EQ(steps, 3);
@@ -1079,17 +1080,63 @@ TEST(T16_long_window_is_96_clocks)
 {
 	/* N21: the estimate is the slope of the last SEQC_TEMPO_LONG_WINDOW clocks.
 	 * Clock 30 is 0.3 of a clock late, inside the band: it tilts the line while
-	 * it is in the long window, 80 clocks later still, and not once it has left
-	 * it (the short window lost it long before, without a switch) */
+	 * it is in the long window, at clock 126 (96 clocks later) still, and not
+	 * once it has left it at clock 127 (the short window lost it long before,
+	 * without a switch) */
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
 	const double per = fake_clockCycles(120.0);
 	size_t n = appendClocks(0, per, 140);
 	stamps[30] += (seqc_time_t)(0.3 * per);
-	deliver(h, SEQC_EV_CLOCK, stamps, 111, fake_msToCycles(0.1));
+	deliver(h, SEQC_EV_CLOCK, stamps, 127, fake_msToCycles(0.1));	/* clocks 0..126 */
 	ASSERT_TRUE(fabs(seqc_currentBpm() - 120.0) > 5e-3);
-	deliver(h, SEQC_EV_CLOCK, stamps + 111, n - 111, fake_msToCycles(0.1));
+	deliver(h, SEQC_EV_CLOCK, stamps + 127, 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-4);
+	deliver(h, SEQC_EV_CLOCK, stamps + 128, n - 128, fake_msToCycles(0.1));
 	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-4);
 	ASSERT_EQ(stats().intervalsExcluded, 0);
+}
+
+/* 300 clocks at 120 BPM, from clock 200 at 126, every one from clock 6 on
+ * up to 0.3 ms of jitter. With stale, a clock stamped 0.2 ms before clock 5
+ * comes after it, behind a Continue (ignored while running), so it does not join
+ * clock 5's transfer: an untested point of the fit, stamped before the newest
+ * one. bpm[i] is the estimate after clock i. */
+static void runStaleClock(bool stale, double *bpm)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	size_t n = appendClocks(0, fake_clockCycles(120.0), 200);
+	n = appendClocks(n, fake_clockCycles(126.0), 100);
+	lcg = 12345;
+	for (size_t i = 6; i < n; i++)
+		stamps[i] += (seqc_time_t)(int64_t)(jitterMs() * 0.3 * (double)fake_msToCycles(1.0));
+	deliver(h, SEQC_EV_CLOCK, stamps, 6, fake_msToCycles(0.1));
+	const seqc_time_t t = stamps[5] + fake_msToCycles(1.0);
+	fake_sync(h, SEQC_EV_CONTINUE, t);
+	fake_process(h, t);
+	if (stale)
+		fake_sync(h, SEQC_EV_CLOCK, stamps[5] - fake_msToCycles(0.2));
+	fake_process(h, t + fake_msToCycles(0.1));
+	for (size_t i = 6; i < n; i++)
+	{
+		deliver(h, SEQC_EV_CLOCK, stamps + i, 1, fake_msToCycles(0.1));
+		bpm[i] = seqc_currentBpm();
+	}
+}
+
+TEST(T16_stale_clock_in_the_first_points_leaves_the_window_cleanly)
+{
+	/* The stale clock goes into the ring after clock 5, which is stamped later.
+	 * It must not leave the long window early, nor take wrong sums with it, when
+	 * clock 5 becomes the base: once it has left the window (from clock 101 on),
+	 * the estimate is that of the same clocks without it, also across the tempo
+	 * change. */
+	static double with[300], without[300];
+	runStaleClock(true, with);
+	runStaleClock(false, without);
+	for (size_t i = 101; i < 300; i++)
+		ASSERT_NEAR(with[i], without[i], 1e-9);
+	ASSERT_NEAR(with[299], 126.0, 0.05);
 }
 
 /* deliver stamps[from..to) one transfer at a time: the clocks with one stamp,
@@ -1188,9 +1235,9 @@ TEST(T16_bunched_pairs_are_not_a_tempo_jump)
 /* a late bunch of 6 clocks gap cycles apart (not one stamp), 6 clocks after the
  * last one at 120 BPM, then 24 clocks at 120. A clock less than
  * SEQC_TEMPO_JOIN_MS after the newest clock of the last transfer joins it
- * (unless that one restarted the fit or another sync event came): the bunch is
- * one point of the fit, at its last clock, 5 gaps late, near the line. Nothing
- * is left out and the fit does not restart. */
+ * (unless another sync event came): the bunch is one point of the fit, at its
+ * last clock, 5 gaps late, near the line. Nothing is left out and the fit does
+ * not restart. */
 static void checkBunchedGaps(double gap)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);

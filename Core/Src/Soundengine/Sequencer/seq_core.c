@@ -114,18 +114,20 @@ typedef struct
 } seqc_tracks_t;
 
 //------------------------------------------------------------------------------
-/** the probability draw of one step occurrence (N3), and the timing its early
- * part used */
+/** one step occurrence (N3): its probability draw, and the timing and result of
+ * its early part */
 typedef struct
 {
-	bool		valid;
+	bool		valid;		/**< the slot holds occurrence (absStep, pattern, step) */
+	bool		drawn;		/**< r is drawn */
+	bool		timed;		/**< the early part was evaluated: played, hits and offset are set */
+	bool		played;		/**< the early part passed stepOn() and the draw */
 	uint32_t	absStep;
 	uint8_t		pattern;
 	uint8_t		step;
 	uint8_t		r;		/**< 1..100 */
-	bool		timed;		/**< the early part was generated: hits and offset are set */
-	uint8_t		hits;		/**< the ratchet hits it used */
-	int16_t		offset;		/**< the swing + shift it used, ticks after absStep * 96 */
+	uint8_t		hits;		/**< the ratchet hits it read */
+	int16_t		offset;		/**< the swing + shift it read, ticks after absStep * 96 */
 } seqc_draw_t;
 
 //------------------------------------------------------------------------------
@@ -688,47 +690,64 @@ static void seqc_fireNext(void)
 //------------------------------------------------------------------------------
 // Generation
 //------------------------------------------------------------------------------
-/** the draw slot of occurrence (track, absStep) at (pattern, step), N3: r is
- * drawn once and kept with (pattern, step); a different step gets a new draw */
-static seqc_draw_t *seqc_draw(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step)
+/** the slot of occurrence (track, absStep) at (pattern, step), N3. A slot that
+ * holds another occurrence, or the same one at another (pattern, step), is
+ * cleared for it, so a different step gets a new draw. */
+static seqc_draw_t *seqc_slot(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step)
 {
 	seqc_draw_t *d = &seqc_gen.draw[track][absStep & 1u];
 	if (!d->valid || d->absStep != absStep || d->pattern != pattern || d->step != step)
 	{
-		const uint32_t v = seqc.host.random(seqc.host.ctx);
+		memset(d, 0, sizeof *d);
 		d->valid = true;
 		d->absStep = absStep;
 		d->pattern = pattern;
 		d->step = step;
-		d->r = (uint8_t)(1u + v % 100u);
-		d->timed = false;
 	}
 	return d;
+}
+//------------------------------------------------------------------------------
+/** the probability draw r of the occurrence in slot d, made once (N3) */
+static uint8_t seqc_drawR(seqc_draw_t *d)
+{
+	if (!d->drawn)
+	{
+		const uint32_t v = seqc.host.random(seqc.host.ctx);
+		d->r = (uint8_t)(1u + v % 100u);
+		d->drawn = true;
+	}
+	return d->r;
 }
 //------------------------------------------------------------------------------
 /** queue the hits of occurrence (track, absStep) at (pattern, step) that belong to
  * one part (N3): the early part has the hits before absStep * 96, the late part
  * the rest.
- * The early part keeps the timing it used (swing + shift, ratchet hits) in the
- * draw slot. The late part reads the timing again, so an edit or a shuffle change
- * before the boundary applies, but it keeps the early part's timing instead if
- * the early part queued a hit, or if the timing read now would put a hit before
- * absStep * 96, which has passed. Either way every hit is generated once
- * (decision 9 of epic E1).
- * If the early part queued a hit, the occurrence has begun: the late part plays
- * whatever the main-step bit and the probability read now, so the hits of a step
- * play together or not at all. Otherwise both are read again, with the same
- * draw. */
+ * The early part keeps the timing it read (swing + shift, ratchet hits) in the
+ * slot, and whether it played (stepOn() and the draw), also when the step did
+ * not play. If that timing had a hit before absStep * 96, the late part follows
+ * the early part: it plays if the early part played, whatever stepOn() and the
+ * probability read now, and otherwise not at all. So the hits of a step play
+ * together or not at all.
+ * Otherwise the late part reads stepOn() and the probability again, with the
+ * same draw, and reads the timing again, so an edit or a shuffle change before
+ * the boundary applies; but it keeps the early part's timing if the timing read
+ * now would put a hit before absStep * 96, which has passed. Either way every
+ * hit is generated once (decision 9 of epic E1). */
 static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step, bool early)
 {
-	const seqc_draw_t *slot = &seqc_gen.draw[track][absStep & 1u];
-	const bool begun = !early && slot->valid && slot->absStep == absStep && slot->pattern == pattern
-			&& slot->step == step && slot->timed && slot->offset < 0;
-	if (!begun && !seqc.host.stepOn(seqc.host.ctx, pattern, track, step))
+	seqc_draw_t *d = seqc_slot(track, absStep, pattern, step);
+	const bool decided = !early && d->timed && d->offset < 0;
+	if (decided && !d->played)
 		return;
-	seqc_draw_t *d = seqc_draw(track, absStep, pattern, step);
-	const Step *data = seqc.host.step(seqc.host.ctx, pattern, track, step);
-	if (!begun && d->r > data->prob)
+	const Step *data = NULL;
+	bool plays = decided;
+	if (!decided && seqc.host.stepOn(seqc.host.ctx, pattern, track, step))
+	{
+		const uint8_t r = seqc_drawR(d);
+		data = seqc.host.step(seqc.host.ctx, pattern, track, step);
+		plays = r <= data->prob;
+	}
+	if (!plays && !early)
 		return;
 	const StepTiming timing = seqc.host.timing(seqc.host.ctx, pattern, track, step);
 	uint8_t hits = seqc_hitCount(timing.flam);
@@ -736,14 +755,19 @@ static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint
 	if (early)
 	{
 		d->timed = true;
+		d->played = plays;
 		d->hits = hits;
 		d->offset = (int16_t)offset;
+		if (!plays)
+			return;
 	}
 	else if (d->timed && (d->offset < 0 || offset < 0))
 	{
 		hits = d->hits;
 		offset = d->offset;
 	}
+	if (data == NULL)
+		data = seqc.host.step(seqc.host.ctx, pattern, track, step);
 	const seqc_tick_t base = (seqc_tick_t)absStep * SEQC_TICKS_PER_STEP;
 	const seqc_tick_t first = base + offset;
 
@@ -1090,8 +1114,8 @@ static double seqc_ringX(uint8_t i)
 	return (double)(uint32_t)(seqc_sl.ringClock[i] - seqc_sl.fit.baseClock);
 }
 //------------------------------------------------------------------------------
-/** y of ring point i: cycles from the base point (the window spans less than
- * 2^32 cycles) */
+/** y of ring point i: cycles from the base point. The window spans less than
+ * 2^32 cycles, and no point is stamped before the base (seqc_fitAdd()). */
 static double seqc_ringY(uint8_t i)
 {
 	return (double)(uint32_t)(seqc_sl.ringStamp[i] - (uint32_t)seqc_sl.fit.baseStamp);
@@ -1179,8 +1203,8 @@ static void seqc_fitAdd(seqc_point_t p)
 	{
 		/* The oldest point leaves when it is out of the window. It leaves too if
 		 * p is stamped before it: a stale MIDI clock, untested in the first
-		 * points (a tested one that early is an outlier). The ring keeps stamps
-		 * after the base, so the base must not be later than p. */
+		 * points (a tested one that early is an outlier). The base, the oldest
+		 * point, must not be later than p. */
 		const uint64_t tail = f->baseStamp + (uint64_t)seqc_ringY(f->tailL);
 		if (p.clock - seqc_sl.ringClock[f->tailL] <= longW && p.stamp >= tail && p.stamp - tail <= span)
 			break;
@@ -1205,8 +1229,20 @@ static void seqc_fitAdd(seqc_point_t p)
 		f->baseClock = p.clock;
 		f->baseStamp = p.stamp;
 	}
-	else if (moved)
-		seqc_fitRebase();
+	else
+	{
+		/* A stale clock in the fit (untested in the first points, or inside a
+		 * wide USB band) can be stamped after the oldest point but before the
+		 * newest one. It goes in at the newest one's stamp: the ring stays in
+		 * stamp order, so a later base (the oldest point) is never after a point
+		 * of the window, and seqc_ringY() never wraps. */
+		const uint8_t newest = f->head > 0u ? (uint8_t)(f->head - 1u) : (uint8_t)(SEQC_TEMPO_RING - 1u);
+		const uint64_t last = f->baseStamp + (uint64_t)seqc_ringY(newest);
+		if (p.stamp < last)
+			p.stamp = last;
+		if (moved)
+			seqc_fitRebase();
+	}
 	seqc_sl.ringClock[f->head] = p.clock;
 	seqc_sl.ringStamp[f->head] = (uint32_t)p.stamp;
 	f->head = seqc_ringNext(f->head);

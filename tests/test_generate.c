@@ -392,6 +392,63 @@ TEST(T8_prob_edit_before_the_boundary_applies_with_the_same_draw)
 	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 1);
 }
 
+/* x8 at -3 units on even step 2, as in runAfterTheEarlyHits(), but the early
+ * part did not play: the step is off, or prob 30 with r = 40. edit enables the
+ * step before boundary 2. The late part follows the early part, so none of its
+ * hits play. */
+static void runAfterDroppedEarlyHits(bool on, void (*edit)(fake_host_t *h), size_t draws)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 2, on);
+	fake_setStepData(h, 0, 0, 2, 127, 60, 30);
+	fake_setTiming(h, 0, 0, 2, 5, -3);
+	static const uint32_t script[] = { 39 };
+	fake_scriptRandom(h, script, 1);
+	runSteps(h, 2);					/* until just before boundary 2 */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 16), 0);
+	edit(h);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 4), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 0, trig, 16), 0);
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], draws);
+}
+static void setProb100(fake_host_t *h) { fake_setStepData(h, 0, 0, 2, 127, 60, 100); }
+static void switchOnProb100(fake_host_t *h) { fake_setStep(h, 0, 0, 2, true); setProb100(h); }
+
+TEST(T8_undrawn_early_part_drops_the_late_hits_after_a_prob_edit)
+{
+	runAfterDroppedEarlyHits(true, setProb100, 1);
+}
+
+TEST(T8_early_part_of_an_off_step_drops_the_late_hits_after_it_is_switched_on)
+{
+	/* no draw: the step was off at boundary 1, and the late part does not
+	 * evaluate it again */
+	runAfterDroppedEarlyHits(false, switchOnProb100, 0);
+}
+
+TEST(T8_undrawn_step_keeps_its_timing_when_an_edit_makes_it_early)
+{
+	/* x8 at shift 0, prob 30 with r = 40: no early hit, the draw fails. Before
+	 * boundary 2 the step gets prob 100 and shift -3, which would put hits
+	 * 0..2 before tick 192: the late part keeps the early part's timing and
+	 * plays all 8 hits */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 2, true);
+	fake_setStepData(h, 0, 0, 2, 127, 60, 30);
+	fake_setTiming(h, 0, 0, 2, 5, 0);
+	static const uint32_t script[] = { 39 };
+	fake_scriptRandom(h, script, 1);
+	runSteps(h, 2);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 16), 0);
+	setProb100(h);
+	fake_setTiming(h, 0, 0, 2, 5, -3);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 4), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 0, trig, 16), 8);
+	for (int j = 0; j < 8; j++)
+		ASSERT_EQ(trig[j]->ev.tick, 2 * 96 + j * 12);
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 1);
+}
+
 /* The early part of a step fixes its timing (seqc_generate()). A change of the
  * shuffle or of the step's timing between the boundary that makes the early part
  * and the step's own boundary neither plays a hit twice nor loses one. */

@@ -11181,7 +11181,7 @@ EOF
 | N18.2, N18.3, N18.4 | E2.2 `seq_cbTransport()`, E2.3 `seq_triggerVoice()`, E2.1 `seqq_usbMessage()` |
 | Spec §6.1–6.7 | the T2–T15 rows above |
 | Spec §11: queue full, dropout, intervals that don't fit, late stamps, 64-bit time | T19; T16 (dropout, outliers, bunched clocks); the 64-bit `seqc_time_t` everywhere |
-| Spec §10 budget | E1.12 Step 6: `text` 15422 B, `bss` 6973 B; E1.14 Step 8: `text` 15690 B, `bss` 7053 B (Arm GNU 14.3.rel1, darwin-arm64). Measured with the firmware's compile command (E1.17): 15466/6973 B after E1.13 (7af5fea), 15758/7053 B after E1.14 (da2aa8e), 18602/8245 B after E1.15 (b97c1c6), 19514/8245 B after E1.16 (ceada09), 20158/8269 B after E1.17. The text grew past the plan's figures with review-round code (a8a8bbf's seqc_dueLimit(), 1b924ad's guard); E1.15 is N21's estimator, E1.16 the ring queue, E1.17 its fixes and the 101-point fit ring (+24 B). R6.2 must allow the 24 B on top of N21's 1192 B. |
+| Spec §10 budget | E1.12 Step 6: `text` 15422 B, `bss` 6973 B; E1.14 Step 8: `text` 15690 B, `bss` 7053 B (Arm GNU 14.3.rel1, darwin-arm64). Measured with the firmware's compile command (E1.17): 15466/6973 B after E1.13 (7af5fea), 15758/7053 B after E1.14 (da2aa8e), 18602/8245 B after E1.15 (b97c1c6), 19514/8245 B after E1.16 (ceada09), 20158/8269 B after E1.17 (367eec1), 20126/8269 B after the fixes of its spec review (the early part's result in the draw slot, the fit ring kept in stamp order). The text grew past the plan's figures with review-round code (a8a8bbf's seqc_dueLimit(), 1b924ad's guard); E1.15 is N21's estimator, E1.16 the ring queue, E1.17 its fixes and the 101-point fit ring (+24 B). R6.2 must allow the 24 B on top of N21's 1192 B. |
 | Spec §9.1, host tests: C11, `-Wall -Wextra -Werror`, fake host, runner, ctest, replica for T20 | E1.1, E1.13 |
 | G5, the firmware builds after every task with zero warnings | every task's last run of `tools/check.sh` |
 
@@ -21447,7 +21447,7 @@ RAM 271032 B, image 274688 B.
 |---|---|---|---|---|
 | R6.1 | A | `tools/check.sh`, the `memory:` line | ITCM fits (≤ 16384 B) | open |
 | R6.2 | A | the same line | DTCM + RAM is at most 387568 B: the baseline 378420 B plus 8704 B (event queue 6 KB, sync queues 1.5 KB, other state under 1 KB) plus 444 B (the USB MIDI transmit ring of E2.8, N20) | open |
-| R6.3 | A | the same line | the image grew by about 17.5 KB (the core alone has 15.7 KB of code, E1.14 Step 8, and the USB MIDI out of E2.8 adds 0.75 KB; spec §10: +10–15 KB); more than 30 KB is a finding | open |
+| R6.3 | A | the same line | the image grew by about 21.5 KB (the core alone has 19.7 KB of code: `text` 20126 B after E1.17, measured with the firmware's compile command, against 15.7 KB in E1.14 Step 8, with N21's estimator and the ring queue; the USB MIDI out of E2.8 adds 0.75 KB; spec §10: +10–15 KB); more than 30 KB is a finding | open |
 
 ### R7 Compatibility (G8: no file format changes)
 
