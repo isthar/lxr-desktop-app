@@ -45,7 +45,9 @@
  *      seqc_setTempo(), seqc_stop(), seqc_rewind(), seqc_start(), and seqc_skipOnce()
  *      for the notes that seq_addNote() moved to the next step;
  *   2. drains the DIN, USB and jack sync queues, merged in stamp order, into
- *      seqc_syncEvent(), and a queued Song Position Pointer into seqc_songPosition();
+ *      seqc_syncEvent(), a queued Song Position Pointer into seqc_songPosition(),
+ *      and a queued Program Change into the pattern switch, whose rewind while
+ *      stopped goes through the mailbox, applied at once;
  *   3. calls seqc_process(seqp_now());
  *   4. parses MIDI input, which reaches the core through the mailbox, except for
  *      the seqc_skipOnce() of a recorded note: seq_postSkipOnce() calls it at once.

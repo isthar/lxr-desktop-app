@@ -1846,9 +1846,9 @@ void midiParser_parseMidiMessage(MidiMsg msg)
 			} // check midi filter
 
 		} else if(msgonly==PROG_CHANGE) {
-			// respond to prog change and change patterns. This responds only when global channel matches the PC message's channel.
-			if((midiParser_txRxFilter & MIDI_FILTER_PROG_C) && (chanonly == midi_MidiChannels[7]))
-				seq_setNextPattern(msg.data1);
+			// routed above. The interrupt handlers also put it in the sync queues, and
+			// seq_tick() changes the pattern there, in order with Start, Continue and Stop,
+			// if MIDI_FILTER_PROG_C is on and the channel is the global channel.
 
 		} else if(msgonly==MIDI_CC){
 

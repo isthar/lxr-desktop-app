@@ -4,7 +4,7 @@
  * Host tests of the sync input queues (Core/Src/Soundengine/Sequencer/seq_syncq.c,
  * task E2.1): the SPSC queue, the stamp unwrap, the merge of the queues in stamp
  * order, the 64-bit counter extension, and the decoding of MIDI DIN bytes and USB
- * MIDI packets into sync events and song positions.
+ * MIDI packets into sync events, song positions and program changes.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -161,7 +161,7 @@ TEST(syncq_extend)
 TEST(syncq_din)
 {
 	reset();
-	seqq_din_t d = { 0, 0 };
+	seqq_din_t d = { 0 };
 	/* a note on with a clock between its data bytes, then SPP 272 = 0x10 + 0x02 * 128
 	 * with a clock between its data bytes, then the transport and two ignored bytes */
 	const uint8_t bytes[] = { 0x90, 0x3C, 0xF8, 0x64, 0xF2, 0x10, 0xF8, 0x02, 0xFB, 0xFE, 0xFA, 0xFC, 0xF9 };
@@ -187,7 +187,7 @@ TEST(syncq_din)
 TEST(syncq_din_spp_cut)
 {
 	reset();
-	seqq_din_t d = { 0, 0 };
+	seqq_din_t d = { 0 };
 	/* an SPP cut short by a note on is dropped; data bytes outside an SPP are ignored */
 	const uint8_t bytes[] = { 0xF2, 0x10, 0x90, 0x02, 0x40, 0xF2, 0x7F, 0x7F, 0x05 };
 	for (unsigned i = 0; i < sizeof bytes; i++)
@@ -197,6 +197,39 @@ TEST(syncq_din_spp_cut)
 	ASSERT_EQ(e[0].type, SEQQ_SONG_POSITION);
 	ASSERT_EQ(e[0].value, 16383);
 	ASSERT_EQ(e[0].stamp, 2007);
+}
+
+TEST(syncq_din_program_change)
+{
+	reset();
+	seqq_din_t d = { 0 };
+	/* PC 5 on channel 3, a start, PC 6 by running status; PC 7 on channel 0 with a
+	 * clock between the status and the data byte; a note on, whose running status
+	 * makes no PC; a SysEx and a song select, which end the running status of a PC,
+	 * so their data bytes and the ones after them are no PCs; PC 9, then an MTC
+	 * quarter frame, which ends the running status as well */
+	const uint8_t bytes[] = { 0xC3, 0x05, 0xFA, 0x06, 0xC0, 0xF8, 0x07, 0x90, 0x08, 0x40, 0x09,
+			0xC0, 0xF0, 0x0A, 0xF7, 0x0B, 0xC1, 0xF3, 0x0C, 0xC0, 0x09, 0xF1, 0x0D, 0x0E };
+	for (unsigned i = 0; i < sizeof bytes; i++)
+		seqq_dinByte(&d, &qa, bytes[i], 3000u + i);
+	seqq_entry_t e[16];
+	ASSERT_EQ(takeAll(&qa, e, 16), 6);
+	ASSERT_EQ(e[0].type, SEQQ_PROGRAM_CHANGE);
+	ASSERT_EQ(e[0].value, 0x0305);
+	ASSERT_EQ(e[0].stamp, 3001);
+	ASSERT_EQ(e[1].type, SEQC_EV_START);
+	ASSERT_EQ(e[1].stamp, 3002);
+	ASSERT_EQ(e[2].type, SEQQ_PROGRAM_CHANGE);
+	ASSERT_EQ(e[2].value, 0x0306);
+	ASSERT_EQ(e[2].stamp, 3003);
+	ASSERT_EQ(e[3].type, SEQC_EV_CLOCK);
+	ASSERT_EQ(e[3].stamp, 3005);
+	ASSERT_EQ(e[4].type, SEQQ_PROGRAM_CHANGE);
+	ASSERT_EQ(e[4].value, 0x0007);
+	ASSERT_EQ(e[4].stamp, 3006);
+	ASSERT_EQ(e[5].type, SEQQ_PROGRAM_CHANGE);
+	ASSERT_EQ(e[5].value, 0x0009);
+	ASSERT_EQ(e[5].stamp, 3020);
 }
 
 TEST(syncq_usb)
@@ -212,8 +245,13 @@ TEST(syncq_usb)
 	seqq_usbMessage(&qb, 0x05, 0xF7, 0x00, 0x00, 17);	/* CIN 0x5 with the end of a SysEx: ignored */
 	seqq_usbMessage(&qb, 0x0F, 0xFC, 0x00, 0x00, 18);	/* stop */
 	seqq_usbMessage(&qb, 0x05, 0xFA, 0x00, 0x00, 19);	/* start with CIN 0x5 */
+	seqq_usbMessage(&qb, 0x0C, 0xC2, 0x05, 0x00, 20);	/* PC 5 on channel 2 */
+	seqq_usbMessage(&qb, 0x1C, 0xC2, 0x06, 0x00, 21);	/* cable 1: ignored */
+	seqq_usbMessage(&qb, 0x0B, 0xB2, 0x07, 0x08, 22);	/* control change: ignored */
+	seqq_usbMessage(&qb, 0x02, 0xC0, 0x7F, 0x00, 23);	/* PC with another CIN, as the parser takes it */
+	seqq_usbMessage(&qb, 0x00, 0xC0, 0x01, 0x00, 24);	/* CIN 0x0 (reserved): ignored, as by the parser */
 	seqq_entry_t e[8];
-	ASSERT_EQ(takeAll(&qb, e, 8), 6);
+	ASSERT_EQ(takeAll(&qb, e, 8), 8);
 	ASSERT_EQ(e[0].type, SEQC_EV_CLOCK);
 	ASSERT_EQ(e[0].stamp, 10);
 	ASSERT_EQ(e[1].type, SEQQ_SONG_POSITION);
@@ -227,6 +265,12 @@ TEST(syncq_usb)
 	ASSERT_EQ(e[4].stamp, 18);
 	ASSERT_EQ(e[5].type, SEQC_EV_START);
 	ASSERT_EQ(e[5].stamp, 19);
+	ASSERT_EQ(e[6].type, SEQQ_PROGRAM_CHANGE);
+	ASSERT_EQ(e[6].value, 0x0205);
+	ASSERT_EQ(e[6].stamp, 20);
+	ASSERT_EQ(e[7].type, SEQQ_PROGRAM_CHANGE);
+	ASSERT_EQ(e[7].value, 0x007F);
+	ASSERT_EQ(e[7].stamp, 23);
 }
 
 TEST_MAIN()

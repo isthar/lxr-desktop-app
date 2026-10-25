@@ -111,6 +111,19 @@ check_E2_4() {
 	must_not_call TIM2_IRQHandler uart_processMidi
 	gone seq_sync sync_midiResetPosition sync_midiStartStop
 	no_source 'clockSync\.h' Core/Src/Soundengine/MIDI/MidiParser.c
+	# only seq_tick() parses, inside its nesting guard, with the budget (E2.4 review)
+	must_call seq_tick uart_processMidi usb_getMidi midiParser_parseMidiMessage
+	awk '/^void seq_tick\(\)/{f=1} f&&/seq_inTick = 1;/{g=1} f&&g&&/seq_parseMidiInput\(\);/{ok=1} f&&/seq_inTick = 0;/{exit} END{exit !ok}' \
+		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_parseMidiInput() is not inside the nesting guard of seq_tick()"
+	has_source '#define SEQ_DIN_BYTES_PER_TICK +32 ' Core/Src/Soundengine/Sequencer/sequencer.c
+	has_source '#define SEQ_USB_MESSAGES_PER_TICK +8 ' Core/Src/Soundengine/Sequencer/sequencer.c
+	# a full USB message queue drops the new message
+	has_source 'USB_MIDI_INPUT_BUFFER_MASK\) == usb_MidiMessagesRead' Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c
+	# realtime bytes inside a DIN message are routed alone
+	has_source '^[[:space:]]+if\(data >= MIDI_CLOCK\)' Core/Src/Soundengine/MIDI/MidiParser.c
+	# a Program Change switches the pattern from the sync queues, in order with the transport
+	has_source 'entry\.type == SEQQ_PROGRAM_CHANGE' Core/Src/Soundengine/Sequencer/sequencer.c
+	no_source 'seq_setNextPattern' Core/Src/Soundengine/MIDI/MidiParser.c
 }
 
 check_tasks="E2.2 E2.3 E2.4"

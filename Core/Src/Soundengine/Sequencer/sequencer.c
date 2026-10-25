@@ -2248,6 +2248,20 @@ static uint8_t seq_drainSyncQueues(seqc_time_t now)
 	while(seqp_syncPop(now, &source, &entry, &stamp))
 	{
 		drained = 1;
+		if(entry.type == SEQQ_PROGRAM_CHANGE)
+		{
+			//a Program Change switches the pattern here, in its place among Start,
+			//Continue and Stop (fw 1.7 parsed them in arrival order), with the
+			//filter and the channel test of the fw 1.7 parser
+			if((midiParser_txRxFilter & MIDI_FILTER_PROG_C) && ((entry.value >> 8) == midi_MidiChannels[7]))
+			{
+				seq_setNextPattern((uint8_t)entry.value);
+				//a switch while stopped rewinds through the mailbox: before the next event
+				if(seq_mailboxPosted)
+					seq_applyMailbox();
+			}
+			continue;
+		}
 		//the RX filter for MIDI system messages; the core checks the sync mode
 		if((source != SEQP_SRC_JACK) && !(midiParser_txRxFilter & MIDI_FILTER_SYSTEM))
 			continue;
@@ -2293,7 +2307,9 @@ static void seq_refreshCopies(uint8_t changed)
 #define SEQ_USB_MESSAGES_PER_TICK   8   /**< USB MIDI messages parsed per seq_tick() */
 
 /** MIDI input (D8): DIN and USB are parsed only here, in the seq_tick() context,
- * with a budget per call. The handlers reach the core only through the mailbox. */
+ * with a budget per call. The message handlers reach the core through the mailbox,
+ * except seq_postSkipOnce(), which sets the skip-once marker of a recorded note in
+ * the core at once. Program Changes act in seq_drainSyncQueues(). */
 static void seq_parseMidiInput(void)
 {
 	MidiMsg msg;

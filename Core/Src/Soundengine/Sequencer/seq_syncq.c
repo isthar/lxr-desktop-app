@@ -22,8 +22,10 @@
 #define SEQQ_MIDI_START		0xFAu
 #define SEQQ_MIDI_CONTINUE	0xFBu
 #define SEQQ_MIDI_STOP		0xFCu
+#define SEQQ_MIDI_PROG_CHANGE	0xC0u	/**< status of a Program Change, without the channel */
 
 /* USB MIDI code index numbers, as in usbd_cdc.h */
+#define SEQQ_CIN_TWO_BYTE	0x02u	/**< two-byte system common message; the lowest CIN that carries a message */
 #define SEQQ_CIN_THREE_BYTE	0x03u	/**< three-byte system common message, e.g. SPP */
 #define SEQQ_CIN_COMMON_1	0x05u	/**< single-byte system common or SysEx end; some hosts send realtime with it */
 #define SEQQ_CIN_SINGLE_BYTE	0x0Fu	/**< single byte, e.g. realtime */
@@ -79,8 +81,9 @@ void seqq_dinByte(seqq_din_t *d, seqq_t *q, uint8_t byte, uint32_t stamp)
 	}
 	if (byte & 0x80u)
 	{
-		/* any other status byte starts a new message */
+		/* any other status byte starts a new message and sets or ends the running status */
 		d->state = byte == SEQQ_MIDI_SPP ? 1u : 0u;
+		d->program = (byte & 0xF0u) == SEQQ_MIDI_PROG_CHANGE ? byte : 0u;
 		return;
 	}
 	if (d->state == 1u)
@@ -93,6 +96,8 @@ void seqq_dinByte(seqq_din_t *d, seqq_t *q, uint8_t byte, uint32_t stamp)
 		seqq_push(q, SEQQ_SONG_POSITION, (uint16_t)(d->lsb | ((unsigned)byte << 7)), stamp);
 		d->state = 0u;
 	}
+	else if (d->program)
+		seqq_push(q, SEQQ_PROGRAM_CHANGE, (uint16_t)(((d->program & 0x0Fu) << 8) | byte), stamp);
 }
 //------------------------------------------------------------------------------
 void seqq_usbMessage(seqq_t *q, uint8_t cin, uint8_t status, uint8_t data1, uint8_t data2, uint32_t stamp)
@@ -105,6 +110,8 @@ void seqq_usbMessage(seqq_t *q, uint8_t cin, uint8_t status, uint8_t data1, uint
 		seqq_realtime(q, status, stamp);	/* N18.4: realtime with CIN 0x5 as well */
 	else if (code == SEQQ_CIN_THREE_BYTE && status == SEQQ_MIDI_SPP)
 		seqq_push(q, SEQQ_SONG_POSITION, (uint16_t)((data1 & 0x7Fu) | ((unsigned)(data2 & 0x7Fu) << 7)), stamp);
+	else if (code >= SEQQ_CIN_TWO_BYTE && (status & 0xF0u) == SEQQ_MIDI_PROG_CHANGE)
+		seqq_push(q, SEQQ_PROGRAM_CHANGE, (uint16_t)(((status & 0x0Fu) << 8) | data1), stamp);
 }
 //------------------------------------------------------------------------------
 bool seqq_peek(const seqq_t *q, seqq_entry_t *out)

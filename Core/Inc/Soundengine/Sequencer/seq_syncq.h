@@ -5,7 +5,8 @@
  * - one single-producer, single-consumer (SPSC) queue of timestamped sync events
  *   per source: MIDI DIN, USB MIDI and the clock jacks;
  * - the decoding of received MIDI bytes and USB MIDI messages into queue entries:
- *   the realtime messages F8, FA, FB, FC and the Song Position Pointer F2;
+ *   the realtime messages F8, FA, FB, FC, the Song Position Pointer F2 and the
+ *   Program Change Cn, which so stays in order with the transport (E2.4 review);
  * - the 32-bit stamp unwrap and the merge of the queues in stamp order;
  * - the 64-bit extension of the 32-bit cycle counter.
  *
@@ -44,13 +45,16 @@
 
 #define SEQQ_SIZE              64u   /**< entries per queue, a power of two */
 #define SEQQ_SONG_POSITION   0x80u   /**< entry type of a Song Position Pointer; value = sixteenths */
+#define SEQQ_PROGRAM_CHANGE  0x81u   /**< entry type of a Program Change; value = channel << 8 | program */
 
 /** one queue entry, 8 bytes */
 typedef struct seqq_entry
 {
-	uint8_t		type;		/**< a seqc_sync_ev_t, or SEQQ_SONG_POSITION */
+	uint8_t		type;		/**< a seqc_sync_ev_t, SEQQ_SONG_POSITION or SEQQ_PROGRAM_CHANGE */
 	uint8_t		reserved;	/**< 0 */
-	uint16_t	value;		/**< SEQQ_SONG_POSITION: sixteenths, 0..16383; otherwise 0 */
+	uint16_t	value;		/**< SEQQ_SONG_POSITION: sixteenths, 0..16383;
+					     SEQQ_PROGRAM_CHANGE: channel (0..15) << 8 | the data byte;
+					     otherwise 0 */
 	uint32_t	stamp;		/**< DWT->CYCCNT when the interrupt handler received it */
 } seqq_entry_t;
 
@@ -65,11 +69,12 @@ typedef struct seqq
 	seqq_entry_t		buf[SEQQ_SIZE];
 } seqq_t;
 
-/** DIN decoder state for the three bytes of a Song Position Pointer; all zero is idle */
+/** DIN decoder state for the Song Position Pointer and the Program Change; all zero is idle */
 typedef struct seqq_din
 {
 	uint8_t state;		/**< 0 idle, 1 after F2, 2 after the LSB */
 	uint8_t lsb;
+	uint8_t program;	/**< the running status if it is a Program Change Cn, otherwise 0 */
 } seqq_din_t;
 
 //------------------------------------------------------------------------------
@@ -81,14 +86,20 @@ bool seqq_push(seqq_t *q, uint8_t type, uint16_t value, uint32_t stamp);
 /** One byte received on MIDI DIN. F8, FA, FB and FC become SEQC_EV_CLOCK,
  * SEQC_EV_START, SEQC_EV_CONTINUE and SEQC_EV_STOP, also between the data bytes of
  * another message. A complete F2 <lsb> <msb> becomes SEQQ_SONG_POSITION, stamped
- * with its last byte; any other status byte cancels an incomplete one. All other
- * bytes are ignored here: the MIDI parser gets every byte through the RX FIFO. */
+ * with its last byte; any other status byte cancels an incomplete one. A data byte
+ * after Cn, also by running status, becomes SEQQ_PROGRAM_CHANGE, stamped with the
+ * data byte; any other status byte except realtime ends the running status (F0-F7
+ * as well, as the MIDI specification has it). All other bytes are ignored here:
+ * the MIDI parser gets every byte through the RX FIFO. */
 void seqq_dinByte(seqq_din_t *d, seqq_t *q, uint8_t byte, uint32_t stamp);
 //------------------------------------------------------------------------------
 /** One USB MIDI event packet (cable number and code index in cin). On cable 0, F8,
  * FA, FB or FC with CIN 0xF (single byte) becomes the sync event, and so does the
  * same byte with CIN 0x5, which some hosts send for realtime (N18.4). CIN 0x3 with
- * F2 becomes SEQQ_SONG_POSITION. Everything else is ignored here. */
+ * F2 becomes SEQQ_SONG_POSITION. Cn with any CIN from 0x2 up becomes
+ * SEQQ_PROGRAM_CHANGE: USBD_CDC_DataOut() queues these packets for the parser, and
+ * the parser takes Cn as a Program Change whatever the CIN. Everything else is
+ * ignored here. */
 void seqq_usbMessage(seqq_t *q, uint8_t cin, uint8_t status, uint8_t data1, uint8_t data2, uint32_t stamp);
 
 //------------------------------------------------------------------------------
