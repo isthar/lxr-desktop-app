@@ -186,7 +186,7 @@ Every component is an OBJECT library linked into `LXR_V2_STM32F765`:
 | `lxr_dsp`       | `Core/Src/Soundengine/DSPAudio`                 | Oscillators, filters, envelopes, voices, master FX    |
 | `lxr_engine`    | `Core/Src/Soundengine/*.c`                      | Codec/I2S DMA, sample block rendering, FX bus, clock in/out |
 | `lxr_midi`      | `Core/Src/Soundengine/MIDI`                     | MIDI UART, parsers, parameter mapping                 |
-| `lxr_sequencer` | `Core/Src/Soundengine/Sequencer`                | Step sequencer, Euclidean generator, clock sync       |
+| `lxr_sequencer` | `Core/Src/Soundengine/Sequencer`                | Timing core, sync queues, glue, Euclidean generator   |
 | `lxr_usb_app`   | `Core/Src/Soundengine/USB`                      | USB-MIDI message queue                                |
 
 Source files are listed explicitly in the `CMakeLists.txt` files. Add new files there.

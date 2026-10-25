@@ -18,8 +18,6 @@
 #define ACK 1
 #define NACK -1
 
-extern uint8_t midi_process_block;
-
 void initMidiUart();
 
 void uart_sendMidi(MidiMsg msg);

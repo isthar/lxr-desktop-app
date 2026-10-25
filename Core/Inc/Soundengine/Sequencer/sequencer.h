@@ -127,8 +127,6 @@ typedef struct TempPatternStruct
 */
 extern uint8_t seq_activePattern;
 extern uint8_t seq_pendingPattern;
-extern uint8_t seq_newPatternAvailable;
-extern uint8_t seq_prescaleCounter;
 
 //extern PatternSet* seq_activePatternSetPtr;
 
@@ -165,11 +163,7 @@ extern uint8_t seq_selectedStep;
 
 extern uint8_t seq_resetBarOnPatternChange;
 //------------------------------------------------------------------------------
-void seq_MidiSyncQueue(uint8_t cnt);
-//------------------------------------------------------------------------------
 uint8_t seq_isAutomationStepArmed();
-//------------------------------------------------------------------------------
-void seq_nextStep();
 //------------------------------------------------------------------------------
 void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note);
 //------------------------------------------------------------------------------
@@ -178,8 +172,6 @@ void seq_setShuffle(float shuffle);
 void seq_setTrackLength(uint8_t trackNr, uint8_t length);
 //------------------------------------------------------------------------------
 uint8_t seq_getTrackLength(uint8_t trackNr);
-//------------------------------------------------------------------------------
-float seq_getDeltaTShuffleDelay(uint16_t bpm);
 //------------------------------------------------------------------------------
 //void seq_setTrackRotation(uint8_t trackNr, const uint8_t rot);
 //------------------------------------------------------------------------------
@@ -196,17 +188,9 @@ void seq_tick();
 //------------------------------------------------------------------------------
 void seq_armAutomationStep(uint8_t stepNr, uint8_t track,uint8_t isArmed);
 //------------------------------------------------------------------------------
-//void seq_resetDeltaAndTick();
-//------------------------------------------------------------------------------
 void seq_setBpm(uint16_t bpm);
 //------------------------------------------------------------------------------
 uint16_t seq_getBpm();
-//------------------------------------------------------------------------------
-void seq_sync();
-//------------------------------------------------------------------------------
-uint8_t seq_getMasterStepCnt();
-//------------------------------------------------------------------------------
-//void seq_nextStep();
 //------------------------------------------------------------------------------
 uint8_t seq_getExtSync();
 //------------------------------------------------------------------------------
@@ -290,8 +274,6 @@ void seq_copyPatternToBackupBuffer(uint8_t patternNr);
 void seq_copyBackupBufferToPattern(uint8_t patternNr);
 //------------------------------------------------------------------------------
 //void seq_copyEditBufferToRam(uint8_t patternNr);
-//------------------------------------------------------------------------------
-//uint8_t seq_isNextStepSyncStep();
 //------------------------------------------------------------------------------
 // send a note off for a channel if there is a note playing on that channel
 // if 0xff is specified, send a note off on all channels that have a note playing

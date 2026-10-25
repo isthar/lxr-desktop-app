@@ -19,7 +19,6 @@
 #include "Soundengine/Sequencer/seq_platform.h"
 #include "limits.h"
 #include "Soundengine/config.h"
-#include "Soundengine/DSPAudio/medianFilter.h"
 
 #include "main.h"
 
@@ -35,70 +34,6 @@ uint32_t trigger_pulseTimes[NUM_PINS];
 uint8_t trigger_pulseActive[NUM_PINS];
 uint8_t trigger_gateMode = 0;
 */
-
-
-
-
-volatile float trigger_phase = 0;
-volatile float trigger_phaseInc = 0;
-//static uint8_t trigger_phaseWrapCounter = 1;	// count how many times the phase increased by 1.0
-												// with a preascaler of 8 (4ppq) 1 clock pulse
-												// has to increment the sequencer by 8 steps
-#define COUNTER_DURATION (1.0f/42000000l)
-
-//--------------------------------------------------
-#if 0
-void EXTI9_5_IRQHandler()
-{
-	//reset in
-	if(EXTI_GetITStatus(EXTI_Line8) != RESET)
-	{
-		if(seq_getExtSync())
-		{
-			const uint16_t pinState = (GPIOA->IDR & GPIO_Pin_8);
-			if(!pinState)
-			{
-				//reset pin is high -> stop and reset sequencer
-				seq_setRunning(0);
-			} else {
-				//reset pin is low -> start sequencer
-				seq_setRunning(1);
-			}
-		}
-
-		EXTI_ClearITPendingBit(EXTI_Line8);
-	}
-	//clock in falling edge (inverted due to input transistor)
-	else if(EXTI_GetITStatus(EXTI_Line9) != RESET)
-    {
-		if(seq_getExtSync())
-		{
-			uint32_t counter = medianFilter(TIM_GetCounter(TIM2));
-
-			//time for a 128th substep
-			float t =  (counter) * COUNTER_DURATION / (trigger_prescalerClockInput);
-			const float f = (1.f/t);
-			trigger_phaseInc = (1/(REAL_FS/f)) ;
-
-			//divide incoming clocks with prescaler
-			//if(trigger_prescaleCounterClockInput % trigger_prescalerClockInput == 0)
-			{
-				if(seq_isRunning()!=0)
-				{
-					seq_triggerNextMasterStep(trigger_prescalerClockInput);
-					//reset phase counter
-					trigger_phase = 0;
-					trigger_phaseWrapCounter = 1;
-
-				}
-			}
-			//reset measurement timer
-		}
-		TIM_SetCounter(TIM2,0);
-        EXTI_ClearITPendingBit(EXTI_Line9);
-    }
-}
-#else
 
 //Clock In Interrupt. In sync mode 1 every pulse goes to the jack sync queue with its
 //time stamp; the timing core counts the pulses into steps (4 or 24 PPQ, see
@@ -143,7 +78,6 @@ void EXTI9_5_IRQHandler(void)
 		}
 	}
 }
-#endif
 //--------------------------------------------------
 void trigger_setPin(uint8_t index, uint8_t isOn)
 {
@@ -466,29 +400,6 @@ void trigger_reset(uint8_t value)
 		trigger_setPin(CLOCK_1,0);
 	}
 }
-//--------------------------------------------------
-/*
-void trigger_tickPhaseCounter()
-{
-	int i;
-	for(i=0;i<OUTPUT_DMA_SIZE;i++)
-	{
-		//only run one cycle of the phase counter
-		// it is reset by the next incoming master clock pulse
-		if( (trigger_phase + trigger_phaseInc) < trigger_prescalerClockInput)
-		{
-			trigger_phase += trigger_phaseInc;
-		}
-		if(trigger_phase >= trigger_phaseWrapCounter)
-		{
-			trigger_phaseWrapCounter++;
-			// trigger a step
-			// -> set time to next step to immediately (trigger next step)
-			seq_setDeltaT(-1);
-		}
-	}
-}
-*/
 //--------------------------------------------------
 /*
 uint8_t trigger_isGateModeOn()

@@ -123,7 +123,6 @@ static void seq_sendProgChg(const uint8_t ptn);
 
 
 
-//static uint8_t seq_isNextStepSyncStep();
 static uint8_t seq_intIsStepActive(uint8_t voice, uint8_t stepNr, uint8_t patternNr);
 static uint8_t seq_intIsMainStepActive(uint8_t voice, uint8_t mainStepNr, uint8_t pattern);
 static void seq_resetNote(Step *step);
@@ -252,35 +251,6 @@ void seq_setClockInPpq(uint8_t ppq)
 	seq_mailboxUnlock(primask);
 }
 //------------------------------------------------------------------------------
-// Transitional: clockSync.c compiles against these until it is deleted (task
-// E2.6). None of them runs: seq_sync() does nothing, so sync_tick() is never called.
-//------------------------------------------------------------------------------
-uint8_t seq_prescaleCounter = 0;
-//------------------------------------------------------------------------------
-uint8_t seq_getMasterStepCnt()
-{
-	return 0;
-}
-//------------------------------------------------------------------------------
-float seq_getDeltaTShuffleDelay(uint16_t bpm)
-{
-	(void)bpm;
-	return 0.f;
-}
-//------------------------------------------------------------------------------
-void seq_nextStep()
-{
-}
-//------------------------------------------------------------------------------
-void seq_MidiSyncQueue(uint8_t cnt)
-{
-	(void)cnt;
-}
-//------------------------------------------------------------------------------
-void seq_sync()
-{
-}
-//------------------------------------------------------------------------------
 void seq_init()
 {
 	int i;
@@ -404,52 +374,6 @@ uint8_t seq_getTrackLength(uint8_t trackNr)
 	*/
 	return r;
 }
-//------------------------------------------------------------------------------
-// **PATROT
-//TODO check if rotation is working with new 4 bar layout
-/*
-void seq_setTrackRotation(uint8_t trackNr, const uint8_t newRot)
-{
-	// frontParser_shownPattern contains the pattern that is shown (being edited) on the front at the time this is called
-	// seq_activePattern is the pattern that is now playing
-	LengthRotate *lr=&seq_patternSet.seq_patternLengthRotate[frontParser_shownPattern][trackNr];
-
-	if(newRot == lr->rotate)
-		return;
-
-	// if sequencer is running, move the current step position to compensate for the rotation
-	if(seq_running) {
-		int8_t len = lr->length;
-		if(len==0)
-			len=16;
-
-		// this is how many main steps we need to move in one direction, negative means
-		// move back positive is move forward
-		int8_t offset=(((int8_t)newRot) % len) - (((int8_t)lr->rotate) % len);
-
-        // if adding the offset to si would push it over the edge either way we need to wrap it
-		// offset will always be less than len
-        int16_t si = seq_stepIndex[trackNr] + (offset*8);
-        if(si < 0 )
-            si += (len*8);
-        else if(si >= (len*8))
-            si -= (len*8);
-        seq_stepIndex[trackNr]=(int8_t)si;
-	}
-
-	//set new rotation value
-	lr->rotate=newRot;
-
-}
-*/
-//------------------------------------------------------------------------------
-// **PATROT
-/*
-uint8_t seq_getTrackRotation(uint8_t trackNr)
-{
-	return seq_patternSet.seq_patternLengthRotate[frontParser_shownPattern][trackNr].rotate;
-}
-*/
 //------------------------------------------------------------------------------
 void seq_setBpm(uint16_t bpm)
 {
@@ -659,9 +583,6 @@ void seq_setPendingPatternActive()
 		//use shuffle value from pattern
 		//activeParameters[PAR_SHUFFLE] = seq_patternSet.shuffle[seq_activePattern];
 		//seq_setShuffle(activeParameters[PAR_SHUFFLE]/127.f);
-
-		//reset pattern position to pattern rotate starting position for the active pattern **PATROT
-		// seq_setStepIndexToStart();
 
 		//send the ack message to tell the front that a new pattern starts playing
 		/*
@@ -1602,22 +1523,6 @@ uint8_t seq_getActiveAutomationTrack(void)
 {
   return seq_activeAutomTrack;
 }
-//------------------------------------------------------------------------------
-/*
-static uint8_t seq_isNextStepSyncStep()
-{
-	if(seq_delayedSyncStepFlag)
-	{
-		seq_delayedSyncStepFlag = 0;
-		seq_prescaleCounter = 0;
-		return 0;
-	}
-	if( ((seq_stepIndex[0] & 0x3) % 4) == 3) {
-		return 1;
-	}
-	return 0;
-}
-*/
 //------------------------------------------------------------------------------
 
 void seq_midiNoteOff(uint8_t chan)

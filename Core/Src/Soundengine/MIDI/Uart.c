@@ -31,8 +31,6 @@
 //-----------------------------------------------------------------------------
 //we need a TX and RX FIFO for every uart
 
-uint8_t midi_process_block = 0;
-
 static Fifo fifo_midiTx;
 static Fifo fifo_midiRx;
 
@@ -70,10 +68,6 @@ void USART3_IRQHandler(void)
     if (fifo_bufferIn(&fifo_midiRx, data) == 0)
     {
     }
-    //  if (!midi_process_block)
-    //  {
-    //    uart_processMidi();
-    //  }
 	}
 
 	//uint8_t test = ;// __HAL_UART_GET_IT(&huart2, UART_IT_TXE);

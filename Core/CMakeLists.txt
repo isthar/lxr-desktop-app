@@ -122,10 +122,8 @@ add_library(lxr_midi OBJECT
 
 # Step sequencer: the timing core (seq_core) and the sync input queues (seq_syncq),
 # which the host tests in tests/ build as well, the platform layer (seq_platform:
-# DWT time base, queue instances), the glue (sequencer), the Euclidean generator
-# and the fw 1.7 MIDI clock sync (clockSync).
+# DWT time base, queue instances), the glue (sequencer) and the Euclidean generator.
 add_library(lxr_sequencer OBJECT
-    Src/Soundengine/Sequencer/clockSync.c
     Src/Soundengine/Sequencer/EuklidGenerator.c
     Src/Soundengine/Sequencer/seq_core.c
     Src/Soundengine/Sequencer/seq_platform.c
@@ -187,7 +185,6 @@ set(LXR_ITCM_SOURCES
     Src/Soundengine/DSPAudio/FX/Distortion.c
     Src/Soundengine/DSPAudio/FX/Reverb.c
     Src/Soundengine/MIDI/ParameterArray.c
-    Src/Soundengine/Sequencer/sequencer.c
 )
 if(LXR_ITCM_OPT)
     set_source_files_properties(${LXR_ITCM_SOURCES} PROPERTIES COMPILE_OPTIONS "${LXR_ITCM_OPT}")

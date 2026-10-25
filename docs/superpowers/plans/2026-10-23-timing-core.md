@@ -18134,7 +18134,7 @@ and records the ITCM figure.
 - Modify: `README.md` (the `lxr_sequencer` row of the module table)
 - Test: `tools/fw_checks.sh` (all tasks)
 
-- [ ] **Step 1: Write the failing check**
+- [x] **Step 1: Write the failing check**
 
 Add the E2.6 checks before the task list:
 
@@ -18163,7 +18163,7 @@ check_E2_6() {
 check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6"
 ```
 
-- [ ] **Step 2: Run it and see it fail**
+- [x] **Step 2: Run it and see it fail**
 
 ```bash
 tools/fw_checks.sh E2.6
@@ -18180,7 +18180,7 @@ FAIL E2.6: 'medianFilter' found: 22:#include "Soundengine/DSPAudio/medianFilter.
 FAIL E2.6: sequencer.c is still in LXR_ITCM_SOURCES
 ```
 
-- [ ] **Step 3: Delete clockSync and take `sequencer.c` out of the ITCM list**
+- [x] **Step 3: Delete clockSync and take `sequencer.c` out of the ITCM list**
 
 Run:
 
@@ -18227,7 +18227,7 @@ with:
 if(LXR_ITCM_OPT)
 ```
 
-- [ ] **Step 4: `sequencer.c`: remove the shims and the dead comment blocks**
+- [x] **Step 4: `sequencer.c`: remove the shims and the dead comment blocks**
 
 The transitional shims of E2.2, between `seq_setClockInPpq()` and `seq_init()`:
 
@@ -18327,7 +18327,7 @@ In `seq_setPendingPatternActive()`, the commented index reset (fw 1.7 lines 661-
 
 ```
 
-- [ ] **Step 5: `sequencer.h`: remove the stale declarations**
+- [x] **Step 5: `sequencer.h`: remove the stale declarations**
 
 `seq_newPatternAvailable` was never defined; `seq_prescaleCounter` was a shim (fw 1.7 lines 130-131):
 
@@ -18390,7 +18390,7 @@ uint8_t seq_getMasterStepCnt();
 //------------------------------------------------------------------------------
 ```
 
-- [ ] **Step 6: `TriggerOut.c`: remove the dead code**
+- [x] **Step 6: `TriggerOut.c`: remove the dead code**
 
 `medianFilter.h` defines a non-static function and was used only by dead code (fw 1.7 lines 20-21):
 
@@ -18489,7 +18489,7 @@ EOF
 
 Expected output: `deleted 23 lines from Core/Src/Soundengine/TriggerOut.c`
 
-- [ ] **Step 7: Remove `midi_process_block`**
+- [x] **Step 7: Remove `midi_process_block`**
 
 E2.2 removed its last writers; its only reader had long been commented out.
 
@@ -18516,7 +18516,7 @@ uint8_t midi_process_block = 0;
     //  }
 ```
 
-- [ ] **Step 8: Update the module table in the README**
+- [x] **Step 8: Update the module table in the README**
 
 `README.md`, replace:
 
@@ -18530,7 +18530,7 @@ with:
 | `lxr_sequencer` | `Core/Src/Soundengine/Sequencer`                | Timing core, sync queues, glue, Euclidean generator   |
 ```
 
-- [ ] **Step 9: Give the edited files CRLF line endings**
+- [x] **Step 9: Give the edited files CRLF line endings**
 
 ```bash
 python3 - Core/Src/Soundengine/Sequencer/sequencer.c Core/Inc/Soundengine/Sequencer/sequencer.h \
@@ -18548,7 +18548,7 @@ EOF
 
 Expected: five lines starting with `CRLF`. `Core/CMakeLists.txt` and `README.md` stay LF.
 
-- [ ] **Step 10: Build, run every check, record ITCM**
+- [x] **Step 10: Build, run every check, record ITCM**
 
 ```bash
 tools/check.sh && tools/fw_checks.sh
@@ -18583,19 +18583,19 @@ bash -c 'source tools/env.sh && arm-none-eabi-objdump -t build/release/LXR_V2_ST
 
 Expected: `__seq_getBpm_veneer` only.
 
-- [ ] **Step 11: Review**
+- [x] **Step 11: Review**
 
-- [ ] `git grep -n "clockSync" -- Core` and `git grep -n "seq_stepIndex" -- Core/Src/Soundengine` find
+- [x] `git grep -n "clockSync" -- Core` and `git grep -n "seq_stepIndex" -- Core/Src/Soundengine` find
   nothing.
-- [ ] The release image is the same size as after E2.5, or a few bytes smaller. Only dead code and
+- [x] The release image is the same size as after E2.5, or a few bytes smaller. Only dead code and
   unreferenced symbols went.
-- [ ] `README.md` lists the module correctly.
-- [ ] The stage 1 report (E4.1 Step 4) gets these numbers:
+- [x] `README.md` lists the module correctly.
+- [x] The stage 1 report (E4.1 Step 4) gets these numbers:
   - the ITCM figure above;
   - the RAM and image deltas against fw 1.7, from the `memory:` line that `tools/check.sh` prints
     (it is not in `build/check.log`).
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 `git rm` in Step 3 already staged the deleted files.
 

@@ -175,7 +175,20 @@ check_E2_5() {
 		Core/Src/Soundengine/Sequencer/sequencer.c
 }
 
-check_tasks="E2.2 E2.3 E2.4 E2.5"
+# ---- E2.6: clockSync and the dead timing code are gone; ITCM holds no sequencer code
+check_E2_6() {
+	no_file Core/Src/Soundengine/Sequencer/clockSync.c Core/Inc/Soundengine/Sequencer/clockSync.h
+	no_tree 'clockSync|seq_MidiSyncQueue|seq_getDeltaTShuffleDelay|seq_getMasterStepCnt|seq_prescaleCounter|seq_sync\(|midi_process_block|HANDLE_SEQ_IN_CLOCK_INTERRUPT|trigger_clockReceived' \
+		Core/Src/Soundengine Core/Inc/Soundengine Core/CMakeLists.txt
+	no_source 'seq_newPatternAvailable' Core/Inc/Soundengine/Sequencer/sequencer.h
+	no_source 'medianFilter' Core/Src/Soundengine/TriggerOut.c
+	sed -n '/^set(LXR_ITCM_SOURCES/,/^)/p' Core/CMakeLists.txt | grep -q 'sequencer\.c' \
+		&& fail "sequencer.c is still in LXR_ITCM_SOURCES"
+	no_itcm 'seq'
+	gone sync_tick sync_window sync_timeLast sync_clockCnt sync_writePos sync_delayedStepTimer
+}
+
+check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6"
 
 if [ $# -gt 0 ]; then check_tasks="$*"; fi
 for task in $check_tasks; do
