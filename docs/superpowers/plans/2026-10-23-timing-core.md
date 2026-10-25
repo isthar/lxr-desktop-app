@@ -9653,7 +9653,7 @@ refactor resolve.
 - Create: `tests/fw17_adapter.h`, `tests/fw17_adapter.c`
 - Test: `tests/test_fw17.c` (ctest id `T20`)
 
-- [ ] **Step 1: Write the adapter interface `tests/fw17_adapter.h`**
+- [x] **Step 1: Write the adapter interface `tests/fw17_adapter.h`**
 
 ```c
 /*
@@ -9700,7 +9700,7 @@ int fw17_run(int steps, fw17_hit_t *out, int max);
 #endif /* FW17_ADAPTER_H_ */
 ```
 
-- [ ] **Step 2: Write the failing test `tests/test_fw17.c`**
+- [x] **Step 2: Write the failing test `tests/test_fw17.c`**
 
 ```c
 /*
@@ -9992,7 +9992,7 @@ TEST(T20_no_spill_over_of_the_last_step_at_the_start)
 TEST_MAIN()
 ```
 
-- [ ] **Step 3: Run it to verify it fails**
+- [x] **Step 3: Run it to verify it fails**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -10009,7 +10009,7 @@ CMake Error at CMakeLists.txt:107 (add_executable):
     fw17_adapter.c
 ```
 
-- [ ] **Step 4: Write the adapter `tests/fw17_adapter.c`**
+- [x] **Step 4: Write the adapter `tests/fw17_adapter.c`**
 
 ```c
 /*
@@ -10063,7 +10063,7 @@ int fw17_run(int steps, fw17_hit_t *out, int max)
 }
 ```
 
-- [ ] **Step 5: Run it to verify it still fails**
+- [x] **Step 5: Run it to verify it still fails**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -10071,7 +10071,7 @@ Expected: `host test build FAILED`, with the link error `cc: error: linker comma
 and `exit 1`. The replica's `main()` collides with the runner's. `grep -B4 "linker command failed" build/check.log`
 shows `duplicate symbol '_main' in:` with Apple ld, or `multiple definition of 'main'` with GNU ld.
 
-- [ ] **Step 6: Leave the report out of the replica when `FW17_REPLICA_NO_MAIN` is defined**
+- [x] **Step 6: Leave the report out of the replica when `FW17_REPLICA_NO_MAIN` is defined**
 
 In `tests/reference/fw17_replica.c` (LF), replace:
 ```c
@@ -10101,7 +10101,7 @@ At the very end of the file, after the closing brace of `main()`, add:
 #endif /* FW17_REPLICA_NO_MAIN */
 ```
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `tools/check.sh; echo "exit $?"`
 
@@ -10124,7 +10124,7 @@ Run: `bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests-all -G 
 
 Expected: `all test files present`. Every file listed in `tests/CMakeLists.txt` now exists.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add tests/reference/fw17_replica.c tests/fw17_adapter.h tests/fw17_adapter.c tests/test_fw17.c

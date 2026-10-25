@@ -12,6 +12,10 @@
  *
  * Build and run on the host: cc -O2 -o fw17_replica fw17_replica.c -lm && ./fw17_replica
  *
+ * T20 links its logic: tests/fw17_adapter.c includes this file with
+ * FW17_REPLICA_NO_MAIN defined, which leaves out the report (main() and its
+ * helpers).
+ *
  * Copyright (C) 2012-2026 Erica Synths
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -227,6 +231,7 @@ static void run(int steps)
 	}
 }
 
+#ifndef FW17_REPLICA_NO_MAIN
 static double stepLenFromTempo(uint16_t bpm) { return 60.0 / bpm / 4.0; }
 
 static void printTrigs(const char *title, int seqStepFrom, int seqStepTo)
@@ -311,3 +316,4 @@ int main(void)
 	}
 	return 0;
 }
+#endif /* FW17_REPLICA_NO_MAIN */
