@@ -1096,9 +1096,18 @@ static void seqc_stopTransport(void)
 }
 //------------------------------------------------------------------------------
 /** clear what belongs to the current run: queue, note-offs, draws, same-tick
- * state and the skip-once markers (rewind and seek) */
+ * state and the skip-once markers (rewind and seek). The events that a choke of
+ * this call removed are counted first, as if compacted (seqc_queueChoke()). */
 static void seqc_clearRun(void)
 {
+	if (seqc_queue.chokeTracks != 0)
+	{
+		for (uint16_t i = 0; i < seqc_queue.count; i++)
+		{
+			if (seqc_isChoked(seqc_queueAt(i), NULL))
+				seqc.stats.chokeDrops++;
+		}
+	}
 	seqc_queue.head = 0;
 	seqc_queue.count = 0;
 	seqc_queue.chokeTracks = 0;
@@ -2028,6 +2037,14 @@ void seqc_setSyncMode(seqc_sync_t mode)
 			seqc_out.nextTempoStep = seqc_nextMultiple(seqc.pos, SEQC_TICKS_PER_STEP);
 			if (seqc.state == SEQC_ARMED)
 			{
+				if (seqc_trk.seeked)
+				{
+					/* at the located step (seqc_placeWaitingPosition()): its
+					 * MIDI clock and tempo step go out with it, as a start
+					 * re-phases them to step 0 (N8) */
+					seqc_out.nextMidiClock = (seqc_tick_t)seqc.absStep * SEQC_TICKS_PER_STEP;
+					seqc_out.nextTempoStep = seqc_out.nextMidiClock;
+				}
 				seqc.state = SEQC_RUNNING;
 				seqc.startPending = seqc.atStart;
 				seqc.host.transport(seqc.host.ctx, seqc.atStart ? SEQC_TRANSPORT_START : SEQC_TRANSPORT_CONTINUE);

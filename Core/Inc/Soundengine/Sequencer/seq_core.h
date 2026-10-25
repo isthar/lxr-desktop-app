@@ -314,7 +314,7 @@ typedef struct seqc_stats
 	uint16_t queueDepth;		/**< events queued now; inside a callback it can still count events that a choke of the same call removed (N2) */
 	uint16_t queueMax;		/**< largest queue depth since seqc_init() or seqc_resetStats() */
 	uint32_t queueOverflow;		/**< events rejected because the queue was full */
-	uint32_t chokeDrops;		/**< queued events removed by the choke or the same-tick rule */
+	uint32_t chokeDrops;		/**< queued events removed by the choke or the same-tick rule; inside a callback it can lag: events that a choke of the same call removed are counted when they reach the head, at the end of the call, or when the queue is cleared (N2) */
 	uint32_t muteDrops;		/**< events dropped when they fired because their track was muted */
 	uint32_t skipDrops;		/**< step occurrences not played because of seqc_skipOnce() */
 	uint32_t syncIgnored;		/**< sync events and song positions that did nothing (seqc_sync_ev_t) */
@@ -404,7 +404,8 @@ typedef struct seqc_host
 	void		(*tempoStep)(void *ctx);
 	/** Internal sync only: send one MIDI clock (F8). Called every 16 ticks of the
 	 * free-running timeline, also while stopped. A start re-phases it: the first
-	 * clock after transport(START) is at step 0 (N8) */
+	 * clock after transport(START) is at step 0 (N8), and the first one after a
+	 * switch to internal sync that continues at a located step is at that step */
 	void		(*midiClockOut)(void *ctx);
 	/** While running, every 4 ticks of the position: one pulse of the clock out
 	 * jack. pulseInStep is 0..23, and 0 at the step boundary. It is straight
@@ -439,7 +440,9 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond);
  *   slave: its START was reported, so it stops (STOP) and is armed (ARM) until
  *   the clock that begins a step, which reports START again.
  * - Slave to internal: the position continues at the master tempo. An armed
- *   transport starts at once (transport START or CONTINUE).
+ *   transport starts at once (transport START or CONTINUE). Armed at a located
+ *   step, it plays that step at once, with its MIDI clock and tempoStep(): they
+ *   are re-phased to it, as a start re-phases them to step 0.
  * - A transport that waits for its first clock after a rewind or a song
  *   position is moved to where the new mode starts it: one clock of the new
  *   mode before step 0 or the located step in a slave mode, so that the first

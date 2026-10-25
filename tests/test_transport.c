@@ -579,10 +579,23 @@ TEST(T17_spp_then_switch_to_internal_plays_the_step_at_once)
 	const seqc_time_t t0 = h->now;
 	seqc_setSyncMode(SEQC_SYNC_INTERNAL);
 	ASSERT_EQ_DBL(seqc_position(), 8.0 * 96);
+	h->logMask = FAKE_LOG_ALL;
+	const size_t from = h->logCount;
 	fake_runUntil(h, t0 + fake_msToCycles(50.0), fake_msToCycles(0.1));
 	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
 	ASSERT_EQ(trig[0]->ev.absStep, 8);
 	ASSERT_TRUE(trig[0]->time - t0 <= fake_msToCycles(0.1));
+	/* the step's MIDI clock and tempo step go out with it, as at a start (N8),
+	 * so a slave that follows the Continue plays the step with the LXR */
+	static const fake_kind_t kinds[] = { FAKE_MIDI_CLOCK, FAKE_TEMPO_STEP };
+	for (size_t k = 0; k < 2; k++)
+	{
+		size_t pos = from;
+		const fake_rec_t *r = fake_next(h, kinds[k], &pos);
+		ASSERT_TRUE(r != NULL);
+		ASSERT_EQ_DBL(r->tick, 8.0 * 96);
+		ASSERT_TRUE(r->time - t0 <= fake_msToCycles(0.1));
+	}
 }
 
 /* the clock that resumes step s after Stop, SPP s and Continue */

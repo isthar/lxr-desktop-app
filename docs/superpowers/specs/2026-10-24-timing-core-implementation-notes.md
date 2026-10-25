@@ -74,9 +74,12 @@ compare, the choke test, the front of the queue), now inlined into the processin
   events are removed. Such an event is dropped when it reaches the head. The others are compacted once,
   before the next event is staged and at the end of the call, from the nearer end: the kept events
   after the first removed one move towards the head, or those before the last removed one towards the
-  tail, whichever are fewer. A choke that removes nothing writes nothing. `chokeDrops` and `queueDepth`
-  are as before between calls; inside a callback `queueDepth` can still count events that a choke of
-  the same call removed.
+  tail, whichever are fewer. A choke that removes nothing writes nothing. When the queue is cleared
+  (a rewind, a song end, a song position, a slave Start or jack reset), the events a choke of that call
+  removed are counted first, without moving anything. `chokeDrops` and `queueDepth` are therefore as
+  before between calls; inside a callback both can lag: `queueDepth` can still count events that a
+  choke of the same call removed, and `chokeDrops` counts them only when they reach the head, at the
+  compaction, or when the queue is cleared.
 - **Skip-once** removes its hits the same way, after the recorded chokes and the staged events (it
   can be called from a callback).
 - **Single inserts.** The core queues nothing outside a boundary (the one-shot roll stays in
@@ -104,10 +107,12 @@ compare, the choke test, the front of the queue), now inlined into the processin
   354 index shifts) costs about 9k.
 - **Size** (`seq_core.c.obj`, the firmware compile command, Arm GNU 14.3.rel1): bss 8269 → 11221 B
   (+2952: the staging buffer 2688 B and its index 224 B, the recorded chokes 32 B), text 20178 →
-  20090 B. Review row R6.2 must allow it, as for N20 and N21.
-- Tests check the order and the rejects against a reference model (batches into a nearly full queue)
-  and against fire logs recorded from the E1.16 queue (random patterns, settings and recorded notes,
-  with the firmware's queue and a 16-entry one).
+  20138 B (with the E1.18 review fixes). Review row R6.2 must allow it, as for N20 and N21.
+- Tests check the order and the rejects against a reference model (batches into a nearly full queue,
+  and a batch with ties that merges from the head) and against fire logs recorded from the E1.16 queue
+  (random patterns, settings and recorded notes, with the firmware's queue and a 16-entry one). Direct
+  tests cover what those runs do not reach: `chokeDrops` when a song end, a slave Start or a jack reset
+  clears the queue in the call of the choke, and skip-once from a generation callback.
 
 ## N3. Early and late parts instead of removing and regenerating
 

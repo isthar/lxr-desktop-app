@@ -340,6 +340,49 @@ TEST(queue_batches_match_the_reference_sort)
 		ASSERT_TRUE(runBatchesAgainstReference(seed, 400, 30, 112) >= 0);
 }
 
+/* A batch that belongs before most pending events merges from the head: the
+ * start of the queue moves back by the batch, and of the pending events only
+ * those in front of the batch's last event move. 50 pending events at ticks
+ * 100..149 (ids 0..49), then a batch with the keys of the first three (ids
+ * 200..202): of equal keys the staged event fires first, as with one insert per
+ * event, where the one queued last fires first (N2). */
+TEST(queue_batch_before_pending_merges_from_the_head)
+{
+	enum { M = 50, K = 3 };
+	fake_init();
+	refCount = 0;
+	uint32_t seq = 0;
+	for (int i = 0; i < M; i++)
+	{
+		const seqc_event_t ev = event(100 + i, 0, false, 0, (uint16_t)i);
+		seqc_testQueueInsert(&ev);
+		ref[refCount++] = (ref_entry_t){ ev, seq++ };
+	}
+	seqc_event_t batch[K];
+	for (int k = 0; k < K; k++)
+	{
+		batch[k] = event(100 + k, 0, false, 0, (uint16_t)(200 + k));
+		ref[refCount++] = (ref_entry_t){ batch[k], seq++ };
+	}
+	const unsigned head0 = seqc_testQueueHead();
+	const uint32_t m0 = seqc_queueMoves;
+	seqc_testQueueInsertBatch(batch, K);
+	ASSERT_EQ(seqc_testQueueHead(), (head0 + CAPACITY - K) % CAPACITY);
+	ASSERT_EQ(seqc_queueMoves - m0, 2 * K + (K - 1));	/* staged, merged, and ids 0 and 1 */
+	ASSERT_EQ(stats().queueDepth, M + K);
+	static const int firstIds[] = { 200, 0, 201, 1, 202, 2, 3 };
+	for (int i = 0; i < M + K; i++)
+	{
+		const seqc_event_t want = refPop();
+		seqc_event_t ev;
+		ASSERT_TRUE(seqc_testQueuePop(&ev));
+		ASSERT_TRUE(memcmp(&ev, &want, sizeof ev) == 0);
+		if (i < (int)(sizeof firstIds / sizeof firstIds[0]))
+			ASSERT_EQ(ev.p1Val | ev.p2Val << 8, firstIds[i]);
+	}
+	ASSERT_EQ(stats().queueDepth, 0);
+}
+
 /* batches into a nearly full queue, also longer than the free space and than a
  * boundary's events: the rejects of single inserts */
 TEST(queue_batches_full_reject_as_single_inserts)
@@ -533,6 +576,7 @@ static void denseMovesAreBounded(const dense_case_t *dc)
 			maxBoundary = c.moves;
 		boundaries++;
 	}
+	ASSERT_TRUE(dc->maxBoundary <= CALL_MOVES_GOAL && dc->maxOther <= CALL_MOVES_GOAL);
 	ASSERT_TRUE(maxBoundary <= dc->maxBoundary);
 	ASSERT_TRUE(maxOther <= dc->maxOther);
 	ASSERT_EQ(boundaries, 16);
@@ -621,6 +665,11 @@ TEST(queue_adversarial_pattern_cost_is_bounded)
 #define RANDOM_SEEDS			200
 #define RANDOM_BOUNDARY_MOVES		240
 #define RANDOM_OTHER_MOVES		76
+
+_Static_assert(ADVERSARIAL_BOUNDARY_MOVES <= CALL_MOVES_GOAL && ADVERSARIAL_OTHER_MOVES <= CALL_MOVES_GOAL,
+		"the hill-climbed pattern's bounds are within the goal");
+_Static_assert(RANDOM_BOUNDARY_MOVES <= CALL_MOVES_GOAL && RANDOM_OTHER_MOVES <= CALL_MOVES_GOAL,
+		"the random patterns' bounds are within the goal");
 
 TEST(queue_random_shifts_cost_is_bounded)
 {
@@ -745,6 +794,72 @@ TEST(queue_choke_compacts_from_the_nearer_end)
 	ASSERT_EQ(stats().queueDepth, 0);
 }
 
+/* Events that a choke removed count in chokeDrops also when the queue is cleared
+ * in the same call (a song end, a slave Start, a jack reset), as with the E1.16
+ * queue, which counted them at the fire. Track 0 (length 17, the master) plays
+ * step 15 x8 and step 16 x1, both shifted +7, and track 1 step 0 x8 +7, with
+ * shuffle 127. Step 16's hit at tick 1620 chokes the last 5 hits of step 15
+ * (1624..1672), which interleave with track 1's hits at 1632, 1644, ...: the
+ * first is dropped at the head, the other 4 are still queued when the queue is
+ * cleared. The E1.16 queue counts 5, with the same triggers. */
+static fake_host_t *chokeBeforeClear(void)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = 0;
+	h->shuffle = 127;
+	fake_setLength(h, 0, 0, 17);
+	fake_setStep(h, 0, 0, 15, true);
+	fake_setTiming(h, 0, 0, 15, 5, +7);
+	fake_setStep(h, 0, 0, 16, true);
+	fake_setTiming(h, 0, 0, 16, 0, +7);
+	fake_setStep(h, 0, 1, 0, true);
+	fake_setTiming(h, 0, 1, 0, 5, +7);
+	return h;
+}
+
+TEST(queue_choke_counts_at_a_song_end_in_the_same_call)
+{
+	fake_host_t *h = chokeBeforeClear();
+	fake_setSongMode(h, true);			/* song { 0 }: it ends at tick 17 * 96 */
+	fake_process(h, 0);
+	seqc_start();
+	const double cyclesPerTick = fake_stepCycles(120.0) / 96.0;
+	fake_runUntil(h, (seqc_time_t)(1610 * cyclesPerTick), fake_msToCycles(0.1));
+	const uint32_t drops0 = stats().chokeDrops;
+	const uint32_t trig0 = h->calls[FAKE_TRIGGER];
+	fake_process(h, (seqc_time_t)(1640 * cyclesPerTick));	/* the choke, then the song end */
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	ASSERT_EQ(h->calls[FAKE_TRIGGER] - trig0, 3);
+	ASSERT_EQ(stats().chokeDrops - drops0, 5);
+	ASSERT_EQ(stats().queueDepth, 0);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(queue_choke_counts_at_a_slave_start_or_reset_in_the_same_call)
+{
+	/* a MIDI Start, and a jack reset at 24 PPQ, half a clock after the clock at
+	 * tick 1616: the slave position reaches the choke first */
+	for (int analog = 0; analog < 2; analog++)
+	{
+		fake_host_t *h = chokeBeforeClear();
+		seqc_setSyncMode(analog ? SEQC_SYNC_ANALOG : SEQC_SYNC_MIDI);
+		seqc_setAnalogPpq(24);
+		fake_process(h, fake_msToCycles(1.0));
+		fake_sync(h, SEQC_EV_START, h->now + 100);
+		const double per = fake_clockCycles(120.0);
+		fake_runClocks(h, analog ? SEQC_EV_PULSE : SEQC_EV_CLOCK, h->now + (seqc_time_t)per, per, 102,
+				fake_msToCycles(0.1));
+		const uint32_t drops0 = stats().chokeDrops;
+		const uint32_t trig0 = h->calls[FAKE_TRIGGER];
+		fake_sync(h, analog ? SEQC_EV_RESET_ON : SEQC_EV_START, h->now + (seqc_time_t)(per / 2));
+		ASSERT_EQ(seqc_state(), analog ? SEQC_STOPPED : SEQC_ARMED);
+		ASSERT_EQ(h->calls[FAKE_TRIGGER] - trig0, 2);
+		ASSERT_EQ(stats().chokeDrops - drops0, 5);
+		ASSERT_EQ(stats().queueDepth, 0);
+		ASSERT_EQ(h->errors, 0);
+	}
+}
+
 /* skip-once (D6) removes queued hits by their place in the ring, after the start
  * of the queue has moved on and wrapped. Track 0 plays x8 on every step (hits 12
  * ticks apart), track 1 x8 on steps 6..15; track 4 step 4 has flam 1 and shift -2
@@ -806,6 +921,49 @@ TEST(queue_skip_once_with_a_moved_head)
 	ASSERT_EQ(stats().queueOverflow, 0);
 	ASSERT_EQ(h->errors, 0);
 	ASSERT_EQ(h->logLost, 0);
+}
+
+/* skip-once from inside the generation of a boundary, after the early hits of
+ * the occurrence it skips are staged: they are removed with the queued ones and
+ * do not play (N2). Track 0 step 1 is x8 with shift -7, so boundary 0 stages its
+ * early hits; then its stepOn() read of track 1 for step 1 calls seqc_skipOnce()
+ * for track 0 step 1, as the glue's recording can from a callback. */
+static bool (*plainStepOn)(void *ctx, uint8_t pattern, uint8_t track, uint8_t step);
+static bool skippedInStepOn;
+static int32_t skippedAtStep;
+
+static bool stepOnThatSkips(void *ctx, uint8_t pattern, uint8_t track, uint8_t step)
+{
+	if (!skippedInStepOn && track == 1 && step == 1)
+	{
+		skippedInStepOn = true;
+		skippedAtStep = seqc_absStep();
+		seqc_skipOnce(0, 1);
+	}
+	return plainStepOn(ctx, pattern, track, step);
+}
+
+TEST(queue_skip_once_from_the_generation_removes_the_staged_hits)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_BIT(FAKE_TRIGGER);
+	fake_setStep(h, 0, 0, 1, true);
+	fake_setTiming(h, 0, 0, 1, 5, -7);
+	fake_setStep(h, 0, 0, 2, true);			/* plays */
+	plainStepOn = h->host.stepOn;
+	h->host.stepOn = stepOnThatSkips;
+	skippedInStepOn = false;
+	seqc_init(&h->host, SEQC_CPU_HZ);		/* with the wrapped stepOn() */
+	fake_process(h, 0);
+	seqc_start();
+	fake_runUntil(h, (seqc_time_t)(4 * fake_stepCycles(120.0)), fake_msToCycles(0.1));
+	ASSERT_TRUE(skippedInStepOn);
+	ASSERT_EQ(skippedAtStep, 0);			/* at boundary 0 */
+	const fake_rec_t *trig[16];
+	ASSERT_EQ(fake_triggers(h, 0, trig, 16), 1);
+	ASSERT_EQ(trig[0]->ev.step, 2);
+	ASSERT_EQ(stats().skipDrops, 1);
+	ASSERT_EQ(h->errors, 0);
 }
 
 TEST_MAIN()
