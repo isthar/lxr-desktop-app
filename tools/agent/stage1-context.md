@@ -12,11 +12,11 @@ How the plan was made:
 
 Order of the tasks:
 1. E3.2
-2. E1.1-E1.13, then E1.14
+2. E1.1-E1.13, then E1.14, E1.15 (the slave tempo estimate for packed USB clocks, note N21), E1.16 (the event queue as an earliest-first ring, amended N2) and E1.17 (the leftovers of the E1 reviews)
 3. E2.1-E2.6, then E2.7 and E2.8
 4. E3.1, E3.3, E3.4, E3.5 (its env.sh part was already done in commit aa70b81)
 5. E4.1-E4.3
 
-Each task starts from the committed result of the tasks before it on branch timing-core (see git log). The notes file docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N20) wins over the spec. The plan applies the notes; where the plan and a note still disagree, follow the note and report it.
+Each task starts from the committed result of the tasks before it on branch timing-core (see git log). The notes file docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N21) wins over the spec. The plan applies the notes; where the plan and a note still disagree, follow the note and report it.
 
 The Bash tool runs zsh, and `source tools/env.sh` works in zsh. Build and test only through tools/check.sh, or the commands the plan gives.

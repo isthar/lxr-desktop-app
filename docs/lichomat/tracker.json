@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-24 15:52",
-    "phase": "Etap 1 — implementacja",
-    "focus": "Rusza implementacja etapu 1: najpierw E3.2 i rdzeń E1.1–E1.14 (15 zadań). Każde zadanie: implementacja TDD z check.sh i commitem, przegląd zgodności ze specyfikacją, przegląd jakości.",
+    "updated": "2026-10-25 05:51",
+    "phase": "Etap 1 — rdzeń: E1.15–E1.17",
+    "focus": "Workflow A2: E1.15 (estymator tempa dla spakowanego USB), E1.16 (kolejka jako bufor pierścieniowy), E1.17 (porządki po przeglądach). Potem integracja z firmware E2.1–E2.8.",
     "branch": "timing-core",
-    "head": "a8a8bbf",
-    "next": "Po rdzeniu: integracja E2.1–E2.8, potem narzędzia i wydanie (E3.1, E3.3–E3.5, E4.1–E4.3). Push na Twój fork po każdym zadaniu.",
-    "updated_at": "2026-10-24T15:52:00+02:00"
+    "head": "47c6f81",
+    "next": "Integracja z firmware (E2.1–E2.8), potem narzędzia i wydanie (E3, E4).",
+    "updated_at": "2026-10-25T05:51:00+01:00"
   },
   "epics": [
     {
@@ -140,79 +140,100 @@
     {
       "id": "E1.4",
       "epic": "E1",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Granice kroków, liczniki torów, koniec patternu (T10)",
       "updated": "2026-10-24"
     },
     {
       "id": "E1.5",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Generowanie zdarzeń: ratchet, shift, swing, probability (T2–T4, T8)",
-      "updated": ""
+      "updated": "2026-10-24"
     },
     {
       "id": "E1.6",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Kolejka, kolejność, choke per tor, mute, note-off (T7, T9, T15)",
-      "updated": ""
+      "updated": "2026-10-24"
     },
     {
       "id": "E1.7",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Wyprzedzenie, przeliczanie na granicy, zmiana patternu (T11, T12)",
-      "updated": ""
+      "updated": "2026-10-24"
     },
     {
       "id": "E1.8",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "MIDI clock out i impulsy clock out (T5, T6)",
-      "updated": ""
+      "updated": "2026-10-24"
     },
     {
       "id": "E1.9",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Roll, faza nagrywania, skip-once (T13, T14)",
-      "updated": ""
+      "updated": "2026-10-24"
     },
     {
       "id": "E1.10",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Slave: MIDI/analog clock, estymacja tempa, zanik (T16, T18)",
-      "updated": ""
+      "updated": "2026-10-25"
     },
     {
       "id": "E1.11",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Transport: Start, Continue, Stop, SPP, song mode (T17)",
-      "updated": ""
+      "updated": "2026-10-25"
     },
     {
       "id": "E1.12",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Przepełnienie kolejki i statystyki (T19)",
-      "updated": ""
+      "updated": "2026-10-25"
     },
     {
       "id": "E1.13",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Zgodność z repliką fw 1.7 (T20)",
-      "updated": ""
+      "updated": "2026-10-25"
     },
     {
       "id": "E1.14",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Slave: powrót estymacji po skoku tempa ponad 50% (N16), note-off przy zaniku zegara (N17), skip-once per tor (N18.1)",
-      "updated": "2026-10-24"
+      "updated": "2026-10-25"
+    },
+    {
+      "id": "E1.15",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Estymacja tempa przy taktach zegara ze wspólnym znacznikiem czasu (spakowany USB MIDI z DAW), N21",
+      "updated": "2026-10-25"
+    },
+    {
+      "id": "E1.16",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Kolejka zdarzeń jako bufor pierścieniowy: tanie typowe wstawienie i choke bez kopiowania (koszt czasu rzeczywistego z przeglądu końcowego)",
+      "updated": "2026-10-25"
+    },
+    {
+      "id": "E1.17",
+      "epic": "E1",
+      "status": "do zrobienia",
+      "title": "Porządki po przeglądach E1: ASSERT_EQ odrzuca liczby zmiennoprzecinkowe, brakujące testy, 3 podejrzenia błędów do analizy, komentarze, CRLF, T20 z własnym generatorem",
+      "updated": "2026-10-25"
     },
     {
       "id": "E2.1",
@@ -498,6 +519,12 @@
       "date": "2026-10-24",
       "title": "Plan implementacji etapu 1",
       "summary": "Plan: 27 zadań, 19 265 linii (50d8889). Każda sekcja sprawdzona w kopii repo; trzech krytyków zgłosiło 30 uwag, 29 przyjęto i poprawiono. Po drodze: notatki N12–N19, nowe zadania E1.14, E2.7, E2.8 i E6.10. Raport: docs/lichomat/reports/M4-plan-etapu-1.md."
+    },
+    {
+      "id": "M5",
+      "date": "2026-10-25",
+      "title": "Rdzeń timingu seq_core (E1.1–E1.14)",
+      "summary": "Rdzeń zaimplementowany, ok. 25 plików testów na hoście, przeglądy z testami mutacyjnymi (104 agentów, ok. 14 h). Znalezione: spakowany zegar USB (N21, E1.15), koszt kolejki na sprzęcie (E1.16), przyklejone takty DIN (naprawione). Raport: docs/lichomat/reports/M5-rdzen-etapu-1.md."
     }
   ],
   "questions": [
@@ -810,6 +837,76 @@
       "n": 52,
       "at": "2026-10-24 15:52",
       "text": "E1.3 gotowe (0b95fe4, 61b2cf4, 3c01114): zegar wewnętrzny rdzenia, granice kroków i transport; 12 testów T1 (dokładność tempa, brak dryfu, zmiany tempa). Przeglądy z celowo wprowadzanymi błędami wzmocniły 7 testów. Znalazły też subtelny przypadek zaokrąglenia, gdy wywołanie trafia dokładnie w granicę kroku: poprawka w kroku 0 zadania E1.4. Teraz E1.4."
+    },
+    {
+      "n": 53,
+      "at": "2026-10-24 17:20",
+      "text": "E1.4 gotowe (a8a8bbf, 7fae2d7, 3bdd95a, 7065108, c221859): liczniki torów, zawinięcie patternu wg najdłuższego toru, koniec patternu i utworu. Najpierw krok 0 z przeglądu E1.3 (granica kroku dokładnie w chwili wywołania). Przeglądy dołożyły 4 testy. Nowa reguła: w ostatniej rundzie przeglądu jakości blokują tylko błędy krytyczne, luki w testach idą na listę porządków (zebrana w build/plan/amendments.md). Teraz E1.5: generowanie zdarzeń."
+    },
+    {
+      "n": 54,
+      "at": "2026-10-24 18:11",
+      "text": "E1.5 gotowe: generowanie zdarzeń (swing całego kroku, przesunięcia, ratchety, prawdopodobieństwo) z podziałem na część wczesną i późną. Uwzględnia poprawkę z przeglądu planu, dzięki której zmiana shuffle w trakcie kroku nie dubluje ani nie gubi uderzeń. 23 testy T2/T3/T4/T8. Do przeglądu końcowego: koszt memmove w kolejce zdarzeń i ponowny odczyt prawdopodobieństwa w części późnej. Teraz E1.6: choke na tor, mute, note-off."
+    },
+    {
+      "n": 55,
+      "at": "2026-10-24 19:09",
+      "text": "E1.6 gotowe: reguły odpalania. Choke działa per tor, czyli nowszy krok tłumi starsze uderzenia tylko na swoim torze (poprawka błędu D2). Do tego mute w chwili odpalenia i note-off po 4 tickach. Przeglądy dołożyły 4 testy, w tym sprawdzenie czasu, w którym host faktycznie dostaje note-off. Teraz E1.7: lookahead przy zmianie patternu."
+    },
+    {
+      "n": 56,
+      "at": "2026-10-24 20:00",
+      "text": "E1.7 gotowe (fbf8cca + 2 commity testów): lookahead przy zmianie patternu. Wczesne uderzenia (przesunięte w lewo) następnego kroku biorą dane z patternu, który faktycznie zagra (peekNextPattern), więc nie z poprzedniego jak w fw 1.7. Przeglądy dołożyły 4 testy, m.in. ratchet po obu stronach zmiany patternu i przeładowanie tego samego patternu. Teraz E1.8: MIDI clock out i impulsy zegara."
+    },
+    {
+      "n": 57,
+      "at": "2026-10-24 21:04",
+      "text": "E1.8 gotowe (7cce81a + 2 commity testów): MIDI clock out na stałej osi czasu, ponownie ustawiany w fazie przy starcie, krok tempa także przy zatrzymanym transporcie (miganie LED) i impulsy clock out. Poprawka D1: w testach na hoście odstęp zegara MIDI jest stały także przy szufli, a w fw 1.7 skakał od 0,11 do 57,8 ms. Na sprzęcie sprawdzi to H5. Przeglądy dołożyły testy restartu i fazy po zatrzymaniu. Teraz E1.9: roll, faza nagrywania, skip-once."
+    },
+    {
+      "n": 58,
+      "at": "2026-10-24 23:04",
+      "text": "E1.9 gotowe (90c9a19 + 6 commitów testów): roll (okresowy, gra też na wyciszonych torach jak w fw 1.7), faza nagrywania uwzględniająca swing, skip-once (poprawka D6) i reguła tego samego ticku. Przeglądy dołożyły 9 testów. Zostajemy przy pełnym procesie przeglądów (Twoja decyzja). Teraz E1.10: synchronizacja slave (MIDI clock i jack), największe zadanie rdzenia."
+    },
+    {
+      "n": 59,
+      "at": "2026-10-25 00:46",
+      "text": "Przegląd jakości E1.10 znalazł prawdziwą lukę w projekcie: gdy DAW wysyła po kilka taktów zegara w jednym pakiecie USB, estymacja tempa mierzy częstotliwość pakietów, nie zegara (np. ok. 40 zamiast 120 BPM przy 3 taktach w pakiecie). Siatka kroków zostaje dobra, ale tempo na ekranie, LFO i uderzenia między taktami już nie. Nowa notatka N21 i zadanie E1.15 (po E1.14). Równolegle workflow projektowy porównuje trzy estymatory (rozkład na pakiet, rozpiętość, regresja) na symulacji z prawdziwym rdzeniem."
+    },
+    {
+      "n": 60,
+      "at": "2026-10-25 01:33",
+      "text": "E1.10 gotowe (a49e8d4 + 5 commitów testów): synchronizacja slave z MIDI clock i jackiem (4 i 24 PPQ). Estymacja tempa, ograniczenie pozycji między taktami, dogonienie bez gubienia zdarzeń, zanik zegara i start lokalny w siatce mastera. Przeglądy dołożyły ok. 12 testów i znalazły lukę projektową N21 (spakowany zegar USB), którą rozwiązuje E1.15. Scenariusze potwierdziły skalę: przy pakietach na bufor audio 23,2 ms estymacja stoi na 107,67 BPM niezależnie od tempa. Teraz E1.11: transport i SPP."
+    },
+    {
+      "n": 61,
+      "at": "2026-10-25 02:23",
+      "text": "E1.11 gotowe (656bcb9 + 4 commity testów): Start, Continue (wznawia w miejscu), Stop, SPP w trybie patternu i utworu oraz bramka run z jacka. Przeglądy dołożyły ok. 15 testów, m.in. SPP na początku taktu, jak wysyła DAW. Wykryły też zmianę końców linii w seq_core.h na LF, którą naprawi krok 0 zadania E1.13. Zmiana czasu na zimowy: od 03:00 CEST zegar pokazuje CET. Teraz E1.12: przepełnienie kolejki i statystyki."
+    },
+    {
+      "n": 62,
+      "at": "2026-10-25 02:58",
+      "text": "Workflow projektowy E1.15 zakończony (5 agentów, 3 h 10 min). Wybrana regresja liniowa (metoda najmniejszych kwadratów) czasu taktów względem ich numeru. Takty ze wspólnym znacznikiem liczą się jako jeden punkt, a estymator ma dwa okna, 24 i 96 taktów. Pakiety 2–6 taktów dają dokładne tempo, bufory audio 0,1–0,3%, DIN 0,007%, wyświetlacz nie skacze. Koszt ok. 928 B RAM. Ograniczenia zapisane w N21. Po E1.14 ruszy E1.15, potem E1.16 (porządki po przeglądach), a dopiero potem integracja."
+    },
+    {
+      "n": 63,
+      "at": "2026-10-25 03:05",
+      "text": "E1.12 gotowe (d20224f + test resetu statystyk): limit kolejki zdarzeń z licznikiem przepełnień, statystyki rdzenia i ignorowanie wywołań z wnętrza callbacków. Teraz E1.13: porównanie z repliką timingu fw 1.7 (T20), poprzedzone krokiem 0, który przywraca CRLF w seq_core.h."
+    },
+    {
+      "n": 64,
+      "at": "2026-10-25 03:35",
+      "text": "E1.13 gotowe (f83435b: CRLF w seq_core.h, potem T20). Rdzeń porównany z repliką timingu fw 1.7: te same uderzenia na tych samych impulsach, poza zamierzonymi różnicami (poprawki D1–D5). Przegląd zgodności przeszedł bez uwag, przegląd jakości z samymi drobnymi. Teraz E1.14: skoki tempa, note-off przy zaniku zegara, skip-once per tor. To ostatnie zadanie workflowu A, potem przegląd całego rdzenia."
+    },
+    {
+      "n": 65,
+      "at": "2026-10-25 05:22",
+      "text": "E1.14 gotowe (da2aa8e + 3 commity): estymacja wraca po skoku tempa (N16), zanik zegara wysyła oczekujące note-offy (N17), skip-once ma znacznik na każdy tor (N18.1). Przegląd znalazł regresję: przyklejone takty DIN (odstęp ok. 0,32 ms) restartowały estymację. Naprawione w 1b924ad, a to samo wymaganie dopisane do E1.15. Wszystkie zadania workflowu A zrobione, trwa przegląd całego rdzenia."
+    },
+    {
+      "n": 66,
+      "at": "2026-10-25 05:51",
+      "text": "Kamień milowy M5: rdzeń seq_core (E1.1–E1.14) gotowy, raport w docs/lichomat/reports/M5-rdzen-etapu-1.md. Przegląd końcowy znalazł ważny problem: kolejka zdarzeń kosztuje na sprzęcie do 0,8–1,2 ms na granicę kroku (memmove z newlib-nano kopiuje bajt po bajcie), co grozi przerwami dźwięku. Rozwiązanie to bufor pierścieniowy (E1.16). Rusza workflow z E1.15, E1.16 i E1.17."
     }
   ]
 }
