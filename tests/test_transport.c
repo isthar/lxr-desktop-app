@@ -196,13 +196,14 @@ TEST(T17_continue_rephases_the_clock_count)
 	}
 	ASSERT_EQ(steps, 3);
 	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 3);
-	/* the local stop button and play: step 0 waits for the master's next step */
+	/* the local stop button and play: step 0 waits for the master's next step,
+	 * at 864 = 9 * 96 of the resumed song */
 	seqc_stop();
 	seqc_rewind();
 	seqc_start();
-	clocks(h, 1);					/* tick 816 of the master: not a step */
+	clocks(h, 3);					/* 816, 832 and 848: no step */
 	ASSERT_EQ(seqc_state(), SEQC_ARMED);
-	clocks(h, 5);					/* 896 */
+	clocks(h, 1);					/* 864 */
 	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
 }
 
