@@ -34,6 +34,18 @@
 #ifndef SEQC_QUEUE_CAPACITY
 #define SEQC_QUEUE_CAPACITY	SEQC_QUEUE_SIZE
 #endif
+/* The most events one step boundary generates (seqc_boundary()), which the
+ * queue's staging buffer holds (E1.18). Per track: one roll event; the late part
+ * of step n, at most SEQC_MAX_HITS hits; and the early part of step n+1, its hits
+ * before (n+1) * 96. The earliest hit is SEQC_MAX_SHIFT_TICKS before that (the
+ * swing only delays), and k hits are 96 / k ticks apart, so at most
+ * ceil(84 * k / 96) of them are early: 7 for x8, fewer for smaller k. */
+#define SEQC_MAX_HITS		8u
+#define SEQC_EARLY_HITS		((SEQC_MAX_SHIFT_TICKS * SEQC_MAX_HITS + SEQC_TICKS_PER_STEP - 1u) / SEQC_TICKS_PER_STEP)
+#define SEQC_STAGE_SIZE		(SEQC_NUM_TRACKS * (1u + SEQC_MAX_HITS + SEQC_EARLY_HITS))
+_Static_assert(SEQC_EARLY_HITS == 7u && SEQC_STAGE_SIZE == 112u, "a boundary generates at most 7 x (1 + 8 + 7) events");
+_Static_assert(SEQC_STAGE_SIZE <= 255u, "the staging indices are 8 bits");
+_Static_assert(SEQC_NUM_TRACKS <= 8u, "seqc_queue_t.chokeTracks has a bit per track");
 //------------------------------------------------------------------------------
 /* The tempo fit (N21), see the Tempo estimate section. The windows, the outlier
  * band and the restart counts are in seq_core.h. The tunables can be set with
@@ -145,8 +157,22 @@ typedef struct
 {
 	seqc_event_t	events[SEQC_QUEUE_CAPACITY];
 	uint16_t	head;		/**< slot of the next event to fire */
-	uint16_t	count;
+	uint16_t	count;		/**< with the events of recorded chokes, until they are compacted */
+	uint8_t		chokeTracks;	/**< bit t: track t has a recorded choke (seqc_queueChoke()) */
+	uint32_t	chokeStep[SEQC_NUM_TRACKS];	/**< it removes the track's events below this absolute step */
 } seqc_queue_t;
+
+//------------------------------------------------------------------------------
+/** the events of one step boundary, before they join the queue (E1.18) */
+typedef struct
+{
+	seqc_event_t	events[SEQC_STAGE_SIZE];	/**< in the order they were generated */
+	/** indices into events, in firing order, in order[first .. first + count - 1].
+	 * It starts in the middle and grows at either end. */
+	uint8_t		order[2 * SEQC_STAGE_SIZE];
+	uint8_t		first;
+	uint8_t		count;
+} seqc_stage_t;
 
 //------------------------------------------------------------------------------
 /** per-track firing state: note-off and the same-tick rule (N2) */
@@ -272,6 +298,7 @@ static seqc_core_t seqc;
 static seqc_tracks_t seqc_trk;
 static seqc_gen_t seqc_gen;
 static seqc_queue_t seqc_queue;
+static seqc_stage_t seqc_stage;
 static seqc_fire_t seqc_fire;
 static seqc_outputs_t seqc_out;
 static seqc_skip_t seqc_skip[SEQC_NUM_TRACKS];
@@ -350,7 +377,7 @@ static uint8_t seqc_swingTicks(uint8_t shuffle)
 /** hits of StepTiming.flam: 0..5 give 1, 2, 3, 4, 6, 8; any other value 1 */
 static uint8_t seqc_hitCount(uint8_t flam)
 {
-	static const uint8_t hits[6] = { 1, 2, 3, 4, 6, 8 };
+	static const uint8_t hits[6] = { 1, 2, 3, 4, 6, SEQC_MAX_HITS };
 	return flam < 6 ? hits[flam] : 1;
 }
 //------------------------------------------------------------------------------
@@ -463,6 +490,21 @@ static double seqc_positionAt(seqc_time_t t)
 //------------------------------------------------------------------------------
 // Event queue
 //------------------------------------------------------------------------------
+/*
+ * The queue (N2, amended for tasks E1.16 and E1.18) is a ring, earliest first,
+ * and the events of a step boundary join it together:
+ * - generation stages them (seqc_queueStage()), keeping an index of the staged
+ *   events in firing order;
+ * - at the end of the boundary, seqc_queueMerge() merges them into the ring in
+ *   one pass from the nearer end, so a boundary writes O(new + pending)
+ *   elements;
+ * - a choke only records the step below which its track's events are removed;
+ *   those events are dropped when they reach the head, and the ring is
+ *   compacted once, from the nearer end, before the next events are staged and
+ *   at the end of the call (seqc_leave()).
+ * Every element is moved with a struct copy (newlib-nano's memmove copies
+ * bytes).
+ */
 /** true if event a fires before event b (N2) */
 static bool seqc_firesBefore(const seqc_event_t *a, const seqc_event_t *b)
 {
@@ -488,63 +530,249 @@ static seqc_event_t *seqc_queueAt(uint16_t i)
 	return &seqc_queue.events[seqc_queueSlot(i)];
 }
 //------------------------------------------------------------------------------
-/** queue an event, in firing order (N2). An event that fires after every pending
- * one, the common case, is appended. Otherwise a binary search finds its place,
- * and the events on its shorter side move one slot, by struct copies
- * (newlib-nano's memmove copies bytes): those before it towards the head if it
- * is in the first half, else those after it towards the tail. So an event that
- * fires before every pending one moves nothing. Of events with the same key, the
- * one queued last fires first. A full queue rejects the event. */
-static void seqc_queueInsert(const seqc_event_t *ev)
+/** the slots after and before slot s */
+static uint16_t seqc_slotAfter(uint16_t s)
 {
-	if (seqc_queue.count >= SEQC_QUEUE_CAPACITY)
+	return s + 1u < SEQC_QUEUE_CAPACITY ? (uint16_t)(s + 1u) : 0u;
+}
+static uint16_t seqc_slotBefore(uint16_t s)
+{
+	return s > 0 ? (uint16_t)(s - 1u) : (uint16_t)(SEQC_QUEUE_CAPACITY - 1u);
+}
+//------------------------------------------------------------------------------
+/** the number of pending events that fire before ev: ev goes after them, and
+ * before the pending events with the same key */
+static uint16_t seqc_queueFiresBefore(const seqc_event_t *ev)
+{
+	uint16_t lo = 0;
+	uint16_t hi = seqc_queue.count;
+	if (hi > 0 && seqc_firesBefore(seqc_queueAt((uint16_t)(hi - 1u)), ev))
+		return hi;				/* the common case: after every pending one */
+	while (lo < hi)
+	{
+		const uint16_t mid = (uint16_t)((lo + hi) / 2u);
+		if (seqc_firesBefore(seqc_queueAt(mid), ev))
+			lo = (uint16_t)(mid + 1u);
+		else
+			hi = mid;
+	}
+	return lo;
+}
+//------------------------------------------------------------------------------
+/** Merge the staged events into the ring, in one pass. The pending events that
+ * fire before every staged one stay where they are, and so do those that fire
+ * after every staged one; of the events in between, those on the shorter side
+ * move: towards the tail (a merge from the tail, the common case, where it is
+ * an append) or towards the head. Each element is written once. Of events with
+ * the same key, the staged ones fire first, so the order is that of one insert
+ * per event in the order they were staged (N2). */
+static void seqc_queueMerge(void)
+{
+	const uint16_t k = seqc_stage.count;
+	if (k == 0)
+		return;
+	seqc_stage.count = 0;
+	const uint16_t m = seqc_queue.count;
+	const seqc_event_t *const staged = seqc_stage.events;
+	const uint8_t *const order = &seqc_stage.order[seqc_stage.first];
+	/* pending events [0, before) fire before the first staged one, and events
+	 * [after, m) not before the last one */
+	const uint16_t before = seqc_queueFiresBefore(&staged[order[0]]);
+	const uint16_t after = seqc_queueFiresBefore(&staged[order[k - 1u]]);
+
+	if (m - before <= after)
+	{
+		/* from the tail: the latest of the two goes to the last free slot */
+		uint16_t dst = seqc_queueSlot((uint16_t)(m + k - 1u));
+		uint16_t src = seqc_queueSlot(m > 0 ? (uint16_t)(m - 1u) : 0u);
+		uint16_t pending = (uint16_t)(m - before);
+		uint16_t j = (uint16_t)(k - 1u);
+		for (;;)
+		{
+			const seqc_event_t *ev = &staged[order[j]];
+			if (pending > 0 && !seqc_firesBefore(&seqc_queue.events[src], ev))
+			{
+				seqc_queue.events[dst] = seqc_queue.events[src];
+				src = seqc_slotBefore(src);
+				pending--;
+			}
+			else
+			{
+				seqc_queue.events[dst] = *ev;
+				if (j == 0)
+					break;
+				j--;
+			}
+			SEQC_QUEUE_MOVED(1u);
+			dst = seqc_slotBefore(dst);
+		}
+		SEQC_QUEUE_MOVED(1u);
+	}
+	else
+	{
+		/* from the head: the ring starts k slots earlier, which are free */
+		uint16_t src = seqc_queue.head;
+		uint16_t dst = seqc_queueSlot((uint16_t)(SEQC_QUEUE_CAPACITY - k));
+		seqc_queue.head = dst;
+		uint16_t pending = after;
+		uint16_t j = 0;
+		for (;;)
+		{
+			const seqc_event_t *ev = &staged[order[j]];
+			if (pending > 0 && seqc_firesBefore(&seqc_queue.events[src], ev))
+			{
+				seqc_queue.events[dst] = seqc_queue.events[src];
+				src = seqc_slotAfter(src);
+				pending--;
+			}
+			else
+			{
+				seqc_queue.events[dst] = *ev;
+				if (++j == k)
+					break;
+			}
+			SEQC_QUEUE_MOVED(1u);
+			dst = seqc_slotAfter(dst);
+		}
+		SEQC_QUEUE_MOVED(1u);
+	}
+	seqc_queue.count = (uint16_t)(m + k);
+}
+//------------------------------------------------------------------------------
+/** true if a choke that is not compacted yet removes ev (seqc_queueChoke()) */
+static bool seqc_isChoked(const seqc_event_t *ev, const void *arg)
+{
+	(void)arg;
+	return (seqc_queue.chokeTracks & (1u << ev->track)) != 0 && ev->absStep < seqc_queue.chokeStep[ev->track];
+}
+//------------------------------------------------------------------------------
+/** Remove the events for which drop() is true, keeping the order of the rest,
+ * from the end nearer to them: the kept events after the first removed one move
+ * towards the head, or those before the last removed one towards the tail,
+ * whichever are fewer. Nothing is written if nothing is removed. Returns how many
+ * were removed. */
+static uint16_t seqc_queueRemoveIf(bool (*drop)(const seqc_event_t *ev, const void *arg), const void *arg)
+{
+	const uint16_t m = seqc_queue.count;
+	uint16_t first = 0;
+	while (first < m && !drop(seqc_queueAt(first), arg))
+		first++;
+	if (first == m)
+		return 0;
+	uint16_t last = (uint16_t)(m - 1u);
+	while (!drop(seqc_queueAt(last), arg))
+		last--;
+	uint16_t kept;
+	if (m - 1u - first <= last)
+	{
+		kept = first;
+		for (uint16_t i = (uint16_t)(first + 1u); i < m; i++)
+		{
+			const seqc_event_t *ev = seqc_queueAt(i);
+			if (drop(ev, arg))
+				continue;
+			*seqc_queueAt(kept++) = *ev;
+			SEQC_QUEUE_MOVED(1u);
+		}
+	}
+	else
+	{
+		/* the kept events of [0, last) move to the end of [0, last], and the
+		 * ring then starts at the first of them */
+		uint16_t dst = last;
+		for (uint16_t i = last; i-- > 0;)
+		{
+			const seqc_event_t *ev = seqc_queueAt(i);
+			if (drop(ev, arg))
+				continue;
+			*seqc_queueAt(dst--) = *ev;
+			SEQC_QUEUE_MOVED(1u);
+		}
+		kept = (uint16_t)(m - 1u - dst);
+		seqc_queue.head = seqc_queueSlot((uint16_t)(dst + 1u));
+	}
+	seqc_queue.count = kept;
+	return (uint16_t)(m - kept);
+}
+//------------------------------------------------------------------------------
+/** compact the chokes recorded since the last compaction (seqc_queueChoke()) */
+static void seqc_queueCompact(void)
+{
+	if (seqc_queue.chokeTracks == 0)
+		return;
+	seqc.stats.chokeDrops += seqc_queueRemoveIf(seqc_isChoked, NULL);
+	seqc_queue.chokeTracks = 0;
+}
+//------------------------------------------------------------------------------
+/** Stage ev, generated at a step boundary; seqc_queueMerge() queues it. A queue
+ * that would be full with the staged events rejects it: the same events as one
+ * insert per event would reject, the boundary's last ones in the order they
+ * were generated. */
+static void seqc_queueStage(const seqc_event_t *ev)
+{
+	seqc_queueCompact();			/* the choked events do not count */
+	if (seqc_queue.count + seqc_stage.count >= SEQC_QUEUE_CAPACITY)
 	{
 		seqc.stats.queueOverflow++;
 		return;
 	}
-	uint16_t dst = seqc_queueSlot(seqc_queue.count);
-	if (seqc_queue.count > 0 && !seqc_firesBefore(seqc_queueAt((uint16_t)(seqc_queue.count - 1u)), ev))
-	{
-		/* lo: the first event that does not fire before ev, where ev goes */
-		uint16_t lo = 0;
-		uint16_t hi = (uint16_t)(seqc_queue.count - 1u);
-		while (lo < hi)
-		{
-			const uint16_t mid = (uint16_t)((lo + hi) / 2u);
-			if (seqc_firesBefore(seqc_queueAt(mid), ev))
-				lo = (uint16_t)(mid + 1u);
-			else
-				hi = mid;
-		}
-		if (lo < seqc_queue.count - lo)
-		{
-			/* the slot before the head is free: the queue is not full */
-			dst = seqc_queue.head > 0 ? (uint16_t)(seqc_queue.head - 1u) : (uint16_t)(SEQC_QUEUE_CAPACITY - 1u);
-			seqc_queue.head = dst;
-			for (uint16_t i = 0; i < lo; i++)
-			{
-				const uint16_t src = dst + 1u < SEQC_QUEUE_CAPACITY ? (uint16_t)(dst + 1u) : 0u;
-				seqc_queue.events[dst] = seqc_queue.events[src];
-				dst = src;
-			}
-			SEQC_QUEUE_MOVED(lo);
-		}
-		else
-		{
-			for (uint16_t i = seqc_queue.count; i > lo; i--)
-			{
-				const uint16_t src = dst > 0 ? (uint16_t)(dst - 1u) : (uint16_t)(SEQC_QUEUE_CAPACITY - 1u);
-				seqc_queue.events[dst] = seqc_queue.events[src];
-				dst = src;
-			}
-			SEQC_QUEUE_MOVED(seqc_queue.count - lo);
-		}
-	}
-	seqc_queue.events[dst] = *ev;
+	if (seqc_stage.count == SEQC_STAGE_SIZE)
+		seqc_queueMerge();		/* more than a boundary generates (the test hook) */
+	if (seqc_stage.count == 0)
+		seqc_stage.first = SEQC_STAGE_SIZE;
+	const uint8_t i = seqc_stage.count++;
+	seqc_stage.events[i] = *ev;
 	SEQC_QUEUE_MOVED(1u);
-	seqc_queue.count++;
-	if (seqc_queue.count > seqc.stats.queueMax)
-		seqc.stats.queueMax = seqc_queue.count;
+	/* its place in firing order: after the staged events that fire before it,
+	 * before those with the same key. The indices on the shorter side of it
+	 * move, as in the ring: a boundary generates the late hits of step n before
+	 * the early hits of step n+1, which fire first. */
+	uint8_t *const order = &seqc_stage.order[seqc_stage.first];
+	uint8_t lo = 0;
+	uint8_t hi = i;
+	if (hi > 0 && seqc_firesBefore(&seqc_stage.events[order[hi - 1u]], ev))
+		lo = hi;
+	while (lo < hi)
+	{
+		const uint8_t mid = (uint8_t)((lo + hi) / 2u);
+		if (seqc_firesBefore(&seqc_stage.events[order[mid]], ev))
+			lo = (uint8_t)(mid + 1u);
+		else
+			hi = mid;
+	}
+	if (lo < i - lo)
+	{
+		/* first > 0: it started at SEQC_STAGE_SIZE, and at most that many are staged */
+		for (uint8_t j = 0; j < lo; j++)
+			order[j - 1] = order[j];
+		order[lo - 1] = i;
+		seqc_stage.first--;
+	}
+	else
+	{
+		for (uint8_t j = i; j > lo; j--)
+			order[j] = order[j - 1u];
+		order[lo] = i;
+	}
+	const uint16_t depth = (uint16_t)(seqc_queue.count + seqc_stage.count);
+	if (depth > seqc.stats.queueMax)
+		seqc.stats.queueMax = depth;
+}
+//------------------------------------------------------------------------------
+/** the next event to fire, or NULL if the queue is empty; events a choke
+ * removed are dropped here */
+static const seqc_event_t *seqc_queueFront(void)
+{
+	while (seqc_queue.count > 0)
+	{
+		const seqc_event_t *ev = &seqc_queue.events[seqc_queue.head];
+		if (!seqc_isChoked(ev, NULL))
+			return ev;
+		seqc_queue.head = seqc_queueSlot(1u);
+		seqc_queue.count--;
+		seqc.stats.chokeDrops++;
+	}
+	return NULL;
 }
 //------------------------------------------------------------------------------
 /** take the next event; the queue is not empty */
@@ -556,68 +784,52 @@ static seqc_event_t seqc_queuePop(void)
 	return ev;
 }
 //------------------------------------------------------------------------------
-/** true if the choke of a fired event (track, absStep) removes ev */
-static bool seqc_isChoked(const seqc_event_t *ev, uint8_t track, uint32_t absStep)
+/** choke of a fired event (track, absStep): the queued events of track with an
+ * absolute step below absStep are removed. They are dropped when they reach the
+ * head or at the next compaction (seqc_queueCompact()), and counted then. */
+static void seqc_queueChoke(uint8_t track, uint32_t absStep)
 {
-	return ev->track == track && ev->absStep < absStep;
+	const uint8_t bit = (uint8_t)(1u << track);
+	if ((seqc_queue.chokeTracks & bit) == 0 || absStep > seqc_queue.chokeStep[track])
+		seqc_queue.chokeStep[track] = absStep;
+	seqc_queue.chokeTracks |= bit;
 }
 //------------------------------------------------------------------------------
-/** choke: remove the queued events of track with an absolute step below absStep.
- * Nothing is written before the first removed event. Returns how many were
- * removed. */
-static uint32_t seqc_queueChoke(uint8_t track, uint32_t absStep)
+/** true if ev is a step hit of the occurrence (track, absStep, pattern, step) of
+ * the event arg */
+static bool seqc_isStepHit(const seqc_event_t *ev, const void *arg)
 {
-	uint16_t i = 0;
-	while (i < seqc_queue.count && !seqc_isChoked(seqc_queueAt(i), track, absStep))
-		i++;
-	if (i == seqc_queue.count)
-		return 0;
-	uint16_t kept = i;
-	for (i++; i < seqc_queue.count; i++)
-	{
-		const seqc_event_t *ev = seqc_queueAt(i);
-		if (seqc_isChoked(ev, track, absStep))
-			continue;
-		*seqc_queueAt(kept++) = *ev;
-		SEQC_QUEUE_MOVED(1u);
-	}
-	const uint32_t removed = (uint32_t)(seqc_queue.count - kept);
-	seqc_queue.count = kept;
-	return removed;
+	const seqc_event_t *o = arg;
+	return ev->track == o->track && ev->absStep == o->absStep && ev->pattern == o->pattern
+			&& ev->step == o->step && (ev->flags & SEQC_EVF_ROLL) == 0;
 }
 //------------------------------------------------------------------------------
-/** true if ev is a step hit of occurrence (track, absStep) at (pattern, step) */
-static bool seqc_isStepHit(const seqc_event_t *ev, uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step)
-{
-	return ev->track == track && ev->absStep == absStep && ev->pattern == pattern && ev->step == step
-			&& (ev->flags & SEQC_EVF_ROLL) == 0;
-}
-//------------------------------------------------------------------------------
-/** remove the queued step hits of one occurrence (skip-once). Nothing is written
- * before the first removed event. */
+/** remove the queued step hits of one occurrence (skip-once). It can be called
+ * from a callback, while chokes are recorded or events are staged. */
 static void seqc_queueRemoveStep(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step)
 {
-	uint16_t i = 0;
-	while (i < seqc_queue.count && !seqc_isStepHit(seqc_queueAt(i), track, absStep, pattern, step))
-		i++;
-	if (i == seqc_queue.count)
-		return;
-	uint16_t kept = i;
-	for (i++; i < seqc_queue.count; i++)
-	{
-		const seqc_event_t *ev = seqc_queueAt(i);
-		if (seqc_isStepHit(ev, track, absStep, pattern, step))
-			continue;
-		*seqc_queueAt(kept++) = *ev;
-		SEQC_QUEUE_MOVED(1u);
-	}
-	seqc_queue.count = kept;
+	seqc_event_t o;
+	memset(&o, 0, sizeof o);
+	o.track = track;
+	o.absStep = absStep;
+	o.pattern = pattern;
+	o.step = step;
+	seqc_queueCompact();
+	seqc_queueMerge();
+	seqc_queueRemoveIf(seqc_isStepHit, &o);
 }
 #ifdef SEQC_QUEUE_TEST
 //------------------------------------------------------------------------------
 void seqc_testQueueInsert(const seqc_event_t *ev)
 {
-	seqc_queueInsert(ev);
+	seqc_testQueueInsertBatch(ev, 1);
+}
+//------------------------------------------------------------------------------
+void seqc_testQueueInsertBatch(const seqc_event_t *evs, uint16_t count)
+{
+	for (uint16_t i = 0; i < count; i++)
+		seqc_queueStage(&evs[i]);
+	seqc_queueMerge();
 }
 //------------------------------------------------------------------------------
 bool seqc_testQueuePop(seqc_event_t *out)
@@ -630,7 +842,15 @@ bool seqc_testQueuePop(seqc_event_t *out)
 //------------------------------------------------------------------------------
 uint32_t seqc_testQueueChoke(uint8_t track, uint32_t absStep)
 {
-	return seqc_queueChoke(track, absStep);
+	const uint32_t drops = seqc.stats.chokeDrops;
+	seqc_queueChoke(track, absStep);
+	seqc_queueCompact();
+	return seqc.stats.chokeDrops - drops;
+}
+//------------------------------------------------------------------------------
+uint16_t seqc_testQueueHead(void)
+{
+	return seqc_queue.head;
 }
 #endif
 
@@ -676,7 +896,7 @@ static void seqc_fireNext(void)
 		seqc.stats.chokeDrops++;
 		return;
 	}
-	seqc.stats.chokeDrops += seqc_queueChoke(t, ev.absStep);
+	seqc_queueChoke(t, ev.absStep);
 	if (seqc_fire.offPending[t])
 		seqc.host.noteOff(seqc.host.ctx, t);
 	seqc_fire.fired[t] = true;
@@ -781,7 +1001,7 @@ static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint
 			.hit = j, .vel = (uint8_t)(data->volume & 0x7f), .note = data->note, .flags = 0, .reserved = 0,
 			.p1Nr = data->param1Nr, .p1Val = data->param1Val, .p2Nr = data->param2Nr, .p2Val = data->param2Val,
 		};
-		seqc_queueInsert(&ev);
+		seqc_queueStage(&ev);
 	}
 }
 //------------------------------------------------------------------------------
@@ -824,7 +1044,7 @@ static void seqc_queueRolls(uint32_t n, uint8_t pattern)
 			.vel = SEQC_ROLL_VELOCITY, .note = data->note, .flags = SEQC_EVF_ROLL, .reserved = 0,
 			.p1Nr = data->param1Nr, .p1Val = data->param1Val, .p2Nr = data->param2Nr, .p2Val = data->param2Val,
 		};
-		seqc_queueInsert(&ev);
+		seqc_queueStage(&ev);
 	}
 }
 //------------------------------------------------------------------------------
@@ -881,6 +1101,8 @@ static void seqc_clearRun(void)
 {
 	seqc_queue.head = 0;
 	seqc_queue.count = 0;
+	seqc_queue.chokeTracks = 0;
+	seqc_stage.count = 0;
 	seqc_flushNoteOffs();
 	memset(seqc_gen.draw, 0, sizeof seqc_gen.draw);
 	memset(seqc_fire.fired, 0, sizeof seqc_fire.fired);
@@ -1014,6 +1236,7 @@ static void seqc_boundary(seqc_tick_t tick)
 	seqc_queueRolls(n, pattern);
 	seqc_generateLate(n, pattern);
 	seqc_generateEarly(n, pattern);
+	seqc_queueMerge();			/* the boundary's events join the queue together */
 }
 
 //------------------------------------------------------------------------------
@@ -1522,8 +1745,9 @@ static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
 		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
 			if (seqc_fire.offPending[t])
 				seqc_consider(SEQC_ITEM_NOTE_OFF, seqc_fire.offTick[t], t, &best, tick, track);
-		if (seqc_queue.count > 0)
-			seqc_consider(SEQC_ITEM_EVENT, seqc_queue.events[seqc_queue.head].tick, 0, &best, tick, track);
+		const seqc_event_t *ev = seqc_queueFront();
+		if (ev != NULL)
+			seqc_consider(SEQC_ITEM_EVENT, ev->tick, 0, &best, tick, track);
 		seqc_consider(SEQC_ITEM_PULSE, seqc_out.nextPulse, 0, &best, tick, track);
 	}
 	return best;
@@ -1745,9 +1969,10 @@ static bool seqc_enter(void)
 	return true;
 }
 //------------------------------------------------------------------------------
-/** end of such a call */
+/** end of such a call: the choked events leave the queue (seqc_queueChoke()) */
 static void seqc_leave(void)
 {
+	seqc_queueCompact();
 	seqc_schedule();
 	seqc.busy = false;
 }
@@ -1758,6 +1983,7 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
 	memset(&seqc_trk, 0, sizeof seqc_trk);
 	memset(&seqc_gen, 0, sizeof seqc_gen);
 	memset(&seqc_queue, 0, sizeof seqc_queue);
+	memset(&seqc_stage, 0, sizeof seqc_stage);
 	memset(&seqc_fire, 0, sizeof seqc_fire);
 	memset(&seqc_out, 0, sizeof seqc_out);
 	memset(&seqc_skip, 0, sizeof seqc_skip);
@@ -2060,7 +2286,7 @@ bool seqc_isRunning(void)
 void seqc_stats(seqc_stats_t *out)
 {
 	*out = seqc.stats;
-	out->queueDepth = seqc_queue.count;
+	out->queueDepth = (uint16_t)(seqc_queue.count + seqc_stage.count);
 }
 //------------------------------------------------------------------------------
 void seqc_resetStats(void)

@@ -311,7 +311,7 @@ _Static_assert(sizeof(seqc_event_t) == 24, "seqc_event_t is 24 bytes (N2)");
 /** counters for the CPU page and the tests, see seqc_stats() */
 typedef struct seqc_stats
 {
-	uint16_t queueDepth;		/**< events queued now */
+	uint16_t queueDepth;		/**< events queued now; inside a callback it can still count events that a choke of the same call removed (N2) */
 	uint16_t queueMax;		/**< largest queue depth since seqc_init() or seqc_resetStats() */
 	uint32_t queueOverflow;		/**< events rejected because the queue was full */
 	uint32_t chokeDrops;		/**< queued events removed by the choke or the same-tick rule */
@@ -712,15 +712,22 @@ void seqc_resetStats(void);
 // Test only: the event queue of a core built with -DSEQC_QUEUE_TEST
 // (tests/test_queue.c). The firmware never defines it.
 //------------------------------------------------------------------------------
-/** queue elements written by insert, choke and skip-once since the program
- * started; seqc_init() keeps it (the tests take differences) */
+/** queue elements written since the program started: the staging and the merge
+ * of new events, and the compaction of the choke and of skip-once (N2);
+ * seqc_init() keeps it (the tests take differences) */
 extern uint32_t seqc_queueMoves;
-/** queue ev as an event generator would */
+/** queue ev on its own, as one insert outside a step boundary */
 void seqc_testQueueInsert(const seqc_event_t *ev);
+/** queue the count events of evs together, in this order, as the event
+ * generator queues the events of one step boundary */
+void seqc_testQueueInsertBatch(const seqc_event_t *evs, uint16_t count);
 /** take the next event; false if the queue is empty */
 bool seqc_testQueuePop(seqc_event_t *out);
-/** the choke of a fired event (track, absStep); returns how many were removed */
+/** the choke of a fired event (track, absStep), compacted at once; returns how
+ * many were removed */
 uint32_t seqc_testQueueChoke(uint8_t track, uint32_t absStep);
+/** the slot of the next event to fire in the queue's ring */
+uint16_t seqc_testQueueHead(void);
 #endif
 
 #endif /* SEQ_CORE_H_ */

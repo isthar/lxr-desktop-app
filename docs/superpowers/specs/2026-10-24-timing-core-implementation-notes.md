@@ -45,6 +45,67 @@ to 0.8–1.2 ms per boundary on a dense pattern. The queue becomes earliest-firs
 - the choke writes nothing when it removes nothing.
 The ordering key, the choke, the same-tick rule and the overflow behaviour are unchanged.
 
+*Amended 2026-10-25 (task E1.18): one merge per boundary.* Each new event was still inserted on its
+own, so when a boundary's events interleave with the pending ones every insert can move many of them;
+and every fire's choke compacted the queue. The E1.16 reviews measured up to 3861 element writes in one
+boundary call (a hill-climbed legal pattern, 608 of them choke compaction, about 70–90k cycles) and up
+to 448 in a call without a boundary. The queue now works as follows. It stays in `seq_core.c`, in its
+own section: there is no LTO, so a separate translation unit would turn its small functions (the key
+compare, the choke test, the front of the queue), now inlined into the processing loop, into calls.
+- **Stage.** At a step boundary the generator stages its events in a buffer instead of the ring. The
+  buffer holds the most one boundary generates, `SEQC_STAGE_SIZE` = 112 (a static assert): per track
+  one roll event, the late part of step `n` (at most 8 hits) and the early part of step `n+1` (at most
+  7 hits: the earliest is 84 ticks before its boundary, and ×8 hits are 12 ticks apart).
+- **Sort.** An index of the staged events is kept in firing order: binary search, and the indices on
+  the shorter side move, since a boundary generates the late hits of step `n` before the early hits of
+  step `n+1`, which fire first.
+- **Merge.** At the end of the boundary the staged events join the ring in one pass. The pending
+  events that fire before the first staged one stay in place, and so do those that fire after the last
+  one; of the events in between, those on the shorter side move, towards the tail (an append in the
+  common case) or towards the head. A new event is written twice (staged, merged), a moved pending event
+  once.
+- **Ties.** Of events with equal keys, the staged ones fire before the pending ones, and of the staged
+  ones the one staged last: the order of one insert per event, where the one queued last fires first.
+- **Overflow.** An event is rejected when the queue's events and the events staged before it at the
+  same boundary fill `SEQC_QUEUE_CAPACITY`. Those are exactly the events that one insert per event
+  rejects (the boundary's last ones, in the order they were generated), and they are counted in
+  `queueOverflow` the same way; `queueMax` counts the staged events.
+- **Choke.** A fire records its choke: per track, the absolute step below which the track's queued
+  events are removed. Such an event is dropped when it reaches the head. The others are compacted once,
+  before the next event is staged and at the end of the call, from the nearer end: the kept events
+  after the first removed one move towards the head, or those before the last removed one towards the
+  tail, whichever are fewer. A choke that removes nothing writes nothing. `chokeDrops` and `queueDepth`
+  are as before between calls; inside a callback `queueDepth` can still count events that a choke of
+  the same call removed.
+- **Skip-once** removes its hits the same way, after the recorded chokes and the staged events (it
+  can be called from a callback).
+- **Single inserts.** The core queues nothing outside a boundary (the one-shot roll stays in
+  `seq_setRoll()`), so there is no separate single insert; the test hook queues one event as a batch of
+  one.
+- **Measured** (element writes per `seqc_process()` call; the boundary calls, then the others; 16 to 32
+  steps at 120, 130 and 300 BPM with a call every 0.1, 1 or 3 ms; `tests/test_queue.c`):
+
+  | Pattern | E1.16 queue | E1.18 queue |
+  |---|---|---|
+  | ×8 on every track, shift +7 or 0 | 644 or 410, 0 | 112, 0 |
+  | ×8, shift +7/−7, shuffle 127 | 1194, 168 | 210, 0 |
+  | ×8, shift −7/+7, shuffle 127 | 543, 217 | 140, 0 |
+  | ×8, shift +7/+7, shuffle 127 | 1077, 448 | 147, 28 |
+  | the hill-climbed pattern | 3861, 289 | 330, 43 |
+  | random ±7 shifts, ×8, shuffle 127, 200 seeds | 1691, 229 | 240, 76 |
+
+- **Cycles** (estimated from the firmware disassembly: a copy is a 4+2-word LDM/STM pair, about 30
+  cycles a write with its loop and compare; a key compare about 12; an index shift about 4, through
+  newlib-nano's byte `memmove`). The worst boundary call, of the hill-climbed pattern, has 330 writes,
+  816 compares and 1894 index shifts: about 28k cycles, 9% of the 313 186-cycle block budget (N12),
+  against about 70–90k. A dense ×8 boundary with every track on one grid costs about 8k.
+- **Size** (`seq_core.c.obj`, the firmware compile command, Arm GNU 14.3.rel1): bss 8269 → 11221 B
+  (+2952: the staging buffer 2688 B and its index 224 B, the recorded chokes 32 B), text 20178 →
+  20090 B. Review row R6.2 must allow it, as for N20 and N21.
+- Tests check the order and the rejects against a reference model (batches into a nearly full queue)
+  and against fire logs recorded from the E1.16 queue (random patterns, settings and recorded notes,
+  with the firmware's queue and a 16-entry one).
+
 ## N3. Early and late parts instead of removing and regenerating
 
 The spec regenerates step `n` at its boundary by removing its pending on-time events and generating

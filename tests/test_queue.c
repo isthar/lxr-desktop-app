@@ -1,13 +1,19 @@
 /*
  * test_queue.c
  *
- * The event queue (N2, amended for task E1.16): firing order, a full queue, and
- * its real-time cost, counted as the queue elements it writes.
+ * The event queue (N2, amended for tasks E1.16 and E1.18): firing order, a full
+ * queue, and its real-time cost, counted as the queue elements it writes.
  *
  * This file runs against a copy of the core built with -DSEQC_QUEUE_TEST
  * (seq_core_queue_test in tests/CMakeLists.txt). That copy counts the elements
  * the queue writes in seqc_queueMoves and lets the tests insert, pop and choke
  * directly (the test-only block at the end of seq_core.h).
+ *
+ * Task E1.18 queues the events of a step boundary together, in one merge. The
+ * tests here check that it gives the order and the rejects of one insert per
+ * event, against the reference model and against fire logs recorded from the
+ * E1.16 queue, and that one seqc_process() call writes at most about 400
+ * elements.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -17,6 +23,7 @@
  * the repository.
  */
 #include "fake_host.h"
+#include "queue_equiv.h"
 #include "seqc_test.h"
 
 #define CAPACITY ((int)SEQC_QUEUE_SIZE)	/* seq_core_queue_test keeps the firmware's queue */
@@ -250,8 +257,152 @@ TEST(queue_full_wraps_over_many_cycles)
 	}
 }
 
+
+/* As runAgainstReference(), with the inserts in batches of 1 to maxBatch events,
+ * queued together as the events of one step boundary are, and the pops in runs
+ * of 1 to maxBatch. Ticks reach a few ticks before the latest pending ones, so a
+ * batch interleaves with them. A batch longer than the free space is cut as
+ * single inserts would cut it: its last events are rejected. Returns the number
+ * of rejected inserts. */
+static long runBatchesAgainstReference(uint64_t seed, int ops, uint32_t insertPercent, int maxBatch)
+{
+	static seqc_event_t batch[2 * CAPACITY];
+	fake_init();
+	lcgState = seed;
+	refCount = 0;
+	long rejected = 0;
+	uint32_t seq = 0;
+	seqc_tick_t base = 100;
+	for (int i = 0; i < ops; i++)
+	{
+		const int n = 1 + (int)(lcg() % (uint32_t)maxBatch);
+		if (lcg() % 100u < insertPercent)
+		{
+			for (int k = 0; k < n; k++)
+			{
+				base += lcg() % 2u;
+				const seqc_tick_t tick = base + (seqc_tick_t)(lcg() % 12u) - 6;
+				const uint32_t absStep = lcg() % 4u;
+				const bool roll = lcg() % 4u == 0;
+				const uint8_t track = (uint8_t)(lcg() % SEQC_NUM_TRACKS);
+				batch[k] = event(tick, absStep, roll, track, (uint16_t)seq);
+				if (refCount < CAPACITY)
+					ref[refCount++] = (ref_entry_t){ batch[k], seq };
+				else
+					rejected++;
+				seq++;
+			}
+			seqc_testQueueInsertBatch(batch, (uint16_t)n);
+		}
+		else
+		{
+			for (int k = 0; k < n && refCount > 0; k++)
+			{
+				const seqc_event_t want = refPop();
+				seqc_event_t ev;
+				if (!seqc_testQueuePop(&ev) || memcmp(&ev, &want, sizeof ev) != 0)
+				{
+					printf("seed %llu, op %d: the pop differs from the reference\n", (unsigned long long)seed, i);
+					return -1;
+				}
+			}
+		}
+		const seqc_stats_t s = stats();
+		if (s.queueDepth != refCount || s.queueOverflow != (uint32_t)rejected)
+		{
+			printf("seed %llu, op %d: depth %u (want %d), overflow %u (want %ld)\n", (unsigned long long)seed,
+					i, (unsigned)s.queueDepth, refCount, (unsigned)s.queueOverflow, rejected);
+			return -1;
+		}
+	}
+	while (refCount > 0)
+	{
+		const seqc_event_t want = refPop();
+		seqc_event_t ev;
+		if (!seqc_testQueuePop(&ev) || memcmp(&ev, &want, sizeof ev) != 0)
+		{
+			printf("seed %llu, drain: the pop differs from the reference\n", (unsigned long long)seed);
+			return -1;
+		}
+	}
+	seqc_event_t ev;
+	if (seqc_testQueuePop(&ev))
+		return -1;
+	return rejected;
+}
+
+/* batches of the size of a boundary's events (up to 112, see seq_core.c),
+ * with ties and interleaving, in the order of single inserts; the queue is
+ * mostly below its capacity */
+TEST(queue_batches_match_the_reference_sort)
+{
+	for (uint64_t seed = 1; seed <= 40; seed++)
+		ASSERT_TRUE(runBatchesAgainstReference(seed, 400, 30, 112) >= 0);
+}
+
+/* batches into a nearly full queue, also longer than the free space and than a
+ * boundary's events: the rejects of single inserts */
+TEST(queue_batches_full_reject_as_single_inserts)
+{
+	for (uint64_t seed = 1; seed <= 20; seed++)
+	{
+		const long rejected = runBatchesAgainstReference(seed, 400, 60, 2 * CAPACITY);
+		ASSERT_TRUE(rejected > CAPACITY);
+		ASSERT_EQ(stats().queueMax, CAPACITY);
+	}
+}
+
+/* The fire log of random runs of the core (queue_equiv.c) is the one recorded
+ * from the E1.16 queue, which queued every event on its own: tick, track, step,
+ * hit, flags and the rest of each event, and the final counters. test_overflow.c
+ * has the same test with a 16-entry queue, which also checks the rejects. */
+static const uint64_t equivHashes[] = {
+	0xc88d09ec0ce0fecfull,	0xbdf5f754b3336e85ull,	0xfc49d78014a89d21ull,
+	0xbd8f086c93050ff5ull,	0xf4c34b6647a2b52cull,	0x6544d8dfeb091873ull,
+	0xe8e767f7ccabb99eull,	0xe7923f3eee302450ull,	0x289cc3469a5621feull,
+	0x093d3e104f2a7b68ull,	0x8881a84af9bfc4c5ull,	0xfeb61d65b12264f6ull,
+	0x0cceb370bfbb9a19ull,	0xfbc30cad8a59682dull,	0x8c839aa36983add7ull,
+	0xb4db143156fb78daull,	0xe784ec5d43c1cc92ull,	0x1ac113a22ffa9651ull,
+	0xb4e9b6b2b3bd7044ull,	0x9e5c6487047640b3ull,	0x1c7062ca8e3a16e6ull,
+	0xf3ba113fc39efc20ull,	0x7fe3ca60e9d6480cull,	0x1b39377a33c32feaull,
+	0x26077b0b2d2fd2afull,	0x07da10be753e4ad8ull,	0x7a1d38198d154f24ull,
+	0x88bed0f2c558d8bfull,	0x4bfad26283d54ceeull,	0xca71a59002c872f8ull,
+	0x0a8b8875b09e5ac7ull,	0x1e89a072e183cb06ull,	0x51e77d1e2a744130ull,
+	0x64a4540b81f8e0f1ull,	0x6ff92e55dfe5d0b7ull,	0xcc54fc6c6ca3b7c4ull,
+	0x429e6155d053c769ull,	0x0f9c9510a7eea257ull,	0xd5c997cd8e65d530ull,
+	0x4d889b9990bcf84full,	0xab55b15955735ff8ull,	0x2ea843906db534daull,
+	0x34c81af849b8cacfull,	0xf337f4af5a2df734ull,	0x68af72ae5dbf49ccull,
+	0x764a5f0e579ea92cull,	0xe551edcb28bb1991ull,	0xf0d1ec49ad2497a9ull,
+	0x804eefb8c5f5739bull,	0xa0a3e86dbb9d71c3ull,	0xc0696e277338e470ull,
+	0xa1590d1bcb632ad2ull,	0x5db30a7933d1077eull,	0x843d566ef1f44740ull,
+	0xe6bdba17131f68deull,	0x6adcad187402b621ull,	0x4f05c35195a374f7ull,
+	0xe52910a169ce3e6cull,	0xbfb3f10b1d64a3a0ull,	0x16136287a312bdafull,
+	0xd8893efc4245ae7full,	0x5a34dc15c6a65b72ull,	0x8d01a039d53f4b83ull,
+	0x60546a023af826a8ull,
+};
+
+TEST(queue_fire_log_matches_the_per_event_inserts)
+{
+	const size_t n = sizeof equivHashes / sizeof equivHashes[0];
+	uint32_t skips = 0, chokes = 0;
+	for (size_t i = 0; i < n; i++)
+	{
+		seqc_stats_t s;
+		const uint64_t got = queue_equivRun(i + 1, &s);
+		if (got != equivHashes[i])
+			printf("seed %zu: hash 0x%016llx, recorded 0x%016llx\n", i + 1, (unsigned long long)got,
+					(unsigned long long)equivHashes[i]);
+		ASSERT_TRUE(got == equivHashes[i]);
+		ASSERT_EQ(s.queueOverflow, 0);
+		skips += s.skipDrops;
+		chokes += s.chokeDrops;
+	}
+	ASSERT_TRUE(skips > 0);
+	ASSERT_TRUE(chokes > 0);
+}
+
 //------------------------------------------------------------------------------
-// Real-time cost (the E1 final review)
+// Real-time cost (the E1 final review, task E1.18)
 //------------------------------------------------------------------------------
 /* One seqc_process() call: the queue elements it wrote, the events it queued
  * (what is pending now, plus what left the queue: triggered, muted, or dropped
@@ -279,6 +430,36 @@ static call_t processCall(fake_host_t *h, seqc_time_t now)
 	return c;
 }
 
+/* The most queue elements one call writes, for calls with a step boundary and
+ * calls without one (they fire events, and their choke compacts the queue) */
+typedef struct
+{
+	uint32_t	boundary;
+	uint32_t	other;
+	size_t		boundaries;
+} cost_t;
+
+/* seqc_process() every intervalMs for steps steps at bpm (seqc_setTempo() is
+ * the caller's) */
+static cost_t runCost(fake_host_t *h, double bpm, double intervalMs, int steps)
+{
+	cost_t c = { 0, 0, 0 };
+	const seqc_time_t until = h->now + (seqc_time_t)(steps * fake_stepCycles(bpm));
+	for (seqc_time_t t = h->now; t < until; t += fake_msToCycles(intervalMs))
+	{
+		const call_t k = processCall(h, t);
+		uint32_t *max = k.boundaries > 0 ? &c.boundary : &c.other;
+		if (k.moves > *max)
+			*max = k.moves;
+		c.boundaries += k.boundaries;
+	}
+	return c;
+}
+
+/* The goal of task E1.18 for every call, with a boundary or not. The bounds
+ * below are the measured writes, all within it. */
+#define CALL_MOVES_GOAL	400
+
 /* The review's dense pattern: 7 tracks, every step x8 (flam 5), the odd steps
  * shifted by `odd` units, the even ones by `even` units, and shuffle `shuffle`.
  * The callers run 16 steps at 120 BPM, one seqc_process() every 0.1 ms. */
@@ -303,71 +484,75 @@ static fake_host_t *startDense(int8_t shift)
 	return startDenseShuffled(shift, shift, 0);
 }
 
-/* The core generates a boundary's hits track by track. With every track on the
- * same grid, hit j of track t orders before hits j+1..7 of tracks 0..t-1, so a
- * shift towards the tail alone would move t * (7 - j) of the new events:
- * C(7,2) * C(8,2) = 588 in all. Inserting from the nearer end moves at most that
- * (354 without shift). With shift +7 the 49 events still pending from the step
- * before fire before every new one and the tail is always the nearer end, so
- * they do not move; with smaller positive shifts the head-side shift can move
- * them (shift +3: 615 writes, within the 644 of the first case). */
-#define DENSE_NEW_EVENT_MOVES		(21 * 28)
-#define DENSE_NEW_EVENT_MOVES_NO_SHIFT	354
-
-/* With shuffle, or shifts that alternate between odd and even steps, a step's
- * hits interleave with those still pending from the step before, and a
- * boundary queues up to 105 events. The bounds are the writes measured with
- * the two-ended insert; a tail-only insert writes 3878, 1414 and 1379. */
+/* A boundary writes each new event twice, staged and merged, and moves the
+ * pending events on the shorter side of the merge once. With every track on
+ * the same grid, its 56 events come after every pending one: 112 writes (the
+ * E1.16 queue: 644 with shift +7, 410 without). With shuffle, or shifts that
+ * alternate between odd and even steps, a step's hits interleave with those
+ * still pending from the step before, and a boundary queues up to 105 events:
+ * 210 writes (E1.16: 1194). The calls without a boundary compact the choked
+ * events once, from the nearer end (E1.16: 168, 217 and 448, where every fire's
+ * choke compacted most of the queue). */
 typedef struct
 {
 	int8_t		odd;		/**< the shift of the odd steps */
 	int8_t		even;		/**< the shift of the even steps */
 	uint8_t		shuffle;
-	uint32_t	maxMoves;	/**< the most queue elements one boundary call writes */
+	uint32_t	maxBoundary;	/**< the most queue elements one call with a boundary writes */
+	uint32_t	maxOther;	/**< the same for the calls without a boundary */
 } dense_case_t;
 
 static const dense_case_t denseCases[] = {
-	{ +7, +7,   0, SEQC_NUM_TRACKS * 8 + DENSE_NEW_EVENT_MOVES },	/* a step's hits still pending at the next boundary */
-	{  0,  0,   0, SEQC_NUM_TRACKS * 8 + DENSE_NEW_EVENT_MOVES_NO_SHIFT },	/* tail-only: 644 */
-	{ +7, -7, 127, 1194 },	/* tail-only: 3878 */
-	{ -7, +7, 127,  543 },	/* tail-only: 1414 */
-	{ +7, +7, 127, 1077 },	/* tail-only: 1379 */
+	{ +7, +7,   0, 2 * SEQC_NUM_TRACKS * 8, 0 },	/* a step's hits still pending at the next boundary */
+	{  0,  0,   0, 2 * SEQC_NUM_TRACKS * 8, 0 },
+	{ +7, -7, 127, 210,  0 },
+	{ -7, +7, 127, 140,  0 },
+	{ +7, +7, 127, 147, 28 },
 };
 
-static void denseBoundaryMovesAreBounded(const dense_case_t *dc)
+static void denseMovesAreBounded(const dense_case_t *dc)
 {
 	fake_host_t *h = startDenseShuffled(dc->odd, dc->even, dc->shuffle);
 	const bool lockstep = dc->odd == dc->even && dc->shuffle == 0;
 	const seqc_time_t until = (seqc_time_t)(16.0 * fake_stepCycles(120.0));
 	size_t boundaries = 0;
+	uint32_t maxBoundary = 0, maxOther = 0;
 	for (seqc_time_t t = 0; t < until; t += fake_msToCycles(0.1))
 	{
 		const call_t c = processCall(h, t);
 		if (c.boundaries == 0)
+		{
+			if (c.moves > maxOther)
+				maxOther = c.moves;
 			continue;
+		}
 		ASSERT_EQ(c.boundaries, 1);
 		if (lockstep)
 			ASSERT_EQ(c.inserted, SEQC_NUM_TRACKS * 8);
-		ASSERT_TRUE(c.moves <= dc->maxMoves);
+		if (c.moves > maxBoundary)
+			maxBoundary = c.moves;
 		boundaries++;
 	}
+	ASSERT_TRUE(maxBoundary <= dc->maxBoundary);
+	ASSERT_TRUE(maxOther <= dc->maxOther);
 	ASSERT_EQ(boundaries, 16);
 	ASSERT_TRUE(stats().queueMax >= SEQC_NUM_TRACKS * 8);
 	ASSERT_EQ(stats().queueOverflow, 0);
 	ASSERT_EQ(h->errors, 0);
 }
 
-TEST(queue_dense_boundary_moves_are_bounded)
+TEST(queue_dense_moves_are_bounded)
 {
 	for (size_t i = 0; i < sizeof denseCases / sizeof denseCases[0]; i++)
-		denseBoundaryMovesAreBounded(&denseCases[i]);
+		denseMovesAreBounded(&denseCases[i]);
 }
 
-/* A worst case found by a hill climb over legal settings (the E1.16 review):
- * every step on, per-step shift and flam, roll rates, shuffle 0. Its boundary
- * calls write up to 3861 queue elements (5977 with a tail-only insert) and
- * queue up to 111 events; other calls write up to 289. This is the pattern to
- * give the CPU meter (H12). The bounds are measured, not derived. */
+/* A worst case of the E1.16 queue, found by a hill climb over legal settings
+ * (the E1.16 review, "climbed2"): every step on, per-step shift and flam, roll
+ * rates, shuffle 0. Its boundary calls queue up to 111 events. At 120, 130 and
+ * 300 BPM, with a call every 0.1, 1 or 3 ms, they write up to 330 queue
+ * elements (the E1.16 queue: 3861, 608 of them choke compaction), and the other
+ * calls up to 43 (E1.16: 289). This is the pattern to give the CPU meter (H12). */
 static const int8_t adversarialShift[SEQC_NUM_TRACKS][16] = {
 	{ -3, -3, -4, -3, +1, -6, +5, +6, +6, -7, +1, +5, +3, +4, -2, -6 },
 	{ +3, +1, +5, +7, -4, -2, -5, +7, +6, -6, +4, +2, +5, -3, +2, +1 },
@@ -388,41 +573,85 @@ static const uint8_t adversarialFlam[SEQC_NUM_TRACKS][16] = {
 };
 static const uint8_t adversarialRoll[SEQC_NUM_TRACKS] = { 1, 8, 8, 4, 4, 4, 4 };
 
-#define ADVERSARIAL_BOUNDARY_MOVES	3861
-#define ADVERSARIAL_OTHER_MOVES		289
+#define ADVERSARIAL_BOUNDARY_MOVES	330
+#define ADVERSARIAL_OTHER_MOVES		43
+
+/* the tempos and call intervals the cost tests run at */
+static const double costBpms[] = { 120.0, 130.0, 300.0 };
+static const double costIntervalsMs[] = { 0.1, 1.0, 3.0 };
 
 TEST(queue_adversarial_pattern_cost_is_bounded)
 {
-	fake_host_t *h = fake_init();
-	h->logMask = 0;
-	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
-	{
-		h->rollRate[t] = adversarialRoll[t];
-		for (uint8_t s = 0; s < 16; s++)
+	uint32_t maxBoundary = 0, maxOther = 0;
+	for (size_t b = 0; b < 3; b++)
+		for (size_t k = 0; k < 3; k++)
 		{
-			fake_setStep(h, 0, t, s, true);
-			fake_setTiming(h, 0, t, s, adversarialFlam[t][s], adversarialShift[t][s]);
+			fake_host_t *h = fake_init();
+			h->logMask = 0;
+			for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+			{
+				h->rollRate[t] = adversarialRoll[t];
+				for (uint8_t s = 0; s < 16; s++)
+				{
+					fake_setStep(h, 0, t, s, true);
+					fake_setTiming(h, 0, t, s, adversarialFlam[t][s], adversarialShift[t][s]);
+				}
+			}
+			fake_process(h, 0);
+			seqc_setTempo((float)costBpms[b]);
+			seqc_start();
+			const cost_t c = runCost(h, costBpms[b], costIntervalsMs[k], 32);
+			ASSERT_TRUE(c.boundaries >= 31);
+			if (c.boundary > maxBoundary)
+				maxBoundary = c.boundary;
+			if (c.other > maxOther)
+				maxOther = c.other;
+			ASSERT_EQ(stats().queueOverflow, 0);
+			ASSERT_EQ(h->errors, 0);
 		}
-	}
-	fake_process(h, 0);
-	seqc_start();
-	const seqc_time_t until = (seqc_time_t)(16.0 * fake_stepCycles(120.0));
-	size_t boundaries = 0;
-	for (seqc_time_t t = 0; t < until; t += fake_msToCycles(0.1))
+	ASSERT_TRUE(maxBoundary <= ADVERSARIAL_BOUNDARY_MOVES);
+	ASSERT_TRUE(maxOther <= ADVERSARIAL_OTHER_MOVES);
+}
+
+/* The review's random patterns: every step x8 with a random shift of -7..+7
+ * units, shuffle 127, over many seeds, at the tempos and call intervals above.
+ * Boundary calls write up to 240 queue elements and the other calls up to 76
+ * (the E1.16 queue: 1691 and 229 for these seeds; the E1.16 review saw up to
+ * 2211 in boundary calls with its own seeds). */
+#define RANDOM_SEEDS			200
+#define RANDOM_BOUNDARY_MOVES		240
+#define RANDOM_OTHER_MOVES		76
+
+TEST(queue_random_shifts_cost_is_bounded)
+{
+	uint32_t maxBoundary = 0, maxOther = 0;
+	for (uint64_t seed = 1; seed <= RANDOM_SEEDS; seed++)
 	{
-		const call_t c = processCall(h, t);
-		if (c.boundaries == 0)
-		{
-			ASSERT_TRUE(c.moves <= ADVERSARIAL_OTHER_MOVES);
-			continue;
-		}
-		ASSERT_EQ(c.boundaries, 1);
-		ASSERT_TRUE(c.moves <= ADVERSARIAL_BOUNDARY_MOVES);
-		boundaries++;
+		fake_host_t *h = fake_init();
+		h->logMask = 0;
+		h->shuffle = 127;
+		lcgState = seed;
+		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+			for (uint8_t s = 0; s < 16; s++)
+			{
+				fake_setStep(h, 0, t, s, true);
+				fake_setTiming(h, 0, t, s, 5, (int8_t)((int)(lcg() % 15u) - 7));
+			}
+		const double bpm = costBpms[seed % 3];
+		fake_process(h, 0);
+		seqc_setTempo((float)bpm);
+		seqc_start();
+		const cost_t c = runCost(h, bpm, costIntervalsMs[(seed / 3) % 3], 32);
+		ASSERT_TRUE(c.boundaries >= 31);
+		if (c.boundary > maxBoundary)
+			maxBoundary = c.boundary;
+		if (c.other > maxOther)
+			maxOther = c.other;
+		ASSERT_EQ(stats().queueOverflow, 0);
+		ASSERT_EQ(h->errors, 0);
 	}
-	ASSERT_EQ(boundaries, 16);
-	ASSERT_EQ(stats().queueOverflow, 0);
-	ASSERT_EQ(h->errors, 0);
+	ASSERT_TRUE(maxBoundary <= RANDOM_BOUNDARY_MOVES);
+	ASSERT_TRUE(maxOther <= RANDOM_OTHER_MOVES);
 }
 
 /* fires that remove nothing write nothing */
@@ -458,19 +687,55 @@ TEST(queue_choke_without_removal_moves_nothing)
 		const seqc_event_t ev = event(1000 + i, (uint32_t)(5 + i % 2), false, (uint8_t)(i % 3), (uint16_t)i);
 		seqc_testQueueInsert(&ev);
 	}
-	uint32_t m0 = seqc_queueMoves;
+	const uint32_t m0 = seqc_queueMoves;
 	ASSERT_EQ(seqc_testQueueChoke(0, 5), 0);	/* track 0 has absSteps 5 and 6 */
 	ASSERT_EQ(seqc_testQueueChoke(1, 5), 0);
 	ASSERT_EQ(seqc_testQueueChoke(5, 99), 0);	/* no events of track 5 */
 	ASSERT_EQ(seqc_queueMoves - m0, 0);
 	ASSERT_EQ(stats().queueDepth, 10);
+}
 
-	/* a removal writes only the kept events after the first removed one: of
-	 * track 1 (i = 1, 4, 7), only i = 4 is at absStep 5, so i = 5..9 move */
+/* A choke compacts the queue from the end nearer to the removed events, so it
+ * writes at most the shorter side. Ten events i = 0..9 with the start of the
+ * queue moved on so that they wrap; i = 1 and i = 8 are of tracks 0 and 1 at
+ * absStep 5, the others of track 2. */
+TEST(queue_choke_compacts_from_the_nearer_end)
+{
+	fake_init();
+	for (int i = 0; i < CAPACITY - 4; i++)
+	{
+		const seqc_event_t ev = event(i, 0, false, 6, 0);
+		seqc_testQueueInsert(&ev);
+		seqc_event_t out;
+		ASSERT_TRUE(seqc_testQueuePop(&out));
+	}
+	for (int i = 0; i < 10; i++)
+	{
+		const uint8_t track = i == 1 ? 0 : i == 8 ? 1 : 2;
+		const seqc_event_t ev = event(1000 + i, 5, false, track, (uint16_t)i);
+		seqc_testQueueInsert(&ev);
+	}
+	uint32_t m0 = seqc_queueMoves;
+	ASSERT_EQ(seqc_testQueueChoke(0, 6), 1);	/* i = 1: i = 0 moves, not i = 2..9 */
+	ASSERT_EQ(seqc_queueMoves - m0, 1);
 	m0 = seqc_queueMoves;
+	ASSERT_EQ(seqc_testQueueChoke(1, 6), 1);	/* i = 8: i = 9 moves */
+	ASSERT_EQ(seqc_queueMoves - m0, 1);
+	m0 = seqc_queueMoves;
+	ASSERT_EQ(seqc_testQueueChoke(2, 6), 8);	/* all the rest: nothing is kept */
+	ASSERT_EQ(seqc_queueMoves - m0, 0);
+	ASSERT_EQ(stats().queueDepth, 0);
+
+	/* the same ten again; the kept events stay in order */
+	for (int i = 0; i < 10; i++)
+	{
+		const uint8_t track = i == 1 ? 0 : i == 8 ? 1 : 2;
+		const seqc_event_t ev = event(1000 + i, 5, false, track, (uint16_t)i);
+		seqc_testQueueInsert(&ev);
+	}
+	ASSERT_EQ(seqc_testQueueChoke(0, 6), 1);
 	ASSERT_EQ(seqc_testQueueChoke(1, 6), 1);
-	ASSERT_EQ(seqc_queueMoves - m0, 5);
-	const int kept[] = { 0, 1, 2, 3, 5, 6, 7, 8, 9 };
+	const int kept[] = { 0, 2, 3, 4, 5, 6, 7, 9 };
 	for (size_t k = 0; k < sizeof kept / sizeof kept[0]; k++)
 	{
 		seqc_event_t ev;
@@ -486,10 +751,11 @@ TEST(queue_choke_without_removal_moves_nothing)
  * (an early hit 24 ticks before the step, a late one 24 after). At phase 0.52 of
  * step 3 of each pattern cycle the queue holds track 0's hits at +60, +72 and +84
  * and track 4's early hit, which orders before track 0's +72 (absStep
- * descending). Skip-once removes it and moves only track 0's last two. At these
- * removals the start of the queue is in slots 29, 217, 149, 81, 13, 201, 133, 65,
- * 253, ...: it wraps, and at 253 the kept events straddle the array's end. */
-#define SKIP_CYCLES	12
+ * descending). Skip-once removes it from the nearer end, so only track 0's +60
+ * moves. The boundary merges move the start of the queue back 47 slots per cycle:
+ * at these removals it is in slots 29, 238, 191, ..., 24, 233, ..., 45, 254. It
+ * wraps, and at 254, the 18th, the kept events straddle the array's end. */
+#define SKIP_CYCLES	18
 
 static void runToTick(fake_host_t *h, double tick)
 {
@@ -517,15 +783,20 @@ TEST(queue_skip_once_with_a_moved_head)
 	fake_setTiming(h, 0, 4, 4, 1, -2);
 	fake_process(h, 0);
 	seqc_start();
+	int straddles = 0;
 	for (int k = 0; k < SKIP_CYCLES; k++)
 	{
 		runToTick(h, (16 * k + 3) * 96 + 50);
 		const uint32_t m0 = seqc_queueMoves;
 		const unsigned d0 = stats().queueDepth;
+		const unsigned head = seqc_testQueueHead();
+		ASSERT_TRUE(head != 0);				/* the start of the queue has moved */
+		straddles += head + d0 > CAPACITY;		/* the kept events cross the array's end */
 		fake_addNote(h, 4, 100, 64);			/* skip-once of track 4, step 4 */
 		ASSERT_EQ(stats().queueDepth, d0 - 1);
-		ASSERT_EQ(seqc_queueMoves - m0, 2);
+		ASSERT_EQ(seqc_queueMoves - m0, 1);
 	}
+	ASSERT_TRUE(straddles > 0);
 	runToTick(h, (16 * SKIP_CYCLES - 1) * 96 - 1);
 	const fake_rec_t *trig[1];
 	ASSERT_EQ(fake_triggers(h, 4, trig, 1), 0);	/* track 4 plays none of its hits */

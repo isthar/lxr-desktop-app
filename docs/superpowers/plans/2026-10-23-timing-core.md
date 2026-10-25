@@ -13381,7 +13381,7 @@ pending ones, every insert can shift many elements.
   per-boundary merge). Do not edit the other notes.
 
 **Steps (TDD):**
-- [ ] **Step 1: Failing cost tests.** Use the reviewer's patterns, the climbed pattern from
+- [x] **Step 1: Failing cost tests.** Use the reviewer's patterns, the climbed pattern from
   `/private/tmp/claude-501/-Users-tk-Code-lxr/96b76bdc-1e78-46dc-a0e8-44d89ec424a5/scratchpad/e116rev/mut/tests/probe_eval.c`
   (climbed2) and random ±7 per-step shifts with ×8 and shuffle 127 over many seeds of a local LCG. Turn
   them into cost tests with the test-only write counter:
@@ -13389,24 +13389,24 @@ pending ones, every insert can shift many elements.
   - choke compaction from the nearer end;
   - fires that remove nothing write 0.
   Show they fail on the current code.
-- [ ] **Step 2: Order and overflow equivalence tests.**
+- [x] **Step 2: Order and overflow equivalence tests.**
   - For many seeded random patterns, settings and capacities (the `SEQC_QUEUE_CAPACITY` knob), the new
     queue produces exactly the same fire sequence as the current one: tick, track, step, hit, flags,
     and the overflow counts.
   - Build the reference by recording the current core's fire log in the test, or from a reference
     model in the test.
-- [ ] **Step 3: Implement** the staging, sort, merge and nearer-end choke. Keep every existing test
+- [x] **Step 3: Implement** the staging, sort, merge and nearer-end choke. Keep every existing test
   green.
-- [ ] **Step 4: Measure and report:**
+- [x] **Step 4: Measure and report:**
   - the maximum writes per boundary call, before and after, for all the patterns (typical and
     adversarial);
   - a cycle estimate from the disassembly, checking the real instruction mix: 4+2-word LDM/STM per
     copy;
   - the bss and text size of `seq_core.c.obj` with the firmware compile command.
-- [ ] **Step 5: Amend N2's note** with the per-boundary merge and the measured bound, and keep CRLF in
+- [x] **Step 5: Amend N2's note** with the per-boundary merge and the measured bound, and keep CRLF in
   `Core/` files.
-- [ ] **Step 6: Run `tools/check.sh`:** 0 warnings.
-- [ ] **Step 7: Commit** with an explicit file list. Message: "seq_core: merge a boundary's events into
+- [x] **Step 6: Run `tools/check.sh`:** 0 warnings.
+- [x] **Step 7: Commit** with an explicit file list. Message: "seq_core: merge a boundary's events into
   the queue in one pass (E1.18)", with the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 ---
