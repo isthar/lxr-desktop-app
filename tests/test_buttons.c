@@ -39,6 +39,7 @@ static uint8_t trackLength[NUM_TRACKS];	/* seq_setTrackLength() / seq_getTrackLe
 static int setTrackLengthCalls;
 static int toggleMainStepCalls;
 static int updateSeqLedsCalls;
+static int switchSubPageCalls;
 static uint8_t blinking[256];		/* led_setBlinkLed() per LED number */
 
 //------------------------------------------------------------------------------
@@ -89,7 +90,7 @@ void seq_setSongModeEnabled(uint8_t onOff) { (void)onOff; }
 PatternSet *get_seq_patternSet_p(void) { return &seq_patternSet; }
 
 void menu_switchPage(uint8_t pageNr) { menu_activePage = pageNr; }
-void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle) { (void)subPageNr; (void)toggle; }
+void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle) { (void)subPageNr; (void)toggle; switchSubPageCalls++; }
 uint8_t menu_getSubPage(void) { return 0; }
 uint8_t menu_getActivePage(void) { return menu_activePage; }
 uint8_t menu_getActiveVoice(void) { return menu_activeVoice; }
@@ -155,6 +156,7 @@ static void reset(void)
 	setTrackLengthCalls = 0;
 	toggleMainStepCalls = 0;
 	updateSeqLedsCalls = 0;
+	switchSubPageCalls = 0;
 	menu_activePage = VOICE1_PAGE;
 	menu_activeVoice = 0;
 	menu_activeBar = 0;
@@ -233,6 +235,7 @@ TEST(buttons_global_menu_other_buttons_stay_in_the_menu)
 	pressWith(BUT_SHIFT, BUT_SEQ12);
 	press(BUT_SELECT1);			/* select buttons do nothing here */
 	ASSERT_EQ(menu_activePage, MENU_MIDI_PAGE);
+	ASSERT_EQ(switchSubPageCalls, 0);
 	press(BUT_VOICE_3);			/* a voice button selects the voice, the menu stays */
 	ASSERT_EQ(menu_activeVoice, 2);
 	ASSERT_EQ(menu_activePage, MENU_MIDI_PAGE);
