@@ -206,7 +206,7 @@
 #define SEQC_TEMPO_LONG_WINDOW      96u   /**< long window of the tempo fit, clocks: MIDI clock, jack at 24 PPQ (N21) */
 #define SEQC_TEMPO_LONG_WINDOW_4PPQ  4u   /**< long window of the tempo fit, clocks: jack at 4 PPQ (the short one) */
 #define SEQC_TEMPO_OUTLIER_PCT      50u   /**< a clock off the fitted line by more than this share of a clock is an outlier */
-#define SEQC_TEMPO_JOIN_MS           2u   /**< a MIDI clock less than this after an open or left-out transfer joins it (see Slave position) */
+#define SEQC_TEMPO_JOIN_MS           2u   /**< a MIDI clock less than this after the last transfer joins it (see Slave position) */
 #define SEQC_TEMPO_RESTART           4u   /**< outliers in a row on one side that restart the estimate (N16) */
 #define SEQC_TEMPO_RESTART_4PPQ      2u   /**< the same for the jack at 4 PPQ */
 #define SEQC_DROPOUT_MS            500u   /**< the shortest dropout time; slow clocks get longer (N15) */
@@ -518,15 +518,17 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *   once it is complete, at the next clock with a later stamp, the next other
  *   sync event or the next seqc_process(), so seqc_currentBpm() includes the
  *   clocks given to seqc_syncEvent() from the next seqc_process() on.
- * - A MIDI clock less than SEQC_TEMPO_JOIN_MS after the newest stamp of a
- *   transfer joins it if that transfer is still open, or was evaluated and left
- *   out as an outlier; the transfer then takes the clock's later stamp. So a
- *   burst of clocks forwarded back to back (a DIN interface sends one 0xF8 per
- *   0.32 ms) is one transfer, even when the core sees its clocks one by one.
- *   For a transfer left out, the fit goes back to before it, and
- *   intervalsExcluded does not count it. A transfer that went into the fit or
- *   restarted it takes no more clocks, and neither does one followed by another
- *   sync event.
+ * - A MIDI clock less than SEQC_TEMPO_JOIN_MS after the newest stamp of the
+ *   last transfer joins it, whether that transfer is still open or was
+ *   evaluated (left out as an outlier, or in the fit); the transfer then takes
+ *   the clock's later stamp. So a burst of clocks forwarded back to back (a DIN
+ *   interface sends one 0xF8 per 0.32 ms) is one transfer, even when the core
+ *   sees its clocks one by one, also among the first clocks of the fit, which
+ *   are not tested. For a transfer already evaluated, the fit goes back to
+ *   before it, and intervalsExcluded does not count it; until the next clock
+ *   joins it, for less than SEQC_TEMPO_JOIN_MS, the estimate includes it. A
+ *   transfer that restarted the fit takes no more clocks, and neither does one
+ *   followed by another sync event.
  * - The fit has two windows: the points of the last SEQC_TEMPO_WINDOW clocks
  *   and of the last SEQC_TEMPO_LONG_WINDOW clocks (SEQC_TEMPO_WINDOW_4PPQ and
  *   SEQC_TEMPO_LONG_WINDOW_4PPQ for the jack at 4 PPQ, where both are the same).

@@ -942,8 +942,8 @@ TEST(T16_bunched_pairs_are_not_a_tempo_jump)
 
 /* a late bunch of 6 clocks gap cycles apart (not one stamp), 6 clocks after the
  * last one at 120 BPM, then 24 clocks at 120. A clock less than
- * SEQC_TEMPO_JOIN_MS after the newest clock of a transfer that is open or was
- * left out joins it: the bunch is one point of the fit, at its last clock,
+ * SEQC_TEMPO_JOIN_MS after the newest clock of the last transfer joins it
+ * (unless that one restarted the fit or another sync event came): the bunch is one point of the fit, at its last clock,
  * 5 gaps late, near the line. Nothing is left out and the fit does not
  * restart. */
 static void checkBunchedGaps(double gap)
@@ -985,7 +985,7 @@ TEST(T16_usb_bunched_clocks_10us_apart_are_not_a_tempo_jump)
  * cycles apart, from the true time of the last clock of the bunch on: at
  * 120 BPM, every 2 beats a bunch of 2, 3 or 6 clocks. Each clock arrives in
  * its own seq_tick(). A clock less than SEQC_TEMPO_JOIN_MS after the newest
- * clock of a transfer that is open or was left out joins it, so each bunch is
+ * clock of the last transfer joins it, so each bunch is
  * one point of the fit, at its last clock, at most 5 gaps late. No restart,
  * nothing left out, within 0.5% from two beats on, and every step played. */
 static void checkDinBunches(double gap)
@@ -1080,13 +1080,61 @@ TEST(T16_packed_din_bunch_head_keeps_a_restart)
 	ASSERT_NEAR(seqc_currentBpm(), 60.0, 0.5);
 }
 
+/* at 120 BPM, a bunch of size clocks 0.32 ms apart whose last clock is the
+ * 9th of a run: after the switch to MIDI sync, or (resume) after a dropout. The
+ * fit tests no point while it spans less than half a short window, so the late
+ * head of the bunch goes into it. The next clock, less than SEQC_TEMPO_JOIN_MS
+ * later, joins it all the same: the fit goes back to before the head, and the
+ * bunch is one point, at its last clock. Within 0.5% from two beats on (the
+ * head alone made a step amplitude of size - 1 clocks: up to 3.5% for 4
+ * beats), no restart, and nothing left out. */
+static void checkEarlyDinBunch(size_t size, bool resume)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = resume ? appendClocks(appendClocks(0, per, SEQC_TEMPO_WINDOW), (double)fake_msToCycles(1000.0), 1)
+			: appendClocks(0, per, 1);
+	const size_t first = n - 1, last = first + 8;
+	n = appendClocks(n, per, 24 * 8);
+	for (size_t j = 0; j < size; j++)
+		stamps[last - size + 1 + j] = stamps[last] + (seqc_time_t)((double)j * fake_msToCycles(0.32) + 0.5);
+	double worst = 0.0;
+	size_t i = 0;
+	seqc_time_t t = h->now;
+	while (i < n)
+	{
+		t += fake_msToCycles(0.1);
+		while (i < n && stamps[i] <= t)
+			fake_sync(h, SEQC_EV_CLOCK, stamps[i++]);
+		fake_process(h, t);
+		const double e = fabs((double)seqc_currentBpm() - 120.0) / 120.0 * 100.0;
+		if (i > first + 2 * 24 && e > worst)
+			worst = e;
+	}
+	ASSERT_TRUE(worst < 0.5);
+	ASSERT_EQ(stats().dropouts, resume ? 1 : 0);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	if (!resume)
+		ASSERT_EQ(fake_triggers(h, 0, trig, 128), (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+}
+
+TEST(T16_packed_din_bunch_in_the_first_clocks)
+{
+	checkEarlyDinBunch(3, false);
+	checkEarlyDinBunch(6, false);
+	checkEarlyDinBunch(6, true);
+}
+
 TEST(T16_clock_stamped_before_the_newest_point)
 {
-	/* DIN and USB clocks at once: after clock 40 went into the fit, one more
-	 * clock comes stamped 0.2 ms before it. It is a point of its own; its
-	 * interval from clock 40 is negative, not 2^64 cycles less 0.2 ms, so the
-	 * step amplitude of the stamps stays small, and a jump from 120 to 60 BPM
-	 * at clock 150 still restarts the fit within SEQC_TEMPO_RESTART clocks. */
+	/* DIN and USB clocks at once: after clock 40 went into the fit, and a MIDI
+	 * Continue (ignored while running) ended its transfer, one more clock comes
+	 * stamped 0.2 ms before it. It is a point of its own; its interval from
+	 * clock 40 is negative, not 2^64 cycles less 0.2 ms, so the step amplitude
+	 * of the stamps stays small, and a jump from 120 to 60 BPM at clock 150
+	 * still restarts the fit within SEQC_TEMPO_RESTART clocks. */
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
 	seqc_start();
 	const double per = fake_clockCycles(120.0), slow = fake_clockCycles(60.0);
@@ -1099,6 +1147,7 @@ TEST(T16_clock_stamped_before_the_newest_point)
 		fake_process(h, ts + fake_msToCycles(0.05));
 		if (k == 40)
 		{
+			fake_sync(h, SEQC_EV_CONTINUE, ts + fake_msToCycles(0.05));
 			fake_sync(h, SEQC_EV_CLOCK, ts - fake_msToCycles(0.2));
 			fake_process(h, ts + fake_msToCycles(0.1));
 		}

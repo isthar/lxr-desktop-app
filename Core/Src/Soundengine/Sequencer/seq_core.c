@@ -197,6 +197,15 @@ typedef struct
 } seqc_sums_t;
 
 //------------------------------------------------------------------------------
+/** what the fit did with the point of a transfer */
+typedef enum
+{
+	SEQC_POINT_USED,	/**< in the fit, tested or not */
+	SEQC_POINT_LEFT_OUT,	/**< an outlier, counted in intervalsExcluded */
+	SEQC_POINT_RESTARTED,	/**< it completed a tempo jump: the fit restarted (N16) */
+} seqc_pointFate_t;
+
+//------------------------------------------------------------------------------
 /** the tempo fit (N9, N16, N21) */
 typedef struct
 {
@@ -240,7 +249,8 @@ typedef struct
 	uint32_t	fitClock;	/**< clocks counted by the tempo fit */
 	bool		transferOpen;	/**< a transfer is being collected (N21) */
 	seqc_point_t	transfer;	/**< its stamp, and its last clock so far */
-	bool		joinable;	/**< the last transfer was left out, and a MIDI clock less than SEQC_TEMPO_JOIN_MS after it joins it */
+	bool		joinable;	/**< a MIDI clock less than SEQC_TEMPO_JOIN_MS after the last transfer joins it */
+	bool		joinLeftOut;	/**< that transfer was left out as an outlier */
 	seqc_fit_t	fitBefore;	/**< the fit before the last MIDI transfer, for a clock that joins it */
 	seqc_fit_t	fit;		/**< the tempo fit (N9, N16, N21) */
 	uint32_t	ringClock[SEQC_TEMPO_RING];	/**< the points of the long window */
@@ -873,16 +883,22 @@ static void seqc_setSlaveBpm(double bpm)
  *   queued clock before it calls seqc_process(), and the USB interrupt queues
  *   all the clocks of a transfer before seq_tick() can run.
  * - Bursts: a MIDI clock less than SEQC_TEMPO_JOIN_MS after the newest stamp
- *   of a transfer that is still open, or was left out as an outlier, joins it,
- *   and the transfer takes the later stamp. A DIN interface that forwards a
- *   late buffer sends its clocks back to back, 0.32 ms apart, so each reaches
- *   its own seq_tick(): the head of the burst, late, is evaluated alone and
- *   left out as an outlier. The next clock then takes the fit back to before
- *   it (a copy kept for that) and joins the transfer. 2 ms takes in USB
- *   transfers in consecutive 1 ms frames and a few MIDI bytes between two
- *   clocks, and is a quarter of a clock at SEQC_SLAVE_BPM_MAX. A transfer that
- *   went into the fit, or restarted it, takes no more clocks (it is not
- *   undone), and neither does one followed by another sync event.
+ *   of the last transfer joins it, and the transfer takes the later stamp. A
+ *   DIN interface that forwards a late buffer sends its clocks back to back,
+ *   0.32 ms apart, so each reaches its own seq_tick(): the head of the burst,
+ *   late, is evaluated alone. Tested, it is left out as an outlier; in the
+ *   first points, which are not tested, it goes into the fit. Either way the
+ *   next clock takes the fit back to before it (a copy kept for that) and
+ *   joins the transfer; an outlier is uncounted. Joining only outliers would
+ *   leave an untested head in, as a step of size - 1 clocks for 4 beats, and
+ *   joining only untested points would treat the clocks of one audio buffer
+ *   differently in the first points and later, which tilts the line. Until
+ *   the next clock comes the estimate includes the head alone, for less than
+ *   SEQC_TEMPO_JOIN_MS. 2 ms takes in USB transfers in consecutive 1 ms frames
+ *   and a few MIDI bytes between two clocks, and is a quarter of a clock at
+ *   SEQC_SLAVE_BPM_MAX. A transfer that restarted the fit takes no more clocks
+ *   (the restart rewrote the ring, so it is not undone), and neither does one
+ *   followed by another sync event.
  * - Windows: the points of the last SEQC_TEMPO_WINDOW clocks (short) and of the
  *   last SEQC_TEMPO_LONG_WINDOW clocks (long; the 4PPQ values for the jack at
  *   4 PPQ), and at most SEQC_TEMPO_SPAN_S. The estimate is the slope of the long
@@ -1085,9 +1101,9 @@ static double seqc_fitSwitch(double newestOff)
 	return shortSlope;
 }
 //------------------------------------------------------------------------------
-/** the point of a complete transfer goes into the fit. Returns true if it was
- * left out as an outlier, without a restart. */
-static bool seqc_fitPoint(seqc_point_t p)
+/** the point of a complete transfer goes into the fit, is left out as an
+ * outlier, or restarts the fit */
+static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
 {
 	seqc_fit_t *f = &seqc_sl.fit;
 	const bool jack = seqc.mode == SEQC_SYNC_ANALOG;
@@ -1150,7 +1166,7 @@ static bool seqc_fitPoint(seqc_point_t p)
 				if (jack)	/* left out: the line goes on as if the interval had the slope */
 					f->phase += (int64_t)(dev < 0.0 ? dev - 0.5 : dev + 0.5);
 				seqc.stats.intervalsExcluded++;
-				return true;
+				return SEQC_POINT_LEFT_OUT;
 			}
 			/* a tempo jump: the fit restarts from the row alone */
 			const uint8_t count = f->rowCount;
@@ -1163,7 +1179,7 @@ static bool seqc_fitPoint(seqc_point_t p)
 			f->haveLastOff = false;
 			f->slope = seqc_sumsSlope(&f->lng);
 			seqc.stats.tempoRestarts++;
-			return false;
+			return SEQC_POINT_RESTARTED;
 		}
 		const double rr = f->rowResidual < 0.0 ? -f->rowResidual : f->rowResidual;
 		if (f->rowCount > 0 && (r < 0.0 ? -r : r) < 0.5 * rr)
@@ -1183,7 +1199,7 @@ static bool seqc_fitPoint(seqc_point_t p)
 	f->slope = seqc_fitSwitch(haveDev ? (off < 0.0 ? -off : off) : 0.0);
 	f->havePrev = true;
 	f->prev = p;
-	return false;
+	return SEQC_POINT_USED;
 }
 //------------------------------------------------------------------------------
 /** forget the fit and the transfer being collected (the last known tempo stays) */
@@ -1203,15 +1219,17 @@ static void seqc_clearEstimate(void)
 }
 //------------------------------------------------------------------------------
 /** the transfer being collected is complete: its point goes into the fit, and
- * the estimate follows the slope. A MIDI transfer left out as an outlier stays
- * joinable: the fit before it is kept, see seqc_tempoClock(). */
+ * the estimate follows the slope. A MIDI transfer that did not restart the fit
+ * stays joinable: the fit before it is kept, see seqc_tempoClock(). */
 static void seqc_transferDone(void)
 {
 	const bool midi = seqc.mode == SEQC_SYNC_MIDI;
 	seqc_sl.transferOpen = false;
 	if (midi)
 		seqc_sl.fitBefore = seqc_sl.fit;
-	seqc_sl.joinable = seqc_fitPoint(seqc_sl.transfer) && midi;
+	const seqc_pointFate_t fate = seqc_fitPoint(seqc_sl.transfer);
+	seqc_sl.joinable = midi && fate != SEQC_POINT_RESTARTED;
+	seqc_sl.joinLeftOut = fate == SEQC_POINT_LEFT_OUT;
 	if (seqc_sl.fit.slope > 0.0)
 		seqc_setSlaveBpm(seqc_ticksPerClock() / seqc_sl.fit.slope * (double)seqc.cyclesPerSecond * 60.0
 				/ SEQC_TICKS_PER_BEAT);
@@ -1261,11 +1279,12 @@ static void seqc_tempoClock(seqc_time_t stamp)
 	if (seqc_sl.joinable && seqc_inTransfer(stamp))
 	{
 		/* A burst: DIN interfaces forward a late buffer as back-to-back clocks,
-		 * 0.32 ms apart, each in its own seq_tick(). The last transfer, left out
-		 * as an outlier, was its head: the fit goes back to before it, and the
-		 * transfer takes this clock too. */
+		 * 0.32 ms apart, each in its own seq_tick(). The last transfer was its
+		 * head, left out as an outlier or, untested or inside the band, in the
+		 * fit: the fit goes back to before it (the head took only the free slot
+		 * of the ring), and the transfer takes this clock too. */
 		seqc_sl.fit = seqc_sl.fitBefore;
-		if (seqc.stats.intervalsExcluded > 0)
+		if (seqc_sl.joinLeftOut && seqc.stats.intervalsExcluded > 0)
 			seqc.stats.intervalsExcluded--;
 		seqc_sl.transferOpen = true;
 	}
