@@ -133,9 +133,11 @@ check_E2_4() {
 	# the handling of an entry can call out of the sequencer for long (a kit load), and the
 	# entries stamped meanwhile must not be popped against the time read before it: the
 	# drain reads the time again before every pop, drains to the end, and seqc_process()
-	# gets the time of its last pop (E2.4 review). The read must sit in the loop: the
-	# non-blank lines "for(;;)", "{", the read, the pop and "break;" follow each other,
-	# and the function pops in one place and returns in one. drain_lines prints the
+	# gets the time of its last pop (E2.4 review). Two checks: the read sits in the loop
+	# (the non-blank lines "for(;;)", "{", the read, the pop and "break;" follow each
+	# other, and the function pops in that place only), and the drain runs until the
+	# queues are empty (the break after the pop and the final "return drained;" are the
+	# only break, return or goto in the function, N21). drain_lines prints the
 	# function's lines trimmed, without blank lines and whole-line // comments; in the CRLF
 	# file a blank line is a lone \r, one field for NF: strip it first
 	drain_lines() {
@@ -143,11 +145,14 @@ check_E2_4() {
 			f&&/^}/{exit} f&&NF{sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); if(!/^\/\//)print}' \
 			Core/Src/Soundengine/Sequencer/sequencer.c
 	}
-	drain_lines | awk '{l[NR]=$0} /seqp_syncPop\(/{pops++} /while\(seqp_syncPop/{w++} /return drained;/{n++}
+	drain_lines | awk '{l[NR]=$0} /seqp_syncPop\(/{pops++}
 		END{for(i=1; i+4<=NR; i++) if(l[i]=="for(;;)" && l[i+1]=="{" && l[i+2]=="*now = seqp_now();" &&
 			l[i+3] ~ /^if\(!seqp_syncPop\(\*now, / && l[i+4]=="break;") ok=1
-			exit !(ok && pops==1 && n==1 && !w)}' \
+			exit !(ok && pops==1)}' \
 		|| fail "seq_drainSyncQueues() does not read the time before every pop"
+	drain_lines | awk '/return drained;/{n++} /(^|[^[:alnum:]_])(break|return|goto)([^[:alnum:]_]|$)/{exits++}
+		END{exit !(n==1 && exits<=2)}' \
+		|| fail "seq_drainSyncQueues() stops before the queues are empty"
 	# a Program Change switch while stopped rewinds through the mailbox, applied in the
 	# drain before the next entry, not at the next seq_tick() (E2.4 review)
 	drain_lines | awk '{l[NR]=$0} END{for(i=1; i+2<=NR; i++) if(l[i]=="seq_setNextPattern((uint8_t)entry.value);" &&
