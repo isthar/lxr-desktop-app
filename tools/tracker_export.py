@@ -48,7 +48,7 @@ def main():
         "tasks.json": t["tasks"],
         "milestones.json": t["milestones"],
         "questions.json": t["questions"],
-        "log.json": sorted(log, key=lambda e: (e["at"], e["n"]), reverse=True),
+        "log.json": sorted(log, key=lambda e: e["n"], reverse=True),  # by number: local times jump back at the end of DST
     }
     for name, rows in files.items():
         path = os.path.join(out, name)
