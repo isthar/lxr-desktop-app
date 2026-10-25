@@ -2282,6 +2282,10 @@ static uint8_t seq_drainSyncQueues(seqc_time_t now)
 			return drained;
 		}
 		seqc_syncEvent((seqc_sync_ev_t)entry.type, stamp);
+		//fw 1.7 seq_resetPosition() sent all notes off on every active reset gate edge, also
+		//when stopped at the start already, where the core reports no rewind
+		if((source == SEQP_SRC_JACK) && (entry.type == SEQC_EV_RESET_ON) && (seq_coreSyncMode == SEQC_SYNC_ANALOG))
+			voiceControl_noteOff(0xFF);
 	}
 	return drained;
 }

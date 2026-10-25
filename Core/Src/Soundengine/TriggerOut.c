@@ -130,6 +130,9 @@ void EXTI9_5_IRQHandler(void)
 	/* EXTI line interrupt detected */
 	if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_5) != RESET)
 	{
+		//cleared before the pin is read: an edge after this sets the pending bit again,
+		//and the handler runs again and pushes the new level (fw 1.7 cleared it a second
+		//time after the read, which could lose an edge and leave the gate stuck)
 		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
 
 		if(seq_getExtSync() == 1)
@@ -138,7 +141,6 @@ void EXTI9_5_IRQHandler(void)
 			const uint16_t pinState = (Reset_In_EXTI5_GPIO_Port->IDR & Reset_In_EXTI5_Pin);
 			seqp_jackIn(pinState ? SEQC_EV_RESET_OFF : SEQC_EV_RESET_ON, stamp);
 		}
-		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
 	}
 }
 #endif

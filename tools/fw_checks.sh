@@ -52,6 +52,12 @@ must_call()   { local f="$1" s; shift; linked "$f" || { fail "$f is not linked";
                 for s in "$@"; do calls "$f" "$s" || fail "$f does not call $s"; done; }
 must_not_call() { local f="$1" s; shift; linked "$f" || { fail "$f is not linked"; return; }
                 for s in "$@"; do calls "$f" "$s" && fail "$f still calls $s"; done; }
+# function $1 branches to nothing but itself and the functions $2...
+only_calls()  { local f="$1" t s ok; shift; linked "$f" || { fail "$f is not linked"; return; }
+                for t in $(calls_of "$f" | sort -u); do
+                    ok=0; for s in "$f" "$@"; do grep -qE "^(__)?$s(\\.[a-z]+\\.[0-9]+)*(_veneer)?\$" <<<"$t" && ok=1; done
+                    [ $ok -eq 1 ] || fail "$f calls $t"
+                done; }
 no_itcm()     { local s; for s in $(grep -E "^$1" <<<"$ITCM"); do fail "$s is in ITCM"; done; }
 # every path must exist: grep exits 2 on a missing one, which would pass silently
 exists()      { local p; for p in "$@"; do [ -e "$p" ] || fail "$p does not exist"; done; }
@@ -140,6 +146,26 @@ check_E2_5() {
 	need seq_setClockInPpq
 	gone trigger_clockReceived trigger_calcBpm trigger_timeLast trigger_clockCnt syncTrigger_writePos \
 		trigger_ResetPosition trigger_prescaleCounterClockInput
+	# trigger_calcBpm and trigger_ResetPosition were inlined in fw 1.7 already: gone cannot see them
+	no_source 'trigger_calcBpm|trigger_ResetPosition|HANDLE_SEQ_IN_CLOCK_INTERRUPT' \
+		Core/Src/Soundengine/TriggerOut.c Core/Inc/Soundengine/TriggerOut.h
+	# the interrupts only stamp: the sync mode test and the push, nothing else
+	must_call EXTI4_IRQHandler seq_getExtSync
+	must_call EXTI9_5_IRQHandler seq_getExtSync
+	only_calls EXTI4_IRQHandler seq_getExtSync seqp_jackIn
+	only_calls EXTI9_5_IRQHandler seq_getExtSync seqp_jackIn
+	# the event types, and the run gate's polarity: a low pin is an active reset
+	has_source 'seqp_jackIn\(SEQC_EV_PULSE, stamp\);' Core/Src/Soundengine/TriggerOut.c
+	has_source 'seqp_jackIn\(pinState \? SEQC_EV_RESET_OFF : SEQC_EV_RESET_ON, stamp\);' Core/Src/Soundengine/TriggerOut.c
+	# the reset handler clears the pending bit before it reads the pin, never after: a
+	# clear after the read could lose an edge and leave the gate stuck
+	awk '/^void EXTI9_5_IRQHandler\(void\)/{f=1} f&&/->IDR/{r=1} f&&r&&/__HAL_GPIO_EXTI_CLEAR_IT/{bad=1} f&&/^}/{exit} END{exit bad}' \
+		Core/Src/Soundengine/TriggerOut.c || fail "EXTI9_5_IRQHandler clears the pending bit after it reads the pin"
+	# menu value 0 is 4 PPQ and 1 is 24 PPQ (ppqInNames)
+	has_source 'seq_setClockInPpq\(trigger_prescalerClockInput == PRE_24_PPQ_IN \? 24 : 4\);' Core/Src/Soundengine/MIDI/CortexParser.c
+	# fw 1.7 sent all notes off on every active gate edge, also where the core reports no rewind
+	has_source 'entry\.type == SEQC_EV_RESET_ON\) && \(seq_coreSyncMode == SEQC_SYNC_ANALOG\)\)' \
+		Core/Src/Soundengine/Sequencer/sequencer.c
 }
 
 check_tasks="E2.2 E2.3 E2.4 E2.5"
