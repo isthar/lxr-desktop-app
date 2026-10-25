@@ -567,6 +567,24 @@ TEST(T17_spp_then_switch_to_internal_plays_the_seek_target)
 	ASSERT_EQ(trig[0]->ev.absStep, 8);
 }
 
+TEST(T17_spp_then_switch_to_internal_plays_the_step_at_once)
+{
+	/* armed after a song position, the switch to internal sync puts the
+	 * position at the located step, not one MIDI clock before it: step 8 plays
+	 * at the next seqc_process(), not 20.8 ms later */
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 8, true);
+	seqc_songPosition(8);
+	sync(h, SEQC_EV_CONTINUE);
+	const seqc_time_t t0 = h->now;
+	seqc_setSyncMode(SEQC_SYNC_INTERNAL);
+	ASSERT_EQ_DBL(seqc_position(), 8.0 * 96);
+	fake_runUntil(h, t0 + fake_msToCycles(50.0), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 8);
+	ASSERT_TRUE(trig[0]->time - t0 <= fake_msToCycles(0.1));
+}
+
 /* the clock that resumes step s after Stop, SPP s and Continue */
 static void stopLocateContinue(fake_host_t *h, uint16_t s)
 {

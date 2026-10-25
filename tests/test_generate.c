@@ -393,9 +393,9 @@ TEST(T8_prob_edit_before_the_boundary_applies_with_the_same_draw)
 }
 
 /* x8 at -3 units on even step 2, as in runAfterTheEarlyHits(), but the early
- * part did not play: the step is off, or prob 30 with r = 40. edit enables the
- * step before boundary 2. The late part follows the early part, so none of its
- * hits play. */
+ * part did not play: the step is off (no draw is made), or on with prob 30,
+ * where the draw r = 40 fails. edit enables the step before boundary 2. The late
+ * part follows the early part, so none of its hits play. */
 static void runAfterDroppedEarlyHits(bool on, void (*edit)(fake_host_t *h), size_t draws)
 {
 	fake_host_t *h = fake_init();
@@ -414,7 +414,7 @@ static void runAfterDroppedEarlyHits(bool on, void (*edit)(fake_host_t *h), size
 static void setProb100(fake_host_t *h) { fake_setStepData(h, 0, 0, 2, 127, 60, 100); }
 static void switchOnProb100(fake_host_t *h) { fake_setStep(h, 0, 0, 2, true); setProb100(h); }
 
-TEST(T8_undrawn_early_part_drops_the_late_hits_after_a_prob_edit)
+TEST(T8_failed_draw_drops_the_late_hits_after_a_prob_edit)
 {
 	runAfterDroppedEarlyHits(true, setProb100, 1);
 }
@@ -426,7 +426,7 @@ TEST(T8_early_part_of_an_off_step_drops_the_late_hits_after_it_is_switched_on)
 	runAfterDroppedEarlyHits(false, switchOnProb100, 0);
 }
 
-TEST(T8_undrawn_step_keeps_its_timing_when_an_edit_makes_it_early)
+TEST(T8_failed_draw_keeps_its_timing_when_an_edit_makes_it_early)
 {
 	/* x8 at shift 0, prob 30 with r = 40: no early hit, the draw fails. Before
 	 * boundary 2 the step gets prob 100 and shift -3, which would put hits

@@ -736,12 +736,12 @@ static uint8_t seqc_drawR(seqc_draw_t *d)
 static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step, bool early)
 {
 	seqc_draw_t *d = seqc_slot(track, absStep, pattern, step);
-	const bool decided = !early && d->timed && d->offset < 0;
-	if (decided && !d->played)
+	const bool followsEarly = !early && d->timed && d->offset < 0;
+	if (followsEarly && !d->played)
 		return;
 	const Step *data = NULL;
-	bool plays = decided;
-	if (!decided && seqc.host.stepOn(seqc.host.ctx, pattern, track, step))
+	bool plays = followsEarly;
+	if (!followsEarly && seqc.host.stepOn(seqc.host.ctx, pattern, track, step))
 	{
 		const uint8_t r = seqc_drawR(d);
 		data = seqc.host.step(seqc.host.ctx, pattern, track, step);
@@ -930,14 +930,16 @@ static void seqc_localStart(void)
 }
 //------------------------------------------------------------------------------
 /** A transport that waits for its first clock since a rewind or a song position
- * is one clock before step 0, or before the located step. The clock length
- * depends on the sync mode and the PPQ, so a change of either moves it. */
-static void seqc_rebaseWaiting(void)
+ * is placed where the sync mode starts it: in a slave mode one clock before
+ * step 0, or before the located step, so that the first clock plays it; in
+ * internal sync at that step. The clock length depends on the sync mode and the
+ * PPQ, so a change of either moves it. */
+static void seqc_placeWaitingPosition(void)
 {
 	if (seqc.atStart)
 		seqc.pos = seqc_startPosition();
 	else if (seqc_trk.seeked && seqc.state != SEQC_RUNNING)
-		seqc.pos = (double)seqc.absStep * SEQC_TICKS_PER_STEP - seqc_ticksPerClock();
+		seqc.pos = (double)seqc.absStep * SEQC_TICKS_PER_STEP + seqc_startPosition();
 	else
 		return;
 	seqc_sl.lastClockPos = seqc.pos;
@@ -955,7 +957,7 @@ static void seqc_seek(uint16_t sixteenths)
 	seqc_trk.seeked = true;
 	seqc.absStep = sixteenths;
 	seqc.atStart = false;
-	seqc_rebaseWaiting();			/* one clock before step sixteenths */
+	seqc_placeWaitingPosition();			/* one clock before step sixteenths */
 	seqc_out.nextPulse = (seqc_tick_t)sixteenths * SEQC_TICKS_PER_STEP;
 	seqc_sl.clockCount = 0;
 }
@@ -1790,7 +1792,7 @@ void seqc_setSyncMode(seqc_sync_t mode)
 		seqc_sl.haveStamp = false;
 		seqc_sl.droppedOut = false;
 		seqc_setSlaveBpm(seqc.masterBpm);
-		seqc_rebaseWaiting();
+		seqc_placeWaitingPosition();
 		if (mode == SEQC_SYNC_INTERNAL)
 		{
 			/* the position continues at the master tempo; an armed transport starts */
@@ -1811,9 +1813,13 @@ void seqc_setSyncMode(seqc_sync_t mode)
 			seqc_sl.lastClockPos = seqc.pos;
 			seqc_sl.lastClockTime = seqc.now;
 			/* an internal start that has not begun is a local start of a slave:
-			 * armed until the clock that begins a step */
+			 * its START was reported, so it stops (STOP) and is armed until the
+			 * clock that begins a step, which reports START again */
 			if (pendingStart)
+			{
+				seqc_stopTransport();
 				seqc_arm(SEQC_ARM_STEP_CLOCK);
+			}
 		}
 	}
 	seqc_leave();
@@ -1858,7 +1864,7 @@ void seqc_setAnalogPpq(uint8_t ppq)
 		seqc_clearEstimate();
 		seqc_sl.clockCount = 0;
 		seqc_sl.haveStamp = false;
-		seqc_rebaseWaiting();
+		seqc_placeWaitingPosition();
 	}
 	seqc_leave();
 }

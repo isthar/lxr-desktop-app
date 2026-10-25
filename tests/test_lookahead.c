@@ -319,6 +319,28 @@ TEST(T12_erase_at_the_boundary_wins)
 	ASSERT_EQ(fake_triggers(h, 4, trig, 16), 1);	/* other tracks play */
 }
 
+TEST(T12_erase_of_a_begun_step_plays_its_late_hits)
+{
+	/* x8 at -7 units on step 5: hits 0..6 play before tick 480, hit 7 at 480.
+	 * The glue's erase clears step 5 at its boundary, after the early hits
+	 * played: the late hit follows them, so all 8 play */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 3, 5, true);
+	fake_setTiming(h, 0, 3, 5, 5, -7);
+	start(h);
+	runToTick(h, 4 * 96 + 10);			/* the early hits are queued */
+	h->eraseActive = true;
+	h->activeTrack = 3;
+	runToTick(h, 7 * 96);
+	ASSERT_EQ(h->mainSteps[0][3] & (1u << 5), 0);	/* erased at boundary 5 */
+	ASSERT_EQ(fake_triggers(h, 3, trig, 16), 8);
+	for (uint8_t j = 0; j < 8; j++)
+	{
+		ASSERT_EQ(trig[j]->ev.hit, j);
+		ASSERT_EQ(trig[j]->ev.tick, 396 + 12 * j);
+	}
+}
+
 TEST(T12_track_length_change_before_the_boundary)
 {
 	fake_host_t *h = fake_init();

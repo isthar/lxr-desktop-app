@@ -58,6 +58,20 @@ them again. This is equivalent and simpler:
   is generated, and reused for the late part if they match. Otherwise a new draw is made.
 - Each track keeps two slots, for `n` and `n+1`.
 
+*Amended 2026-10-25 (task E1.17 Part D, recorded in E1.18).* **Deviation from spec §6.2**, which says
+"Edits, pattern changes, track length changes, erase and mutes made before a step's boundary apply to
+that step". A step whose early part played a hit before `n·96` follows that early part at boundary
+`n`: it plays all its hits or none, whatever `stepOn()` and `Step.prob` read then. An erase or a
+probability edit made before boundary `n` therefore does not stop its late hits, and a step switched
+on then does not add them. The step data (velocity, note, p-locks) is still read at boundary `n`. Two
+exceptions:
+- a late change of the pattern or of the track length: if `(p, s)` at boundary `n` differs from the
+  early part's, the early hits came from the prediction, and the late part is that of the step actually
+  reached;
+- skip-once (`seqc_skipOnce()`) drops the hits that have not played yet.
+A step whose early part had no hit before `n·96` keeps the spec rule: an edit made before its boundary
+applies, with the same draw. The stage 1 report and E4.1 take this deviation from here.
+
 ## N4. Starting, and the first boundary
 
 **Internal start** (button, or `seq_setRunning(1)` in internal sync):
@@ -474,9 +488,20 @@ the clock count.
   - N16's rule for a 0 interval no longer applies.
 - **Limit (qualifies the requirement above).** Near simple clock-to-buffer ratios no estimator reaches
   0.5% after two beats; for example 1:1 is 107.67 BPM with 1024-sample buffers.
+  - The figures depend on the buffer phase, where the first clock falls within a buffer. The ones
+    below are for phase 0.31 of a buffer.
   - Across the 561 tempos from 60 to 200 BPM, the fit stays within 0.51%, 0.87% and 2.59% at 256, 512
     and 1024 samples (the worst at 144.25, 143.75 and 108.25 BPM, the last near 1:1).
   - It misses 0.5% at 1, 8 and 47 of those tempos.
+  - Over 20 buffer phases with the same stamp model (the E1.15–E1.17 final review), the worst case is:
+
+    | Buffer | Worst error | Misses of 561 | At phase 0.31 |
+    |---|---|---|---|
+    | 256 samples | up to 0.97% | up to 3 | 0.51%, 1 |
+    | 512 samples | up to 1.35% | up to 17 | 0.87%, 8 |
+    | 1024 samples | up to 2.80% | up to 75 | 2.59%, 47 |
+
+    H6 and H7 take the worst case over the phases as their acceptance limits.
   - *Re-measured in E1.17* with the stamp model of the committed tests (`usbStamps()` in
     `tests/test_slave.c`: buffer phase 0.31, 16 beats, the error from clock 48 on), on the core after
     E1.15 and after E1.17 alike. The design pass's harness had given 0.74%, 0.79% and 1.37%, and 3, 8
@@ -509,12 +534,18 @@ the clock count.
     more points (101), so a restart leaves the points of the fit before it intact; +24 B of bss.
   - Why 2 ms: back-to-back USB transfers in consecutive 1 ms frames join reliably; a few MIDI bytes fit
     between two clocks of a burst; and it is a quarter of a clock at 300 BPM.
+    - The trade-off: the join also merges USB transfers of two buffers sent in consecutive 1 ms frames.
+      The E1.15 quality reviewer measured it with every second 1024-sample buffer sent 1 ms before the
+      next: the settled misses of 0.5% rise from 54 to 119 of 561 tempos, and the worst error falls
+      from 4.19% to 2.45%.
   - The jack keeps the plain rule.
-  - Check the 2 ms value on hardware, under H6 and H7.
+  - Check the 2 ms value on hardware, under H6 and H7, also with a host that sends the transfers of
+    two buffers in consecutive 1 ms frames.
 - **Costs and behaviour changes.**
   - 1192 B of bss over E1.14 (7053 to 8245 B): the 98-point ring and the fit (928 B), and the fit copy
-    and the join state (264 B). E1.17's 101-point ring adds 24 B (8269 B). Review row R6.2 is amended
-    for it, as for N20.
+    and the join state (264 B). E1.17's 101-point ring adds 24 B (8269 B). Review row R6.2 must allow
+    it, as for N20; the controller amends R6.2 before E4.1 with the measured figures (amendments items
+    12, 14 and 17).
   - About 2.7 KB of code: `seq_core.c.obj` text 18602 B after E1.15 (b97c1c6) against 15854 B after
     E1.14, measured with the firmware's compile command and Arm GNU 14.3.rel1.
   - A lost DIN clock now costs about 1.5% for about 4 beats, where it cost 0% before. A lost jack pulse

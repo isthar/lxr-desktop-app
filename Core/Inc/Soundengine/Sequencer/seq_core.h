@@ -318,7 +318,7 @@ typedef struct seqc_stats
 	uint32_t muteDrops;		/**< events dropped when they fired because their track was muted */
 	uint32_t skipDrops;		/**< step occurrences not played because of seqc_skipOnce() */
 	uint32_t syncIgnored;		/**< sync events and song positions that did nothing (seqc_sync_ev_t) */
-	uint32_t intervalsExcluded;	/**< outlier transfers left out of the tempo fit, a restarting row's included (N16, N21) */
+	uint32_t intervalsExcluded;	/**< outlier transfers left out of the tempo fit, also those of a row that then restarts it, but not the outlier that restarts it (N16, N21) */
 	uint32_t dropouts;		/**< slave clock dropouts: no clock for the dropout time (N15) */
 	uint32_t reentries;		/**< calls ignored because they came from inside a callback */
 	uint32_t tempoRestarts;		/**< slave tempo estimates restarted after a tempo jump (N16) */
@@ -392,7 +392,9 @@ typedef struct seqc_host
 	void		(*noteOff)(void *ctx, uint8_t track);
 	/** Step boundary n, after the counters advanced and after patternEnd(), and
 	 * before step n is generated: LEDs, follow-bar, chase light, erase and the MTC
-	 * check. A step erased here does not play. It is not called at a song end */
+	 * check. A step erased here does not play, unless its early part already
+	 * played hits before n * 96; its late hits then follow it (see Generation).
+	 * It is not called at a song end */
 	void		(*stepBoundary)(void *ctx, uint32_t absStep);
 	/** Every step of the tempo, also while stopped (N8). It drives the tempo blink
 	 * (led_blinkHandler()).
@@ -434,12 +436,14 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond);
  * - Internal to slave: the position continues from where it is, and the next
  *   clock adds one clock's worth of ticks. A start that has not begun yet
  *   (seqc_start() with no seqc_process() since) becomes the local start of a
- *   slave: armed (ARM) until the clock that begins a step.
+ *   slave: its START was reported, so it stops (STOP) and is armed (ARM) until
+ *   the clock that begins a step, which reports START again.
  * - Slave to internal: the position continues at the master tempo. An armed
  *   transport starts at once (transport START or CONTINUE).
  * - A transport that waits for its first clock after a rewind or a song
- *   position stays one clock of the new mode before step 0 or the located
- *   step. */
+ *   position is moved to where the new mode starts it: one clock of the new
+ *   mode before step 0 or the located step in a slave mode, so that the first
+ *   clock plays that step, and at that step in internal sync. */
 void seqc_setSyncMode(seqc_sync_t mode);
 //------------------------------------------------------------------------------
 /** Set the master tempo in BPM, clamped to SEQC_MASTER_BPM_MIN..MAX. The
@@ -574,9 +578,9 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *   side, all late or all early (SEQC_TEMPO_RESTART_4PPQ for the jack at
  *   4 PPQ), the fit restarts from those outliers alone, as after a dropout. A
  *   point inside the band ends the row; an outlier on the other side ends it
- *   and starts a new row of one. For
- *   MIDI clock, a tempo change that takes the clocks out of the band within a
- *   few clocks (about 15% or more) restarts the fit this way too.
+ *   and starts a new row of one. For MIDI clock, a tempo change that takes the
+ *   clocks out of the band within a few clocks (about 15% or more) restarts the
+ *   fit this way too.
  * - The dropout time is SEQC_DROPOUT_MS, or two expected clock intervals if
  *   that is longer (N15). The interval comes from the estimate, or from
  *   SEQC_SLAVE_BPM_MIN while there is none, so a slow jack clock at 4 PPQ can

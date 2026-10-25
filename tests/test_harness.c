@@ -30,17 +30,18 @@ TEST(harness_runner)
 }
 
 /* a failing ASSERT_ sets the flag and returns from its function; this checks the
- * runner without its own macros, and prints four expected failure lines */
+ * runner without its own macros, and prints five expected failure lines */
 static int afterFailingAssert;
 static void failingAssert(void) { ASSERT_EQ(1, 2); afterFailingAssert = 1; }
 static void failingTrue(void) { ASSERT_TRUE(0); afterFailingAssert = 1; }
 static void failingFalse(void) { ASSERT_FALSE(1); afterFailingAssert = 1; }
 static void failingNear(void) { ASSERT_NEAR(1.0, 2.0, 0.5); afterFailingAssert = 1; }
+static void failingEqDbl(void) { ASSERT_EQ_DBL(1.0, 1.0 + 1e-9); afterFailingAssert = 1; }
 TEST(harness_runner_failure)
 {
-	void (*const helpers[])(void) = { failingAssert, failingTrue, failingFalse, failingNear };
+	void (*const helpers[])(void) = { failingAssert, failingTrue, failingFalse, failingNear, failingEqDbl };
 	int ok = 1;
-	printf("harness_runner_failure: 4 expected failures follow\n");
+	printf("harness_runner_failure: 5 expected failures follow\n");
 	for (size_t i = 0; i < sizeof helpers / sizeof helpers[0]; i++)
 	{
 		seqc_test_failed_ = 0;

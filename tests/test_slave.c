@@ -562,15 +562,25 @@ TEST(T16_switch_to_midi_arms_a_start_that_has_not_begun)
 	while ((r = fake_next(h, FAKE_TRANSPORT, &pos)) != NULL)
 		if (n < 4)
 			tr[n++] = r->value;
-	ASSERT_EQ(n, 2);
+	/* the reported START is taken back before the ARM */
+	ASSERT_EQ(n, 3);
 	ASSERT_EQ(tr[0], SEQC_TRANSPORT_START);
-	ASSERT_EQ(tr[1], SEQC_TRANSPORT_ARM);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_STOP);
+	ASSERT_EQ(tr[2], SEQC_TRANSPORT_ARM);
 	/* the count restarted at the switch: the first clock begins a step */
 	const double per = fake_clockCycles(120.0);
 	fake_runClocks(h, SEQC_EV_CLOCK, h->now + (seqc_time_t)per, per, 7, fake_msToCycles(0.1));
 	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
 	ASSERT_EQ(seqc_absStep(), 1);
 	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	/* and the step clock reports START again */
+	pos = 0;
+	n = 0;
+	while ((r = fake_next(h, FAKE_TRANSPORT, &pos)) != NULL)
+		if (n < 4)
+			tr[n++] = r->value;
+	ASSERT_EQ(n, 4);
+	ASSERT_EQ(tr[3], SEQC_TRANSPORT_START);
 }
 
 TEST(T16_tempo_post_while_running_keeps_the_position)
