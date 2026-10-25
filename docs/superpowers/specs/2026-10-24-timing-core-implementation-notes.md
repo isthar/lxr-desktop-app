@@ -669,9 +669,13 @@ the clock count.
     and first new one add up to one old pulse merges once (one more `intervalsExcluded`, the
     restart one pulse later), or, at 240 and 242.5 BPM with jitter, restarts once where it had
     followed inside the band.
-  - Costs: `seq_core.c.obj` text 20138 to 22422 B (+2284) and bss 11221 to 11269 B (+48: 24 B in
-    the fit and in its copy for the join), measured with the firmware's compile command and Arm GNU
-    14.3.rel1.
+  - A MIDI merge can take the fit's newest point out, and the next point goes into its ring slot,
+    which the fit before the transfer uses. The slot is kept and put back when a clock joins the
+    transfer, so the copy stays intact. (With the present bands the joined transfer is two clocks
+    early and restarts the fit, which clears the windows; the slot is put back regardless.)
+  - Costs: `seq_core.c.obj` text 20138 to 22466 B (+2328) and bss 11221 to 11277 B (+56: 24 B in
+    the fit and in its copy for the join, 8 B for the kept slot), measured with the firmware's
+    compile command and Arm GNU 14.3.rel1.
 - **Costs and behaviour changes.**
   - 1192 B of bss over E1.14 (7053 to 8245 B): the 98-point ring and the fit (928 B), and the fit copy
     and the join state (264 B). E1.17's 101-point ring adds 24 B (8269 B). Review row R6.2 must allow

@@ -324,7 +324,7 @@ typedef struct seqc_stats
 	uint32_t muteDrops;		/**< events dropped when they fired because their track was muted */
 	uint32_t skipDrops;		/**< step occurrences not played because of seqc_skipOnce() */
 	uint32_t syncIgnored;		/**< sync events and song positions that did nothing (seqc_sync_ev_t) */
-	uint32_t intervalsExcluded;	/**< outlier transfers left out of the tempo fit, also those of a row that then restarts it, but not the outlier that restarts it (N16, N21) */
+	uint32_t intervalsExcluded;	/**< outlier transfers left out of the tempo fit, also those of a row that then restarts it or that a spurious clock explains, but not the outlier that ends that row; a jack double trigger counts once (N16, N21) */
 	uint32_t dropouts;		/**< slave clock dropouts: no clock for the dropout time (N15) */
 	uint32_t reentries;		/**< calls ignored because they came from inside a callback */
 	uint32_t tempoRestarts;		/**< slave tempo estimates restarted after a tempo jump (N16) */

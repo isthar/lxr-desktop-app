@@ -289,6 +289,10 @@ typedef struct
 	bool		joinable;	/**< a MIDI clock less than SEQC_TEMPO_JOIN_MS after the last transfer joins it */
 	bool		joinLeftOut;	/**< that transfer was left out as an outlier */
 	bool		joinRestarted;	/**< that transfer restarted the fit */
+	bool		joinDropped;	/**< that transfer took a point of the fit out (seqc_fitDropNewest()) */
+	uint8_t		dropSlot;	/**< the ring slot of the last point taken out, and what it held */
+	uint32_t	dropClock;
+	uint32_t	dropStamp;
 	seqc_fit_t	fitBefore;	/**< the fit before the last MIDI transfer, for a clock that joins it */
 	seqc_fit_t	fit;		/**< the tempo fit (N9, N16, N21) */
 	uint32_t	ringClock[SEQC_TEMPO_RING];	/**< the points of the long window */
@@ -1504,11 +1508,17 @@ static void seqc_fitAdd(seqc_point_t p)
 }
 //------------------------------------------------------------------------------
 /** take the newest point out of the ring and both windows; not the base point.
- * The points that left a window when it came in stay out. */
+ * The points that left a window when it came in stay out. The next point goes
+ * into its slot, which the fit before the transfer uses: the slot is kept for a
+ * clock that joins the transfer (seqc_tempoClock()). */
 static void seqc_fitDropNewest(void)
 {
 	seqc_fit_t *f = &seqc_sl.fit;
 	f->head = seqc_ringPrev(f->head);
+	seqc_sl.joinDropped = true;
+	seqc_sl.dropSlot = f->head;
+	seqc_sl.dropClock = seqc_sl.ringClock[f->head];
+	seqc_sl.dropStamp = seqc_sl.ringStamp[f->head];
 	seqc_sumsAdd(&f->lng, seqc_ringX(f->head), seqc_ringY(f->head), -1.0);
 	seqc_sumsAdd(&f->sht, seqc_ringX(f->head), seqc_ringY(f->head), -1.0);
 }
@@ -1797,7 +1807,10 @@ static void seqc_transferDone(void)
 	const bool midi = seqc.mode == SEQC_SYNC_MIDI;
 	seqc_sl.transferOpen = false;
 	if (midi)
+	{
 		seqc_sl.fitBefore = seqc_sl.fit;
+		seqc_sl.joinDropped = false;
+	}
 	const seqc_pointFate_t fate = seqc_fitPoint(seqc_sl.transfer);
 	seqc_sl.joinable = midi;
 	seqc_sl.joinLeftOut = fate == SEQC_POINT_LEFT_OUT;
@@ -1858,8 +1871,14 @@ static void seqc_tempoClock(seqc_time_t stamp)
 		 * head: left out as an outlier, in the fit (untested or inside the
 		 * band), or the end of a tempo jump that restarted the fit. The fit goes
 		 * back to before it (the head wrote only ring slots that the fit before
-		 * it does not use), and the transfer takes this clock too. */
+		 * it does not use, but for the slot of a point it took out, which is
+		 * put back), and the transfer takes this clock too. */
 		seqc_sl.fit = seqc_sl.fitBefore;
+		if (seqc_sl.joinDropped)
+		{
+			seqc_sl.ringClock[seqc_sl.dropSlot] = seqc_sl.dropClock;
+			seqc_sl.ringStamp[seqc_sl.dropSlot] = seqc_sl.dropStamp;
+		}
 		if (seqc_sl.joinLeftOut && seqc.stats.intervalsExcluded > 0)
 			seqc.stats.intervalsExcluded--;
 		if (seqc_sl.joinRestarted && seqc.stats.tempoRestarts > 0)
