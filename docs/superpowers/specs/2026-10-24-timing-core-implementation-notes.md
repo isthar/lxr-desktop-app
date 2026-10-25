@@ -470,14 +470,26 @@ the clock count.
   - It is exact for transfers of 1 to 16 clocks.
   - DIN with ±0.3 ms jitter stays within 0.007%.
 - **Joining bursts (amended 2026-10-25 during E1.15).**
-  - A MIDI clock that comes less than `SEQC_TEMPO_JOIN_MS` (2 ms) after the newest stamp of a transfer
-    joins it, but only if that transfer is still open, or was evaluated and left out. The transfer then
-    takes the clock's later stamp. If it had been left out as an outlier, the fit is restored from the
-    copy taken before it, and the outlier is uncounted.
-  - A transfer that went into the fit, restarted it, or was followed by another sync event takes no
-    more clocks.
+  - A MIDI clock that comes less than `SEQC_TEMPO_JOIN_MS` (2 ms) after the newest stamp of the last
+    transfer joins it, whether that transfer is still open or was evaluated. The transfer then takes
+    the clock's later stamp. If it had been evaluated, the fit is restored from the copy taken before
+    it, and an outlier is uncounted.
+  - A transfer that restarted the fit, or was followed by another sync event, takes no more clocks.
   - The reason: a DIN burst with clocks 0.32 ms apart reaches the core one clock per `seq_tick()`, so
     the burst's late head would be evaluated alone.
+  - Why any evaluated transfer, not only an outlier (amended after the E1.15 quality review): the fit
+    tests nothing in its first 12 clocks (after the switch, every dropout and every N16 restart), so a
+    burst's head there went into the fit, and the rest of the burst raised the step amplitude to
+    about the burst size. A bunch of 6 at clock 8 read 140 BPM at clock 14 and 3.3% off at clock 47.
+    Joining only untested heads instead treats the clocks of one audio buffer differently in the first
+    clocks and later, which tilts the line: with DIN-forwarded 1024-sample buffers it failed 0.5% at 218
+    of 561 tempos, against 47 for USB. With the rule above DIN-forwarded buffers give the USB numbers
+    (1, 8 and 47 of 561 tempos at 256, 512 and 1024 samples, the scenario harness of the review), and
+    bunches of 2, 3 and 6 anywhere in the first 20 clocks stay within 0.03%.
+  - Until the next clock of a burst joins it, the estimate includes the head alone: for less than 2 ms.
+  - The one exception left: a burst whose head is the outlier that restarts the fit. The restart
+    rewrites the ring, so it is not undone; a bunch of 6 there reads up to 1.45% off two beats after
+    the jump.
   - Why 2 ms: back-to-back USB transfers in consecutive 1 ms frames join reliably; a few MIDI bytes fit
     between two clocks of a burst; and it is a quarter of a clock at 300 BPM.
   - The jack keeps the plain rule.
@@ -485,8 +497,8 @@ the clock count.
   - The RAM cost of the estimator is 1192 B of bss over E1.14 (7053 to 8245 B), not 928 B. Review row
     R6.2 allows that.
 - **Costs and behaviour changes.**
-  - About 928 B of RAM (a 98-point ring) and about 2.5 KB of code. Review row R6.2 is amended for it,
-    as for N20.
+  - About 1192 B of bss over E1.14: the 98-point ring, the fit copy and the join state. About 2.8 KB of
+    code (text 18618 B against 15854 B). Review row R6.2 is amended for it, as for N20.
   - A lost DIN clock now costs about 1.5% for about 4 beats, where it cost 0% before. A lost jack pulse
     still costs 0%.
   - Tempo changes on buffered USB settle in 1 to 3 beats.
