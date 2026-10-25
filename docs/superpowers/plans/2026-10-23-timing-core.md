@@ -126,42 +126,59 @@ the one before it.
 15. **E1.14**: N16, N17 and N18.1: the slave tempo estimate restarts after a tempo jump beyond the
     ±50% band of the clock intervals, a slave dropout sends the pending note-offs, and each track
     has its own skip-once marker (T14, T16, T18); the `seq_core.h` comments describe the code again.
-    The core is complete. E2 relies on it: the mailbox of E2.2 keeps one skip-once marker per track
+    E2 relies on it: the mailbox of E2.2 keeps one skip-once marker per track
     and passes each to `seqc_skipOnce()`.
-16. **E2.1**: `seq_syncq` (host-tested SPSC queues and MIDI decoding) and `seq_platform` (DWT time
+16. **E1.15**: N21: the slave tempo estimate becomes a least-squares fit over the clock transfers,
+    so packed USB clocks give the clock tempo and not the packet rate, and a DIN burst under 2 ms
+    joins one transfer (`SEQC_TEMPO_JOIN_MS`); E1.14's packed-clock tests are reworked (T16, T18).
+17. **E1.16**: the event queue becomes an earliest-first ring with an insert from the nearer end,
+    and a choke that removes nothing writes nothing (N2 amended; host test `queue`).
+18. **E1.17**: the leftovers of the E1 reviews: `ASSERT_EQ` refuses floating-point operands, the
+    missing tests, the possible defects (fixed where they were defects), the header rules, the
+    comments and the line endings.
+19. **E1.18**: the event queue merges a boundary's new events in one pass (stage, sort, merge), so
+    a boundary call writes O(new + pending) elements (N2 amended). E2 starts from here.
+20. **E2.1**: `seq_syncq` (host-tested SPSC queues and MIDI decoding) and `seq_platform` (DWT time
     base, queue instances), built but not linked yet (`syncq`). Needs all of E1.
-17. **E2.2**: `sequencer.c` becomes the glue: host callbacks, mailbox, copies, the new `seq_tick()`;
+21. **E2.2**: `sequencer.c` becomes the glue: host callbacks, mailbox, copies, the new `seq_tick()`;
     the pulse machine goes; `tools/fw_checks.sh`.
-18. **E2.3**: D4: one MIDI Note On per trigger, Note Offs per voice, the echo once.
-19. **E2.4**: D7 and D8: realtime messages and SPP stamped in the receive interrupts, MIDI parsed
+22. **E2.3**: D4: one MIDI Note On per trigger, Note Offs per voice, the echo once.
+23. **E2.4**: D7 and D8: realtime messages and SPP stamped in the receive interrupts, MIDI parsed
     only in `seq_tick()`.
-20. **E2.5**: clock in and reset jacks through the jack sync queue; the clock in PPQ goes to the core.
-21. **E2.6**: `clockSync` and the dead timing code go; `sequencer.c` leaves ITCM.
-22. **E2.7**: SHIFT + step 12 gives the global menu its own button mode, `SELECT_MODE_MENU`; host
+24. **E2.5**: clock in and reset jacks through the jack sync queue; the clock in PPQ goes to the core.
+25. **E2.6**: `clockSync` and the dead timing code go; `sequencer.c` leaves ITCM.
+26. **E2.7**: SHIFT + step 12 gives the global menu its own button mode, `SELECT_MODE_MENU`; host
     test `buttons` (`tests/test_buttons.c` with the stand-in headers in `tests/stubs/`) and
     `tools/fw_checks.sh E2.7`.
-23. **E2.8**: USB MIDI out: packets with the CIN of USB MIDI 1.0 that wait in a ring until the IN
+27. **E2.8**: USB MIDI out: packets with the CIN of USB MIDI 1.0 that wait in a ring until the IN
     endpoint is free (`usb_midiTx.c`, host test `usbtx`; `tools/fw_checks.sh E2.8`), and the MIDI
     parser waits for the data byte of a Song Select.
-24. **E3.1**: LICHOMAT name, version 0.1, start-up screen, `LXR_V2_LICHOMAT_0.1.img`, and
+28. **E1.19**: one extra MIDI clock or a double trigger on the clock jack no longer restarts or
+    skews the slave tempo fit (N21). It was added after the final review of E1.15–E1.17 and runs
+    after E2.8, so the integration is not delayed; it changes only the slave estimate. The core
+    is complete.
+29. **E3.1**: LICHOMAT name, version 0.1, start-up screen, `LXR_V2_LICHOMAT_0.1.img`, and
     `tools/check_image.py` in `tools/check.sh`. It runs here and not first, because the expected
     outputs of E1 and E2 show the fw 1.7 update file `LXR_V2_V1.7.img` and the fw 1.7 image size.
-25. **E3.3**: CPU meter (`cpuMeter.c`, host-tested), its hooks in both render paths, and the CPU
+30. **E3.3**: CPU meter (`cpuMeter.c`, host-tested), its hooks in both render paths, and the CPU
     page. Needs E2: `seqc_stats()` in the firmware, `TIM2_IRQHandler()` as E2.4 left it, and the
     `test_syncq` line of E2.1 in `tests/CMakeLists.txt`.
-26. **E3.4**: CI workflow (host tests and firmware build) and its local dry run. Needs E3.1 (the
+31. **E3.4**: CI workflow (host tests and firmware build) and its local dry run. Needs E3.1 (the
     update file check), E3.3 (`cpumeter`) and every host test file.
-27. **E3.5**: the README's LICHOMAT section and the new file names. Steps 1–6 (`tools/env.sh` for
+32. **E3.5**: the README's LICHOMAT section and the new file names. Steps 1–6 (`tools/env.sh` for
     zsh) are already done, in commit `aa70b81`: start at Step 7. Needs E2.6 (the module table row)
     and E3.1–E3.4 (what the README describes).
-28. **E4.1**: multi-dimension review of all of stage 1; findings fixed test-first, one commit each.
-29. **E4.2**: hardware checklist H1–H13, with U1 (E2.7) and X4 (E2.8), and the two update files for
+33. **E4.1**: multi-dimension review of all of stage 1; findings fixed test-first, one commit each.
+34. **E4.2**: hardware checklist H1–H13, with U1 (E2.7) and X4 (E2.8), and the two update files for
     the owner. Needs E3.1 and E3.3.
-30. **E4.3**: draft v0.1 release notes; nothing is pushed. Needs E4.1 (the accepted findings), E4.2
+35. **E4.3**: draft v0.1 release notes; nothing is pushed. Needs E4.1 (the accepted findings), E4.2
     (the checks it cites) and E3.5 (the README section that links to it).
 
 E1.14, E2.7 and E2.8 were written and reviewed on their own and inserted into this plan after its
 review (implementation notes, end of N17), so every tracker task of stage 1 has its section here.
+E1.15–E1.19 were added during execution, after the reviews of E1.10–E1.17. Their sections follow
+E1.14 in epic E1 ("Execution amendments" near the end of this plan lists every change made while
+executing it).
 N18.2, N18.3 and N18.4 are applied where they belong: E2.2 (`seq_cbTransport()`), E2.3
 (`seq_triggerVoice()`) and E2.1 (`seqq_usbMessage()`).
 
@@ -174,7 +191,7 @@ three give pure CRLF whatever the editor did to the inserted lines.
 
 ---
 
-## Epic E1: timing core `seq_core` (tasks E1.1–E1.14)
+## Epic E1: timing core `seq_core` (tasks E1.1–E1.19)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -199,8 +216,9 @@ fake host (`tests/fake_host.c`) that implements every callback the way `sequence
 
 **Authoritative documents:**
 - the spec, `docs/superpowers/specs/2026-10-23-timing-core-design.md`;
-- the implementation notes N1–N20, `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md`.
-  They win over the spec where the two differ. N12–N20 were added during planning:
+- the implementation notes N1–N21, `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md`.
+  They win over the spec where the two differ. N12–N20 were added during planning, N21 and the
+  amendments of N2 during execution:
   - N12: the main-loop execution context;
   - N13: the API decisions, already in `seq_core.h`;
   - N14: SPP travels in the sync queues (E2);
@@ -211,6 +229,10 @@ fake host (`tests/fake_host.c`) that implements every callback the way `sequence
   - N19: the global menu fix of E2.7, its two visible changes and its host test build;
   - N20: the USB MIDI out of E2.8: the CIN, the transmit ring, no old messages, the Song Select,
     and its files and RAM beyond the spec;
+  - N21 (execution): the slave tempo estimate as a least-squares fit over the clock transfers, so
+    that packed USB clocks give the clock tempo (E1.15);
+  - N2 amended (execution): the event queue as an earliest-first ring (E1.16) that merges a
+    boundary's new events in one pass (E1.18);
 - the interface (API phase of this plan), reproduced verbatim in Task E1.1;
 - `docs/lichomat/HANDOFF.md` for the tooling and the working rules.
 
@@ -11125,6 +11147,2352 @@ EOF
 
 ---
 
+### Task E1.15: The slave tempo estimate measures the clock rate when clocks share a stamp (N21)
+
+> **Added during execution** (2026-10-25; "Execution amendments", items 8 and 13–15). The implementer
+> read this text from `build/plan/tasks/E1.15.md`. Commits: `6e9dff5`–`b97c1c6` (5 commits).
+
+> **Controller note, added after the E1.14 quality review (read before Step 1).**
+> 1. **A regression the E1.14 review found.** Bunched clocks with tiny but non-zero gaps restart the
+>    tempo estimate, because N16 lets only an exact 0 interval end a row. One case is a DIN interface
+>    that forwards a burst of clocks as back-to-back 0xF8 bytes about 0.32 ms apart; USB-to-DIN
+>    forwarding after a late host buffer does this.
+>    - The fit of this task must handle it: no restart, no excluded run, and the estimate within N21's
+>      bound after two beats.
+>    - Add a test `T16_packed_din_bunch_*` with bunches of 2, 3 and 6 clocks 0.32 ms apart every few
+>      beats, at 120 BPM, and check that it fails before your change.
+>    - If the design's outlier and glitch rules do not cover it, extend them. One option is a minimum
+>      interval below which clocks join the current transfer, for example under 1 ms, which is 1/20 of
+>      a clock at 120 BPM. Explain the choice.
+> 2. **Anchors may have moved.** The E1.14 review commits (3f1c16b, 758a13e and the fix after them)
+>    changed tests/test_slave.c, tests/test_overflow.c (T19's MIDI section) and possibly seq_core.c.
+>    This task's anchors quote the text from before them. Adapt every "Replace" step to the current
+>    file, keep the intent, and list each adaptation in your report.
+
+Note N21 was written after the E1.10 quality review. E2.4 stamps USB MIDI once per transfer, in
+`USBD_CDC_DataOut()`, so all the clocks of one transfer share a stamp. Under N9 and N16 an interval
+of 0 is left out, so the estimate measures the transfer rate, not the clock rate. Some hosts send
+one transfer per audio buffer, so this is the normal case for USB clock sync from a DAW. This task
+replaces the interval mean of N9 with a least-squares fit of the stamps against the clock count,
+test first. It runs after E1.14 and before E2.1. Line numbers are those of `seq_core.h` as E1.14
+leaves it, with the line that the E1.11 review added to the Continue text; in `seq_core.c` the text
+names the functions and types, as the E1 conventions do.
+
+**The problem, measured.** A design pass ran the E1.14 core through a scenario harness: the real
+core and the fake host, the clocks delivered as `seq_tick()` will deliver them after E2.4 (every
+0.1 ms the events stamped up to then, then `seqc_process()`), and `seqc_currentBpm()` compared with
+the true tempo from two beats on. 31 scenarios, 19 of them fail a check:
+- Transfers of N clocks, stamped at the last clock, read 120/N BPM at 120 BPM: 60, 40, 30, 24 and
+  20 BPM (the clamp) for N = 2 to 6. Every clock but the last of each transfer counts in
+  `intervalsExcluded`.
+- One transfer per audio buffer of 1024 samples at 44.1 kHz (23.2 ms) reads 107.67 BPM at 90, 120
+  and 140 BPM: one buffer per clock. With 512 samples (11.6 ms), 140 BPM reads 215.33 BPM.
+- With 256 samples (5.8 ms) the 24-interval mean carries the quantisation: 0.74 to 1.13% off, and
+  the rounded tempo changes 52 to 105 times in 14 beats (each change is a `lfo_recalcSync()` call).
+- The step grid stays right, because clocks are counted. The wrong tempo reaches the BPM display,
+  `lfo_recalcSync()`, the hits played between clocks and the dropout time.
+
+**The design (N21), chosen by the design pass.** Three candidates were measured on the harness and
+on sweeps of about 2800 more scenarios (buffers of 128 to 2048 samples from 60 to 300 BPM, packets
+of 1 to 16 clocks, late and paired host buffers, callback jitter, ramps and jumps): spreading a
+transfer's time over its clocks, a span between least-delayed stamps, and a least-squares fit. The
+fit wins on N21's own case, steady clocks in audio buffers, and it is the only one that stays
+within 1.4% with paired and jittered host buffers. This task takes the fit with three changes made
+in the design pass: a transfer is evaluated once, when it is complete (instead of undoing and
+redoing its point at each clock); a tempo jump restarts the fit from the outliers alone; and
+`intervalsExcluded` counts outlier transfers only.
+- **Transfers.** The clocks that share a stamp are one transfer: one point of the fit, at its last
+  clock, the stamp being the time the last clock was in.
+  - A transfer is complete at the next clock with a later stamp, at any other sync event, or at the
+    next `seqc_process()`. `seqc_schedule()` keeps `nextDue` at 0 while a transfer is open, so the
+    next `seqc_process()` evaluates it.
+  - `seq_tick()` (E2.2) drains every queued sync event before it calls `seqc_process()`, and
+    `USBD_CDC_DataOut()` queues all the clocks of a transfer in one interrupt. OTG_FS has priority
+    3 and TIM2 (which runs `seq_tick()` while the SD card is busy, N12) priority 4, so no drain
+    sees half a transfer. `seqc_currentBpm()`, read after `seqc_process()`, includes every clock.
+  - A clock stamped earlier than the open transfer (DIN and USB clocks at once) joins it.
+- **The fit.** The slope of stamp against clock count over two windows: the points of the last
+  `SEQC_TEMPO_WINDOW` (24) clocks and of the last `SEQC_TEMPO_LONG_WINDOW` (96) clocks, and at most
+  16 s. The estimate is the slope of the long window.
+  - If the short window's slope differs from it by more than the steps of the stamps can explain,
+    the tempo is changing: the long window drops its older points and becomes the short one. So
+    exact stamps follow a ramp within the short window, and stamps quantised to audio buffers get
+    the precision of 96 clocks.
+  - The step amplitude is a decaying peak of how far an interval is from the slope, counted when the
+    next interval takes it back (USB buffers move the stamps in steps of up to one buffer; a tempo
+    change is not taken back).
+  - The sums are exact: x counts clocks from the oldest point of the window and y cycles from its
+    stamp, so every term is an integer below 2^53. The ring keeps the low 32 bits of each stamp.
+- **Outliers (N9), MIDI clock.** A transfer further from the long window's line than half a clock,
+  or than 1.25 step amplitudes if that is more, is left out. So the buffer steps of USB stamps stay
+  in, and a lasting step is taken in by the line. An outlier followed by a point back near the line
+  was a glitch, and the step amplitude goes back to its value before it.
+- **Outliers, clock in jack.** The stamps are exact (EXTI), so an interval more than 50% off the
+  slope is a lost or an extra pulse: it is left out, and the line goes on as if it had had the
+  slope. A lost pulse leaves the estimate alone, as in E1.14.
+- **Jack at 4 PPQ.** Both windows are `SEQC_TEMPO_WINDOW_4PPQ` (4) pulses, the 4 intervals of N9.
+- **Tempo jumps (N16).** `SEQC_TEMPO_RESTART` outliers in a row on one side
+  (`SEQC_TEMPO_RESTART_4PPQ` for the jack at 4 PPQ) restart the fit from those outliers alone, as
+  after a dropout. The interval into the first of them is not used: it may straddle the change (a
+  real tempo change falls between clocks, and inside a transfer of several clocks). With it, a jump
+  in transfers of 3 clocks still read 0.7% off two beats later. The step amplitude stays.
+- **The first points.** While the fit spans less than half a short window, nothing is tested.
+- **Dropout (N15).** Unchanged. "Has an estimate" now means the fit has a slope; a dropout clears
+  the fit and the open transfer.
+
+**Behaviour that changes, beyond N21.**
+- A tempo step inside N16's interval band is followed faster: on MIDI clock a step of about 15% or
+  more takes the clocks out of the band of the fit within a few clocks, and restarts it. 120 to
+  100 BPM reads exactly 100 after 12 clocks; the mean of 24 intervals read 109.09.
+- A late clock, back on the line at the next, is one outlier (E1.14: two intervals).
+- `intervalsExcluded` counts transfers left out of the fit. Clocks that share a stamp are no longer
+  counted.
+- A lost DIN clock looks like a lasting step of the stamps and is taken in: about 1.5% for 4 beats
+  (E1.14: 0%). An extra clock: 0.03% (E1.14: 4.3% for one beat). At its first occurrence a lost
+  clock looks like the buffer step of USB stamps near the 1:1 tempo, and N21 favours USB. The jack
+  keeps the E1.14 behaviour.
+
+**What the fit gives** (the harness, E1.14 then E1.15). Every check of N21 passes:
+- transfers of 2 to 6 clocks: exact (0.000%) from the second transfer on;
+- one transfer per 256, 512 or 1024-sample buffer at 90, 120 and 140 BPM: at most 0.105, 0.094 and
+  0.271% off from two beats on (E1.14: up to 1.13%, 53.8% and 23.1%), and no change of the rounded
+  tempo after two beats;
+- DIN with 0.3 ms jitter: 0.007% (0.117%); a ramp from 120 to 140 BPM: within 0.5% 197 ms after it
+  ends (214 ms); the N16 jumps 90 to 200 and 200 to 90 BPM: within 0.5% after 50 and 111 ms (100 and
+  111 ms); the jack at 4 PPQ, 25 and 100 BPM: exact; the 2 s dropout: at 500.1 ms, no note-off
+  pending.
+
+2 scenarios still fail a check, both extras of the harness on buffered USB: after the N16 jump
+from 90 to 200 BPM with 512-sample buffers the estimate is within 0.5% after 374 ms (the check
+allows one beat, 300 ms), and after the ramp to 140 BPM with 512-sample buffers after 521 ms (one
+beat is 429 ms). One beat of stamps quantised to 11.6 ms gives the new tempo to about 1%.
+
+**The limit, for N21's wording.** No estimator meets 0.5% after two beats at every tempo with
+buffered stamps. Where the clock period is close to a simple ratio of the buffer (1:1 is 107.67 BPM
+with 1024 samples), the stamps carry almost no tempo information until the phase wraps. Over 60 to
+200 BPM in 0.25 BPM steps the fit fails 0.5% at 3 of 561 tempos with 256 samples (worst 0.74%), 8
+with 512 (0.79%) and 42 with 1024 (1.37%), all near such ratios. E1.14 failed 496, 554 and 554.
+
+**Resources.** No firmware behaviour changes yet: nothing calls the core before E2, so the image
+stays 274 688 bytes. The core object grows by 2536 B of `text` and 928 B of `bss` (`seqc_sl`: the
+98-point ring is 784 B). With E2's glue the timing core then needs about 9468 B, which is 764 B more
+than review row R6.2 allows (8704 B, of which E2.6 and E1.14 use 8540 B). R6.2 must therefore allow
+the 928 B of the fit on top, as it allows N20's 444 B (an amendment for the controller; 119 KB of
+RAM stay free). The fit costs about 1000 cycles
+per transfer (7 double divisions), about 2500 at a restart, and nothing that grows with the clocks
+of a transfer: at 300 BPM with one clock per transfer 0.06% of the CPU.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c`
+  - the top comment (`:9-10`) and the constants (`SEQC_QUEUE_CAPACITY`);
+  - new types `seqc_point_t`, `seqc_sums_t` and `seqc_fit_t`, and `seqc_slave_t`;
+  - `seqc_dropoutCycles()`, `seqc_schedule()`, `seqc_setTempo()`, `seqc_syncEvent()` and
+    `seqc_process()`;
+  - the tempo estimate: `seqc_clearEstimate()`, `seqc_windowAdd()`, `seqc_tempoInterval()` and
+    `seqc_tempoClock()` make way for the fit.
+- Modify: `Core/Inc/Soundengine/Sequencer/seq_core.h:21-22`, `:204-206`, `:308`, `:434-436`,
+  `:508-522`
+- Test: `tests/test_slave.c` (ctest ids `T16`, `T18`), `tests/test_overflow.c` (ctest id `T19`)
+
+- [x] **Step 1: Write the failing tests in `tests/test_slave.c`**
+
+In `tests/test_slave.c` (LF), replace the description at the top:
+
+```c
+ * Slave modes (spec 5, N4, N9, N15, N16, N17):
+ * - T16: MIDI clock: a steady clock, USB-like jitter of +-1 ms, a tempo ramp
+ *   from 120 to 140 BPM, early, late and bunched clocks without a lost event,
+ *   the clamp to the next clock, outliers, a dropout and the resume, the local
+ *   start on the master's step grid, the sync mode switches, tempo jumps beyond
+ *   the outlier band, and bunched clocks that are no tempo jump (N16);
+ * - T18: the clock in jack at 4 and 24 PPQ, a tempo jump at 4 PPQ (N16), and the
+ *   pending note-off sent at a dropout (N17).
+```
+
+with:
+
+```c
+ * Slave modes (spec 5, N4, N9, N15, N16, N17, N21):
+ * - T16: MIDI clock: a steady clock, USB-like jitter of +-1 ms, a tempo ramp
+ *   from 120 to 140 BPM, early, late and bunched clocks without a lost event,
+ *   the clamp to the next clock, outliers, a dropout and the resume, the local
+ *   start on the master's step grid, the sync mode switches, tempo jumps beyond
+ *   the outlier band, and bunched clocks that are no tempo jump (N16); clocks
+ *   that share a stamp, in USB transfers of several clocks and one transfer
+ *   per audio buffer, give the clock tempo (N21, T16_packed_*);
+ * - T18: the clock in jack at 4 and 24 PPQ, a tempo jump at 4 PPQ (N16), the
+ *   pending note-off sent at a dropout (N17), and a lost or an extra pulse.
+```
+
+Replace the includes:
+
+```c
+#include "fake_host.h"
+#include "seqc_test.h"
+```
+
+with:
+
+```c
+#include <math.h>
+
+#include "fake_host.h"
+#include "seqc_test.h"
+```
+
+Then replace nine tests whose expectations the fit changes. Each "Replace the test" below means:
+from the line `TEST(name)` to its closing `}`. If the E1.14 review changed one of them, keep its
+additions where they still hold.
+
+`T16_estimate_uses_24_intervals` asserted the 24-interval mean after a step from 120 to 100 BPM.
+That step now restarts the fit (see `T16_packed_step_restarts_the_fit`). The test keeps its name and
+pins the short window with a step that stays inside both bands, 120 to 118 BPM; by symmetry the fit
+of the 24 intervals gives their mean, as before. Replace the test `T16_estimate_uses_24_intervals`
+with:
+
+```c
+TEST(T16_estimate_uses_24_intervals)
+{
+	/* N21: a small tempo change, inside the outlier band: the long window of
+	 * the fit gives way to the short one, the fit of the last 24 intervals.
+	 * 12 intervals at 120 and 12 at 118 BPM: by symmetry its slope is their
+	 * mean. (A step to 100 BPM restarts the fit instead, see
+	 * T16_packed_step_restarts_the_fit.) */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, fake_clockCycles(120.0), 30, fake_msToCycles(0.1));
+	const seqc_time_t t1 = t0 + (seqc_time_t)(29.0 * fake_clockCycles(120.0) + 0.5)
+			+ (seqc_time_t)fake_clockCycles(118.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t1, fake_clockCycles(118.0), 12, fake_msToCycles(0.1));
+	const double mean = (12.0 * fake_clockCycles(120.0) + 12.0 * fake_clockCycles(118.0)) / 24.0;
+	ASSERT_NEAR(seqc_currentBpm(), SEQC_CPU_HZ * 60.0 / (24.0 * mean), 5e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+}
+```
+
+`T16_bunched_clocks_lose_no_event` asserted `intervalsExcluded > 0`, which held only because of
+the intervals of 0. Each packet is now one point; the run ends on a packet cut short, the one
+outlier. Replace the test `T16_bunched_clocks_lose_no_event` with:
+
+```c
+TEST(T16_bunched_clocks_lose_no_event)
+{
+	/* USB: three clocks in one packet share a stamp; the gaps in between are
+	 * three intervals long. The position follows every clock. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	fake_setStep(h, 0, 1, 1, true);
+	fake_setTiming(h, 0, 1, 1, 5, 3);		/* x8 between the clocks */
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	const size_t count = 6 * 16 + 1;
+	for (size_t i = 0; i < count; i++)
+		stamps[i] = t0 + (seqc_time_t)((double)(i / 3 * 3 + 2) * per);
+	size_t i = 0;
+	seqc_time_t t = h->now;
+	double last = -1e9;
+	while (i < count)
+	{
+		t += fake_msToCycles(0.1);
+		while (i < count && stamps[i] <= t)
+			fake_sync(h, SEQC_EV_CLOCK, stamps[i++]);
+		fake_process(h, t);
+		ASSERT_TRUE(seqc_position() >= last);	/* never back */
+		last = seqc_position();
+	}
+	ASSERT_EQ(fake_triggers(h, 0, trig, 1024), 17);
+	const size_t n = fake_triggers(h, 1, trig, 1024);
+	ASSERT_EQ(n, 8);
+	for (size_t k = 1; k < n; k++)
+		ASSERT_TRUE(trig[k]->ev.tick > trig[k - 1]->ev.tick);
+	/* N21: each packet is one point, at its last clock, so the estimate is the
+	 * clock tempo. The run ends on a packet cut short: clock 96 alone, with the
+	 * stamp of clock 98, two clocks late, the one outlier. */
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+}
+```
+
+`T16_zero_interval_without_an_estimate_is_left_out`: the two clocks with one stamp are one
+transfer, so no interval of 0 is left out (1 becomes 0). Renamed
+`T16_shared_stamp_without_an_estimate_is_one_transfer`. Replace the test
+`T16_zero_interval_without_an_estimate_is_left_out` with:
+
+```c
+TEST(T16_shared_stamp_without_an_estimate_is_one_transfer)
+{
+	/* USB bunching right after the switch: the first two clocks share a stamp.
+	 * They are one transfer, the first point of the fit, at the second clock
+	 * (N21): no interval of 0 is measured, and nothing is left out. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const double per = fake_clockCycles(100.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_sync(h, SEQC_EV_CLOCK, t0);
+	fake_sync(h, SEQC_EV_CLOCK, t0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(per + 0.5), per, 30, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-2);
+}
+```
+
+`T16_outlier_interval_is_left_out`: the fit leaves out the late clock, not the two intervals around
+it (2 becomes 1). Renamed `T16_outlier_clock_is_left_out`. Replace the test
+`T16_outlier_interval_is_left_out` with:
+
+```c
+TEST(T16_outlier_clock_is_left_out)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	const size_t count = 60;
+	for (size_t i = 0; i < count; i++)
+		stamps[i] = t0 + (seqc_time_t)((double)i * per + (i == 40 ? 0.8 * per : 0.0));
+	deliver(h, SEQC_EV_CLOCK, stamps, count, fake_msToCycles(0.1));
+	/* clock 40 is 0.8 of a clock late, further from the fitted line than the
+	 * band: left out. Clock 41 is on time, on the line: used (N21: the fit
+	 * leaves out points, not intervals). */
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 10);	/* steps 0..9 */
+}
+```
+
+`T16_interval_inside_the_band_is_kept`: the late clock is evaluated at the next `seqc_process()`,
+which the test now runs, and the least-squares fit weights the last of 30 intervals by 30/4960
+instead of 1/24. Replace the test `T16_interval_inside_the_band_is_kept` with:
+
+```c
+TEST(T16_interval_inside_the_band_is_kept)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 30, fake_msToCycles(0.1));
+	const seqc_time_t late = t0 + (seqc_time_t)(29.0 * per + 1.4 * per);
+	fake_sync(h, SEQC_EV_CLOCK, late);
+	fake_process(h, late);			/* its transfer is complete (N21) */
+	/* 40% late, inside the band: used. The least-squares fit of all 31 points
+	 * (N21) weights interval j of n - 1 by j (n - j), here 30 of
+	 * n (n^2 - 1) / 6 = 4960 for the last one. */
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0 / (1.0 + 0.4 * 30.0 / 4960.0), 1e-3);
+}
+```
+
+`T16_alternating_outliers_do_not_restart`: each late clock is one outlier, a glitch (8 becomes 4),
+and the restart uses the outliers alone, so the slope is the mean of the 3 intervals between them,
+1.8 times the interval (was 1.75, the mean of 4). Replace the test
+`T16_alternating_outliers_do_not_restart` with:
+
+```c
+TEST(T16_alternating_outliers_do_not_restart)
+{
+	/* at 120 BPM, 8 intervals alternately 60% longer and 60% shorter: every
+	 * other clock is 0.6 of a clock late, and the one after it back on the
+	 * line. The 4 late ones are outliers on their own, glitches: no jump.
+	 * Then SEQC_TEMPO_RESTART longer intervals in a row, 1.6 to 1.9 times the
+	 * interval, are one: the fit restarts from those clocks alone, as after a
+	 * dropout (N21), at the mean of the intervals between them, 1.8 times. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	for (int k = 0; k < 8; k++)
+		n = appendClocks(n, per * (k % 2 == 0 ? 1.6 : 0.4), 1);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 4);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	const size_t before = n;
+	for (unsigned k = 0; k < SEQC_TEMPO_RESTART; k++)
+		n = appendClocks(n, per * (1.6 + 0.1 * k), 1);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0 / 1.8, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, 4 + SEQC_TEMPO_RESTART - 1);
+}
+```
+
+`T16_inlier_resets_the_outlier_run`: the input changes, the expectations do not. After 3 early
+clocks, one interval at 120 BPM leaves the clock early, in the row; the clock that ends the row is
+the one back on the line. Replace the test `T16_inlier_resets_the_outlier_run` with:
+
+```c
+TEST(T16_inlier_resets_the_outlier_run)
+{
+	/* at 120 BPM: 3 clocks at 270 BPM (intervals 56% shorter), each further
+	 * before the line, then one back on the line, then 3 more at 270: no
+	 * restart, the estimate stays. The count started again at the clock back on
+	 * the line, so the next outlier is the 4th in a row. (N21: the fit tests how
+	 * far a clock is from its line; one interval at 120 after the first 3 would
+	 * leave the clock early, in the row.) */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0), fast = fake_clockCycles(270.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	n = appendClocks(n, fast, 3);
+	n = appendClocks(n, 4.0 * per - 3.0 * fast, 1);	/* back on the line */
+	n = appendClocks(n, fast, 3);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 6);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	const size_t before = n;
+	n = appendClocks(n, fast, 1);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, 1, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 270.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	seqc_resetStats();
+	ASSERT_EQ(stats().tempoRestarts, 0);
+}
+```
+
+`T16_bunched_clocks_are_not_a_tempo_jump`: the late packet is one point on the line (6 becomes 0).
+Replace the test `T16_bunched_clocks_are_not_a_tempo_jump` with:
+
+```c
+TEST(T16_bunched_clocks_are_not_a_tempo_jump)
+{
+	/* USB: a late packet brings 6 clocks with one stamp, that of the last. They
+	 * are one transfer, one point of the fit at the 6th clock (N21), and it lies
+	 * on the line: no outlier and nothing left out. The estimate stays, and the
+	 * position follows every clock. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	const seqc_time_t packet = stamps[n - 1] + (seqc_time_t)(6.0 * per + 0.5);
+	for (int k = 0; k < 6; k++)
+		stamps[n++] = packet;
+	n = appendClocks(n, per, 12);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+}
+```
+
+`T16_bunched_pairs_are_not_a_tempo_jump`: each pair is one point on the line (2 x 8 becomes 0,
+twice). Replace the test `T16_bunched_pairs_are_not_a_tempo_jump` with:
+
+```c
+TEST(T16_bunched_pairs_are_not_a_tempo_jump)
+{
+	/* USB: 2 * SEQC_TEMPO_RESTART late packets in a row, each with 2 clocks
+	 * and one stamp, that of the second. Each packet is one point of the fit,
+	 * at its second clock, and lies on the line (N21): no outlier, and the
+	 * estimate does not restart at half the tempo. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const unsigned pairs = 2 * SEQC_TEMPO_RESTART;
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	for (unsigned k = 0; k < pairs; k++)
+	{
+		n = appendClocks(n, 2.0 * per, 1);
+		stamps[n] = stamps[n - 1];		/* the second clock of the packet */
+		n++;
+	}
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	const size_t before = n;
+	n = appendClocks(n, per, 12);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+}
+```
+
+Then insert the helpers and the new tests below right before the last line of the file,
+`TEST_MAIN()`. The `T16_packed_*` tests assert N21 and the parts of the fit; `T18_lost_pulse_*`
+and `T18_double_trigger_*` pin the jack behaviour that the fit keeps from E1.14, so they pass
+before this task as well.
+
+```c
+/* N21: count clocks at bpm, the true time of clock k at 10 ms + k periods,
+ * stamped the way a USB host delivers them, into stamps[]:
+ * - packet > 0: transfers of packet clocks, each stamped at its last clock;
+ * - buffer > 0: one transfer per audio buffer of buffer cycles (its phase 0.31
+ *   of a buffer), stamped at the end of the buffer the clock falls in. */
+static void usbStamps(double bpm, size_t count, unsigned packet, double buffer)
+{
+	const double per = fake_clockCycles(bpm), t0 = (double)fake_msToCycles(10.0);
+	for (size_t k = 0; k < count; k++)
+	{
+		double t = t0 + (double)k * per;
+		if (packet > 0)
+		{
+			size_t last = k / packet * packet + packet - 1;
+			if (last >= count)
+				last = count - 1;
+			t = t0 + (double)last * per;
+		}
+		else if (buffer > 0.0)
+			t = 0.31 * buffer + ceil((t - 0.31 * buffer) / buffer) * buffer;
+		stamps[k] = (seqc_time_t)(t + 0.5);
+	}
+}
+
+/* deliver the clocks of stamps[0..count) one transfer at a time, the way
+ * seq_tick() does: the clocks with one stamp, then seqc_process() at that
+ * stamp. Returns the largest |error| of seqc_currentBpm() against bpm, in %,
+ * after the transfers that end after clock first. */
+static double deliverTransfers(fake_host_t *h, double bpm, size_t count, size_t first)
+{
+	double worst = 0.0;
+	size_t i = 0;
+	while (i < count)
+	{
+		const seqc_time_t t = stamps[i];
+		while (i < count && stamps[i] == t)
+			fake_sync(h, SEQC_EV_CLOCK, stamps[i++]);
+		fake_process(h, t);
+		const double e = fabs((double)seqc_currentBpm() - bpm) / bpm * 100.0;
+		if (i > first && e > worst)
+			worst = e;
+	}
+	return worst;
+}
+
+TEST(T16_packed_clocks_give_the_clock_tempo)
+{
+	/* N21: transfers of 1 to 6 clocks, each stamped once, at its last clock.
+	 * Each transfer is one point of the fit, so the estimate is the clock
+	 * tempo, not the transfer rate: exact from the second transfer on, nothing
+	 * left out, and every step played. */
+	for (unsigned n = 1; n <= 6; n++)
+	{
+		fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+		seqc_start();
+		const size_t count = 24 * 8 + 1;
+		usbStamps(97.0, count, n, 0.0);
+		ASSERT_TRUE(deliverTransfers(h, 97.0, count, n) < 1e-4);
+		ASSERT_EQ(stats().tempoRestarts, 0);
+		ASSERT_EQ(stats().intervalsExcluded, 0);
+		ASSERT_EQ(fake_triggers(h, 0, trig, 64), (count - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+	}
+}
+
+TEST(T16_packed_audio_buffers_give_the_clock_tempo)
+{
+	/* N21: one transfer per audio buffer of 256, 512 or 1024 samples at
+	 * 44.1 kHz (5.8, 11.6 and 23.2 ms). The clocks of a buffer share the stamp
+	 * of its end, so the stamps move in steps of up to one buffer: at 101 and
+	 * 116 BPM a step of a 1024-sample buffer is about a clock, and only the
+	 * band of the fit, which grows with the steps, keeps them in. Within 0.5%
+	 * from 2 beats on, with no restart. */
+	static const double samples[] = { 256.0, 512.0, 1024.0 };
+	static const double bpms[] = { 90.0, 101.0, 116.0, 120.0, 128.0, 140.0 };
+	for (size_t b = 0; b < sizeof samples / sizeof samples[0]; b++)
+		for (size_t t = 0; t < sizeof bpms / sizeof bpms[0]; t++)
+		{
+			fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+			seqc_start();
+			const size_t count = 24 * 16 + 1;
+			usbStamps(bpms[t], count, 0, samples[b] / 44100.0 * SEQC_CPU_HZ);
+			ASSERT_TRUE(deliverTransfers(h, bpms[t], count, 2 * 24) < 0.5);
+			ASSERT_EQ(stats().tempoRestarts, 0);
+			ASSERT_EQ(fake_triggers(h, 0, trig, 128), (count - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+		}
+}
+
+TEST(T16_packed_transfer_is_evaluated_when_complete)
+{
+	/* N21: the clocks of one transfer reach the core one by one, with one
+	 * stamp. The transfer is evaluated once it is complete: at the next
+	 * seqc_process(), or at a clock with a later stamp. Until then the estimate
+	 * is the one before it. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const double per = fake_clockCycles(97.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	for (int k = 0; k < 3; k++)
+		fake_sync(h, SEQC_EV_CLOCK, t0);	/* the first point */
+	fake_process(h, t0);
+	ASSERT_NEAR(seqc_currentBpm(), SEQC_DEFAULT_BPM, 1e-3);
+	const seqc_time_t t1 = t0 + (seqc_time_t)(3.0 * per + 0.5);
+	for (int k = 0; k < 3; k++)
+		fake_sync(h, SEQC_EV_CLOCK, t1);
+	ASSERT_NEAR(seqc_currentBpm(), SEQC_DEFAULT_BPM, 1e-3);	/* still collected */
+	fake_process(h, t1);
+	ASSERT_NEAR(seqc_currentBpm(), 97.0, 1e-3);		/* 3 clocks in 3 periods */
+	/* 3 clocks at 101 BPM, completed by the next clock, without seqc_process() */
+	const seqc_time_t t2 = t1 + (seqc_time_t)(3.0 * fake_clockCycles(101.0) + 0.5);
+	for (int k = 0; k < 3; k++)
+		fake_sync(h, SEQC_EV_CLOCK, t2);
+	ASSERT_NEAR(seqc_currentBpm(), 97.0, 1e-3);
+	fake_sync(h, SEQC_EV_CLOCK, t2 + (seqc_time_t)(fake_clockCycles(101.0) + 0.5));
+	ASSERT_TRUE(seqc_currentBpm() > 98.0 && seqc_currentBpm() < 101.0);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+}
+
+TEST(T16_packed_switch_drops_the_transfer)
+{
+	/* N21: a transfer still being collected when the sync mode changes belongs
+	 * to the old mode: the switch clears the estimate and drops it, so the jack
+	 * measures its own pulses alone */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_sync(h, SEQC_EV_CLOCK, t0);
+	fake_sync(h, SEQC_EV_CLOCK, t0);		/* a transfer of 2, not evaluated yet */
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);
+	const double per = fake_stepCycles(100.0);
+	fake_runClocks(h, SEQC_EV_PULSE, t0 + fake_msToCycles(50.0), per, 2, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);	/* from the two pulses */
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+}
+
+TEST(T16_packed_jump_restarts_from_the_outliers)
+{
+	/* N16 with transfers of 3 clocks: 90 to 200 BPM, the change in the middle
+	 * of a clock interval, so the interval into the first transfer at the new
+	 * tempo has some of each. That transfer is the first outlier. After
+	 * SEQC_TEMPO_RESTART of them the fit restarts from them alone, as after a
+	 * dropout (N21), without the interval into the first: exactly 200 at once. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double slow = fake_clockCycles(90.0), fast = fake_clockCycles(200.0);
+	const size_t change = 24 * 4;		/* the interval from clock 96 to 97 */
+	const size_t count = change + 3 * (SEQC_TEMPO_RESTART + 8);
+	double t = (double)fake_msToCycles(10.0);
+	for (size_t k = 0; k < count; k++)
+	{
+		stamps[k] = (seqc_time_t)(t + 0.5);	/* the true time, for now */
+		t += k < change ? slow : k == change ? 0.5 * (slow + fast) : fast;
+	}
+	for (size_t k = 0; k < count; k++)
+		stamps[k] = stamps[k / 3 * 3 + 2];	/* transfers of 3, at their last clock */
+	const size_t before = change / 3 * 3 + 3 * SEQC_TEMPO_RESTART - 3;	/* up to the 3rd outlier */
+	deliverTransfers(h, 90.0, before, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 90.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART - 1);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	for (size_t k = 0; k < 3; k++)
+		fake_sync(h, SEQC_EV_CLOCK, stamps[before + k]);
+	fake_process(h, stamps[before]);	/* the 4th outlier */
+	ASSERT_NEAR(seqc_currentBpm(), 200.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	/* the rest of the run: deliverTransfers() starts at index 0, so move them */
+	const size_t rest = count - before - 3;
+	for (size_t k = 0; k < rest; k++)
+		stamps[k] = stamps[before + 3 + k];
+	ASSERT_TRUE(deliverTransfers(h, 200.0, rest, 0) < 1e-4);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART - 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 128), (count - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+}
+
+TEST(T16_packed_step_restarts_the_fit)
+{
+	/* N21: 120 to 100 BPM, in transfers of 1 and of 3 clocks. The intervals
+	 * are 20% longer, inside the interval band of N16, but each clock is later
+	 * than the fitted line by 20% more, so a few clocks after the step the
+	 * points leave the band of the fit (half a clock), and SEQC_TEMPO_RESTART
+	 * in a row restart it: exactly 100 within 12 clocks. The mean of 24
+	 * intervals was still between the two tempos there. */
+	for (unsigned n = 1; n <= 3; n += 2)
+	{
+		fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+		size_t count = 0;
+		double t = (double)fake_msToCycles(10.0);
+		for (size_t k = 0; k < 30 + 12; k++)
+		{
+			stamps[count++] = (seqc_time_t)(t + 0.5);
+			t += k < 29 ? fake_clockCycles(120.0) : fake_clockCycles(100.0);
+		}
+		for (size_t k = 0; k < count; k++)
+			stamps[k] = stamps[k / n * n + n - 1 < count ? k / n * n + n - 1 : count - 1];
+		deliverTransfers(h, 100.0, count, 0);
+		ASSERT_NEAR(seqc_currentBpm(), 100.0, 5e-3);
+		ASSERT_EQ(stats().tempoRestarts, 1);
+		ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART - 1);
+	}
+}
+
+TEST(T16_packed_step_amplitude_decays)
+{
+	/* N21: the step amplitude of the stamps is a decaying peak. In transfers of
+	 * 2 clocks at 120 BPM, the transfer of clocks 30 and 31 is 0.4 of a clock
+	 * late, inside the band, and the next is back on the line: a step of 0.4
+	 * clocks, which widens the switch between the windows. 8 beats later it
+	 * has decayed, and a 2% tempo step is followed through the short window:
+	 * within 0.5% 24 clocks after the step. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const double per = fake_clockCycles(120.0), per2 = fake_clockCycles(122.4);
+	const size_t step = 32 + 8 * 24, count = step + 24;
+	double t = (double)fake_msToCycles(10.0);
+	for (size_t k = 0; k < count; k++)
+	{
+		stamps[k] = (seqc_time_t)(t + (k == 31 ? 0.4 * per : 0.0) + 0.5);
+		t += k + 1 < step ? per : per2;
+	}
+	for (size_t k = 0; k < count; k++)
+		stamps[k] = stamps[k | 1u];		/* transfers of 2, at their last clock */
+	deliverTransfers(h, 122.4, count, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 122.4, 0.005 * 122.4);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+}
+
+TEST(T16_packed_glitch_leaves_the_band_as_it_was)
+{
+	/* a clock 0.8 of a clock late, back on the line at the next: a glitch, not
+	 * a step of the stamps (N21). The band stays at SEQC_TEMPO_OUTLIER_PCT, so
+	 * the same glitch 12 clocks later is left out as well: one point each. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	const size_t count = 80;
+	for (size_t i = 0; i < count; i++)
+		stamps[i] = t0 + (seqc_time_t)((double)i * per + (i == 40 || i == 52 ? 0.8 * per : 0.0));
+	deliver(h, SEQC_EV_CLOCK, stamps, count, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().intervalsExcluded, 2);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+}
+
+TEST(T16_packed_fit_is_exact_after_hours)
+{
+	/* N21: the sums count from the oldest point of the window, so transfers 22
+	 * hours after boot (stamps near 2^44 cycles) give the same estimate as at
+	 * boot, and an hour of jittered transfers of 3 clocks leaves no rounding
+	 * behind */
+	float bpm[2];
+	for (int late = 0; late < 2; late++)
+	{
+		fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+		const double per = fake_clockCycles(123.4);
+		const double t0 = late ? 17592186044416.0 : (double)fake_msToCycles(10.0);	/* 2^44 */
+		lcg = 777;
+		const uint32_t clocks = 3u * 24u * 2400u;	/* about an hour */
+		for (uint32_t k = 2; k < clocks; k += 3)
+		{
+			const seqc_time_t t = (seqc_time_t)(t0 + (double)k * per + jitterMs() * fake_msToCycles(0.3));
+			for (int c = 0; c < 3; c++)
+				fake_sync(h, SEQC_EV_CLOCK, t);
+			fake_process(h, t);
+		}
+		/* then a long window of exact transfers: the estimate is exact again */
+		for (uint32_t k = clocks + 2; k < clocks + 2u * SEQC_TEMPO_LONG_WINDOW; k += 3)
+		{
+			const seqc_time_t t = (seqc_time_t)(t0 + (double)k * per + 0.5);
+			for (int c = 0; c < 3; c++)
+				fake_sync(h, SEQC_EV_CLOCK, t);
+			fake_process(h, t);
+		}
+		bpm[late] = seqc_currentBpm();
+		ASSERT_NEAR(bpm[late], 123.4, 1e-4);
+		ASSERT_EQ(stats().tempoRestarts, 0);
+		ASSERT_EQ(stats().dropouts, 0);
+	}
+	ASSERT_NEAR(bpm[0], bpm[1], 1e-5);
+}
+
+TEST(T16_packed_fit_window_fits_in_32_bit_stamps)
+{
+	/* N21: the ring keeps 32 bits of each stamp, so the long window spans at
+	 * most 2^32 cycles: at a time base of 1 GHz, 4.3 s. A clock at 30 BPM
+	 * (83 ms), in transfers of 2, fills 96 clocks in 8 s; the window keeps the
+	 * newest 4.3 s of them, and the fit stays exact. */
+	fake_host_t *h = fake_init();
+	const double hz = 1e9;
+	seqc_init(&h->host, (uint32_t)hz);
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	for (uint8_t s = 0; s < 16; s++)
+		fake_setStep(h, 0, 0, s, true);
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	fake_process(h, 1000000);
+	seqc_start();
+	const double per = hz * 60.0 / (30.0 * 24.0);
+	const uint32_t count = 300;
+	for (uint32_t k = 1; k < count; k += 2)
+	{
+		const seqc_time_t t = (seqc_time_t)(1e7 + (double)k * per + 0.5);
+		fake_sync(h, SEQC_EV_CLOCK, t);
+		fake_sync(h, SEQC_EV_CLOCK, t);
+		fake_process(h, t + 1000);
+		if (k > 24)
+			ASSERT_NEAR(seqc_currentBpm(), 30.0, 1e-3);
+	}
+	ASSERT_EQ(stats().dropouts, 0);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), (count - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+}
+
+TEST(T16_packed_set_tempo_keeps_a_measured_estimate)
+{
+	/* seqc_setTempo() in MIDI sync, with transfers of 3 clocks: it sets the
+	 * first estimate while the fit has no slope; a measured estimate stays;
+	 * after a dropout, which clears the fit, it is the first estimate again */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_setTempo(140.0f);
+	ASSERT_NEAR(seqc_currentBpm(), 140.0, 1e-3);
+	const size_t count = 30;
+	usbStamps(100.0, count, 3, 0.0);
+	deliverTransfers(h, 100.0, count, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);
+	seqc_setTempo(150.0f);
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);
+	fake_runClocks(h, SEQC_EV_CLOCK, h->now + fake_msToCycles(800.0), fake_clockCycles(100.0), 1,
+			fake_msToCycles(0.1));
+	ASSERT_EQ(stats().dropouts, 1);
+	seqc_setTempo(150.0f);
+	ASSERT_NEAR(seqc_currentBpm(), 150.0, 1e-3);
+}
+
+/* the jack at ppq, 120 BPM: pulses 0..count-1 of the master, with pulse at
+ * (and pulse again, if not 0) lost, or (extra) followed by a second pulse 5% of
+ * a pulse after it. Returns the largest |error| of the estimate in % from the
+ * pulse after at on. */
+static double jackCountError(uint8_t ppq, uint32_t count, uint32_t at, uint32_t again, bool extra)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_setAnalogPpq(ppq);
+	seqc_start();
+	const double per = ppq == 24 ? fake_clockCycles(120.0) : fake_stepCycles(120.0);
+	double worst = 0.0;
+	for (uint32_t c = 0; c < count; c++)
+	{
+		const seqc_time_t t = fake_msToCycles(10.0) + (seqc_time_t)((double)c * per + 0.5);
+		const bool event = c == at || (again != 0 && c == again);
+		if (event && !extra)
+			continue;
+		fake_sync(h, SEQC_EV_PULSE, t);
+		fake_process(h, t);
+		if (event)
+		{
+			fake_sync(h, SEQC_EV_PULSE, t + (seqc_time_t)(0.05 * per));
+			fake_process(h, t + (seqc_time_t)(0.05 * per));
+		}
+		const double e = fabs((double)seqc_currentBpm() - 120.0) / 120.0 * 100.0;
+		if (c > at && e > worst)
+			worst = e;
+	}
+	return worst;
+}
+
+TEST(T18_lost_pulse_keeps_the_tempo)
+{
+	/* jack stamps are exact, so an interval off the slope is a lost or an extra
+	 * pulse: it is left out, and the fit goes on from the pulse after it as if
+	 * the interval had had the slope (N9, N21). A lost pulse leaves the
+	 * estimate alone, and is no step of the stamps that would let a second one
+	 * in. */
+	ASSERT_TRUE(jackCountError(4, 24, 12, 0, false) < 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_TRUE(jackCountError(24, 24 * 8, 24 * 4, 24 * 4 + 12, false) < 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 2);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+}
+
+TEST(T18_double_trigger_is_left_out)
+{
+	/* a second pulse 5% after a real one: its short interval is left out, and
+	 * the next, 5% short, is used: the estimate moves by about 1.5% for the 4
+	 * pulses of the window at 4 PPQ, then is exact again */
+	ASSERT_TRUE(jackCountError(4, 24, 12, 0, true) < 2.0);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+}
+
+TEST(T18_alternating_outliers_do_not_restart)
+{
+	/* the jack at 4 PPQ, 120 BPM: 4 intervals alternately 60% longer and 60%
+	 * shorter are outliers on both sides, each left out: no jump (N16). Then
+	 * SEQC_TEMPO_RESTART_4PPQ longer ones in a row are one: the fit restarts
+	 * from those pulses alone, at the interval between them. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_start();
+	const double per = fake_stepCycles(120.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW_4PPQ + 1);
+	for (int k = 0; k < 4; k++)
+		n = appendClocks(n, per * (k % 2 == 0 ? 1.6 : 0.4), 1);
+	deliver(h, SEQC_EV_PULSE, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, 4);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	const size_t before = n;
+	n = appendClocks(n, 1.7 * per, 1);
+	n = appendClocks(n, 1.8 * per, 1);
+	deliver(h, SEQC_EV_PULSE, stamps + before, n - before, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0 / 1.8, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, 5);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), n);	/* one step per pulse */
+}
+```
+
+In `tests/test_overflow.c` (LF), `T19_reset_stats_clears_every_counter` (added by the E1.12 review)
+needs one excluded interval. Its three MIDI clocks fall in the first half short window, where the
+fit tests nothing, so the outlier comes after 13 clocks now. This passes before the task as well.
+Replace:
+
+```c
+	/* MIDI clock: an outlier interval and a dropout */
+	seqc_stop();
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	const seqc_time_t t0 = h->now + fake_msToCycles(1.0);
+	fake_sync(h, SEQC_EV_CLOCK, t0);
+	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(20.833));
+	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(22.833));
+	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(1100.0));
+```
+
+with:
+
+```c
+	/* MIDI clock: an outlier and a dropout. The tempo fit tests no clock while
+	 * it spans less than half its short window (N21), so 13 clocks at 120 BPM
+	 * come first; the 14th is 0.6 of a clock late. */
+	seqc_stop();
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	const seqc_time_t t0 = h->now + fake_msToCycles(1.0);
+	for (int k = 0; k < 13; k++)
+		fake_sync(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(k * fake_clockCycles(120.0)));
+	fake_sync(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(13.6 * fake_clockCycles(120.0)));
+	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(1100.0));
+```
+
+If a test that the E1.13 or E1.14 review added relies on the interval mean (an interval of 0 left
+out, two intervals counted around a late clock, a restart from the mean of the outlier intervals,
+an outlier among the first clocks), adapt it as the tests above.
+
+- [x] **Step 2: Run them to verify they fail**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: the test build fails, because `seq_core.h` has no long window. The firmware still
+builds:
+
+```
+== host tests
+host test build FAILED
+/Library/Developer/CommandLineTools/usr/bin/cc ... (the compile command of test_slave.c)
+.../tests/test_slave.c:1200:51: error: use of undeclared identifier 'SEQC_TEMPO_LONG_WINDOW'
+1 error generated.
+== firmware build (release)
+memory: ITCM 15000/16384 B (91.6%, free 1384)  ...  image 274688/1015808 B (27.0%)
+...
+== compiler warnings: 0
+exit 1
+```
+
+- [x] **Step 3: Add the long windows and the comments to `seq_core.h`**
+
+`Core/Inc/Soundengine/Sequencer/seq_core.h` is CRLF. Convert it to LF first:
+`perl -pi -e 's/\r\n/\n/' Core/Inc/Soundengine/Sequencer/seq_core.h`. Then make these five
+replacements. Each "before" text occurs once in the file.
+
+**1. The notes it follows (lines 21-22).** Replace:
+
+```c
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N18;
+ * they win where the two differ).
+```
+
+with:
+
+```c
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N21;
+ * they win where the two differ).
+```
+
+**2. The windows of the fit and the outlier band (lines 204-206).** Replace:
+
+```c
+#define SEQC_TEMPO_WINDOW           24u   /**< clock intervals averaged: MIDI clock, jack at 24 PPQ */
+#define SEQC_TEMPO_WINDOW_4PPQ       4u   /**< clock intervals averaged: jack at 4 PPQ */
+#define SEQC_TEMPO_OUTLIER_PCT      50u   /**< an interval off the mean by more than this is an outlier */
+```
+
+with:
+
+```c
+#define SEQC_TEMPO_WINDOW           24u   /**< short window of the tempo fit, clocks: MIDI clock, jack at 24 PPQ */
+#define SEQC_TEMPO_WINDOW_4PPQ       4u   /**< short window of the tempo fit, clocks: jack at 4 PPQ */
+#define SEQC_TEMPO_LONG_WINDOW      96u   /**< long window of the tempo fit, clocks: MIDI clock, jack at 24 PPQ (N21) */
+#define SEQC_TEMPO_LONG_WINDOW_4PPQ  4u   /**< long window of the tempo fit, clocks: jack at 4 PPQ (the short one) */
+#define SEQC_TEMPO_OUTLIER_PCT      50u   /**< a clock off the fitted line by more than this share of a clock is an outlier */
+```
+
+**3. `seqc_stats_t.intervalsExcluded` (line 308).** Replace:
+
+```c
+	uint32_t intervalsExcluded;	/**< clock intervals left out of the tempo estimate (outliers) */
+```
+
+with:
+
+```c
+	uint32_t intervalsExcluded;	/**< transfers of clocks left out of the tempo fit (outliers, N21) */
+```
+
+**4. `seqc_setAnalogPpq()` (lines 434-436).** Replace:
+
+```c
+ * - 4 PPQ: one pulse is 96 ticks and one step, and 4 intervals are averaged.
+ * - 24 PPQ: one pulse is 16 ticks, 6 pulses make a step, and 24 intervals are
+ *   averaged.
+```
+
+with:
+
+```c
+ * - 4 PPQ: one pulse is 96 ticks and one step; the tempo fit uses the last
+ *   4 intervals.
+ * - 24 PPQ: one pulse is 16 ticks, 6 pulses make a step; the tempo fit uses
+ *   windows of 24 and 96 intervals, as for MIDI clock.
+```
+
+**5. "Slave position": the fit, the transfers, the outliers and N16 (lines 508-522).** Replace:
+
+```c
+ * - The estimate is the mean of the last SEQC_TEMPO_WINDOW intervals
+ *   (SEQC_TEMPO_WINDOW_4PPQ for the jack at 4 PPQ), clamped to
+ *   SEQC_SLAVE_BPM_MIN..MAX. An interval more than SEQC_TEMPO_OUTLIER_PCT
+ *   longer or shorter than the mean is an outlier and is left out, unless it
+ *   completes a tempo jump. Without a measured interval, the last known tempo
+ *   is used.
+ * - A tempo jump (N16): after SEQC_TEMPO_RESTART outliers in a row on the same
+ *   side of the mean, all longer or all shorter (SEQC_TEMPO_RESTART_4PPQ for
+ *   the jack at 4 PPQ), the estimate restarts from those intervals alone. An
+ *   interval inside the band, or an outlier on the other side, ends the row. In
+ *   tempo, the band takes in anything from two thirds of the estimate up to
+ *   twice it.
+ * - An interval of 0 (the clocks of one USB packet share a stamp) is left out
+ *   and ends the row: the packet came late, so the interval before the 0 is no
+ *   sign of a new tempo either.
+```
+
+with:
+
+```c
+ * - The estimate (N21) is the slope of a least-squares fit of the clock stamps
+ *   against the clock count: the clock period. It is clamped to
+ *   SEQC_SLAVE_BPM_MIN..MAX. Without a fitted slope (fewer than two points),
+ *   the last known tempo is used.
+ * - Clocks that share a stamp, as the clocks of one USB transfer do, form a
+ *   transfer: one point of the fit, at its last clock. A transfer is evaluated
+ *   once it is complete, at the next clock with a later stamp, the next other
+ *   sync event or the next seqc_process(), so seqc_currentBpm() includes the
+ *   clocks given to seqc_syncEvent() from the next seqc_process() on.
+ * - The fit has two windows: the points of the last SEQC_TEMPO_WINDOW clocks
+ *   and of the last SEQC_TEMPO_LONG_WINDOW clocks (SEQC_TEMPO_WINDOW_4PPQ and
+ *   SEQC_TEMPO_LONG_WINDOW_4PPQ for the jack at 4 PPQ, where both are the same).
+ *   The estimate is the slope of the long window. When the short window's
+ *   slope differs from it by more than the steps of the stamps can explain, the
+ *   long window drops its older points and becomes the short one, so a tempo
+ *   change is followed within the short window.
+ * - MIDI clock: a point further from the long window's fitted line than
+ *   SEQC_TEMPO_OUTLIER_PCT of a clock is an outlier and is left out, unless it
+ *   completes a tempo jump. Where the stamps move in steps (quantized to the
+ *   host's audio buffers), the band is wider: about the size of the steps.
+ * - Clock in jack: an interval more than SEQC_TEMPO_OUTLIER_PCT off the fitted
+ *   slope is an outlier and is left out, unless it completes a tempo jump; the
+ *   fit goes on as if it had had the slope, so a lost or an extra pulse does
+ *   not move the estimate.
+ * - The points of the first half short window after a start of the fit are not
+ *   tested.
+ * - A tempo jump (N16): after SEQC_TEMPO_RESTART outliers in a row on the same
+ *   side, all late or all early (SEQC_TEMPO_RESTART_4PPQ for the jack at
+ *   4 PPQ), the fit restarts from those outliers alone, as after a dropout. A
+ *   point inside the band, or an outlier on the other side, ends the row. For
+ *   MIDI clock, a tempo change that takes the clocks out of the band within a
+ *   few clocks (about 15% or more) restarts the fit this way too.
+```
+
+Convert it back and check:
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Inc/Soundengine/Sequencer/seq_core.h && file Core/Inc/Soundengine/Sequencer/seq_core.h`
+
+Expected: `... with CRLF line terminators`
+
+- [x] **Step 4: Run the tests to verify they fail for the reasons named**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `91% tests passed, 2 tests failed out of 22`, `18 - T16 (Failed)`, `19 - T18 (Failed)`,
+`exit 1`.
+
+Run: `build/host-tests/test_slave`
+
+Expected: `test_overflow` (`T19`) and every test of `test_slave` that this task does not change
+pass, and so do `T16_estimate_uses_24_intervals` (the mean of 24 intervals is the short window's
+slope here), `T18_lost_pulse_keeps_the_tempo` and `T18_double_trigger_is_left_out`. Every other
+changed or new test fails: the interval mean measures the transfer rate, counts the intervals of 0,
+leaves out both intervals around a late clock, follows a step only through the window, evaluates
+each clock at once, and restarts from the mean of the outlier intervals. The output, without the
+`PASS` lines (the line numbers move with the length of the file after the E1.14 review):
+
+```
+.../tests/test_slave.c:218: ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3) failed: 40 vs 120
+FAIL T16_bunched_clocks_lose_no_event
+.../tests/test_slave.c:234: ASSERT_EQ(stats().intervalsExcluded, 0) failed: 1 != 0
+FAIL T16_shared_stamp_without_an_estimate_is_one_transfer
+.../tests/test_slave.c:269: ASSERT_EQ(stats().intervalsExcluded, 1) failed: 2 != 1
+FAIL T16_outlier_clock_is_left_out
+.../tests/test_slave.c:287: ASSERT_NEAR(seqc_currentBpm(), 120.0 / (1.0 + 0.4 * 30.0 / 4960.0), 1e-3) failed: 118.032784 vs 119.710378
+FAIL T16_interval_inside_the_band_is_kept
+.../tests/test_slave.c:788: ASSERT_EQ(stats().intervalsExcluded, 4) failed: 8 != 4
+FAIL T16_alternating_outliers_do_not_restart
+.../tests/test_slave.c:816: ASSERT_EQ(stats().intervalsExcluded, 6) failed: 7 != 6
+FAIL T16_inlier_resets_the_outlier_run
+.../tests/test_slave.c:844: ASSERT_EQ(stats().intervalsExcluded, 0) failed: 6 != 0
+FAIL T16_bunched_clocks_are_not_a_tempo_jump
+.../tests/test_slave.c:868: ASSERT_EQ(stats().intervalsExcluded, 0) failed: 16 != 0
+FAIL T16_bunched_pairs_are_not_a_tempo_jump
+.../tests/test_slave.c:992: ASSERT_TRUE(deliverTransfers(h, 97.0, count, n) < 1e-4) failed
+FAIL T16_packed_clocks_give_the_clock_tempo
+.../tests/test_slave.c:1016: ASSERT_TRUE(deliverTransfers(h, bpms[t], count, 2 * 24) < 0.5) failed
+FAIL T16_packed_audio_buffers_give_the_clock_tempo
+.../tests/test_slave.c:1038: ASSERT_NEAR(seqc_currentBpm(), SEQC_DEFAULT_BPM, 1e-3) failed: 32.3333321 vs 120
+FAIL T16_packed_transfer_is_evaluated_when_complete
+.../tests/test_slave.c:1065: ASSERT_EQ(stats().intervalsExcluded, 0) failed: 1 != 0
+FAIL T16_packed_switch_drops_the_transfer
+.../tests/test_slave.c:1090: ASSERT_NEAR(seqc_currentBpm(), 90.0, 1e-3) failed: 30.3477345 vs 90
+FAIL T16_packed_jump_restarts_from_the_outliers
+.../tests/test_slave.c:1129: ASSERT_NEAR(seqc_currentBpm(), 100.0, 5e-3) failed: 109.090912 vs 100
+FAIL T16_packed_step_restarts_the_fit
+.../tests/test_slave.c:1155: ASSERT_NEAR(seqc_currentBpm(), 122.4, 0.005 * 122.4) failed: 60.594059 vs 122.4
+FAIL T16_packed_step_amplitude_decays
+.../tests/test_slave.c:1173: ASSERT_EQ(stats().intervalsExcluded, 2) failed: 4 != 2
+FAIL T16_packed_glitch_leaves_the_band_as_it_was
+.../tests/test_slave.c:1208: ASSERT_NEAR(bpm[late], 123.4, 1e-4) failed: 41.1333351 vs 123.4
+FAIL T16_packed_fit_is_exact_after_hours
+.../tests/test_slave.c:1239: ASSERT_NEAR(seqc_currentBpm(), 30.0, 1e-3) failed: 20 vs 30
+FAIL T16_packed_fit_window_fits_in_32_bit_stamps
+.../tests/test_slave.c:1258: ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3) failed: 33.3333321 vs 100
+FAIL T16_packed_set_tempo_keeps_a_measured_estimate
+.../tests/test_slave.c:1344: ASSERT_NEAR(seqc_currentBpm(), 120.0 / 1.8, 1e-3) failed: 68.5714264 vs 66.6666667
+FAIL T18_alternating_outliers_do_not_restart
+33 of 53 tests passed
+```
+
+- [x] **Step 5: Implement the fit in `Core/Src/Soundengine/Sequencer/seq_core.c`**
+
+`seq_core.c` is CRLF; convert it to LF first: `perl -pi -e 's/\r\n/\n/' Core/Src/Soundengine/Sequencer/seq_core.c`.
+The operations are in file order.
+
+In the top comment, replace:
+
+```c
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N18;
+ * they win where the two differ).
+```
+
+with:
+
+```c
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N21;
+ * they win where the two differ).
+```
+
+In the constants, replace:
+
+```c
+#ifndef SEQC_QUEUE_CAPACITY
+#define SEQC_QUEUE_CAPACITY	SEQC_QUEUE_SIZE
+#endif
+```
+
+with:
+
+```c
+#ifndef SEQC_QUEUE_CAPACITY
+#define SEQC_QUEUE_CAPACITY	SEQC_QUEUE_SIZE
+#endif
+//------------------------------------------------------------------------------
+/* The tempo fit (N21), see the Tempo estimate section. The windows, the outlier
+ * band and the restart counts are in seq_core.h. The tunables can be set with
+ * -D for host measurements. */
+#define SEQC_TEMPO_RING		(SEQC_TEMPO_LONG_WINDOW + 2u)	/**< points: a long window and the next one */
+#define SEQC_TEMPO_SPAN_S	16u	/**< the long window holds at most 16 s, so 32-bit stamps suffice in the ring */
+#ifndef SEQC_TEMPO_BAND_STEP
+#define SEQC_TEMPO_BAND_STEP	1.25	/**< the outlier band is at least this many step amplitudes */
+#endif
+#ifndef SEQC_TEMPO_SWITCH_STEP
+#define SEQC_TEMPO_SWITCH_STEP	1.5	/**< the windows' slopes may differ by this many step bounds */
+#endif
+#ifndef SEQC_TEMPO_STEP_DECAY
+#define SEQC_TEMPO_STEP_DECAY	(1.0 / 64.0)	/**< of the step amplitude, per point */
+#endif
+#ifndef SEQC_TEMPO_DRIFT_GAIN
+#define SEQC_TEMPO_DRIFT_GAIN	0.25	/**< of the mean interval deviation, per point */
+#endif
+_Static_assert(SEQC_TEMPO_RING <= 255u, "the ring indexes are 8 bits");
+```
+
+Insert after `seqc_arm_t` (`seqc_point_t`, `seqc_sums_t`, `seqc_fit_t`):
+
+```c
+//------------------------------------------------------------------------------
+/** a point of the tempo fit (N21): the last clock of a transfer, the clocks
+ * that share a stamp */
+typedef struct
+{
+	uint64_t	stamp;
+	uint32_t	clock;		/**< the fit's own clock count */
+} seqc_point_t;
+
+//------------------------------------------------------------------------------
+/** least-squares sums of points (x, y): x in clocks and y in cycles from the
+ * base point. Every value is an integer below 2^53, so the sums are exact. */
+typedef struct
+{
+	double		n, sx, sy, sxx, sxy;
+} seqc_sums_t;
+
+//------------------------------------------------------------------------------
+/** the tempo fit (N9, N16, N21) */
+typedef struct
+{
+	seqc_sums_t	lng;		/**< long window: the points of the last SEQC_TEMPO_LONG_WINDOW clocks */
+	seqc_sums_t	sht;		/**< short window: the points of the last SEQC_TEMPO_WINDOW clocks */
+	uint32_t	baseClock;	/**< the base point, x = y = 0: the oldest of the long window */
+	uint64_t	baseStamp;
+	uint8_t		head;		/**< ring index of the next point */
+	uint8_t		tailL;		/**< ring index of the oldest point of the long window */
+	uint8_t		tailS;		/**< ring index of the oldest point of the short window */
+	bool		havePrev;
+	seqc_point_t	prev;		/**< the newest point, in the windows or not */
+	seqc_point_t	row[SEQC_TEMPO_RESTART];	/**< N16: the outliers in a row */
+	uint8_t		rowCount;
+	bool		rowLate;	/**< they lie after the fitted line (else before it) */
+	double		rowResidual;	/**< residual of the row's first outlier, cycles */
+	double		stepBeforeRow;	/**< the step amplitude before it */
+	int64_t		phase;		/**< jack: cycles taken off the stamps, the deviations of the intervals left out */
+	double		drift;		/**< mean of interval - slope x clocks over the recent points, cycles */
+	double		lastOff;	/**< the newest point's interval - slope x clocks, less the drift */
+	bool		haveLastOff;
+	double		step;		/**< step amplitude: decaying peak of the steps, cycles */
+	double		slope;		/**< the estimate, cycles per clock; 0 while there is none */
+} seqc_fit_t;
+```
+
+Replace `seqc_slave_t` with:
+
+```c
+/** slave modes: clock count, tempo estimate and the interpolation (N9) */
+typedef struct
+{
+	uint8_t		ppq;		/**< clock in jack: 4 or 24 */
+	seqc_arm_t	arm;
+	uint32_t	clockCount;	/**< clocks since the last reset of the count */
+	bool		haveStamp;
+	seqc_time_t	lastStamp;	/**< stamp of the last clock, in any state */
+	double		lastClockPos;	/**< position of the last clock while running, ticks */
+	seqc_time_t	lastClockTime;	/**< its stamp */
+	bool		droppedOut;	/**< no clock for the dropout time (N15): the position holds */
+	double		bpm;		/**< the estimate, or the last known tempo */
+	double		ticksPerCycle;	/**< of bpm */
+	double		cyclesPerTick;
+	uint32_t	fitClock;	/**< clocks counted by the tempo fit */
+	bool		transferOpen;	/**< a transfer is being collected (N21) */
+	seqc_point_t	transfer;	/**< its stamp, and its last clock so far */
+	seqc_fit_t	fit;		/**< the tempo fit (N9, N16, N21) */
+	uint32_t	ringClock[SEQC_TEMPO_RING];	/**< the points of the long window */
+	uint32_t	ringStamp[SEQC_TEMPO_RING];	/**< their stamps, low 32 bits */
+} seqc_slave_t;
+```
+
+Replace `seqc_dropoutCycles()` with:
+
+```c
+/** the dropout time (N15): SEQC_DROPOUT_MS, or two expected clock intervals if
+ * that is longer. Without an estimate the interval is the one at
+ * SEQC_SLAVE_BPM_MIN, so that a slow clock can still build its first estimate. */
+static seqc_time_t seqc_dropoutCycles(void)
+{
+	const double cyclesPerTick = seqc_sl.fit.slope > 0.0 ? seqc_sl.cyclesPerTick
+			: 1.0 / seqc_ticksPerCycle(SEQC_SLAVE_BPM_MIN);
+	const double twoClocks = 2.0 * seqc_ticksPerClock() * cyclesPerTick;
+	const double minimum = (double)seqc.cyclesPerSecond * SEQC_DROPOUT_MS / 1000.0;
+	return (seqc_time_t)(twoClocks > minimum ? twoClocks : minimum);
+}
+```
+
+Replace the four functions `seqc_clearEstimate()`, `seqc_windowAdd()`, `seqc_tempoInterval()` and
+`seqc_tempoClock()`, from the doc comment of `seqc_clearEstimate()` to the closing line of
+`seqc_tempoClock()` (the separator lines between them go too; the one above `seqc_clearEstimate()`
+stays), with:
+
+```c
+/*
+ * The estimate (N9, N16, N21) is a least-squares fit of the clock stamps against
+ * the clock count. Its slope is the clock period.
+ * - Transfers: USB stamps the clocks of one transfer once, when the transfer is
+ *   in, so they share the stamp of the last of them. The clocks with one stamp
+ *   form a transfer, which is one point of the fit, at its last clock. It is
+ *   evaluated once it is complete: at the next clock with a later stamp, at any
+ *   other sync event, or at the next seqc_process(). seq_tick() drains every
+ *   queued clock before it calls seqc_process(), and the USB interrupt queues
+ *   all the clocks of a transfer before seq_tick() can run.
+ * - Windows: the points of the last SEQC_TEMPO_WINDOW clocks (short) and of the
+ *   last SEQC_TEMPO_LONG_WINDOW clocks (long; the 4PPQ values for the jack at
+ *   4 PPQ), and at most SEQC_TEMPO_SPAN_S. The estimate is the slope of the long
+ *   window. If the short window's slope differs from it by more than the steps
+ *   of the stamps explain, the tempo is changing: the long window drops its older
+ *   points and becomes the short one.
+ * - Steps: how far a point's interval is from the slope; their amplitude is a
+ *   decaying peak. Stamps quantized to audio buffers move in steps of up to one
+ *   buffer, a clock in exact stamps only by its jitter.
+ * - Outliers, MIDI: a point further from the long window's line than the band
+ *   is left out. The band is SEQC_TEMPO_OUTLIER_PCT of the slope, and at least
+ *   SEQC_TEMPO_BAND_STEP step amplitudes, so the steps of USB stamps stay in;
+ *   a lasting step is a step of the stamps, and the line takes it in. An
+ *   outlier whose next point is back near the line was a glitch: its step is
+ *   forgotten.
+ * - Outliers, clock in jack: the stamps are exact, so a step of the stamps can
+ *   only be a lost or an extra pulse. The test is on the interval: one more
+ *   than SEQC_TEMPO_OUTLIER_PCT off the slope is left out, and the line goes on
+ *   from its point as if the interval had had the slope (N9).
+ * - The points of the first half short window are taken without the test.
+ * - A tempo jump (N16): SEQC_TEMPO_RESTART outliers in a row on the same side
+ *   restart the fit from them alone, as after a dropout: the first of them is
+ *   the first point. The interval into it may straddle the change, so it is
+ *   not used. The step amplitude stays: it belongs to the stamps, not to the
+ *   tempo.
+ */
+/** true for the jack at 4 PPQ, whose clock is a step */
+static bool seqc_jack4(void)
+{
+	return seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24;
+}
+//------------------------------------------------------------------------------
+/** clocks of the short window of the fit */
+static uint32_t seqc_shortWindow(void)
+{
+	return seqc_jack4() ? SEQC_TEMPO_WINDOW_4PPQ : SEQC_TEMPO_WINDOW;
+}
+//------------------------------------------------------------------------------
+/** clocks of the long window of the fit */
+static uint32_t seqc_longWindow(void)
+{
+	return seqc_jack4() ? SEQC_TEMPO_LONG_WINDOW_4PPQ : SEQC_TEMPO_LONG_WINDOW;
+}
+//------------------------------------------------------------------------------
+/** the ring index after i */
+static uint8_t seqc_ringNext(uint8_t i)
+{
+	return i + 1u < SEQC_TEMPO_RING ? (uint8_t)(i + 1u) : 0u;
+}
+//------------------------------------------------------------------------------
+/** x of ring point i: clocks from the base point */
+static double seqc_ringX(uint8_t i)
+{
+	return (double)(uint32_t)(seqc_sl.ringClock[i] - seqc_sl.fit.baseClock);
+}
+//------------------------------------------------------------------------------
+/** y of ring point i: cycles from the base point (the window spans less than
+ * 2^32 cycles) */
+static double seqc_ringY(uint8_t i)
+{
+	return (double)(uint32_t)(seqc_sl.ringStamp[i] - (uint32_t)seqc_sl.fit.baseStamp);
+}
+//------------------------------------------------------------------------------
+/** add (w = 1) or remove (w = -1) a point */
+static void seqc_sumsAdd(seqc_sums_t *s, double x, double y, double w)
+{
+	s->n += w;
+	s->sx += w * x;
+	s->sy += w * y;
+	s->sxx += w * x * x;
+	s->sxy += w * x * y;
+}
+//------------------------------------------------------------------------------
+/** move the origin of the sums to (dx, dy); exact, as all terms are integers */
+static void seqc_sumsShift(seqc_sums_t *s, double dx, double dy)
+{
+	s->sxy -= dy * s->sx + dx * s->sy - s->n * dx * dy;
+	s->sxx -= (2.0 * s->sx - s->n * dx) * dx;
+	s->sx -= s->n * dx;
+	s->sy -= s->n * dy;
+}
+//------------------------------------------------------------------------------
+/** the fitted slope in cycles per clock; 0 with fewer than two points */
+static double seqc_sumsSlope(const seqc_sums_t *s)
+{
+	if (s->n < 2.0)
+		return 0.0;
+	const double mx = s->sx / s->n;
+	const double sxx = s->sxx - mx * s->sx;
+	const double sxy = s->sxy - mx * s->sy;
+	return sxx > 0.0 && sxy > 0.0 ? sxy / sxx : 0.0;
+}
+//------------------------------------------------------------------------------
+/** the fitted line at x, with its slope */
+static double seqc_sumsAt(const seqc_sums_t *s, double x, double slope)
+{
+	return (s->sy + slope * (x * s->n - s->sx)) / s->n;
+}
+//------------------------------------------------------------------------------
+/** clocks from the oldest to the newest point of the long window */
+static double seqc_fitSpan(void)
+{
+	const seqc_fit_t *f = &seqc_sl.fit;
+	if (f->tailL == f->head)
+		return 0.0;
+	return seqc_ringX(f->head > 0u ? (uint8_t)(f->head - 1u) : (uint8_t)(SEQC_TEMPO_RING - 1u));
+}
+//------------------------------------------------------------------------------
+/** the base point becomes the oldest point of the long window */
+static void seqc_fitRebase(void)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	const double dx = seqc_ringX(f->tailL);
+	const double dy = seqc_ringY(f->tailL);
+	seqc_sumsShift(&f->lng, dx, dy);
+	seqc_sumsShift(&f->sht, dx, dy);
+	f->baseClock = seqc_sl.ringClock[f->tailL];
+	f->baseStamp += (uint64_t)dy;
+}
+//------------------------------------------------------------------------------
+/** empty both windows */
+static void seqc_fitClearWindows(void)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	f->tailL = f->head;
+	f->tailS = f->head;
+	memset(&f->lng, 0, sizeof f->lng);
+	memset(&f->sht, 0, sizeof f->sht);
+}
+//------------------------------------------------------------------------------
+/** add point p to the ring and to both windows; the points that leave a window
+ * go out of its sums */
+static void seqc_fitAdd(seqc_point_t p)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	const uint32_t shortW = seqc_shortWindow();
+	const uint32_t longW = seqc_longWindow();
+	uint64_t span = (uint64_t)seqc.cyclesPerSecond * SEQC_TEMPO_SPAN_S;
+	if (span > UINT32_MAX)
+		span = UINT32_MAX;	/* the ring keeps 32 bits of each stamp */
+	bool moved = false;
+	while (f->tailL != f->head && (p.clock - seqc_sl.ringClock[f->tailL] > longW
+			|| p.stamp - (f->baseStamp + (uint64_t)seqc_ringY(f->tailL)) > span))
+	{
+		if (f->tailS == f->tailL)
+		{
+			seqc_sumsAdd(&f->sht, seqc_ringX(f->tailS), seqc_ringY(f->tailS), -1.0);
+			f->tailS = seqc_ringNext(f->tailS);
+		}
+		seqc_sumsAdd(&f->lng, seqc_ringX(f->tailL), seqc_ringY(f->tailL), -1.0);
+		f->tailL = seqc_ringNext(f->tailL);
+		moved = true;
+	}
+	while (f->tailS != f->head && p.clock - seqc_sl.ringClock[f->tailS] > shortW)
+	{
+		seqc_sumsAdd(&f->sht, seqc_ringX(f->tailS), seqc_ringY(f->tailS), -1.0);
+		f->tailS = seqc_ringNext(f->tailS);
+	}
+	if (f->tailL == f->head)
+	{
+		/* p is the only point: the base */
+		seqc_fitClearWindows();
+		f->baseClock = p.clock;
+		f->baseStamp = p.stamp;
+	}
+	else if (moved)
+		seqc_fitRebase();
+	seqc_sl.ringClock[f->head] = p.clock;
+	seqc_sl.ringStamp[f->head] = (uint32_t)p.stamp;
+	f->head = seqc_ringNext(f->head);
+	const double x = (double)(uint32_t)(p.clock - f->baseClock);
+	const double y = (double)(p.stamp - f->baseStamp);
+	seqc_sumsAdd(&f->lng, x, y, 1.0);
+	seqc_sumsAdd(&f->sht, x, y, 1.0);
+}
+//------------------------------------------------------------------------------
+/** the long window becomes the short one when their slopes differ by more than
+ * the steps can explain: SEQC_TEMPO_SWITCH_STEP times the largest slope error
+ * that steps of the amplitude can give the two windows. The amplitude includes
+ * the offset of the newest point, which may be a step the next point confirms.
+ * Returns the slope of the long window, or of the short one after a switch. */
+static double seqc_fitSwitch(double newestOff)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	const double longSlope = seqc_sumsSlope(&f->lng);
+	if (f->tailS == f->tailL || f->sht.n < 3.0)
+		return longSlope;
+	const double step = newestOff > f->step ? newestOff : f->step;
+	const double shortSlope = seqc_sumsSlope(&f->sht);
+	const double d = shortSlope - longSlope;
+	const double allowed = SEQC_TEMPO_SWITCH_STEP * 1.5 * step
+			* (1.0 / (double)seqc_shortWindow() + 1.0 / (double)seqc_longWindow());
+	if (d <= allowed && -d <= allowed)
+		return longSlope;
+	f->lng = f->sht;
+	f->tailL = f->tailS;
+	seqc_fitRebase();
+	f->drift = 0.0;		/* the slope changes: the offsets start again */
+	f->haveLastOff = false;
+	return shortSlope;
+}
+//------------------------------------------------------------------------------
+/** the point of a complete transfer goes into the fit */
+static void seqc_fitPoint(seqc_point_t p)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	const bool jack = seqc.mode == SEQC_SYNC_ANALOG;
+	/* Steps of the stamps. How far an interval is from the slope, less the drift
+	 * (the recent mean of that, which a ramp moves slowly), is its offset.
+	 * Stamps quantized to buffers, or with jitter, stay near the true times: the
+	 * next offset turns back or stops (opposite sign, or under half), and the
+	 * offset was a step of the stamps. A tempo change makes the offsets after it
+	 * go on to the same side, falling only as the drift follows. */
+	double step = f->step * (1.0 - SEQC_TEMPO_STEP_DECAY);
+	double dev = 0.0, off = 0.0;
+	bool haveDev = false;
+	if (f->havePrev && f->slope > 0.0)
+	{
+		dev = (double)(p.stamp - f->prev.stamp) - f->slope * (double)(p.clock - f->prev.clock);
+		off = dev - f->drift;
+		if (f->haveLastOff)
+		{
+			const double a = off < 0.0 ? -off : off;
+			const double b = f->lastOff < 0.0 ? -f->lastOff : f->lastOff;
+			if (((off < 0.0) != (f->lastOff < 0.0) || a < 0.5 * b) && b > step)
+				step = b;
+		}
+		haveDev = true;
+	}
+	f->step = step;
+	if (f->slope > 0.0 && seqc_fitSpan() >= (double)(seqc_shortWindow() / 2u))
+	{
+		/* MIDI: how far the point is from the long window's line. The jack: how
+		 * far its interval, one pulse, is from the slope; its stamps are exact,
+		 * so a point that is off the line after a good interval came after a
+		 * lost or an extra pulse, and the line goes on from it. */
+		double r = dev;
+		if (!jack)
+		{
+			const double x = (double)(uint32_t)(p.clock - f->baseClock);
+			r = (double)(p.stamp - f->baseStamp) - seqc_sumsAt(&f->lng, x, f->slope);
+		}
+		double band = f->slope * (SEQC_TEMPO_OUTLIER_PCT / 100.0);
+		if (band < SEQC_TEMPO_BAND_STEP * f->step)
+			band = SEQC_TEMPO_BAND_STEP * f->step;
+		if (r > band || -r > band)
+		{
+			const bool late = r > 0.0;
+			if (f->rowCount == 0 || late != f->rowLate)
+			{
+				f->rowCount = 0;
+				f->rowLate = late;
+				f->rowResidual = r;
+				f->stepBeforeRow = f->step;
+			}
+			f->row[f->rowCount++] = p;
+			f->prev = p;
+			f->lastOff = off;
+			f->haveLastOff = !jack;		/* a jack outlier is no step of the stamps */
+			if (f->rowCount < (seqc_jack4() ? SEQC_TEMPO_RESTART_4PPQ : SEQC_TEMPO_RESTART))
+			{
+				if (jack)	/* left out: the line goes on as if the interval had the slope */
+					f->phase += (int64_t)(dev < 0.0 ? dev - 0.5 : dev + 0.5);
+				seqc.stats.intervalsExcluded++;
+				return;
+			}
+			/* a tempo jump: the fit restarts from the row alone */
+			const uint8_t count = f->rowCount;
+			seqc_fitClearWindows();
+			for (uint8_t i = 0; i < count; i++)
+				seqc_fitAdd(f->row[i]);
+			f->rowCount = 0;
+			f->phase = 0;
+			f->drift = 0.0;
+			f->haveLastOff = false;
+			f->slope = seqc_sumsSlope(&f->lng);
+			seqc.stats.tempoRestarts++;
+			return;
+		}
+		const double rr = f->rowResidual < 0.0 ? -f->rowResidual : f->rowResidual;
+		if (f->rowCount > 0 && (r < 0.0 ? -r : r) < 0.5 * rr)
+		{
+			/* back near the line: the outliers before were a glitch, not a step of
+			 * the stamps */
+			f->step = f->stepBeforeRow * (1.0 - SEQC_TEMPO_STEP_DECAY) * (1.0 - SEQC_TEMPO_STEP_DECAY);
+			haveDev = false;
+		}
+	}
+	f->lastOff = off;
+	f->haveLastOff = haveDev;
+	if (haveDev)
+		f->drift += (dev - f->drift) * SEQC_TEMPO_DRIFT_GAIN;
+	f->rowCount = 0;
+	seqc_fitAdd((seqc_point_t){ p.stamp - (uint64_t)f->phase, p.clock });
+	f->slope = seqc_fitSwitch(haveDev ? (off < 0.0 ? -off : off) : 0.0);
+	f->havePrev = true;
+	f->prev = p;
+}
+//------------------------------------------------------------------------------
+/** forget the fit and the transfer being collected (the last known tempo stays) */
+static void seqc_clearEstimate(void)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	seqc_fitClearWindows();
+	f->havePrev = false;
+	f->rowCount = 0;
+	f->phase = 0;
+	f->step = 0.0;
+	f->drift = 0.0;
+	f->haveLastOff = false;
+	f->slope = 0.0;
+	seqc_sl.transferOpen = false;
+}
+//------------------------------------------------------------------------------
+/** the transfer being collected is complete: its point goes into the fit, and
+ * the estimate follows the slope */
+static void seqc_transferDone(void)
+{
+	seqc_sl.transferOpen = false;
+	seqc_fitPoint(seqc_sl.transfer);
+	if (seqc_sl.fit.slope > 0.0)
+		seqc_setSlaveBpm(seqc_ticksPerClock() / seqc_sl.fit.slope * (double)seqc.cyclesPerSecond * 60.0
+				/ SEQC_TICKS_PER_BEAT);
+}
+//------------------------------------------------------------------------------
+/** true if a sync event is one more clock of the transfer being collected: a
+ * clock of the sync mode, not stamped later than the transfer */
+static bool seqc_sameTransfer(seqc_sync_ev_t ev, seqc_time_t stamp)
+{
+	const bool clock = (ev == SEQC_EV_CLOCK && seqc.mode == SEQC_SYNC_MIDI)
+			|| (ev == SEQC_EV_PULSE && seqc.mode == SEQC_SYNC_ANALOG);
+	return clock && stamp <= seqc_sl.transfer.stamp;
+}
+//------------------------------------------------------------------------------
+/** the tempo part of a clock (N9, N15, N21). A clock with the stamp of the
+ * transfer being collected, or an earlier one, is one more clock of it; any
+ * other clock begins the next transfer. After a dropout the fit starts again,
+ * and the gap is not used. */
+static void seqc_tempoClock(seqc_time_t stamp)
+{
+	if (seqc_sl.haveStamp)
+	{
+		const seqc_time_t dt = stamp > seqc_sl.lastStamp ? stamp - seqc_sl.lastStamp : 0u;
+		if (seqc_sl.droppedOut || dt > seqc_dropoutCycles())
+		{
+			if (!seqc_sl.droppedOut)
+				seqc.stats.dropouts++;
+			seqc_clearEstimate();
+		}
+	}
+	seqc_sl.haveStamp = true;
+	seqc_sl.lastStamp = stamp;
+	seqc_sl.droppedOut = false;
+
+	const uint32_t clock = ++seqc_sl.fitClock;
+	if (seqc_sl.transferOpen)
+	{
+		/* one more clock of the transfer: seqc_syncEvent() completed it
+		 * before this clock otherwise */
+		seqc_sl.transfer.clock = clock;
+		return;
+	}
+	seqc_sl.transferOpen = true;
+	seqc_sl.transfer = (seqc_point_t){ stamp, clock };
+}
+```
+
+Replace `seqc_schedule()` with:
+
+```c
+/** work out nextDue (N10). While a transfer is being collected, the next
+ * seqc_process() evaluates it (N21). */
+static void seqc_schedule(void)
+{
+	if (!seqc.haveTime || seqc.startPending || seqc_sl.transferOpen)
+	{
+		seqc.nextDue = 0;
+		return;
+	}
+	seqc_tick_t tick;
+	uint8_t track;
+	const seqc_item_t item = seqc_nextItem(&tick, &track);
+	if (seqc.mode != SEQC_SYNC_INTERNAL)
+		seqc.nextDue = seqc_slaveDue(item, tick);
+	else if (item == SEQC_ITEM_NONE)
+		seqc.nextDue = SEQC_NEVER;
+	else
+		seqc.nextDue = seqc_internalTime(tick);
+}
+```
+
+Replace `seqc_setTempo()` with:
+
+```c
+void seqc_setTempo(float bpm)
+{
+	if (!seqc_enter())
+		return;
+	double b = bpm;
+	if (b < SEQC_MASTER_BPM_MIN)
+		b = SEQC_MASTER_BPM_MIN;
+	if (b > SEQC_MASTER_BPM_MAX)
+		b = SEQC_MASTER_BPM_MAX;
+	if (seqc.haveTime)
+	{
+		/* re-anchor, so that the timeline and the position stay continuous */
+		seqc.anchorTick = seqc_internalTick(seqc.now);
+		seqc.anchorTime = seqc.now;
+	}
+	seqc.masterBpm = b;
+	seqc.ticksPerCycle = seqc_ticksPerCycle(b);
+	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
+	if (seqc_sl.fit.slope <= 0.0)
+		seqc_setSlaveBpm(b);	/* the first estimate while nothing is measured */
+	seqc_leave();
+}
+```
+
+Replace `seqc_syncEvent()` with:
+
+```c
+void seqc_syncEvent(seqc_sync_ev_t ev, seqc_time_t stamp)
+{
+	if (!seqc_enter())
+		return;
+	if (seqc_sl.transferOpen && !seqc_sameTransfer(ev, stamp))
+		seqc_transferDone();	/* the transfer being collected is complete (N21) */
+	seqc_advance(stamp);
+
+	const bool midi = seqc.mode == SEQC_SYNC_MIDI;
+	const bool analog = seqc.mode == SEQC_SYNC_ANALOG;
+	bool used = false;
+	switch (ev)
+	{
+	case SEQC_EV_CLOCK:
+	case SEQC_EV_PULSE:
+		used = ev == SEQC_EV_CLOCK ? midi : analog;
+		if (used)
+			seqc_slaveClock(stamp);
+		break;
+	case SEQC_EV_START:
+		used = midi || analog;
+		if (used)
+		{
+			seqc_syncReset();
+			seqc_arm(SEQC_ARM_NEXT_CLOCK);
+		}
+		break;
+	case SEQC_EV_CONTINUE:
+		used = (midi || analog) && seqc.state == SEQC_STOPPED;
+		if (used)
+			seqc_arm(SEQC_ARM_NEXT_CLOCK);
+		break;
+	case SEQC_EV_STOP:
+		used = (midi || analog) && seqc.state != SEQC_STOPPED;
+		if (used)
+		{
+			seqc.pos = seqc_positionAt(seqc.now);
+			seqc_stopTransport();
+		}
+		break;
+	case SEQC_EV_RESET_ON:
+		used = analog;
+		if (used)
+			seqc_syncReset();
+		break;
+	case SEQC_EV_RESET_OFF:
+		used = analog && seqc.state == SEQC_STOPPED;
+		if (used)
+			seqc_localStart();
+		break;
+	default:
+		break;
+	}
+	if (!used)
+		seqc.stats.syncIgnored++;
+	seqc_leave();
+}
+```
+
+Replace `seqc_process()` with:
+
+```c
+void seqc_process(seqc_time_t now)
+{
+	if (now < seqc.nextDue)
+	{
+		/* N10: nothing is due; the time is kept for the queries */
+		if (now > seqc.now)
+			seqc.now = now;
+		return;
+	}
+	if (!seqc_enter())
+		return;
+	if (seqc_sl.transferOpen)
+		seqc_transferDone();	/* seq_tick() drains every queued clock before this call (N21) */
+	seqc_advance(now);
+	seqc_leave();
+}
+```
+
+- [x] **Step 6: Convert `seq_core.c` to CRLF**
+
+Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/Soundengine/Sequencer/seq_core.c && file Core/Src/Soundengine/Sequencer/seq_core.c`
+
+Expected: `... with CRLF line terminators`
+
+- [x] **Step 7: Run the tests to verify they pass**
+
+Run: `tools/check.sh; echo "exit $?"`
+
+Expected: `100% tests passed, 0 tests failed out of 22`, image `274688/1015808 B`,
+`== compiler warnings: 0`, `exit 0`.
+
+Run: `build/host-tests/test_slave | tail -n 1`
+
+Expected (the 39 tests after the E1.10 review and 14 new; adapt the count to the file):
+```
+53 of 53 tests passed
+```
+
+Run: `bash -c 'source tools/env.sh && arm-none-eabi-size build/release/Core/CMakeFiles/lxr_sequencer.dir/Src/Soundengine/Sequencer/seq_core.c.obj'`
+
+Expected: `text` 18294 and `bss` 7981 with Arm GNU 14.3.rel1, where the core after E1.14
+printed `text` 15758 and `bss` 7053 (E1.14's own figure for `text` is 15690): `text` grows by
+2536 B and `bss` by 928 B. If the E1.11 to E1.14 reviews changed the core, the absolute figures
+move with it.
+
+- [x] **Step 8: Commit**
+
+```bash
+git add Core/Src/Soundengine/Sequencer/seq_core.c Core/Inc/Soundengine/Sequencer/seq_core.h tests/test_slave.c tests/test_overflow.c
+git commit -F - <<'EOF'
+seq_core: the slave tempo estimate fits the clock stamps (E1.15, N21)
+
+USB stamps all the clocks of one transfer at once, so the mean of intervals
+measured the transfer rate: transfers of 3 clocks at 120 BPM read 40 BPM,
+one transfer per 1024-sample audio buffer read 107.67 BPM. The estimate is
+now the slope of a least-squares fit of the stamps against the clock count.
+The clocks that share a stamp are one point, at the last of them, evaluated
+when the transfer is complete. The fit has a 24-clock and a 96-clock window;
+the long one gives way to the short one when the tempo changes. Outliers
+are points off the fitted line by more than half a clock or the steps of
+the stamps (N9); 4 in a row restart the fit from them alone (N16). The jack
+keeps exact-stamp outliers: a lost pulse leaves the estimate alone.
+intervalsExcluded counts the transfers left out. T19's reset test gets
+its outlier after the first 12 clocks, which the fit does not test.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+```
+
+**Verification of this section.** The design pass applied Steps 1 to 6 to a copy of the repository
+after E1.14, made from the task texts E1.11 to E1.14, with `tests/test_slave.c` of commit 752197f
+and `tests/test_transport.c` and `tests/test_overflow.c` of commit a6509e2 (the E1.10 to E1.12
+reviews), using a tool that takes every code block from this file. Step 2, Step 4 and Step 7 gave
+the outputs above. The scenario harness and the sweeps of the design pass are not part of the
+repository.
+
+---
+
+### Task E1.16: Event queue: cheap typical insert and choke (real-time cost)
+
+> **Added during execution** (2026-10-25; "Execution amendments", item 16 and the final review of the core). The implementer
+> read this text from `build/plan/tasks/E1.16.md`. Commits: `e0d0f54`–`ceada09` (5 commits; `971314d` between them changed only the agent tooling).
+
+The final review of the core measured the queue's cost (`build/plan/e1-final-review.json`, the
+important finding).
+- N2 keeps the next event at the end of the array. A newly generated event almost always fires after
+  every pending one, so each insert lands near index 0 and `memmove`s the whole queue.
+- The firmware links newlib-nano, whose `memmove` is a byte loop: about 2–3 cycles per byte. The queue
+  sits in `.bss` in RAM, not in DTCM.
+- With a counting `memmove`, one `seqc_process()` call that handles a boundary moves:
+  - up to 88 704 B for 7 tracks, every step ×8 with shift +7;
+  - 22 848 B for ×8 without shift.
+- That is about 180k–270k cycles, 0.8–1.2 ms, or 57–85% of the 313 186-cycle block budget, inside
+  `seq_tick()` right before a render (N12). The audio is double-buffered, so the deadline is about one
+  1.45 ms block, and a dense pattern risks a dropout at every step.
+- `seqc_queueChoke()` also copies every kept event onto itself on every fire.
+
+**Goal:**
+- A boundary of the dense pattern moves O(new events) elements, not O(queue size).
+- A fire with nothing to remove copies nothing.
+- The event order (N2's key: tick ascending, then absStep descending, then note before roll, then
+  track ascending), the choke, the same-tick rule and the overflow behaviour are exactly as now.
+
+**Design (amends N2, see the note):**
+- Keep the queue earliest-first in a ring of `SEQC_QUEUE_CAPACITY` elements, with `head` and `count`.
+- **Pop:** take the element at `head`, then `head = (head + 1) % cap` and `count--`.
+- **Insert:**
+  - Compare with the last element first. If the new event orders after it, which is the common case,
+    append at the tail.
+  - Otherwise binary-search the logical position and move only the elements after it toward the tail,
+    one `seqc_event_t` at a time with struct assignment (GCC copies 24-byte structs with word loads and
+    stores), not `memmove`.
+  - Keep the full queue's reject-and-count rule.
+- **Choke (remove pending events of the same track with a lower absStep):**
+  - Scan, but start compacting only at the first removed element.
+  - With no removal, nothing is written.
+- If a ring makes the code clearly more complex than a plain array with the next event at index 0 plus
+  a moving head, use whichever is simpler and gives the same costs. Explain the choice.
+- Keep `seqc_event_t` at 24 bytes, and keep `SEQC_QUEUE_CAPACITY` as a test knob (E1.12).
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c` (queue functions), `Core/Inc/Soundengine/Sequencer/seq_core.h`
+  (comments on the queue, if any).
+- Test: `tests/test_overflow.c` (T19) or a new `tests/test_queue.c`, registered in `tests/CMakeLists.txt`
+  under the T19 id (or a new id `queue` if it gets its own executable).
+
+**Steps (TDD):**
+- [x] **Step 1: Write the failing tests.**
+  - Add a test-only element-move counter to `seq_core.c`, behind a macro that only the test build
+    defines, like `SEQC_QUEUE_CAPACITY`. It counts every element written by insert and choke.
+  - `T19_dense_boundary_moves_are_bounded`: the review's dense pattern (7 tracks, every step ×8, shift
+    +7), run for 16 steps. Assert that the moves per boundary are at most the events inserted at that
+    boundary plus a small constant. Use the reviewer's probe as a reference:
+    `/private/tmp/claude-501/-Users-tk-Code-lxr/96b76bdc-1e78-46dc-a0e8-44d89ec424a5/scratchpad/probe/memmove_probe.c`.
+  - `T19_choke_without_removal_moves_nothing`: fires that remove nothing write 0 elements.
+  - **Order tests:** random insert orders (seeded LCG) are popped in exactly N2's key order, including
+    ties on tick, absStep, note and roll, and track. Compare against a reference sort in the test.
+  - **Overflow:** inserting into a full ring rejects and counts, and wraps correctly over many cycles.
+  - Run them; the move-bound tests must fail on the current queue.
+- [x] **Step 2: Implement the ring** as above. Keep every existing test green.
+- [x] **Step 3: Measure.**
+  - Report the moves per boundary before and after for the dense case and the plain ×8 case.
+  - Estimate the cycles on the M7 (struct copies about 7 cycles per element; give the instruction
+    mix).
+  - Report the `seq_core.c.obj` text and bss before and after (the firmware compile command, as the
+    review did).
+- [x] **Step 4: Keep CRLF in `Core/` files and run `tools/check.sh`:** all tests pass, 0 warnings.
+- [x] **Step 5: Commit** `seq_core.c`, `seq_core.h` (if changed), the test file(s) and
+  `tests/CMakeLists.txt` (if changed), with the message "seq_core: event queue as an earliest-first ring
+  (E1.16, real-time cost)" and the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+
+---
+
+### Task E1.17: Leftovers of the E1 reviews: test hardening and small fixes
+
+> **Added during execution** (2026-10-25; "Execution amendments", items 2–7, 9–11 and 15). The implementer
+> read this text from `build/plan/tasks/E1.17.md`. Commits: `c459ce7`–`5dad00e` (11 commits).
+
+The per-task reviews of E1.1–E1.16 and the final review of the core recorded findings that did not block their tasks. Two kinds were
+left: minor ones, and important ones raised in a last review round. Most are test gaps found by mutation
+testing; a few are small defects or possible defects. This task works through them so that epic E1 ends
+with a suite that pins every rule of the core.
+
+**Sources:**
+- `build/plan/amendments.md`, items 2–11. The controller collected them.
+- `build/plan/e1-leftovers.json`: all 195 findings of the E3.2 and E1.1–E1.12 reviews, extracted from
+  the workflow journal, with the task, review, severity, problem and the reviewer's suggested fix.
+  - Many of them were already fixed in their task's own fix rounds.
+  - Check each against the current code and tests: a finding whose mutant is already caught, or whose
+    code is already changed, is done.
+  - The final review of the core is in `build/plan/e1-final-review.json`. Its important finding, the queue cost, is handled by E1.16; its minor ones belong here. They are: N16 widened by 1b924ad (amend the note and the intervalsExcluded comment); stale object sizes in the plan; T20's libc rand() (use a local seeded LCG); C1.
+  - The findings of the E1.13, E1.14, E1.15 and E1.16 reviews are not in the file. Find them yourself:
+    - read the `journal.jsonl` files under
+      `/Users/tk/.claude/projects/-Users-tk-Code-lxr/96b76bdc-1e78-46dc-a0e8-44d89ec424a5/subagents/workflows/`;
+    - take the `"type":"result"` lines whose agent did a `spec:E1.13`, `spec:E1.14`, `spec:E1.15`, `spec:E1.16`,
+      `quality:...` or `final-review` review;
+    - each agent's label is in the `"type":"started"` line with the same `agentId`.
+    Treat them like the rest.
+
+Some findings may already be handled by E1.15, which reworks the slave tempo estimate and its tests
+(note N21): the 50% band edges, and the E1.10 estimate tests. Check each one against the current code
+and skip it with a one-line reason if it is obsolete.
+
+**Files:**
+- Modify: `tests/seqc_test.h` (Part A), `tests/test_*.c` (Parts B and D)
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c` and `Core/Inc/Soundengine/Sequencer/seq_core.h`,
+  only where a finding is a real defect or a stale comment (Parts C and E)
+- Modify: other `Core/` files only to restore CRLF (Part F)
+
+Work in this order, with one commit per part. Each commit gets an explicit file list and the trailer
+`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Run `tools/check.sh` (0 warnings) before
+every commit.
+
+- [x] **Part A: make `ASSERT_EQ` refuse floating-point operands (amendments item 6).**
+  - Today `ASSERT_EQ` casts both sides to `long long`, so with doubles and floats it compares whole
+    numbers only.
+  - Make it reject floating-point operands at compile time, with C11 `_Generic` and `_Static_assert`
+    or an equivalent that works with clang and GCC under `-Werror`.
+  - Convert every floating-point `ASSERT_EQ` in `tests/*.c` to `ASSERT_NEAR`, with a tolerance that
+    fits the quantity: 1e-9 for ticks and positions, 1e-6 for phases, and the existing tolerances for
+    BPM.
+  - Where the exact value matters (a held position, a phase of exactly 0), use a tolerance of 1e-12 or
+    an exact comparison through a new `ASSERT_EQ_DBL`.
+  - TDD: first show the build fails with the new guard, listing the uses, then convert them. Every test
+    must still pass. If one fails after the conversion, the old check was hiding a real difference:
+    investigate it, fix the code or the test, and report it.
+- [x] **Part B: missing tests from the amendments list and `e1-leftovers.json`.** Add a test for each
+  real gap, and show each new test fails on a mutant of the code it pins. Name tests by their spec id,
+  as the existing ones are. At least:
+  - **E1.4:**
+    - shortening a track below its current index (N5's `idx+1 >= len` rule versus modulo);
+    - a local stop then start (the index reset in `seqc_rewindTransport()`);
+    - every track at raw length 0;
+    - the counters as `patternEnd()` sees them.
+  - **E1.8:** a tempo change while stopped keeps the free-running timeline continuous.
+  - **E1.9:**
+    - a roll dropped by the same-tick rule has no side effects;
+    - a roll ignores shift, ratchet and probability;
+    - `seqc_skipEarly()`'s step and pattern comparisons;
+    - the phase is 0 before the first step.
+  - **E1.10** (unless obsolete after E1.15):
+    - a rewind in a slave mode;
+    - `seqc_setTempo()` in a slave mode, in both directions and after a dropout;
+    - a clock whose stamp is earlier than the core's time;
+    - the `seqc_setSyncMode()` mode guard;
+    - the position between clocks.
+  - **E1.11:**
+    - an SPP while stopped in internal sync;
+    - the parts a seek clears;
+    - a mode or PPQ change between an SPP and the Continue.
+  - **E1.12:** `T19_calls_from_a_callback_are_ignored_and_counted` must fail without
+    `seqc.nextDue = 0;` in `seqc_enter()`.
+- [x] **Part C: possible defects. Analyse each, decide, test, and fix if it is a defect.**
+  1. `seqc_start()` in internal sync, then `seqc_setSyncMode(SEQC_SYNC_MIDI)` before any
+     `seqc_process()`. The switch clears `startPending` but leaves the state RUNNING at the start
+     position. Without a master clock, does the transport hang in RUNNING?
+     - The intended behaviour, consistent with N4: the transport becomes armed and waits for the next
+       clock.
+  2. A Continue without an SPP does not re-phase the clock count, which kept counting while stopped.
+     The tempo step, the LED blink and the local-start grid then differ from the played step grid.
+     - The intended behaviour: at a Continue, the clock count is re-phased to the resumed position, so
+       that `count mod clocksPerStep` matches the step phase.
+  3. `seqc_stepPhase()` can return 1.0f just below the end of a step, because it compares in double and
+     converts afterwards. Clamp after the conversion.
+  4. Unsigned stamp differences in the E1.15 fit.
+     - E1.15's spec review fixed `seqc_fitPoint()` to take the interval as a signed value.
+     - The same unsigned pattern remains in `seqc_fitAdd()` (`p.stamp - baseStamp` and the span test)
+       and in the residual (`p.stamp - f->baseStamp`).
+     - Decide whether a stamp earlier than the base point can reach them. Can a clock stamped before the
+       window's base arrive, with DIN and USB at once or a late stamp? Then make them signed, or prove
+       that they cannot underflow.
+     - Add a test for the case that is reachable.
+- [x] **Part C2: the queue's worst case (from the E1.16 spec review; the controller decided).**
+  - If E1.16's final code still shifts only toward the tail on insert, make the ring insert from the
+    nearer end. When the insertion point is in the front half, move the events before it one slot
+    toward the head and decrement `head`, so that a prepend is O(1).
+  - The reviewer's prototype is in
+    `/private/tmp/claude-501/-Users-tk-Code-lxr/96b76bdc-1e78-46dc-a0e8-44d89ec424a5/scratchpad/e116rev/tree_2end`.
+    It passes all tests, and its maximum writes per boundary are 1194, 543, 1077 and 644 for these
+    four scenarios at 130 BPM with 0.1 ms calls:
+    - ×8 with odd steps +7 and even steps −7, shuffle 127;
+    - odd −7 and even +7, shuffle 127;
+    - shift +7 with shuffle 127;
+    - plain ×8.
+  - Add the four scenarios as cost tests with bounds that fail on the tail-only ring.
+  - Keep N2's order and every other test.
+  - Report the before and after maxima and the cycle estimate, for H12 and E4.1 R5.
+  - If E1.16 already did this, check its cost tests cover the four scenarios and skip the rest.
+
+- [x] **Part D: rule mismatches in the header.**
+  - `seq_core.h` says all hits of a step play together or not at all. The late part re-reads
+    `Step.prob` (E1.5), and a late change of the pending pattern can play a step partly from each
+    pattern (E1.7, pinned by `T11_late_change_of_the_pending_pattern`).
+  - Decide which behaviour is intended:
+    - Keep the stored draw for the late part, so a step's hits play together; this is the default
+      choice unless it contradicts a test the plan requires.
+    - Either way, make the header and the code agree, and add or adjust tests.
+  - Record the decision as a short bullet for the stage 1 report, in your report.
+- [x] **Part E: comments.**
+  - Rewrite `seqc_dueLimit()`'s comment precisely: rounding leaves the timeline at the call (the
+    target) a few ULPs short of the boundary tick. The tolerance is 1e-12 of |target| in ticks. Drop
+    the claims about cycles.
+  - Fix any other stale comment the leftovers name.
+- [x] **Part F: line endings.**
+  - Run `file` on every file under `Core/` that stage 1 touched.
+  - Normalise to CRLF any file that is not "with CRLF line terminators".
+  - Check that `git diff --ignore-cr-at-eol` shows no content change.
+- [x] **Part G: report.** List every leftover with its result: tested, fixed, obsolete or rejected, each
+  with its reason.
+
+---
+
+### Task E1.18: Event queue: one merge per boundary (bounded real-time cost)
+
+> **Added during execution** (2026-10-25; "Execution amendments", items 16 and 17). The implementer
+> read this text from `build/plan/tasks/E1.18.md`. Commits: made in workflow B, after this section was inserted.
+
+> **Controller note, added after E1.17 (read before Step 1).** E1.17 deferred these review items of
+> E1.16 to this task. They are part of its scope.
+> - **The bound covers every call, not only boundary calls** (J74, J79). A call without a boundary
+>   can cost more than the boundary calls the E1.16 tests bound. With ×8 and shift +7/+7 at shuffle
+>   127, all 7 tracks fire the first hit of step n+1 at the same tick, and each fire's choke compacts
+>   most of the queue. One such call writes 448 elements (measured at 120, 130 and 300 BPM, and with
+>   call intervals from 0.1 to 3 ms). The same measurement gives 168 for +7/−7 and 217 for −7/+7.
+>   - The goal of about 400 writes therefore applies to every `seqc_process()` call: boundary
+>     calls, and calls that only fire and choke.
+>   - Several chokes in one call must not each compact the queue. One option is to defer the
+>     compaction: drop events below their track's choke floor as they are popped, and compact once
+>     before the next insert and at the end of the call, from the nearer end. Any design is fine if
+>     it keeps everything the Goal lists exactly as now: the fire sequence, the choke and same-tick
+>     rules, the stats as seen between calls (`chokeDrops`, queue depth and high-water mark), and the
+>     overflow rejects.
+>   - The cost tests bound both kinds of call. Give the dense table a column for the calls without
+>     a boundary (today 0, 0, 168, 217 and 448 at 120 BPM). Run the climbed and random adversarial
+>     patterns through both kinds of call.
+> - **A test-only head accessor** (J69, J73). `queue_skip_once_with_a_moved_head` in
+>   `tests/test_queue.c` is meant to cover a skip-once removal after the head has moved and wrapped,
+>   once with the kept events straddling the array's end. Those head positions were measured once
+>   with an instrumented build, and this task changes how the head moves.
+>   - Add `uint16_t seqc_testQueueHead(void)` to the `SEQC_QUEUE_TEST` block (header and core).
+>   - Make the test assert that the head is not 0 at every removal, and that head + depth exceeds the
+>     ring size for at least one of them.
+>   - Re-establish the premise under the new queue, choosing the pattern or the run length so that
+>     the assertions hold.
+> - **Where the code lives** (J75): the review suggested a separate `seq_queue.c`. The Design's
+>   last bullet already settles it; give your reason either way in the report.
+> - **Small leftovers of E1.17's spec reviews** (rounds 2 and 3, minor). Before Step 1, do every one
+>   that E1.17's quality review has not already done, together in one commit.
+>   - `seq_core.h`, the `stepBoundary` doc ("A step erased here does not play"). Since E1.17 Part D, a
+>     step whose early part already played hits keeps playing its late hits whatever `stepOn()` reads
+>     at the boundary, so an erase does not stop them, and the doc contradicts the header's own
+>     Generation section. Qualify it, for example: "A step erased here does not play, unless its early
+>     part already played hits before n * 96; its late hits then follow it (see Generation)". Pin it
+>     with a T12 test where the glue's erase clears a begun ×8 step at its boundary and all 8 hits
+>     play.
+>   - `tests/test_harness.c`: `harness_runner_failure` tests the failure path of `ASSERT_EQ`,
+>     `ASSERT_TRUE`, `ASSERT_FALSE` and `ASSERT_NEAR`, but not of `ASSERT_EQ_DBL`. Two mutants of
+>     `seqc_test.h` pass every test today: one never fails, and one compares within 1.0. Add
+>     `static void failingEqDbl(void) { ASSERT_EQ_DBL(1.0, 1.0 + 1e-9); afterFailingAssert = 1; }`
+>     to `helpers[]`, and print "5 expected failures follow".
+>   - Note N21, "Costs and behaviour changes": "Review row R6.2 is amended for it, as for N20" is not
+>     true yet. Write that R6.2 must allow it, and that the controller amends R6.2 before E4.1 with
+>     the measured figures (amendments items 12, 14 and 17).
+>   - Note N21, "Why 2 ms" and "Check the 2 ms value on hardware, under H6 and H7": the 2 ms join also
+>     merges USB transfers in consecutive 1 ms frames. The E1.15 quality reviewer measured the trade-off
+>     with every second 1024-sample buffer sent 1 ms before the next: settled misses rise from 54 to 119
+>     of 561 tempos, and the worst error falls from 4.19% to 2.45%. Add the trade-off to "Why 2 ms",
+>     and add the case to the hardware check.
+>   - `seq_core.h`, "Slave position", the tempo jump bullet (about line 576): a stray short line
+>     ("and starts a new row of one. For"). Re-wrap the bullet at about 80 columns and keep CRLF.
+> - **Small leftovers of E1.17's quality review** (round 1, minor). Do them in the same commit,
+>   each with a test where it changes behaviour.
+>   - **A step that plays one MIDI clock late** (`seqc_rebaseWaiting()`, `seq_core.c` about line
+>     940). In internal sync, the waiting position after a song position is absStep × 96 − 16,
+>     because `seqc_ticksPerClock()` returns 16 there, while after a rewind `seqc_startPosition()`
+>     gives 0. Take SPP 8 in MIDI sync, a Continue, then a switch to internal sync. CONTINUE is
+>     reported at once, but step 8 plays one MIDI clock later (measured: 20.9 ms at 120 BPM). Fix:
+>     `seqc.pos = (double)seqc.absStep * SEQC_TICKS_PER_STEP + seqc_startPosition();`. That is 0
+>     clocks before the located step in internal sync, and one clock before it in the slave modes.
+>     The reviewer ran the whole suite with this change and every test passed. Add a T17 test that
+>     fails before the fix, and correct the function comment and the header bullet at
+>     `seq_core.h` 440–442 ("stays one clock of the new mode before step 0 or the located step").
+>   - **The C1 path reports START, ARM, START** (`seq_core.h` 435–437 and 472, `seq_core.c` about
+>     line 1815). A start that has not begun, followed by a switch to a slave mode, reports START
+>     from `seqc_start()`, then ARM at the switch, then START again at the step clock. The Transport
+>     section's order rule ("STOP, then REWIND, then ARM, START or CONTINUE") does not allow that,
+>     and E2.2's `seq_cbTransport()` would send MIDI Start twice. E2.2's mailbox order (mode before
+>     start) cannot reach this path, so it is a contract gap only. Pick one fix and keep
+>     `T16_switch_to_midi_arms_a_start_that_has_not_begun` in line with it:
+>     - document in `seqc_setSyncMode()` that the reported START stands and the step clock reports
+>       START again;
+>     - or report STOP before ARM.
+>   - **Test names** (`tests/test_generate.c` about 394–429): the two `T8_undrawn_*` tests make
+>     the draw, which then fails against prob 30. Rename them `T8_failed_draw_drops_the_late_hits_after_a_prob_edit`
+>     and `T8_failed_draw_keeps_its_timing_when_an_edit_makes_it_early`, and fix the helper comment.
+>   - **Names and comments:**
+>     - `decided` (`seq_core.c` about line 739) → `followsEarly`, since the late part follows the
+>       early part's result.
+>     - `seqc_rebaseWaiting()` → `seqc_placeWaitingPosition()`, since "rebase" means moving the
+>       fit's base point elsewhere in the file.
+>     - The `intervalsExcluded` doc (`seq_core.h` about line 321) → "outlier transfers left out of
+>       the tempo fit, also those of a row that then restarts it, but not the outlier that restarts
+>       it (N16, N21)".
+> - **Notes from the final review of E1.15–E1.17** (minor). Do them in the same commit. N2 is
+>   already this task's note to amend; these two are text only.
+>   - **N3** does not describe E1.17 Part D yet, and N3 wins over the spec. Amend it with the Part D
+>     rule: a step whose early part played a hit before n × 96 follows that early part at boundary
+>     n, and plays all its hits or none, whatever `stepOn()` and `Step.prob` read then. Name the two
+>     exceptions: a late change of the pattern or of the track length, and skip-once. Mark it as a
+>     deviation from spec §6.2 ("Edits ... and erase made before a step's boundary apply to that
+>     step"), so that the stage 1 report and E4.1 take it from the notes.
+>   - **N21, "Limit".** Its figures are for one buffer phase, 0.31 of a buffer: within 0.51%, 0.87%
+>     and 2.59%, with 1, 8 and 47 misses of 561 tempos. The reviewer swept 20 phases with the same
+>     stamp model:
+>
+>     | Buffer | Worst error | Misses |
+>     |---|---|---|
+>     | 256 samples | up to 0.97% | up to 3 |
+>     | 512 samples | up to 1.35% | up to 17 |
+>     | 1024 samples | up to 2.80% | up to 75 |
+>
+>     State that the figures depend on the buffer phase. Give the worst case over the phases next to
+>     the phase-0.31 figures, and say that H6 and H7 take the worst case as their acceptance limits.
+>   - The extra clock and the double trigger (the review's third finding) are task E1.19, which runs
+>     after E2.8. Leave them alone here.
+
+E1.16 made the event queue an earliest-first ring with an insert from the nearer end. Its reviews
+measured what that leaves (amendments item 16):
+- **Typical:** about 410–644 element writes per boundary call.
+- **Adversarial:** random ±7 per-step shifts with ×8 and shuffle 127 give up to 2211. A hill-climbed
+  legal pattern gives 3861, 608 of them choke compaction. That is about 70–90k cycles, 22–29% of the
+  313 186-cycle block budget, spent in `seq_tick()` right before a render (N12).
+
+Each new event is still inserted one at a time. When a boundary's new events interleave with the
+pending ones, every insert can shift many elements.
+
+**Goal:**
+- A boundary call writes O(new + pending) elements, not O(new × pending).
+- The bound holds for the reviewer's adversarial patterns, at about 400 writes or less.
+- A choke never compacts more than the shorter side of the ring.
+- Everything else is exactly as now:
+  - N2's order (tick ascending, then absStep descending, then note before roll, then track ascending);
+  - the tie rule, where of two equal keys the one queued last fires first;
+  - the choke and the same-tick rule;
+  - the full-queue reject-and-count rule, which must reject the same events as before when the ring
+    overflows. Define this carefully and test it.
+
+**Design (amends N2 again; record it in the note):**
+- **Stage:** at a boundary, generation writes the new events into a small staging buffer, not into the
+  ring.
+  - The buffer holds the most events one boundary can generate. Derive the bound from the generator:
+    7 tracks, late part of step n plus early part of step n+1, ratchets up to ×8, rolls. Assert it at
+    compile time.
+  - It stays in `.bss`; keep the RAM cost small and report it.
+- **Sort:** sort the staged events by the N2 key. Insertion sort is fine: they are few and mostly in
+  order already.
+  - Equal keys must end in the order the per-event inserts would have given, where the last queued
+    fires first. Prove it by tests against the current insert.
+- **Merge:** merge the sorted staged events into the ring in one pass.
+  - Most new events are later than every pending one; append those.
+  - Early hits that belong before pending events merge from the nearer end.
+  - Each element is written at most a constant number of times.
+- **Overflow:** if the ring cannot hold all staged events, reject exactly the events the per-event
+  inserts would have rejected, and count them the same way.
+- **Choke:** compact from whichever end of the ring is nearer to the first removed event. Removed events
+  are usually near the head.
+- **Single inserts outside boundaries** (one-shot roll, immediate triggers) keep the E1.16 insert.
+- **Where the code lives:** keep the queue in `seq_core.c`, in its own clearly separated section. A
+  separate translation unit would stop the inlining into `seqc_process()` (no LTO). Explain if you
+  decide otherwise.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c` (generation call sites, the queue section) and
+  `Core/Inc/Soundengine/Sequencer/seq_core.h` (comments).
+- Test: `tests/test_queue.c` (ctest id `queue`, or the T19 id it uses) and any test whose expected
+  counts change.
+- Modify: `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N2's amendment: the
+  per-boundary merge). Do not edit the other notes.
+
+**Steps (TDD):**
+- [ ] **Step 1: Failing cost tests.** Use the reviewer's patterns, the climbed pattern from
+  `/private/tmp/claude-501/-Users-tk-Code-lxr/96b76bdc-1e78-46dc-a0e8-44d89ec424a5/scratchpad/e116rev/mut/tests/probe_eval.c`
+  (climbed2) and random ±7 per-step shifts with ×8 and shuffle 127 over many seeds of a local LCG. Turn
+  them into cost tests with the test-only write counter:
+  - at most about 400 writes per boundary call;
+  - choke compaction from the nearer end;
+  - fires that remove nothing write 0.
+  Show they fail on the current code.
+- [ ] **Step 2: Order and overflow equivalence tests.**
+  - For many seeded random patterns, settings and capacities (the `SEQC_QUEUE_CAPACITY` knob), the new
+    queue produces exactly the same fire sequence as the current one: tick, track, step, hit, flags,
+    and the overflow counts.
+  - Build the reference by recording the current core's fire log in the test, or from a reference
+    model in the test.
+- [ ] **Step 3: Implement** the staging, sort, merge and nearer-end choke. Keep every existing test
+  green.
+- [ ] **Step 4: Measure and report:**
+  - the maximum writes per boundary call, before and after, for all the patterns (typical and
+    adversarial);
+  - a cycle estimate from the disassembly, checking the real instruction mix: 4+2-word LDM/STM per
+    copy;
+  - the bss and text size of `seq_core.c.obj` with the firmware compile command.
+- [ ] **Step 5: Amend N2's note** with the per-boundary merge and the measured bound, and keep CRLF in
+  `Core/` files.
+- [ ] **Step 6: Run `tools/check.sh`:** 0 warnings.
+- [ ] **Step 7: Commit** with an explicit file list. Message: "seq_core: merge a boundary's events into
+  the queue in one pass (E1.18)", with the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+
+---
+
+### Task E1.19: Slave tempo estimate: one extra clock or a double trigger (N21)
+
+> **Added during execution** (2026-10-25; "Execution amendments", item 19). The implementer
+> read this text from `build/plan/tasks/E1.19.md`. Commits: made in workflow B after E2.8, after this section was inserted.
+
+The final review of E1.15–E1.17 (workflow A2, 2026-10-25 14:50) measured what one spurious clock
+does to the tempo fit. It ran at 120 BPM with exact stamps and a 0.1 ms tick, using the probe
+`/private/tmp/claude-501/-Users-tk-Code-lxr/96b76bdc-1e78-46dc-a0e8-44d89ec424a5/scratchpad/rv-e115-17/probe/extra.c`.
+In the figures below, f is the extra clock's offset after a real one, as a fraction of a period.
+
+**MIDI clock:**
+- f from 0.22 to 0.48: the spurious clock starts an early row. The real clocks after it count one
+  early, so 4 outliers restart the fit, with the spurious clock as the row's first point.
+  - The slope is then off by about (1 − 0.3f) of a period: +7% to +16.8% for 12–20 clocks.
+  - `tempoRestarts` goes up by 1, although the tempo never changed.
+- f under 0.2 or above 0.85: +1.57% for about 80 clocks, the same as a lost clock.
+- f from 0.5 to 0.8: about 0.03%. This is the only range where E1.15's "an extra clock: 0.03%"
+  holds.
+
+**Jack at 4 PPQ:** only one part of the split interval is left out, so the line carries an offset of
+f or 1 − f of a pulse through the 4-pulse window.
+- f from 0.2 to 0.9: 3.5% to 17.9% for 3–5 pulses.
+- The header's "(about 1.5% at 4 PPQ)" holds only near f = 0.05.
+- `T18_double_trigger_is_left_out` tests only f = 0.05.
+
+The effect is rare and short (under a beat on MIDI). It is still visible in the BPM display, in
+`lfo_recalcSync()` and in the interpolated hits. A double trigger on a clock jack, such as a bouncing
+contact or a noisy cable, is the likeliest source.
+
+**Goal:**
+- One spurious MIDI clock at any offset f does not restart the fit.
+  - Its tempo error is at most that of a lost clock: about 1.6%, for no longer than a lost clock's
+    effect lasts.
+  - The position still counts the extra clock. A slave cannot tell a spurious clock from a real one
+    by position, so the one-clock phase step stays.
+- One double trigger on the jack at 4 PPQ, at any offset f, leaves no lasting offset in the line.
+  - The error after the next real pulse stays within that of a lost pulse.
+  - The same holds at 24 PPQ.
+- Everything else is exactly as now. That covers the N16 restart after a real tempo jump, the 2 ms
+  join of N21, the dropout, and every existing test.
+
+**Design (options from the review; choose and explain):**
+- **MIDI:** on a restart, drop the row's first point when it lies off the line through the other
+  points of the row.
+- **Jack:** when a short outlier interval and the next interval add up to about one slope, treat them
+  as one interval. Decrement the fit's own `fitClock`, so that no lasting offset stays in the line.
+- Keep the change inside the slave estimate's section of `seq_core.c`. Report RAM and code size.
+
+**Files:**
+- Modify: `Core/Src/Soundengine/Sequencer/seq_core.c` (the slave estimate),
+  `Core/Inc/Soundengine/Sequencer/seq_core.h` (the comments on the slave position and the jack),
+  `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N21: the measured
+  behaviour of an extra clock and a double trigger; do not edit the other notes).
+- Test: `tests/test_slave.c` (T16, T18).
+
+**Steps (TDD):**
+- [ ] **Step 1: Failing tests.**
+  - MIDI: one extra clock at f = 0.1, 0.3, 0.45, 0.6 and 0.9 of a period, at 120 BPM. Also test
+    one f in the restart range at 90 BPM and at 180 BPM.
+    - Assert that `tempoRestarts` does not change.
+    - Assert that the error stays within the lost-clock bound and returns within 0.1% as fast as
+      after a lost clock.
+  - Jack at 4 PPQ: a double trigger at f = 0.05, 0.3, 0.55 and 0.9 of a pulse, with the same kind of
+    bounds. Also test one case at 24 PPQ.
+  - A real tempo jump of 30% and of 100% still restarts as N16 says.
+  - Show which tests fail on the current core, and why.
+- [ ] **Step 2: Implement** the chosen design. Every existing test stays green.
+- [ ] **Step 3: Measure and report:**
+  - the worst error and its duration over f from 0.05 to 0.95 in 0.05 steps, MIDI and jack, before
+    and after;
+  - the N21 Limit sweep (USB buffers of 256, 512 and 1024 samples), unchanged or with the
+    difference explained;
+  - `seq_core.c.obj` text and bss, from the firmware compile command.
+- [ ] **Step 4: Amend N21 and the header** with the measured behaviour. In the jack paragraph,
+  replace "about 1.5% at 4 PPQ" with the real figures. Keep CRLF in the `Core/` files.
+- [ ] **Step 5: Run `tools/check.sh`:** all tests pass, 0 warnings.
+- [ ] **Step 6: Commit** with an explicit file list. Message: "seq_core: one extra clock or a double
+  trigger no longer skews the slave tempo (E1.19)", with the trailer
+  `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+
+---
+
 ### Coverage of the spec and the notes
 
 **Host tests (spec §13.1).** Every test name starts with its id, so `ctest` and
@@ -11151,6 +13519,8 @@ EOF
 | T17 | `T17_midi_start_arms_and_the_next_clock_starts`, `T17_midi_start_while_running_restarts`, `T17_stop_and_continue_resume_in_place`, `T17_continue_at_the_start_is_a_start`, `T17_events_that_do_nothing_are_counted`, `T17_transport_events_are_ignored_in_internal_sync`, `T17_spp_in_pattern_mode`, `T17_spp_in_song_mode_with_identical_entries`, `T17_spp_with_song_loop`, `T17_spp_past_the_song_end_stops_at_the_next_pattern_end`, `T17_spp_within_the_active_pattern_does_not_reload_it`, `T17_spp_while_running_is_ignored`, `T17_spp_while_armed_seeks`, `T17_spp_clears_the_queue_and_restarts_the_count`, `T17_midi_start_in_analog_sync_starts_with_the_next_pulse` (N13.10), `T17_jack_run_gate` | E1.11 |
 | T18 | `T18_jack_4ppq_one_pulse_per_step`, `T18_jack_4ppq_estimate_uses_4_intervals`, `T18_jack_24ppq_six_pulses_per_step`, `T18_ppq_change_restarts_the_count`, `T18_slow_4ppq_clock_is_not_a_dropout` (N15), `T18_pulse_only_in_analog_sync`, `T18_ppq_change_in_midi_sync_keeps_the_count` (decision 11); `T18_tempo_jump_4ppq_restarts_after_2` (N16) and `T18_dropout_note_off_is_sent` (N17) | E1.10, E1.14 |
 | T19 | `T19_full_queue_rejects_and_counts`, `T19_queue_depth_is_live`, `T19_calls_from_a_callback_are_ignored_and_counted`, `T19_reset_stats_clears_every_counter` | E1.12 |
+| T16, packed clocks (N21) | `T16_packed_*` in `tests/test_slave.c`: transfers, the 2 ms join, restarts, long sessions | E1.15, E1.17 |
+| queue | `tests/test_queue.c` (`seq_core_queue_test`, with a write counter): N2's order and ties, overflow, the writes per boundary and per choke | E1.16, E1.18 |
 | T20 | `T20_every_ratchet_and_shift`, `T20_random_patterns`, `T20_d2_scenario_matches_per_track_flags`, `T20_global_choke_flags_of_fw17_drop_hits`; the two intended differences: `T20_spill_over_after_a_newer_step_is_choked`, `T20_no_spill_over_of_the_last_step_at_the_start` | E1.13 |
 
 **Spec sections and notes.**
@@ -11162,6 +13532,7 @@ EOF
 | N2, choke | E1.6 |
 | N2, same-tick rule | E1.9 |
 | N2, overflow | E1.12 |
+| N2 amended, the ring, the nearer-end insert, the choke that writes nothing, one merge per boundary | E1.16, E1.18 (`queue`) |
 | N3, early and late parts with two draw slots | E1.5 (`seqc_generate()`, `seqc_draw()`; the early part fixes the timing, decision 9), E1.7 (prediction) |
 | N4, starts and the first boundary: internal start, step-0 wrap | E1.3, E1.4 |
 | N4, local start in a slave mode | E1.10 |
@@ -11178,6 +13549,8 @@ EOF
 | N14, SPP in the sync queues | E2.4. The core side is `seqc_songPosition()` while stopped or armed (T17). |
 | N15, dropout threshold | E1.10: `seqc_dropoutCycles()`, `T18_slow_4ppq_clock_is_not_a_dropout`; E1.14: the header comments (`SEQC_DROPOUT_MS`, `seqc_stats_t.dropouts`, "Slave position") |
 | N16, N17, N18.1 | E1.14: `seqc_tempoInterval()` with `seqc_windowAdd()` (T16, T18), the note-offs in `seqc_runSlave()` (T18), one marker per track in `seqc_skip[]` (T14) |
+| N21, the slave tempo estimate as a fit over transfers, the join rule | E1.15 (T16, T18), E1.17 |
+| N21, one extra clock or a double trigger | E1.19 (T16, T18) |
 | N18.2, N18.3, N18.4 | E2.2 `seq_cbTransport()`, E2.3 `seq_triggerVoice()`, E2.1 `seqq_usbMessage()` |
 | Spec §6.1–6.7 | the T2–T15 rows above |
 | Spec §11: queue full, dropout, intervals that don't fit, late stamps, 64-bit time | T19; T16 (dropout, outliers, bunched clocks); the 64-bit `seqc_time_t` everywhere |
@@ -22759,6 +25132,240 @@ Where this part differs from the spec, and why:
 
 ---
 
+## Execution amendments
+
+The controller, the session that ran this plan with `tools/agent/impl-track.js`, changed it while
+executing it. Each change went first into the task text the implementer read (`build/plan/tasks/`,
+not committed); this list keeps them with the plan. They are in the order they were made. Paths
+under `scratchpad/` were the controller's temporary files.
+
+1. **2026-10-24 15:15, after the E1.3 review (spec round 2).** A boundary whose ideal time falls exactly
+   on a call could wait for the next call (double rounding in seqc_internalTick()), and T1's bound
+   accepted one full call late.
+   - E1.4 gets a Step 0: the seqc_dueLimit() helper, seqc_runTo() compares against it, and T1's bound
+     becomes strict (late < interval). This is its own commit.
+   - The "Replace seqc_runTo() with:" blocks in E1.5, E1.6 and E1.8 compare against
+     seqc_dueLimit(target).
+   - In E1.5, T2_straight_grid's bound becomes strict: late < fake_msToCycles(0.1).
+
+2. **Leftover for the cleanup (from the E1.3 quality review).** The comment on seqc_dueLimit() says the
+   tolerance is "far below one cycle in a long session". It is 1e-12 × |target| ticks: after 10 h at
+   300 BPM that is about 8 cycles (37 ns). Either reword the comment or use 1e-14, which gives about
+   0.08 cycle there and is still about 100 ULPs above double rounding.
+
+3. **Leftovers from E1.4's reviews, for the cleanup task.**
+   - (important) No test shortens a track below its current index, the only case where N5's
+     `idx+1 >= len` rule differs from a plain modulo. Two mutations of seqc_nextIndex() pass T10 and T1.
+   - (minor) No test does a local stop then a start, to check the index reset in seqc_rewindTransport().
+   - (minor) No T10 test has every track at raw length 0.
+   - (minor) Nothing checks the track counters as patternEnd() sees them ("after the indices advanced,
+     so the master track is at 0").
+   - (minor) seqc_dueLimit()'s comment is criticised for the third time. Rewrite it precisely: rounding
+     leaves the timeline at the call (the target) a few ULPs short of the boundary tick. State the
+     tolerance as 1e-12 of |target| in ticks, and drop the claims about cycles.
+
+4. **For the E4.1 review and the release notes (from E1.5 to E1.7).**
+   - The header says that all hits of a step play together or not at all. It does not always hold:
+     - the late part re-reads Step.prob (E1.5 quality);
+     - a late change of the pending pattern gives a step played partly from each pattern (E1.7, pinned
+       by T11_late_change_of_the_pending_pattern).
+     Decide which is intended and make the header and code agree.
+   - A user-visible change from fw 1.7, not yet documented: at a pattern change, early-shifted hits
+     come from the next pattern's step (peekNextPattern). fw 1.7 took them from (step+1)%length of the
+     active pattern. Add it to the release notes under changed behaviour.
+   - Real-time cost: seqc_queueInsert() memmoves almost the whole queue for each late event, and
+     newlib-nano's memmove may copy byte by byte. seqc_queueChoke() copies every kept event onto itself
+     on each fire. Measure both with the CPU meter (E3.3) and optimise if they show.
+
+5. **Leftover from E1.8 (important, last quality round).** No test changes the tempo while stopped.
+   seqc_setTempo() re-anchors the free-running timeline so that it stays continuous (seq_core.c
+   736-741); add a T5 test for it in the cleanup task.
+
+6. **Systemic test weakness (found in E1.3, E1.8 and E1.9).** ASSERT_EQ casts both sides to long long,
+   so with doubles or floats it compares whole numbers only. For example, `ASSERT_EQ(seqc_stepPhase(), 0.0f)`
+   accepts any phase in [0, 1). Fix at the source in the cleanup task:
+   - make ASSERT_EQ reject floating-point operands at compile time (C11 _Generic plus _Static_assert, or
+     a separate macro per type);
+   - convert every floating-point ASSERT_EQ in tests/*.c to ASSERT_NEAR with a tolerance that fits the
+     quantity (ticks: 1e-9; phases: 1e-6), and check each converted test still passes.
+
+7. **E1.9 leftovers.**
+   - seqc_stepPhase() ends with `return phase < 1.0 ? (float)phase : 0.999999f;`. The comparison is in
+     double, so a phase in [1 - 2^-25, 1) still converts to 1.0f (seen at 1 BPM). Compare after the
+     conversion, or clamp with nextafterf(1.0f, 0.0f).
+   - No test checks that a roll ignores the step's shift, ratchet and probability (spec 6.6).
+   - seqc_skipEarly() is reached only when the marker matches; nothing covers its step and pattern
+     comparisons.
+   - Nothing tests that the phase is 0 before the first step.
+   - (important, last quality round) No test checks that a roll dropped by the same-tick rule has no
+     side effects (pending note-off, chokeDrops, lastTick and lastStep).
+   - E1.14's expected outputs assume the plan's test_roll.c (256 lines, 14 tests). The file now has 19
+     or more tests after the E1.9 review, so E1.14's line numbers and counts differ; the implementer has
+     to adapt them.
+
+8. **N21 / E1.15 (design gap found in the E1.10 quality review, 2026-10-25 00:44).** With packed USB
+   clocks (shared stamps), the estimate measures the packet rate. Note N21 is written. A design
+   workflow compares the candidate estimators. E1.15 implements the winner after E1.14, before E2.1,
+   and reworks E1.14's packed-clock tests as needed.
+
+9. **E1.10 leftovers.**
+   - (important, last quality round) No test rewinds in a slave mode. seqc_rewindTransport() sets
+     pos = seqc_startPosition() and lastClockPos = pos; every local start in test_slave.c begins from a
+     fresh fake.
+   - (possible bug, analyse it) seqc_start() in internal sync followed by seqc_setSyncMode(MIDI) with no
+     seqc_process() in between. The switch clears startPending but leaves the state RUNNING at -16
+     (atStart); with no master clock this may hang in a running state. Decide the intended behaviour
+     (armed until the first clock?) and add a test.
+   - seqc_setTempo() in a slave mode: no test in either direction (first estimate only while nothing is
+     measured; it never replaces a measured estimate; after a dropout it replaces the last known tempo).
+   - No clock with a stamp earlier than the core's time (header rule: the stamp still feeds the estimate
+     and anchors the interpolation).
+   - The mode guard of seqc_setSyncMode() (0..2): no test.
+   - The 50% band edges are pinned only between 40% and 80%.
+   - seqc_position() between clocks is not read by any test except at the clamp.
+   - Several floating-point ASSERT_EQ uses (see item 6).
+   - seq_core.c is about 1300 lines and grows. Consider splitting the slave estimate into its own unit in
+     E1.15 (the reviewers suggest seqc_slave_t, the estimate, the target, due time, run and clock
+     functions).
+
+10. **E1.11 leftovers.**
+   - (possible bug) A Continue without an SPP does not re-phase the clock count, which kept counting
+     while stopped. The count grid (tempoStep, the LED blink in slave mode, the local-start alignment)
+     and the played step grid then differ by (clocks while stopped) mod 6. Decide: re-phase the count
+     at Continue to the resumed position (count = absStep*6 + phase), and test it.
+   - SPP while running in internal sync: ignored only because running; add the stopped case.
+   - Seek clears more than the queue (note-offs, draws, same-tick state, skip markers); document it in
+     seqc_songPosition() and test the parts.
+   - Mode or PPQ change between an SPP and the Continue: the "one clock before" seek target is not
+     recomputed.
+   - More floating-point ASSERT_EQ uses (item 6).
+
+11. **E1.11 review: line endings.** Commit 4bc8eda turned seq_core.h from CRLF into LF. E1.13 gets a
+    Step 0 that restores CRLF in its own commit. The cleanup task must check every Core/ file with
+    `file` and normalise any that has drifted.
+
+12. **After workflow A (plan for the controller).**
+    - Run E1.15 (build/plan/tasks/E1.15.md, written by the design pass: a least-squares fit, verified
+      on a post-E1.14 copy) and then the leftovers (the ASSERT_EQ guard, the possible defects, the
+      header rule, comments, CRLF), with the same implementation workflow. The leftovers became
+      E1.17 when the queue's cost (item 16) took E1.16.
+    - Amend E4.1 row R6.2 for E1.15's estimator (+928 B bss), as for N20, before workflow C. The judge
+      estimates the core plus glue at about 9468 B against 8704 B.
+    - Then bring the plan file in line: insert E1.15 and E1.16, and add a section of execution
+      amendments (this list).
+
+13. **E1.14 quality review (round 2): DIN-forwarded bunches with tiny non-zero gaps** (about 0.32 ms)
+    restart the estimate, a regression from E1.13. The E1.14 fixer is handling it in E1.14. E1.15's
+    task now requires the fit to cover it too, with a T16_packed_din_bunch_* test, and warns that the
+    E1.14 review commits moved E1.15's anchors.
+
+14. **E1.15 implementation.**
+    - The join rule: SEQC_TEMPO_JOIN_MS = 2 ms (N21 is amended).
+    - bss is 8245 B, +1192 B over E1.14; text is 18618 B.
+    - E4.1 row R6.2 must allow +1192 B for the estimator on top of 8704 + 444 (N20), so DTCM + RAM may
+      be at most 387568 + 1192 = 388760 B, unless E1.16's ring changes the queue's size. Re-measure
+      after E1.16.
+    - The fixer found the same unsigned stamp-difference pattern in seqc_fitAdd() (p.stamp - baseStamp,
+      and the span test) and in the residual. That is for E1.17.
+
+15. **E1.15 leftovers (quality round 2, minor) for E1.17.**
+    - N21's figures are out of date: the text size at HEAD is 18602 B, and the Limit bullet and the join
+      bullet give different miss counts (3/8/42 against 1/8/47 of 561). Re-measure once and use one set.
+    - A burst whose head completes an N16 restart: the documented exception exists only because a
+      restart writes SEQC_TEMPO_RESTART ring slots, while the 98-slot ring guarantees just one free slot.
+    - joinLeftOut has no test (setting it always true passes everything).
+    - Comment polish: a 120-column line, a stray short line, and the seqc_tempoClock() doc.
+
+16. **E1.16 quality review (round 1): the adversarial worst case.**
+    - Random ±7 per-step shifts with ×8 and shuffle 127 give up to 2211 writes per boundary call. A
+      hill-climbed legal pattern gives 3861, of which 608 are choke compaction. That is about 22–29% of
+      a block, against 6727 for the old layout.
+    - Decision: add task **E1.18** before E2.1. Stage a boundary's new events, sort them (at most about
+      112), and merge them into the ring in one pass. The choke compacts from the nearer end.
+    - The goal is O(new + pending) writes per boundary, at most about 400, with a cost test on the
+      reviewer's climbed pattern. The patterns are in
+      scratchpad/e116rev/mut/tests/probe_eval.c (climbed2) and probe_climb.c.
+
+17. **E1.17, the leftovers of the E1 reviews (2026-10-25).** Implemented in 9 commits, `c459ce7` to
+    `367eec1`. The spec review fixes added `2cb6466` and `5dad00e`, for 11 in all.
+    - `ASSERT_EQ` refuses floating-point operands at compile time (C11 `_Generic` with
+      `_Static_assert`). `ASSERT_EQ_DBL` is new. The guard found 12 uses, and all were converted.
+    - New tests for the listed gaps. The implementer ran about 110 mutants; 99 are killed, and the
+      survivors are equivalent or unreachable (its report lists them).
+    - Defects fixed, each with a test:
+      - a start that has not begun, followed by a switch to a slave mode, now arms (C1);
+      - a Continue re-phases the clock count (C2);
+      - `seqc_stepPhase()` clamps after the float conversion (C3);
+      - the fit's residual is signed, and `seqc_fitAdd()`'s base rule is written out (C4);
+      - a sync mode or PPQ change between an SPP and the Continue moves the waiting position (C5);
+      - `seqc_setTempo()` and `seqc_setAnalogPpq()` in slave modes commit the position first;
+      - the fit ring has 101 points (+24 B bss), so a joining clock can undo a restart.
+    - **Part D decision.** A step whose early part queued a hit has begun. Its late part plays with the
+      stored draw, whatever the main-step bit and `Step.prob` read at the boundary. The step data is
+      still read at the boundary. The exceptions are a late change of the pending pattern or of a
+      track length, and skip-once.
+    - **Routed on:**
+      - to E1.18: J33, J69, J73–J75 and J79 (the controller note in E1.18: the bound covers calls
+        without a boundary, and a test-only head accessor);
+      - to E2.2: leftover [113], where `seq_addNote()` posts the skip-once marker whenever the phase is
+        at least 50% (the controller note in E2.2);
+      - to E4.1 and E4.3: the next pattern's early hits ([80], item 4), the plan's T16 test table
+        (J22, J30) and E1.7's expected line numbers ([77], [81]);
+      - to E4.1 row R6.2: the +24 B.
+    - `seq_core.c.obj` with the firmware compile command: text 20158 B, bss 8269 B.
+    - **The spec reviews, rounds 2 and 3.**
+      - Round 2: the Continue re-phase of round 1 had made two older tests blind to mutants of the
+        count reset at Start and at a song position. Two new tests followed in `5dad00e`.
+      - Six minor items were left:
+        - five go to E1.18 (the controller note): the erase doc in `stepBoundary`, the
+          `ASSERT_EQ_DBL` failure path, two sentences of N21, and a stray line in `seq_core.h`;
+        - the sixth is the reasons that Part G of the report lacked, recorded here:
+          - [107], [111] and [115] are obsolete, because E1.14 is done;
+          - the file-split suggestions [117], [152], [158] and [165] are rejected like J31 (E1.18
+            decides the queue's unit);
+          - J51's code suggestions are rejected as polish;
+          - C1 cannot be reached through E2.2's mailbox order.
+      - To E4.1: the stage 1 report lists the erase of a begun step next to the switch-off, as a
+        deviation from spec §6.2.
+    - **The quality review** passed in round 1 (14:15) with five minor items. Four go to E1.18 (the
+      controller note):
+      - `seqc_rebaseWaiting()`: in internal sync, after SPP, a Continue and a mode switch, the
+        step plays one MIDI clock (20.9 ms) late;
+      - the C1 path reports START, ARM and START, which is a contract gap;
+      - the `T8_undrawn_*` test names;
+      - the names `decided` and `seqc_rebaseWaiting()`, and the `intervalsExcluded` doc.
+
+      The fifth, splitting `tests/test_slave.c` (2191 lines) into a tempo-fit file with its own
+      ctest id, goes to E4.1 (R9 hygiene): split it there, or record why it stays.
+    - E1.17 took 3 h 55 min, from 10:20 to 14:15. That is the implementation, three spec rounds, two
+      fixes and one quality round.
+18. **The review process (the owner's decisions).**
+    - 2026-10-24 22:40: every task keeps a spec review and then a quality review, up to 3 rounds each,
+      with mutation testing by the reviewers.
+    - 2026-10-25 09:45: E1 and E2 keep the full reviews; E3 and E4 get one combined review at high
+      effort, at most 2 rounds (`review: 'light'` in `tools/agent/impl-track.js`). Parallel worktrees
+      were dropped: E2.7 needs E2.2's `tools/fw_checks.sh`, and E3.1 and E3.5 touch `main.c`, CMake and
+      the README together with E2.
+    - 2026-10-25 12:25: in workflow B (E1.18, E2.1–E2.8) the spec and the quality reviewer of a round
+      work at the same time on the same HEAD, and one fixer takes both lists (`review: 'parallel'`).
+      A spec review that passed stays passed; the quality review runs again after every fix.
+    - 2026-10-25 12:55: in workflow B the second and third run of each review are focused. They get
+      the findings of the previous run, check that each is fixed, and review the fix commits since the
+      HEAD they saw, with tests and mutants on the changed lines. The first run stays a full review.
+19. **The final review of E1.15–E1.17 (workflow A2, 2026-10-25 14:50).** It found no defect that breaks
+    the design, and about 95 mutants of the range were killed except equivalent ones.
+    - *Important, already routed:* E1.16's own goal, O(new events) per boundary, is not met (644 and
+      1194 writes allowed, 3861 for the climbed pattern). E1.18 does it, before E2.1. Until then, no
+      H12 or E4.1 R5 figure may cite E1.16 as meeting its real-time goal.
+    - *One extra clock or a double trigger* skews the slave tempo fit:
+      - MIDI with f from 0.22 to 0.48 of a period: a false restart, +7% to +16.8% for 12–20 clocks;
+      - the jack at 4 PPQ: 3.5% to 17.9% for 3–5 pulses.
+
+      This is new task **E1.19**. It runs after E2.8, so that E2 is not delayed.
+    - N3 still lacks E1.17's Part D rule, a deviation from spec §6.2, and N21's Limit figures are for
+      one buffer phase (the worst over phases: 0.97%, 1.35% and 2.80%). Both go to E1.18's controller
+      note.
+
 ## Progress notes
 
 Notes made while executing the plan, one bullet each, newest last: the date, the task, and what
@@ -22766,6 +25373,10 @@ happened (a deviation from the plan, a surprise, a decision taken on the way).
 
 - 2026-10-24, plan review: Plan reviewed by 3 critics; 29 findings accepted and fixed, 1 rejected.
 - 2026-10-24, plan assembly: E1.14, E2.7 and E2.8 inserted after review.
+- 2026-10-24 to 2026-10-25, execution of E3.2 and E1.1–E1.14: every task with a spec review and a
+  quality review; the changes are in "Execution amendments", items 1–13.
+- 2026-10-25, execution: E1.15–E1.17 added and done before E2 (items 8 and 12–17); E1.18 added
+  to run before E2.1 and E1.19 to run after E2.8 (items 16, 17 and 19).
 
 ## Questions for the owner
 
