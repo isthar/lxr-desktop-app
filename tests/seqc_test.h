@@ -10,7 +10,9 @@
  * passes the spec test id this way). The exit status is 1 if a test failed and 2
  * if no test matches. An ASSERT_ that fails prints file:line and returns from the
  * function it is in, so use it in a TEST body or in a void helper. ASSERT_EQ
- * compares integers (and enums) as long long; use ASSERT_NEAR for floating point.
+ * compares integers (and enums) as long long and rejects floating-point operands
+ * at compile time; use ASSERT_NEAR for floating point, or ASSERT_EQ_DBL for an
+ * exact comparison.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -44,11 +46,21 @@ __attribute__((unused)) static int seqc_test_failed_;	/* the running test has fa
 	printf("\n"); seqc_test_failed_ = 1; return; } while (0)
 #define ASSERT_TRUE(c) do { if (!(c)) SEQC_TEST_FAIL_("ASSERT_TRUE(%s) failed", #c); } while (0)
 #define ASSERT_FALSE(c) do { if (c) SEQC_TEST_FAIL_("ASSERT_FALSE(%s) failed", #c); } while (0)
-#define ASSERT_EQ(a, b) do { long long a_ = (long long)(a), b_ = (long long)(b); if (a_ != b_) \
-	SEQC_TEST_FAIL_("ASSERT_EQ(%s, %s) failed: %lld != %lld", #a, #b, a_, b_); } while (0)
-#define ASSERT_NEAR(a, b, tol) do { double a_ = (double)(a), b_ = (double)(b), t_ = (double)(tol); \
-	if (!(a_ - b_ <= t_ && b_ - a_ <= t_)) SEQC_TEST_FAIL_("ASSERT_NEAR(%s, %s, %s) failed: %.9g vs %.9g", \
-	#a, #b, #tol, a_, b_); } while (0)
+/* ASSERT_EQ compares integers and enums as long long. A floating-point
+ * operand does not compile: compare it with ASSERT_NEAR, or with ASSERT_EQ_DBL
+ * where the exact value matters. */
+#define SEQC_TEST_IS_FLOAT_(x) _Generic((x), float: 1, double: 1, long double: 1, default: 0)
+#define ASSERT_EQ(a, b) do { \
+	_Static_assert(!SEQC_TEST_IS_FLOAT_(a) && !SEQC_TEST_IS_FLOAT_(b), \
+		"ASSERT_EQ compares integers: use ASSERT_NEAR or ASSERT_EQ_DBL for floating point"); \
+	long long seqc_a_ = (long long)(a), seqc_b_ = (long long)(b); if (seqc_a_ != seqc_b_) \
+	SEQC_TEST_FAIL_("ASSERT_EQ(%s, %s) failed: %lld != %lld", #a, #b, seqc_a_, seqc_b_); } while (0)
+#define ASSERT_EQ_DBL(a, b) do { double seqc_a_ = (double)(a), seqc_b_ = (double)(b); \
+	if (!(seqc_a_ == seqc_b_)) SEQC_TEST_FAIL_("ASSERT_EQ_DBL(%s, %s) failed: %.17g != %.17g", \
+	#a, #b, seqc_a_, seqc_b_); } while (0)
+#define ASSERT_NEAR(a, b, tol) do { double seqc_a_ = (double)(a), seqc_b_ = (double)(b), seqc_t_ = (double)(tol); \
+	if (!(seqc_a_ - seqc_b_ <= seqc_t_ && seqc_b_ - seqc_a_ <= seqc_t_)) \
+	SEQC_TEST_FAIL_("ASSERT_NEAR(%s, %s, %s) failed: %.9g vs %.9g", #a, #b, #tol, seqc_a_, seqc_b_); } while (0)
 
 /* a filter selects the test of that name and the tests named <filter>_... */
 __attribute__((unused)) static int seqc_test_matches_(const char *name, const char *filter)

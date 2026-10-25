@@ -82,7 +82,9 @@ TEST(T5_midi_clock_runs_while_stopped)
 	ASSERT_EQ(r->time, 0);
 	r = fake_next(h, FAKE_MIDI_CLOCK, &pos);
 	ASSERT_NEAR((double)r->time, fake_clockCycles(120.0), fake_msToCycles(0.05) + 1.0);
-	ASSERT_EQ(r->tick, 0.0);			/* the transport position is not moved */
+	/* the free-running items never move the transport position */
+	for (size_t i = 0; i < h->logCount; i++)
+		ASSERT_EQ_DBL(h->log[i].tick, 0.0);
 }
 
 TEST(T5_start_rephases_the_clock)

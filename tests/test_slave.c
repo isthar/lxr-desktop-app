@@ -80,7 +80,7 @@ TEST(T16_steady_clock)
 	fake_setStep(h, 0, 1, 2, true);
 	fake_setTiming(h, 0, 1, 2, 3, 0);		/* x4: 192, 216, 240, 264 */
 	seqc_setSyncMode(SEQC_SYNC_MIDI);
-	ASSERT_EQ(seqc_position(), -16.0);		/* one clock before step 0 */
+	ASSERT_EQ_DBL(seqc_position(), -16.0);		/* one clock before step 0 */
 	fake_process(h, fake_msToCycles(1.0));
 	seqc_start();
 	ASSERT_EQ(seqc_state(), SEQC_ARMED);
@@ -449,7 +449,7 @@ TEST(T16_switch_to_internal_starts_an_armed_transport)
 	ASSERT_EQ(seqc_state(), SEQC_ARMED);
 	seqc_setSyncMode(SEQC_SYNC_INTERNAL);
 	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
-	ASSERT_EQ(seqc_position(), 0.0);
+	ASSERT_EQ_DBL(seqc_position(), 0.0);
 	const uint32_t clocks = h->calls[FAKE_MIDI_CLOCK];
 	const uint32_t steps = h->calls[FAKE_TEMPO_STEP];
 	fake_process(h, h->now + 10);
@@ -510,12 +510,12 @@ TEST(T16_switch_to_internal_while_stopped)
 	const double at = seqc_position();
 	seqc_setSyncMode(SEQC_SYNC_INTERNAL);
 	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
-	ASSERT_EQ(seqc_position(), at);
+	ASSERT_EQ_DBL(seqc_position(), at);
 	const uint32_t clocks = h->calls[FAKE_MIDI_CLOCK];
 	const uint32_t steps = h->calls[FAKE_TEMPO_STEP];
 	fake_runUntil(h, h->now + fake_msToCycles(50.0), fake_msToCycles(0.1));
 	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
-	ASSERT_EQ(seqc_position(), at);
+	ASSERT_EQ_DBL(seqc_position(), at);
 	ASSERT_TRUE(h->calls[FAKE_MIDI_CLOCK] - clocks >= 2 && h->calls[FAKE_MIDI_CLOCK] - clocks <= 3);
 	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], steps);
 }
@@ -523,7 +523,7 @@ TEST(T16_switch_to_internal_while_stopped)
 TEST(T18_jack_4ppq_one_pulse_per_step)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
-	ASSERT_EQ(seqc_position(), -96.0);		/* one pulse is a step */
+	ASSERT_EQ_DBL(seqc_position(), -96.0);		/* one pulse is a step */
 	fake_setStep(h, 0, 1, 1, true);
 	fake_setTiming(h, 0, 1, 1, 3, 0);		/* x4 between two pulses */
 	seqc_start();
@@ -558,7 +558,7 @@ TEST(T18_jack_24ppq_six_pulses_per_step)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
 	seqc_setAnalogPpq(24);
-	ASSERT_EQ(seqc_position(), -16.0);
+	ASSERT_EQ_DBL(seqc_position(), -16.0);
 	const double per = fake_clockCycles(120.0);
 	const seqc_time_t t0 = fake_msToCycles(10.0);
 	fake_runClocks(h, SEQC_EV_PULSE, t0, per, 4, fake_msToCycles(0.1));	/* count 4 */

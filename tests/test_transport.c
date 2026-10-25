@@ -109,7 +109,7 @@ TEST(T17_midi_start_while_running_restarts)
 	ASSERT_EQ(tr[2], SEQC_TRANSPORT_ARM);
 	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 2);	/* the pending one went out with the STOP */
 	ASSERT_EQ(seqc_absStep(), -1);
-	ASSERT_EQ(seqc_position(), -16.0);
+	ASSERT_EQ_DBL(seqc_position(), -16.0);
 	clocks(h, 1);
 	ASSERT_EQ(seqc_absStep(), 0);
 	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 3);
@@ -125,12 +125,13 @@ TEST(T17_stop_and_continue_resume_in_place)
 	sync(h, SEQC_EV_START);
 	clocks(h, 6 * 5 + 2);				/* tick 496: hits 480 and 492 played */
 	ASSERT_EQ(fake_triggers(h, 1, trig, 16), 2);
+	fake_process(h, h->now + fake_msToCycles(10.0));	/* the stop comes well after the clock */
 	sync(h, SEQC_EV_STOP);
 	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
 	const double held = seqc_position();
-	ASSERT_TRUE(held >= 496.0 && held <= 512.0);
+	ASSERT_TRUE(held > 503.0 && held < 504.0);	/* 7.68 ticks after the clock at 496 */
 	clocks(h, 7);					/* the master's clock runs on: count 39 */
-	ASSERT_EQ(seqc_position(), held);
+	ASSERT_EQ_DBL(seqc_position(), held);
 	ASSERT_EQ(seqc_absStep(), 5);
 	sync(h, SEQC_EV_CONTINUE);
 	ASSERT_EQ(seqc_state(), SEQC_ARMED);
@@ -147,7 +148,7 @@ TEST(T17_stop_and_continue_resume_in_place)
 	uint8_t tr[8];
 	ASSERT_EQ(transports(h, 0, tr, 8), 5);
 	ASSERT_EQ(tr[4], SEQC_TRANSPORT_CONTINUE);
-	ASSERT_EQ(seqc_position(), 496.0 + 16);		/* the last clock plus one clock */
+	ASSERT_NEAR(seqc_position(), 496.0 + 16, 0.1);	/* the last clock plus one clock, not held + 16 */
 	clocks(h, 6 * 2 - 1);
 	const size_t n = transports(h, 0, tr, 8);
 	ASSERT_EQ(n, 5);				/* ARM, START, STOP, ARM, CONTINUE */
@@ -250,7 +251,7 @@ TEST(T17_spp_in_pattern_mode)
 	ASSERT_EQ(seqc_trackStep(0), 5);
 	ASSERT_EQ(seqc_trackStep(1), 1);
 	ASSERT_EQ(seqc_trackStep(2), 2);
-	ASSERT_EQ(seqc_position(), 37.0 * 96 - 16);
+	ASSERT_EQ_DBL(seqc_position(), 37.0 * 96 - 16);
 	size_t pos = 0;
 	const fake_rec_t *r = fake_next(h, FAKE_SEEK, &pos);
 	ASSERT_TRUE(r != NULL);
@@ -661,7 +662,7 @@ TEST(T17_midi_transport_and_spp_in_analog_sync_at_4_ppq)
 	sync(h, SEQC_EV_STOP);
 	seqc_songPosition(8);
 	ASSERT_EQ(seqc_absStep(), 8);
-	ASSERT_EQ(seqc_position(), 8.0 * 96 - 96);	/* minus one clock: 96 ticks at 4 PPQ */
+	ASSERT_EQ_DBL(seqc_position(), 8.0 * 96 - 96);	/* minus one clock: 96 ticks at 4 PPQ */
 	sync(h, SEQC_EV_CONTINUE);
 	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 1, fake_msToCycles(0.1));
 	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
