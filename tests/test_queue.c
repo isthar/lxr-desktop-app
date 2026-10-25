@@ -297,9 +297,11 @@ static fake_host_t *startDense(int8_t shift)
 }
 
 /* The core generates a boundary's hits track by track. With every track on the
- * same grid, hit j of track t orders before hits j+1..7 of tracks 0..t-1, so it
- * moves t * (7 - j) of the new events: C(7,2) * C(8,2) = 588 in all. The events
- * still pending from the step before fire before every new one and do not move. */
+ * same grid, hit j of track t orders before hits j+1..7 of tracks 0..t-1, so a
+ * shift towards the tail alone would move t * (7 - j) of the new events:
+ * C(7,2) * C(8,2) = 588 in all. Inserting from the nearer end moves at most that
+ * (354 without shift). The events still pending from the step before fire before
+ * every new one and do not move. */
 #define DENSE_NEW_EVENT_MOVES	(21 * 28)
 
 static void denseBoundaryMovesAreBounded(int8_t shift)
