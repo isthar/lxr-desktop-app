@@ -33,6 +33,15 @@ The spec asked for Q48.16 fixed point. The STM32F765 has a hardware double-preci
   that track with the same tick and an absStep ≤ `lastFiredStep` is dropped.
 - When the queue is full, the new event is rejected and `stats.queueOverflow` is incremented.
 
+*Amended 2026-10-25 (task E1.16).* The final review of the core measured the layout above on the
+firmware: newlib-nano's byte-wise `memmove` moves the whole queue on almost every insert, which costs up
+to 0.8–1.2 ms per boundary on a dense pattern. The queue becomes earliest-first:
+- a ring with a head index, where pop is O(1);
+- the common insert, later than everything pending, is an append;
+- elements are moved with struct copies, not `memmove`;
+- the choke writes nothing when it removes nothing.
+The ordering key, the choke, the same-tick rule and the overflow behaviour are unchanged.
+
 ## N3. Early and late parts instead of removing and regenerating
 
 The spec regenerates step `n` at its boundary by removing its pending on-time events and generating
@@ -306,6 +315,10 @@ interval out, and the estimate would stay at the old tempo for good. So:
   - A 0 that extended a row could restart the estimate at a mean of 0.
   - A 0 that left the row alone would let a few late packets of 2 clocks in a row restart the estimate
     at half the tempo.
+- *Amended 2026-10-25 (E1.14 review, commit 1b924ad).* Any interval shorter than half a clock at the
+  highest slave tempo, 300 BPM (4.17 ms at 24 PPQ, 25 ms at 4 PPQ), counts as a 0. DIN interfaces that
+  forward a burst of clocks back to back, about 0.32 ms apart, would otherwise restart the estimate.
+  E1.15's estimator (N21) replaces this rule with transfers and its own outlier test.
 
 ## N17. A dropout sends the pending note-offs
 
