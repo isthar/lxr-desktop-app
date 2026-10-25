@@ -293,7 +293,10 @@ typedef struct
 	uint8_t		dropSlot;	/**< the ring slot of the last point taken out, and what it held */
 	uint32_t	dropClock;
 	uint32_t	dropStamp;
-	seqc_fit_t	fitBefore;	/**< the fit before the last MIDI transfer, for a clock that joins it */
+	seqc_fit_t	fitBefore;	/**< the fit before the last MIDI transfer, for a clock that joins it; the jack: before a merged double trigger */
+	bool		mergeTentative;	/**< the jack: the last pulse merged a double trigger, which the next one may undo (seqc_fitUndoMerge()) */
+	seqc_point_t	mergePoint;	/**< that pulse, in the position's count */
+	uint32_t	mergeExcluded;	/**< intervalsExcluded before it */
 	seqc_fit_t	fit;		/**< the tempo fit (N9, N16, N21) */
 	uint32_t	ringClock[SEQC_TEMPO_RING];	/**< the points of the long window */
 	uint32_t	ringStamp[SEQC_TEMPO_RING];	/**< their stamps, low 32 bits */
@@ -1331,7 +1334,8 @@ static void seqc_setSlaveBpm(double bpm)
  *   (extraClocks); the position counts them. MIDI: a row of early outliers
  *   that one spurious clock explains is taken in instead of restarting the fit
  *   (seqc_fitExtraClock()). The jack: a double trigger is merged at the pulse
- *   after it (seqc_fitDoubleTrigger()).
+ *   after it (seqc_fitDoubleTrigger()), and the merge undone at the next pulse
+ *   if that one shows a tempo jump (seqc_fitUndoMerge()).
  */
 /** true for the jack at 4 PPQ, whose clock is a step */
 static bool seqc_jack4(void)
@@ -1616,25 +1620,23 @@ static bool seqc_fitExtraClock(void)
 //------------------------------------------------------------------------------
 /** the jack: a double trigger (E1.19), a second pulse between two of the
  * master's, from a bouncing contact or a noisy cable. It splits an interval of
- * the slope into two short ones, and one of them is an outlier: the first if the
- * second pulse came in the first half, else the second. So the pulse between
- * the interval into p and the one before it (f->split, tested against
+ * the slope into two short ones. The first is an outlier if the second pulse
+ * came in the first half, the second if it came in the second half; within
+ * about the jitter of half a pulse, both or neither may be. So the pulse
+ * between the interval into p and the one before it (f->split, tested against
  * f->splitSlope) is left out when:
- * - the two add up to that slope within a sixteenth of its band;
- * - against that slope exactly one of them is an outlier (the second may have
- *   moved the fit's slope). Both outliers is no double trigger: a tempo that
- *   more than doubled starts that way;
- * - the interval before them was steady, within a quarter band of the slope,
- *   so after a tempo about doubled only its first two intervals can merge;
+ * - the two add up to that slope within a sixteenth of its band, and p's is
+ *   short against it (the second may have moved the fit's slope);
+ * - the interval before them was steady, within a quarter band of the slope;
  * - the step amplitude, step, is at most the sixteenth band: the stamps are
  *   precise enough.
  * The fit then counts one clock fewer, and p's interval, *dev, becomes the
  * merged one. The jack decides at p, where MIDI decides at the end of a row
- * (seqc_fitExtraClock()), so its sum must be closer: the first two intervals
- * after a jump to about twice the tempo can merge, and the clock that the fit
- * then misses stays in its window. With a quarter band that is 1.8 to 2.3
- * times, with a sixteenth 1.94 to 2.06, at the edge of the N16 band. Returns
- * true if it merged. */
+ * (seqc_fitExtraClock()), and the first two intervals after a jump to two to
+ * three times the tempo (the straddling one and the first new one) can look the
+ * same. So the merge is tentative: the fit before it is kept, and the next
+ * pulse takes it back if it comes about half the slope after p, or earlier
+ * (seqc_fitUndoMerge()). Returns true if it merged. */
 static bool seqc_fitDoubleTrigger(seqc_point_t *p, double *dev, double step)
 {
 	seqc_fit_t *f = &seqc_sl.fit;
@@ -1642,17 +1644,26 @@ static bool seqc_fitDoubleTrigger(seqc_point_t *p, double *dev, double step)
 	const double tol = band / 16.0;
 	const double merged = f->split + *dev + f->slope;
 	const double second = *dev + f->slope - f->splitSlope;	/* p's interval less the slope of the first */
-	const bool out = second > band || -second > band;
 	const bool leftOut = f->rowCount == 1;	/* the pulse between was an outlier */
-	if (step > tol || merged > tol || -merged > tol || out == leftOut || second > 0.0
+	if (step > tol || merged > tol || -merged > tol || second > 0.0
 			|| (!leftOut && f->tailL == seqc_ringPrev(f->head)))
 		return false;
+	/* for an undo: the fit before the merge, and the ring slot p goes into */
+	const uint8_t slot = leftOut ? f->head : seqc_ringPrev(f->head);
+	seqc_sl.fitBefore = *f;
+	seqc_sl.dropSlot = slot;
+	seqc_sl.dropClock = seqc_sl.ringClock[slot];
+	seqc_sl.dropStamp = seqc_sl.ringStamp[slot];
+	seqc_sl.mergeTentative = true;
+	seqc_sl.mergePoint = (seqc_point_t){ p->stamp, p->clock + f->extraClocks };
+	seqc_sl.mergeExcluded = seqc.stats.intervalsExcluded;
 	if (leftOut)
 		f->phase -= (int64_t)(f->split - 0.5);	/* the phase its interval added (seqc_fitPoint()) */
 	else
 	{
 		seqc_fitDropNewest();	/* it was in the fit, and its offset was no step of the stamps */
 		f->haveLastOff = false;
+		f->drift = (f->drift - SEQC_TEMPO_DRIFT_GAIN * f->split) / (1.0 - SEQC_TEMPO_DRIFT_GAIN);	/* nor part of the drift */
 		seqc.stats.intervalsExcluded++;
 	}
 	f->extraClocks++;
@@ -1662,8 +1673,9 @@ static bool seqc_fitDoubleTrigger(seqc_point_t *p, double *dev, double step)
 }
 //------------------------------------------------------------------------------
 /** the point of a complete transfer goes into the fit, is left out as an
- * outlier, or restarts the fit */
-static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
+ * outlier, or restarts the fit. On the jack it may complete a double trigger
+ * (seqc_fitDoubleTrigger()) if mayMerge. */
+static seqc_pointFate_t seqc_fitPoint(seqc_point_t p, bool mayMerge)
 {
 	seqc_fit_t *f = &seqc_sl.fit;
 	const bool jack = seqc.mode == SEQC_SYNC_ANALOG;
@@ -1683,7 +1695,7 @@ static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
 		/* signed: a MIDI clock may be stamped before the newest point (DIN and
 		 * USB clocks at once) */
 		dev = (double)(int64_t)(p.stamp - f->prev.stamp) - f->slope * (double)(p.clock - f->prev.clock);
-		merged = jack && tested && f->split < 0.0 && seqc_fitDoubleTrigger(&p, &dev, step);
+		merged = jack && mayMerge && tested && f->split < 0.0 && seqc_fitDoubleTrigger(&p, &dev, step);
 		off = dev - f->drift;
 		if (f->haveLastOff)
 		{
@@ -1780,6 +1792,31 @@ static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
 	return SEQC_POINT_USED;
 }
 //------------------------------------------------------------------------------
+/** the jack: the pulse p after one that merged a double trigger
+ * (seqc_fitDoubleTrigger()). After a double trigger p comes about one slope
+ * after that pulse. If it comes more than half a band earlier than that (about
+ * half a slope after it, or less), the two short intervals were the start of a
+ * tempo jump: the fit, the ring slot that pulse
+ * wrote and intervalsExcluded go back to before the merge, and the pulse goes
+ * in again without one. The jump then goes through the fit (N16) as it would
+ * have without the merge, one pulse later. */
+static void seqc_fitUndoMerge(seqc_point_t p)
+{
+	if (!seqc_sl.mergeTentative)
+		return;
+	seqc_sl.mergeTentative = false;
+	const seqc_fit_t *b = &seqc_sl.fitBefore;
+	const seqc_point_t m = seqc_sl.mergePoint;
+	const double d = (double)(int64_t)(p.stamp - m.stamp) - b->splitSlope * (double)(uint32_t)(p.clock - m.clock);
+	if (d >= -0.5 * seqc_fitBand(b->splitSlope, b->step))
+		return;
+	seqc_sl.fit = seqc_sl.fitBefore;
+	seqc_sl.ringClock[seqc_sl.dropSlot] = seqc_sl.dropClock;
+	seqc_sl.ringStamp[seqc_sl.dropSlot] = seqc_sl.dropStamp;
+	seqc.stats.intervalsExcluded = seqc_sl.mergeExcluded;
+	(void)seqc_fitPoint(m, false);
+}
+//------------------------------------------------------------------------------
 /** forget the fit and the transfer being collected (the last known tempo stays) */
 static void seqc_clearEstimate(void)
 {
@@ -1795,6 +1832,7 @@ static void seqc_clearEstimate(void)
 	f->split = 0.0;
 	f->steady = false;
 	f->extraClocks = 0;
+	seqc_sl.mergeTentative = false;
 	seqc_sl.transferOpen = false;
 	seqc_sl.joinable = false;
 }
@@ -1811,7 +1849,8 @@ static void seqc_transferDone(void)
 		seqc_sl.fitBefore = seqc_sl.fit;
 		seqc_sl.joinDropped = false;
 	}
-	const seqc_pointFate_t fate = seqc_fitPoint(seqc_sl.transfer);
+	seqc_fitUndoMerge(seqc_sl.transfer);
+	const seqc_pointFate_t fate = seqc_fitPoint(seqc_sl.transfer, true);
 	seqc_sl.joinable = midi;
 	seqc_sl.joinLeftOut = fate == SEQC_POINT_LEFT_OUT;
 	seqc_sl.joinRestarted = fate == SEQC_POINT_RESTARTED;

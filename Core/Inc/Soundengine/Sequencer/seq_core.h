@@ -590,16 +590,14 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *   slope is an outlier and is left out, unless it completes a tempo jump; the
  *   fit goes on as if it had had the slope, so a lost pulse does not move the
  *   estimate. A double trigger (E1.19, N21), a second pulse between two of the
- *   master's, splits an interval into two that add up to the slope, one of
- *   them an outlier: the fit leaves the second pulse out and counts one pulse
- *   fewer, so from the next real pulse on the estimate is as exact as after a
- *   lost pulse (it was 1.5% to 17.9% off for 3 to 5 pulses at 4 PPQ, and up to
- *   2.7% at 24 PPQ, before). Between the two the estimate may include the
- *   second pulse, for one pulse. Not so for a second pulse exactly half a
- *   pulse after the first, which is how an exactly doubled tempo starts
- *   (42.9% for 4 pulses at 4 PPQ, 5.0% at 24 PPQ), nor for stamps whose step
- *   amplitude (about their jitter) is over 1/32 of a pulse; there it costs
- *   what it did before. The position counts the second pulse.
+ *   master's, splits an interval into two short ones that add up to the
+ *   slope: the fit leaves the second pulse out and counts one pulse fewer, so
+ *   from the next real pulse on the estimate is as exact as after a lost pulse
+ *   (it was 1.5% to 42.9% off for 3 to 5 pulses at 4 PPQ, and up to 5.0% at
+ *   24 PPQ, before). Between the two the estimate may include the second
+ *   pulse, for one pulse. Not so for stamps whose step amplitude (about their
+ *   jitter) is over 1/32 of a pulse, such as ±1 ms at 24 PPQ and 120 BPM;
+ *   there it costs what it did before. The position counts the second pulse.
  * - The points of the first half short window after a start of the fit are not
  *   tested.
  * - A tempo jump (N16): after SEQC_TEMPO_RESTART outliers in a row on the same
@@ -608,7 +606,10 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *   point inside the band ends the row; an outlier on the other side ends it
  *   and starts a new row of one. For MIDI clock, a tempo change that takes the
  *   clocks out of the band within a few clocks (about 15% or more) restarts the
- *   fit this way too.
+ *   fit this way too. On the jack, the first two intervals after a jump to two
+ *   to three times the tempo can add up to one old pulse, as after a double
+ *   trigger; the pulse after them, half an old pulse or less later, undoes that
+ *   merge, and the jump goes on as without it, one pulse later (E1.19, N21).
  * - The dropout time is SEQC_DROPOUT_MS, or two expected clock intervals if
  *   that is longer (N15). The interval comes from the estimate, or from
  *   SEQC_SLAVE_BPM_MIN while there is none, so a slow jack clock at 4 PPQ can

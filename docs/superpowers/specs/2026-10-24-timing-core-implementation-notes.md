@@ -626,17 +626,35 @@ the clock count.
     after a real one, the newest point of the fit later). The row is the lookahead that tells it
     from a tempo jump, whose clocks move further off the line at every clock. It needs a step
     amplitude before the row of at most that quarter band (stamps precise to 1/8 of a clock).
-  - Jack: a double trigger splits one interval into two short ones that add up to the slope, one of
-    them an outlier. When the interval into a pulse and the one before it add up to the slope of
-    the first within a sixteenth band, exactly one of them is an outlier against that slope, the
-    interval before them was within a quarter band, and the step amplitude is at most the
-    sixteenth band, the pulse between is left out and the fit counts one clock fewer.
-    - The jack decides at once, with no row, so its sum test is tight: the first two intervals after
-      a jump to about twice the tempo can look the same. With a quarter band that took in jumps of
-      1.8 to 2.3 times, and the clock the fit then missed cost up to 2.3% two beats later at 24 PPQ
-      with 0.3 to 1 ms of jitter; with a sixteenth, 1.94 to 2.06 times, and none was worse.
-    - Both intervals outliers is no double trigger (a tempo more than doubled starts that way), and
-      a merged interval is not split again.
+  - Jack: a double trigger splits one interval into two short ones that add up to the slope. The first
+    is an outlier if the second pulse came in the first half of the interval, the second if it came
+    in the second half; within about the jitter of half a pulse, both or neither may be. When the
+    interval into a pulse and the one before it add up to the slope of the first within a sixteenth
+    band, both are short against that slope, the interval before them was within a quarter band, and
+    the step amplitude is at most the sixteenth band, the pulse between is left out and the fit
+    counts one clock fewer. If that pulse was in the fit (the second half), it leaves the drift too;
+    else the offsets after it read as a step of the stamps, and a second double trigger a few pulses
+    later is not merged.
+    - The jack decides at the pulse after the double trigger, with no row, and the first two
+      intervals after a jump to two to three times the tempo (the straddling one and the first new
+      one) can add up to one old pulse. So the merge is tentative (amended in the E1.19 review): the
+      fit before it is kept, in the copy that MIDI keeps for the join (jack transfers never join).
+      The next pulse undoes the merge if it comes more than half a band before one old pulse after
+      the merged one: after a double trigger it comes one old pulse later, after such a jump half an
+      old pulse or less.
+      The undo puts back the fit, the ring slot the merged pulse wrote and `intervalsExcluded`, and
+      the merged pulse goes in again without a merge. The jump then goes through the fit as it
+      would have without one, a pulse later.
+    - The first version merged at once and guarded jumps with the tight sum test alone, and with no
+      merge of two outliers or of two intervals inside the band. The review found that it still
+      merged jumps to about 2 to 2.5 times when the change came early in a pulse, and dropped a
+      real pulse: from 120 to 200–300 BPM at 4 PPQ, 47 of 2020 exact jumps restarted where they
+      had followed inside the band, and at 24 PPQ with 0.1 to 0.3 ms of jitter the missing pulse
+      stayed in the 96-clock window (1.34% two beats after 120 to 240 BPM, 0.32% after four). Its
+      figures (1.94 to 2.06 times; the same error within 0.01 points) came from a grid of 2.5 BPM
+      and 4 change phases that missed those phases.
+    - With the undo, two outliers and two intervals inside the band merge too, so a second pulse at
+      about half a pulse is a double trigger like any other. A merged interval is not split again.
   - Measured with exact stamps and a 0.1 ms `seq_tick()`, one spurious clock f of a period after a
     real one, f from 0.05 to 0.95 in steps of 0.05, at 120 BPM (MIDI also at 90 and 180 BPM, with
     the same figures). The error is the worst from the clock after it on; the duration is the
@@ -649,33 +667,42 @@ the clock count.
     | MIDI | 0.50–0.80 | 0.013%–0.032%, a restart | 0.013%–0.032%, no restart |
     | Jack, 4 PPQ | 0.05–0.45, 0.55–0.95 | 1.5%–17.9%, 3–5 pulses | 0.000% |
     | Jack, 24 PPQ | 0.05–0.45, 0.55–0.95 | 0.30%–2.74%, 21–92 clocks | 0.000% |
-    | Jack | 0.50 exactly | 42.9% for 4 pulses (4 PPQ), 5.0% for 24 clocks (24 PPQ) | the same |
+    | Jack | 0.50 | 42.9% for 4 pulses (4 PPQ), 5.0% for 24 clocks (24 PPQ) | 0.000% |
 
-    - At exactly half a pulse both intervals lie on the edge of the band and neither is an outlier:
-      that is how an exactly doubled tempo starts, which the window must follow. A thousandth of a
-      pulse either side is merged.
-    - With ±0.1, ±0.3 and ±1 ms of jitter (f 0.3, 0.45, 0.55 and 0.7), the merged cases stay within
-      0.033% on MIDI, and on the jack within the error of a lost pulse with the same jitter. At 24 PPQ
-      with ±1 ms the step amplitude is over the sixteenth band: a double trigger there costs what it
-      did before.
+    - With ±0.1, ±0.3 and ±1 ms of jitter (f 0.05 to 0.95), the merged cases stay within 0.034% on
+      MIDI, and on the jack within the error of a lost pulse with the same jitter (at ±1 ms and
+      4 PPQ, 0.28% to 0.39% against 0.42%). At 24 PPQ with ±1 ms the step amplitude is over the
+      sixteenth band: a double trigger there costs what it did before (up to 2.7%). Around half
+      a pulse (f 0.47 to 0.53 in steps of 0.005, 20 jitter seeds each), the jack at 4 PPQ stays
+      within the lost-pulse error at every jitter. Before E1.19 it was up to 105% off at f 0.5,
+      with a restart in 6 of 20 runs; the first E1.19 version still was from f 0.485 to 0.51 at
+      ±1 ms.
+    - Two double triggers 2 to 8 pulses apart at 4 PPQ, or 2 to 32 clocks apart at 24 PPQ, at f 0.1,
+      0.3, 0.5, 0.6 and 0.8: each merges. Before the drift was put back, the second was not merged
+      in 96 of the 200 runs (up to 43% at 4 PPQ, 5% at 24 PPQ).
     - While a MIDI row forms (f over 0.5) and between a double trigger and the next pulse (f over
       0.5 on the jack), the estimate includes the spurious clock: for the four clocks of the row, and
       for less than one pulse.
   - Unchanged: the N21 Limit sweep (identical output at buffer phase 0.31, 0.51%, 0.87% and 2.59%,
     and over 20 phases), the burst join, the dropout, a lost clock or pulse, and every test before
-    E1.19. Tempo jumps from 120 to 60–300 BPM in steps of 2.5, at 4 change phases, with 0, 0.3 and
-    1 ms of jitter: MIDI is identical; on the jack the error two beats later is the same within
-    0.01 points, and in 10 to 23 of 1164 cases a jump to 2 to 2.5 times whose straddling interval
-    and first new one add up to one old pulse merges once (one more `intervalsExcluded`, the
-    restart one pulse later), or, at 240 and 242.5 BPM with jitter, restarts once where it had
-    followed inside the band.
+    E1.19.
+  - Tempo jumps on the jack, from 120 to 200–300 BPM in steps of 1 at 20 change phases (0.05
+    steps), at 4 and 24 PPQ, with exact stamps and with ±0.1, ±0.3 and ±1 ms of jitter (1 to 3
+    seeds): the restarts, `intervalsExcluded`, the error two beats later, the largest error after
+    that, the error at the end and the number of steps played are the same as before E1.19 in all
+    36360 runs. From 120 to 60–300 BPM in steps of 2.5 at 4 change phases, with 0, 0.3 and 1 ms of
+    jitter, the error after every pulse: MIDI is identical, and on the jack 76 of 2328 runs differ,
+    each at one pulse only. That is the pulse between a merge and its undo, where the estimate
+    holds the old tempo: up to 50.6 points more error for that pulse at 4 PPQ (a quarter of a
+    beat; where the window had followed at once, 120 to 245 BPM 0.05 into a pulse), under 0.07
+    points at 24 PPQ. From the next pulse on the runs are identical.
   - A MIDI merge can take the fit's newest point out, and the next point goes into its ring slot,
     which the fit before the transfer uses. The slot is kept and put back when a clock joins the
     transfer, so the copy stays intact. (With the present bands the joined transfer is two clocks
     early and restarts the fit, which clears the windows; the slot is put back regardless.)
-  - Costs: `seq_core.c.obj` text 20138 to 22466 B (+2328) and bss 11221 to 11277 B (+56: 24 B in
-    the fit and in its copy for the join, 8 B for the kept slot), measured with the firmware's
-    compile command and Arm GNU 14.3.rel1.
+  - Costs: `seq_core.c.obj` text 20138 to 22862 B (+2724) and bss 11221 to 11309 B (+88: 24 B in
+    the fit and in its copy for the join, 8 B for the kept slot, 32 B for the tentative jack merge),
+    measured with the firmware's compile command and Arm GNU 14.3.rel1.
 - **Costs and behaviour changes.**
   - 1192 B of bss over E1.14 (7053 to 8245 B): the 98-point ring and the fit (928 B), and the fit copy
     and the join state (264 B). E1.17's 101-point ring adds 24 B (8269 B). Review row R6.2 must allow
