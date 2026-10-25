@@ -44,6 +44,10 @@ typedef struct
 static fw17_hit_t ref[MAX_HITS];
 static fw17_hit_t got[MAX_HITS];
 static const fake_rec_t *trig[MAX_HITS];
+/* what the last runCore() saw besides the hits: more hits than got[] holds, and
+ * the fake host's error and lost-log counts */
+static bool coreOverflow;
+static uint32_t coreErrors, coreLost;
 
 static void clearScenario(scenario_t *sc)
 {
@@ -113,8 +117,13 @@ static int runCore(const scenario_t *sc, int steps)
 	seqc_start();
 	fake_process(h, 0);
 	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(130.0) * steps) - 1, fake_msToCycles(0.1));
-	const int n = (int)fake_triggers(h, -1, trig, MAX_HITS);
-	for (int i = 0; i < n && i < MAX_HITS; i++)
+	int n = (int)fake_triggers(h, -1, trig, MAX_HITS);
+	coreOverflow = n > MAX_HITS;
+	if (coreOverflow)
+		n = MAX_HITS;
+	coreErrors = h->errors;
+	coreLost = h->logLost;
+	for (int i = 0; i < n; i++)
 	{
 		const seqc_event_t *ev = &trig[i]->ev;
 		got[i] = (fw17_hit_t){ ev->track, ev->step, (int)(ev->tick / 96), (int)(ev->tick % 96 / 4) };
@@ -131,6 +140,9 @@ static void checkEquivalent(const scenario_t *sc, int steps)
 	const int nr = runReplica(sc, steps, 1);
 	const int nc = runCore(sc, steps);
 	ASSERT_TRUE(nr > 0);
+	ASSERT_FALSE(coreOverflow);
+	ASSERT_EQ(coreErrors, 0);
+	ASSERT_EQ(coreLost, 0);
 	for (int i = 0; i < nr && i < nc; i++)
 	{
 		if (compareHits(&ref[i], &got[i]) != 0)
@@ -146,7 +158,7 @@ static void checkEquivalent(const scenario_t *sc, int steps)
 
 TEST(T20_every_ratchet_and_shift)
 {
-	/* each (flam, shift) pair once, three steps apart, on all tracks */
+	/* each (flam, shift) pair at least once, three steps apart, on all tracks */
 	scenario_t sc;
 	clearScenario(&sc);
 	int k = 0;
@@ -164,37 +176,46 @@ TEST(T20_every_ratchet_and_shift)
 	checkEquivalent(&sc, 130);
 }
 
+/* the scenarios' own generator, a 32-bit LCG, so that every platform runs the
+ * same patterns (libc rand() differs between macOS and glibc, and the replica
+ * draws from it too) */
+static uint32_t scenarioState;
+static int scenarioRandom(int n)
+{
+	scenarioState = scenarioState * 1664525u + 1013904223u;
+	return (int)((scenarioState >> 8) % (uint32_t)n);
+}
+
 TEST(T20_random_patterns)
 {
-	srand(20261024);
 	for (int round = 0; round < 25; round++)
 	{
+		const uint32_t seed = 20261024u + (uint32_t)round;
+		scenarioState = seed;
 		scenario_t sc;
 		clearScenario(&sc);
 		static const uint8_t lengths[] = { 16, 12, 7, 64, 24, 5, 9, 32 };
 		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
 		{
-			const uint8_t len = lengths[rand() % 8];
+			const uint8_t len = lengths[scenarioRandom(8)];
 			sc.length[t] = len;
 			/* steps at least 3 apart, also across the wrap */
-			int first = -1, last = -1;
-			for (int s = rand() % 3; s < len; s += 3 + rand() % 3)
+			int first = -1;
+			for (int s = scenarioRandom(3); s < len; s += 3 + scenarioRandom(3))
 			{
 				if (first >= 0 && first + len - s < 3)
 					break;
 				sc.on[t][s] = true;
-				sc.flam[t][s] = (uint8_t)(rand() % 16);
-				sc.shift[t][s] = (uint8_t)(rand() % 16);
+				sc.flam[t][s] = (uint8_t)scenarioRandom(16);
+				sc.shift[t][s] = (uint8_t)scenarioRandom(16);
 				if (first < 0)
 					first = s;
-				last = s;
 			}
-			(void)last;
 		}
 		checkEquivalent(&sc, 100);
 		if (seqc_test_failed_)
 		{
-			printf("random round %d\n", round);
+			printf("random round %d, seed %u\n", round, (unsigned)seed);
 			return;
 		}
 	}
@@ -223,13 +244,32 @@ TEST(T20_d2_scenario_matches_per_track_flags)
 
 TEST(T20_global_choke_flags_of_fw17_drop_hits)
 {
-	/* the replica with fw 1.7's global flags loses the two hits of D2 */
+	/* the replica with fw 1.7's global flags loses the two hits of D2: the hat
+	 * x4's 4th hit (pulse 18 of step 0) and the hat step 2 spill-over (pulse 0
+	 * of step 3) */
 	scenario_t sc;
 	setUpD2(&sc);
+	static fw17_hit_t perTrack[MAX_HITS];
 	const int fixed = runReplica(&sc, 6, 1);
+	memcpy(perTrack, ref, sizeof ref[0] * (size_t)fixed);
 	const int fw17 = runReplica(&sc, 6, 0);
 	ASSERT_EQ(fixed - fw17, 2);
+	static const fw17_hit_t lost[2] = { { 5, 0, 0, 18 }, { 5, 2, 3, 0 } };
+	int missing = 0;
+	for (int i = 0, j = 0; i < fixed; i++)
+	{
+		if (j < fw17 && compareHits(&perTrack[i], &ref[j]) == 0)
+		{
+			j++;
+			continue;
+		}
+		ASSERT_TRUE(missing < 2);
+		ASSERT_EQ(compareHits(&perTrack[i], &lost[missing]), 0);
+		missing++;
+	}
+	ASSERT_EQ(missing, 2);
 	ASSERT_EQ(runCore(&sc, 6), fixed);
+	ASSERT_EQ(coreErrors, 0);
 }
 
 /* The two intended differences that the comparison above leaves out, pinned
@@ -252,6 +292,7 @@ TEST(T20_spill_over_after_a_newer_step_is_choked)
 	const int nc = runCore(&sc, 4);
 	ASSERT_EQ(nr, 3);
 	ASSERT_EQ(nc, 2);
+	ASSERT_EQ(coreErrors, 0);
 	ASSERT_EQ(compareHits(&ref[0], &got[0]), 0);	/* step 1 at pulse 15 */
 	ASSERT_EQ(compareHits(&ref[1], &got[1]), 0);	/* step 2 at pulse 18 of step 1 */
 	ASSERT_EQ(ref[2].step, 1);			/* fw 1.7 only: step 1 at pulse 3 of step 2 */
@@ -277,6 +318,7 @@ TEST(T20_no_spill_over_of_the_last_step_at_the_start)
 	const int nc = runCore(&sc, 20);
 	ASSERT_EQ(nr, 3);
 	ASSERT_EQ(nc, 2);
+	ASSERT_EQ(coreErrors, 0);
 	ASSERT_EQ(ref[0].step, 15);			/* fw 1.7 only */
 	ASSERT_EQ(ref[0].seqStep, 0);
 	ASSERT_EQ(ref[0].pulse, 9);

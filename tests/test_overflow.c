@@ -102,8 +102,11 @@ static void callBackIntoTheCore(fake_host_t *h, uint32_t absStep)
 {
 	if (absStep != 2 || nestedCalls++ > 0)
 		return;
-	/* a kit autoload, say, that runs seq_tick() again: all of these are ignored */
+	/* a kit autoload, say, that runs seq_tick() again: all of these are ignored.
+	 * seqc_process(0) is before the nextDue of the last call, so it is counted
+	 * only because seqc_enter() clears nextDue for the time of the call. */
 	seqc_process(h->now + 1000);
+	seqc_process(0);
 	seqc_stop();
 	seqc_start();
 	seqc_rewind();
@@ -131,7 +134,7 @@ TEST(T19_calls_from_a_callback_are_ignored_and_counted)
 	runToTick(h, 4 * 96);
 	ASSERT_EQ(nestedCalls, 1);
 	seqc_stats_t s = stats();
-	ASSERT_EQ(s.reentries, 10);
+	ASSERT_EQ(s.reentries, 11);
 	ASSERT_EQ(s.skipDrops, 1);
 	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
 	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-6);

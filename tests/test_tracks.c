@@ -166,6 +166,88 @@ TEST(T10_tie_goes_to_the_lowest_track)
 	int32_t ends[4];
 	ASSERT_EQ(patternEnds(h, ends, 4), 2);
 	ASSERT_EQ(ends[1], 24);
+	/* seqc_init() forgets the master and the indices of the last run */
+	fake_init();
+	ASSERT_EQ(seqc_masterTrack(), 0);
+	ASSERT_EQ(seqc_trackStep(2), SEQC_NO_STEP);
+}
+
+TEST(T10_shortened_track_wraps_at_once)
+{
+	/* N5: a track wraps when index + 1 >= its length, so a track shortened
+	 * below its index restarts at 0 at the next boundary, as in fw 1.7; a
+	 * modulo would go on at (index + 1) % length */
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 0, 32);			/* the master */
+	runTo(h, 20);					/* track 0 at 20, the others at 4 */
+	fake_setLength(h, 0, 0, 16);			/* now shorter than its index */
+	fake_setLength(h, 0, 2, 3);			/* 4 + 1 >= 3 */
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 24) + fake_msToCycles(1.0), fake_msToCycles(1.0));
+	ASSERT_EQ(seen[21][0], 0);
+	ASSERT_EQ(seen[21][2], 0);
+	ASSERT_EQ(seen[24][2], 0);
+	ASSERT_EQ(seen[21][1], 5);
+	int32_t ends[4];
+	ASSERT_EQ(patternEnds(h, ends, 4), 2);
+	ASSERT_EQ(ends[1], 21);				/* the shortened master wrapped there */
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T10_start_after_a_stop_restarts_every_track)
+{
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 1, 12);
+	runTo(h, 5);
+	seqc_stop();
+	seqc_start();					/* from the beginning: rewinds first */
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		ASSERT_EQ(seqc_trackStep(t), SEQC_NO_STEP);
+	fake_clearLog(h);
+	clearSeen();
+	fake_process(h, h->now);			/* step 0 */
+	ASSERT_EQ(seenCount, 1);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		ASSERT_EQ(seen[0][t], 0);
+	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 1);	/* N4: at step 0 again */
+}
+
+/* the counters as patternEnd() sees them, recorded by a wrapper around the fake
+ * host's callback */
+static seqc_pat_t (*realPatternEnd)(void *ctx);
+static uint8_t endSteps[8][SEQC_NUM_TRACKS];
+static int32_t endAbsStep[8];
+static size_t endCount;
+static seqc_pat_t spyPatternEnd(void *ctx)
+{
+	if (endCount < 8)
+	{
+		for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+			endSteps[endCount][t] = seqc_trackStep(t);
+		endAbsStep[endCount] = seqc_absStep();
+	}
+	endCount++;
+	return realPatternEnd(ctx);
+}
+
+TEST(T10_pattern_end_sees_the_advanced_counters)
+{
+	/* seq_core.h: patternEnd() is called after the indices advanced, so the
+	 * master track is at 0 */
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 1, 12);
+	realPatternEnd = h->host.patternEnd;
+	h->host.patternEnd = spyPatternEnd;
+	endCount = 0;
+	seqc_init(&h->host, SEQC_CPU_HZ);		/* the core copies the table */
+	runTo(h, 20);
+	ASSERT_EQ(endCount, 2);				/* steps 0 and 16 */
+	ASSERT_EQ(endAbsStep[0], 0);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		ASSERT_EQ(endSteps[0][t], 0);
+	ASSERT_EQ(endAbsStep[1], 16);
+	ASSERT_EQ(endSteps[1][0], 0);			/* the master */
+	ASSERT_EQ(endSteps[1][1], 4);			/* 16 mod 12 */
+	ASSERT_EQ(h->errors, 0);
 }
 
 TEST(T10_same_pattern_keeps_the_indices_running)

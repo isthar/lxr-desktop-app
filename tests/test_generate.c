@@ -93,12 +93,16 @@ TEST(T2_event_carries_its_step_data)
 
 TEST(T2_flam_out_of_range_plays_one_hit)
 {
-	fake_host_t *h = fake_init();
-	fake_setStep(h, 0, 1, 2, true);
-	fake_setTiming(h, 0, 1, 2, 9, 0);
-	runSteps(h, 4);
-	ASSERT_EQ(fake_triggers(h, 1, trig, 4), 1);
-	ASSERT_EQ(trig[0]->ev.tick, 192);
+	static const uint8_t flams[] = { 6, 9, 15 };	/* 6: the first value past the table */
+	for (size_t i = 0; i < sizeof flams; i++)
+	{
+		fake_host_t *h = fake_init();
+		fake_setStep(h, 0, 1, 2, true);
+		fake_setTiming(h, 0, 1, 2, flams[i], 0);
+		runSteps(h, 4);
+		ASSERT_EQ(fake_triggers(h, 1, trig, 4), 1);
+		ASSERT_EQ(trig[0]->ev.tick, 192);
+	}
 }
 
 /* one step per track, so that no two steps of a track overlap */
@@ -140,8 +144,11 @@ static void checkSwing(uint8_t shuffle, int swing)
 }
 
 TEST(T3_swing_0) { checkSwing(0, 0); }
+TEST(T3_swing_1) { checkSwing(1, 1); }			/* 0.504 rounds up, floor() gives 0 */
 TEST(T3_swing_32) { checkSwing(32, 16); }		/* round(32 * 64 / 127) */
 TEST(T3_swing_64) { checkSwing(64, 32); }
+TEST(T3_swing_97) { checkSwing(97, 49); }		/* 48.88 rounds up */
+TEST(T3_swing_126) { checkSwing(126, 63); }		/* 63.496 rounds down, not up to 64 */
 TEST(T3_swing_127) { checkSwing(127, 64); }		/* 2/3 of a step */
 TEST(T3_shuffle_above_127_counts_as_127) { checkSwing(200, 64); }
 
@@ -172,6 +179,19 @@ TEST(T3_shuffle_is_read_at_every_boundary)
 	ASSERT_EQ(fake_triggers(h, 0, trig, 4), 2);
 	ASSERT_EQ(trig[0]->ev.tick, 96 + 32);
 	ASSERT_EQ(trig[1]->ev.tick, 3 * 96 + 64);
+}
+
+TEST(T3_shuffle_change_before_the_boundary_applies)
+{
+	/* odd step 3 without shift: boundary 2 queues no early hit, so the late part
+	 * takes the shuffle read at boundary 3 itself (decision 9) */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 3, true);
+	runSteps(h, 3);
+	h->shuffle = 127;
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 5), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 0, trig, 4), 1);
+	ASSERT_EQ(trig[0]->ev.tick, 3 * 96 + 64);
 }
 
 TEST(T4_shift_on_every_ratchet_type)
@@ -239,6 +259,10 @@ TEST(T4_late_hits_spill_into_the_next_steps)
 	ASSERT_EQ(trig[0]->ev.tick, 3 * 96 + 84);
 	ASSERT_EQ(trig[7]->ev.tick, 3 * 96 + 168);
 	ASSERT_EQ(trig[7]->ev.absStep, 3);
+	/* inside trigger() the position is the event's own tick, also between
+	 * boundaries */
+	for (int j = 0; j < 8; j++)
+		ASSERT_EQ_DBL(trig[j]->tick, (double)trig[j]->ev.tick);
 }
 
 TEST(T8_draws_come_from_the_generator)
@@ -432,6 +456,7 @@ TEST(T2_restart_drops_the_old_run)
 	ASSERT_EQ(trig[0]->ev.tick, hitTick(3, 0, 7, 0, 8));
 	for (int i = 1; i < 9; i++)
 		ASSERT_EQ(trig[i]->ev.tick, hitTick(3, 0, 7, i - 1, 8));
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 2);	/* the new run draws step 3 again */
 }
 
 TEST_MAIN()

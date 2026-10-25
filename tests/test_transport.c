@@ -310,6 +310,20 @@ TEST(T17_spp_in_song_mode_with_identical_entries)
 	ASSERT_EQ(h->errors, 0);
 }
 
+TEST(T17_spp_sets_the_master_of_the_seeked_pattern)
+{
+	/* after a song position, seqc_masterTrack() is the master of the pattern
+	 * that the song position activated, before any boundary */
+	fake_host_t *h = midiSlave();
+	static const uint8_t song[] = { 1, 2 };
+	fake_setSong(h, song, 2);
+	fake_setSongMode(h, true);
+	fake_setLength(h, 2, 3, 24);			/* the master of pattern 2 */
+	seqc_songPosition(16);
+	ASSERT_EQ(h->activePattern, 2);
+	ASSERT_EQ(seqc_masterTrack(), 3);
+}
+
 TEST(T17_spp_at_a_pattern_start_calls_no_pattern_end)
 {
 	/* a DAW locates to a bar start: the first boundary plays the located entry's
@@ -490,6 +504,92 @@ TEST(T17_spp_while_armed_seeks)
 	ASSERT_EQ(trig[0]->ev.absStep, 8);
 }
 
+TEST(T17_spp_then_switch_to_internal_plays_the_seek_target)
+{
+	/* armed after a song position, the switch to internal sync resumes at the
+	 * located step (a CONTINUE), not one step later */
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 8, true);
+	seqc_songPosition(8);
+	sync(h, SEQC_EV_CONTINUE);
+	seqc_setSyncMode(SEQC_SYNC_INTERNAL);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	fake_runUntil(h, h->now + fake_msToCycles(300.0), fake_msToCycles(0.1));
+	uint8_t tr[8];
+	const size_t n = transports(h, 0, tr, 8);
+	ASSERT_EQ(n, 2);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_CONTINUE);
+	ASSERT_TRUE(fake_triggers(h, 0, trig, 8) >= 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 8);
+}
+
+/* the clock that resumes step s after Stop, SPP s and Continue */
+static void stopLocateContinue(fake_host_t *h, uint16_t s)
+{
+	sync(h, SEQC_EV_STOP);
+	seqc_songPosition(s);
+	sync(h, SEQC_EV_CONTINUE);
+	clocks(h, 1);
+}
+
+TEST(T17_spp_clears_the_same_tick_state)
+{
+	/* the master stops just after step 2's hit and locates back to step 2: the
+	 * replayed hit has the tick and step of the one that fired, and must not be
+	 * dropped by the same-tick rule */
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 2, true);
+	sync(h, SEQC_EV_START);
+	clocks(h, 1 + 6 * 2);				/* step 2 played */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	stopLocateContinue(h, 2);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 2);
+	ASSERT_EQ(trig[1]->ev.absStep, 2);
+	ASSERT_EQ(stats().chokeDrops, 0);
+}
+
+TEST(T17_spp_clears_the_probability_draws)
+{
+	/* a seek draws a located step again: r = 40 plays step 2 at prob 50, the
+	 * new draw r = 90 after the locate does not */
+	fake_host_t *h = midiSlave();
+	fake_setStep(h, 0, 0, 2, true);
+	fake_setStepData(h, 0, 0, 2, 100, 60, 50);
+	static const uint32_t script[] = { 39, 89 };
+	fake_scriptRandom(h, script, 2);
+	sync(h, SEQC_EV_START);
+	clocks(h, 1 + 6 * 2 + 3);			/* into step 2 */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	stopLocateContinue(h, 2);
+	clocks(h, 6);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 2);
+}
+
+TEST(T17_stop_keeps_and_spp_clears_every_skip_marker)
+{
+	/* N18.1: a Stop keeps the markers of every track for the Continue; a song
+	 * position clears them, as a rewind does */
+	for (int seek = 0; seek < 2; seek++)
+	{
+		fake_host_t *h = midiSlave();
+		fake_setStep(h, 0, 0, 4, true);
+		fake_setStep(h, 0, 2, 4, true);
+		sync(h, SEQC_EV_START);
+		clocks(h, 22);				/* phase 0.5 of step 3 */
+		seqc_skipOnce(0, 4);
+		seqc_skipOnce(2, 4);
+		sync(h, SEQC_EV_STOP);
+		if (seek)
+			seqc_songPosition(4);
+		sync(h, SEQC_EV_CONTINUE);
+		clocks(h, 12);
+		ASSERT_EQ(fake_triggers(h, 0, trig, 8), (size_t)seek);
+		ASSERT_EQ(fake_triggers(h, 2, trig, 8), (size_t)seek);
+		ASSERT_EQ(stats().skipDrops, seek ? 0 : 2);
+	}
+}
+
 TEST(T17_spp_clears_the_queue_and_restarts_the_count)
 {
 	fake_host_t *h = midiSlave();
@@ -638,6 +738,34 @@ TEST(T17_jack_reset_after_a_midi_stop_rewinds)
 	ASSERT_EQ(transports(h, from, tr, 8), 1);
 	ASSERT_EQ(tr[0], SEQC_TRANSPORT_REWIND);
 	ASSERT_EQ(stats().syncIgnored, 0);
+}
+
+TEST(T17_jack_release_after_a_midi_stop_starts_from_step_0)
+{
+	/* the released gate is a local start: from a position a MIDI Stop kept, it
+	 * rewinds, and the next pulse that begins a step starts step 0 */
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_setStep(h, 0, 0, 0, true);
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);		/* 4 PPQ */
+	fake_process(h, fake_msToCycles(1.0));
+	const double per = fake_stepCycles(120.0);
+	sync(h, SEQC_EV_START);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 3, fake_msToCycles(0.1));
+	sync(h, SEQC_EV_STOP);
+	ASSERT_EQ(seqc_absStep(), 2);
+	const size_t from = h->logCount;
+	sync(h, SEQC_EV_RESET_OFF);
+	uint8_t tr[8];
+	ASSERT_EQ(transports(h, from, tr, 8), 2);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_REWIND);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_ARM);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + (seqc_time_t)per, per, 1, fake_msToCycles(0.1));
+	ASSERT_EQ(transports(h, from, tr, 8), 3);
+	ASSERT_EQ(tr[2], SEQC_TRANSPORT_START);
+	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 2);
+	ASSERT_EQ(trig[1]->ev.absStep, 0);
 }
 
 TEST(T17_midi_transport_and_spp_in_analog_sync_at_4_ppq)

@@ -287,6 +287,24 @@ TEST(T16_interval_inside_the_band_is_kept)
 	ASSERT_NEAR(seqc_currentBpm(), 120.0 / (1.0 + 0.4 * 30.0 / 4960.0), 1e-3);
 }
 
+TEST(T16_outlier_band_is_half_a_clock)
+{
+	/* SEQC_TEMPO_OUTLIER_PCT: with exact stamps the band is half a clock, so a
+	 * clock 0.48 of a clock late is used and one 0.52 late is left out */
+	static const double offsets[] = { 0.48, 0.52 };
+	for (size_t i = 0; i < 2; i++)
+	{
+		fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+		const double per = fake_clockCycles(120.0);
+		const seqc_time_t t0 = fake_msToCycles(10.0);
+		fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 30, fake_msToCycles(0.1));
+		const seqc_time_t late = t0 + (seqc_time_t)((30.0 + offsets[i]) * per);
+		fake_sync(h, SEQC_EV_CLOCK, late);
+		fake_process(h, late);
+		ASSERT_EQ(stats().intervalsExcluded, i);
+	}
+}
+
 TEST(T16_dropout_and_resume)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
@@ -379,6 +397,84 @@ TEST(T16_local_start_waits_for_the_masters_step)
 	ASSERT_EQ(tr[1], SEQC_TRANSPORT_START);
 }
 
+TEST(T16_restart_after_a_stop_waits_for_the_masters_step)
+{
+	/* the local stop button (stop, rewind) and play while the master's clock
+	 * runs on: the rewind goes to one clock before step 0, and the count is not
+	 * reset, so step 0 comes with the master's next 16th, with no burst of the
+	 * steps played before */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 6 * 8 + 3, fake_msToCycles(0.1));	/* clock 50 */
+	ASSERT_EQ(seqc_absStep(), 8);
+	seqc_stop();
+	seqc_rewind();
+	ASSERT_EQ_DBL(seqc_position(), -16.0);		/* one clock before step 0 */
+	fake_clearLog(h);
+	seqc_start();
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	/* the count runs on: clocks 51..53 do not begin a step, clock 54 does */
+	fake_runClocks(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(51.0 * per + 0.5), per, 3, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(54.0 * per + 0.5), per, 7, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_absStep(), 1);			/* steps 0 and 1, no burst */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 2);
+	ASSERT_EQ(trig[0]->ev.absStep, 0);
+	ASSERT_EQ(trig[0]->time, t0 + (seqc_time_t)(54.0 * per + 0.5));
+	ASSERT_EQ(trig[1]->time, t0 + (seqc_time_t)(60.0 * per + 0.5));
+}
+
+TEST(T16_position_follows_the_tempo_between_clocks)
+{
+	/* between clocks seqc_position() is interpolated at the estimate: 6/16 of a
+	 * clock interval after clock 30 (tick 480) it is 486, not the last handled
+	 * item */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 31, fake_msToCycles(0.1));
+	fake_process(h, t0 + (seqc_time_t)(30.0 * per + 6.0 / 16.0 * per + 0.5));
+	ASSERT_NEAR(seqc_position(), 486.0, 0.01);
+}
+
+TEST(T16_late_clock_anchors_at_its_stamp)
+{
+	/* a clock stamped before the core's current time (stamped after seq_tick()
+	 * drained the queue, delivered at the next one) is handled at the current
+	 * time, but its own stamp anchors the interpolation and feeds the fit */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 31, fake_msToCycles(0.1));	/* clock 30: tick 480 */
+	const seqc_time_t stamp = t0 + (seqc_time_t)(31.0 * per + 0.5);
+	fake_process(h, stamp + fake_msToCycles(5.0));
+	fake_sync(h, SEQC_EV_CLOCK, stamp);		/* clock 31, delivered 5 ms late */
+	ASSERT_NEAR(seqc_position(), 496.0 + 0.005 * 768.0, 0.01);	/* from the stamp */
+	fake_process(h, stamp + fake_msToCycles(5.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);	/* its point is at the stamp */
+}
+
+TEST(T16_short_gap_while_stopped_is_no_dropout)
+{
+	/* N15: stopped, a gap between two stamps is a dropout from SEQC_DROPOUT_MS
+	 * on (here two clocks at 120 BPM are shorter) */
+	static const double gaps[] = { 490.0, 510.0 };
+	for (size_t i = 0; i < 2; i++)
+	{
+		fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+		const double per = fake_clockCycles(120.0);
+		const seqc_time_t t0 = fake_msToCycles(10.0);
+		fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 30, fake_msToCycles(0.1));
+		const seqc_time_t t1 = t0 + (seqc_time_t)(29.0 * per + 0.5) + fake_msToCycles(gaps[i]);
+		fake_runClocks(h, SEQC_EV_CLOCK, t1, per, 2, fake_msToCycles(0.1));
+		ASSERT_EQ(stats().dropouts, i);
+	}
+}
+
 TEST(T16_tempo_estimate_is_clamped)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
@@ -440,6 +536,66 @@ TEST(T16_switch_from_internal_while_running)
 	/* 6 clocks: 96 ticks, plus the interpolation up to the last process call */
 	ASSERT_TRUE(seqc_position() >= at + 96.0 && seqc_position() < at + 96.1);
 	ASSERT_EQ(seqc_absStep(), 2);
+}
+
+TEST(T16_switch_keeps_the_position_between_items)
+{
+	/* the switch keeps the live position, not the last handled item: at tick
+	 * 102, off the 4-tick grid of the clock out pulses */
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_runUntil(h, (seqc_time_t)(fake_tickCycles(120.0) * 102.0), fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_position(), 102.0, 0.1);
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	ASSERT_NEAR(seqc_position(), 102.0, 0.1);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+}
+
+TEST(T16_switch_between_slave_modes_keeps_an_armed_transport)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	fake_runClocks(h, SEQC_EV_PULSE, h->now + 1000, fake_stepCycles(120.0), 1, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);		/* at 4 PPQ every pulse begins a step */
+	ASSERT_EQ(seqc_absStep(), 0);
+}
+
+TEST(T16_same_sync_mode_again_keeps_the_estimate_and_the_count)
+{
+	/* fw 1.7 calls seq_setExtSync() on every front panel BPM message: a post of
+	 * the mode in use changes nothing, so a local start still lands on the
+	 * master's 16th grid */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const double per = fake_clockCycles(100.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 4, fake_msToCycles(0.1));	/* count 4 */
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	ASSERT_NEAR(seqc_currentBpm(), 100.0, 1e-3);
+	seqc_start();
+	fake_runClocks(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(4.0 * per + 0.5), per, 2, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);		/* clocks 4 and 5 */
+	fake_runClocks(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(6.0 * per + 0.5), per, 1, fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);		/* clock 6 begins a step */
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+}
+
+TEST(T16_invalid_sync_mode_is_ignored)
+{
+	/* the glue passes the posted value unchecked: a mode other than 0..2 keeps
+	 * the mode in use */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_setSyncMode((seqc_sync_t)3);
+	fake_sync(h, SEQC_EV_CLOCK, fake_msToCycles(2.0));
+	ASSERT_EQ(stats().syncIgnored, 0);		/* still MIDI sync */
+	seqc_start();
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
 }
 
 TEST(T16_switch_to_internal_starts_an_armed_transport)
@@ -757,9 +913,10 @@ static void checkTempoJump(double from, double to)
 
 TEST(T16_tempo_jump_up_is_followed)
 {
-	/* 90 to 200 BPM: the intervals get 55% shorter. A jump up must more than
-	 * double the tempo to leave the band; 120 to 190 BPM (-37%) stays inside
-	 * it and the window follows on its own. */
+	/* 90 to 200 BPM: the intervals get 55% shorter, so every clock after the
+	 * jump is an outlier. With the tempo fit (N21), smaller steps of about 15%
+	 * or more also take the clocks out of the fit's band within a few clocks
+	 * and restart it (T16_packed_step_restarts_the_fit). */
 	checkTempoJump(90.0, 200.0);
 }
 
@@ -845,6 +1002,23 @@ TEST(T16_inlier_resets_the_outlier_run)
 	ASSERT_EQ(stats().tempoRestarts, 1);
 	seqc_resetStats();
 	ASSERT_EQ(stats().tempoRestarts, 0);
+}
+
+TEST(T16_long_window_is_96_clocks)
+{
+	/* N21: the estimate is the slope of the last SEQC_TEMPO_LONG_WINDOW clocks.
+	 * Clock 30 is 0.3 of a clock late, inside the band: it tilts the line while
+	 * it is in the long window, 80 clocks later still, and not once it has left
+	 * it (the short window lost it long before, without a switch) */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, 140);
+	stamps[30] += (seqc_time_t)(0.3 * per);
+	deliver(h, SEQC_EV_CLOCK, stamps, 111, fake_msToCycles(0.1));
+	ASSERT_TRUE(fabs(seqc_currentBpm() - 120.0) > 5e-3);
+	deliver(h, SEQC_EV_CLOCK, stamps + 111, n - 111, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-4);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
 }
 
 /* deliver stamps[from..to) one transfer at a time: the clocks with one stamp,
@@ -943,9 +1117,9 @@ TEST(T16_bunched_pairs_are_not_a_tempo_jump)
 /* a late bunch of 6 clocks gap cycles apart (not one stamp), 6 clocks after the
  * last one at 120 BPM, then 24 clocks at 120. A clock less than
  * SEQC_TEMPO_JOIN_MS after the newest clock of the last transfer joins it
- * (unless that one restarted the fit or another sync event came): the bunch is one point of the fit, at its last clock,
- * 5 gaps late, near the line. Nothing is left out and the fit does not
- * restart. */
+ * (unless that one restarted the fit or another sync event came): the bunch is
+ * one point of the fit, at its last clock, 5 gaps late, near the line. Nothing
+ * is left out and the fit does not restart. */
 static void checkBunchedGaps(double gap)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
@@ -958,7 +1132,7 @@ static void checkBunchedGaps(double gap)
 	n = appendClocks(n, per, 24);
 	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
 	ASSERT_EQ(stats().tempoRestarts, 0);
-	ASSERT_NEAR(seqc_currentBpm(), 120.0, 0.5);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 0.5);	/* the bunch's point is 5 gaps late */
 	ASSERT_EQ(stats().intervalsExcluded, 0);
 	const size_t steps = (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1;
 	ASSERT_EQ(fake_triggers(h, 0, trig, 64), steps);
@@ -985,9 +1159,9 @@ TEST(T16_usb_bunched_clocks_10us_apart_are_not_a_tempo_jump)
  * cycles apart, from the true time of the last clock of the bunch on: at
  * 120 BPM, every 2 beats a bunch of 2, 3 or 6 clocks. Each clock arrives in
  * its own seq_tick(). A clock less than SEQC_TEMPO_JOIN_MS after the newest
- * clock of the last transfer joins it, so each bunch is
- * one point of the fit, at its last clock, at most 5 gaps late. No restart,
- * nothing left out, within 0.5% from two beats on, and every step played. */
+ * clock of the last transfer joins it, so each bunch is one point of the fit,
+ * at its last clock, at most 5 gaps late. No restart, nothing left out, within
+ * 0.5% from two beats on, and every step played. */
 static void checkDinBunches(double gap)
 {
 	static const size_t sizes[] = { 2, 3, 6 };
@@ -1080,6 +1254,101 @@ TEST(T16_packed_din_bunch_head_keeps_a_restart)
 	ASSERT_NEAR(seqc_currentBpm(), 60.0, 0.5);
 }
 
+/* at 120 BPM, clock 40 is 0.6 of a clock late, evaluated alone and left out;
+ * then one more clock gap cycles after it. Returns the host. */
+static fake_host_t *lateHeadThen(double gapMs)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, 40);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	const seqc_time_t head = stamps[n - 1] + (seqc_time_t)(1.6 * per + 0.5);
+	fake_sync(h, SEQC_EV_CLOCK, head);
+	fake_process(h, head);
+	if (gapMs > 0.0)
+	{
+		fake_sync(h, SEQC_EV_CLOCK, head + fake_msToCycles(gapMs));
+		fake_process(h, head + fake_msToCycles(gapMs));
+	}
+	return h;
+}
+
+TEST(T16_packed_join_is_under_2_ms)
+{
+	/* SEQC_TEMPO_JOIN_MS: a clock 1.9 ms after the left-out head joins it, and
+	 * the head is uncounted; one 2.5 ms after it is a transfer of its own,
+	 * inside the band, and the head stays counted */
+	lateHeadThen(0.0);
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	lateHeadThen(1.9);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	lateHeadThen(2.5);
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+}
+
+TEST(T16_packed_join_uncounts_the_head_once)
+{
+	/* the head of a burst is left out; its next two clocks, 0.32 and 0.64 ms
+	 * later, reach the core in one drain. The first joins and uncounts the
+	 * head, the second only joins: an earlier outlier stays counted. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, 60);
+	stamps[40] += (seqc_time_t)(0.8 * per);		/* an outlier of its own */
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	const seqc_time_t head = stamps[n - 1] + (seqc_time_t)(3.0 * per + 0.5);	/* clock 60, 2 late */
+	fake_sync(h, SEQC_EV_CLOCK, head);
+	fake_process(h, head);
+	ASSERT_EQ(stats().intervalsExcluded, 2);
+	fake_sync(h, SEQC_EV_CLOCK, head + fake_msToCycles(0.32));
+	fake_sync(h, SEQC_EV_CLOCK, head + fake_msToCycles(0.64));
+	fake_process(h, head + fake_msToCycles(0.64));
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 0.5);
+}
+
+TEST(T16_packed_switch_ends_the_join)
+{
+	/* a switch to analog sync and back between a left-out head and a clock
+	 * under SEQC_TEMPO_JOIN_MS after it: the switches cleared the estimate, so
+	 * the clock is the first point of a new fit, not a join that brings the old
+	 * fit back */
+	fake_host_t *h = lateHeadThen(0.0);
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	seqc_setSyncMode(SEQC_SYNC_ANALOG);
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	const seqc_time_t t = h->now + fake_msToCycles(1.0);
+	fake_sync(h, SEQC_EV_CLOCK, t);
+	fake_process(h, t);
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_NEAR(seqc_currentBpm(), SEQC_DEFAULT_BPM, 1e-3);	/* no estimate: the master tempo */
+}
+
+TEST(T18_jack_pulses_never_join)
+{
+	/* the join is for MIDI clock only (N21): a jack pulse 1 ms after pulse 29,
+	 * delivered before seqc_process(), is an extra pulse of its own and is left
+	 * out, and pulse 29, 0.3 of a pulse late but inside the band, stays a point
+	 * of the fit. The fit of 30 points weights the last one by 6 / (30 * 31). */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_setAnalogPpq(24);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, 30);
+	stamps[n - 1] += (seqc_time_t)(0.3 * per);
+	deliver(h, SEQC_EV_PULSE, stamps, n - 1, fake_msToCycles(0.1));
+	fake_sync(h, SEQC_EV_PULSE, stamps[n - 1]);
+	fake_sync(h, SEQC_EV_PULSE, stamps[n - 1] + fake_msToCycles(1.0));
+	fake_process(h, stamps[n - 1] + fake_msToCycles(1.0));
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0 / (1.0 + 0.3 * 6.0 / (30.0 * 31.0)), 1e-2);
+}
+
 /* at 120 BPM, a bunch of size clocks 0.32 ms apart whose last clock is the
  * 9th of a run: after the switch to MIDI sync, or (resume) after a dropout. The
  * fit tests no point while it spans less than half a short window, so the late
@@ -1087,14 +1356,18 @@ TEST(T16_packed_din_bunch_head_keeps_a_restart)
  * later, joins it all the same: the fit goes back to before the head, and the
  * bunch is one point, at its last clock. Within 0.5% from two beats on (the
  * head alone made a step amplitude of size - 1 clocks: up to 3.5% for 4
- * beats), no restart, and nothing left out. */
-static void checkEarlyDinBunch(size_t size, bool resume)
+ * beats), no restart, and nothing left out. With outlier, clock 20 before the
+ * dropout is 0.8 of a clock late and left out: the join takes back only a head
+ * that was left out, so it still counts. */
+static void checkEarlyDinBunch(size_t size, bool resume, bool outlier)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
 	seqc_start();
 	const double per = fake_clockCycles(120.0);
 	size_t n = resume ? appendClocks(appendClocks(0, per, SEQC_TEMPO_WINDOW), (double)fake_msToCycles(1000.0), 1)
 			: appendClocks(0, per, 1);
+	if (outlier)
+		stamps[20] += (seqc_time_t)(0.8 * per);
 	const size_t first = n - 1, last = first + 8;
 	n = appendClocks(n, per, 24 * 8);
 	for (size_t j = 0; j < size; j++)
@@ -1115,16 +1388,17 @@ static void checkEarlyDinBunch(size_t size, bool resume)
 	ASSERT_TRUE(worst < 0.5);
 	ASSERT_EQ(stats().dropouts, resume ? 1 : 0);
 	ASSERT_EQ(stats().tempoRestarts, 0);
-	ASSERT_EQ(stats().intervalsExcluded, 0);
+	ASSERT_EQ(stats().intervalsExcluded, outlier ? 1 : 0);
 	if (!resume)
 		ASSERT_EQ(fake_triggers(h, 0, trig, 128), (n - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
 }
 
 TEST(T16_packed_din_bunch_in_the_first_clocks)
 {
-	checkEarlyDinBunch(3, false);
-	checkEarlyDinBunch(6, false);
-	checkEarlyDinBunch(6, true);
+	checkEarlyDinBunch(3, false, false);
+	checkEarlyDinBunch(6, false, false);
+	checkEarlyDinBunch(6, true, false);
+	checkEarlyDinBunch(6, true, true);
 }
 
 TEST(T16_clock_stamped_before_the_newest_point)
@@ -1132,9 +1406,10 @@ TEST(T16_clock_stamped_before_the_newest_point)
 	/* DIN and USB clocks at once: after clock 40 went into the fit, and a MIDI
 	 * Continue (ignored while running) ended its transfer, one more clock comes
 	 * stamped 0.2 ms before it. It is a point of its own; its interval from
-	 * clock 40 is negative, not 2^64 cycles less 0.2 ms, so the step amplitude
-	 * of the stamps stays small, and a jump from 120 to 60 BPM at clock 150
-	 * still restarts the fit within SEQC_TEMPO_RESTART clocks. */
+	 * clock 40 is negative, not 2^64 cycles less 0.2 ms. The step amplitude it
+	 * leaves is about one clock, as an extra clock would, and decays, so a jump
+	 * from 120 to 60 BPM at clock 150 still restarts the fit within
+	 * SEQC_TEMPO_RESTART clocks. */
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
 	seqc_start();
 	const double per = fake_clockCycles(120.0), slow = fake_clockCycles(60.0);
@@ -1179,6 +1454,24 @@ TEST(T18_tempo_jump_4ppq_restarts_after_2)
 		ASSERT_EQ(trig[k]->ev.absStep, k);
 }
 
+TEST(T18_tempo_jump_24ppq_restarts_after_4)
+{
+	/* N16: the jack at 24 PPQ is a 24 PPQ source, so it takes
+	 * SEQC_TEMPO_RESTART outliers in a row, not SEQC_TEMPO_RESTART_4PPQ */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_setAnalogPpq(24);
+	seqc_start();
+	const size_t settled = appendClocks(0, fake_clockCycles(90.0), SEQC_TEMPO_WINDOW + 1);
+	const size_t n = appendClocks(settled, fake_clockCycles(200.0), SEQC_TEMPO_RESTART);
+	deliver(h, SEQC_EV_PULSE, stamps, settled + SEQC_TEMPO_RESTART_4PPQ, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 90.0, 1e-3);
+	deliver(h, SEQC_EV_PULSE, stamps + settled + SEQC_TEMPO_RESTART_4PPQ,
+			n - settled - SEQC_TEMPO_RESTART_4PPQ, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_NEAR(seqc_currentBpm(), 200.0, 1e-3);
+}
+
 TEST(T18_dropout_note_off_is_sent)
 {
 	/* N17, with the jack at 4 PPQ at 120 BPM. After the last pulse (step 4) the
@@ -1212,6 +1505,24 @@ TEST(T18_dropout_note_off_is_sent)
 	fake_runUntil(h, h->now + fake_msToCycles(10.0), fake_msToCycles(0.1));	/* past 580 */
 	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 7);	/* step 6 at the second pulse */
 	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 7);	/* one note-off per trigger */
+}
+
+TEST(T18_dropout_sends_the_note_off_of_the_hit_it_plays)
+{
+	/* N17 when no seqc_process() comes between the clamp and the dropout time:
+	 * the dropout first plays step 5 at the clamp, then sends the pending
+	 * note-offs, its own included */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_start();
+	const double per = fake_stepCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	for (int k = 0; k < 5; k++)
+		fake_sync(h, SEQC_EV_PULSE, t0 + (seqc_time_t)(k * per + 0.5));
+	const seqc_time_t limit = t0 + (seqc_time_t)(4.0 * per + 0.5) + fake_msToCycles(SEQC_DROPOUT_MS);
+	fake_process(h, limit + fake_msToCycles(1.0));
+	ASSERT_EQ(stats().dropouts, 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 6);
+	ASSERT_EQ(fake_count(h, FAKE_NOTE_OFF), 6);
 }
 
 /* N21: count clocks at bpm, the true time of clock k at 10 ms + k periods,

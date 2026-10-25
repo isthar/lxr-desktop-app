@@ -182,6 +182,91 @@ TEST(T13_roll_chokes_the_previous_step)
 	ASSERT_EQ(stats().chokeDrops, 3);
 }
 
+TEST(T13_newer_note_chokes_the_roll)
+{
+	fake_host_t *h = fake_init();
+	h->shuffle = 127;				/* the roll of step 1 at 96 + 64 */
+	h->rollRate[0] = 1;
+	fake_setStep(h, 0, 0, 2, true);
+	fake_setTiming(h, 0, 0, 2, 0, -7);		/* step 2 at 192 - 84 = 108 */
+	start(h);
+	runToTick(h, 3 * 96 - 1);
+	/* the note of step 2 removes the queued roll of step 1 (spec 6.4) */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 3);
+	ASSERT_EQ(trig[0]->ev.tick, 0);
+	ASSERT_EQ(trig[0]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(trig[1]->ev.tick, 108);
+	ASSERT_EQ(trig[1]->ev.flags, 0);
+	ASSERT_EQ(trig[2]->ev.tick, 192);
+	ASSERT_EQ(trig[2]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(stats().chokeDrops, 1);
+}
+
+TEST(T13_roll_and_note_of_a_step_at_other_ticks_both_play)
+{
+	/* the same-tick rule drops only at the same tick (N2): a shifted note and
+	 * the roll of its step both play */
+	fake_host_t *h = fake_init();
+	h->rollRate[2] = 4;
+	fake_setStep(h, 0, 2, 4, true);
+	fake_setTiming(h, 0, 2, 4, 0, -1);		/* note 372, roll 384 */
+	fake_setStep(h, 0, 2, 8, true);
+	fake_setTiming(h, 0, 2, 8, 0, 1);		/* roll 768, note 780 */
+	start(h);
+	runToTick(h, 9 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 16), 5);
+	ASSERT_EQ(trig[1]->ev.tick, 372);
+	ASSERT_EQ(trig[1]->ev.flags, 0);
+	ASSERT_EQ(trig[2]->ev.tick, 384);
+	ASSERT_EQ(trig[2]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(trig[3]->ev.tick, 768);
+	ASSERT_EQ(trig[3]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(trig[4]->ev.tick, 780);
+	ASSERT_EQ(trig[4]->ev.flags, 0);
+	ASSERT_EQ(stats().chokeDrops, 0);
+}
+
+TEST(T13_roll_ignores_the_step_timing_and_probability)
+{
+	/* spec 6.6: n * 96 + swing, one hit, whatever the step's shift, ratchet and
+	 * probability (fw 1.7 seq_nextStep() triggers the roll without them) */
+	fake_host_t *h = fake_init();
+	h->rollRate[1] = 4;
+	fake_setTiming(h, 0, 1, 4, 2, 3);		/* x3 at +3 units */
+	fake_setStepData(h, 0, 1, 4, 127, 60, 0);	/* prob 0 */
+	start(h);
+	runToTick(h, 8 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 1, trig, 8), 2);
+	ASSERT_EQ(trig[1]->ev.absStep, 4);
+	ASSERT_EQ(trig[1]->ev.tick, 4 * 96);
+	ASSERT_EQ(trig[1]->ev.hit, 0);
+	ASSERT_EQ(trig[1]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 0);	/* no draw */
+}
+
+TEST(T13_dropped_roll_has_no_side_effects)
+{
+	/* the setup of T13_note_wins_over_a_roll_at_the_same_tick: the roll that the
+	 * same-tick rule drops neither sends the note's note-off early nor sends
+	 * another one */
+	fake_host_t *h = fake_init();
+	h->rollRate[2] = 4;
+	fake_setStep(h, 0, 2, 4, true);
+	start(h);
+	runToTick(h, 9 * 96 - 1);
+	ASSERT_EQ(stats().chokeDrops, 1);
+	size_t pos = 0, offs = 0;
+	for (const fake_rec_t *r; (r = fake_next(h, FAKE_NOTE_OFF, &pos)) != NULL;)
+		if (r->track == 2 && r->tick > 4 * 96 - 1 && r->tick < 5 * 96)
+		{
+			ASSERT_NEAR(r->tick, 4 * 96 + SEQC_NOTE_OFF_TICKS, 1e-9);
+			offs++;
+		}
+	ASSERT_EQ(offs, 1);
+	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 3);
+	ASSERT_EQ(trig[2]->ev.absStep, 8);		/* the roll of step 8 still plays */
+}
+
 TEST(T13_roll_hit_is_recorded_at_its_own_step)
 {
 	fake_host_t *h = fake_init();
@@ -237,6 +322,16 @@ TEST(T14_phase_is_zero_when_stopped)
 	ASSERT_TRUE(seqc_stepPhase() > 0.5f);
 	seqc_stop();
 	ASSERT_TRUE(seqc_stepPhase() == 0.0f);
+}
+
+TEST(T14_phase_is_zero_before_the_first_step)
+{
+	fake_host_t *h = fake_init();
+	fake_process(h, 0);
+	seqc_start();					/* running, step 0 at the next seqc_process() */
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(seqc_absStep(), -1);
+	ASSERT_EQ_DBL(seqc_stepPhase(), 0.0);
 }
 
 TEST(T14_late_note_goes_to_the_next_step_and_plays_once)
@@ -418,6 +513,53 @@ TEST(T14_skip_once_from_the_step_boundary_drops_the_early_hits)
 	ASSERT_EQ(stats().skipDrops, 1);
 }
 
+static void skipStep9(fake_host_t *h, uint32_t absStep)
+{
+	(void)h;
+	if (absStep == 3)
+		seqc_skipOnce(4, 9);
+}
+
+TEST(T14_skip_once_from_the_step_boundary_keeps_another_step)
+{
+	/* a marker for step 9 does not drop the early hit of step 4 */
+	fake_host_t *h = fake_init();
+	h->onStepBoundary = skipStep9;
+	fake_setStep(h, 0, 4, 4, true);
+	fake_setTiming(h, 0, 4, 4, 1, -2);		/* 360 early, 408 late */
+	start(h);
+	runToTick(h, 6 * 96);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.tick, 360);
+	ASSERT_EQ(trig[1]->ev.tick, 408);
+	ASSERT_EQ(stats().skipDrops, 0);
+}
+
+static void skipStep0At15(fake_host_t *h, uint32_t absStep)
+{
+	(void)h;
+	if (absStep == 15)
+		seqc_skipOnce(4, 0);			/* pattern 0 is still the active one */
+}
+
+TEST(T14_skip_once_from_the_step_boundary_keeps_the_next_pattern)
+{
+	/* at boundary 15 the early part of step 16 comes from pattern 1; the marker
+	 * is for pattern 0, so it drops neither part */
+	fake_host_t *h = fake_init();
+	h->onStepBoundary = skipStep0At15;
+	fake_setStep(h, 1, 4, 0, true);
+	fake_setTiming(h, 1, 4, 0, 1, -2);		/* 1512 early, 1560 late */
+	start(h);
+	fake_setNextPattern(h, 1);
+	runToTick(h, 17 * 96);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 2);
+	ASSERT_EQ(trig[0]->ev.pattern, 1);
+	ASSERT_EQ(trig[0]->ev.tick, 1512);
+	ASSERT_EQ(trig[1]->ev.tick, 1560);
+	ASSERT_EQ(stats().skipDrops, 0);
+}
+
 TEST(T14_marker_belongs_to_the_active_pattern)
 {
 	fake_host_t *h = fake_init();
@@ -493,6 +635,23 @@ TEST(T14_skip_once_replaces_only_its_track)
 	ASSERT_EQ(trig[1]->ev.absStep, 20);
 	ASSERT_EQ(fake_triggers(h, 2, trig, 8), 1);	/* track 2 kept its marker */
 	ASSERT_EQ(trig[0]->ev.absStep, 20);
+	ASSERT_EQ(stats().skipDrops, 1);
+}
+
+TEST(T14_late_note_on_a_one_step_track_plays_once)
+{
+	/* on a track of length 1 the next step is step 0 again: the note recorded
+	 * there in the second half of the step must still skip once (D6) */
+	fake_host_t *h = fake_init();
+	h->recordActive = true;
+	fake_setLength(h, 0, 4, 1);
+	start(h);
+	runToTick(h, 3 * 96 + 60);			/* phase 0.625 in step 3 */
+	fake_addNote(h, 4, 100, 64);
+	ASSERT_EQ(h->mainSteps[0][4], 1u);		/* recorded on step 0 */
+	runToTick(h, 6 * 96 - 1);
+	ASSERT_EQ(fake_triggers(h, 4, trig, 8), 1);	/* not at 4, at 5 */
+	ASSERT_EQ(trig[0]->ev.absStep, 5);
 	ASSERT_EQ(stats().skipDrops, 1);
 }
 

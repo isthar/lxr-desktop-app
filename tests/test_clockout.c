@@ -149,7 +149,7 @@ TEST(T5_tempo_steps_come_with_the_boundaries)
 
 /* checks that there are count records of kind, each pair period apart */
 static void checkPeriod(const fake_host_t *h, fake_kind_t kind, int count, double period,
-	double tolerance)
+		double tolerance)
 {
 	size_t pos = 0;
 	const fake_rec_t *r;
@@ -178,13 +178,35 @@ TEST(T5_stop_and_rewind_keep_the_clock_phase)
 	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 10.3), interval);
 	seqc_stop();
 	seqc_rewind();					/* the stop button */
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	ASSERT_EQ_DBL(seqc_position(), 0.0);
 	fake_runUntil(h, h->now + fake_msToCycles(300.0), interval);
+	ASSERT_EQ_DBL(seqc_position(), 0.0);		/* the stopped timeline leaves it alone */
 	/* only a start re-phases them: the pairs across the stop keep the spacing */
 	const double tolerance = (double)interval + 1.0;
 	/* 1288 + 300 ms: clocks at 0..1216 and tempo steps at 0..1152 on the timeline */
 	checkPeriod(h, FAKE_MIDI_CLOCK, 77, fake_clockCycles(120.0), tolerance);
 	checkPeriod(h, FAKE_TEMPO_STEP, 13, fake_stepCycles(120.0), tolerance);
 	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T5_start_and_stop_before_a_process_keep_the_clock_phase)
+{
+	/* a stop before the seqc_process() that would begin step 0 cancels the
+	 * pending start: nothing plays, and the free-running timeline is not
+	 * re-phased */
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_BIT(FAKE_MIDI_CLOCK) | FAKE_LOG_BIT(FAKE_TRANSPORT) | FAKE_LOG_BIT(FAKE_STEP_BOUNDARY);
+	fake_process(h, 0);
+	const seqc_time_t interval = fake_msToCycles(0.1);
+	fake_runUntil(h, fake_msToCycles(30.0), interval);	/* clocks at 0 and 20.8 ms */
+	seqc_start();
+	seqc_stop();
+	fake_runUntil(h, fake_msToCycles(100.0), interval);	/* and at 41.7, 62.5 and 83.3 ms */
+	checkPeriod(h, FAKE_MIDI_CLOCK, 5, fake_clockCycles(120.0), (double)interval + 1.0);
+	ASSERT_EQ(fake_count(h, FAKE_STEP_BOUNDARY), 0);
+	ASSERT_EQ(fake_count(h, FAKE_TRANSPORT), 2);	/* START, STOP */
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
 }
 
 TEST(T5_tempo_change_keeps_the_clock_continuous)
@@ -213,6 +235,30 @@ TEST(T5_tempo_change_keeps_the_clock_continuous)
 	/* tick 80 is 3.2 ticks after the change; at 60 BPM a tick is 2.604 ms */
 	ASSERT_NEAR(fake_cyclesToMs(t80 - t1), 3.2 * 60000.0 / (60.0 * 384.0), 0.011);
 	ASSERT_EQ(k, 5 + (int)((76.8 + 200.0 * 60.0 * 384.0 / 60000.0 - 80.0) / 16.0) + 1);
+}
+
+TEST(T5_tempo_change_while_stopped_keeps_the_clock_continuous)
+{
+	/* the free-running timeline is re-anchored while stopped too, so a tempo set
+	 * before pressing play neither bursts nor stalls the MIDI clock */
+	fake_host_t *h = fake_init();
+	fake_process(h, 0);
+	const seqc_time_t t1 = fake_msToCycles(30.0);	/* 23.04 ticks: clocks at 0 and 16 */
+	fake_runUntil(h, t1, fake_msToCycles(0.01));
+	ASSERT_EQ(fake_count(h, FAKE_MIDI_CLOCK), 2);
+	seqc_setTempo(60.0f);
+	fake_runUntil(h, t1 + fake_msToCycles(100.0), fake_msToCycles(0.01));
+	/* + 38.4 ticks at 60 BPM: clocks at 32 and 48; tick 32 is 8.96 ticks after the change */
+	ASSERT_EQ(fake_count(h, FAKE_MIDI_CLOCK), 4);
+	size_t pos = 0;
+	const fake_rec_t *r = NULL;
+	for (int i = 0; i < 3; i++)
+		r = fake_next(h, FAKE_MIDI_CLOCK, &pos);
+	ASSERT_NEAR(fake_cyclesToMs(r->time - t1), 8.96 * 60000.0 / (60.0 * 384.0), 0.011);
+	const fake_rec_t *next = fake_next(h, FAKE_MIDI_CLOCK, &pos);
+	ASSERT_TRUE(next != NULL);
+	ASSERT_NEAR((double)(next->time - r->time), fake_clockCycles(60.0), fake_msToCycles(0.01) + 1.0);
+	ASSERT_EQ(h->errors, 0);
 }
 
 TEST(T6_pulses_every_4_ticks_while_running)
@@ -264,7 +310,7 @@ TEST(T6_restart_begins_the_pulses_at_step_0)
 	{
 		if (prev != NULL)
 			ASSERT_NEAR((double)(r->time - prev->time), fake_clockCycles(120.0),
-				fake_msToCycles(0.1) + 1.0);
+					fake_msToCycles(0.1) + 1.0);
 		prev = r;
 	}
 	ASSERT_EQ(fake_count(h, FAKE_MIDI_CLOCK), 2);	/* ticks 1024 and 1040, on the old phase */

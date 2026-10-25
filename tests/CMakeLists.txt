@@ -125,6 +125,10 @@ endfunction()
 
 # One file per area, in the order of the stage 1 tasks (tracker E1.x).
 seqc_add_test(test_harness   IDS harness)            # E1.1  runner, fake host, song walk
+if(TARGET test_harness)
+    # a "FAIL harness_..." line fails the test even if the exit status were broken
+    set_tests_properties(harness PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL harness_")
+endif()
 seqc_add_test(test_layout    IDS layout)             # E1.2  Step and StepTiming layout
 seqc_add_test(test_clock     IDS T1)                 # E1.3  master clock accuracy
 seqc_add_test(test_tracks    IDS T10)                # E1.4  track counters, master wrap, pattern end

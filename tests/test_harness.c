@@ -30,7 +30,7 @@ TEST(harness_runner)
 }
 
 /* a failing ASSERT_ sets the flag and returns from its function; this checks the
- * runner without its own macros, and prints the four expected failure lines */
+ * runner without its own macros, and prints four expected failure lines */
 static int afterFailingAssert;
 static void failingAssert(void) { ASSERT_EQ(1, 2); afterFailingAssert = 1; }
 static void failingTrue(void) { ASSERT_TRUE(0); afterFailingAssert = 1; }
@@ -40,13 +40,46 @@ TEST(harness_runner_failure)
 {
 	void (*const helpers[])(void) = { failingAssert, failingTrue, failingFalse, failingNear };
 	int ok = 1;
-	for (size_t i = 0; i < sizeof helpers / sizeof helpers[0]; i++) {
+	printf("harness_runner_failure: 4 expected failures follow\n");
+	for (size_t i = 0; i < sizeof helpers / sizeof helpers[0]; i++)
+	{
 		seqc_test_failed_ = 0;
 		afterFailingAssert = 0;
 		helpers[i]();
-		ok = ok && seqc_test_failed_ == 1 && afterFailingAssert == 0;
+		if (seqc_test_failed_ != 1 || afterFailingAssert != 0)
+		{
+			printf("harness_runner_failure: helper %zu did not fail and return\n", i);
+			ok = 0;
+		}
 	}
 	seqc_test_failed_ = !ok;
+}
+
+/* The exit status of TEST_MAIN(), which is what ctest sees: main() is called
+ * again with a filter. selftest_fails_when_armed fails only while armed; its
+ * name does not match the ctest filter "harness", so ctest never runs it on its
+ * own. tests/CMakeLists.txt also fails the harness test on any "FAIL harness_"
+ * line, in case the exit status itself is broken. */
+int main(int argc, char **argv);
+static int verdictArmed;
+TEST(selftest_fails_when_armed)
+{
+	ASSERT_FALSE(verdictArmed);
+}
+
+TEST(harness_runner_verdict)
+{
+	char prog[] = "test_harness", failing[] = "selftest_fails_when_armed", none[] = "no_such_test";
+	char *withFailure[] = { prog, failing, NULL };
+	char *withNone[] = { prog, none, NULL };
+	printf("harness_runner_verdict: 1 expected failure follows\n");
+	verdictArmed = 1;
+	const int failed = main(2, withFailure);
+	verdictArmed = 0;
+	const int unmatched = main(2, withNone);
+	seqc_test_failed_ = 0;
+	ASSERT_EQ(failed, 1);
+	ASSERT_EQ(unmatched, 2);
 }
 
 TEST(harness_runner_filter)
@@ -253,6 +286,34 @@ TEST(harness_seek)
 	ASSERT_EQ(seek(h, 40 + 5), 16 + 5);		/* the first A after the loop joins it */
 	ASSERT_EQ(h->songPos, 0);
 	ASSERT_EQ(h->errors, 0);
+	/* a song that starts with SONG_END or SONG_LOOP has no entry: the walk
+	 * stops at once (the END case first, so that a broken guard fails here and
+	 * does not loop forever) and seeks as in pattern mode */
+	const uint32_t changes = h->patternChanges;
+	static const uint8_t songEnd[] = { FAKE_SONG_END, 1 };
+	fake_setSong(h, songEnd, 2);
+	ASSERT_EQ(seek(h, 20), 20);
+	static const uint8_t songLoop[] = { FAKE_SONG_LOOP, 1 };
+	fake_setSong(h, songLoop, 2);
+	ASSERT_EQ(seek(h, 20), 20);
+	ASSERT_EQ(h->patternChanges, changes);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(harness_drivers)
+{
+	fake_host_t *h = fake_init();
+	fake_runUntil(h, 1000, 300);			/* 300, 600, 900, then 1000 */
+	ASSERT_EQ(h->now, 1000);
+	/* the log keeps FAKE_LOG_SIZE entries and counts the rest */
+	h->logMask = FAKE_LOG_BIT(FAKE_TEMPO_STEP);
+	fake_clearLog(h);
+	const uint32_t calls = h->calls[FAKE_TEMPO_STEP];
+	for (uint32_t i = 0; i < FAKE_LOG_SIZE + 1; i++)
+		h->host.tempoStep(h);
+	ASSERT_EQ(h->logCount, FAKE_LOG_SIZE);
+	ASSERT_EQ(h->logLost, 1);
+	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], calls + FAKE_LOG_SIZE + 1);
 }
 
 TEST(harness_log)
@@ -286,12 +347,15 @@ TEST(harness_record)
 {
 	fake_host_t *h = fake_init();
 	h->recordActive = true;
-	fake_addNote(h, 0, 90, 61);			/* stopped, before the first step: nothing */
+	fake_addNote(h, 0, 90, 61);			/* stopped: nothing */
 	ASSERT_EQ(h->mainSteps[0][0], 0);
 	const seqc_event_t ev = { .tick = 0, .absStep = 0, .track = 4, .pattern = 0, .step = 6,
 			.vel = SEQC_ROLL_VELOCITY, .note = 62, .flags = SEQC_EVF_ROLL };
 	fake_setStepData(h, 0, 4, 6, 50, 60, 30);	/* the recording must overwrite these */
 	seqc_start();
+	fake_addNote(h, 0, 90, 61);			/* running, before the first step: nothing */
+	ASSERT_EQ(h->mainSteps[0][0], 0);
+	ASSERT_EQ(h->errors, 0);
 	h->recordActive = false;
 	h->host.trigger(h, &ev);			/* recording off: a roll hit is not recorded */
 	ASSERT_EQ(h->mainSteps[0][4], 0);
