@@ -199,8 +199,9 @@ Severity: critical = bug or broken behaviour; important = test gap, architecture
 }
 
 // Light review (owner's choice for tooling and docs tasks, 2026-10-25): one reviewer checks spec
-// compliance and quality together, at high effort, for at most LIGHT_ROUNDS rounds; only critical and
-// important issues block, minor ones are reported.
+// compliance and quality together, at high effort, for at most LIGHT_ROUNDS rounds. Critical and
+// important issues are fixed between rounds; in the last round only critical ones block. Whatever is
+// left unfixed (important or minor) is returned as leftovers in the task's `minor` list.
 const LIGHT_ROUNDS = 2
 
 function lightReviewPrompt(t, impl) {
