@@ -164,13 +164,14 @@ TEST(T19_reset_stats_clears_every_counter)
 	start(h);
 	runToTick(h, 6 * 96);
 	fake_sync(h, SEQC_EV_CLOCK, h->now);		/* ignored in internal sync */
-	/* MIDI clock: an outlier interval and a dropout */
+	/* MIDI clock: outlier intervals, a tempo restart and a dropout */
 	seqc_stop();
 	seqc_setSyncMode(SEQC_SYNC_MIDI);
 	const seqc_time_t t0 = h->now + fake_msToCycles(1.0);
 	fake_sync(h, SEQC_EV_CLOCK, t0);
 	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(20.833));
-	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(22.833));
+	for (unsigned k = 0; k < SEQC_TEMPO_RESTART; k++)	/* a row of outliers: a restart */
+		fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(22.833 + 2.0 * k));
 	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(1100.0));
 	seqc_stats_t s = stats();
 	ASSERT_TRUE(s.queueMax > 0);
@@ -182,6 +183,7 @@ TEST(T19_reset_stats_clears_every_counter)
 	ASSERT_TRUE(s.intervalsExcluded > 0);
 	ASSERT_TRUE(s.dropouts > 0);
 	ASSERT_TRUE(s.reentries > 0);
+	ASSERT_TRUE(s.tempoRestarts > 0);
 	seqc_resetStats();
 	s = stats();
 	ASSERT_EQ(s.queueMax, 0);
@@ -193,6 +195,7 @@ TEST(T19_reset_stats_clears_every_counter)
 	ASSERT_EQ(s.intervalsExcluded, 0);
 	ASSERT_EQ(s.dropouts, 0);
 	ASSERT_EQ(s.reentries, 0);
+	ASSERT_EQ(s.tempoRestarts, 0);
 }
 
 TEST_MAIN()

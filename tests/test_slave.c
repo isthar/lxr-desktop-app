@@ -772,6 +772,24 @@ TEST(T16_alternating_outliers_do_not_restart)
 	ASSERT_EQ(stats().intervalsExcluded, 8 + SEQC_TEMPO_RESTART - 1);
 }
 
+TEST(T16_other_side_outlier_starts_a_new_row)
+{
+	/* at 120 BPM: one outlier 60% longer, then SEQC_TEMPO_RESTART at 270 BPM
+	 * (intervals 56% shorter). The first shorter one ends the row of the longer
+	 * one and starts a new row of one, so the last of them restarts the
+	 * estimate, at 270 BPM. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW + 1);
+	n = appendClocks(n, per * 1.6, 1);
+	n = appendClocks(n, fake_clockCycles(270.0), SEQC_TEMPO_RESTART);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_NEAR(seqc_currentBpm(), 270.0, 1e-3);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART);
+}
+
 TEST(T16_inlier_resets_the_outlier_run)
 {
 	/* at 120 BPM: 3 outliers at 270 BPM (intervals 56% shorter), 1 interval at
