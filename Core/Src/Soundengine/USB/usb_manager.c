@@ -14,6 +14,7 @@
  */
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/USB/usb_midiTx.h"
+#include <stdatomic.h>
 #include <string.h>
 #include "usbd_cdc_if.h"
 
@@ -178,15 +179,22 @@ void usb_sendMidi(MidiMsg msg)
 	usb_txUnlock(primask);
 }
 //-------------------------------------------------------------------------------
+//LICHOMAT (E2.8): USBD_CDC_DataOut() fills this queue in OTG_FS (priority 3), which can
+//preempt the reader (seq_tick(): main loop or TIM2). It drops a message when the queue
+//is full, so the reader reads a slot only after the write index that covers it, and
+//copies it before it frees the slot. The fences keep that order (C does not without
+//them), and the read index is stored once, already wrapped.
 uint8_t usb_getMidi(MidiMsg* msg)
 {
-	if(usb_MidiMessagesRead != usb_MidiMessagesWrite)
+	const uint8_t read = usb_MidiMessagesRead;
+	if(read != usb_MidiMessagesWrite)
 	{
 		//we have unprocessed messages in the queue
-		*msg = usb_MidiMessages[usb_MidiMessagesRead];
+		atomic_signal_fence(memory_order_acquire);	//the write index before the slot
+		*msg = usb_MidiMessages[read];
+		atomic_signal_fence(memory_order_release);	//the slot copied before it is freed
 
-		usb_MidiMessagesRead++;
-		usb_MidiMessagesRead &= USB_MIDI_INPUT_BUFFER_MASK;
+		usb_MidiMessagesRead = (read + 1) & USB_MIDI_INPUT_BUFFER_MASK;
 
 		return 1; //return OK
 	}

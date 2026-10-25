@@ -230,6 +230,16 @@ check_E2_8() {
 	awk '{sub(/\r$/, "")} /^[[:space:]]+default: \/\* 0 byte payload messages/{f=1} f&&/^[[:space:]]+midiMsg_tmp\.bits\.length = 0;/{ok=1}
 		f&&/break;/{exit} END{exit !ok}' Core/Src/Soundengine/MIDI/MidiParser.c \
 		|| fail "the MIDI parser routes F4, F5 and F6 with the data bytes of the message before"
+	# USBD_CDC_DataOut() (OTG_FS) drops a message when the USB input queue is full, which is
+	# safe only if usb_getMidi() reads the write index before the slot, and copies the slot
+	# before it frees it: the fences pin that order, in this order (E2.4 review)
+	awk '{sub(/\r$/, "")} /^uint8_t usb_getMidi\(MidiMsg\* msg\)/{f=1} f&&/^}/{exit}
+		f&&/atomic_signal_fence\(memory_order_acquire\)/{a=1}
+		f&&/\*msg = usb_MidiMessages\[/{if(a)c=1}
+		f&&/atomic_signal_fence\(memory_order_release\)/{if(c)r=1}
+		f&&/^[[:space:]]+usb_MidiMessagesRead[[:space:]]*(=|\+\+|&=)/{if(r)ok=1; else bad=1}
+		END{exit !(ok && !bad)}' Core/Src/Soundengine/USB/usb_manager.c \
+		|| fail "usb_getMidi() does not order the index, the copy and the freed slot"
 }
 
 check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8"
