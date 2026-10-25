@@ -262,6 +262,10 @@ typedef struct
 	bool		haveLastOff;
 	double		step;		/**< step amplitude: decaying peak of the steps, cycles */
 	double		slope;		/**< the estimate, cycles per clock; 0 while there is none */
+	double		split;		/**< jack: the newest interval less splitSlope if it may be part of a double trigger (< 0), else 0 */
+	double		splitSlope;	/**< the slope it was tested against */
+	bool		steady;		/**< jack: the newest interval was within a quarter band of the slope, not merged */
+	uint32_t	extraClocks;	/**< spurious clocks the fit leaves out of its count (E1.19) */
 } seqc_fit_t;
 
 //------------------------------------------------------------------------------
@@ -1319,6 +1323,11 @@ static void seqc_setSlaveBpm(double bpm)
  *   the first point. The interval into it may straddle the change, so it is
  *   not used. The step amplitude stays: it belongs to the stamps, not to the
  *   tempo.
+ * - Spurious clocks (E1.19): the fit has its own count, which leaves them out
+ *   (extraClocks); the position counts them. MIDI: a row of early outliers
+ *   that one spurious clock explains is taken in instead of restarting the fit
+ *   (seqc_fitExtraClock()). The jack: a double trigger is merged at the pulse
+ *   after it (seqc_fitDoubleTrigger()).
  */
 /** true for the jack at 4 PPQ, whose clock is a step */
 static bool seqc_jack4(void)
@@ -1342,6 +1351,12 @@ static uint32_t seqc_longWindow(void)
 static uint8_t seqc_ringNext(uint8_t i)
 {
 	return i + 1u < SEQC_TEMPO_RING ? (uint8_t)(i + 1u) : 0u;
+}
+//------------------------------------------------------------------------------
+/** the ring index before i */
+static uint8_t seqc_ringPrev(uint8_t i)
+{
+	return i > 0u ? (uint8_t)(i - 1u) : (uint8_t)(SEQC_TEMPO_RING - 1u);
 }
 //------------------------------------------------------------------------------
 /** x of ring point i: clocks from the base point */
@@ -1399,7 +1414,7 @@ static double seqc_fitSpan(void)
 	const seqc_fit_t *f = &seqc_sl.fit;
 	if (f->tailL == f->head)
 		return 0.0;
-	return seqc_ringX(f->head > 0u ? (uint8_t)(f->head - 1u) : (uint8_t)(SEQC_TEMPO_RING - 1u));
+	return seqc_ringX(seqc_ringPrev(f->head));
 }
 //------------------------------------------------------------------------------
 /** the base point becomes the oldest point of the long window */
@@ -1472,7 +1487,7 @@ static void seqc_fitAdd(seqc_point_t p)
 		 * newest one. It goes in at the newest one's stamp: the ring stays in
 		 * stamp order, so a later base (the oldest point) is never after a point
 		 * of the window, and seqc_ringY() never wraps. */
-		const uint8_t newest = f->head > 0u ? (uint8_t)(f->head - 1u) : (uint8_t)(SEQC_TEMPO_RING - 1u);
+		const uint8_t newest = seqc_ringPrev(f->head);
 		const uint64_t last = f->baseStamp + (uint64_t)seqc_ringY(newest);
 		if (p.stamp < last)
 			p.stamp = last;
@@ -1486,6 +1501,16 @@ static void seqc_fitAdd(seqc_point_t p)
 	const double y = (double)(p.stamp - f->baseStamp);
 	seqc_sumsAdd(&f->lng, x, y, 1.0);
 	seqc_sumsAdd(&f->sht, x, y, 1.0);
+}
+//------------------------------------------------------------------------------
+/** take the newest point out of the ring and both windows; not the base point.
+ * The points that left a window when it came in stay out. */
+static void seqc_fitDropNewest(void)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	f->head = seqc_ringPrev(f->head);
+	seqc_sumsAdd(&f->lng, seqc_ringX(f->head), seqc_ringY(f->head), -1.0);
+	seqc_sumsAdd(&f->sht, seqc_ringX(f->head), seqc_ringY(f->head), -1.0);
 }
 //------------------------------------------------------------------------------
 /** the long window becomes the short one when their slopes differ by more than
@@ -1514,12 +1539,126 @@ static double seqc_fitSwitch(double newestOff)
 	return shortSlope;
 }
 //------------------------------------------------------------------------------
+/** the outlier band for the slope and the step amplitude step:
+ * SEQC_TEMPO_OUTLIER_PCT of the slope, and at least SEQC_TEMPO_BAND_STEP step
+ * amplitudes */
+static double seqc_fitBand(double slope, double step)
+{
+	const double band = slope * (SEQC_TEMPO_OUTLIER_PCT / 100.0);
+	return band < SEQC_TEMPO_BAND_STEP * step ? SEQC_TEMPO_BAND_STEP * step : band;
+}
+//------------------------------------------------------------------------------
+/** MIDI: a row of early outliers that one spurious clock explains (E1.19). The
+ * master's clocks after a spurious one are one clock early in the count, so
+ * they leave the band in a row; counted one clock earlier, they lie on the line
+ * again. The spurious clock is the row's first point (up to about half a clock
+ * after a real one) or the newest point of the fit (later), the one of the two
+ * further from the line at their common clock. If the row's other points,
+ * counted one clock earlier, lie within a quarter of the band of the line, and
+ * so does the nearer of those two, the fit counts one clock fewer, takes them
+ * in and leaves the spurious clock out, instead of restarting. After a tempo
+ * jump the clocks move further off the line at every clock, so they do not all
+ * come back that close. The test needs stamps precise to that quarter band: a
+ * step amplitude before the row of at most that. Returns true if it took the
+ * row in. */
+static bool seqc_fitExtraClock(void)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	const uint8_t newest = seqc_ringPrev(f->head);
+	const double tol = 0.25 * seqc_fitBand(f->slope, f->stepBeforeRow);
+	if (f->rowLate || f->stepBeforeRow > tol || f->tailL == newest
+			|| f->row[0].clock - 1u != seqc_sl.ringClock[newest])
+		return false;
+	double r0 = 0.0;
+	for (uint8_t i = 0; i < f->rowCount; i++)
+	{
+		/* signed: a stale MIDI clock may be stamped before the base */
+		const double r = (double)(int64_t)(f->row[i].stamp - f->baseStamp)
+				- seqc_sumsAt(&f->lng, (double)(uint32_t)(f->row[i].clock - 1u - f->baseClock), f->slope);
+		if (i == 0)
+			r0 = r < 0.0 ? -r : r;
+		else if (r > tol || -r > tol)
+			return false;
+	}
+	const double r = seqc_ringY(newest) - seqc_sumsAt(&f->lng, seqc_ringX(newest), f->slope);
+	const double rn = r < 0.0 ? -r : r;
+	if (r0 > tol && rn > tol)
+		return false;
+	uint8_t i = 1;
+	if (rn > r0)
+	{
+		seqc_fitDropNewest();	/* the newest point was the spurious clock */
+		i = 0;
+	}
+	f->extraClocks++;
+	for (; i < f->rowCount; i++)
+	{
+		f->row[i].clock--;
+		seqc_fitAdd(f->row[i]);
+	}
+	f->prev = f->row[f->rowCount - 1u];
+	f->rowCount = 0;
+	f->step = f->stepBeforeRow * (1.0 - SEQC_TEMPO_STEP_DECAY) * (1.0 - SEQC_TEMPO_STEP_DECAY);
+	f->haveLastOff = false;
+	f->slope = seqc_fitSwitch(0.0);
+	return true;
+}
+//------------------------------------------------------------------------------
+/** the jack: a double trigger (E1.19), a second pulse between two of the
+ * master's, from a bouncing contact or a noisy cable. It splits an interval of
+ * the slope into two short ones, and one of them is an outlier: the first if the
+ * second pulse came in the first half, else the second. So the pulse between
+ * the interval into p and the one before it (f->split, tested against
+ * f->splitSlope) is left out when:
+ * - the two add up to that slope within a sixteenth of its band;
+ * - against that slope exactly one of them is an outlier (the second may have
+ *   moved the fit's slope). Both outliers is no double trigger: a tempo that
+ *   more than doubled starts that way;
+ * - the interval before them was steady, within a quarter band of the slope,
+ *   so after a tempo about doubled only its first two intervals can merge;
+ * - the step amplitude, step, is at most the sixteenth band: the stamps are
+ *   precise enough.
+ * The fit then counts one clock fewer, and p's interval, *dev, becomes the
+ * merged one. The jack decides at p, where MIDI decides at the end of a row
+ * (seqc_fitExtraClock()), so its sum must be closer: the first two intervals
+ * after a jump to about twice the tempo can merge, and the clock that the fit
+ * then misses stays in its window. With a quarter band that is 1.8 to 2.3
+ * times, with a sixteenth 1.94 to 2.06, at the edge of the N16 band. Returns
+ * true if it merged. */
+static bool seqc_fitDoubleTrigger(seqc_point_t *p, double *dev, double step)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	const double band = seqc_fitBand(f->splitSlope, step);
+	const double tol = band / 16.0;
+	const double merged = f->split + *dev + f->slope;
+	const double second = *dev + f->slope - f->splitSlope;	/* p's interval less the slope of the first */
+	const bool out = second > band || -second > band;
+	const bool leftOut = f->rowCount == 1;	/* the pulse between was an outlier */
+	if (step > tol || merged > tol || -merged > tol || out == leftOut || second > 0.0
+			|| (!leftOut && f->tailL == seqc_ringPrev(f->head)))
+		return false;
+	if (leftOut)
+		f->phase -= (int64_t)(f->split - 0.5);	/* the phase its interval added (seqc_fitPoint()) */
+	else
+	{
+		seqc_fitDropNewest();	/* it was in the fit, and its offset was no step of the stamps */
+		f->haveLastOff = false;
+		seqc.stats.intervalsExcluded++;
+	}
+	f->extraClocks++;
+	p->clock--;
+	*dev = merged;
+	return true;
+}
+//------------------------------------------------------------------------------
 /** the point of a complete transfer goes into the fit, is left out as an
  * outlier, or restarts the fit */
 static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
 {
 	seqc_fit_t *f = &seqc_sl.fit;
 	const bool jack = seqc.mode == SEQC_SYNC_ANALOG;
+	p.clock -= f->extraClocks;	/* the fit's own count */
+	const bool tested = f->slope > 0.0 && seqc_fitSpan() >= (double)(seqc_shortWindow() / 2u);
 	/* Steps of the stamps. How far an interval is from the slope, less the drift
 	 * (the recent mean of that, which a ramp moves slowly), is its offset.
 	 * Stamps quantized to buffers, or with jitter, stay near the true times: the
@@ -1528,12 +1667,13 @@ static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
 	 * go on to the same side, falling only as the drift follows. */
 	double step = f->step * (1.0 - SEQC_TEMPO_STEP_DECAY);
 	double dev = 0.0, off = 0.0;
-	bool haveDev = false;
+	bool haveDev = false, merged = false;
 	if (f->havePrev && f->slope > 0.0)
 	{
 		/* signed: a MIDI clock may be stamped before the newest point (DIN and
 		 * USB clocks at once) */
 		dev = (double)(int64_t)(p.stamp - f->prev.stamp) - f->slope * (double)(p.clock - f->prev.clock);
+		merged = jack && tested && f->split < 0.0 && seqc_fitDoubleTrigger(&p, &dev, step);
 		off = dev - f->drift;
 		if (f->haveLastOff)
 		{
@@ -1545,7 +1685,10 @@ static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
 		haveDev = true;
 	}
 	f->step = step;
-	if (f->slope > 0.0 && seqc_fitSpan() >= (double)(seqc_shortWindow() / 2u))
+	f->split = 0.0;
+	const bool steady = f->steady;	/* a double trigger splits an interval after a steady one */
+	f->steady = false;
+	if (tested)
 	{
 		/* MIDI: how far the point is from the long window's line. The jack: how
 		 * far its interval, one pulse, is from the slope; its stamps are exact,
@@ -1558,9 +1701,7 @@ static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
 			/* signed: a stale MIDI clock may be stamped before the base */
 			r = (double)(int64_t)(p.stamp - f->baseStamp) - seqc_sumsAt(&f->lng, x, f->slope);
 		}
-		double band = f->slope * (SEQC_TEMPO_OUTLIER_PCT / 100.0);
-		if (band < SEQC_TEMPO_BAND_STEP * f->step)
-			band = SEQC_TEMPO_BAND_STEP * f->step;
+		const double band = seqc_fitBand(f->slope, f->step);
 		if (r > band || -r > band)
 		{
 			const bool late = r > 0.0;
@@ -1579,9 +1720,16 @@ static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
 			{
 				if (jack)	/* left out: the line goes on as if the interval had the slope */
 					f->phase += (int64_t)(dev < 0.0 ? dev - 0.5 : dev + 0.5);
+				if (jack && !late && f->rowCount == 1 && steady)
+				{
+					f->split = dev;	/* a short interval may be the first part of a double trigger */
+					f->splitSlope = f->slope;
+				}
 				seqc.stats.intervalsExcluded++;
 				return SEQC_POINT_LEFT_OUT;
 			}
+			if (!jack && seqc_fitExtraClock())
+				return SEQC_POINT_USED;
 			/* a tempo jump: the fit restarts from the row alone */
 			const uint8_t count = f->rowCount;
 			seqc_fitClearWindows();
@@ -1595,6 +1743,7 @@ static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
 			seqc.stats.tempoRestarts++;
 			return SEQC_POINT_RESTARTED;
 		}
+		f->steady = jack && !merged && r <= 0.25 * band && -r <= 0.25 * band;
 		const double rr = f->rowResidual < 0.0 ? -f->rowResidual : f->rowResidual;
 		if (f->rowCount > 0 && (r < 0.0 ? -r : r) < 0.5 * rr)
 		{
@@ -1603,6 +1752,11 @@ static seqc_pointFate_t seqc_fitPoint(seqc_point_t p)
 			f->step = f->stepBeforeRow * (1.0 - SEQC_TEMPO_STEP_DECAY) * (1.0 - SEQC_TEMPO_STEP_DECAY);
 			haveDev = false;
 		}
+	}
+	if (jack && tested && haveDev && dev < 0.0 && !merged && steady)
+	{
+		f->split = dev;		/* a short interval may be the first part of a double trigger; a merged one is not */
+		f->splitSlope = f->slope;
 	}
 	f->lastOff = off;
 	f->haveLastOff = haveDev;
@@ -1628,6 +1782,9 @@ static void seqc_clearEstimate(void)
 	f->drift = 0.0;
 	f->haveLastOff = false;
 	f->slope = 0.0;
+	f->split = 0.0;
+	f->steady = false;
+	f->extraClocks = 0;
 	seqc_sl.transferOpen = false;
 	seqc_sl.joinable = false;
 }

@@ -8,9 +8,11 @@
  *   start on the master's step grid, the sync mode switches, tempo jumps beyond
  *   the outlier band, and bunched clocks that are no tempo jump (N16); clocks
  *   that share a stamp, in USB transfers of several clocks and one transfer
- *   per audio buffer, give the clock tempo (N21, T16_packed_*);
+ *   per audio buffer, give the clock tempo (N21, T16_packed_*); a spurious clock
+ *   is no tempo jump (E1.19);
  * - T18: the clock in jack at 4 and 24 PPQ, a tempo jump at 4 PPQ (N16), the
- *   pending note-off sent at a dropout (N17), and a lost or an extra pulse.
+ *   pending note-off sent at a dropout (N17), and a lost or an extra pulse (a
+ *   double trigger, E1.19).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -1066,6 +1068,98 @@ TEST(T16_tempo_jump_down_is_followed)
 {
 	/* 200 to 90 BPM: the intervals get 122% longer */
 	checkTempoJump(200.0, 90.0);
+}
+
+/* N16 after E1.19: a MIDI slave settled at 120 BPM (a full long window), then
+ * two beats at to BPM. The fit restarts once and reads to. */
+static void checkJumpRestartsOnce(double to)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const size_t settled = appendClocks(0, fake_clockCycles(120.0), SEQC_TEMPO_LONG_WINDOW + 1);
+	const size_t n = appendClocks(settled, fake_clockCycles(to), 2 * 24);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_NEAR(seqc_currentBpm(), to, 1e-3);
+}
+
+TEST(T16_jump_of_30_and_100_percent_restarts)
+{
+	/* the clocks after a jump come earlier and earlier: no extra clock
+	 * explains them (T16_extra_clock_is_no_tempo_jump) */
+	checkJumpRestartsOnce(156.0);
+	checkJumpRestartsOnce(240.0);
+}
+
+/* E1.19: a slave in mode (the jack at ppq) gets a steady clock at bpm with exact
+ * stamps, through seq_tick() every 0.1 ms, for 16 beats. Clock at, a full long
+ * window in, is lost (frac < 0), or followed by one spurious clock frac of a
+ * period after it. *worst is the largest error of the estimate in % from the
+ * clock after it on, and *settle the number of clocks after it until the error
+ * stays within 0.1%. The position counts every clock, the spurious one too. */
+static void spuriousClock(seqc_sync_t mode, uint8_t ppq, double bpm, double frac, double *worst, uint32_t *settle)
+{
+	fake_host_t *h = slaveWithGrid(mode);
+	if (mode == SEQC_SYNC_ANALOG)
+		seqc_setAnalogPpq(ppq);
+	seqc_start();
+	const bool jack4 = mode == SEQC_SYNC_ANALOG && ppq == 4;
+	const double per = jack4 ? fake_stepCycles(bpm) : fake_clockCycles(bpm);
+	const seqc_sync_ev_t ev = mode == SEQC_SYNC_ANALOG ? SEQC_EV_PULSE : SEQC_EV_CLOCK;
+	const uint32_t count = jack4 ? 64u : 24u * 16u, at = jack4 ? 24u : 120u;
+	*worst = 0.0;
+	*settle = 0;
+	for (uint32_t k = 0; k < count; k++)
+	{
+		const seqc_time_t s = fake_msToCycles(10.0) + (seqc_time_t)((double)k * per + 0.5);
+		fake_runUntil(h, s, fake_msToCycles(0.1));
+		if (k != at || frac >= 0.0)
+			fake_sync(h, ev, s);
+		if (k == at && frac >= 0.0)
+		{
+			const seqc_time_t x = s + (seqc_time_t)(frac * per + 0.5);
+			fake_runUntil(h, x, fake_msToCycles(0.1));
+			fake_sync(h, ev, x);
+		}
+		if (k > at)
+		{
+			fake_process(h, s);	/* the transfer is complete */
+			const double e = fabs((double)seqc_currentBpm() - bpm) / bpm * 100.0;
+			if (e > *worst)
+				*worst = e;
+			if (e > 0.1)
+				*settle = k - at;
+		}
+	}
+	const uint32_t clocks = frac < 0.0 ? count - 1u : count + 1u;
+	ASSERT_EQ(fake_triggers(h, 0, trig, 1024), (clocks - 1u) / (jack4 ? 1u : SEQC_MIDI_CLOCKS_PER_STEP) + 1u);
+}
+
+/* E1.19: one spurious MIDI clock frac of a clock after a real one, at bpm, is
+ * no tempo jump, and costs no more than a lost clock: 1.52% (a lasting step,
+ * which the line takes in, N21), within 0.1% again 95 clocks after it. Under
+ * about 0.2 and over 0.85 of a clock the spurious clock is taken in the same
+ * way, at 1.57%. */
+static void checkExtraClock(double bpm, double frac)
+{
+	double lostWorst, worst;
+	uint32_t lostSettle, settle;
+	spuriousClock(SEQC_SYNC_MIDI, 24, bpm, -1.0, &lostWorst, &lostSettle);
+	spuriousClock(SEQC_SYNC_MIDI, 24, bpm, frac, &worst, &settle);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_TRUE(worst < 1.6);
+	ASSERT_TRUE(settle <= lostSettle);
+}
+
+TEST(T16_extra_clock_is_no_tempo_jump)
+{
+	/* from 0.2 to 0.85 of a clock, the master's clocks after it are one clock
+	 * early, off the line: counted one clock earlier, they lie on it again */
+	static const double frac[] = { 0.1, 0.3, 0.45, 0.6, 0.9 };
+	for (size_t i = 0; i < sizeof frac / sizeof frac[0]; i++)
+		checkExtraClock(120.0, frac[i]);
+	checkExtraClock(90.0, 0.4);
+	checkExtraClock(180.0, 0.3);
 }
 
 TEST(T16_alternating_outliers_do_not_restart)
@@ -2177,10 +2271,9 @@ TEST(T16_packed_set_tempo_keeps_a_measured_estimate)
 }
 
 /* the jack at ppq, 120 BPM: pulses 0..count-1 of the master, with pulse at
- * (and pulse again, if not 0) lost, or (extra) followed by a second pulse 5% of
- * a pulse after it. Returns the largest |error| of the estimate in % from the
- * pulse after at on. */
-static double jackCountError(uint8_t ppq, uint32_t count, uint32_t at, uint32_t again, bool extra)
+ * (and pulse again, if not 0) lost. Returns the largest |error| of the
+ * estimate in % from the pulse after at on. */
+static double jackLostError(uint8_t ppq, uint32_t count, uint32_t at, uint32_t again)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
 	seqc_setAnalogPpq(ppq);
@@ -2190,16 +2283,10 @@ static double jackCountError(uint8_t ppq, uint32_t count, uint32_t at, uint32_t 
 	for (uint32_t c = 0; c < count; c++)
 	{
 		const seqc_time_t t = fake_msToCycles(10.0) + (seqc_time_t)((double)c * per + 0.5);
-		const bool event = c == at || (again != 0 && c == again);
-		if (event && !extra)
+		if (c == at || (again != 0 && c == again))
 			continue;
 		fake_sync(h, SEQC_EV_PULSE, t);
 		fake_process(h, t);
-		if (event)
-		{
-			fake_sync(h, SEQC_EV_PULSE, t + (seqc_time_t)(0.05 * per));
-			fake_process(h, t + (seqc_time_t)(0.05 * per));
-		}
 		const double e = fabs((double)seqc_currentBpm() - 120.0) / 120.0 * 100.0;
 		if (c > at && e > worst)
 			worst = e;
@@ -2214,22 +2301,57 @@ TEST(T18_lost_pulse_keeps_the_tempo)
 	 * the interval had had the slope (N9, N21). A lost pulse leaves the
 	 * estimate alone, and is no step of the stamps that would let a second one
 	 * in. */
-	ASSERT_TRUE(jackCountError(4, 24, 12, 0, false) < 1e-3);
+	ASSERT_TRUE(jackLostError(4, 24, 12, 0) < 1e-3);
 	ASSERT_EQ(stats().intervalsExcluded, 1);
 	ASSERT_EQ(stats().tempoRestarts, 0);
-	ASSERT_TRUE(jackCountError(24, 24 * 8, 24 * 4, 24 * 4 + 12, false) < 1e-3);
+	ASSERT_TRUE(jackLostError(24, 24 * 8, 24 * 4, 24 * 4 + 12) < 1e-3);
 	ASSERT_EQ(stats().intervalsExcluded, 2);
 	ASSERT_EQ(stats().tempoRestarts, 0);
 }
 
+/* E1.19: a double trigger on the jack at ppq, 120 BPM: a second pulse frac of a
+ * pulse after a real one. From the next real pulse on, the estimate is as exact
+ * as after a lost pulse (T18_lost_pulse_keeps_the_tempo), and nothing restarts. */
+static void checkDoubleTrigger(uint8_t ppq, double frac)
+{
+	double worst;
+	uint32_t settle;
+	spuriousClock(SEQC_SYNC_ANALOG, ppq, 120.0, frac, &worst, &settle);
+	ASSERT_TRUE(worst < 1e-3);
+	ASSERT_EQ(settle, 0);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+}
+
 TEST(T18_double_trigger_is_left_out)
 {
-	/* a second pulse 5% after a real one: its short interval is left out, and
-	 * the next, 5% short, is used: the estimate moves by about 1.5% for the 4
-	 * pulses of the window at 4 PPQ, then is exact again */
-	ASSERT_TRUE(jackCountError(4, 24, 12, 0, true) < 2.0);
-	ASSERT_EQ(stats().tempoRestarts, 0);
-	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+	/* the two intervals of the split pulse add up to one pulse, and one of them
+	 * is an outlier: the fit counts one pulse fewer, and the pulse after the
+	 * second trigger goes in at the slope, so no offset stays in the line */
+	checkDoubleTrigger(4, 0.05);
+	checkDoubleTrigger(4, 0.3);
+	checkDoubleTrigger(4, 0.55);
+	checkDoubleTrigger(4, 0.9);
+	checkDoubleTrigger(24, 0.55);
+}
+
+TEST(T18_jump_that_starts_like_a_double_trigger_restarts)
+{
+	/* the jack at 4 PPQ, 120 to 270 BPM, the first new interval 5/9 of a pulse
+	 * (the change fell inside it), the next ones 4/9. The first two add up to
+	 * one pulse and the second is an outlier, as after a double trigger; the
+	 * pulse after them is no second one, and SEQC_TEMPO_RESTART_4PPQ outliers
+	 * in a row restart the fit (N16). */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_start();
+	const double per = fake_stepCycles(120.0);
+	size_t n = appendClocks(0, per, SEQC_TEMPO_WINDOW_4PPQ + 1);
+	n = appendClocks(n, per * 5.0 / 9.0, 1);
+	n = appendClocks(n, per * 4.0 / 9.0, 6);
+	deliver(h, SEQC_EV_PULSE, stamps, n, fake_msToCycles(0.1));
+	ASSERT_NEAR(seqc_currentBpm(), 270.0, 1e-3);
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), n);	/* one step per pulse */
 }
 
 TEST(T18_alternating_outliers_do_not_restart)

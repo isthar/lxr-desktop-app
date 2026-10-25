@@ -575,12 +575,31 @@ void seqc_setAnalogPpq(uint8_t ppq);
  * - MIDI clock: a point further from the long window's fitted line than
  *   SEQC_TEMPO_OUTLIER_PCT of a clock is an outlier and is left out, unless it
  *   completes a tempo jump. Where the stamps move in steps (quantized to the
- *   host's audio buffers), the band is wider: about the size of the steps.
+ *   host's audio buffers), the band is wider: about the size of the steps. A
+ *   lost clock is a lasting step, which the line takes in: 1.5% off for about
+ *   4 beats (N21).
+ * - A spurious MIDI clock (E1.19, N21): the clocks after it are one clock early
+ *   in the count. If it came 0.2 to 0.85 of a clock after a real one, they
+ *   leave the band in a row; instead of a restart, the fit counts one clock
+ *   fewer and leaves the spurious clock out, so the estimate stays within
+ *   0.03% (with stamps precise to 1/8 of a clock; else it restarts, as
+ *   before). Closer to a real clock the line takes it in as a step, as a lost
+ *   clock: 1.57% for about 4 beats. tempoRestarts does not count it. The
+ *   position counts it: a slave cannot tell it from a real clock.
  * - Clock in jack: an interval more than SEQC_TEMPO_OUTLIER_PCT off the fitted
  *   slope is an outlier and is left out, unless it completes a tempo jump; the
  *   fit goes on as if it had had the slope, so a lost pulse does not move the
- *   estimate, and an extra one only for the window after it (about 1.5% at
- *   4 PPQ).
+ *   estimate. A double trigger (E1.19, N21), a second pulse between two of the
+ *   master's, splits an interval into two that add up to the slope, one of
+ *   them an outlier: the fit leaves the second pulse out and counts one pulse
+ *   fewer, so from the next real pulse on the estimate is as exact as after a
+ *   lost pulse (it was 1.5% to 17.9% off for 3 to 5 pulses at 4 PPQ, and up to
+ *   2.7% at 24 PPQ, before). Between the two the estimate may include the
+ *   second pulse, for one pulse. Not so for a second pulse exactly half a
+ *   pulse after the first, which is how an exactly doubled tempo starts
+ *   (42.9% for 4 pulses at 4 PPQ, 5.0% at 24 PPQ), nor for stamps whose step
+ *   amplitude (about their jitter) is over 1/32 of a pulse; there it costs
+ *   what it did before. The position counts the second pulse.
  * - The points of the first half short window after a start of the fit are not
  *   tested.
  * - A tempo jump (N16): after SEQC_TEMPO_RESTART outliers in a row on the same

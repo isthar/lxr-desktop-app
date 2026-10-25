@@ -610,6 +610,68 @@ the clock count.
   - The jack keeps the plain rule.
   - Check the 2 ms value on hardware, under H6 and H7, also with a host that sends the transfers of
     two buffers in consecutive 1 ms frames.
+- **One spurious clock or a double trigger (amended in E1.19).**
+  - The E1.15–E1.17 final review measured what one spurious clock does to the fit: on MIDI clock,
+    one 0.22 to 0.48 of a clock after a real one restarted it (8% to 16% off for 12 to 20 clocks,
+    and a `tempoRestarts` although the tempo never changed); on the jack, a double trigger left an
+    offset in the line (1.5% to 17.9% for 3 to 5 pulses at 4 PPQ).
+  - The fit now has its own clock count, which leaves a spurious clock out (`extraClocks` in the
+    fit, so a MIDI join that takes the fit back takes it back too). The position still counts the
+    clock: a slave cannot tell a spurious clock from a real one, so the one-clock phase step stays.
+  - MIDI: the clocks after a spurious one are one clock early in the count, so they leave the band
+    in a row (N16). When the row is early, and its points after the first, counted one clock
+    earlier, lie within a quarter band of the line, and so does the nearer of the row's first point
+    and the fit's newest point, the fit counts one clock fewer, takes the row in and leaves the
+    farther of those two out (the spurious clock: the row's first point up to about half a clock
+    after a real one, the newest point of the fit later). The row is the lookahead that tells it
+    from a tempo jump, whose clocks move further off the line at every clock. It needs a step
+    amplitude before the row of at most that quarter band (stamps precise to 1/8 of a clock).
+  - Jack: a double trigger splits one interval into two short ones that add up to the slope, one of
+    them an outlier. When the interval into a pulse and the one before it add up to the slope of
+    the first within a sixteenth band, exactly one of them is an outlier against that slope, the
+    interval before them was within a quarter band, and the step amplitude is at most the
+    sixteenth band, the pulse between is left out and the fit counts one clock fewer.
+    - The jack decides at once, with no row, so its sum test is tight: the first two intervals after
+      a jump to about twice the tempo can look the same. With a quarter band that took in jumps of
+      1.8 to 2.3 times, and the clock the fit then missed cost up to 2.3% two beats later at 24 PPQ
+      with 0.3 to 1 ms of jitter; with a sixteenth, 1.94 to 2.06 times, and none was worse.
+    - Both intervals outliers is no double trigger (a tempo more than doubled starts that way), and
+      a merged interval is not split again.
+  - Measured with exact stamps and a 0.1 ms `seq_tick()`, one spurious clock f of a period after a
+    real one, f from 0.05 to 0.95 in steps of 0.05, at 120 BPM (MIDI also at 90 and 180 BPM, with
+    the same figures). The error is the worst from the clock after it on; the duration is the
+    clocks or pulses until the estimate stays within 0.1%.
+
+    | Source | f | Before | After |
+    |---|---|---|---|
+    | MIDI | 0.05–0.20, 0.85–0.95 | 1.57%, 93–95 clocks | the same: taken in as a step, as a lost clock (1.52%, 95 clocks) |
+    | MIDI | 0.25–0.45 | 8.1%–15.6%, 37–50 clocks, a restart | 0.000%, no restart |
+    | MIDI | 0.50–0.80 | 0.013%–0.032%, a restart | 0.013%–0.032%, no restart |
+    | Jack, 4 PPQ | 0.05–0.45, 0.55–0.95 | 1.5%–17.9%, 3–5 pulses | 0.000% |
+    | Jack, 24 PPQ | 0.05–0.45, 0.55–0.95 | 0.30%–2.74%, 21–92 clocks | 0.000% |
+    | Jack | 0.50 exactly | 42.9% for 4 pulses (4 PPQ), 5.0% for 24 clocks (24 PPQ) | the same |
+
+    - At exactly half a pulse both intervals lie on the edge of the band and neither is an outlier:
+      that is how an exactly doubled tempo starts, which the window must follow. A thousandth of a
+      pulse either side is merged.
+    - With ±0.1, ±0.3 and ±1 ms of jitter (f 0.3, 0.45, 0.55 and 0.7), the merged cases stay within
+      0.033% on MIDI, and on the jack within the error of a lost pulse with the same jitter. At 24 PPQ
+      with ±1 ms the step amplitude is over the sixteenth band: a double trigger there costs what it
+      did before.
+    - While a MIDI row forms (f over 0.5) and between a double trigger and the next pulse (f over
+      0.5 on the jack), the estimate includes the spurious clock: for the four clocks of the row, and
+      for less than one pulse.
+  - Unchanged: the N21 Limit sweep (identical output at buffer phase 0.31, 0.51%, 0.87% and 2.59%,
+    and over 20 phases), the burst join, the dropout, a lost clock or pulse, and every test before
+    E1.19. Tempo jumps from 120 to 60–300 BPM in steps of 2.5, at 4 change phases, with 0, 0.3 and
+    1 ms of jitter: MIDI is identical; on the jack the error two beats later is the same within
+    0.01 points, and in 10 to 23 of 1164 cases a jump to 2 to 2.5 times whose straddling interval
+    and first new one add up to one old pulse merges once (one more `intervalsExcluded`, the
+    restart one pulse later), or, at 240 and 242.5 BPM with jitter, restarts once where it had
+    followed inside the band.
+  - Costs: `seq_core.c.obj` text 20138 to 22422 B (+2284) and bss 11221 to 11269 B (+48: 24 B in
+    the fit and in its copy for the join), measured with the firmware's compile command and Arm GNU
+    14.3.rel1.
 - **Costs and behaviour changes.**
   - 1192 B of bss over E1.14 (7053 to 8245 B): the 98-point ring and the fit (928 B), and the fit copy
     and the join state (264 B). E1.17's 101-point ring adds 24 B (8269 B). Review row R6.2 must allow
@@ -618,7 +680,7 @@ the clock count.
   - About 2.7 KB of code: `seq_core.c.obj` text 18602 B after E1.15 (b97c1c6) against 15854 B after
     E1.14, measured with the firmware's compile command and Arm GNU 14.3.rel1.
   - A lost DIN clock now costs about 1.5% for about 4 beats, where it cost 0% before. A lost jack pulse
-    still costs 0%.
+    still costs 0%. For a spurious clock or pulse see the E1.19 bullet above.
   - Tempo changes on buffered USB settle in 1 to 3 beats.
   - The tuning constants (band 1.25, switch 1.5, decay 1/64, drift 0.25) come from the harness sweeps.
     Confirm them on hardware (H6, H7 over USB) and measure the CPU cost with the E3.3 meter.

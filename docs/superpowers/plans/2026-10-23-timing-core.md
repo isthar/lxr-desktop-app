@@ -13467,7 +13467,7 @@ contact or a noisy cable, is the likeliest source.
 - Test: `tests/test_slave.c` (T16, T18).
 
 **Steps (TDD):**
-- [ ] **Step 1: Failing tests.**
+- [x] **Step 1: Failing tests.**
   - MIDI: one extra clock at f = 0.1, 0.3, 0.45, 0.6 and 0.9 of a period, at 120 BPM. Also test
     one f in the restart range at 90 BPM and at 180 BPM.
     - Assert that `tempoRestarts` does not change.
@@ -13477,17 +13477,17 @@ contact or a noisy cable, is the likeliest source.
     bounds. Also test one case at 24 PPQ.
   - A real tempo jump of 30% and of 100% still restarts as N16 says.
   - Show which tests fail on the current core, and why.
-- [ ] **Step 2: Implement** the chosen design. Every existing test stays green.
-- [ ] **Step 3: Measure and report:**
+- [x] **Step 2: Implement** the chosen design. Every existing test stays green.
+- [x] **Step 3: Measure and report:**
   - the worst error and its duration over f from 0.05 to 0.95 in 0.05 steps, MIDI and jack, before
     and after;
   - the N21 Limit sweep (USB buffers of 256, 512 and 1024 samples), unchanged or with the
     difference explained;
   - `seq_core.c.obj` text and bss, from the firmware compile command.
-- [ ] **Step 4: Amend N21 and the header** with the measured behaviour. In the jack paragraph,
+- [x] **Step 4: Amend N21 and the header** with the measured behaviour. In the jack paragraph,
   replace "about 1.5% at 4 PPQ" with the real figures. Keep CRLF in the `Core/` files.
-- [ ] **Step 5: Run `tools/check.sh`:** all tests pass, 0 warnings.
-- [ ] **Step 6: Commit** with an explicit file list. Message: "seq_core: one extra clock or a double
+- [x] **Step 5: Run `tools/check.sh`:** all tests pass, 0 warnings.
+- [x] **Step 6: Commit** with an explicit file list. Message: "seq_core: one extra clock or a double
   trigger no longer skews the slave tempo (E1.19)", with the trailer
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
