@@ -164,14 +164,17 @@ TEST(T19_reset_stats_clears_every_counter)
 	start(h);
 	runToTick(h, 6 * 96);
 	fake_sync(h, SEQC_EV_CLOCK, h->now);		/* ignored in internal sync */
-	/* MIDI clock: outlier intervals, a tempo restart and a dropout */
+	/* MIDI clock: outliers, a tempo restart and a dropout. The tempo fit tests
+	 * no clock while it spans less than half its short window (N21), so 13
+	 * clocks at 120 BPM come first; then SEQC_TEMPO_RESTART clocks 6 ms apart,
+	 * each further before the fitted line: a row of outliers, a restart. */
 	seqc_stop();
 	seqc_setSyncMode(SEQC_SYNC_MIDI);
 	const seqc_time_t t0 = h->now + fake_msToCycles(1.0);
-	fake_sync(h, SEQC_EV_CLOCK, t0);
-	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(20.833));
-	for (unsigned k = 0; k < SEQC_TEMPO_RESTART; k++)	/* a row of outliers: a restart */
-		fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(26.833 + 6.0 * k));	/* above the 4.17 ms guard */
+	for (int k = 0; k < 13; k++)
+		fake_sync(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(k * fake_clockCycles(120.0)));
+	for (unsigned k = 1; k <= SEQC_TEMPO_RESTART; k++)
+		fake_sync(h, SEQC_EV_CLOCK, t0 + (seqc_time_t)(12.0 * fake_clockCycles(120.0)) + fake_msToCycles(6.0 * k));
 	fake_sync(h, SEQC_EV_CLOCK, t0 + fake_msToCycles(1100.0));
 	seqc_stats_t s = stats();
 	ASSERT_TRUE(s.queueMax > 0);

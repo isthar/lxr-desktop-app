@@ -6,7 +6,7 @@
  * file builds in the firmware and in the host tests (tests/).
  *
  * Design: docs/superpowers/specs/2026-10-23-timing-core-design.md (the spec) and
- * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N18;
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N21;
  * they win where the two differ).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
@@ -34,6 +34,25 @@
 #ifndef SEQC_QUEUE_CAPACITY
 #define SEQC_QUEUE_CAPACITY	SEQC_QUEUE_SIZE
 #endif
+//------------------------------------------------------------------------------
+/* The tempo fit (N21), see the Tempo estimate section. The windows, the outlier
+ * band and the restart counts are in seq_core.h. The tunables can be set with
+ * -D for host measurements. */
+#define SEQC_TEMPO_RING		(SEQC_TEMPO_LONG_WINDOW + 2u)	/**< points: a long window and the next one */
+#define SEQC_TEMPO_SPAN_S	16u	/**< the long window holds at most 16 s, so 32-bit stamps suffice in the ring */
+#ifndef SEQC_TEMPO_BAND_STEP
+#define SEQC_TEMPO_BAND_STEP	1.25	/**< the outlier band is at least this many step amplitudes */
+#endif
+#ifndef SEQC_TEMPO_SWITCH_STEP
+#define SEQC_TEMPO_SWITCH_STEP	1.5	/**< the windows' slopes may differ by this many step bounds */
+#endif
+#ifndef SEQC_TEMPO_STEP_DECAY
+#define SEQC_TEMPO_STEP_DECAY	(1.0 / 64.0)	/**< of the step amplitude, per point */
+#endif
+#ifndef SEQC_TEMPO_DRIFT_GAIN
+#define SEQC_TEMPO_DRIFT_GAIN	0.25	/**< of the mean interval deviation, per point */
+#endif
+_Static_assert(SEQC_TEMPO_RING <= 255u, "the ring indexes are 8 bits");
 
 //------------------------------------------------------------------------------
 // State
@@ -161,6 +180,49 @@ typedef enum
 } seqc_arm_t;
 
 //------------------------------------------------------------------------------
+/** a point of the tempo fit (N21): the last clock of a transfer, the clocks
+ * that share a stamp */
+typedef struct
+{
+	uint64_t	stamp;
+	uint32_t	clock;		/**< the fit's own clock count */
+} seqc_point_t;
+
+//------------------------------------------------------------------------------
+/** least-squares sums of points (x, y): x in clocks and y in cycles from the
+ * base point. Every value is an integer below 2^53, so the sums are exact. */
+typedef struct
+{
+	double		n, sx, sy, sxx, sxy;
+} seqc_sums_t;
+
+//------------------------------------------------------------------------------
+/** the tempo fit (N9, N16, N21) */
+typedef struct
+{
+	seqc_sums_t	lng;		/**< long window: the points of the last SEQC_TEMPO_LONG_WINDOW clocks */
+	seqc_sums_t	sht;		/**< short window: the points of the last SEQC_TEMPO_WINDOW clocks */
+	uint32_t	baseClock;	/**< the base point, x = y = 0: the oldest of the long window */
+	uint64_t	baseStamp;
+	uint8_t		head;		/**< ring index of the next point */
+	uint8_t		tailL;		/**< ring index of the oldest point of the long window */
+	uint8_t		tailS;		/**< ring index of the oldest point of the short window */
+	bool		havePrev;
+	seqc_point_t	prev;		/**< the newest point, in the windows or not */
+	seqc_point_t	row[SEQC_TEMPO_RESTART];	/**< N16: the outliers in a row */
+	uint8_t		rowCount;
+	bool		rowLate;	/**< they lie after the fitted line (else before it) */
+	double		rowResidual;	/**< residual of the row's first outlier, cycles */
+	double		stepBeforeRow;	/**< the step amplitude before it */
+	int64_t		phase;		/**< jack: cycles taken off the stamps, the deviations of the intervals left out */
+	double		drift;		/**< mean of interval - slope x clocks over the recent points, cycles */
+	double		lastOff;	/**< the newest point's interval - slope x clocks, less the drift */
+	bool		haveLastOff;
+	double		step;		/**< step amplitude: decaying peak of the steps, cycles */
+	double		slope;		/**< the estimate, cycles per clock; 0 while there is none */
+} seqc_fit_t;
+
+//------------------------------------------------------------------------------
 /** slave modes: clock count, tempo estimate and the interpolation (N9) */
 typedef struct
 {
@@ -175,15 +237,16 @@ typedef struct
 	double		bpm;		/**< the estimate, or the last known tempo */
 	double		ticksPerCycle;	/**< of bpm */
 	double		cyclesPerTick;
-	uint32_t	interval[SEQC_TEMPO_WINDOW];	/**< clock intervals, cycles */
-	uint8_t		intervalCount;
-	uint8_t		intervalNext;
-	uint64_t	intervalSum;
-	uint32_t	run[SEQC_TEMPO_RESTART];	/**< N16: the outliers in a row, cycles */
-	uint8_t		runCount;
-	bool		runLonger;	/**< they are longer than the mean (else shorter) */
+	uint32_t	fitClock;	/**< clocks counted by the tempo fit */
+	bool		transferOpen;	/**< a transfer is being collected (N21) */
+	seqc_point_t	transfer;	/**< its stamp, and its last clock so far */
+	bool		joinable;	/**< the last transfer was left out, and a MIDI clock less than SEQC_TEMPO_JOIN_MS after it joins it */
+	seqc_fit_t	fitBefore;	/**< the fit before the last MIDI transfer, for a clock that joins it */
+	seqc_fit_t	fit;		/**< the tempo fit (N9, N16, N21) */
+	uint32_t	ringClock[SEQC_TEMPO_RING];	/**< the points of the long window */
+	uint32_t	ringStamp[SEQC_TEMPO_RING];	/**< their stamps, low 32 bits */
 } seqc_slave_t;
-_Static_assert(SEQC_TEMPO_RESTART_4PPQ <= SEQC_TEMPO_RESTART, "run[] holds a row at either threshold (N16)");
+_Static_assert(SEQC_TEMPO_RESTART_4PPQ <= SEQC_TEMPO_RESTART, "row[] holds a row at either threshold (N16)");
 
 //------------------------------------------------------------------------------
 /* the state, one part per area */
@@ -321,7 +384,7 @@ static double seqc_startPosition(void)
  * SEQC_SLAVE_BPM_MIN, so that a slow clock can still build its first estimate. */
 static seqc_time_t seqc_dropoutCycles(void)
 {
-	const double cyclesPerTick = seqc_sl.intervalCount > 0 ? seqc_sl.cyclesPerTick
+	const double cyclesPerTick = seqc_sl.fit.slope > 0.0 ? seqc_sl.cyclesPerTick
 			: 1.0 / seqc_ticksPerCycle(SEQC_SLAVE_BPM_MIN);
 	const double twoClocks = 2.0 * seqc_ticksPerClock() * cyclesPerTick;
 	const double minimum = (double)seqc.cyclesPerSecond * SEQC_DROPOUT_MS / 1000.0;
@@ -799,84 +862,381 @@ static void seqc_setSlaveBpm(double bpm)
 	seqc_sl.cyclesPerTick = 1.0 / seqc_sl.ticksPerCycle;
 }
 //------------------------------------------------------------------------------
-/** forget the measured intervals and the outliers in a row (the last known
- * tempo stays) */
+/*
+ * The estimate (N9, N16, N21) is a least-squares fit of the clock stamps against
+ * the clock count. Its slope is the clock period.
+ * - Transfers: USB stamps the clocks of one transfer once, when the transfer is
+ *   in, so they share the stamp of the last of them. The clocks with one stamp
+ *   form a transfer, which is one point of the fit, at its last clock. It is
+ *   evaluated once it is complete: at the next clock with a later stamp, at any
+ *   other sync event, or at the next seqc_process(). seq_tick() drains every
+ *   queued clock before it calls seqc_process(), and the USB interrupt queues
+ *   all the clocks of a transfer before seq_tick() can run.
+ * - Bursts: a MIDI clock less than SEQC_TEMPO_JOIN_MS after a transfer joins
+ *   it. A DIN interface that forwards a late buffer sends its clocks back to
+ *   back, 0.32 ms apart, so each reaches its own seq_tick(): the head of the
+ *   burst, late, is evaluated alone and left out as an outlier. The next clock
+ *   then takes the fit back to before it (a copy kept for that) and joins the
+ *   transfer. 2 ms takes in USB transfers in consecutive 1 ms frames and a few
+ *   MIDI bytes between two clocks, and is a quarter of a clock at
+ *   SEQC_SLAVE_BPM_MAX. A transfer that went into the fit, or restarted it, is
+ *   not undone.
+ * - Windows: the points of the last SEQC_TEMPO_WINDOW clocks (short) and of the
+ *   last SEQC_TEMPO_LONG_WINDOW clocks (long; the 4PPQ values for the jack at
+ *   4 PPQ), and at most SEQC_TEMPO_SPAN_S. The estimate is the slope of the long
+ *   window. If the short window's slope differs from it by more than the steps
+ *   of the stamps explain, the tempo is changing: the long window drops its older
+ *   points and becomes the short one.
+ * - Steps: how far a point's interval is from the slope; their amplitude is a
+ *   decaying peak. Stamps quantized to audio buffers move in steps of up to one
+ *   buffer, a clock in exact stamps only by its jitter.
+ * - Outliers, MIDI: a point further from the long window's line than the band
+ *   is left out. The band is SEQC_TEMPO_OUTLIER_PCT of the slope, and at least
+ *   SEQC_TEMPO_BAND_STEP step amplitudes, so the steps of USB stamps stay in;
+ *   a lasting step is a step of the stamps, and the line takes it in. An
+ *   outlier whose next point is back near the line was a glitch: its step is
+ *   forgotten.
+ * - Outliers, clock in jack: the stamps are exact, so a step of the stamps can
+ *   only be a lost or an extra pulse. The test is on the interval: one more
+ *   than SEQC_TEMPO_OUTLIER_PCT off the slope is left out, and the line goes on
+ *   from its point as if the interval had had the slope (N9).
+ * - The points of the first half short window are taken without the test.
+ * - A tempo jump (N16): SEQC_TEMPO_RESTART outliers in a row on the same side
+ *   restart the fit from them alone, as after a dropout: the first of them is
+ *   the first point. The interval into it may straddle the change, so it is
+ *   not used. The step amplitude stays: it belongs to the stamps, not to the
+ *   tempo.
+ */
+/** true for the jack at 4 PPQ, whose clock is a step */
+static bool seqc_jack4(void)
+{
+	return seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24;
+}
+//------------------------------------------------------------------------------
+/** clocks of the short window of the fit */
+static uint32_t seqc_shortWindow(void)
+{
+	return seqc_jack4() ? SEQC_TEMPO_WINDOW_4PPQ : SEQC_TEMPO_WINDOW;
+}
+//------------------------------------------------------------------------------
+/** clocks of the long window of the fit */
+static uint32_t seqc_longWindow(void)
+{
+	return seqc_jack4() ? SEQC_TEMPO_LONG_WINDOW_4PPQ : SEQC_TEMPO_LONG_WINDOW;
+}
+//------------------------------------------------------------------------------
+/** the ring index after i */
+static uint8_t seqc_ringNext(uint8_t i)
+{
+	return i + 1u < SEQC_TEMPO_RING ? (uint8_t)(i + 1u) : 0u;
+}
+//------------------------------------------------------------------------------
+/** x of ring point i: clocks from the base point */
+static double seqc_ringX(uint8_t i)
+{
+	return (double)(uint32_t)(seqc_sl.ringClock[i] - seqc_sl.fit.baseClock);
+}
+//------------------------------------------------------------------------------
+/** y of ring point i: cycles from the base point (the window spans less than
+ * 2^32 cycles) */
+static double seqc_ringY(uint8_t i)
+{
+	return (double)(uint32_t)(seqc_sl.ringStamp[i] - (uint32_t)seqc_sl.fit.baseStamp);
+}
+//------------------------------------------------------------------------------
+/** add (w = 1) or remove (w = -1) a point */
+static void seqc_sumsAdd(seqc_sums_t *s, double x, double y, double w)
+{
+	s->n += w;
+	s->sx += w * x;
+	s->sy += w * y;
+	s->sxx += w * x * x;
+	s->sxy += w * x * y;
+}
+//------------------------------------------------------------------------------
+/** move the origin of the sums to (dx, dy); exact, as all terms are integers */
+static void seqc_sumsShift(seqc_sums_t *s, double dx, double dy)
+{
+	s->sxy -= dy * s->sx + dx * s->sy - s->n * dx * dy;
+	s->sxx -= (2.0 * s->sx - s->n * dx) * dx;
+	s->sx -= s->n * dx;
+	s->sy -= s->n * dy;
+}
+//------------------------------------------------------------------------------
+/** the fitted slope in cycles per clock; 0 with fewer than two points */
+static double seqc_sumsSlope(const seqc_sums_t *s)
+{
+	if (s->n < 2.0)
+		return 0.0;
+	const double mx = s->sx / s->n;
+	const double sxx = s->sxx - mx * s->sx;
+	const double sxy = s->sxy - mx * s->sy;
+	return sxx > 0.0 && sxy > 0.0 ? sxy / sxx : 0.0;
+}
+//------------------------------------------------------------------------------
+/** the fitted line at x, with its slope */
+static double seqc_sumsAt(const seqc_sums_t *s, double x, double slope)
+{
+	return (s->sy + slope * (x * s->n - s->sx)) / s->n;
+}
+//------------------------------------------------------------------------------
+/** clocks from the oldest to the newest point of the long window */
+static double seqc_fitSpan(void)
+{
+	const seqc_fit_t *f = &seqc_sl.fit;
+	if (f->tailL == f->head)
+		return 0.0;
+	return seqc_ringX(f->head > 0u ? (uint8_t)(f->head - 1u) : (uint8_t)(SEQC_TEMPO_RING - 1u));
+}
+//------------------------------------------------------------------------------
+/** the base point becomes the oldest point of the long window */
+static void seqc_fitRebase(void)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	const double dx = seqc_ringX(f->tailL);
+	const double dy = seqc_ringY(f->tailL);
+	seqc_sumsShift(&f->lng, dx, dy);
+	seqc_sumsShift(&f->sht, dx, dy);
+	f->baseClock = seqc_sl.ringClock[f->tailL];
+	f->baseStamp += (uint64_t)dy;
+}
+//------------------------------------------------------------------------------
+/** empty both windows */
+static void seqc_fitClearWindows(void)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	f->tailL = f->head;
+	f->tailS = f->head;
+	memset(&f->lng, 0, sizeof f->lng);
+	memset(&f->sht, 0, sizeof f->sht);
+}
+//------------------------------------------------------------------------------
+/** add point p to the ring and to both windows; the points that leave a window
+ * go out of its sums */
+static void seqc_fitAdd(seqc_point_t p)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	const uint32_t shortW = seqc_shortWindow();
+	const uint32_t longW = seqc_longWindow();
+	uint64_t span = (uint64_t)seqc.cyclesPerSecond * SEQC_TEMPO_SPAN_S;
+	if (span > UINT32_MAX)
+		span = UINT32_MAX;	/* the ring keeps 32 bits of each stamp */
+	bool moved = false;
+	while (f->tailL != f->head && (p.clock - seqc_sl.ringClock[f->tailL] > longW
+			|| p.stamp - (f->baseStamp + (uint64_t)seqc_ringY(f->tailL)) > span))
+	{
+		if (f->tailS == f->tailL)
+		{
+			seqc_sumsAdd(&f->sht, seqc_ringX(f->tailS), seqc_ringY(f->tailS), -1.0);
+			f->tailS = seqc_ringNext(f->tailS);
+		}
+		seqc_sumsAdd(&f->lng, seqc_ringX(f->tailL), seqc_ringY(f->tailL), -1.0);
+		f->tailL = seqc_ringNext(f->tailL);
+		moved = true;
+	}
+	while (f->tailS != f->head && p.clock - seqc_sl.ringClock[f->tailS] > shortW)
+	{
+		seqc_sumsAdd(&f->sht, seqc_ringX(f->tailS), seqc_ringY(f->tailS), -1.0);
+		f->tailS = seqc_ringNext(f->tailS);
+	}
+	if (f->tailL == f->head)
+	{
+		/* p is the only point: the base */
+		seqc_fitClearWindows();
+		f->baseClock = p.clock;
+		f->baseStamp = p.stamp;
+	}
+	else if (moved)
+		seqc_fitRebase();
+	seqc_sl.ringClock[f->head] = p.clock;
+	seqc_sl.ringStamp[f->head] = (uint32_t)p.stamp;
+	f->head = seqc_ringNext(f->head);
+	const double x = (double)(uint32_t)(p.clock - f->baseClock);
+	const double y = (double)(p.stamp - f->baseStamp);
+	seqc_sumsAdd(&f->lng, x, y, 1.0);
+	seqc_sumsAdd(&f->sht, x, y, 1.0);
+}
+//------------------------------------------------------------------------------
+/** the long window becomes the short one when their slopes differ by more than
+ * the steps can explain: SEQC_TEMPO_SWITCH_STEP times the largest slope error
+ * that steps of the amplitude can give the two windows. The amplitude includes
+ * the offset of the newest point, which may be a step the next point confirms.
+ * Returns the slope of the long window, or of the short one after a switch. */
+static double seqc_fitSwitch(double newestOff)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	const double longSlope = seqc_sumsSlope(&f->lng);
+	if (f->tailS == f->tailL || f->sht.n < 3.0)
+		return longSlope;
+	const double step = newestOff > f->step ? newestOff : f->step;
+	const double shortSlope = seqc_sumsSlope(&f->sht);
+	const double d = shortSlope - longSlope;
+	const double allowed = SEQC_TEMPO_SWITCH_STEP * 1.5 * step
+			* (1.0 / (double)seqc_shortWindow() + 1.0 / (double)seqc_longWindow());
+	if (d <= allowed && -d <= allowed)
+		return longSlope;
+	f->lng = f->sht;
+	f->tailL = f->tailS;
+	seqc_fitRebase();
+	f->drift = 0.0;		/* the slope changes: the offsets start again */
+	f->haveLastOff = false;
+	return shortSlope;
+}
+//------------------------------------------------------------------------------
+/** the point of a complete transfer goes into the fit. Returns true if it was
+ * left out as an outlier, without a restart. */
+static bool seqc_fitPoint(seqc_point_t p)
+{
+	seqc_fit_t *f = &seqc_sl.fit;
+	const bool jack = seqc.mode == SEQC_SYNC_ANALOG;
+	/* Steps of the stamps. How far an interval is from the slope, less the drift
+	 * (the recent mean of that, which a ramp moves slowly), is its offset.
+	 * Stamps quantized to buffers, or with jitter, stay near the true times: the
+	 * next offset turns back or stops (opposite sign, or under half), and the
+	 * offset was a step of the stamps. A tempo change makes the offsets after it
+	 * go on to the same side, falling only as the drift follows. */
+	double step = f->step * (1.0 - SEQC_TEMPO_STEP_DECAY);
+	double dev = 0.0, off = 0.0;
+	bool haveDev = false;
+	if (f->havePrev && f->slope > 0.0)
+	{
+		dev = (double)(p.stamp - f->prev.stamp) - f->slope * (double)(p.clock - f->prev.clock);
+		off = dev - f->drift;
+		if (f->haveLastOff)
+		{
+			const double a = off < 0.0 ? -off : off;
+			const double b = f->lastOff < 0.0 ? -f->lastOff : f->lastOff;
+			if (((off < 0.0) != (f->lastOff < 0.0) || a < 0.5 * b) && b > step)
+				step = b;
+		}
+		haveDev = true;
+	}
+	f->step = step;
+	if (f->slope > 0.0 && seqc_fitSpan() >= (double)(seqc_shortWindow() / 2u))
+	{
+		/* MIDI: how far the point is from the long window's line. The jack: how
+		 * far its interval, one pulse, is from the slope; its stamps are exact,
+		 * so a point that is off the line after a good interval came after a
+		 * lost or an extra pulse, and the line goes on from it. */
+		double r = dev;
+		if (!jack)
+		{
+			const double x = (double)(uint32_t)(p.clock - f->baseClock);
+			r = (double)(p.stamp - f->baseStamp) - seqc_sumsAt(&f->lng, x, f->slope);
+		}
+		double band = f->slope * (SEQC_TEMPO_OUTLIER_PCT / 100.0);
+		if (band < SEQC_TEMPO_BAND_STEP * f->step)
+			band = SEQC_TEMPO_BAND_STEP * f->step;
+		if (r > band || -r > band)
+		{
+			const bool late = r > 0.0;
+			if (f->rowCount == 0 || late != f->rowLate)
+			{
+				f->rowCount = 0;
+				f->rowLate = late;
+				f->rowResidual = r;
+				f->stepBeforeRow = f->step;
+			}
+			f->row[f->rowCount++] = p;
+			f->prev = p;
+			f->lastOff = off;
+			f->haveLastOff = !jack;		/* a jack outlier is no step of the stamps */
+			if (f->rowCount < (seqc_jack4() ? SEQC_TEMPO_RESTART_4PPQ : SEQC_TEMPO_RESTART))
+			{
+				if (jack)	/* left out: the line goes on as if the interval had the slope */
+					f->phase += (int64_t)(dev < 0.0 ? dev - 0.5 : dev + 0.5);
+				seqc.stats.intervalsExcluded++;
+				return true;
+			}
+			/* a tempo jump: the fit restarts from the row alone */
+			const uint8_t count = f->rowCount;
+			seqc_fitClearWindows();
+			for (uint8_t i = 0; i < count; i++)
+				seqc_fitAdd(f->row[i]);
+			f->rowCount = 0;
+			f->phase = 0;
+			f->drift = 0.0;
+			f->haveLastOff = false;
+			f->slope = seqc_sumsSlope(&f->lng);
+			seqc.stats.tempoRestarts++;
+			return false;
+		}
+		const double rr = f->rowResidual < 0.0 ? -f->rowResidual : f->rowResidual;
+		if (f->rowCount > 0 && (r < 0.0 ? -r : r) < 0.5 * rr)
+		{
+			/* back near the line: the outliers before were a glitch, not a step of
+			 * the stamps */
+			f->step = f->stepBeforeRow * (1.0 - SEQC_TEMPO_STEP_DECAY) * (1.0 - SEQC_TEMPO_STEP_DECAY);
+			haveDev = false;
+		}
+	}
+	f->lastOff = off;
+	f->haveLastOff = haveDev;
+	if (haveDev)
+		f->drift += (dev - f->drift) * SEQC_TEMPO_DRIFT_GAIN;
+	f->rowCount = 0;
+	seqc_fitAdd((seqc_point_t){ p.stamp - (uint64_t)f->phase, p.clock });
+	f->slope = seqc_fitSwitch(haveDev ? (off < 0.0 ? -off : off) : 0.0);
+	f->havePrev = true;
+	f->prev = p;
+	return false;
+}
+//------------------------------------------------------------------------------
+/** forget the fit and the transfer being collected (the last known tempo stays) */
 static void seqc_clearEstimate(void)
 {
-	seqc_sl.intervalCount = 0;
-	seqc_sl.intervalNext = 0;
-	seqc_sl.intervalSum = 0;
-	seqc_sl.runCount = 0;
+	seqc_fit_t *f = &seqc_sl.fit;
+	seqc_fitClearWindows();
+	f->havePrev = false;
+	f->rowCount = 0;
+	f->phase = 0;
+	f->step = 0.0;
+	f->drift = 0.0;
+	f->haveLastOff = false;
+	f->slope = 0.0;
+	seqc_sl.transferOpen = false;
+	seqc_sl.joinable = false;
 }
 //------------------------------------------------------------------------------
-/** add a clock interval to the window of the estimate */
-static void seqc_windowAdd(uint32_t dt, uint8_t window)
+/** the transfer being collected is complete: its point goes into the fit, and
+ * the estimate follows the slope. A MIDI transfer left out as an outlier stays
+ * joinable: the fit before it is kept, see seqc_tempoClock(). */
+static void seqc_transferDone(void)
 {
-	if (seqc_sl.intervalCount < window)
-		seqc_sl.intervalCount++;
-	else
-		seqc_sl.intervalSum -= seqc_sl.interval[seqc_sl.intervalNext];
-	seqc_sl.interval[seqc_sl.intervalNext] = dt;
-	seqc_sl.intervalSum += dt;
-	seqc_sl.intervalNext = (uint8_t)((seqc_sl.intervalNext + 1u) % window);
+	const bool midi = seqc.mode == SEQC_SYNC_MIDI;
+	seqc_sl.transferOpen = false;
+	if (midi)
+		seqc_sl.fitBefore = seqc_sl.fit;
+	seqc_sl.joinable = seqc_fitPoint(seqc_sl.transfer) && midi;
+	if (seqc_sl.fit.slope > 0.0)
+		seqc_setSlaveBpm(seqc_ticksPerClock() / seqc_sl.fit.slope * (double)seqc.cyclesPerSecond * 60.0
+				/ SEQC_TICKS_PER_BEAT);
 }
 //------------------------------------------------------------------------------
-/** a measured clock interval, in cycles (N9, N16):
- * - an interval more than SEQC_TEMPO_OUTLIER_PCT off the mean is an outlier and
- *   is left out, unless it completes a tempo jump;
- * - a tempo jump is SEQC_TEMPO_RESTART outliers in a row on the same side of
- *   the mean (SEQC_TEMPO_RESTART_4PPQ for the jack at 4 PPQ): the estimate
- *   restarts from them alone. An inlier, or an outlier on the other side, ends
- *   the row;
- * - an interval of 0 (clocks of one USB packet share a stamp) is left out and
- *   ends the row: the packet came late, so the interval before the 0 is no
- *   sign of a new tempo either. So is any interval under half a clock at
- *   SEQC_SLAVE_BPM_MAX (4.17 ms at 24 PPQ, 25 ms at 4 PPQ): a bunch with tiny
- *   gaps (DIN-forwarded 0xF8 bytes 0.32 ms apart, USB transfers stamped
- *   microseconds apart) is the same late packet. */
-static void seqc_tempoInterval(uint32_t dt)
+/** true if a clock stamped at stamp belongs to the last transfer: not stamped
+ * later than it, or, for MIDI clock, less than SEQC_TEMPO_JOIN_MS later (a
+ * burst of clocks forwarded back to back) */
+static bool seqc_inTransfer(seqc_time_t stamp)
 {
-	const bool jack4 = seqc.mode == SEQC_SYNC_ANALOG && seqc_sl.ppq != 24;
-	const uint8_t window = jack4 ? SEQC_TEMPO_WINDOW_4PPQ : SEQC_TEMPO_WINDOW;
-	if (dt < (uint32_t)(0.5 * seqc_ticksPerClock() / seqc_ticksPerCycle(SEQC_SLAVE_BPM_MAX)))
-	{
-		seqc.stats.intervalsExcluded++;
-		seqc_sl.runCount = 0;
-		return;
-	}
-	/* |dt - mean| > mean * pct / 100, with mean = sum / count */
-	const uint64_t scaled = (uint64_t)dt * seqc_sl.intervalCount;
-	const bool longer = scaled > seqc_sl.intervalSum;
-	const uint64_t dev = longer ? scaled - seqc_sl.intervalSum : seqc_sl.intervalSum - scaled;
-	if (seqc_sl.intervalCount > 0 && dev * 100u > seqc_sl.intervalSum * SEQC_TEMPO_OUTLIER_PCT)
-	{
-		if (seqc_sl.runCount > 0 && longer != seqc_sl.runLonger)
-			seqc_sl.runCount = 0;
-		seqc_sl.runLonger = longer;
-		seqc_sl.run[seqc_sl.runCount++] = dt;
-		if (seqc_sl.runCount < (jack4 ? SEQC_TEMPO_RESTART_4PPQ : SEQC_TEMPO_RESTART))
-		{
-			seqc.stats.intervalsExcluded++;
-			return;
-		}
-		/* a tempo jump: restart from the row alone, as after a dropout */
-		const uint8_t count = seqc_sl.runCount;
-		seqc_clearEstimate();
-		for (uint8_t i = 0; i < count; i++)
-			seqc_windowAdd(seqc_sl.run[i], window);
-		seqc.stats.tempoRestarts++;
-	}
-	else
-	{
-		seqc_sl.runCount = 0;
-		seqc_windowAdd(dt, window);
-	}
-	const double mean = (double)seqc_sl.intervalSum / seqc_sl.intervalCount;
-	seqc_setSlaveBpm(seqc_ticksPerClock() / mean * (double)seqc.cyclesPerSecond * 60.0 / SEQC_TICKS_PER_BEAT);
+	const seqc_time_t t = seqc_sl.transfer.stamp;
+	return stamp <= t || (seqc.mode == SEQC_SYNC_MIDI
+			&& stamp - t < (seqc_time_t)seqc.cyclesPerSecond * SEQC_TEMPO_JOIN_MS / 1000u);
 }
 //------------------------------------------------------------------------------
-/** the tempo part of a clock: the interval since the last clock, from the raw
- * stamps. After a dropout the interval is not used. */
+/** true if a sync event is one more clock of the last transfer: a clock of the
+ * sync mode that seqc_inTransfer() takes */
+static bool seqc_sameTransfer(seqc_sync_ev_t ev, seqc_time_t stamp)
+{
+	const bool clock = (ev == SEQC_EV_CLOCK && seqc.mode == SEQC_SYNC_MIDI)
+			|| (ev == SEQC_EV_PULSE && seqc.mode == SEQC_SYNC_ANALOG);
+	return clock && seqc_inTransfer(stamp);
+}
+//------------------------------------------------------------------------------
+/** the tempo part of a clock (N9, N15, N21). A clock with the stamp of the
+ * transfer being collected, or an earlier one, is one more clock of it, and so
+ * is a MIDI clock less than SEQC_TEMPO_JOIN_MS after it; any other clock begins
+ * the next transfer. After a dropout the fit starts again, and the gap is not
+ * used. */
 static void seqc_tempoClock(seqc_time_t stamp)
 {
 	if (seqc_sl.haveStamp)
@@ -888,12 +1248,35 @@ static void seqc_tempoClock(seqc_time_t stamp)
 				seqc.stats.dropouts++;
 			seqc_clearEstimate();
 		}
-		else
-			seqc_tempoInterval((uint32_t)dt);
 	}
 	seqc_sl.haveStamp = true;
 	seqc_sl.lastStamp = stamp;
 	seqc_sl.droppedOut = false;
+
+	const uint32_t clock = ++seqc_sl.fitClock;
+	if (seqc_sl.joinable && seqc_inTransfer(stamp))
+	{
+		/* A burst: DIN interfaces forward a late buffer as back-to-back clocks,
+		 * 0.32 ms apart, each in its own seq_tick(). The last transfer, left out
+		 * as an outlier, was its head: the fit goes back to before it, and the
+		 * transfer takes this clock too. */
+		seqc_sl.fit = seqc_sl.fitBefore;
+		if (seqc.stats.intervalsExcluded > 0)
+			seqc.stats.intervalsExcluded--;
+		seqc_sl.transferOpen = true;
+	}
+	seqc_sl.joinable = false;
+	if (seqc_sl.transferOpen)
+	{
+		/* one more clock of the transfer: seqc_syncEvent() completed it
+		 * before this clock otherwise. Its stamp is that of its latest clock. */
+		seqc_sl.transfer.clock = clock;
+		if (stamp > seqc_sl.transfer.stamp)
+			seqc_sl.transfer.stamp = stamp;
+		return;
+	}
+	seqc_sl.transferOpen = true;
+	seqc_sl.transfer = (seqc_point_t){ stamp, clock };
 }
 
 //------------------------------------------------------------------------------
@@ -1067,10 +1450,11 @@ static seqc_time_t seqc_slaveDue(seqc_item_t item, seqc_tick_t tick)
 	return due;
 }
 //------------------------------------------------------------------------------
-/** work out nextDue (N10) */
+/** work out nextDue (N10). While a transfer is being collected, the next
+ * seqc_process() evaluates it (N21). */
 static void seqc_schedule(void)
 {
-	if (!seqc.haveTime || seqc.startPending)
+	if (!seqc.haveTime || seqc.startPending || seqc_sl.transferOpen)
 	{
 		seqc.nextDue = 0;
 		return;
@@ -1228,7 +1612,7 @@ void seqc_setTempo(float bpm)
 	seqc.masterBpm = b;
 	seqc.ticksPerCycle = seqc_ticksPerCycle(b);
 	seqc.cyclesPerTick = 1.0 / seqc.ticksPerCycle;
-	if (seqc_sl.intervalCount == 0)
+	if (seqc_sl.fit.slope <= 0.0)
 		seqc_setSlaveBpm(b);	/* the first estimate while nothing is measured */
 	seqc_leave();
 }
@@ -1288,6 +1672,12 @@ void seqc_syncEvent(seqc_sync_ev_t ev, seqc_time_t stamp)
 {
 	if (!seqc_enter())
 		return;
+	if (!seqc_sameTransfer(ev, stamp))
+	{
+		if (seqc_sl.transferOpen)
+			seqc_transferDone();	/* the transfer being collected is complete (N21) */
+		seqc_sl.joinable = false;	/* and the last one takes no more clocks */
+	}
 	seqc_advance(stamp);
 
 	const bool midi = seqc.mode == SEQC_SYNC_MIDI;
@@ -1362,6 +1752,8 @@ void seqc_process(seqc_time_t now)
 	}
 	if (!seqc_enter())
 		return;
+	if (seqc_sl.transferOpen)
+		seqc_transferDone();	/* seq_tick() drains every queued clock before this call (N21) */
 	seqc_advance(now);
 	seqc_leave();
 }

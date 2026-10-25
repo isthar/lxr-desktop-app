@@ -18,7 +18,7 @@
  * the host.
  *
  * Design: docs/superpowers/specs/2026-10-23-timing-core-design.md (the spec) and
- * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N18;
+ * docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N21;
  * they win where the two differ).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
@@ -201,9 +201,12 @@
 #define SEQC_MASTER_BPM_MAX       300.0f
 #define SEQC_SLAVE_BPM_MIN         20.0f  /**< the slave tempo estimate is clamped to this range */
 #define SEQC_SLAVE_BPM_MAX        300.0f
-#define SEQC_TEMPO_WINDOW           24u   /**< clock intervals averaged: MIDI clock, jack at 24 PPQ */
-#define SEQC_TEMPO_WINDOW_4PPQ       4u   /**< clock intervals averaged: jack at 4 PPQ */
-#define SEQC_TEMPO_OUTLIER_PCT      50u   /**< an interval off the mean by more than this is an outlier */
+#define SEQC_TEMPO_WINDOW           24u   /**< short window of the tempo fit, clocks: MIDI clock, jack at 24 PPQ */
+#define SEQC_TEMPO_WINDOW_4PPQ       4u   /**< short window of the tempo fit, clocks: jack at 4 PPQ */
+#define SEQC_TEMPO_LONG_WINDOW      96u   /**< long window of the tempo fit, clocks: MIDI clock, jack at 24 PPQ (N21) */
+#define SEQC_TEMPO_LONG_WINDOW_4PPQ  4u   /**< long window of the tempo fit, clocks: jack at 4 PPQ (the short one) */
+#define SEQC_TEMPO_OUTLIER_PCT      50u   /**< a clock off the fitted line by more than this share of a clock is an outlier */
+#define SEQC_TEMPO_JOIN_MS           2u   /**< MIDI clocks less than this apart are one transfer of the tempo fit (N21) */
 #define SEQC_TEMPO_RESTART           4u   /**< outliers in a row on one side that restart the estimate (N16) */
 #define SEQC_TEMPO_RESTART_4PPQ      2u   /**< the same for the jack at 4 PPQ */
 #define SEQC_DROPOUT_MS            500u   /**< the shortest dropout time; slow clocks get longer (N15) */
@@ -305,7 +308,7 @@ typedef struct seqc_stats
 	uint32_t muteDrops;		/**< events dropped when they fired because their track was muted */
 	uint32_t skipDrops;		/**< step occurrences not played because of seqc_skipOnce() */
 	uint32_t syncIgnored;		/**< sync events and song positions that did nothing (seqc_sync_ev_t) */
-	uint32_t intervalsExcluded;	/**< clock intervals left out of the tempo estimate (outliers) */
+	uint32_t intervalsExcluded;	/**< transfers of clocks left out of the tempo fit (outliers, N21) */
 	uint32_t dropouts;		/**< slave clock dropouts: no clock for the dropout time (N15) */
 	uint32_t reentries;		/**< calls ignored because they came from inside a callback */
 	uint32_t tempoRestarts;		/**< slave tempo estimates restarted after a tempo jump (N16) */
@@ -431,9 +434,10 @@ void seqc_setTempo(float bpm);
 //------------------------------------------------------------------------------
 /** Set the PPQ of the clock in jack, 4 or 24 (PAR_PRESCALER_CLOCK_IN). Any other
  * value counts as 4.
- * - 4 PPQ: one pulse is 96 ticks and one step, and 4 intervals are averaged.
- * - 24 PPQ: one pulse is 16 ticks, 6 pulses make a step, and 24 intervals are
- *   averaged.
+ * - 4 PPQ: one pulse is 96 ticks and one step; the tempo fit uses the last
+ *   4 intervals.
+ * - 24 PPQ: one pulse is 16 ticks, 6 pulses make a step; the tempo fit uses
+ *   windows of 24 and 96 intervals, as for MIDI clock.
  * The change applies from the next pulse. In analog sync the tempo estimate is
  * cleared and the clock count restarts, also when the value is the same. In the
  * other modes the value is only kept for analog sync: the MIDI clock count and
@@ -505,23 +509,44 @@ void seqc_setAnalogPpq(uint8_t ppq);
  * - Between clocks, the position advances at the estimated tempo. It is clamped
  *   to the next target, so it never runs ahead of the incoming clock, and it
  *   never goes back.
- * - The estimate is the mean of the last SEQC_TEMPO_WINDOW intervals
- *   (SEQC_TEMPO_WINDOW_4PPQ for the jack at 4 PPQ), clamped to
- *   SEQC_SLAVE_BPM_MIN..MAX. An interval more than SEQC_TEMPO_OUTLIER_PCT
- *   longer or shorter than the mean is an outlier and is left out, unless it
- *   completes a tempo jump. Without a measured interval, the last known tempo
- *   is used.
+ * - The estimate (N21) is the slope of a least-squares fit of the clock stamps
+ *   against the clock count: the clock period. It is clamped to
+ *   SEQC_SLAVE_BPM_MIN..MAX. Without a fitted slope (fewer than two points),
+ *   the last known tempo is used.
+ * - Clocks that share a stamp, as the clocks of one USB transfer do, form a
+ *   transfer: one point of the fit, at its last clock. A transfer is evaluated
+ *   once it is complete, at the next clock with a later stamp, the next other
+ *   sync event or the next seqc_process(), so seqc_currentBpm() includes the
+ *   clocks given to seqc_syncEvent() from the next seqc_process() on.
+ * - A MIDI clock less than SEQC_TEMPO_JOIN_MS after a transfer joins it, and
+ *   takes its stamp: a burst of clocks forwarded back to back (a DIN interface
+ *   sends one 0xF8 per 0.32 ms) is one transfer, even when the core sees its
+ *   clocks one by one. If the transfer was already evaluated and left out as an
+ *   outlier, the fit goes back to before it, and intervalsExcluded does not
+ *   count it.
+ * - The fit has two windows: the points of the last SEQC_TEMPO_WINDOW clocks
+ *   and of the last SEQC_TEMPO_LONG_WINDOW clocks (SEQC_TEMPO_WINDOW_4PPQ and
+ *   SEQC_TEMPO_LONG_WINDOW_4PPQ for the jack at 4 PPQ, where both are the same).
+ *   The estimate is the slope of the long window. When the short window's
+ *   slope differs from it by more than the steps of the stamps can explain, the
+ *   long window drops its older points and becomes the short one, so a tempo
+ *   change is followed within the short window.
+ * - MIDI clock: a point further from the long window's fitted line than
+ *   SEQC_TEMPO_OUTLIER_PCT of a clock is an outlier and is left out, unless it
+ *   completes a tempo jump. Where the stamps move in steps (quantized to the
+ *   host's audio buffers), the band is wider: about the size of the steps.
+ * - Clock in jack: an interval more than SEQC_TEMPO_OUTLIER_PCT off the fitted
+ *   slope is an outlier and is left out, unless it completes a tempo jump; the
+ *   fit goes on as if it had had the slope, so a lost or an extra pulse does
+ *   not move the estimate.
+ * - The points of the first half short window after a start of the fit are not
+ *   tested.
  * - A tempo jump (N16): after SEQC_TEMPO_RESTART outliers in a row on the same
- *   side of the mean, all longer or all shorter (SEQC_TEMPO_RESTART_4PPQ for
- *   the jack at 4 PPQ), the estimate restarts from those intervals alone. An
- *   interval inside the band, or an outlier on the other side, ends the row. In
- *   tempo, the band takes in anything from two thirds of the estimate up to
- *   twice it.
- * - An interval of 0 (the clocks of one USB packet share a stamp) is left out
- *   and ends the row: the packet came late, so the interval before the 0 is no
- *   sign of a new tempo either. So is any interval shorter than half a clock
- *   at SEQC_SLAVE_BPM_MAX: bunched clocks with tiny gaps (DIN-forwarded bytes,
- *   USB transfers stamped microseconds apart) are the same late packet.
+ *   side, all late or all early (SEQC_TEMPO_RESTART_4PPQ for the jack at
+ *   4 PPQ), the fit restarts from those outliers alone, as after a dropout. A
+ *   point inside the band, or an outlier on the other side, ends the row. For
+ *   MIDI clock, a tempo change that takes the clocks out of the band within a
+ *   few clocks (about 15% or more) restarts the fit this way too.
  * - The dropout time is SEQC_DROPOUT_MS, or two expected clock intervals if
  *   that is longer (N15). The interval comes from the estimate, or from
  *   SEQC_SLAVE_BPM_MIN while there is none, so a slow jack clock at 4 PPQ can
