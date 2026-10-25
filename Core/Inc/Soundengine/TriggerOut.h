@@ -100,6 +100,7 @@ void trigger_triggerVoice(uint8_t voice, triggerMode mode);
 #endif
 void trigger_clockTick(uint8_t onOff, uint8_t cnt);//the sequencer calls this function whenever a step is played to generate corresponding trigger out clocks
 void trigger_reset(uint8_t value);
+void trigger_setClockPhase(uint8_t pulse);//the clock out divider's count, 0..95 over four steps
 //void trigger_tickPhaseCounter();
 //uint8_t trigger_isGateModeOn();
 //void trigger_setGatemode(uint8_t onOff);	//if gate mode is on, the trigger out will be high until a note off is send

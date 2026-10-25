@@ -555,6 +555,15 @@ void trigger_clockTick(uint8_t onOff, uint8_t cnt)
 #endif
 }
 //--------------------------------------------------
+/** LICHOMAT: put the clock out divider at pulse 0..95 of the 96 PPQN grid, counted
+ * over four steps, before the next trigger_clockTick(). The sequencer calls it with
+ * the transport position, so the output stays on the step grid after a Continue
+ * from inside a step or after a song position. */
+void trigger_setClockPhase(uint8_t pulse)
+{
+	trigger_nextPulseOut1 = pulse % 96;
+}
+//--------------------------------------------------
 void trigger_reset(uint8_t value)
 {
 	trigger_setPin(TRIGGER_RESET,1-value);

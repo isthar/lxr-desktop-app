@@ -23,6 +23,7 @@ The tools live in `.toolchain/` (git-ignored, about 1.4 GB). Nothing is installe
 tools/setup-toolchain.sh   # downloads Arm GNU 14.3.rel1, CMake 3.31.12, Ninja 1.13.2 if missing (SHA-256 checked)
 source tools/env.sh        # puts them on PATH (bash or zsh), sets ARM_TOOLCHAIN_DIR
 tools/check.sh             # host tests + release build + memory summary + warning count; non-zero exit on failure
+tools/fw_checks.sh         # after check.sh: ELF and source checks of the firmware integration (E2.2-E2.6)
 ```
 
 The release image lands in `build/release/`, and the full log of the last check in `build/check.log`.

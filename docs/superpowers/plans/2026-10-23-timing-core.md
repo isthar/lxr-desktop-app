@@ -14787,7 +14787,7 @@ jack only from E2.5 on. **Do not test the slave modes on a build between E2.2 an
 - Modify: `docs/lichomat/HANDOFF.md` (one line in the toolchain block)
 - Test: `tools/fw_checks.sh E2.2` (release ELF and sources); the host tests must stay green
 
-- [ ] **Step 1: Write the failing check**
+- [x] **Step 1: Write the failing check**
 
 The glue needs the hardware, so its tests are checks of the release ELF and of the sources:
 - symbols that must be linked or gone;
@@ -14894,7 +14894,7 @@ Run:
 chmod +x tools/fw_checks.sh
 ```
 
-- [ ] **Step 2: Run it and see it fail**
+- [x] **Step 2: Run it and see it fail**
 
 Run:
 
@@ -14944,7 +14944,7 @@ FAIL E2.2: seq_cbClockOutPulse is not linked
 
 The exit status is 1.
 
-- [ ] **Step 3: Include the core and the platform layer**
+- [x] **Step 3: Include the core and the platform layer**
 
 Lines 25-30 of `Core/Src/Soundengine/Sequencer/sequencer.c` (fw 1.7). `clockSync.h` is not needed any more; `clockSync.c` still has it.
 
@@ -14971,7 +14971,7 @@ with:
 #include "Soundengine/MIDI/MidiParser.h"
 ```
 
-- [ ] **Step 4: Remove the variables of the pulse machine**
+- [x] **Step 4: Remove the variables of the pulse machine**
 
 These sit in fw 1.7 lines 45-75:
 - the prescaler masks, `seq_prescaleCounter` (it returns as a shim in Step 6) and
@@ -15005,7 +15005,7 @@ EOF
 
 Expected output: `deleted 6 pieces from Core/Src/Soundengine/Sequencer/sequencer.c`
 
-- [ ] **Step 5: Remove the random values and the shuffle table**
+- [x] **Step 5: Remove the random values and the shuffle table**
 
 `seq_rndValue` (fw 1.7 lines 98-105), `seq_shuffleTable` and `seq_lastShuffle` (lines 119-139). The core draws the probability (§6.1) and computes the swing.
 
@@ -15029,7 +15029,7 @@ EOF
 
 Expected output: `deleted 2 pieces from Core/Src/Soundengine/Sequencer/sequencer.c`
 
-- [ ] **Step 6: Add the glue state, the mailbox and the transitional shims**
+- [x] **Step 6: Add the glue state, the mailbox and the transitional shims**
 
 This replaces fw 1.7 lines 171-179: the prototype of `seq_setStepIndexToStart()`, `lastWasNoteOn`
 and `seq_getMasterStepCnt()`. In their place come:
@@ -15214,7 +15214,7 @@ void seq_sync()
 }
 ```
 
-- [ ] **Step 7: Set up the core in `seq_init()`**
+- [x] **Step 7: Set up the core in `seq_init()`**
 
 The skip markers and the step indices are the core's now (fw 1.7 lines 192-199).
 
@@ -15261,7 +15261,7 @@ with:
 }
 ```
 
-- [ ] **Step 8: Remove `seq_getDeltaTShuffleDelay()` and `seq_calcDeltaT()`**
+- [x] **Step 8: Remove `seq_getDeltaTShuffleDelay()` and `seq_calcDeltaT()`**
 
 fw 1.7 lines 354-436. `seq_getDeltaTShuffleDelay()` returns as a shim in the block of Step 6.
 
@@ -15285,7 +15285,7 @@ EOF
 
 Expected output: `deleted 83 lines from Core/Src/Soundengine/Sequencer/sequencer.c`
 
-- [ ] **Step 9: Post the master tempo; remove `seq_sync()`**
+- [x] **Step 9: Post the master tempo; remove `seq_sync()`**
 
 In `seq_setBpm()` (fw 1.7 lines 440-441):
 
@@ -15319,7 +15319,7 @@ void seq_sync()
 }
 ```
 
-- [ ] **Step 10: Rewind after a pattern switch while stopped**
+- [x] **Step 10: Rewind after a pattern switch while stopped**
 
 In fw 1.7 the switch reset the track indices (`seq_setStepIndexToStart()` inside
 `seq_setPendingPatternActive()`). Now the core has to rewind, or a MIDI Continue would resume the
@@ -15347,7 +15347,7 @@ with:
 	}
 ```
 
-- [ ] **Step 11: `seq_triggerVoice()`: the step from the copy, never step -1**
+- [x] **Step 11: `seq_triggerVoice()`: the step from the copy, never step -1**
 
 `seq_triggerVoice()` now serves only the one-shot roll (N11), and `seq_tick()` calls it. It keeps
 the current step's p-locks, as fw 1.7 did. Before the first step it uses none, and it sends the
@@ -15409,7 +15409,7 @@ with:
 	seq_sendMidiNoteOn(midiChan, midiNote, stepData ? (stepData->volume&STEP_VOLUME_MASK) : vol);
 ```
 
-- [ ] **Step 12: `seq_setPendingPatternActive()`: out of ITCM, no index reset**
+- [x] **Step 12: `seq_setPendingPatternActive()`: out of ITCM, no index reset**
 
 The duplicate `#include "Soundengine/MIDI/Uart.h"` above the function goes. So do `IN_ITCM_RAM`
 (N11) and the writes of the write-only flag `midi_process_block`. The index reset goes too: the
@@ -15462,7 +15462,7 @@ with:
 }
 ```
 
-- [ ] **Step 13: Remove `seq_getLongestTrack()`, the pulse machine and `seq_nextStep()`**
+- [x] **Step 13: Remove `seq_getLongestTrack()`, the pulse machine and `seq_nextStep()`**
 
 fw 1.7 lines 829-1516:
 - `seq_getLongestTrack()`, `getShiftValue()`, `flamIdxToPattern()` and `seq_getShiftFlamPattern()`;
@@ -15492,7 +15492,7 @@ EOF
 
 Expected output: `deleted 688 lines from Core/Src/Soundengine/Sequencer/sequencer.c`
 
-- [ ] **Step 14: Post the sync mode in `seq_setExtSync()`**
+- [x] **Step 14: Post the sync mode in `seq_setExtSync()`**
 
 fw 1.7 lines 1523-1526:
 
@@ -15517,7 +15517,7 @@ void seq_setExtSync(uint8_t isExt)
 }
 ```
 
-- [ ] **Step 15: Remove the old `seq_tick()`; the step phase comes from the core**
+- [x] **Step 15: Remove the old `seq_tick()`; the step phase comes from the core**
 
 fw 1.7 lines 1538-1857:
 - `seq_setDeltaT()`, `seq_triggerNextMasterStep()` and the commented `seq_resetDeltaAndTick()`;
@@ -15570,7 +15570,7 @@ float seq_getElapsedStepTimePercent()
 void seq_setQuantisation(uint8_t value)
 ```
 
-- [ ] **Step 16: `seq_resetPosition()` and `seq_setRunning()` post to the mailbox**
+- [x] **Step 16: `seq_resetPosition()` and `seq_setRunning()` post to the mailbox**
 
 fw 1.7 lines 1913-1981. Their side effects move to the `transport` callback (Step 22):
 - MIDI Stop and MIDI Start;
@@ -15633,7 +15633,7 @@ void seq_setRunning(uint8_t isRunning)
 void seq_setSongModeEnabled(uint8_t onOff)
 ```
 
-- [ ] **Step 17: `seq_setMute()` out of ITCM**
+- [x] **Step 17: `seq_setMute()` out of ITCM**
 
 N11 (fw 1.7 line 2047):
 
@@ -15649,7 +15649,7 @@ with:
 void seq_setMute(uint8_t trackNr, uint8_t isMuted)
 ```
 
-- [ ] **Step 18: One-shot roll through the mailbox**
+- [x] **Step 18: One-shot roll through the mailbox**
 
 `seq_setRoll()` runs in the main loop (front panel). The one-shot trigger and its recording need
 the core's step and phase, so `seq_tick()` does them (fw 1.7 lines 2161-2164). The periodic roll
@@ -15671,7 +15671,7 @@ with:
 			seq_postOneShotRoll(voice);
 ```
 
-- [ ] **Step 19: `seq_recordAutomation()` reads the step copy**
+- [x] **Step 19: `seq_recordAutomation()` reads the step copy**
 
 It runs in the main loop (front-panel knobs) and in MIDI parsing. Before the first step it records nothing; fw 1.7 read `seq_mainSteps[15]` there (fw 1.7 lines 2309-2312).
 
@@ -15692,7 +15692,7 @@ with:
 		const uint8_t step = seq_stepCopy[voice];
 ```
 
-- [ ] **Step 20: `seq_addNote()` with the skip-once marker, and `seq_recordNoteAtStep()`**
+- [x] **Step 20: `seq_addNote()` with the skip-once marker, and `seq_recordNoteAtStep()`**
 
 The head of `seq_addNote()` (fw 1.7 lines 2363-2408) has dead code with tabs inside lines, so a
 script removes it first. Then the new head goes in:
@@ -15772,7 +15772,7 @@ void seq_recordNoteAtStep(uint8_t targetPattern, uint8_t trackNr, uint8_t step, 
 		//set the current step in the requested track active
 ```
 
-- [ ] **Step 21: `seq_getStepIndex()` reads the step copy**
+- [x] **Step 21: `seq_getStepIndex()` reads the step copy**
 
 Its only caller is `buttonHandler.c:1528`, in the main loop, and it tests for 255 (fw 1.7 lines 2745-2748).
 
@@ -15795,7 +15795,7 @@ uint8_t seq_getStepIndex(uint8_t trackNr)
 }
 ```
 
-- [ ] **Step 22: Replace `seq_setStepIndexToStart()` with the callbacks and the new `seq_tick()`**
+- [x] **Step 22: Replace `seq_setStepIndexToStart()` with the callbacks and the new `seq_tick()`**
 
 `seq_setStepIndexToStart()` and its comment end the file (fw 1.7 lines 2766-2803). The core owns
 the indices now. Delete it first:
@@ -16412,7 +16412,7 @@ void seq_tick()
 }
 ```
 
-- [ ] **Step 23: Update the prototypes in `sequencer.h`; add `trigger_setClockPhase()`**
+- [x] **Step 23: Update the prototypes in `sequencer.h`; add `trigger_setClockPhase()`**
 
 `seq_processFlam()` is gone (fw 1.7 header lines 172-175). `seq_nextStep()` stays declared for `clockSync.c` until E2.6:
 
@@ -16521,7 +16521,7 @@ void trigger_reset(uint8_t value);
 void trigger_setClockPhase(uint8_t pulse);//the clock out divider's count, 0..95 over four steps
 ```
 
-- [ ] **Step 24: Mention the checks in the handoff guide**
+- [x] **Step 24: Mention the checks in the handoff guide**
 
 `docs/lichomat/HANDOFF.md`, replace:
 
@@ -16536,7 +16536,7 @@ tools/check.sh             # host tests + release build + memory summary + warni
 tools/fw_checks.sh         # after check.sh: ELF and source checks of the firmware integration (E2.2-E2.6)
 ```
 
-- [ ] **Step 25: Give the edited files CRLF line endings**
+- [x] **Step 25: Give the edited files CRLF line endings**
 
 The Edit tool keeps the line endings of a file, but text it inserts may come out as LF.
 Normalise both files (the script reads each file completely before it writes it):
@@ -16557,7 +16557,7 @@ EOF
 
 Expected: four lines starting with `CRLF`.
 
-- [ ] **Step 26: Build and run the checks**
+- [x] **Step 26: Build and run the checks**
 
 Run:
 
@@ -16584,47 +16584,47 @@ PASS E2.2
   is 6 KB, so expect about 8.5 KB.
 - If a warning shows up, fix it: the count must be 0.
 
-- [ ] **Step 27: Review against fw 1.7**
+- [x] **Step 27: Review against fw 1.7**
 
 Read the diff (`git diff -- Core/Src/Soundengine/Sequencer/sequencer.c`) with this list. Each item
 is fw 1.7 behaviour that must survive:
 
-- [ ] The tempo LED blinks while stopped (`tempoStep` → `led_blinkHandler()`).
-- [ ] MIDI clock out runs while stopped in internal sync, and not at all in the slave modes. It goes
+- [x] The tempo LED blinks while stopped (`tempoStep` → `led_blinkHandler()`).
+- [x] MIDI clock out runs while stopped in internal sync, and not at all in the slave modes. It goes
   out through `seq_sendRealtime()` (TX filter).
-- [ ] **Start** (`transport` START) sends MIDI Start in internal sync, `trigger_reset(1)` and the
+- [x] **Start** (`transport` START) sends MIDI Start in internal sync, `trigger_reset(1)` and the
   save-timer abort, before the first note of step 0.
-- [ ] **Stop** (STOP, then REWIND) sends MIDI Stop in internal sync, `trigger_reset(0)`, all notes
+- [x] **Stop** (STOP, then REWIND) sends MIDI Stop in internal sync, `trigger_reset(0)`, all notes
   off, the blink timer reset and song pointer 255. It also arms the save timer and runs the MTC
   check.
-- [ ] In the slave modes no MIDI Start, Stop or Continue goes out (N18.2): every transport send goes
+- [x] In the slave modes no MIDI Start, Stop or Continue goes out (N18.2): every transport send goes
   through `seq_sendTransport()`, which checks `seq_coreSyncMode`. The checks cover this.
-- [ ] Clock out: `seq_cbClockOutPulse()` sets the divider from `seqc_absStep()` and `pulseInStep`
+- [x] Clock out: `seq_cbClockOutPulse()` sets the divider from `seqc_absStep()` and `pulseInStep`
   before `trigger_clockTick()`, so after a Continue inside a step, or a song position, the jack
   pulses stay on the step grid at every output PPQ.
-- [ ] A song position in song mode that lands in the run of the active pattern changes no pattern:
+- [x] A song position in song mode that lands in the run of the active pattern changes no pattern:
   `seq_loadPendigFlag` is not set, so `seq_setPendingPatternActive()` only refreshes the screen.
-- [ ] A `seq_tick()` without a post, a queued event or anything due masks no interrupt and copies
+- [x] A `seq_tick()` without a post, a queued event or anything due masks no interrupt and copies
   nothing but what changed; the phase copy is refreshed only while recording.
-- [ ] A second stop press still sends all notes off (the mailbox applies it on every rewind post).
-- [ ] At a pattern end, the song advances only when no other pattern is pending. `SONG_LOOP`
+- [x] A second stop press still sends all notes off (the mailbox applies it on every rewind post).
+- [x] At a pattern end, the song advances only when no other pattern is pending. `SONG_LOOP`
   restarts at entry 0. The same pattern still runs `seq_setPendingPatternActive()`, which refreshes
   the UI and consumes `SKIP_NEXT_KIT_AUTOLOAD`.
-- [ ] A pattern change still copies the backup buffer, loads the kit, sends Program Change and all
+- [x] A pattern change still copies the backup buffer, loads the kit, sends Program Change and all
   notes off, and updates the LEDs. All of that is in `seq_setPendingPatternActive()`.
-- [ ] The beat LED follows the master track's local step (`&3`).
-- [ ] Erase works on the front's active track when the track is not muted and the main step is set,
+- [x] The beat LED follows the master track's local step (`&3`).
+- [x] Erase works on the front's active track when the track is not muted and the main step is set,
   and the step LED goes off.
-- [ ] Follow-bar and the chase light use the new indices. The MTC check runs on every step.
-- [ ] Roll: the period counts on the track-local index, and a roll plays on muted tracks too, as
+- [x] Follow-bar and the chase light use the new indices. The MTC check runs on every step.
+- [x] Roll: the period counts on the track-local index, and a roll plays on muted tracks too, as
   in fw 1.7 (the core exempts roll events from mutes). A roll is recorded at its own step. The
   one-shot roll fires when stopped or in one-shot mode.
-- [ ] `seq_isRunning()` is 1 while armed. `seq_getStepIndex()` returns 255 before the first step.
-- [ ] Recording: from 50 % of the step a note goes to the next step and posts a skip-once marker
+- [x] `seq_isRunning()` is 1 while armed. `seq_getStepIndex()` returns 255 before the first step.
+- [x] Recording: from 50 % of the step a note goes to the next step and posts a skip-once marker
   (D6), or sets it in the core at once when it is recorded inside `seq_tick()` (the one-shot roll).
   Nothing is written before the first step. One marker per track reaches the core; the per-track
   markers of the core come with E1.14 (N18.1).
-- [ ] A kit autoload inside a callback runs `soundengine_process()`. The nested `seq_tick()` returns
+- [x] A kit autoload inside a callback runs `soundengine_process()`. The nested `seq_tick()` returns
   at once (`seq_inTick`).
 
 Intended changes, for the stage 1 report (spec §12; E4.1 collects them):
@@ -16642,7 +16642,7 @@ Intended changes, for the stage 1 report (spec §12; E4.1 collects them):
 - **One-shot roll:** it triggers up to one `seq_tick()` later, in the core's context. Its MIDI
   velocity is the roll velocity when no step is current.
 
-- [ ] **Step 28: Commit**
+- [x] **Step 28: Commit**
 
 ```bash
 git add tools/fw_checks.sh docs/lichomat/HANDOFF.md \

@@ -171,8 +171,6 @@ uint8_t seq_isAutomationStepArmed();
 //------------------------------------------------------------------------------
 void seq_nextStep();
 //------------------------------------------------------------------------------
-void seq_processFlam(uint8_t idx);
-//------------------------------------------------------------------------------
 void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note);
 //------------------------------------------------------------------------------
 void seq_setShuffle(float shuffle);
@@ -200,10 +198,6 @@ void seq_armAutomationStep(uint8_t stepNr, uint8_t track,uint8_t isArmed);
 //------------------------------------------------------------------------------
 //void seq_resetDeltaAndTick();
 //------------------------------------------------------------------------------
-void seq_setDeltaT(float delta);
-//------------------------------------------------------------------------------
-void seq_triggerNextMasterStep(uint8_t stepSize);
-//------------------------------------------------------------------------------
 void seq_setBpm(uint16_t bpm);
 //------------------------------------------------------------------------------
 uint16_t seq_getBpm();
@@ -219,6 +213,9 @@ uint8_t seq_getExtSync();
 void seq_setQuantisation(uint8_t value);
 //------------------------------------------------------------------------------
 void seq_setExtSync(uint8_t isExt);
+//------------------------------------------------------------------------------
+/** set the PPQ of the clock in jack, 4 or 24; applied by the next seq_tick() */
+void seq_setClockInPpq(uint8_t ppq);
 //------------------------------------------------------------------------------
 /** switch to pattern patNr after the current pattern has finished*/
 void seq_setNextPattern(const uint8_t patNr);
@@ -265,6 +262,9 @@ void seq_setRollRate(uint8_t rate);
 //------------------------------------------------------------------------------
 /** add a note to the current pattern position*/
 void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note);
+//------------------------------------------------------------------------------
+/** write a recorded note into a step: note, velocity, probability 100, main step on (N11) */
+void seq_recordNoteAtStep(uint8_t targetPattern, uint8_t trackNr, uint8_t step, uint8_t vel, uint8_t note);
 //------------------------------------------------------------------------------
 void seq_setRecordingMode(uint8_t active);
 //------------------------------------------------------------------------------
