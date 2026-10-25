@@ -469,6 +469,21 @@ the clock count.
   - It misses 0.5% at 3, 8 and 42 of those tempos.
   - It is exact for transfers of 1 to 16 clocks.
   - DIN with ±0.3 ms jitter stays within 0.007%.
+- **Joining bursts (amended 2026-10-25 during E1.15).**
+  - A MIDI clock that comes less than `SEQC_TEMPO_JOIN_MS` (2 ms) after the newest stamp of a transfer
+    joins it, but only if that transfer is still open, or was evaluated and left out. The transfer then
+    takes the clock's later stamp. If it had been left out as an outlier, the fit is restored from the
+    copy taken before it, and the outlier is uncounted.
+  - A transfer that went into the fit, restarted it, or was followed by another sync event takes no
+    more clocks.
+  - The reason: a DIN burst with clocks 0.32 ms apart reaches the core one clock per `seq_tick()`, so
+    the burst's late head would be evaluated alone.
+  - Why 2 ms: back-to-back USB transfers in consecutive 1 ms frames join reliably; a few MIDI bytes fit
+    between two clocks of a burst; and it is a quarter of a clock at 300 BPM.
+  - The jack keeps the plain rule.
+  - Check the 2 ms value on hardware, under H6 and H7.
+  - The RAM cost of the estimator is 1192 B of bss over E1.14 (7053 to 8245 B), not 928 B. Review row
+    R6.2 allows that.
 - **Costs and behaviour changes.**
   - About 928 B of RAM (a 98-point ring) and about 2.5 KB of code. Review row R6.2 is amended for it,
     as for N20.
