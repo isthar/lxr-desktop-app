@@ -120,16 +120,25 @@ add_library(lxr_midi OBJECT
     Src/Soundengine/MIDI/Uart.c
 )
 
-# Step sequencer, Euclidean generator, external clock sync, and the timing core
-# seq_core (also built by the host tests in tests/).
+# Step sequencer: the timing core (seq_core) and the sync input queues (seq_syncq),
+# which the host tests in tests/ build as well, the platform layer (seq_platform:
+# DWT time base, queue instances), the glue (sequencer), the Euclidean generator
+# and the fw 1.7 MIDI clock sync (clockSync).
 add_library(lxr_sequencer OBJECT
     Src/Soundengine/Sequencer/clockSync.c
     Src/Soundengine/Sequencer/EuklidGenerator.c
     Src/Soundengine/Sequencer/seq_core.c
+    Src/Soundengine/Sequencer/seq_platform.c
+    Src/Soundengine/Sequencer/seq_syncq.c
     Src/Soundengine/Sequencer/sequencer.c
 )
-# The host tests build seq_core.c with -Wall -Wextra -Werror; warn about the same here.
-set_property(SOURCE Src/Soundengine/Sequencer/seq_core.c APPEND PROPERTY COMPILE_OPTIONS -Wextra)
+# The host tests build seq_core.c and seq_syncq.c with -Wall -Wextra -Werror; the
+# firmware warns about the same for them and for seq_platform.c.
+set_property(SOURCE
+    Src/Soundengine/Sequencer/seq_core.c
+    Src/Soundengine/Sequencer/seq_platform.c
+    Src/Soundengine/Sequencer/seq_syncq.c
+    APPEND PROPERTY COMPILE_OPTIONS -Wextra)
 
 # USB-MIDI message queue on top of the USB device stack.
 add_library(lxr_usb_app OBJECT

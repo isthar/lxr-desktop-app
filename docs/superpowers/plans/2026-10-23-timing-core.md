@@ -13835,7 +13835,7 @@ Nothing calls the new code yet, so `--gc-sections` drops it and the image does n
 - Modify: `Core/CMakeLists.txt` (the `lxr_sequencer` library as E1.3 left it)
 - Test: `tests/test_syncq.c`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_syncq.c`:
 
@@ -14089,7 +14089,7 @@ seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c)  # E1.13 fw 1.7 repli
 seqc_add_test(test_syncq     IDS syncq EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/seq_syncq.c)  # E2.1  sync input queues (seq_platform)
 ```
 
-- [ ] **Step 2: Run it and see it fail**
+- [x] **Step 2: Run it and see it fail**
 
 Run:
 
@@ -14108,7 +14108,7 @@ CMake Error at CMakeLists.txt:<line> (add_executable):
 CMake Generate step failed.  Build files cannot be regenerated correctly.
 ```
 
-- [ ] **Step 3: Write `seq_syncq.h`**
+- [x] **Step 3: Write `seq_syncq.h`**
 
 Create `Core/Inc/Soundengine/Sequencer/seq_syncq.h`:
 
@@ -14241,7 +14241,7 @@ static inline uint64_t seqq_extend(uint64_t *time, uint32_t *last, uint32_t cycl
 #endif /* SEQ_SYNCQ_H_ */
 ```
 
-- [ ] **Step 4: Write `seq_syncq.c`**
+- [x] **Step 4: Write `seq_syncq.c`**
 
 Create `Core/Src/Soundengine/Sequencer/seq_syncq.c`:
 
@@ -14413,7 +14413,7 @@ bool seqq_popEarliest(seqq_t *const queues[], unsigned count, uint64_t now,
 }
 ```
 
-- [ ] **Step 5: Run the test and see it pass**
+- [x] **Step 5: Run the test and see it pass**
 
 Run:
 
@@ -14437,7 +14437,7 @@ PASS syncq_usb
 9 of 9 tests passed
 ```
 
-- [ ] **Step 6: Write `seq_platform.h`**
+- [x] **Step 6: Write `seq_platform.h`**
 
 Create `Core/Inc/Soundengine/Sequencer/seq_platform.h`:
 
@@ -14528,7 +14528,7 @@ uint32_t seqp_syncOverflows(void);
 #endif /* SEQ_PLATFORM_H_ */
 ```
 
-- [ ] **Step 7: Write `seq_platform.c`**
+- [x] **Step 7: Write `seq_platform.c`**
 
 Create `Core/Src/Soundengine/Sequencer/seq_platform.c`:
 
@@ -14606,7 +14606,7 @@ uint32_t seqp_syncOverflows(void)
 }
 ```
 
-- [ ] **Step 8: Add the new sources to the firmware build**
+- [x] **Step 8: Add the new sources to the firmware build**
 
 The `lxr_sequencer` block as E1.3 left it, with `seq_core.c` and its `-Wextra` property
 (`Core/CMakeLists.txt` uses LF). If it differs, replace whatever the block holds, so that the
@@ -14652,7 +14652,7 @@ set_property(SOURCE
     APPEND PROPERTY COMPILE_OPTIONS -Wextra)
 ```
 
-- [ ] **Step 9: Give the new Core files CRLF line endings**
+- [x] **Step 9: Give the new Core files CRLF line endings**
 
 155 of the 157 C files under `Core/` use CRLF, and so does `seq_core.h`. Normalise the four new
 files (the script reads each file completely before it writes it):
@@ -14673,7 +14673,7 @@ EOF
 
 Expected: four lines starting with `CRLF`. `tests/test_syncq.c` stays LF, like the rest of `tests/`.
 
-- [ ] **Step 10: Run the full check**
+- [x] **Step 10: Run the full check**
 
 Run:
 
@@ -14693,23 +14693,23 @@ image: <repo>/build/release/LXR_V2_V1.7.img
 ITCM, RAM and the image size are the same as before this task: nothing calls the new code yet.
 The exit status is 0.
 
-- [ ] **Step 11: Review**
+- [x] **Step 11: Review**
 
 Check the new code against these points before committing:
 
-- [ ] `seqq_push()` writes the entry before the write index and `seqq_drop()` reads it before the
+- [x] `seqq_push()` writes the entry before the write index and `seqq_drop()` reads it before the
   read index moves. The `atomic_signal_fence()` calls sit between them.
-- [ ] One slot stays free; a full queue counts in `overflow` and keeps its entries.
-- [ ] `seqp_init()` never writes `DWT->CYCCNT` and does not clear the queues.
-- [ ] `seqq_dinByte()` handles realtime bytes inside an SPP, and drops an SPP when another status
+- [x] One slot stays free; a full queue counts in `overflow` and keeps its entries.
+- [x] `seqp_init()` never writes `DWT->CYCCNT` and does not clear the queues.
+- [x] `seqq_dinByte()` handles realtime bytes inside an SPP, and drops an SPP when another status
   byte cuts it short.
-- [ ] `seqq_usbMessage()` takes cable 0 only, realtime with CIN 0xF and, for the hosts that send it
+- [x] `seqq_usbMessage()` takes cable 0 only, realtime with CIN 0xF and, for the hosts that send it
   that way, realtime bytes F8–FF with CIN 0x5 (N18.4), and SPP only with CIN 0x3.
-- [ ] On equal stamps, DIN comes before USB, and USB before the jacks.
-- [ ] RAM budget (spec §10): 3 queues × (12 + 64 × 8) B = 1572 B, plus 18 B of state. It is used
+- [x] On equal stamps, DIN comes before USB, and USB before the jacks.
+- [x] RAM budget (spec §10): 3 queues × (12 + 64 × 8) B = 1572 B, plus 18 B of state. It is used
   once E2.2 links it.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add tests/test_syncq.c tests/CMakeLists.txt Core/CMakeLists.txt \
