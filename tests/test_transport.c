@@ -70,7 +70,19 @@ TEST(T17_midi_start_arms_and_the_next_clock_starts)
 	uint8_t tr[8];
 	ASSERT_EQ(transports(h, 0, tr, 8), 1);		/* at the start already: no REWIND */
 	ASSERT_EQ(tr[0], SEQC_TRANSPORT_ARM);
+	/* START comes before every other callback of the clock that starts */
+	h->logMask = FAKE_LOG_ALL;
+	const size_t from = h->logCount;
 	clocks(h, 1);
+	static const fake_kind_t order[] = {
+		FAKE_TRANSPORT, FAKE_TEMPO_STEP, FAKE_PATTERN_END, FAKE_STEP_BOUNDARY,
+		FAKE_TRIGGER, FAKE_CLOCK_PULSE,
+	};
+	ASSERT_EQ(h->logCount - from, sizeof order / sizeof order[0]);
+	for (size_t i = 0; i < sizeof order / sizeof order[0]; i++)
+		ASSERT_EQ(h->log[from + i].kind, order[i]);
+	ASSERT_EQ(h->log[from].value, SEQC_TRANSPORT_START);
+	h->logMask = FAKE_LOG_NO_CLOCKS;
 	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
 	ASSERT_EQ(transports(h, 0, tr, 8), 2);
 	ASSERT_EQ(tr[1], SEQC_TRANSPORT_START);
@@ -122,8 +134,16 @@ TEST(T17_stop_and_continue_resume_in_place)
 	ASSERT_EQ(seqc_absStep(), 5);
 	sync(h, SEQC_EV_CONTINUE);
 	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	const size_t from = h->logCount;
 	clocks(h, 1);					/* off the step grid: it resumes anyway */
 	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	/* CONTINUE comes first, ahead of the ratchet hit at 504 that this clock plays */
+	ASSERT_EQ(h->log[from].kind, FAKE_TRANSPORT);
+	ASSERT_EQ(h->log[from].value, SEQC_TRANSPORT_CONTINUE);
+	size_t pos = from;
+	const fake_rec_t *hit = fake_next(h, FAKE_TRIGGER, &pos);
+	ASSERT_TRUE(hit != NULL);
+	ASSERT_EQ(hit->ev.tick, 504);
 	uint8_t tr[8];
 	ASSERT_EQ(transports(h, 0, tr, 8), 5);
 	ASSERT_EQ(tr[4], SEQC_TRANSPORT_CONTINUE);
@@ -200,14 +220,19 @@ TEST(T17_transport_events_are_ignored_in_internal_sync)
 	sync(h, SEQC_EV_START);
 	sync(h, SEQC_EV_CONTINUE);
 	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	seqc_songPosition(8);				/* stopped: the LXR is the master */
+	ASSERT_EQ(stats().syncIgnored, 3);
+	ASSERT_EQ(seqc_absStep(), -1);
+	ASSERT_EQ(fake_count(h, FAKE_SEEK), 0);
 	seqc_start();
 	fake_process(h, h->now + 10);
 	sync(h, SEQC_EV_STOP);
 	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
-	ASSERT_EQ(stats().syncIgnored, 3);
-	seqc_songPosition(8);
 	ASSERT_EQ(stats().syncIgnored, 4);
+	seqc_songPosition(8);
+	ASSERT_EQ(stats().syncIgnored, 5);
 	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_EQ(fake_count(h, FAKE_SEEK), 0);
 }
 
 TEST(T17_spp_in_pattern_mode)
@@ -281,6 +306,64 @@ TEST(T17_spp_in_song_mode_with_identical_entries)
 	ASSERT_EQ(trig[1]->ev.absStep, 32);		/* the song moved on to B */
 	ASSERT_EQ(trig[1]->ev.pattern, 2);
 	ASSERT_EQ(h->songPos, 2);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(T17_spp_at_a_pattern_start_calls_no_pattern_end)
+{
+	/* a DAW locates to a bar start: the first boundary plays the located entry's
+	 * step 0, it does not end the pattern */
+	fake_host_t *h = midiSlave();
+	static const uint8_t song[] = { 1, 2 };
+	fake_setSong(h, song, 2);
+	fake_setSongMode(h, true);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		fake_setLength(h, 2, t, 8);
+	fake_setStep(h, 2, 0, 0, true);
+	seqc_songPosition(16);				/* entry 1, step 0 */
+	ASSERT_EQ(h->activePattern, 2);
+	ASSERT_EQ(h->songPos, 1);
+	ASSERT_EQ(seqc_trackStep(0), 0);
+	sync(h, SEQC_EV_CONTINUE);
+	clocks(h, 1);
+	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 16);
+	ASSERT_EQ(trig[0]->ev.pattern, 2);
+	clocks(h, 6 * 8);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);		/* the song ended at 24 */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+}
+
+TEST(T17_spp_0_then_continue_is_a_continue)
+{
+	/* SPP 0 is a seek, not a rewind: the resume is a CONTINUE, and step 0 comes
+	 * without a pattern end */
+	fake_host_t *h = midiSlave();
+	static const uint8_t song[] = { 1, 2 };
+	fake_setSong(h, song, 2);
+	fake_setSongMode(h, true);
+	fake_setStep(h, 1, 0, 0, true);
+	seqc_songPosition(0);
+	ASSERT_EQ(h->activePattern, 1);
+	ASSERT_EQ(h->songPos, 0);
+	ASSERT_EQ(seqc_absStep(), 0);
+	sync(h, SEQC_EV_CONTINUE);
+	clocks(h, 1);
+	uint8_t tr[8];
+	ASSERT_EQ(transports(h, 0, tr, 8), 2);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_ARM);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_CONTINUE);
+	ASSERT_EQ(h->songPos, 0);
+	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 8), 1);
+	ASSERT_EQ(trig[0]->ev.absStep, 0);
+	ASSERT_EQ(trig[0]->ev.pattern, 1);
+	clocks(h, 6 * 16 - 1);				/* steps 1..15 */
+	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 0);
+	clocks(h, 1);					/* step 16 */
+	ASSERT_EQ(fake_count(h, FAKE_PATTERN_END), 1);
+	ASSERT_EQ(h->songPos, 1);
 	ASSERT_EQ(h->errors, 0);
 }
 

@@ -477,8 +477,9 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *   clock count, arm (ARM). The next clock starts step 0 (START).
  * - SEQC_EV_CONTINUE, while stopped: arm (ARM). The next clock resumes playback
  *   (CONTINUE) one clock after the position of the last clock, which was kept
- *   at the stop or set by a song position. At the start position it starts
- *   step 0 instead (START). Ignored while armed or running.
+ *   at the stop or set by a song position. At the start position (after a
+ *   rewind) it starts step 0 instead (START). After a song position 0 it is a
+ *   CONTINUE at step 0, with no patternEnd(). Ignored while armed or running.
  * - SEQC_EV_STOP: like seqc_stop().
  * - SEQC_EV_RESET_ON: stop if running or armed (STOP), rewind (REWIND), reset the
  *   clock count. In fw 1.7 the reset input is a run gate, not a reset pulse (N4).
