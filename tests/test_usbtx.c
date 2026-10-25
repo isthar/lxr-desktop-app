@@ -80,12 +80,19 @@ TEST(usbtx_data_bytes_seven_bit)
 TEST(usbtx_cin_of_every_status)
 {
 	/* cable 0, the byte itself in MIDI_0, and a CIN of USB MIDI 1.0 table 4-1 that
-	 * fits the byte: never the reserved 0x0 and 0x1, never a SysEx CIN 0x4, 0x6, 0x7 */
+	 * fits the byte: never the reserved 0x0 and 0x1, never a SysEx CIN 0x4, 0x6, 0x7.
+	 * The packet carries as many data bytes as the table gives that CIN, and 0 in
+	 * the others. */
 	for (unsigned s = 0; s < 256; s++)
 	{
-		const usbtx_packet_t p = usbtx_packet((uint8_t)s, 0, 0);
+		const usbtx_packet_t p = usbtx_packet((uint8_t)s, 0x55, 0x2A);
 		ASSERT_EQ(p.b[0] >> 4, 0);
 		ASSERT_EQ(p.b[1], s);
+		const unsigned nData =
+			((s >= 0x80 && s < 0xC0) || (s >= 0xE0 && s < 0xF0) || s == 0xF2) ? 2u :
+			((s >= 0xC0 && s < 0xE0) || s == 0xF1 || s == 0xF3) ? 1u : 0u;
+		ASSERT_EQ(p.b[2], nData >= 1 ? 0x55u : 0u);
+		ASSERT_EQ(p.b[3], nData == 2 ? 0x2Au : 0u);
 		const unsigned cin = p.b[0] & 0x0Fu;
 		if (s >= 0x80 && s < 0xF0)
 			ASSERT_EQ(cin, s >> 4);
@@ -191,10 +198,15 @@ TEST(usbtx_stalled_host_keeps_nothing)
 	ASSERT_EQ(usbtx_next(&ring, true, false, start, xfer), 1);
 	for (uint32_t i = 1; i <= 3; i++)
 		ASSERT_TRUE(usbtx_push(&ring, numbered(i)));
+	ASSERT_EQ(usbtx_next(&ring, true, true, start + 1u, xfer), 0);
+	ASSERT_EQ(usbtx_waiting(&ring), 3);		/* before the wrap: the packets wait */
 	ASSERT_EQ(usbtx_next(&ring, true, true, start + USBTX_STALL_MS - 1u, xfer), 0);
 	ASSERT_EQ(usbtx_waiting(&ring), 3);		/* a slow host: the packets wait */
 	ASSERT_EQ(usbtx_next(&ring, true, true, start + USBTX_STALL_MS, xfer), 0);
 	ASSERT_EQ(usbtx_waiting(&ring), 0);		/* it has stopped reading: discarded */
+	ASSERT_TRUE(usbtx_push(&ring, numbered(9)));
+	ASSERT_EQ(usbtx_next(&ring, true, true, start + USBTX_STALL_MS + 1u, xfer), 0);
+	ASSERT_EQ(usbtx_waiting(&ring), 0);		/* and at every call after that */
 	ASSERT_TRUE(usbtx_push(&ring, numbered(4)));
 	ASSERT_EQ(usbtx_next(&ring, true, true, start + 5000u, xfer), 0);
 	ASSERT_EQ(usbtx_waiting(&ring), 0);		/* nothing waits while it does not read */
