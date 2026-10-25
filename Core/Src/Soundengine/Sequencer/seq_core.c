@@ -872,15 +872,17 @@ static void seqc_setSlaveBpm(double bpm)
  *   other sync event, or at the next seqc_process(). seq_tick() drains every
  *   queued clock before it calls seqc_process(), and the USB interrupt queues
  *   all the clocks of a transfer before seq_tick() can run.
- * - Bursts: a MIDI clock less than SEQC_TEMPO_JOIN_MS after a transfer joins
- *   it. A DIN interface that forwards a late buffer sends its clocks back to
- *   back, 0.32 ms apart, so each reaches its own seq_tick(): the head of the
- *   burst, late, is evaluated alone and left out as an outlier. The next clock
- *   then takes the fit back to before it (a copy kept for that) and joins the
- *   transfer. 2 ms takes in USB transfers in consecutive 1 ms frames and a few
- *   MIDI bytes between two clocks, and is a quarter of a clock at
- *   SEQC_SLAVE_BPM_MAX. A transfer that went into the fit, or restarted it, is
- *   not undone.
+ * - Bursts: a MIDI clock less than SEQC_TEMPO_JOIN_MS after the newest stamp
+ *   of a transfer that is still open, or was left out as an outlier, joins it,
+ *   and the transfer takes the later stamp. A DIN interface that forwards a
+ *   late buffer sends its clocks back to back, 0.32 ms apart, so each reaches
+ *   its own seq_tick(): the head of the burst, late, is evaluated alone and
+ *   left out as an outlier. The next clock then takes the fit back to before
+ *   it (a copy kept for that) and joins the transfer. 2 ms takes in USB
+ *   transfers in consecutive 1 ms frames and a few MIDI bytes between two
+ *   clocks, and is a quarter of a clock at SEQC_SLAVE_BPM_MAX. A transfer that
+ *   went into the fit, or restarted it, takes no more clocks (it is not
+ *   undone), and neither does one followed by another sync event.
  * - Windows: the points of the last SEQC_TEMPO_WINDOW clocks (short) and of the
  *   last SEQC_TEMPO_LONG_WINDOW clocks (long; the 4PPQ values for the jack at
  *   4 PPQ), and at most SEQC_TEMPO_SPAN_S. The estimate is the slope of the long
@@ -1100,7 +1102,9 @@ static bool seqc_fitPoint(seqc_point_t p)
 	bool haveDev = false;
 	if (f->havePrev && f->slope > 0.0)
 	{
-		dev = (double)(p.stamp - f->prev.stamp) - f->slope * (double)(p.clock - f->prev.clock);
+		/* signed: a MIDI clock may be stamped before the newest point (DIN and
+		 * USB clocks at once) */
+		dev = (double)(int64_t)(p.stamp - f->prev.stamp) - f->slope * (double)(p.clock - f->prev.clock);
 		off = dev - f->drift;
 		if (f->haveLastOff)
 		{

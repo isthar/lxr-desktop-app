@@ -847,29 +847,44 @@ TEST(T16_inlier_resets_the_outlier_run)
 	ASSERT_EQ(stats().tempoRestarts, 0);
 }
 
+/* deliver stamps[from..to) one transfer at a time: the clocks with one stamp,
+ * then seqc_process() at that stamp */
+static void deliverPacked(fake_host_t *h, size_t from, size_t to)
+{
+	size_t i = from;
+	while (i < to)
+	{
+		const seqc_time_t t = stamps[i];
+		while (i < to && stamps[i] == t)
+			fake_sync(h, SEQC_EV_CLOCK, stamps[i++]);
+		fake_process(h, t);
+	}
+}
+
 TEST(T16_second_jump_right_after_a_restart)
 {
-	/* 200 to 90 BPM restarts the fit; then 40 BPM, again later, as soon as the
-	 * restarted fit spans half a short window (before that it tests nothing,
-	 * N21). The restart emptied the row, so this outlier starts a new row of
-	 * one and the second jump takes SEQC_TEMPO_RESTART clocks, like the first. */
+	/* in transfers of 4 clocks: 200 to 90 BPM restarts the fit from its 4
+	 * outlier transfers, which span 12 clocks, half a short window, so the next
+	 * transfer is tested at once (N21): 40 BPM, again later. The restart
+	 * emptied the row, so this outlier starts a new row of one (without that,
+	 * it would be the 5th in a row of 4) and the second jump takes
+	 * SEQC_TEMPO_RESTART transfers, like the first. */
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
 	seqc_start();
-	size_t n = appendClocks(0, fake_clockCycles(200.0), SEQC_TEMPO_WINDOW + 1);
-	n = appendClocks(n, fake_clockCycles(90.0), SEQC_TEMPO_RESTART);
-	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	size_t n = appendClocks(0, fake_clockCycles(200.0), 4 * SEQC_TEMPO_WINDOW);
+	n = appendClocks(n, fake_clockCycles(90.0), 4 * SEQC_TEMPO_RESTART);
+	const size_t first = n;
+	n = appendClocks(n, fake_clockCycles(40.0), 4 * SEQC_TEMPO_RESTART);
+	for (size_t k = 0; k < n; k++)
+		stamps[k] = stamps[k | 3u];		/* transfers of 4, at their last clock */
+	deliverPacked(h, 0, first);
 	ASSERT_EQ(stats().tempoRestarts, 1);
 	ASSERT_NEAR(seqc_currentBpm(), 90.0, 1e-3);
-	size_t before = n;
-	n = appendClocks(n, fake_clockCycles(90.0), SEQC_TEMPO_WINDOW / 2 - (SEQC_TEMPO_RESTART - 1));
-	n = appendClocks(n, fake_clockCycles(40.0), 1);
-	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	deliverPacked(h, first, first + 4);
 	ASSERT_NEAR(seqc_currentBpm(), 90.0, 1e-3);
 	ASSERT_EQ(stats().tempoRestarts, 1);
 	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART);	/* a new row of one */
-	before = n;
-	n = appendClocks(n, fake_clockCycles(40.0), SEQC_TEMPO_RESTART - 1);
-	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	deliverPacked(h, first + 4, n);
 	ASSERT_EQ(stats().tempoRestarts, 2);
 	ASSERT_NEAR(seqc_currentBpm(), 40.0, 1e-3);
 	ASSERT_EQ(stats().intervalsExcluded, 2 * (SEQC_TEMPO_RESTART - 1));
@@ -926,10 +941,11 @@ TEST(T16_bunched_pairs_are_not_a_tempo_jump)
 }
 
 /* a late bunch of 6 clocks gap cycles apart (not one stamp), 6 clocks after the
- * last one at 120 BPM, then 24 clocks at 120. Clocks less than
- * SEQC_TEMPO_JOIN_MS apart are one transfer (N21): the bunch is one point of
- * the fit, at its last clock, 5 gaps late, near the line. Nothing is left out
- * and the fit does not restart. */
+ * last one at 120 BPM, then 24 clocks at 120. A clock less than
+ * SEQC_TEMPO_JOIN_MS after the newest clock of a transfer that is open or was
+ * left out joins it: the bunch is one point of the fit, at its last clock,
+ * 5 gaps late, near the line. Nothing is left out and the fit does not
+ * restart. */
 static void checkBunchedGaps(double gap)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
@@ -965,15 +981,15 @@ TEST(T16_usb_bunched_clocks_10us_apart_are_not_a_tempo_jump)
 	checkBunchedGaps((double)fake_msToCycles(0.01));
 }
 
-TEST(T16_packed_din_bunch_is_one_transfer)
+/* a DIN interface forwards a late host buffer as back-to-back 0xF8 bytes, gap
+ * cycles apart, from the true time of the last clock of the bunch on: at
+ * 120 BPM, every 2 beats a bunch of 2, 3 or 6 clocks. Each clock arrives in
+ * its own seq_tick(). A clock less than SEQC_TEMPO_JOIN_MS after the newest
+ * clock of a transfer that is open or was left out joins it, so each bunch is
+ * one point of the fit, at its last clock, at most 5 gaps late. No restart,
+ * nothing left out, within 0.5% from two beats on, and every step played. */
+static void checkDinBunches(double gap)
 {
-	/* a DIN interface forwards a late host buffer as back-to-back 0xF8 bytes,
-	 * 0.32 ms apart, from the true time of the last clock of the bunch on: at
-	 * 120 BPM, every 2 beats a bunch of 2, 3 or 6 clocks. Each clock arrives in
-	 * its own seq_tick(). Clocks less than SEQC_TEMPO_JOIN_MS apart are one
-	 * transfer (N21): each bunch is one point of the fit, at its last clock, at
-	 * most 1.6 ms late. No restart, nothing left out, within 0.5% from two
-	 * beats on, and every step played. */
 	static const size_t sizes[] = { 2, 3, 6 };
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
 	seqc_start();
@@ -986,7 +1002,7 @@ TEST(T16_packed_din_bunch_is_one_transfer)
 		const size_t size = sizes[b % 3];
 		const size_t last = 48 * (b + 1) + 11;		/* off the step grid */
 		for (size_t j = 0; j < size; j++)
-			stamps[last - size + 1 + j] = stamps[last] + (seqc_time_t)j * fake_msToCycles(0.32);
+			stamps[last - size + 1 + j] = stamps[last] + (seqc_time_t)((double)j * gap + 0.5);
 	}
 	double worst = 0.0;
 	size_t i = 0;
@@ -1005,6 +1021,90 @@ TEST(T16_packed_din_bunch_is_one_transfer)
 	ASSERT_EQ(stats().tempoRestarts, 0);
 	ASSERT_EQ(stats().intervalsExcluded, 0);
 	ASSERT_EQ(fake_triggers(h, 0, trig, 128), (count - 1) / SEQC_MIDI_CLOCKS_PER_STEP + 1);
+}
+
+TEST(T16_packed_din_bunch_is_one_transfer)
+{
+	/* 0.32 ms apart, the bytes of a DIN port; 1.0 and 1.5 ms apart, so that a
+	 * bunch of 6 spans 5 and 7.5 ms, more than SEQC_TEMPO_JOIN_MS: the join is
+	 * measured from the newest clock of the transfer, not from its first */
+	checkDinBunches((double)fake_msToCycles(0.32));
+	checkDinBunches((double)fake_msToCycles(1.0));
+	checkDinBunches((double)fake_msToCycles(1.5));
+}
+
+TEST(T16_packed_din_bunch_head_stays_out_after_another_event)
+{
+	/* at 120 BPM, clock 40 is 0.6 of a clock late, evaluated alone and left
+	 * out. A MIDI Stop follows, then clock 41 1 ms after clock 40. The Stop
+	 * ends the transfer of clock 40, so clock 41 does not join it: it is a
+	 * transfer of its own, inside the band, and clock 40 stays counted. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, 40);
+	const seqc_time_t head = stamps[n - 1] + (seqc_time_t)(1.6 * per + 0.5);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	fake_sync(h, SEQC_EV_CLOCK, head);
+	fake_process(h, head);
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	fake_sync(h, SEQC_EV_STOP, head + fake_msToCycles(0.5));
+	fake_sync(h, SEQC_EV_CLOCK, head + fake_msToCycles(1.0));
+	fake_process(h, head + fake_msToCycles(1.0));
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 0.5);
+}
+
+TEST(T16_packed_din_bunch_head_keeps_a_restart)
+{
+	/* 120 to 60 BPM: SEQC_TEMPO_RESTART clocks at 60 restart the fit, the last
+	 * of them the head of a bunch of 2, 0.32 ms apart. A transfer that
+	 * restarted the fit takes no more clocks: the second clock of the bunch is
+	 * a transfer of its own, and the restart stays (it is not undone and done
+	 * again). */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	size_t n = appendClocks(0, fake_clockCycles(120.0), SEQC_TEMPO_WINDOW + 1);
+	n = appendClocks(n, fake_clockCycles(60.0), SEQC_TEMPO_RESTART);
+	stamps[n] = stamps[n - 1] + fake_msToCycles(0.32);
+	n++;
+	const size_t before = n;
+	n = appendClocks(n, fake_clockCycles(60.0), 2 * SEQC_TEMPO_WINDOW);
+	deliver(h, SEQC_EV_CLOCK, stamps, before, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART - 1);
+	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART - 1);
+	ASSERT_NEAR(seqc_currentBpm(), 60.0, 0.5);
+}
+
+TEST(T16_clock_stamped_before_the_newest_point)
+{
+	/* DIN and USB clocks at once: after clock 40 went into the fit, one more
+	 * clock comes stamped 0.2 ms before it. It is a point of its own; its
+	 * interval from clock 40 is negative, not 2^64 cycles less 0.2 ms, so the
+	 * step amplitude of the stamps stays small, and a jump from 120 to 60 BPM
+	 * at clock 150 still restarts the fit within SEQC_TEMPO_RESTART clocks. */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0), slow = fake_clockCycles(60.0);
+	double t = (double)fake_msToCycles(10.0);
+	for (size_t k = 0; k < 150 + SEQC_TEMPO_RESTART + 1; k++)
+	{
+		const seqc_time_t ts = (seqc_time_t)(t + 0.5);
+		t += k < 150 ? per : slow;
+		fake_sync(h, SEQC_EV_CLOCK, ts);
+		fake_process(h, ts + fake_msToCycles(0.05));
+		if (k == 40)
+		{
+			fake_sync(h, SEQC_EV_CLOCK, ts - fake_msToCycles(0.2));
+			fake_process(h, ts + fake_msToCycles(0.1));
+		}
+	}
+	ASSERT_EQ(stats().tempoRestarts, 1);
+	ASSERT_NEAR(seqc_currentBpm(), 60.0, 0.3);
 }
 
 TEST(T18_tempo_jump_4ppq_restarts_after_2)
