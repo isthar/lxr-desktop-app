@@ -2403,6 +2403,26 @@ TEST(T18_double_trigger_is_left_out)
 	checkDoubleTrigger(24, 0.55);
 }
 
+TEST(T18_double_trigger_with_a_millisecond_of_jitter)
+{
+	/* 24 PPQ, ±1 ms of jitter: the step amplitude is over the sum band (1/32
+	 * of a pulse, 0.65 ms), but the sum test alone decides. With this seed the
+	 * two intervals add up within it, and the merge holds the estimate within
+	 * the error of a lost pulse (it was 0.17% to 1.79% off with the merge
+	 * blocked). */
+	static const double frac[] = { 0.1, 0.3, 0.55, 0.8 };
+	double lostWorst, lostLate, worst, late;
+	uint32_t settle;
+	spuriousClock(SEQC_SYNC_ANALOG, 24, 120.0, -1.0, 1.0, &lostWorst, &lostLate, &settle);
+	for (size_t i = 0; i < sizeof frac / sizeof frac[0]; i++)
+	{
+		spuriousClock(SEQC_SYNC_ANALOG, 24, 120.0, frac[i], 1.0, &worst, &late, &settle);
+		ASSERT_TRUE(worst <= lostWorst);
+		ASSERT_EQ(stats().tempoRestarts, 0);
+		ASSERT_EQ(stats().intervalsExcluded, 1);
+	}
+}
+
 /* E1.19: the jack at ppq, 120 BPM, exact stamps: double triggers f1 of a pulse
  * after pulse at and f2 after pulse at + gap. Returns the largest error of the
  * estimate in % from the pulse after the second on. */
@@ -2435,9 +2455,10 @@ static double twoDoubleTriggers(uint8_t ppq, double f1, double f2, uint32_t at, 
 TEST(T18_second_double_trigger_is_left_out_too)
 {
 	/* The first double trigger's pulse in between went into the fit (0.6 of a
-	 * pulse after a real one) and is taken out again, from the drift too: else
-	 * the offsets after it read as a step of the stamps, and the second double
-	 * trigger, four pulses later, would not be merged (3% to 43% off at 4 PPQ). */
+	 * pulse after a real one) and is taken out again; the second double
+	 * trigger, two or four pulses later, is merged too (3% to 43% off at 4 PPQ
+	 * when it was not). Its offset leaving the drift and the step amplitude is
+	 * pinned by T18_tempo_change_after_a_double_trigger_is_followed. */
 	ASSERT_TRUE(twoDoubleTriggers(4, 0.6, 0.3, 24, 4) < 1e-3);
 	ASSERT_EQ(stats().intervalsExcluded, 2);
 	ASSERT_EQ(stats().tempoRestarts, 0);
@@ -2445,6 +2466,58 @@ TEST(T18_second_double_trigger_is_left_out_too)
 	ASSERT_TRUE(twoDoubleTriggers(24, 0.6, 0.3, 120, 4) < 1e-3);
 	ASSERT_EQ(stats().intervalsExcluded, 2);
 	ASSERT_EQ(stats().tempoRestarts, 0);
+}
+
+/* E1.19: the jack at 24 PPQ, 120 BPM, a double trigger frac of a pulse after
+ * pulse 120 (none if frac < 0), and from pulse 124 on `to` BPM. Writes the error
+ * of the estimate in % after each of the 48 pulses from 124 on to err[]. */
+static void changeAfterDoubleTrigger(double frac, double to, double *err)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_setAnalogPpq(24);
+	seqc_start();
+	const double perOld = fake_clockCycles(120.0), perNew = fake_clockCycles(to);
+	double t = (double)fake_msToCycles(10.0);
+	for (uint32_t k = 0; k < 124 + 48; k++)
+	{
+		if (k > 0)
+			t += k <= 123 ? perOld : perNew;
+		const seqc_time_t s = (seqc_time_t)(t + 0.5);
+		fake_runUntil(h, s, fake_msToCycles(0.1));
+		fake_sync(h, SEQC_EV_PULSE, s);
+		if (k == 120 && frac >= 0.0)
+		{
+			const seqc_time_t x = s + (seqc_time_t)(frac * perOld + 0.5);
+			fake_runUntil(h, x, fake_msToCycles(0.1));
+			fake_sync(h, SEQC_EV_PULSE, x);
+		}
+		fake_process(h, s);
+		if (k >= 124)
+			err[k - 124] = fabs((double)seqc_currentBpm() - to) / to * 100.0;
+	}
+}
+
+TEST(T18_tempo_change_after_a_double_trigger_is_followed)
+{
+	/* The pulse between of a double trigger 0.6 of a pulse after a real one went
+	 * into the fit, and is taken out. Its offset is no step of the stamps and
+	 * no part of the drift: counted as a step, it would widen the band and slow
+	 * the switch to a new tempo (0.24% off a beat after 120 to 84 BPM, 0.07%
+	 * after two); left in the drift, the switch would come a pulse late (0.43
+	 * points more after 120 to 114 BPM). So a tempo change after it is followed
+	 * as without the double trigger. */
+	static const double to[] = { 84.0, 114.0 };
+	double err[48], ref[48];
+	for (size_t i = 0; i < sizeof to / sizeof to[0]; i++)
+	{
+		changeAfterDoubleTrigger(-1.0, to[i], ref);
+		changeAfterDoubleTrigger(0.6, to[i], err);
+		ASSERT_EQ(stats().tempoRestarts, 0);
+		ASSERT_EQ(stats().intervalsExcluded, 1);
+		for (uint32_t k = 0; k < 48; k++)
+			ASSERT_TRUE(fabs(err[k] - ref[k]) < 1e-3);
+		ASSERT_TRUE(err[24] < 1e-3);
+	}
 }
 
 TEST(T18_ppq_change_forgets_a_merge)
@@ -2578,9 +2651,140 @@ TEST(T18_jump_to_about_twice_the_tempo_undoes_the_merge)
 		ASSERT_EQ(jackJump(24, to[i], 0.05, 0.3, 0, 0.0, err, 2 * 24 + 1), 0);
 		ASSERT_TRUE(err[2 * 24] < 0.1);
 	}
-	/* ±1 ms: the step amplitude is over the sixteenth band (0.33% four beats later) */
+	/* ±1 ms (about 0.3% four beats later) */
 	ASSERT_EQ(jackJump(24, 245.0, 0.05, 1.0, 0, 0.0, err, 4 * 24 + 1), 0);
 	ASSERT_TRUE(err[4 * 24] < 0.5);
+	/* 24 PPQ, 120 to 240 BPM at a pulse, the straddling pulse 0.1 ms early: it
+	 * is an outlier, left out, and merges with the first new interval; the next
+	 * pulse undoes it and puts back the ring slot it wrote */
+	ASSERT_EQ(jackJump(24, 240.0, 0.0, 0.0, 0, 0.1, err, 2 * 24 + 1), 0);
+	ASSERT_TRUE(err[2 * 24] < 0.01);
+}
+
+TEST(T18_jump_lags_one_pulse_only)
+{
+	/* After an undo the pulse that undid it does not merge again: a split
+	 * interval follows a steady one only. So a jump lags the figures before
+	 * E1.19 by one pulse, not two or three. */
+	double err[4 * 4 + 1];
+	/* in the band: 120 to 258 BPM 0.1 into a pulse, 204 BPM (21% off) after the
+	 * third new pulse, as before E1.19 (142.6 BPM if it merged again) */
+	ASSERT_EQ(jackJump(4, 258.0, 0.1, 0.0, 0, 0.0, err, 4 * 4 + 1), 0);
+	ASSERT_TRUE(err[2] < 21.0);
+	/* 120 to 240 BPM at a pulse, the straddling pulse 0.3 ms early: 33.4%, as
+	 * before E1.19 (50.0% if it merged again) */
+	ASSERT_EQ(jackJump(4, 240.0, 0.0, 0.0, 0, 0.3, err, 4 * 4 + 1), 0);
+	ASSERT_TRUE(err[2] < 40.0);
+	ASSERT_TRUE(worstOf(err, 4, 4 * 4) < 1e-3);
+	/* outliers: 120 to 268 BPM 0.1 into a pulse restarts at the second new pulse,
+	 * and 120 to 252.5 BPM 0.75 into one at the third, as before E1.19 */
+	ASSERT_EQ(jackJump(4, 268.0, 0.1, 0.0, 0, 0.0, err, 4 * 4 + 1), 1);
+	ASSERT_TRUE(worstOf(err, 2, 4 * 4) < 1e-3);
+	ASSERT_EQ(jackJump(4, 252.5, 0.75, 0.0, 0, 0.0, err, 4 * 4 + 1), 1);
+	ASSERT_TRUE(err[2] < 1e-3);
+}
+
+/* E1.19: the jack at ppq, 120 BPM, exact stamps, but pulse at + early comes
+ * earlyMs early, and a second pulse secondFrac of a pulse plus secondMs after
+ * pulse at (none if secondFrac < 0). Returns the largest error of the estimate
+ * in % from pulse from on. */
+static double jackGlitch(uint8_t ppq, uint32_t early, double earlyMs, double secondFrac, double secondMs, uint32_t from)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_setAnalogPpq(ppq);
+	seqc_start();
+	const double per = ppq == 4 ? fake_stepCycles(120.0) : fake_clockCycles(120.0);
+	const uint32_t at = ppq == 4 ? 24u : 120u, count = ppq == 4 ? 64u : 24u * 16u;
+	double worst = 0.0;
+	for (uint32_t k = 0; k < count; k++)
+	{
+		double t = (double)fake_msToCycles(10.0) + (double)k * per;
+		if (k == at + early)
+			t -= earlyMs * (double)fake_msToCycles(1.0);
+		const seqc_time_t s = (seqc_time_t)(t + 0.5);
+		fake_runUntil(h, s, fake_msToCycles(0.1));
+		fake_sync(h, SEQC_EV_PULSE, s);
+		if (k == at && secondFrac >= 0.0)
+		{
+			const seqc_time_t x = s + (seqc_time_t)(secondFrac * per + secondMs * (double)fake_msToCycles(1.0) + 0.5);
+			fake_runUntil(h, x, fake_msToCycles(0.1));
+			fake_sync(h, SEQC_EV_PULSE, x);
+		}
+		fake_process(h, s);
+		const double e = fabs((double)seqc_currentBpm() - 120.0) / 120.0 * 100.0;
+		if (k >= from && e > worst)
+			worst = e;
+	}
+	return worst;
+}
+
+TEST(T18_double_trigger_then_an_early_pulse_keeps_the_merge)
+{
+	/* With jitter the pulse after the merged one is a little early or late; the
+	 * undo takes only one about half a pulse early. Taking it back at any early
+	 * pulse would cost 8.4% here, as before E1.19. */
+	static const double frac[] = { 0.3, 0.5, 0.55, 0.6 };
+	for (size_t i = 0; i < sizeof frac / sizeof frac[0]; i++)
+	{
+		ASSERT_TRUE(jackGlitch(4, 2, 0.2, frac[i], 0.0, 24 + 3) < 0.05);
+		ASSERT_EQ(stats().tempoRestarts, 0);
+		ASSERT_EQ(stats().intervalsExcluded, 1);
+		ASSERT_TRUE(jackGlitch(4, 2, 0.3, frac[i], 0.0, 24 + 3) < 0.2);
+		ASSERT_EQ(stats().tempoRestarts, 0);
+		ASSERT_TRUE(jackGlitch(24, 2, 0.05, frac[i], 0.0, 120 + 3) < 0.05);
+		ASSERT_EQ(stats().tempoRestarts, 0);
+		ASSERT_EQ(stats().intervalsExcluded, 1);
+		ASSERT_TRUE(jackGlitch(24, 2, 0.3, frac[i], 0.0, 120 + 3) < 0.05);
+		ASSERT_EQ(stats().tempoRestarts, 0);
+	}
+}
+
+TEST(T18_bounce_leaves_the_real_pulse_in)
+{
+	/* A contact bounce just after a real pulse that came a little early: the two
+	 * add up to one interval with the one before, but the real pulse is nearer
+	 * the line, so the bounce is left out, not the real pulse, and the estimate
+	 * is as after the early pulse alone (0.016% at 4 PPQ; leaving the real pulse
+	 * out cost 0.06% to 0.47%). At 24 PPQ the sum band is 0.65 ms; a later
+	 * bounce is an outlier, which the next pulse merges (0.004%). */
+	static const struct { uint8_t ppq; double ms, bound; } c[] = {
+		{ 4, 0.5, 0.0 }, { 4, 1.0, 0.0 }, { 4, 3.0, 0.0 },
+		{ 24, 0.25, 0.0 }, { 24, 0.5, 0.0 }, { 24, 3.0, 0.01 },
+	};
+	for (size_t i = 0; i < sizeof c / sizeof c[0]; i++)
+	{
+		const uint32_t at = c[i].ppq == 4 ? 24u : 120u;
+		const double alone = jackGlitch(c[i].ppq, 0, 0.1, -1.0, 0.0, at + 1);
+		ASSERT_EQ(stats().intervalsExcluded, 0);
+		ASSERT_TRUE(jackGlitch(c[i].ppq, 0, 0.1, 0.0, c[i].ms, at + 1) <= alone + c[i].bound + 1e-6);
+		ASSERT_EQ(stats().intervalsExcluded, 1);
+		ASSERT_EQ(stats().tempoRestarts, 0);
+	}
+}
+
+TEST(T18_undo_keeps_earlier_exclusions)
+{
+	/* the jack at 4 PPQ: pulse 16 lost (one interval left out), then 120 to 245
+	 * BPM 0.05 into a pulse, which merges and is undone: intervalsExcluded goes
+	 * back to the count at the merge, the lost pulse included */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_start();
+	const double perOld = fake_stepCycles(120.0), perNew = fake_stepCycles(245.0);
+	double t = (double)fake_msToCycles(10.0);
+	for (uint32_t k = 0; k < 40; k++)
+	{
+		if (k > 0)
+			t += k < 24 ? perOld : k == 24 ? 0.05 * perOld + 0.95 * perNew : perNew;
+		if (k == 16)
+			continue;
+		const seqc_time_t s = (seqc_time_t)(t + 0.5);
+		fake_runUntil(h, s, fake_msToCycles(0.1));
+		fake_sync(h, SEQC_EV_PULSE, s);
+		fake_process(h, s);
+	}
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_NEAR(seqc_currentBpm(), 245.0, 1e-3);
 }
 
 TEST(T18_jump_of_30_percent_is_followed_inside_the_band)

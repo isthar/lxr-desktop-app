@@ -594,10 +594,13 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *   slope: the fit leaves the second pulse out and counts one pulse fewer, so
  *   from the next real pulse on the estimate is as exact as after a lost pulse
  *   (it was 1.5% to 42.9% off for 3 to 5 pulses at 4 PPQ, and up to 5.0% at
- *   24 PPQ, before). Between the two the estimate may include the second
- *   pulse, for one pulse. Not so for stamps whose step amplitude (about their
- *   jitter) is over 1/32 of a pulse, such as ±1 ms at 24 PPQ and 120 BPM;
- *   there it costs what it did before. The position counts the second pulse.
+ *   24 PPQ, before). The second pulse is the one of the two further from the
+ *   line, so a contact bounce just after a real pulse is left out, not the
+ *   real pulse. Between the two the estimate may include the second pulse,
+ *   for one pulse. The two intervals must add up within 1/32 of a pulse: with
+ *   stamps less precise, such as ±1 ms at 24 PPQ and 120 BPM, some double
+ *   triggers cost what they did before (up to 5.0%). The position counts the
+ *   second pulse.
  * - The points of the first half short window after a start of the fit are not
  *   tested.
  * - A tempo jump (N16): after SEQC_TEMPO_RESTART outliers in a row on the same

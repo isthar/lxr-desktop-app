@@ -630,11 +630,13 @@ the clock count.
     is an outlier if the second pulse came in the first half of the interval, the second if it came
     in the second half; within about the jitter of half a pulse, both or neither may be. When the
     interval into a pulse and the one before it add up to the slope of the first within a sixteenth
-    band, both are short against that slope, the interval before them was within a quarter band, and
-    the step amplitude is at most the sixteenth band, the pulse between is left out and the fit
-    counts one clock fewer. If that pulse was in the fit (the second half), it leaves the drift too;
-    else the offsets after it read as a step of the stamps, and a second double trigger a few pulses
-    later is not merged.
+    band, both are short against that slope, and the interval before them was within a quarter band,
+    one of the two pulses is left out and the fit counts one clock fewer. It is the one further from
+    the line at their common clock: the pulse between, unless that lies nearer than the pulse after
+    it, as for a contact bounce just after a real pulse; then the later pulse is left out and the
+    fit stays as it was. If the pulse between was in the fit (the second half), its offset leaves
+    the step amplitude and the drift too; else a tempo change after it is followed later (amended in
+    the second E1.19 review, see below).
     - The jack decides at the pulse after the double trigger, with no row, and the first two
       intervals after a jump to two to three times the tempo (the straddling one and the first new
       one) can add up to one old pulse. So the merge is tentative (amended in the E1.19 review): the
@@ -655,6 +657,28 @@ the clock count.
       and 4 change phases that missed those phases.
     - With the undo, two outliers and two intervals inside the band merge too, so a second pulse at
       about half a pulse is a double trigger like any other. A merged interval is not split again.
+    - The second E1.19 review found two more defects, fixed then:
+      - A contact bounce right after a real pulse that came even a little early (an in-band
+        interval with a negative offset can be split) passed the sum test at the bounce, and the
+        merge left out the real pulse and kept the bounce at its clock. At 4 PPQ and 120 BPM, the
+        real pulse 0.1 ms early and a bounce 0.25 to 3 ms after it: 0.024% to 0.47% off from the
+        next pulse on, where the early pulse alone gives 0.016%. With ±0.1 to ±1 ms of jitter and
+        f 0.001 to 0.05 (20 seeds), up to 0.81%, over the lost-pulse error in 114 of 600 runs
+        (f 0.002 to 0.04). Now the nearer of the two pulses stays: the same runs are all within the
+        lost-pulse error, and the bounce costs exactly what the early pulse alone does. At 24 PPQ
+        the sum band is 0.65 ms; a later bounce is an outlier that the next pulse merges (0.004%).
+      - The first fix also required a step amplitude of at most the sixteenth band. It changed no
+        jump by more than 0.053 points, at one pulse, and only blocked valid merges under jitter,
+        so it is gone. At 24 PPQ with ±1 ms (120 BPM, f 0.001 to 0.999, 20 seeds), 211 of 860
+        runs are over the lost-pulse error, against 533 with it: there the jitter of the two
+        stamps is over the 0.65 ms sum band in about 8 of 20 seeds, and such a double trigger
+        costs what it did before (up to 5.0% near f 0.5). With the gate, the offset of a pulse
+        between left in the step amplitude or the drift kept a second double trigger from merging;
+        without it, it would slow the switch to a new tempo after the merge: at 24 PPQ, 0.24% off
+        a beat after 120 to 84 BPM (step amplitude), or the switch a pulse late, 0.43 points more
+        after 120 to 114 BPM (drift). Two double triggers at 24 PPQ with ±1 ms (5 by 5 offsets,
+        gaps 2 to 32, 3 seeds): 606 of 825 runs better, 12 worse (by up to 1.7 points, where the
+        second is not merged either way), the worst 8.2% either way.
   - Measured with exact stamps and a 0.1 ms `seq_tick()`, one spurious clock f of a period after a
     real one, f from 0.05 to 0.95 in steps of 0.05, at 120 BPM (MIDI also at 90 and 180 BPM, with
     the same figures). The error is the worst from the clock after it on; the duration is the
@@ -671,10 +695,9 @@ the clock count.
 
     - With ±0.1, ±0.3 and ±1 ms of jitter (f 0.05 to 0.95), the merged cases stay within 0.034% on
       MIDI, and on the jack within the error of a lost pulse with the same jitter (at ±1 ms and
-      4 PPQ, 0.28% to 0.39% against 0.42%). At 24 PPQ with ±1 ms the step amplitude is over the
-      sixteenth band: a double trigger there costs what it did before (up to 2.7%). Around half
-      a pulse (f 0.47 to 0.53 in steps of 0.005, 20 jitter seeds each), the jack at 4 PPQ stays
-      within the lost-pulse error at every jitter. Before E1.19 it was up to 105% off at f 0.5,
+      4 PPQ, 0.28% to 0.39% against 0.42%); at 24 PPQ with ±1 ms, see the second review above.
+      Around half a pulse (f 0.47 to 0.53 in steps of 0.005, 20 jitter seeds each), the jack at
+      4 PPQ stays within the lost-pulse error at every jitter. Before E1.19 it was up to 105% off at f 0.5,
       with a restart in 6 of 20 runs; the first E1.19 version still was from f 0.485 to 0.51 at
       ±1 ms.
     - Two double triggers 2 to 8 pulses apart at 4 PPQ, or 2 to 32 clocks apart at 24 PPQ, at f 0.1,
@@ -696,13 +719,20 @@ the clock count.
     holds the old tempo: up to 50.6 points more error for that pulse at 4 PPQ (a quarter of a
     beat; where the window had followed at once, 120 to 245 BPM 0.05 into a pulse), under 0.07
     points at 24 PPQ. From the next pulse on the runs are identical.
+    - Again after the second review, with the bounce rule and without the step gate: the first sweep
+      above (its 24240 jittered runs) is identical to before E1.19. From 120 to 200–300 BPM in steps
+      of 1 at 20 change phases, at 4 and 24 PPQ, exact and with ±0.1, ±0.3 and ±1 ms (2 seeds), the
+      error after every pulse: 2884 of 28280 runs differ from before E1.19, each at one pulse only,
+      and the restarts, `intervalsExcluded` and steps played are the same in all. 389 of them come
+      from removing the step gate, by at most 0.053 points; the bounce rule changes none.
   - A MIDI merge can take the fit's newest point out, and the next point goes into its ring slot,
     which the fit before the transfer uses. The slot is kept and put back when a clock joins the
     transfer, so the copy stays intact. (With the present bands the joined transfer is two clocks
     early and restarts the fit, which clears the windows; the slot is put back regardless.)
   - Costs: `seq_core.c.obj` text 20138 to 22862 B (+2724) and bss 11221 to 11309 B (+88: 24 B in
     the fit and in its copy for the join, 8 B for the kept slot, 32 B for the tentative jack merge),
-    measured with the firmware's compile command and Arm GNU 14.3.rel1.
+    measured with the firmware's compile command and Arm GNU 14.3.rel1. After the second review
+    (the bounce rule, no step gate): text 22898 B (+36), bss unchanged.
 - **Costs and behaviour changes.**
   - 1192 B of bss over E1.14 (7053 to 8245 B): the 98-point ring and the fit (928 B), and the fit copy
     and the join state (264 B). E1.17's 101-point ring adds 24 B (8269 B). Review row R6.2 must allow

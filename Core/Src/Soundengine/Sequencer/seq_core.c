@@ -238,6 +238,14 @@ typedef enum
 	SEQC_POINT_RESTARTED,	/**< it completed a tempo jump: the fit restarted (N16) */
 } seqc_pointFate_t;
 
+/** what seqc_fitDoubleTrigger() did on the jack (E1.19) */
+typedef enum
+{
+	SEQC_SPLIT_NONE,	/**< no double trigger */
+	SEQC_SPLIT_MERGED,	/**< the pulse between left out, p's interval merged */
+	SEQC_SPLIT_BOUNCE,	/**< p left out */
+} seqc_split_t;
+
 //------------------------------------------------------------------------------
 /** the tempo fit (N9, N16, N21) */
 typedef struct
@@ -1627,17 +1635,20 @@ static bool seqc_fitExtraClock(void)
  * f->splitSlope) is left out when:
  * - the two add up to that slope within a sixteenth of its band, and p's is
  *   short against it (the second may have moved the fit's slope);
- * - the interval before them was steady, within a quarter band of the slope;
- * - the step amplitude, step, is at most the sixteenth band: the stamps are
- *   precise enough.
+ * - the interval before them was steady, within a quarter band of the slope.
  * The fit then counts one clock fewer, and p's interval, *dev, becomes the
  * merged one. The jack decides at p, where MIDI decides at the end of a row
  * (seqc_fitExtraClock()), and the first two intervals after a jump to two to
  * three times the tempo (the straddling one and the first new one) can look the
  * same. So the merge is tentative: the fit before it is kept, and the next
  * pulse takes it back if it comes about half the slope after p, or earlier
- * (seqc_fitUndoMerge()). Returns true if it merged. */
-static bool seqc_fitDoubleTrigger(seqc_point_t *p, double *dev, double step)
+ * (seqc_fitUndoMerge()).
+ * The second pulse is the one of the two that is further from the line at
+ * their common clock, as on MIDI (seqc_fitExtraClock()): the pulse between,
+ * unless it lay nearer than p, as when p is a contact bounce just after a real
+ * pulse. Then p is left out instead, and the fit stays as it was. Returns what
+ * it did. */
+static seqc_split_t seqc_fitDoubleTrigger(seqc_point_t *p, double *dev, double step)
 {
 	seqc_fit_t *f = &seqc_sl.fit;
 	const double band = seqc_fitBand(f->splitSlope, step);
@@ -1645,9 +1656,15 @@ static bool seqc_fitDoubleTrigger(seqc_point_t *p, double *dev, double step)
 	const double merged = f->split + *dev + f->slope;
 	const double second = *dev + f->slope - f->splitSlope;	/* p's interval less the slope of the first */
 	const bool leftOut = f->rowCount == 1;	/* the pulse between was an outlier */
-	if (step > tol || merged > tol || -merged > tol || second > 0.0
+	if (merged > tol || -merged > tol || second > 0.0
 			|| (!leftOut && f->tailL == seqc_ringPrev(f->head)))
-		return false;
+		return SEQC_SPLIT_NONE;
+	if (-f->split <= (merged < 0.0 ? -merged : merged))	/* never so if the pulse between was an outlier */
+	{
+		f->extraClocks++;	/* p was the second pulse */
+		seqc.stats.intervalsExcluded++;
+		return SEQC_SPLIT_BOUNCE;
+	}
 	/* for an undo: the fit before the merge, and the ring slot p goes into */
 	const uint8_t slot = leftOut ? f->head : seqc_ringPrev(f->head);
 	seqc_sl.fitBefore = *f;
@@ -1669,7 +1686,7 @@ static bool seqc_fitDoubleTrigger(seqc_point_t *p, double *dev, double step)
 	f->extraClocks++;
 	p->clock--;
 	*dev = merged;
-	return true;
+	return SEQC_SPLIT_MERGED;
 }
 //------------------------------------------------------------------------------
 /** the point of a complete transfer goes into the fit, is left out as an
@@ -1695,7 +1712,11 @@ static seqc_pointFate_t seqc_fitPoint(seqc_point_t p, bool mayMerge)
 		/* signed: a MIDI clock may be stamped before the newest point (DIN and
 		 * USB clocks at once) */
 		dev = (double)(int64_t)(p.stamp - f->prev.stamp) - f->slope * (double)(p.clock - f->prev.clock);
-		merged = jack && mayMerge && tested && f->split < 0.0 && seqc_fitDoubleTrigger(&p, &dev, step);
+		const seqc_split_t dt = jack && mayMerge && tested && f->split < 0.0
+				? seqc_fitDoubleTrigger(&p, &dev, step) : SEQC_SPLIT_NONE;
+		if (dt == SEQC_SPLIT_BOUNCE)
+			return SEQC_POINT_LEFT_OUT;	/* the fit stays as it was */
+		merged = dt == SEQC_SPLIT_MERGED;
 		off = dev - f->drift;
 		if (f->haveLastOff)
 		{
