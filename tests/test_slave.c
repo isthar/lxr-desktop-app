@@ -740,6 +740,66 @@ TEST(T16_switch_to_internal_while_stopped)
 	ASSERT_EQ(h->calls[FAKE_TEMPO_STEP], steps);
 }
 
+TEST(T16_switch_to_internal_after_stop_and_continue)
+{
+	/* armed by a Stop and a Continue in the middle of step 40, without a song
+	 * position: the switch starts the transport (a CONTINUE) from the position
+	 * held, and the MIDI clock out and the tempo steps start from the next
+	 * multiple above it, not from step 40's tick: no burst, and no callback
+	 * sees the position go back */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t t0 = fake_msToCycles(10.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, t0, per, 6 * 40 + 4, fake_msToCycles(0.1));	/* clock 243: tick 3888 */
+	const seqc_time_t stopAt = t0 + (seqc_time_t)(243.5 * per + 0.5);
+	fake_sync(h, SEQC_EV_STOP, stopAt);
+	fake_process(h, stopAt);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	const double at = seqc_position();
+	ASSERT_NEAR(at, 3896.0, 0.2);
+	fake_sync(h, SEQC_EV_CONTINUE, stopAt + fake_msToCycles(1.0));
+	fake_process(h, stopAt + fake_msToCycles(1.0));
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	h->logMask = FAKE_LOG_ALL;
+	const size_t from = h->logCount;
+	const seqc_time_t t1 = h->now;
+	const uint32_t clocks = h->calls[FAKE_MIDI_CLOCK];
+	seqc_setSyncMode(SEQC_SYNC_INTERNAL);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	fake_runUntil(h, t1 + fake_msToCycles(60.0), fake_msToCycles(0.1));
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	uint8_t tr[2];
+	size_t n = 0, pos = from;
+	const fake_rec_t *r;
+	while ((r = fake_next(h, FAKE_TRANSPORT, &pos)) != NULL)
+		if (n < 2)
+			tr[n++] = r->value;
+	ASSERT_EQ(n, 1);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_CONTINUE);
+	/* the first MIDI clock at tick 3904, one clock period (at 120 BPM) after
+	 * the held position's half clock, not at once */
+	pos = from;
+	r = fake_next(h, FAKE_MIDI_CLOCK, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ_DBL(r->tick, 3904.0);
+	ASSERT_NEAR((double)(r->time - t1), 0.5 * per, fake_msToCycles(0.1) + 2.0);
+	ASSERT_EQ(h->calls[FAKE_MIDI_CLOCK] - clocks, 3);	/* 3904, 3920, 3936 in 60 ms */
+	/* no tempo step before the step-41 boundary (tick 3936, 52.1 ms) */
+	pos = from;
+	r = fake_next(h, FAKE_TEMPO_STEP, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ_DBL(r->tick, 41.0 * 96);		/* handled before the boundary at that tick */
+	ASSERT_TRUE(fake_next(h, FAKE_TEMPO_STEP, &pos) == NULL);	/* one step in 60 ms */
+	pos = from;
+	r = fake_next(h, FAKE_STEP_BOUNDARY, &pos);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->arg, 41);
+	/* no callback sees the position below the one held */
+	for (size_t i = from; i < h->logCount && i < FAKE_LOG_SIZE; i++)
+		ASSERT_TRUE(h->log[i].tick >= at);
+}
+
 TEST(T18_jack_4ppq_one_pulse_per_step)
 {
 	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
