@@ -2268,8 +2268,6 @@ FRESULT preset_createProject(uint8_t presetNr)
 	seq_songData[0][0] = 0;
 
 
-	//memset(seq_stepIndex,0,NUM_TRACKS);
-//	memset(seq_lastMasterStep,0,NUM_TRACKS);
 
 
 	for(i=0;i<NUM_PATTERN;i++)

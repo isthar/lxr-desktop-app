@@ -133,12 +133,27 @@ check_E2_4() {
 	# the handling of an entry can call out of the sequencer for long (a kit load), and the
 	# entries stamped meanwhile must not be popped against the time read before it: the
 	# drain reads the time again before every pop, drains to the end, and seqc_process()
-	# gets the time of its last pop (E2.4 review). In the CRLF file a blank line is a lone
-	# \r, one field for NF: strip it first
-	awk '{sub(/\r$/, "")} /^static uint8_t seq_drainSyncQueues\(seqc_time_t \*now\)/{f=1}
-		f&&/^[[:space:]]+\*now = seqp_now\(\);/{r=1;next} f&&r&&NF{if(/seqp_syncPop\(\*now, /)ok=1; r=0}
-		f&&/return drained;/{n++} f&&/^}/{exit} END{exit !(ok && n==1)}' \
-		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_drainSyncQueues() does not read the time before every pop"
+	# gets the time of its last pop (E2.4 review). The read must sit in the loop: the
+	# non-blank lines "for(;;)", "{", the read, the pop and "break;" follow each other,
+	# and the function pops in one place and returns in one. drain_lines prints the
+	# function's lines trimmed, without blank lines and whole-line // comments; in the CRLF
+	# file a blank line is a lone \r, one field for NF: strip it first
+	drain_lines() {
+		awk '{sub(/\r$/, "")} /^static uint8_t seq_drainSyncQueues\(seqc_time_t \*now\)/{f=1}
+			f&&/^}/{exit} f&&NF{sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); if(!/^\/\//)print}' \
+			Core/Src/Soundengine/Sequencer/sequencer.c
+	}
+	drain_lines | awk '{l[NR]=$0} /seqp_syncPop\(/{pops++} /while\(seqp_syncPop/{w++} /return drained;/{n++}
+		END{for(i=1; i+4<=NR; i++) if(l[i]=="for(;;)" && l[i+1]=="{" && l[i+2]=="*now = seqp_now();" &&
+			l[i+3] ~ /^if\(!seqp_syncPop\(\*now, / && l[i+4]=="break;") ok=1
+			exit !(ok && pops==1 && n==1 && !w)}' \
+		|| fail "seq_drainSyncQueues() does not read the time before every pop"
+	# a Program Change switch while stopped rewinds through the mailbox, applied in the
+	# drain before the next entry, not at the next seq_tick() (E2.4 review)
+	drain_lines | awk '{l[NR]=$0} END{for(i=1; i+2<=NR; i++) if(l[i]=="seq_setNextPattern((uint8_t)entry.value);" &&
+			l[i+1]=="if(seq_mailboxPosted)" && l[i+2]=="seq_applyMailbox();") ok=1
+			exit !ok}' \
+		|| fail "seq_drainSyncQueues() does not apply the mailbox after a Program Change switch"
 	awk '{sub(/\r$/, "")} /^void seq_tick\(\)/{f=1} f&&/seq_drainSyncQueues\(&now\)/{d=1;next} f&&d&&NF{if(/^[[:space:]]+changed = 1;$/)next; if(/^[[:space:]]+seqc_process\(now\);$/)ok=1; d=0}
 		f&&/^}/{exit} END{exit !ok}' \
 		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_tick() does not pass the time of the last pop to seqc_process()"
