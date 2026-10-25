@@ -418,3 +418,49 @@ The step grid and absStep stay correct, because clocks are counted. The wrong te
 - The design is chosen by a separate design pass and implemented test-first in task **E1.15**, after
   E1.14 and before E2.1. Until then the E1.10 and E1.14 behaviour stands; reviewers need not raise this
   case again.
+
+**Design, chosen on 2026-10-25 by a design pass that compared three estimators on 31 harness scenarios
+and about 2800 swept ones.** The estimate is the slope of a least-squares fit of the clock stamps against
+the clock count.
+
+- **Transfers.**
+  - Clocks with one stamp form one transfer, and a transfer is one point of the fit, placed at its last
+    clock (the time USB stamps it).
+  - A transfer is evaluated once it is complete: at the next clock with a later stamp, at any other sync
+    event, or at the next `seqc_process()`.
+  - `seq_tick()` drains every queued clock first, and OTG_FS (priority 3) queues a whole transfer above
+    TIM2 (priority 4). So no 0 interval exists, and transfers of any size give the clock tempo.
+- **Two windows.**
+  - The fit uses the last 24 clocks and the last 96 clocks, at most 16 s; at 4 PPQ both are 4 pulses
+    (N9). The estimate is the long slope.
+  - When the short slope differs from it by more than the steps of the stamps can explain, the long
+    window becomes the short one.
+  - Exact stamps therefore follow ramps within a beat, and stamps quantised to audio buffers get the
+    precision of 96 clocks.
+- **Steps of the stamps.** The estimator keeps a decaying peak of how far an interval is from the slope,
+  counted when the next interval takes it back: up to one buffer for USB, the jitter for DIN.
+- **Outliers (replacing N9's mean and its ±50% band).**
+  - MIDI: a point further from the line than half a clock, or than 1.25 step amplitudes, is left out. A
+    lasting step is taken in, and a glitch does not widen the band.
+  - Jack: the interval test with the line re-anchored, so a lost pulse leaves the estimate alone.
+  - Nothing is tested in the first 12 clocks.
+- **Jumps (N16, as amended).**
+  - 4 outliers in a row (2 at 4 PPQ) restart the fit from those outliers alone, as after a dropout. The
+    interval into the first one, which may straddle the change, is not used.
+  - On MIDI, in-band steps of about 15% or more restart the same way, and count in `tempoRestarts`.
+  - N16's rule for a 0 interval no longer applies.
+- **Limit (qualifies the requirement above).** Near simple clock-to-buffer ratios no estimator reaches
+  0.5% after two beats; for example 1:1 is 107.67 BPM with 1024-sample buffers.
+  - Across the 561 tempos from 60 to 200 BPM, the fit stays within 0.74%, 0.79% and 1.37% at 256, 512
+    and 1024 samples.
+  - It misses 0.5% at 3, 8 and 42 of those tempos.
+  - It is exact for transfers of 1 to 16 clocks.
+  - DIN with ±0.3 ms jitter stays within 0.007%.
+- **Costs and behaviour changes.**
+  - About 928 B of RAM (a 98-point ring) and about 2.5 KB of code. Review row R6.2 is amended for it,
+    as for N20.
+  - A lost DIN clock now costs about 1.5% for about 4 beats, where it cost 0% before. A lost jack pulse
+    still costs 0%.
+  - Tempo changes on buffered USB settle in 1 to 3 beats.
+  - The tuning constants (band 1.25, switch 1.5, decay 1/64, drift 0.25) come from the harness sweeps.
+    Confirm them on hardware (H6, H7 over USB) and measure the CPU cost with the E3.3 meter.
