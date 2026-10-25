@@ -82,8 +82,10 @@ compare, the choke test, the front of the queue), now inlined into the processin
 - **Single inserts.** The core queues nothing outside a boundary (the one-shot roll stays in
   `seq_setRoll()`), so there is no separate single insert; the test hook queues one event as a batch of
   one.
-- **Measured** (element writes per `seqc_process()` call; the boundary calls, then the others; 16 to 32
-  steps at 120, 130 and 300 BPM with a call every 0.1, 1 or 3 ms; `tests/test_queue.c`):
+- **Measured** (the most element writes in one `seqc_process()` call: the boundary calls, then the
+  others; `tests/test_queue.c`). The dense ×8 patterns run 16 steps at 120 BPM with a call every
+  0.1 ms; the hill-climbed and the random ones 32 steps at 120, 130 and 300 BPM with a call every 0.1, 1
+  or 3 ms:
 
   | Pattern | E1.16 queue | E1.18 queue |
   |---|---|---|
@@ -98,7 +100,8 @@ compare, the choke test, the front of the queue), now inlined into the processin
   cycles a write with its loop and compare; a key compare about 12; an index shift about 4, through
   newlib-nano's byte `memmove`). The worst boundary call, of the hill-climbed pattern, has 330 writes,
   816 compares and 1894 index shifts: about 28k cycles, 9% of the 313 186-cycle block budget (N12),
-  against about 70–90k. A dense ×8 boundary with every track on one grid costs about 8k.
+  against about 70–90k. A dense ×8 boundary with every track on one grid (112 writes, 264 compares,
+  354 index shifts) costs about 9k.
 - **Size** (`seq_core.c.obj`, the firmware compile command, Arm GNU 14.3.rel1): bss 8269 → 11221 B
   (+2952: the staging buffer 2688 B and its index 224 B, the recorded chokes 32 B), text 20178 →
   20090 B. Review row R6.2 must allow it, as for N20 and N21.
