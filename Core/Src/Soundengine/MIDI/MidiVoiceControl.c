@@ -51,11 +51,7 @@ void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
 	}
 	*/
 
-	if (active_voices & (1<<voice))
-	{
-    uint8_t midiChan = midi_MidiChannels[voice];
-		seq_sendMidiNoteOn(midiChan, note, vel);
-	}
+	//no MIDI Note On here: the caller sends exactly one (D4)
 
 	// Send to front panel so it can pulse the LED
 	uart_sendFrontpanelByte(NOTE_ON);
@@ -65,24 +61,20 @@ void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
 //----------------------------------------------------------------
 void voiceControl_noteOff(uint8_t voice)
 {
-	uint8_t midiChan; // which midi channel to send a note on
-
 	if(voice==0xff)
 	{
 		active_voices = 0;
+		//the note of every voice, then any channel note sent without a voice
+		for(uint8_t i=0;i<NUM_TRACKS;i++)
+			seq_sendVoiceNoteOff(i);
 		seq_midiNoteOff(0xff);
 		return;
 	}
 
-	//only set voice inactive and send MIDI off when voice is currently playing
-	if(active_voices & (1<<voice))
-	{
-		active_voices &= (~(1<<voice));
+	active_voices &= (~(1<<voice));
 
-		//send midi note off
-		midiChan = midi_MidiChannels[voice];
-		seq_midiNoteOff(midiChan);
-	}
+	//send midi note off: the voice's last note, on the channel it was sent on
+	seq_sendVoiceNoteOff(voice);
 }
 //----------------------------------------------------------------
 uint8_t voiceControl_isVoicePlaying(uint8_t voice)

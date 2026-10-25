@@ -80,7 +80,19 @@ check_E2_2() {
 	must_call seq_cbClockOutPulse trigger_setClockPhase trigger_clockTick
 }
 
-check_tasks="E2.2"
+# ---- E2.3: one MIDI Note On per trigger, Note Offs per voice (D4) ------------
+check_E2_3() {
+	need seq_sendVoiceNoteOn seq_sendVoiceNoteOff
+	must_not_call voiceControl_noteOn seq_sendMidiNoteOn seq_sendVoiceNoteOn
+	must_call voiceControl_noteOff seq_sendVoiceNoteOff
+	must_call midiParser_noteOn seq_sendVoiceNoteOn
+	must_not_call midiParser_noteOn seq_sendMidiNoteOn seq_midiNoteOff
+	no_source '^[[:space:]]+seq_sendMidiNoteOn\(' Core/Src/Soundengine/Sequencer/sequencer.c \
+		Core/Src/Soundengine/MIDI/MidiVoiceControl.c Core/Src/Soundengine/MIDI/MidiParser.c
+	no_source 'voiceControl_noteOff\(midi_MidiChannels' Core/Src/Soundengine/Sequencer/sequencer.c
+}
+
+check_tasks="E2.2 E2.3"
 
 if [ $# -gt 0 ]; then check_tasks="$*"; fi
 for task in $check_tasks; do

@@ -16713,7 +16713,7 @@ one with the note override.
 - Modify: `Core/Src/Soundengine/MIDI/MidiParser.c` (fw 1.7 lines 1517-1530)
 - Test: `tools/fw_checks.sh E2.3`
 
-- [ ] **Step 1: Write the failing check**
+- [x] **Step 1: Write the failing check**
 
 Add the E2.3 checks before the task list:
 
@@ -16741,7 +16741,7 @@ check_E2_3() {
 check_tasks="E2.2 E2.3"
 ```
 
-- [ ] **Step 2: Run it and see it fail**
+- [x] **Step 2: Run it and see it fail**
 
 Run:
 
@@ -16763,7 +16763,7 @@ FAIL E2.3: '^[[:space:]]+seq_sendMidiNoteOn\(' found: Core/Src/Soundengine/Seque
 FAIL E2.3: 'voiceControl_noteOff\(midi_MidiChannels' found: 1007:			voiceControl_noteOff(midi_MidiChannels[trackNr]);
 ```
 
-- [ ] **Step 3: `voiceControl_noteOn()` without MIDI; `voiceControl_noteOff()` per voice**
+- [x] **Step 3: `voiceControl_noteOn()` without MIDI; `voiceControl_noteOff()` per voice**
 
 fw 1.7 lines 52-59:
 
@@ -16839,7 +16839,7 @@ void voiceControl_noteOff(uint8_t voice)
 }
 ```
 
-- [ ] **Step 4: Note bookkeeping per voice in `sequencer.c`**
+- [x] **Step 4: Note bookkeeping per voice in `sequencer.c`**
 
 After `seq_resetBarOnPatternChange` (fw 1.7 line 113):
 
@@ -16928,7 +16928,7 @@ void seq_sendVoiceNoteOff(const uint8_t voice)
 }
 ```
 
-- [ ] **Step 5: Declare them in `sequencer.h`**
+- [x] **Step 5: Declare them in `sequencer.h`**
 
 `Core/Inc/Soundengine/Sequencer/sequencer.h`, replace:
 
@@ -16947,7 +16947,7 @@ void seq_sendVoiceNoteOn(const uint8_t voice, const uint8_t note, const uint8_t 
 void seq_sendVoiceNoteOff(const uint8_t voice);
 ```
 
-- [ ] **Step 6: Send per voice from the triggers; fix `seq_setMute()`**
+- [x] **Step 6: Send per voice from the triggers; fix `seq_setMute()`**
 
 `seq_triggerVoice()` as E2.2 left it. Its single Note On keeps fw 1.7's velocity, the volume of
 the track's current step (N18.3); before the first step, where fw 1.7 read step -1, it sends `vol`,
@@ -17020,7 +17020,7 @@ with:
 			voiceControl_noteOff(trackNr);
 ```
 
-- [ ] **Step 7: Echo incoming notes per voice**
+- [x] **Step 7: Echo incoming notes per voice**
 
 In `midiParser_noteOn()`, fw 1.7 lines 1517-1525 and 1529-1530. The comment lines 1526-1528 stay between the two pieces.
 
@@ -17063,7 +17063,7 @@ with:
 		}
 ```
 
-- [ ] **Step 8: Give the edited files CRLF line endings**
+- [x] **Step 8: Give the edited files CRLF line endings**
 
 ```bash
 python3 - Core/Src/Soundengine/MIDI/MidiVoiceControl.c Core/Src/Soundengine/Sequencer/sequencer.c \
@@ -17081,7 +17081,7 @@ EOF
 
 Expected: four lines starting with `CRLF`.
 
-- [ ] **Step 9: Build and run the checks**
+- [x] **Step 9: Build and run the checks**
 
 Run:
 
@@ -17100,29 +17100,29 @@ PASS E2.2
 PASS E2.3
 ```
 
-- [ ] **Step 10: Review**
+- [x] **Step 10: Review**
 
-- [ ] There is no `seq_sendMidiNoteOn(` call left in `sequencer.c`, `MidiVoiceControl.c` or
+- [x] There is no `seq_sendMidiNoteOn(` call left in `sequencer.c`, `MidiVoiceControl.c` or
   `MidiParser.c` (the definition stays). The checks cover this.
-- [ ] Every path that triggers a voice sends at most one Note On:
+- [x] Every path that triggers a voice sends at most one Note On:
   - the sequencer (`trigger` callback);
   - the one-shot roll (`seq_triggerVoice()`);
   - an incoming MIDI note (echo);
   - a front-panel pad: CortexParser calls `voiceControl_noteOn()` and sends no MIDI.
-- [ ] `voiceControl_noteOff(0xFF)`, sent on a pattern change and on a rewind, ends every voice's
+- [x] `voiceControl_noteOff(0xFF)`, sent on a pattern change and on a rewind, ends every voice's
   note and every per-channel note.
-- [ ] `CortexParser.c:822` calls `voiceControl_noteOff(voice)` before it changes a voice's channel.
+- [x] `CortexParser.c:822` calls `voiceControl_noteOff(voice)` before it changes a voice's channel.
   The Note Off therefore goes out on the old channel, which is what the per-voice record holds.
-- [ ] The TX note filter still gates Note Ons only. Note Offs go out unfiltered, as fw 1.7 did.
+- [x] The TX note filter still gates Note Ons only. Note Offs go out unfiltered, as fw 1.7 did.
 
-- [ ] The one-shot roll's Note On has the current step's volume, as in fw 1.7 (N18.3), and the
+- [x] The one-shot roll's Note On has the current step's volume, as in fw 1.7 (N18.3), and the
   voice's velocity only before the first step.
 
 Intended changes for the report:
 - one Note On per trigger, and Note Offs match per voice;
 - muting a track turns off that track's note.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add tools/fw_checks.sh Core/Src/Soundengine/MIDI/MidiVoiceControl.c Core/Src/Soundengine/Sequencer/sequencer.c \

@@ -1515,18 +1515,15 @@ static void midiParser_noteOn(uint8_t voice, uint8_t note, uint8_t vel, uint8_t 
 		//Recording Mode - record the note to sequencer and echo to channel of that voice
 		// (we'd want to hear what's being recorded)
 		if(do_rec) {
-			const uint8_t chan=midi_MidiChannels[voice];
-
 			// record note if rec is on
 			seq_addNote(voice,vel, note);
 
-			//if a note is on for that channel send note-off first
-			seq_midiNoteOff(chan);
-			//send the new note to midi/usb out
+			//echo the note on the voice's channel, once in play and in record mode (D4):
+			//the voice's last note gets its Note Off first, then the new Note On is sent
 			// todo a user played note will end up being turned off if a pattern switch happens.
 			//           to fix this we'd have to differentiate between a user played note and a
 			//           note triggered from sequencer, and also recognize note off on user played note and send it.
-			seq_sendMidiNoteOn(chan, note, vel);
+			seq_sendVoiceNoteOn(voice, note, vel);
 		}
 
 	}

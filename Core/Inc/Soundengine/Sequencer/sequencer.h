@@ -299,6 +299,11 @@ void seq_midiNoteOff(uint8_t chan);
 //------------------------------------------------------------------------------
 void seq_sendMidiNoteOn(const uint8_t channel, const uint8_t note, const uint8_t veloc);
 //------------------------------------------------------------------------------
+// MIDI Note On and Note Off of a voice (track) on its channel; the Note Off always
+// matches the voice's last Note On, also when voices share a channel
+void seq_sendVoiceNoteOn(const uint8_t voice, const uint8_t note, const uint8_t veloc);
+void seq_sendVoiceNoteOff(const uint8_t voice);
+//------------------------------------------------------------------------------
 uint8_t seq_getStepIndex(uint8_t trackNr);
 //------------------------------------------------------------------------------
 PatternSet* get_seq_patternSet_p(void);

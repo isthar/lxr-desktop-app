@@ -86,6 +86,12 @@ static uint8_t seq_loadPendigFlag = 0;
 // the purpose of pattern changes
 uint8_t seq_resetBarOnPatternChange=0;
 
+//LICHOMAT: the MIDI note of each voice, so that its Note Off matches its Note On also
+//when several voices share a MIDI channel (D4, spec 12)
+static uint8_t midi_voiceChan[NUM_TRACKS];	/**< channel of the voice's last Note On */
+static uint8_t midi_voiceNote[NUM_TRACKS];	/**< note of the voice's last Note On */
+static uint8_t midi_voicesOn=0;			/**< voices with a MIDI note on, one bit each */
+
 // keep track of which midi notes are playing
 static uint8_t midi_chan_notes[16];		    /**< what note is playing on each channel */
 static uint16_t midi_notes_on=0;		    /**< which channels have a note currently playing */
@@ -496,7 +502,6 @@ static void seq_parseAutomationNodes(uint8_t track, const Step* stepData)
 //------------------------------------------------------------------------------
 void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 {
-	uint8_t midiChan; // which midi channel to send a note on
 	uint8_t midiNote; // which midi note to send
 
 	if(voiceNr > 6) return;
@@ -527,8 +532,6 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 	//Trigger internal synth voice
 	voiceControl_noteOn(voiceNr, note, vol);
 
-	midiChan = midi_MidiChannels[voiceNr];
-
 	// the note that is played will be whatever is received unless we have a note override set
 	// A note override is any non-zero value for this parameter
 	//if(midi_NoteOverride[voiceNr] == 0)
@@ -538,8 +541,9 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 		//midiNote = midi_NoteOverride[voiceNr];
 		midiNote = activeParameters[PAR_MIDI_NOTE1 + voiceNr];
 
-	//send the new note to midi/usb out
-	seq_sendMidiNoteOn(midiChan, midiNote, stepData ? (stepData->volume&STEP_VOLUME_MASK) : vol);
+	//send the new note to midi/usb out: the only Note On (D4), with the current step's volume
+	//as in fw 1.7 (N18.3), or the voice's velocity before the first step
+	seq_sendVoiceNoteOn(voiceNr, midiNote, stepData ? (stepData->volume&STEP_VOLUME_MASK) : vol);
 }
 //------------------------------------------------------------------------------
 //has to be called AFTER the last pattern switch is finished, so the playing pattern is properly put into the temp buffer
@@ -1007,7 +1011,8 @@ void seq_setMute(uint8_t trackNr, uint8_t isMuted)
 			//mute track
 			seq_mutedTracks |= (1<<trackNr);
 			// turn off the midi note that may be playing on that track
-			voiceControl_noteOff(midi_MidiChannels[trackNr]);
+			// (fw 1.7 passed the MIDI channel here, which turned off another voice)
+			voiceControl_noteOff(trackNr);
 		} else {
 			//unmute track
 			seq_mutedTracks &= ~(1<<trackNr);
@@ -1679,6 +1684,51 @@ void seq_sendMidiNoteOn(const uint8_t channel, const uint8_t note, const uint8_t
 	midi_notes_on |= (1 << channel);
 
 }
+//------------------------------------------------------------------------------
+/* LICHOMAT: send the MIDI Note On of a voice on its channel and remember the channel
+ * and the note. A note of the voice that is still on gets its Note Off first, so a
+ * voice has at most one MIDI note on. Filtered like seq_sendMidiNoteOn(). */
+void seq_sendVoiceNoteOn(const uint8_t voice, const uint8_t note, const uint8_t veloc)
+{
+	MidiMsg msg = {0};
+
+	if(voice >= NUM_TRACKS)
+		return;
+	seq_sendVoiceNoteOff(voice);
+
+	// FILT filter out note msgs if appropriate
+	if((midiParser_txRxFilter & (MIDI_FILTER_NOTES<<4))==0)
+		return;
+
+	const uint8_t channel = midi_MidiChannels[voice];
+	msg.status = NOTE_ON | channel;
+	msg.data1 = note;
+	msg.data2 = veloc;
+	msg.bits.length = 2;
+	seq_sendMidi(msg);
+
+	midi_voiceChan[voice] = channel;
+	midi_voiceNote[voice] = note;
+	midi_voicesOn |= (uint8_t)(1 << voice);
+}
+//------------------------------------------------------------------------------
+/* LICHOMAT: the Note Off of the voice's last Note On, on the channel and with the note
+ * it was sent with, if it is still on. Not filtered, like seq_midiNoteOff(): the
+ * filter may have been switched on while the note sounds. */
+void seq_sendVoiceNoteOff(const uint8_t voice)
+{
+	MidiMsg msg = {0};
+
+	if((voice >= NUM_TRACKS) || !(midi_voicesOn & (1 << voice)))
+		return;
+	midi_voicesOn &= (uint8_t)~(1 << voice);
+
+	msg.status = NOTE_OFF | midi_voiceChan[voice];
+	msg.data1 = midi_voiceNote[voice];
+	msg.data2 = 0;
+	msg.bits.length = 2;
+	seq_sendMidi(msg);
+}
 
 
 uint8_t seq_getStepIndex(uint8_t trackNr)
@@ -1914,7 +1964,7 @@ static void seq_cbTrigger(void *ctx, const seqc_event_t *ev)
 	// the note that is played will be whatever is received unless we have a note override set
 	// A note override is any non-zero value for this parameter
 	const uint8_t midiNote = activeParameters[PAR_MIDI_NOTE1 + voiceNr] == 0 ? ev->note : activeParameters[PAR_MIDI_NOTE1 + voiceNr];
-	seq_sendMidiNoteOn(midi_MidiChannels[voiceNr], midiNote, ev->vel);
+	seq_sendVoiceNoteOn(voiceNr, midiNote, ev->vel);
 
 	//record roll notes at their own step
 	if((ev->flags & SEQC_EVF_ROLL) && seq_recordActive)
