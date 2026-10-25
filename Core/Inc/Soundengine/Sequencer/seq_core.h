@@ -127,7 +127,15 @@
  *   tick n * 96. So a change of the shuffle or of the step's timing between the
  *   two boundaries plays no hit twice and loses none; otherwise an edit made
  *   before boundary n applies to step n.
- * - All hits of a step play together or not at all.
+ * - If the early part queued a hit, the occurrence has begun: its late part
+ *   plays whatever stepOn() and Step.prob read at boundary n (the step data,
+ *   velocity, note and p-locks, is read again). Otherwise an edit of either
+ *   made before boundary n applies, with the same draw. So the hits of a step
+ *   play together or not at all, with two exceptions:
+ *   - if (p, s) at boundary n differs from the early part's (a late change of
+ *     the pending pattern, or of a track length), the early hits came from the
+ *     prediction, and the late part is that of the step actually reached;
+ *   - seqc_skipOnce() drops the hits that have not played yet.
  * - StepTiming.flam 0..5 gives k = 1, 2, 3, 4, 6 or 8 hits; any other value
  *   gives 1. Hit j (0..k-1) is at
  *       n * 96 + swing + shift + j * 96 / k

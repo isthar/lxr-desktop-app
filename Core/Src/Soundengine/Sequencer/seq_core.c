@@ -714,14 +714,21 @@ static seqc_draw_t *seqc_draw(uint8_t track, uint32_t absStep, uint8_t pattern, 
  * before the boundary applies, but it keeps the early part's timing instead if
  * the early part queued a hit, or if the timing read now would put a hit before
  * absStep * 96, which has passed. Either way every hit is generated once
- * (decision 9 of epic E1). */
+ * (decision 9 of epic E1).
+ * If the early part queued a hit, the occurrence has begun: the late part plays
+ * whatever the main-step bit and the probability read now, so the hits of a step
+ * play together or not at all. Otherwise both are read again, with the same
+ * draw. */
 static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step, bool early)
 {
-	if (!seqc.host.stepOn(seqc.host.ctx, pattern, track, step))
+	const seqc_draw_t *slot = &seqc_gen.draw[track][absStep & 1u];
+	const bool begun = !early && slot->valid && slot->absStep == absStep && slot->pattern == pattern
+			&& slot->step == step && slot->timed && slot->offset < 0;
+	if (!begun && !seqc.host.stepOn(seqc.host.ctx, pattern, track, step))
 		return;
 	seqc_draw_t *d = seqc_draw(track, absStep, pattern, step);
 	const Step *data = seqc.host.step(seqc.host.ctx, pattern, track, step);
-	if (d->r > data->prob)
+	if (!begun && d->r > data->prob)
 		return;
 	const StepTiming timing = seqc.host.timing(seqc.host.ctx, pattern, track, step);
 	uint8_t hits = seqc_hitCount(timing.flam);

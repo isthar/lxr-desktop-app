@@ -343,6 +343,55 @@ TEST(T8_ratchet_hits_play_all_or_none)
 	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 100);
 }
 
+/* x8 at -3 units on even step 2: hits 0..2 (156, 168, 180)
+ * are early, 3..7 (192..240) late. edit runs after the early hits played,
+ * before boundary 2. The triggers of track 0 end up in trig[]. */
+static void runAfterTheEarlyHits(void (*edit)(fake_host_t *h), size_t hits)
+{
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 2, true);
+	fake_setTiming(h, 0, 0, 2, 5, -3);
+	runSteps(h, 2);					/* until just before boundary 2 */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 16), 3);
+	edit(h);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 4), fake_msToCycles(0.1));
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 1);	/* one draw for the occurrence */
+	ASSERT_EQ(fake_triggers(h, 0, trig, 16), hits);
+}
+static void setProb0(fake_host_t *h) { fake_setStepData(h, 0, 0, 2, 127, 60, 0); }
+static void switchOff(fake_host_t *h) { fake_setStep(h, 0, 0, 2, false); }
+
+TEST(T8_begun_step_plays_all_its_hits_after_a_prob_edit)
+{
+	/* the early hits played: the occurrence has begun, and its late hits
+	 * follow, whatever the probability reads at its boundary */
+	runAfterTheEarlyHits(setProb0, 8);
+	if (seqc_test_failed_)
+		return;
+	ASSERT_EQ(trig[7]->ev.tick, 2 * 96 + 48);
+}
+
+TEST(T8_begun_step_plays_all_its_hits_after_it_is_switched_off)
+{
+	runAfterTheEarlyHits(switchOff, 8);
+}
+
+TEST(T8_prob_edit_before_the_boundary_applies_with_the_same_draw)
+{
+	/* no early hit: an edit before the boundary applies to the step, and the
+	 * draw made with the early part stays (r = 40) */
+	fake_host_t *h = fake_init();
+	fake_setStep(h, 0, 0, 2, true);
+	fake_setStepData(h, 0, 0, 2, 127, 60, 50);
+	static const uint32_t script[] = { 39 };
+	fake_scriptRandom(h, script, 1);
+	runSteps(h, 2);					/* drawn at boundary 1: r = 40 */
+	fake_setStepData(h, 0, 0, 2, 127, 60, 30);
+	fake_runUntil(h, (seqc_time_t)(fake_stepCycles(120.0) * 3), fake_msToCycles(0.1));
+	ASSERT_EQ(fake_triggers(h, 0, trig, 4), 0);
+	ASSERT_EQ(h->reads[FAKE_READ_RANDOM], 1);
+}
+
 /* The early part of a step fixes its timing (seqc_generate()). A change of the
  * shuffle or of the step's timing between the boundary that makes the early part
  * and the step's own boundary neither plays a hit twice nor loses one. */
