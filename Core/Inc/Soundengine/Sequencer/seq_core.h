@@ -47,7 +47,8 @@
  *   2. drains the DIN, USB and jack sync queues, merged in stamp order, into
  *      seqc_syncEvent(), and a queued Song Position Pointer into seqc_songPosition();
  *   3. calls seqc_process(seqp_now());
- *   4. parses MIDI input, which reaches the core only through the mailbox.
+ *   4. parses MIDI input, which reaches the core through the mailbox, except for
+ *      the seqc_skipOnce() of a recorded note: seq_postSkipOnce() calls it at once.
  * Other contexts (main loop, interrupts) never call a seqc_ function. They post
  * to the mailbox in sequencer.c instead.
  *
