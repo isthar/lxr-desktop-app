@@ -2237,21 +2237,27 @@ static void seq_applyMailbox(void)
 	}
 }
 //------------------------------------------------------------------------------
-/** feed the queued sync events to the core, oldest first; returns 1 if there was one.
- * The drain stops after an event that can load a kit (a Program Change while stopped,
- * a Song Position Pointer: its seek in song mode). The load takes tens of ms, and the
- * events that arrive during it are stamped after now: popped against this now, they
- * would reach the core early, which skews the slave tempo and the position between
- * clocks. The next seq_tick() drains them against a fresh now, with their stamps. */
-static uint8_t seq_drainSyncQueues(seqc_time_t now)
+/** feed the queued sync events to the core, oldest first, until none is left;
+ * returns 1 if there was one, and in *now the time of the last pop, for seqc_process().
+ * The time is read again before every pop. The handling of an entry can call out of
+ * the sequencer for long: a kit load takes tens of ms, and the pattern switch of an
+ * accepted Program Change, the seek of a Song Position Pointer in song mode and a
+ * slave clock that reaches a pattern end (patternEnd(), the kit autoload) all
+ * load one. An entry stamped during that is later than the time read before it, and
+ * popped against that time it would reach the core early, at that time instead of its
+ * stamp, which skews the slave tempo and the position between clocks. */
+static uint8_t seq_drainSyncQueues(seqc_time_t *now)
 {
 	seqp_src_t source;
 	seqq_entry_t entry;
 	seqc_time_t stamp;
 	uint8_t drained = 0;
 
-	while(seqp_syncPop(now, &source, &entry, &stamp))
+	for(;;)
 	{
+		*now = seqp_now();
+		if(!seqp_syncPop(*now, &source, &entry, &stamp))
+			break;
 		drained = 1;
 		if(entry.type == SEQQ_PROGRAM_CHANGE)
 		{
@@ -2262,13 +2268,9 @@ static uint8_t seq_drainSyncQueues(seqc_time_t now)
 			{
 				seq_setNextPattern((uint8_t)entry.value);
 				//a switch while stopped loaded the pattern (and the kit) and rewinds
-				//through the mailbox: the rewind before the next event, which waits for
-				//the next seq_tick() and its fresh now
+				//through the mailbox: the rewind before the next event
 				if(seq_mailboxPosted)
-				{
 					seq_applyMailbox();
-					return drained;
-				}
 			}
 			continue;
 		}
@@ -2277,9 +2279,8 @@ static uint8_t seq_drainSyncQueues(seqc_time_t now)
 			continue;
 		if(entry.type == SEQQ_SONG_POSITION)
 		{
-			//its seek can load a kit: the next event waits for the next seq_tick()
 			seqc_songPosition(entry.value);
-			return drained;
+			continue;
 		}
 		seqc_syncEvent((seqc_sync_ev_t)entry.type, stamp);
 		//fw 1.7 seq_resetPosition() sent all notes off on every active reset gate edge, also
@@ -2356,8 +2357,8 @@ void seq_tick()
 		changed = 1;
 	}
 
-	const seqc_time_t now = seqp_now();
-	if(seq_drainSyncQueues(now))
+	seqc_time_t now;
+	if(seq_drainSyncQueues(&now))
 		changed = 1;
 	seqc_process(now);
 

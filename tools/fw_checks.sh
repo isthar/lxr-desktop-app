@@ -130,12 +130,18 @@ check_E2_4() {
 	# a Program Change switches the pattern from the sync queues, in order with the transport
 	has_source 'entry\.type == SEQQ_PROGRAM_CHANGE' Core/Src/Soundengine/Sequencer/sequencer.c
 	no_source 'seq_setNextPattern' Core/Src/Soundengine/MIDI/MidiParser.c
-	# the drain stops after a switch while stopped and after an SPP, which can load a kit:
-	# the events after them wait for a fresh now (E2.4 review). In the CRLF file a blank
-	# line is a lone \r, one field for NF: strip it first
-	awk '{sub(/\r$/, "")} /^static uint8_t seq_drainSyncQueues\(/{f=1} f&&/seq_applyMailbox\(\);/{a=1;next} a&&NF{if(/return drained;/)n++; a=0}
-		f&&/seqc_songPosition\(entry\.value\);/{b=1;next} b&&NF{if(/return drained;/)n++; b=0} f&&/^}/{exit} END{exit n!=2}' \
-		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_drainSyncQueues() does not stop after a kit-loading Program Change or SPP"
+	# the handling of an entry can call out of the sequencer for long (a kit load), and the
+	# entries stamped meanwhile must not be popped against the time read before it: the
+	# drain reads the time again before every pop, drains to the end, and seqc_process()
+	# gets the time of its last pop (E2.4 review). In the CRLF file a blank line is a lone
+	# \r, one field for NF: strip it first
+	awk '{sub(/\r$/, "")} /^static uint8_t seq_drainSyncQueues\(seqc_time_t \*now\)/{f=1}
+		f&&/^[[:space:]]+\*now = seqp_now\(\);/{r=1;next} f&&r&&NF{if(/seqp_syncPop\(\*now, /)ok=1; r=0}
+		f&&/return drained;/{n++} f&&/^}/{exit} END{exit !(ok && n==1)}' \
+		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_drainSyncQueues() does not read the time before every pop"
+	awk '{sub(/\r$/, "")} /^void seq_tick\(\)/{f=1} f&&/seq_drainSyncQueues\(&now\)/{d=1;next} f&&d&&NF{if(/^[[:space:]]+changed = 1;$/)next; if(/^[[:space:]]+seqc_process\(now\);$/)ok=1; d=0}
+		f&&/^}/{exit} END{exit !ok}' \
+		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_tick() does not pass the time of the last pop to seqc_process()"
 }
 
 # ---- E2.5: clock in and reset in jacks through the jack sync queue ----------

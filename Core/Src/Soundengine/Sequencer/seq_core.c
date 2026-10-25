@@ -1270,9 +1270,11 @@ static void seqc_setSlaveBpm(double bpm)
  *   in, so they share the stamp of the last of them. The clocks with one stamp
  *   form a transfer, which is one point of the fit, at its last clock. It is
  *   evaluated once it is complete: at the next clock with a later stamp, at any
- *   other sync event, or at the next seqc_process(). seq_tick() drains every
- *   queued clock before it calls seqc_process(), and the USB interrupt queues
- *   all the clocks of a transfer before seq_tick() can run.
+ *   other sync event, or at the next seqc_process(). seq_tick() drains the
+ *   queues until they are empty, reading the time again before every pop, and
+ *   passes the time of the last pop to seqc_process(); the USB interrupt queues
+ *   all the clocks of a transfer before seq_tick() can run. So every clock
+ *   stamped up to that time is in before the transfer is evaluated.
  * - Bursts: a MIDI clock less than SEQC_TEMPO_JOIN_MS after the newest stamp
  *   of the last transfer joins it, and the transfer takes the later stamp. A
  *   DIN interface that forwards a late buffer sends its clocks back to back,
@@ -2227,7 +2229,7 @@ void seqc_process(seqc_time_t now)
 	if (!seqc_enter())
 		return;
 	if (seqc_sl.transferOpen)
-		seqc_transferDone();	/* seq_tick() drains every queued clock before this call (N21) */
+		seqc_transferDone();	/* seq_tick() drains every clock stamped up to now first (N21) */
 	seqc_advance(now);
 	seqc_leave();
 }

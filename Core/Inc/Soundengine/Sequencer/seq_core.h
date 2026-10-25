@@ -47,8 +47,10 @@
  *   2. drains the DIN, USB and jack sync queues, merged in stamp order, into
  *      seqc_syncEvent(), a queued Song Position Pointer into seqc_songPosition(),
  *      and a queued Program Change into the pattern switch, whose rewind while
- *      stopped goes through the mailbox, applied at once;
- *   3. calls seqc_process(seqp_now());
+ *      stopped goes through the mailbox, applied at once. It reads the time
+ *      again before every entry, since handling one can load a kit, and stops
+ *      when no entry is left;
+ *   3. calls seqc_process() with the time of the drain's last read;
  *   4. parses MIDI input, which reaches the core through the mailbox, except for
  *      the seqc_skipOnce() of a recorded note: seq_postSkipOnce() calls it at once.
  * Other contexts (main loop, interrupts) never call a seqc_ function. They post
