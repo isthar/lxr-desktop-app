@@ -1596,6 +1596,36 @@ static void checkStall(size_t history)
 	ASSERT_EQ(stats().tempoRestarts, 0);
 }
 
+TEST(T16_undone_restart_keeps_the_window)
+{
+	/* the ring keeps the points of the fit before a restart, so undoing it
+	 * restores the whole window: at 120 BPM, after 200 clocks of which clock 105
+	 * is 0.3 of a clock late (inside the band), 3 clocks come late in a row and
+	 * the 4th heads a burst of 3 that ends on time. The head restarts the fit,
+	 * the burst undoes it, and the burst's point takes clock 105 out of the
+	 * long window as it should: the estimate is exact at once. (Had the restart
+	 * written over the oldest points of the window, they would stay in the
+	 * sums: 120.02 BPM.) */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = appendClocks(0, per, 200);
+	stamps[105] += (seqc_time_t)(0.3 * per);
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+	ASSERT_TRUE(fabs(seqc_currentBpm() - 120.0) > 0.01);	/* clock 105 tilts the line */
+	const size_t before = n;
+	const seqc_time_t last = stamps[n - 1];
+	for (int k = 1; k <= 3; k++)
+		stamps[n++] = last + (seqc_time_t)((double)k * per + 0.6 * k * per + 0.5);
+	const seqc_time_t end = last + (seqc_time_t)(6.0 * per + 0.5);
+	for (int j = 0; j < 3; j++)
+		stamps[n++] = end - (seqc_time_t)((2 - j) * fake_msToCycles(0.32));
+	deliver(h, SEQC_EV_CLOCK, stamps + before, n - before, fake_msToCycles(0.1));
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 3);
+	ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+}
+
 TEST(T16_stall_with_a_catch_up_burst_is_no_tempo_jump)
 {
 	checkStall(31);
