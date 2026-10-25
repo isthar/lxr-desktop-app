@@ -109,7 +109,7 @@ typedef struct
 typedef struct
 {
 	int8_t		index[SEQC_NUM_TRACKS];	/**< track step, -1 before the first step */
-	uint8_t		master;			/**< master track of the last boundary */
+	uint8_t		master;			/**< master track of the pattern that plays from the last boundary on */
 	bool		seeked;			/**< after a song position: the next boundary is absStep itself */
 } seqc_tracks_t;
 
@@ -503,7 +503,7 @@ static void seqc_queueInsert(const seqc_event_t *ev)
 	uint16_t dst = seqc_queueSlot(seqc_queue.count);
 	if (seqc_queue.count > 0 && !seqc_firesBefore(seqc_queueAt((uint16_t)(seqc_queue.count - 1u)), ev))
 	{
-		/* the first event that does not fire before ev; it and all after it move */
+		/* lo: the first event that does not fire before ev, where ev goes */
 		uint16_t lo = 0;
 		uint16_t hi = (uint16_t)(seqc_queue.count - 1u);
 		while (lo < hi)
@@ -1491,9 +1491,11 @@ static seqc_item_t seqc_nextItem(seqc_tick_t *tick, uint8_t *track)
 	return best;
 }
 //------------------------------------------------------------------------------
-/* A tick that rounding left a few ULPs short of the target still counts as due. The
- * tolerance, 1e-12 of the target, is far above double rounding; it grows by about 2e-4
- * cycles per second of play, so it stays below one cycle for the first hour after a start. */
+/** The last tick that counts as due at target, the timeline at the call.
+ * Rounding can leave the target a few ULPs short of the tick of an item that is
+ * due at the call, a step boundary whose ideal time is the time of the call for
+ * example; that tick still counts as due. The tolerance, 1e-12 x (1 + |target|)
+ * ticks, is far above the rounding of a double. */
 static inline double seqc_dueLimit(double target)
 {
 	return target + 1e-12 * (1.0 + (target > 0.0 ? target : -target));

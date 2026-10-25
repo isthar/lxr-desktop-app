@@ -100,7 +100,8 @@
  *   5. generates the late part of step n: its hits at or after tick n * 96;
  *   6. generates the early part of step n+1: its hits before tick (n+1) * 96,
  *      which come from a negative shift. If the master track wraps at n+1, the
- *      pattern and indices come from peekNextPattern().
+ *      pattern and indices come from peekNextPattern(); if it reports
+ *      SEQC_NO_PATTERN (the song ends at n+1), no early part is generated.
  * The master track is the track of the active pattern with the largest raw length,
  * the lowest track number on a tie, as in fw 1.7 seq_getLongestTrack(). A raw 0
  * (16 steps) therefore loses to any non-zero length. The master track wraps when
@@ -316,7 +317,7 @@ typedef struct seqc_stats
 	uint32_t muteDrops;		/**< events dropped when they fired because their track was muted */
 	uint32_t skipDrops;		/**< step occurrences not played because of seqc_skipOnce() */
 	uint32_t syncIgnored;		/**< sync events and song positions that did nothing (seqc_sync_ev_t) */
-	uint32_t intervalsExcluded;	/**< transfers of clocks left out of the tempo fit (outliers, N21) */
+	uint32_t intervalsExcluded;	/**< outlier transfers left out of the tempo fit, a restarting row's included (N16, N21) */
 	uint32_t dropouts;		/**< slave clock dropouts: no clock for the dropout time (N15) */
 	uint32_t reentries;		/**< calls ignored because they came from inside a callback */
 	uint32_t tempoRestarts;		/**< slave tempo estimates restarted after a tempo jump (N16) */
@@ -658,8 +659,10 @@ uint8_t seqc_trackStep(uint8_t track);
  * start. After a song position it is the SPP value. */
 int32_t seqc_absStep(void);
 //------------------------------------------------------------------------------
-/** The master track chosen at the last step boundary. After a song position it
- * is the master track of the pattern that the song position activated. 0 after
+/** The master track of the pattern that plays from the last step boundary on,
+ * chosen there after patternEnd(): at a pattern change, that of the new pattern
+ * (the wrap was decided with the old one). After a song position it is the
+ * master track of the pattern that the song position activated. 0 after
  * seqc_init() and after a rewind, until the first boundary. */
 uint8_t seqc_masterTrack(void);
 //------------------------------------------------------------------------------

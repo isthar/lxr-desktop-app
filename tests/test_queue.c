@@ -280,8 +280,8 @@ static call_t processCall(fake_host_t *h, seqc_time_t now)
 }
 
 /* The review's dense pattern: 7 tracks, every step x8 (flam 5), the odd steps
- * shifted by odd units and the even ones by even units, with shuffle. 16 steps
- * at 120 BPM, one seqc_process() every 0.1 ms. */
+ * shifted by `odd` units, the even ones by `even` units, and shuffle `shuffle`.
+ * The callers run 16 steps at 120 BPM, one seqc_process() every 0.1 ms. */
 static fake_host_t *startDenseShuffled(int8_t odd, int8_t even, uint8_t shuffle)
 {
 	fake_host_t *h = fake_init();
@@ -307,8 +307,10 @@ static fake_host_t *startDense(int8_t shift)
  * same grid, hit j of track t orders before hits j+1..7 of tracks 0..t-1, so a
  * shift towards the tail alone would move t * (7 - j) of the new events:
  * C(7,2) * C(8,2) = 588 in all. Inserting from the nearer end moves at most that
- * (354 without shift). Without shuffle the events still pending from the step
- * before fire before every new one and do not move. */
+ * (354 without shift). With shift +7 the 49 events still pending from the step
+ * before fire before every new one and the tail is always the nearer end, so
+ * they do not move; with smaller positive shifts the head-side shift can move
+ * them (shift +3: 615 writes, within the 644 of the first case). */
 #define DENSE_NEW_EVENT_MOVES		(21 * 28)
 #define DENSE_NEW_EVENT_MOVES_NO_SHIFT	354
 
