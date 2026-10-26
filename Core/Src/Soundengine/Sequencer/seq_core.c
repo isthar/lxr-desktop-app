@@ -109,7 +109,7 @@ typedef struct
 	double		anchorTick;
 
 	seqc_state_t	state;
-	bool		startPending;	/**< internal start: step 0 at the next seqc_process() */
+	bool		startPending;	/**< internal start: step 0 at the next seqc_process() or seqc_syncEvent() */
 	bool		atStart;	/**< rewound, and nothing has played since */
 	double		pos;		/**< the position handled so far, ticks */
 	int32_t		absStep;	/**< n of the current step, -1 before the first */

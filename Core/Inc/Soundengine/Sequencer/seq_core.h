@@ -446,9 +446,9 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond);
  * with the mode in use, or with a value other than 0..2, is ignored.
  * - Internal to slave: the position continues from where it is, and the next
  *   clock adds one clock's worth of ticks. A start that has not begun yet
- *   (seqc_start() with no seqc_process() since) becomes the local start of a
- *   slave: its START was reported, so it stops (STOP) and is armed (ARM) until
- *   the clock that begins a step, which reports START again.
+ *   (seqc_start() with no seqc_process() or seqc_syncEvent() since) becomes the
+ *   local start of a slave: its START was reported, so it stops (STOP) and is
+ *   armed (ARM) until the clock that begins a step, which reports START again.
  * - Slave to internal: the position continues at the master tempo. An armed
  *   transport starts at once (transport START or CONTINUE). Armed at a located
  *   step, it plays that step at once, with its MIDI clock and tempoStep(): they
@@ -496,8 +496,8 @@ void seqc_setAnalogPpq(uint8_t ppq);
  * - seqc_start() is a local start; it always starts from the beginning.
  *   - From stopped: rewind if the position is not at the start (REWIND).
  *   - Internal sync: start at once (START). Step 0 is at the time of the next
- *     seqc_process() call, which handles it. MIDI clock out is re-phased, so its
- *     next clock is at step 0.
+ *     seqc_process() or seqc_syncEvent() call, which handles it. MIDI clock out
+ *     is re-phased, so its next clock is at step 0.
  *   - Slave modes: arm (ARM). Playback starts at step 0 (START) with the next
  *     clock that begins a step of the clock count: clock count % clocksPerStep
  *     == 0, counted before that clock. clocksPerStep is 6 for MIDI and for the
