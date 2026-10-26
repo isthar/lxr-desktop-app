@@ -193,7 +193,7 @@ LICHOMAT is free software under the GNU General Public License version 3 (GPL-3.
 additional permission and terms in NOTICE.md; the complete source code is in the repository. It
 comes without any warranty: installing it is at your own risk, and Erica Synths provides no support
 for it. "Erica Synths", "LXR" and "LXR-02" are trademarks of Erica Synths and are used here only to
-say which device this firmware is for.
+name the device this firmware is for and its official firmware.
 
 ## Publishing (owner only)
 
