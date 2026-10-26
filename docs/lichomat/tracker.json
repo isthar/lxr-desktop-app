@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-27 00:06",
+    "updated": "2026-10-27 00:09",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Następny jest szkic specyfikacji etapu 1b: emulator na macOS, najpierw renderer WAV, potem aplikacja z wirtualnym panelem.",
     "branch": "timing-core",
-    "head": "2680991",
+    "head": "5f00406",
     "next": "Twoje testy H1–H13, U1 i X4 oraz odpowiedzi na Q9–Q11. Ja: szkic specyfikacji etapu 1b do Twojej akceptacji.",
-    "updated_at": "2026-10-27T00:06:00+01:00",
-    "now": "Testy na sprzęcie odblokowane (plik 9a7aff2a…). Następny krok to szkic specyfikacji etapu 1b."
+    "updated_at": "2026-10-27T00:09:00+01:00",
+    "now": "Etap 1b: piszę szkic specyfikacji emulatora. Recenzent sprawdza też dokumenty po E4.5."
   },
   "epics": [
     {
@@ -650,6 +650,55 @@
       "status": "otwarte",
       "question": "Zegar na wejściu clock in (jack), zwłaszcza 4 PPQ: czy LXR ma czekać na każdy impuls, jak fw 1.7, czy grać kroki w tempie dopasowanym do zegara, jak teraz? Teraz (N9) interpolacja dochodzi aż do przewidywanego impulsu, więc krok, który zaczyna się przy następnym impulsie, gra wtedy, gdy dopasowane tempo ten impuls przewiduje, także gdy impuls się spóźnia. Przy 4 PPQ każdy impuls zaczyna krok, więc zegar ze swingiem na jacku gra równo. W próbie z impulsami na przemian co 100 i 150 ms kroki szły równo co 125 ms, a każdy spóźniony krok grał 25 ms przed swoim impulsem. fw 1.7 grał krok przy jego impulsie, więc swing zegara zostawał. Zegar 4 PPQ, który staje bez resetu, gra 9 kroków na 8 impulsów. Przy 24 PPQ i przy MIDI clock błąd mieści się w jednym takcie zegara (ok. 4,6 ms w tej samej próbie). Uwaga F21 z przeglądu E4.1.",
       "assumption": "Zostaje jak jest we wszystkich trybach slave (N9). Raport etapu i notatki wydania opisują to jako zmianę względem fw 1.7. Jeśli wolisz czekanie na impuls przy jacku 4 PPQ, krok przy granicy poczeka na impuls. Najpierw powstanie test T18 z zegarem ze swingiem.",
+      "answer": null
+    },
+    {
+      "id": "Q12",
+      "status": "otwarte",
+      "question": "Etap 1b: czy robimy emulator w uzgodnionej kolejności? Od 20.10 powstało 5 komputerowych wersji samego silnika dźwięku LXR-02, np. PHX-D01 na macOS. Żadna nie uruchamia menu, sekwencera ani synchronizacji MIDI. Nasz etap 1b uruchomi cały LICHOMAT na Macu, w dwóch krokach. Pierwszy to renderer WAV z linii poleceń: testy porównujące nagrania w CI i szybkie odsłuchy zmian etapu 2 bez sprzętu. Drugi to aplikacja z wirtualnym panelem i CoreMIDI, jako master i jako slave. Prototyp już działa: 68 plików firmware i 509 linii kodu emulatora. Alternatywa: renderer, potem etap 2 (groove), a aplikacja później.",
+      "assumption": "Kolejność jak uzgodniona 23.10: renderer, potem aplikacja, potem etap 2. Specyfikację 1b przygotuję do Twojej akceptacji. Kod ruszy dopiero po akceptacji.",
+      "answer": null
+    },
+    {
+      "id": "Q13",
+      "status": "otwarte",
+      "question": "Emulator potrzebuje kilku małych zmian w firmware. Większość nie zmienia działania LXR: dwa odczyty spod adresu 0 (modulationNode.c:49 i morphParameters bez karty SD), strcpy o 1 bajt za daleko w menu.c, podział main() na start i jedno przejście pętli oraz konwersje float→uint z nasyceniem, jak robi to Cortex-M7. Jedna zmiana zmienia dźwięk: odczyt za końcem tablicy w Oscillator.c:464 (i :174). Czy wprowadzać te zmiany w firmware?",
+      "assumption": "Tak, jako osobne małe commity na gałęzi emulatora, przeniesione do firmware po Twoich testach v0.1. Poprawka Oscillator.c dopiero po odsłuchu na LXR. Zgłoszony przez inny projekt błąd wskaźników delaya ping-pong najpierw odtworzę.",
+      "answer": null
+    },
+    {
+      "id": "Q14",
+      "status": "otwarte",
+      "question": "Nazwa i wygląd emulatora. Propozycja: aplikacja „LICHOMAT Emu”, renderer „lichomat-render”, port CoreMIDI „LICHOMAT Emu”, opis „emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02”. Panel schematyczny, we własnych kolorach, bez logo i bez kopii frontu urządzenia. NOTICE.md nie pozwala używać „LXR” ani „Erica Synths” jako nazwy i nie daje praw do wyglądu urządzenia. Pasuje?",
+      "assumption": "Tak, jak w propozycji.",
+      "answer": null
+    },
+    {
+      "id": "Q15",
+      "status": "otwarte",
+      "question": "Dystrybucja emulatora: tylko Apple silicon (arm64), macOS 13 lub nowszy, plik podpisany ad hoc jako załącznik wydania na Twoim forku, bez płatnego konta Apple Developer (ok. 99 USD rocznie). Przy pierwszym uruchomieniu trzeba wtedy kliknąć „Otwórz mimo to”. Bez fabrycznych kitów Erica, bo nie są na GPL: emulator wczytuje kopię Twojej karty albo folder.",
+      "assumption": "Tak, jak w propozycji. Intel nie jest wspierany (build x86_64 daje inne wyniki i potrafi się wysypać).",
+      "answer": null
+    },
+    {
+      "id": "Q16",
+      "status": "otwarte",
+      "question": "Działanie aplikacji emulatora. Propozycja: pokrętła jak na LXR (ok. 134 kroki na obrót, 22 dla parametrów-list), wyświetlacz odświeżany od razu (bez opóźnienia LXR, ok. 51 ms na pełne odświeżenie), opóźnienie wejścia MIDI w trybie slave ok. 24 ms do regulacji, dźwięk liczony w wewnętrznej częstotliwości LXR 44140,6 Hz i przeliczany do częstotliwości karty dźwiękowej. Aplikacja trzyma własny folder karty, z importem i eksportem, i nie pracuje bezpośrednio na Twojej karcie. Interfejs w Dear ImGui (lekki, natywny Metal).",
+      "assumption": "Tak, jak w propozycji. Jacki zegara w aplikacji: dioda i przyciski, a impuls na wyjściu audio i zegar z wejścia audio opcjonalnie.",
+      "answer": null
+    },
+    {
+      "id": "Q17",
+      "status": "otwarte",
+      "question": "Na DIN takty zegara MIDI (F8) czekają za nutami wysłanymi w tej samej chwili, do ok. 7 ms przy 7 torach. Każda nuta to ok. 1 ms na kablu. Tak jest w fw 1.7 i w LICHOMAT 0.1. Standard MIDI 1.0 pozwala wysłać bajty realtime przed nutami czekającymi w kolejce, więc zegar dla sprzętu za LXR byłby równiejszy. Zmienić to (w 0.1.x albo w etapie 2)?",
+      "assumption": "Zapisuję do etapu 2 i na razie nic nie zmieniam. Test H5 już uwzględnia to opóźnienie.",
+      "answer": null
+    },
+    {
+      "id": "Q18",
+      "status": "otwarte",
+      "question": "Opcjonalnie: czy możesz sfotografować wyświetlacz LXR-02 na stronie songu (strzałki góra/dół) i na innych ekranach ze znakami spoza ASCII? Wirtualny wyświetlacz odwzoruje wtedy font kontrolera WS0010.",
+      "assumption": "Bez zdjęć: ogólny font 5×8, a kody 0xC5 i 0xC6 jako strzałki.",
       "answer": null
     }
   ],
@@ -1758,6 +1807,11 @@
       "n": 221,
       "at": "2026-10-27 00:06",
       "text": "E4.5 zrobione (23:45–00:01, workflow C4): poprawka 2680991, test-first z nowym testem na hoście test_midicc (6 testów, teraz 28 identyfikatorów ctest). Przy okazji poprawiony drugi zapis poza tablicą: NRPN z niskim bajtem numeru od 127 wzwyż pisał do 129 bajtów za tablicę. Lekki przegląd przeszedł w rundzie 1. CI przebieg 40416804934: testy na hoście (x86 GCC z sanitizerami) i firmware przeszły. Nowy plik do testów: SHA-256 9a7aff2a… (300564 B), hash sprawdziłem po pobraniu. Lista testów: nowy hash w arkuszu i nowy test U2 (porównanie plików patternów przed wczytaniem kitów i po nim). Notatki wydania: nowy hash i poprawka w „Fixed”. Raport etapu, plan (poprawka 26) i M7 uzupełnione. MOŻESZ TESTOWAĆ: na pliku 9a7aff2a…, nie na starym 668abe3f…."
+    },
+    {
+      "n": 222,
+      "at": "2026-10-27 00:09",
+      "text": "Etap 1b, rozpoznanie zakończone (22:36–00:01, 7 agentów, 3,2 mln tokenów). Mapa przenośności ma ok. 1030 linii: 41 pytań z domyślnymi odpowiedziami, 17 ryzyk i działający prototyp. Wniosek: cały firmware może działać na wirtualnym urządzeniu. Wymienić trzeba tylko lcd.c, kodek audio, stos USB i sterownik karty SD. Menu, przyciski, enkoder, potencjometry, MIDI i seq_core zostają bez zmian. Nagrania testowe będą identyczne bit w bit tylko między buildami na hoście, nigdy z LXR. Pytania wymagające Twojej decyzji są w trackerze jako Q12–Q18, każde z domyślną odpowiedzią. Teraz piszę szkic specyfikacji 1b na tych domyślnych odpowiedziach. Plan i kod ruszą dopiero po Twojej akceptacji."
     }
   ]
 }
