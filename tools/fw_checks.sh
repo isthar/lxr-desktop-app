@@ -180,6 +180,22 @@ check_E2_4() {
 			l[i+1]=="if(seq_mailboxPosted)" && l[i+2]=="seq_applyMailbox();") ok=1
 			exit !ok}' \
 		|| fail "seq_drainSyncQueues() does not apply the mailbox after a Program Change switch"
+	# the drain's gates and its SPP dispatch (E4.1 F30): a Program Change switches only with
+	# the fw 1.7 filter and on the global channel; the RX filter for system messages drops
+	# a DIN or USB entry before the SPP branch and before seqc_syncEvent(), not the jack's;
+	# an SPP goes to seqc_songPosition() and nowhere else
+	drain_lines | awk '$0=="if((midiParser_txRxFilter & MIDI_FILTER_PROG_C) && ((entry.value >> 8) == midi_MidiChannels[7]))"{n++}
+		END{exit !(n==1)}' \
+		|| fail "seq_drainSyncQueues() does not filter a Program Change as fw 1.7 did"
+	drain_lines | awk '{l[NR]=$0}
+		END{for(i=1; i+1<=NR; i++) if(l[i]=="if((source != SEQP_SRC_JACK) && !(midiParser_txRxFilter & MIDI_FILTER_SYSTEM))" &&
+			l[i+1]=="continue;") g=i
+			for(i=1; i+4<=NR; i++) if(l[i]=="if(entry.type == SEQQ_SONG_POSITION)" && l[i+1]=="{" &&
+			l[i+2]=="seqc_songPosition(entry.value);" && l[i+3]=="continue;" && l[i+4]=="}") s=i
+			for(i=1; i<=NR; i++) if(l[i] ~ /^seqc_syncEvent\(/) e=i
+			exit !(g && s && e && g<s && s<e)}' \
+		|| fail "seq_drainSyncQueues() does not gate system messages with the RX filter before the SPP and the sync events"
+	must_call seq_tick seqc_songPosition
 	awk '{sub(/\r$/, "")} /^void seq_tick\(\)/{f=1} f&&/seq_drainSyncQueues\(&now\)/{d=1;next} f&&d&&NF{if(/^[[:space:]]+changed = 1;$/)next; if(/^[[:space:]]+seqc_process\(now\);$/)ok=1; d=0}
 		f&&/^}/{exit} END{exit !ok}' \
 		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_tick() does not pass the time of the last pop to seqc_process()"
