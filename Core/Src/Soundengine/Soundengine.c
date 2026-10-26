@@ -17,6 +17,8 @@
 #include <string.h>
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/MIDI/Uart.h"
+#include "Soundengine/cpuMeter.h"
+#include "Soundengine/Sequencer/seq_core.h"
 
 uint8_t soundengine_calcNextSampleBlock()
 {
@@ -79,8 +81,9 @@ void soundengine_process()
 #if CALC_SAMPLES_IN_INTERRUPT
 	__HAL_TIM_DISABLE_IT(&htim2, TIM_IT_UPDATE);
 	//HAL_TIM_Base_Stop_IT(&htim2);
+	soundengine_cpuBegin();
 	seq_tick();
-	soundengine_calcNextSampleBlock();
+	soundengine_cpuEnd(soundengine_calcNextSampleBlock());
 	__HAL_TIM_SetCounter(&htim2, 1950);
 	//HAL_TIM_Base_Start_IT(&htim2);
 	__HAL_TIM_ENABLE_IT(&htim2, TIM_IT_UPDATE);
@@ -112,4 +115,23 @@ void soundengine_process()
 	//preset_morph_tick();
 	//preset_morph_tick();
 
+}
+//------------------------------------------------------------------------------
+// LICHOMAT: CPU meter (spec 9.3), see cpuMeter.h. Both run in the seq_tick()
+// context, around the audio work.
+void soundengine_cpuBegin(void)
+{
+	cpuMeter_begin(DWT->CYCCNT);
+}
+//------------------------------------------------------------------------------
+void soundengine_cpuEnd(uint8_t blockRendered)
+{
+	if(cpuMeter_end(DWT->CYCCNT, blockRendered))
+	{
+		//a new reading, once a second: add the event queue counters. The core
+		//may be queried here, this is its context.
+		seqc_stats_t stats;
+		seqc_stats(&stats);
+		cpuMeter_setQueueStats(stats.queueMax, stats.queueOverflow);
+	}
 }

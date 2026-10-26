@@ -101,9 +101,11 @@ add_library(lxr_dsp OBJECT
     Src/Soundengine/DSPAudio/FX/VerbTools/VerbModDelay.c
 )
 
-# Audio engine: codec/I2S DMA, sample block rendering, FX bus, clock/trigger I/O.
+# Audio engine: codec/I2S DMA, sample block rendering, FX bus, clock/trigger I/O,
+# CPU meter.
 add_library(lxr_engine OBJECT
     Src/Soundengine/AudioCodecManager.c
+    Src/Soundengine/cpuMeter.c
     Src/Soundengine/cs4344_cs5343.c
     Src/Soundengine/FIFO.c
     Src/Soundengine/FxBus.c

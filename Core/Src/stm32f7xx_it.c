@@ -268,8 +268,10 @@ void TIM2_IRQHandler(void)
 //#ifndef DEBUG
 
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_SET);
+	soundengine_cpuBegin();	//LICHOMAT: CPU meter
 	seq_tick();
-	soundengine_calcNextSampleBlock();
+	const uint8_t blockRendered = soundengine_calcNextSampleBlock();
+	soundengine_cpuEnd(blockRendered);
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_RESET);
 
 

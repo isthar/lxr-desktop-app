@@ -22471,12 +22471,12 @@ git commit -m "Add the CPU meter, with host tests" \
   -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 8: Write the failing check for the firmware**
+- [x] **Step 8: Write the failing check for the firmware**
 
 Run: `bash -c 'source tools/env.sh && arm-none-eabi-nm build/release/LXR_V2_STM32F765.elf' | grep -E ' T (soundengine_cpuBegin|soundengine_cpuEnd|cpuMeter_end)$'; echo "exit=$?"`
 Expected: `exit=1`, no symbol lines: the firmware does not measure anything yet.
 
-- [ ] **Step 9: Build the meter into the firmware**
+- [x] **Step 9: Build the meter into the firmware**
 
 In `Core/CMakeLists.txt`, replace:
 
@@ -22496,7 +22496,7 @@ add_library(lxr_engine OBJECT
     Src/Soundengine/cpuMeter.c
 ```
 
-- [ ] **Step 10: The measuring calls in `Soundengine.c`**
+- [x] **Step 10: The measuring calls in `Soundengine.c`**
 
 In `Core/Inc/Soundengine/Soundengine.h`, replace:
 
@@ -22593,7 +22593,7 @@ void soundengine_cpuEnd(uint8_t blockRendered)
 }
 ```
 
-- [ ] **Step 11: The measuring calls in `TIM2_IRQHandler()`**
+- [x] **Step 11: The measuring calls in `TIM2_IRQHandler()`**
 
 In `Core/Src/stm32f7xx_it.c`, replace:
 
@@ -22625,7 +22625,7 @@ with:
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_RESET);
 ```
 
-- [ ] **Step 12: Run the check to see it pass**
+- [x] **Step 12: Run the check to see it pass**
 
 First give the three files of Steps 10 and 11 pure CRLF line endings (Part 3, convention 3):
 
@@ -22646,7 +22646,7 @@ Expected, with the addresses of this build:
 Run: `file Core/Inc/Soundengine/Soundengine.h Core/Src/Soundengine/Soundengine.c Core/Src/stm32f7xx_it.c`
 Expected: each `… with CRLF line terminators`.
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add Core/CMakeLists.txt Core/Inc/Soundengine/Soundengine.h Core/Src/Soundengine/Soundengine.c Core/Src/stm32f7xx_it.c

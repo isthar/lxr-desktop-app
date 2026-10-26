@@ -33,4 +33,9 @@
 void soundengine_init();
 void soundengine_process();
 uint8_t soundengine_calcNextSampleBlock();
+/** LICHOMAT CPU meter (cpuMeter.h): call around the audio work, in TIM2_IRQHandler()
+ * and in soundengine_process(); blockRendered is what soundengine_calcNextSampleBlock()
+ * returned */
+void soundengine_cpuBegin(void);
+void soundengine_cpuEnd(uint8_t blockRendered);
 #endif /* INC_SOUNDENGINE_SOUNDENGINE_H_ */
