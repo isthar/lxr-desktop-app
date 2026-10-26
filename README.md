@@ -31,7 +31,8 @@ Version 0.1 gives the step sequencer a new timing core and fixes the timing and 
   appears, right after the page with the clock in and clock out PPQ.
 
 Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged. The start-up
-screen shows `LICHOMAT` and `v0.1 unofficial`.
+screen shows `LICHOMAT` and `v0.1 unofficial`. All changes are listed in the
+[release notes](docs/lichomat/release-notes-v0.1.md).
 
 ### Installing LICHOMAT
 

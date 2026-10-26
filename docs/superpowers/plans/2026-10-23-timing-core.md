@@ -24803,7 +24803,7 @@ or released here (Q5 is still open).
 - Modify: `README.md` (the LICHOMAT section links to the notes)
 - Test: `build/e4-notes-check.sh` (a scratch script, not committed)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `build/e4-notes-check.sh`:
 
@@ -24824,7 +24824,7 @@ grep -qF '](docs/lichomat/release-notes-v0.1.md)' README.md || { echo "README: n
 if [ "$ok" = 1 ]; then echo "release notes check passed"; else echo "release notes check FAILED"; exit 1; fi
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `bash build/e4-notes-check.sh; echo "exit=$?"`
 Expected:
@@ -24834,7 +24834,7 @@ missing: docs/lichomat/release-notes-v0.1.md
 exit=1
 ```
 
-- [ ] **Step 3: Write the release notes**
+- [x] **Step 3: Write the release notes**
 
 Create `docs/lichomat/release-notes-v0.1.md`:
 
@@ -24994,7 +24994,7 @@ say which device this firmware is for.
    (without this section and the draft note) and `LXR_V2_LICHOMAT_0.1.img` attached.
 ```
 
-- [ ] **Step 4: Add the limitations the review accepted**
+- [x] **Step 4: Add the limitations the review accepted**
 
 Run:
 
@@ -25011,7 +25011,7 @@ For each printed row add one bullet at the end of "## Known limitations" that sa
 LXR, what does not work as expected and what to do about it. If it prints `no accepted findings`,
 leave the section as it is.
 
-- [ ] **Step 5: Trace every claim**
+- [x] **Step 5: Trace every claim**
 
 | Claim in the notes | Evidence |
 |---|---|
@@ -25038,10 +25038,22 @@ leave the section as it is.
 | a roll is recorded where it played | `T13_roll_hit_is_recorded_at_its_own_step` (T13) |
 | roll on muted tracks; local slave start on the master's 16th; reset input as a run gate | T13; T16, T18; `T17_jack_run_gate` (T17), X3 |
 | MIDI clock out runs while stopped | T5 |
-| CPU page | `cpumeter`; H12 |
+| CPU page: how to reach it, what it shows, `Qmax` since switch-on, `ovf` of the event queue only | `cpumeter`; `tools/fw_checks.sh E3.3`; review F2 (Q9); H12 |
 | no file format change | `layout`; review R7.1, R7.2, R7.3; H2 |
 | global menu: step buttons leave the track lengths alone, page up and down keep step 12 blinking | `buttons`; `tools/fw_checks.sh E2.7`; U1 |
 | USB MIDI out: the right CIN, nothing lost while the computer reads, no stray bytes, no burst of old messages; a routed Song Select keeps its song number | `usbtx`; `tools/fw_checks.sh E2.8`; review R8.5; X4 |
+| D4: the Note Offs also go out when a slave's clock stops | `T18_dropout_note_off_is_sent`, `T18_dropout_sends_the_note_off_of_the_hit_it_plays` (T18); review R8.4 |
+| one-shot roll and MIDI echo: Note Off one pulse later | `tools/fw_checks.sh E2.3` (the checks of F22); review F22, F31; H10 steps 3 and 4 |
+| D7: the tempo per clock over USB transfers; one spurious MIDI clock or a jack double trigger does not throw it off | `T16_packed_clocks_give_the_clock_tempo`, `T16_packed_audio_buffers_give_the_clock_tempo`, `T16_extra_clock_is_no_tempo_jump` (T16), `T18_double_trigger_is_left_out` (T18); H7 step 6 |
+| D8: a clock inside a DIN message does not break it; realtime messages passed on from DIN go out alone | `tools/fw_checks.sh E2.4` (realtime bytes routed alone at the top of `midiParser_parseUartData()`); review R8.1 |
+| F4, F5 and F6 passed on from DIN go out alone; stray data bytes after them are no repeat | `tools/fw_checks.sh E2.8`; X4 step 6 |
+| a reset gate edge is no longer lost | `tools/fw_checks.sh E2.5` (the pending bit is cleared before the pin is read); X3 |
+| pattern change: the early hits of the first step come from the next pattern | `T11_early_hit_of_the_next_pattern` (T11); H9 |
+| a repeating roll sends one Note On, velocity 100 | `T13_roll_at_every_rate` (T13: `SEQC_ROLL_VELOCITY`); `tools/fw_checks.sh E2.3` (one Note On per trigger, with the event's velocity); review F28 |
+| a slave plays up to the next clock: 4 PPQ plays straight, one more step after the clock stops | `T16_position_is_clamped_to_the_next_clock` (T16), `T18_jack_4ppq_one_pulse_per_step` and `T18_dropout_note_off_is_sent` (T18: step 5 plays after the last pulse, step 4); review F21 (Q11); X2 |
+| song mode: a start after a stop that kept the position plays from the first entry | `T1_stop_keeps_the_position_and_start_rewinds` (T1: the start rewinds), `T10_song_end_stops_and_rewinds` (T10: after the rewind the song plays from entry 0; the fake host's rewind is the glue's `SEQC_TRANSPORT_REWIND` case, `seq_songPositionPointer = 0xff`) |
+| a Program Change just before a Start selects the pattern the Start plays (unchanged) | `syncq_din_program_change` (syncq: queued in order with the Start); `tools/fw_checks.sh E2.4` (applied in the drain, the mailbox before the next entry); H7 step 7 |
+| known limitations of the clock in jack (review F4 and F49, accepted) | review F4, F49; N21 (Limit bullet and the E1.19 jack bullet) |
 
 Run:
 
@@ -25053,6 +25065,13 @@ tools/fw_checks.sh E2.2 E2.7 E2.8
 
 Expected: `100% tests passed, 0 tests failed out of 18`, every listed review row ends in `| pass |`,
 and `PASS E2.2`, `PASS E2.7` and `PASS E2.8`.
+
+> **Done in execution (E4.3, 2026-10-26).** The table's last twelve rows and the wider CPU page row
+> trace the claims that the controller note added (the stage 1 report §2, Q9, F4 and F49). Their
+> evidence also needs `syncq` in the `ctest` run (19 tests) and `tools/fw_checks.sh E2.3 E2.4 E2.5
+> E3.3`; all of them pass. The review rows R1.4, R2.6, R8.1, R8.2 and R8.4 end in their findings
+> (F21 to F31), not in `| pass |`: each of those findings is fixed, except F21, the owner question
+> Q11, whose default the notes describe under "Changed behaviour".
 Open each named test and confirm that it asserts the claim. A claim without evidence is either removed
 from the notes, or becomes a finding of the review with a failing test first (E4.1, "Fixing
 findings").
@@ -25070,7 +25089,7 @@ what they are (the maker, the instrument, the official firmware 1.7 and its down
 say or suggest that Erica Synths made, approved or supports LICHOMAT (NOTICE.md, additional term 1).
 Correct the notes before they are committed, and name the result of this check in the task report.
 
-- [ ] **Step 6: Fill in the files**
+- [x] **Step 6: Fill in the files**
 
 Run:
 
@@ -25099,7 +25118,7 @@ EOF
 
 Expected: `Files section filled in`.
 
-- [ ] **Step 7: Link the notes from the README**
+- [x] **Step 7: Link the notes from the README**
 
 In `README.md`, replace:
 
@@ -25116,7 +25135,7 @@ screen shows `LICHOMAT` and `v0.1 unofficial`. All changes are listed in the
 [release notes](docs/lichomat/release-notes-v0.1.md).
 ```
 
-- [ ] **Step 8: Run the test to see it pass**
+- [x] **Step 8: Run the test to see it pass**
 
 Run: `bash build/e4-notes-check.sh; echo "exit=$?"; tools/check.sh`
 Expected:
@@ -25128,7 +25147,7 @@ exit=0
 
 then `tools/check.sh` exits 0 with `== compiler warnings: 0`.
 
-- [ ] **Step 9: Commit, without pushing**
+- [x] **Step 9: Commit, without pushing**
 
 ```bash
 git add docs/lichomat/release-notes-v0.1.md README.md
