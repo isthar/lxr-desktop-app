@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 22:36",
+    "updated": "2026-10-26 23:43",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Następny jest szkic specyfikacji etapu 1b: emulator na macOS, najpierw renderer WAV, potem aplikacja z wirtualnym panelem.",
     "branch": "timing-core",
-    "head": "3d9ae26",
+    "head": "9b4c131",
     "next": "Twoje testy H1–H13, U1 i X4 oraz odpowiedzi na Q9–Q11. Ja: szkic specyfikacji etapu 1b do Twojej akceptacji.",
-    "updated_at": "2026-10-26T22:36:00+01:00",
-    "now": "Etap 1b: 6 czytelników mapuje zależności firmware od sprzętu (od 22:36)."
+    "updated_at": "2026-10-26T23:43:00+01:00",
+    "now": "E4.5: poprawka błędu, który nadpisuje pamięć patternów przy wczytaniu kitu (test-first, od 23:45). Testy na sprzęcie wstrzymane do nowego pliku."
   },
   "epics": [
     {
@@ -377,6 +377,13 @@
       "updated": "2026-10-26"
     },
     {
+      "id": "E4.5",
+      "epic": "E4",
+      "status": "w toku",
+      "title": "Błąd fw 1.7: wczytanie kitu i MIDI CC 0 nadpisują bajt pamięci patternów (MidiParser.c)",
+      "updated": "2026-10-26"
+    },
+    {
       "id": "E5.1",
       "epic": "E5",
       "status": "w toku",
@@ -608,7 +615,7 @@
       "id": "Q6",
       "status": "otwarte",
       "question": "Testy na sprzęcie są gotowe do zrobienia przez Ciebie: docs/lichomat/hardware-checklist.md, czyli H1–H13, U1 (przyciski kroków w menu globalnym), X4 (USB MIDI out) i opcjonalne X1–X3 (jacki zegara). Wgraj plik z CI: artefakt lichomat-firmware-bf64157… przebiegu 40389633686 na GitHubie, LXR_V2_LICHOMAT_0.1.img o SHA-256 668abe3f…. Do H13 i porównań użyj oficjalnego LXR_V2_V1.7.img (SHA-256 cdb1ca37…), który jest zbudowany ze źródeł a43cd4f w build/official-1.7/ albo pochodzi od Erica Synths. Wyniki wpisz w arkusz na końcu listy albo napisz mi je.",
-      "assumption": "Lista i oba pliki są gotowe, a ich hashe są w arkuszu wyników. Żaden test nie jest oznaczony jako zrobiony, dopóki nie podasz wyników."
+      "assumption": "WSTRZYMANE (26.10, 23:43): poprawiam błąd z fw 1.7, który przy każdym wczytaniu kitu nadpisuje bajt pamięci patternów. Po poprawce będzie nowy plik z CI z nowym SHA-256, a lista testów i notatki wydania dostaną nowy hash. Do tego czasu nie testuj starego pliku 668abe3f…."
     },
     {
       "id": "Q7",
@@ -1741,6 +1748,11 @@
       "n": 219,
       "at": "2026-10-26 22:36",
       "text": "Etap 1b (emulator na macOS), E5.1: zaczynam od rozpoznania. Workflow z 6 czytelnikami sprawdza, co w firmware zależy od sprzętu. Obszary: silnik audio i DSP (z próbą kompilacji na hoście), panel i menu, karta SD i presety, MIDI, USB i jacki, inicjalizacja i HAL (inwentarz plików i próba builda), istniejące emulatory i licencje (m.in. NOTICE.md, licencja JUCE, podpisywanie aplikacji na macOS). Jeden agent złoży z tego mapę przenośności. Na jej podstawie zaproponuję projekt do Twojej akceptacji. Kodu etapu 1 nie zmieniam."
+    },
+    {
+      "n": 220,
+      "at": "2026-10-26 23:43",
+      "text": "WSTRZYMAJ TESTY NA SPRZĘCIE do nowego pliku. Próbna wersja emulatora (rozpoznanie etapu 1b, czytelnik platformy z UBSan) znalazła błąd z fw 1.7, obecny też w LICHOMAT. W MidiParser.c:168 indeks paramNr = data1 - 1 jest typu uint16_t, więc przy CC 0 zapis trafia 64 KB za tablicę midiParser_originalCcValues. Dzieje się to przy każdym wczytaniu kitu (parametr 127 daje data1 = 0) i przy każdym przychodzącym Bank Select (CC 0). Policzyłem adresy z obu buildów. W LICHOMAT zapis nadpisuje nutę kroku 3 głosu 3 w patternie 14, a w fw 1.7 numer parametru p-locka w kroku 52 głosu 3 patternu 18. Poprawka to jedna linia, więc wchodzi do v0.1 (E4.5): najpierw test, który nie przechodzi, potem poprawka i lekki przegląd. Potem nowy plik z CI i nowe hashe w dokumentach."
     }
   ]
 }
