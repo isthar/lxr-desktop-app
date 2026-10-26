@@ -1415,6 +1415,12 @@ static uint8_t has2ndPage(uint8_t menuPage)
 
 }
 //-----------------------------------------------------------------
+/** LICHOMAT: another sub-page of the active menu follows sub-page menuPage */
+static uint8_t hasNextSubPage(uint8_t menuPage)
+{
+	return (menuPage < NUM_SUB_PAGES-1) && (pgm_read_byte(&menuPages[menu_activePage][menuPage+1].top1) != TEXT_EMPTY);
+}
+//-----------------------------------------------------------------
 static uint8_t checkScrollSign(uint8_t activePage, uint8_t activeParameter)
 {
 	const uint8_t is2ndPage = (uint8_t)(activeParameter>3);
@@ -1436,6 +1442,9 @@ static uint8_t checkScrollSign(uint8_t activePage, uint8_t activeParameter)
 				else
 					return '>';
 			} else { // don't have a second screen
+				// LICHOMAT: a sub-page can follow one without a second screen (the CPU page after sub-page 2)
+				if(hasNextSubPage(activePage))
+					return activePage > 0 ? '*' : '>';
 				if(activePage > 0) // on first screen and have sub-pages before this but not second screen after
 					return '<';
 				else // on first screen, no sub-pages before... would not happen

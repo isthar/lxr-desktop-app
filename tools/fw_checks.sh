@@ -306,6 +306,28 @@ check_E3_3() {
 	local obj="$ROOT/build/release/Core/CMakeFiles/lxr_engine.dir/Src/Soundengine/cpuMeter.c.obj"
 	exists "$obj"
 	[ -e "$obj" ] && arm-none-eabi-nm "$obj" | grep -qw cpuMeter_reset && fail "cpuMeter.c.obj has the test hook cpuMeter_reset"
+	# the scroll marker of the global menu (E4.1 F50): sub-page 2 has no 2nd screen, and the
+	# CPU page follows it, so it shows '*', not '<'. checkScrollSign() and the helpers it
+	# calls are compiled on the host with the firmware's page table.
+	local dir
+	dir="$(mktemp -d)"
+	{
+		printf '#include <stdio.h>\n#include "menu/menuPages.h"\n'
+		printf '#ifndef pgm_read_byte\n#define pgm_read_byte(p) (*(p))\n#endif\nuint8_t menu_activePage;\n'
+		awk '{sub(/\r$/, "")} /^static uint8_t (has2ndPage|hasNextSubPage|checkScrollSign)\(/{f=1} f{print} f&&/^}/{f=0}' \
+			Core/Src/menu/menu.c
+		printf 'int main(void)\n{\n\tmenu_activePage = MENU_MIDI_PAGE;\n'
+		printf '\tprintf("%%c%%c%%c\\n", checkScrollSign(0, 0), checkScrollSign(0, 4), checkScrollSign(1, 0));\n'
+		printf '\treturn 0;\n}\n'
+	} >"$dir/scroll.c"
+	if cc -std=c11 -w -I tests/stubs -isystem Core/Inc -o "$dir/scroll" "$dir/scroll.c"; then
+		local signs
+		signs="$("$dir/scroll")"
+		[ "$signs" = ">**" ] || fail "global menu scroll markers are '$signs' on sub-page 1, its 2nd screen and sub-page 2, not '>**'"
+	else
+		fail "checkScrollSign() does not compile on the host"
+	fi
+	rm -rf "$dir"
 }
 
 check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8 E3.3"
