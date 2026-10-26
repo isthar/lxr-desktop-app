@@ -1,3 +1,13 @@
+<!--
+  The stage 1 context that the agent workflow runs pass to every task prompt.
+
+  Copyright (C) 2026 Tomasz Krzywicki
+  SPDX-License-Identifier: GPL-3.0-only
+
+  Licensed under the GNU General Public License version 3, with the additional
+  permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+  the repository.
+-->
 LICHOMAT is an unofficial custom firmware for the Erica Synths LXR-02 drum machine. The hardware is an STM32F765VG Cortex-M7 at 216 MHz with a double-precision FPU, and the firmware is GPL-3.0.
 
 Stage 1 does three things:
