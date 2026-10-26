@@ -342,8 +342,3 @@ Erica Synths.
 
 **Third-party code.** The repository includes components from STMicroelectronics, Arm and ChaN (FatFs)
 under their own licences. See [NOTICE.md](NOTICE.md#third-party-components).
-
-
-<sup>
-Use code OPENLXR15 on the Erica Synths website for a discount on the LXR (active for 1 week since open-source announcment) :)
-</sup>
