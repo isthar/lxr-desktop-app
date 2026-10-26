@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 17:29",
+    "updated": "2026-10-26 18:01",
     "phase": "Etap 1: narzędzia i wydanie (E2.9, E3, E4)",
     "focus": "Workflow C2: przegląd całego etapu 1 (E4.1). 8 grup recenzentów skończyło (51 uwag). Teraz sceptycy weryfikują każdą uwagę, potem poprawki test-first (poważne pojedynczo, drobne paczkami po 8), bramka i lekki przegląd. Potem C3: E4.2 i E4.3.",
     "branch": "timing-core",
-    "head": "030d3b0",
+    "head": "3fa513e",
     "next": "Po E4.1: workflow C3, czyli E4.2 (lista testów sprzętowych H1–H13, U1, X4) i E4.3 (szkic notatek wydania v0.1), potem raport M7.",
-    "updated_at": "2026-10-26T17:29:00+01:00",
-    "now": "E4.1: 54 sceptyków weryfikuje 51 uwag recenzentów, po 12 naraz (od 17:29)."
+    "updated_at": "2026-10-26T18:01:00+01:00",
+    "now": "E4.1: zapis wyników przeglądu w stage1-review.md (od 18:00), potem 14 fixerów po kolei."
   },
   "epics": [
     {
@@ -1566,6 +1566,16 @@
       "n": 188,
       "at": "2026-10-26 17:29",
       "text": "Wznowione o 17:29 na Twoją prośbę. Wypchnąłem commit 030d3b0: drobne uwagi z E4.1 trafią do poprawek paczkami po 8 na grupę recenzentów, a nie wszystkie naraz. Workflow C2 (E4.1) wznowiony od fazy sceptyków. Setup i wyniki 8 recenzentów wróciły z dziennika workflowu. 51 różnych uwag (3 poważne, 48 drobnych) sprawdza 54 sceptyków, po 12 naraz: po jednym na drobną uwagę, po dwóch na poważną."
+    },
+    {
+      "n": 189,
+      "at": "2026-10-26 17:46",
+      "text": "E4.1, sceptycy w połowie (17:29–17:46): 26 z 54 werdyktów. 24 uwagi potwierdzone, 2 odrzucone, bo na oba zachowania pozwalają zapisane decyzje planu. Sceptyk podniósł do poważnej uwagę o seqc_init(): funkcja nie sprawdza, czy rdzeń akurat pracuje. Obaj sceptycy potwierdzili jako poważną brak Note Off po czasie dla jednorazowego rolla i echa nuty przychodzącej. Pierwszy sceptyk uznał uwagę o zaciśnięciu N9 w trybie slave za lukę w raporcie, czyli drobną. Drugi głos jeszcze trwa."
+    },
+    {
+      "n": 190,
+      "at": "2026-10-26 18:01",
+      "text": "E4.1, sceptycy skończyli (17:29–18:00). 54 werdykty dla 51 uwag. Potwierdzonych 46: 4 poważne i 42 drobne. Odrzuconych 5: trzy pozwala zapisana decyzja planu albo notatka N20, jedna była już poprawiona w trackerze, jedna opisuje poprawny kod. Poważne: (1) seqc_init() nie sprawdza, czy rdzeń akurat pracuje (sceptyk podniósł z drobnej); (2) nuta z jednorazowego rolla i echo nuty przychodzącej nie dostają Note Off po czasie; (3) testy T17 nie wysyłają Start ani Stop w trybie song; (4) 13 nowych plików narzędzi nie ma w nagłówku odwołania do NOTICE.md (sceptyk podniósł z drobnej). Uwagę o zaciśnięciu N9 w trybie slave obaj sceptycy uznali za lukę w raporcie, więc spadła do drobnych. Teraz agent zapisuje wyniki w stage1-review.md. Potem 14 fixerów po kolei: 4 poważne pojedynczo i 10 paczek drobnych."
     }
   ]
 }
