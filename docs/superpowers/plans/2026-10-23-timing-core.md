@@ -25463,6 +25463,19 @@ under `scratchpad/` were the controller's temporary files.
     - E3.3: the CPU meter test that claims the peak is held for one window only checks that the peak
       is gone in the next window.
 
+24. **E4.1's results and leftovers (2026-10-26).**
+    - The review (`docs/lichomat/reports/stage1-review.md`) has 52 findings: 4 major, 48 minor.
+      47 are fixed, 3 accepted and 2 are owner questions.
+      - Accepted: F4 and F49 are clock jack limitations for the release notes. F35 keeps
+        `tests/test_slave.c` as one file.
+      - Owner questions: F2 is Q9, F21 is Q11.
+    - Leftovers of its last light review (minor):
+      - F22's check in `tools/fw_checks.sh` checks only the source structure of the timed Note
+        Off. A host test of its behaviour is for a later stage: the Note Off is due one pulse later
+        at `seq_tempo`, a new Note On of the voice cancels it, and it fires while stopped.
+      - The overlong line in N14's "Why" bullet (amendment 22) and the report's N21 row, which
+        lacked F4 and F49, were corrected by the controller after the review.
+
 ## Progress notes
 
 Notes made while executing the plan, one bullet each, newest last: the date, the task, and what
@@ -25476,6 +25489,7 @@ happened (a deviation from the plan, a surprise, a decision taken on the way).
   to run before E2.1 and E1.19 to run after E2.8 (items 16, 17 and 19).
 - 2026-10-26, workflow B done: E1.18, E2.1–E2.8 and E1.19 (items 20 and 21).
 - 2026-10-26, workflow C1 done: E2.9, E3.1, E3.3, E3.4 and E3.5, each with one light review that passed in round 1 (items 22 and 23).
+- 2026-10-26, workflow C2 done: E4.1 by `tools/agent/stage-review.js`, with 82 agents, paused by the owner from 03:39 to 17:29. The light review passed in round 2 (item 24).
 
 ## Questions for the owner
 

@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 18:51",
+    "updated": "2026-10-26 20:00",
     "phase": "Etap 1: narzędzia i wydanie (E2.9, E3, E4)",
-    "focus": "Workflow C2: przegląd całego etapu 1 (E4.1). 8 grup recenzentów skończyło (51 uwag). Teraz sceptycy weryfikują każdą uwagę, potem poprawki test-first (poważne pojedynczo, drobne paczkami po 8), bramka i lekki przegląd. Potem C3: E4.2 i E4.3.",
+    "focus": "Workflow C3: E4.2 (lista testów sprzętowych H1–H13, U1, X4 i dwa pliki aktualizacji) i E4.3 (szkic notatek wydania v0.1), każde z lekkim przeglądem. Potem raport M7.",
     "branch": "timing-core",
-    "head": "af26953",
-    "next": "Po E4.1: workflow C3, czyli E4.2 (lista testów sprzętowych H1–H13, U1, X4) i E4.3 (szkic notatek wydania v0.1), potem raport M7.",
-    "updated_at": "2026-10-26T18:51:00+01:00",
-    "now": "E4.1: fixer 10 z 14, 6 drobnych uwag do raportu odstępstw (R1.4: F21, F23–F27) (od 18:47)."
+    "head": "1f3d782",
+    "next": "Po C3: raport M7 (v0.1 gotowe do testów na sprzęcie) i kamień milowy w trackerze. Testy H1–H13, U1 i X4 robisz Ty.",
+    "updated_at": "2026-10-26T20:00:00+01:00",
+    "now": "Start workflowu C3: E4.2 i E4.3 (od 20:10)."
   },
   "epics": [
     {
@@ -351,23 +351,23 @@
     {
       "id": "E4.1",
       "epic": "E4",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Przegląd wielowymiarowy i poprawki",
       "updated": "2026-10-26"
     },
     {
       "id": "E4.2",
       "epic": "E4",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Checklista testów na sprzęcie H1–H13",
-      "updated": ""
+      "updated": "2026-10-26"
     },
     {
       "id": "E4.3",
       "epic": "E4",
-      "status": "do zrobienia",
-      "title": "Notatki wydania v0.1 (bez pushowania)",
-      "updated": ""
+      "status": "w toku",
+      "title": "Notatki wydania v0.1 (szkic, bez tagu i wydania)",
+      "updated": "2026-10-26"
     },
     {
       "id": "E5.1",
@@ -1638,6 +1638,51 @@
       "n": 201,
       "at": "2026-10-26 18:51",
       "text": "E4.1, fixer 10: F21 zostawiony do Twojej decyzji jako pytanie Q11, nowe w trackerze. Chodzi o zegar na jacku clock in 4 PPQ. Teraz kroki grają w tempie dopasowanym do zegara (N9), więc zegar ze swingiem gra równo, a zegar zatrzymany bez resetu daje jeden krok za dużo. fw 1.7 czekał na każdy impuls. Domyślnie zostaje jak jest, a raport i notatki wydania opisują to jako zmianę."
+    },
+    {
+      "n": 202,
+      "at": "2026-10-26 18:54",
+      "text": "E4.1, fixer 10 z 14 (18:47–18:54): 6 uwag do raportu odstępstw (R1.4). Pięć poprawionych, każda w osobnym commicie raportu etapu, a F21 to pytanie Q11. Nowe wiersze w raporcie: bajty realtime z DIN idą dalej osobno (fw 1.7 wysyłał F8 3C 64); dwa odstępstwa SPP od spec §5; dwie zmiany w trybie song (start po stopie gra song od pierwszego wpisu); periodyczny roll ze stałą prędkością MIDI 100; nic nie jest nagrywane przed pierwszym krokiem; edycja kroku, którego uderzenia są już w kolejce, ich nie zmienia. Dopisane są też pliki zmienione poza tabelą spec §8."
+    },
+    {
+      "n": 203,
+      "at": "2026-10-26 18:58",
+      "text": "E4.1, fixer 11 z 14 (18:54–18:58): 4 uwagi o MIDI (F28–F31) zamknięte. F28 i F31 były już poprawione wcześniej: wiersz o prędkości rolla (8f47dae) i Note Off po czasie (6755cfa). F29 poprawia komentarz w seq_platform.c (e8e33e3). F30 dodaje w tools/fw_checks.sh kontrolę bramek przy opróżnianiu kolejek synchronizacji i przekazywania SPP (2e7b7bd); przedtem nic ich nie pilnowało."
+    },
+    {
+      "n": 204,
+      "at": "2026-10-26 19:04",
+      "text": "E4.1, fixer 12 z 14 (18:58–19:03): F33 poprawione w 139a51a. SPP daleko w zapętlonym songu kazało seq_tick() przejść przez nawet 16384 wpisy songu, czyli robić długą pracę w kontekście czasu rzeczywistego. Teraz przejście zaczyna się od okresu przed szukaną pozycją: najwyżej 192 długości patternów, ok. 0,05 ms. Wynik, czyli wpis i liczba kroków, się nie zmienia. Najpierw dodano testy. Jeden pilnuje limitu przejścia i przed poprawką nie przechodził. Drugi porównuje nowe przejście z pełnym dla 3000 losowych songów po 24 pozycje i łapie dwa mutanty. check.sh: 27 z 27, 0 ostrzeżeń. DTCM + RAM 391796 B, obraz 300460 B."
+    },
+    {
+      "n": 205,
+      "at": "2026-10-26 19:11",
+      "text": "E4.1, fixer 13 z 14 (19:03–19:11): 8 uwag do dokumentacji. Poprawione: testowa funkcja cpuMeter_reset() trafiała do firmware (F34); kolejność kroków seq_tick() pilnuje teraz fw_checks.sh (F36); próbny przebieg CI dopisywał do starego podsumowania i zostawiał SEQC_REQUIRE_ALL_TESTS=ON (F38); z README zniknął wygasły kod rabatowy z upstreamu (F39); E4.3 sprawdzi notatki wydania pod kątem wiersza R10.3 (F40); README nie twierdzi już, że build na Macu niczego nie instaluje w systemie (F42). F37 było poprawione wcześniej przy F9 i F29. F35 przyjęte bez zmian: tests/test_slave.c zostaje jednym plikiem."
+    },
+    {
+      "n": 206,
+      "at": "2026-10-26 19:17",
+      "text": "E4.1, fixer 14 z 14 (19:11–19:17): ostatnie 5 uwag do dokumentacji poprawione. README: instrukcja powrotu na fw 1.7 dodaje teraz narzędzia do PATH (F43), a jako testowany toolchain podaje tylko 14.3.rel1 (F44). HANDOFF.md: 5 nieaktualnych miejsc (F45). Notatki N9, N14, N17 i N21 (F46). Tabela testów T16 i oczekiwane wyniki E1.7 w planie (F47). Wszystkie 47 uwag ma decyzję: 43 poprawione, 2 przyjęte (F4 jako znane ograniczenie, F35 bez zmian) i 2 pytania do Ciebie (F2 to Q9, F21 to Q11). Teraz bramka: wynik przeglądu, gate i check.sh."
+    },
+    {
+      "n": 207,
+      "at": "2026-10-26 19:26",
+      "text": "E4.1, bramka (19:17–19:25): wynik przeglądu zapisany w 2f7f787. 47 uwag: 0 blokujących, 4 poważne, 43 drobne. Poprawione 43, przyjęte 2, pytania 2. Gate daje 0. check.sh: 27 z 27, 0 ostrzeżeń. DTCM + RAM 391788 B, czyli 36 B poniżej R6.2. Obraz +25772 B, poniżej limitu 30 KB z R6.3. Bramka zgłosiła 3 znane pozostałości z mojej notatki do E4.1, których żaden recenzent nie podniósł. (1) Mutanty zabezpieczeń E1.19, które testy jeszcze przepuszczają. (2) Po podstronie 2 menu globalnego jest teraz strona CPU, a znacznik przewijania na podstronie 2 wciąż pokazuje tylko „<”, jakby dalej nic nie było (checkScrollSign() w menu.c). (3) Test „peak held” miernika CPU sprawdza tylko połowę zachowania. Zajmę się nimi po lekkim przeglądzie, który właśnie ruszył."
+    },
+    {
+      "n": 208,
+      "at": "2026-10-26 19:35",
+      "text": "E4.1, lekki przegląd, runda 1 (19:25–19:32): 4 ważne uwagi i 2 drobne. Ważne to 3 pozostałości, które wskazała już bramka: mutanty zabezpieczeń E1.19 (np. bez !merged w regule stałego interwału 27 z 27 testów nadal przechodzi), znacznik przewijania menu globalnego i test „peak held” miernika CPU. Czwarta to nieaktualne liczby zasobów w §3 raportu etapu: po poprawkach DTCM + RAM wynosi 391788 B, czyli 36 B poniżej R6.2, a obraz +25772 B. Drobne: F35 nie powinno trafić do notatek wydania, a przy kilku poprawionych uwagach brakuje nazwy testu. Fixer lekkiego przeglądu poprawia teraz 4 ważne. Drobne zostają jako pozostałości, a F35 i tak obsłuży notatka kontrolera do E4.3."
+    },
+    {
+      "n": 209,
+      "at": "2026-10-26 19:50",
+      "text": "E4.1, fixer lekkiego przeglądu (19:32–19:50): wszystkie 4 ważne uwagi okazały się prawdziwe i są w przeglądzie jako F48–F52. F48: 3 nowe testy łapią mutanty zabezpieczeń E1.19, czyli pasma sumy, progu cofnięcia i bramki kroku MIDI (ad00816). F49 przyjęte: 2 kolejne mutanty dają w 5820 skokach tempa te same restarty, wykluczenia i błędy co kod, więc żaden test ich nie odróżni. Użytkownik tego nie zauważy. F50: podstrona 2 menu globalnego pokazuje „*”, bo dalej jest strona CPU (1550285). F51: test miernika CPU sprawdza szczyt przez całe okno (38681b8). F52: raport etapu ma zasoby po poprawkach (c584a83). Wynik przeglądu: 52 uwagi, 47 poprawionych, 3 przyjęte, 2 pytania do Ciebie (Q9, Q11). Zaczęła się runda 2 lekkiego przeglądu, ostatnia."
+    },
+    {
+      "n": 210,
+      "at": "2026-10-26 20:00",
+      "text": "E4.1 zrobione (workflow C2, 82 agentów, 2,5 h pracy, plus pauza 03:39–17:29). Lekki przegląd przeszedł w rundzie 2. Zostały 3 drobne pozostałości. Dwie poprawiłem sam: zawinąłem za długą linię w N14 i dopisałem F4 i F49 do wiersza N21 w raporcie etapu. Trzecia to test na hoście dla Note Off po czasie i idzie na później (poprawka 24 w planie). Sprawdziłem stan: check.sh daje 27 z 27, 0 ostrzeżeń, DTCM + RAM 391788 B (36 B poniżej R6.2), obraz 300492 B (+25804 B). Przegląd ma 52 uwagi: 47 poprawionych, 3 przyjęte, 2 pytania (Q9, Q11). Kod zmieniły 4 poprawki: seqc_init() w callbacku (F6), Note Off po czasie dla rolla i echa (F22), ograniczone przejście songu przy SPP (F33) i znacznik przewijania w menu (F50)."
     }
   ]
 }
