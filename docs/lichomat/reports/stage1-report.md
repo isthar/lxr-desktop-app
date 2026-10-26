@@ -106,6 +106,7 @@ in neither list is a finding.
 | MIDI input (D8): stamped realtime and SPP, one parsing context, USB MIDI parsed 8 messages per `seq_tick()` instead of 1 per main-loop pass, USB clock keeps going while the card is busy | E2.4 | Fixed |
 | A Program Change sent just before a Start selects the pattern that the Start plays, also when both come in one USB transfer | E2.4 review (`fd0afbe`, N14 amended in E2.9) | Unchanged behaviour, kept through the sync queues (the release notes say so, N14) |
 | Realtime bytes inside a DIN message no longer break the message | E2.4 | covered by Fixed (D8) |
+| MIDI clock, Start, Stop, Continue, Active Sensing and Reset passed on from DIN go out alone on DIN thru (routing M2M, A2M, M2A); fw 1.7 sent them with the data bytes of the last channel message (a clock after a Note On went out as `F8 3C 64`), which a receiver took as running status, so that message repeated on every clock | E2.4 (`midiParser_parseUartData()`; epic E2, decision 9) | Fixed |
 | A full USB MIDI input queue drops new messages instead of wiping the queue | E2.4 | no: only under overload |
 | The reset gate's side effects (all notes off) run up to one `seq_tick()` later, outside the interrupt | E2.5 | no: under 1.5 ms |
 | The clock in PPQ (`PAR_PRESCALER_CLOCK_IN`) is posted to the core when the front panel sends a new value | E2.5 | no: no audible change |
