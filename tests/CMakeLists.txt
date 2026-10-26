@@ -150,16 +150,29 @@ if(TARGET test_cpumeter)
 endif()
 
 # The front-panel buttons (E2.7): test_buttons compiles the firmware's
-# buttonHandler.c as it is. The headers in stubs/ come first on its include path
-# and stand in for the HAL, FatFs and the FX bus. Core/Inc is a system directory
-# for it, so that -Wextra warnings in fw 1.7 headers do not stop -Werror, and
-# buttonHandler.c, fw 1.7 code that the firmware build checks, is compiled
-# without warnings.
+# buttonHandler.c as it is. The headers in stubs/buttons/ and stubs/ come first
+# on its include path and stand in for the FX bus, the HAL and FatFs. Core/Inc is
+# a system directory for it, so that -Wextra warnings in fw 1.7 headers do not
+# stop -Werror, and buttonHandler.c, fw 1.7 code that the firmware build checks,
+# is compiled without warnings.
 seqc_add_test(test_buttons   IDS buttons EXTRA ${LXR_ROOT}/Core/Src/buttonHandler.c)  # E2.7  buttons of the global menu
 if(TARGET test_buttons)
-    target_include_directories(test_buttons BEFORE PRIVATE stubs)
+    target_include_directories(test_buttons BEFORE PRIVATE stubs/buttons stubs)
     target_include_directories(test_buttons SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
     set_source_files_properties(${LXR_ROOT}/Core/Src/buttonHandler.c PROPERTIES COMPILE_OPTIONS -w)
 endif()
 
 seqc_add_test(test_usbtx     IDS usbtx EXTRA ${LXR_ROOT}/Core/Src/Soundengine/USB/usb_midiTx.c)  # E2.8  USB MIDI out packets and ring
+
+# The CC handler's table of original values (E4.5): test_midicc compiles the
+# firmware's MidiParser.c with the stand-in headers in stubs/ (the HAL, the USB
+# device class) and the firmware's own FX bus header. For this target the table,
+# midiParser_originalCcValues, is a pointer to a 255-byte array, which the test
+# points into a buffer with guard bytes around it.
+seqc_add_test(test_midicc    IDS midicc EXTRA ${LXR_ROOT}/Core/Src/Soundengine/MIDI/MidiParser.c)  # E4.5  CC values stay in their table
+if(TARGET test_midicc)
+    target_include_directories(test_midicc BEFORE PRIVATE stubs)
+    target_include_directories(test_midicc SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+    target_compile_definitions(test_midicc PRIVATE "midiParser_originalCcValues=(*midiParser_ccTable)")
+    set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/MIDI/MidiParser.c PROPERTIES COMPILE_OPTIONS -w)
+endif()

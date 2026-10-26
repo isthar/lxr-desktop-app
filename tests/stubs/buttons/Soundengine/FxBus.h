@@ -1,8 +1,10 @@
 /*
  * FxBus.h
  *
- * Host stand-in for Core/Inc/Soundengine/FxBus.h, whose effect headers use the
- * ARM-only __fp16 type. buttonHandler.c only reads the selected effect.
+ * Host stand-in for Core/Inc/Soundengine/FxBus.h, for test_buttons only (its
+ * directory, tests/stubs/buttons, is on no other test's include path): it keeps
+ * the effect headers out of that test. buttonHandler.c only reads the selected
+ * effect.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only

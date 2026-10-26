@@ -1,11 +1,12 @@
 /*
  * stm32f7xx_hal.h
  *
- * Host stand-in for the STM32 HAL, for host tests that compile firmware user
- * interface code (test_buttons.c compiles Core/Src/buttonHandler.c). It has only
- * what the headers of buttonHandler.c need: the handle types that main.h and
- * IO/DIO.h name, the DWT and clock calls of the inline functions in delay.h, and
- * the TIM2 calls of buttonHandler.c.
+ * Host stand-in for the STM32 HAL, for host tests that compile firmware files
+ * (test_buttons.c compiles Core/Src/buttonHandler.c, test_midicc.c
+ * Core/Src/Soundengine/MIDI/MidiParser.c). It has only what the headers of those
+ * files need: the handle types that main.h, IO/DIO.h and DSPAudio/random.h name,
+ * the DWT and clock calls of the inline functions in delay.h, the CMSIS calls of
+ * those in DSPAudio/BufferTools.h, and the TIM2 calls of buttonHandler.c.
  *
  * It also takes the DTCM placement out of the firmware's declarations: INDTCM and
  * INDTCMZ (main.h, Soundengine/config.h) are __attribute__ ((section(".dtcm"))),
@@ -33,10 +34,18 @@
 /* __attribute__ ((section(".dtcm"))) becomes __attribute__ ((unused)) */
 #define section(name) unused
 
+/* The effect headers (DSPAudio/FX/) declare buffers of __fp16, the half-precision
+ * storage type of ARM compilers. They only declare them, so where the host
+ * compiler has no __fp16 (GCC on x86-64), a 16-bit integer stands in for it. */
+#if !defined(__ARM_FP16_FORMAT_IEEE) && !defined(__ARM_FP16_FORMAT_ALTERNATIVE) && !defined(__clang__)
+#define __fp16 uint16_t
+#endif
+
 #define __STATIC_INLINE static inline
 
 typedef enum { HAL_OK = 0, HAL_ERROR = 1 } HAL_StatusTypeDef;
 typedef struct { int unused_; } I2S_HandleTypeDef;
+typedef struct { int unused_; } RNG_HandleTypeDef;
 typedef struct { int unused_; } SPI_HandleTypeDef;
 typedef struct { int unused_; } TIM_HandleTypeDef;
 typedef struct { int unused_; } UART_HandleTypeDef;
@@ -44,6 +53,11 @@ typedef struct { volatile uint32_t CTRL; volatile uint32_t CYCCNT; } DWT_Type;
 
 extern DWT_Type host_dwt;
 #define DWT (&host_dwt)
+
+/* CMSIS SIMD intrinsics that inline functions of DSPAudio/BufferTools.h call.
+ * Declared only: no host test calls those functions, and a call would not link. */
+uint32_t __QADD16(uint32_t op1, uint32_t op2);
+uint32_t __QSUB16(uint32_t op1, uint32_t op2);
 
 uint32_t HAL_RCC_GetHCLKFreq(void);
 HAL_StatusTypeDef HAL_TIM_Base_Start_IT(TIM_HandleTypeDef *htim);

@@ -165,7 +165,10 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 
 		const uint16_t paramNr = msg.data1-1;
 		if(updateOriginalValue && !isFloatModulator) {
-			midiParser_originalCcValues[paramNr+1] = value.itg;
+			// LICHOMAT (E4.5): kept at the CC number. fw 1.7 stored at [paramNr+1], which
+			// is 65536 for CC 0 (paramNr wraps to 65535): 64 KB past the table, in the
+			// pattern memory. Every kit load sends parameter 127 as CC 0.
+			midiParser_originalCcValues[msg.data1] = value.itg;
 		}
 
 		switch(msg.data1)
@@ -906,7 +909,9 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 	{
 		const uint16_t paramNr = msg.data1 + 1 + 127;
 
-		if(updateOriginalValue && !isFloatModulator) {
+		// LICHOMAT (E4.5): only inside the table. An NRPN makes data1 its low byte
+		// (0..255), and fw 1.7 stored data1 127..255 up to 129 bytes past the table.
+		if(updateOriginalValue && !isFloatModulator && paramNr < sizeof(midiParser_originalCcValues)) {
 			midiParser_originalCcValues[paramNr] = value.itg;
 		}
 		switch(msg.data1)
