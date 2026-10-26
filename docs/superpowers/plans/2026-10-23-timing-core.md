@@ -13769,8 +13769,10 @@ The others go beyond the spec and the notes:
    - the start/stop button and LED follow the change (fw 1.7: only for MTC);
    - in internal sync every stop sends MIDI Stop, song end included, and every start MIDI Start;
    - in the slave modes it sends no Start, Stop or Continue (N18.2): MIDI thru, when on, forwards
-     what arrives, so downstream gear gets no duplicates. A resume, which only the slave modes do,
-     therefore sends nothing. `seq_coreSyncMode` is the mode the core runs in; `seq_isSyncExternal`
+     what arrives, so downstream gear gets no duplicates. A resume in a slave mode therefore sends
+     nothing; a switch to internal sync that starts an armed transport sends Start, or Continue
+     when the position is kept or located (`seqc_setSyncMode()`; corrected in the E4.1 review, F7:
+     this said that only the slave modes resume). `seq_coreSyncMode` is the mode the core runs in; `seq_isSyncExternal`
      changes one `seq_tick()` earlier. The owner confirmed this (Q7, 2026-10-24): stay MIDI-compliant, the existing MIDI handling needs no change.
 8. **`tools/fw_checks.sh`.** The glue needs the hardware, so each firmware task's failing test is a
    set of checks on the release ELF (symbols, calls from the disassembly, ITCM contents) and on the
@@ -16634,7 +16636,9 @@ Intended changes, for the stage 1 report (spec §12; E4.1 collects them):
   change. fw 1.7 did this only for MTC, so the button got out of step after a MIDI or song-end stop.
 - **MIDI transport out as a slave (N18.2):** none. fw 1.7 answered a received Start with Stop and
   Start, and a received Continue with Start, also with thru on. In internal sync Start and Stop go
-  out as before; a resume, which only the slave modes do, sends nothing. Confirmed by the owner (Q7).
+  out as before; a resume in a slave mode sends nothing, and a switch to internal sync that starts
+  an armed transport sends Start or Continue (corrected in the E4.1 review, F7). Confirmed by the
+  owner (Q7).
 - **Clock out after a Continue or a song position:** the jack pulses follow the position, on the
   step grid. fw 1.7 always restarted from step 1, where its divider restarted too.
 - **Song position in song mode inside the active pattern:** nothing reloads (no lost edits, no kit
@@ -21261,8 +21265,9 @@ and adds 80 B of RAM.
    callback sends Start, Stop and Continue only in internal sync (`seq_sendTransport()`, checked by
    `tools/fw_checks.sh E2.2`); as a slave the LXR sends none, and thru forwards what arrives. *Answered by the owner
    (Q7, 2026-10-24): stay MIDI-compliant; the existing MIDI handling needs no change.*
-3. **A resume sends Continue (FB).** *Superseded by N18.2: only the slave modes resume, and they
-   send nothing.*
+3. **A resume sends Continue (FB).** *Superseded by N18.2: a resume in a slave mode sends nothing.
+   A switch to internal sync that starts an armed transport sends Continue when the position is kept
+   or located (corrected in the E4.1 review, F7: this said that only the slave modes resume).*
 4. **One-shot roll MIDI velocity.** *Settled by N18.3 and done in E2.3:* the current step's volume,
    as in fw 1.7.
 5. **Echo note.** When an incoming note matches a voice's note override, the echo stays note 60
@@ -25534,7 +25539,9 @@ questions the owner has to answer are also kept in the tracker (`docs/lichomat/t
    `seq_cbTransport()` sends through `seq_sendTransport()`, which checks the mode the core runs in
    (E2.2 Step 22, decision 7, `tools/fw_checks.sh E2.2`).*
 3. A resume sends Continue (FB); fw 1.7 always sent Start (FA). Needs the owner's confirmation.
-   *Status: superseded by N18.2: only the slave modes resume, and they send nothing.*
+   *Status: superseded by N18.2: a resume in a slave mode sends nothing; a switch to internal sync
+   that starts an armed transport sends Continue when the position is kept or located (corrected in
+   the E4.1 review, F7: this said that only the slave modes resume).*
 4. One-shot roll MIDI velocity is the roll velocity (100); fw 1.7 used the current step's volume.
    *Status: settled by N18.3: the current step's volume, as in fw 1.7. Done in the plan review: E2.3
    Step 6 keeps E2.2's `stepData ? (stepData->volume&STEP_VOLUME_MASK) : vol`.*

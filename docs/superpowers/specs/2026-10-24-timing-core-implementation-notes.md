@@ -483,7 +483,11 @@ says otherwise. The owner can still change them.
      did.
    - In the slave modes (1 and 2) it sends nothing. MIDI thru, when on, forwards what arrives, so
      downstream gear gets no duplicates.
-   - A resume therefore never sends Continue in practice, because only the slave modes resume.
+   - A resume in a slave mode therefore sends nothing. A switch to internal sync that starts an
+     armed transport (`seqc_setSyncMode()`) sends Start, or Continue when the position is kept or
+     located (a Continue, or an SPP and a Continue, received before the switch); a slave that
+     follows the LXR then plays the step with it. (Amended in the E4.1 review, F7: this said that
+     a resume never sends Continue in practice, because only the slave modes resume.)
    - The owner confirmed this on 2026-10-24 (Q7): stay MIDI-compliant; the existing MIDI handling
      needs no change.
 3. **One-shot roll velocity.** The MIDI Note On of a one-shot roll uses the current step's volume, as
