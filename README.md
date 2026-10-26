@@ -45,9 +45,13 @@ card: the updater installs the first one it finds. After the update the start-up
 The updater itself is never changed, so you can always go back:
 
 1. Get the official update file `LXR_V2_V1.7.img`, either from Erica Synths or by building the
-   upstream source code:
+   upstream source code. The upstream folder has no `tools/env.sh`: on a Mac set up with
+   `tools/setup-toolchain.sh`, first run `source tools/env.sh` in this folder, then `cd ..`, so that
+   the build tools are on `PATH` and the clone goes next to this folder, not into it:
 
    ```sh
+   source tools/env.sh                 # in this folder, on a Mac set up with tools/setup-toolchain.sh
+   cd ..
    git clone https://github.com/erica-synths/lxr-desktop-app.git lxr-official
    cd lxr-official
    git checkout a43cd4f
