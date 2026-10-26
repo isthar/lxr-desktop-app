@@ -59,11 +59,16 @@ compare, the choke test, the front of the queue), now inlined into the processin
 - **Sort.** An index of the staged events is kept in firing order: binary search, and the indices on
   the shorter side move, since a boundary generates the late hits of step `n` before the early hits of
   step `n+1`, which fire first.
-- **Merge.** At the end of the boundary the staged events join the ring in one pass. The pending
-  events that fire before the first staged one stay in place, and so do those that fire after the last
-  one; of the events in between, those on the shorter side move, towards the tail (an append in the
-  common case) or towards the head. A new event is written twice (staged, merged), a moved pending event
-  once.
+- **Merge.** At the end of the boundary the staged events join the ring in one pass, from one of its
+  ends (wording corrected in E2.9, after the E1.18 quality review):
+  - a merge from the tail moves every pending event from the first staged one's place to the tail,
+    that is every one that does not fire before it, towards the tail; in the common case that is
+    none, and the merge is an append;
+  - a merge from the head moves every pending event before the last staged one's place, that is
+    every one that fires before it, towards the head;
+  - the merge takes whichever of the two groups is smaller.
+
+  A new event is written twice (staged, merged), a moved pending event once.
 - **Ties.** Of events with equal keys, the staged ones fire before the pending ones, and of the staged
   ones the one staged last: the order of one insert per event, where the one queued last fires first.
 - **Overflow.** An event is rejected when the queue's events and the events staged before it at the
@@ -107,7 +112,7 @@ compare, the choke test, the front of the queue), now inlined into the processin
   354 index shifts) costs about 9k.
 - **Size** (`seq_core.c.obj`, the firmware compile command, Arm GNU 14.3.rel1): bss 8269 → 11221 B
   (+2952: the staging buffer 2688 B and its index 224 B, the recorded chokes 32 B), text 20178 →
-  20138 B (with the E1.18 review fixes). Review row R6.2 must allow it, as for N20 and N21.
+  20138 B (with the E1.18 review fixes). Review row R6.2 allows it, as it allows N20 and N21 (E2.9).
 - Tests check the order and the rejects against a reference model (batches into a nearly full queue,
   and a batch with ties that merges from the head) and against fire logs recorded from the E1.16 queue
   (random patterns, settings and recorded notes, with the firmware's queue and a 16-entry one). Direct
@@ -382,6 +387,40 @@ seen. So:
 - The drain calls `seqc_songPosition()` at the SPP's place in the merged order.
 - The parser no longer acts on SPP itself.
 
+*Amended in E2.9: Program Change travels in the sync queues too* (`fd0afbe`, an E2.4 review fix, with
+`23a01ac` for the time the drain reads). This is a deviation from spec §4.3 and §7.2, where only the
+realtime messages travel in the queues (SPP joins them through this note), and from fw 1.7, where the
+MIDI parser switched the pattern itself.
+
+- **Why.** With the parser alone, `seq_tick()` drained Start and Continue before it parsed a Program
+  Change that had arrived before them. A slave that got a Program Change and a Start in one USB
+  transfer played the old pattern first. fw 1.7 parsed both in arrival order.
+- **Decoding.**
+  - DIN: `USART3_IRQHandler` passes every received byte with its stamp to `seqq_dinByte()` (through
+    `seqp_dinByteIn()`). A data byte after a `Cn` status byte, also by running status, is a Program
+    Change, stamped with that data byte. Realtime bytes leave the running status alone; any other
+    status byte, F0–F7 included, ends it.
+  - USB: `USBD_CDC_DataOut()` passes every packet of cable 0 with the transfer's stamp to
+    `seqq_usbMessage()` (through `seqp_usbMessageIn()`). `Cn` with any CIN from 0x2 up is a Program
+    Change, since the parser takes `Cn` as one whatever the CIN.
+- **Queueing.** The entry is `SEQQ_PROGRAM_CHANGE` (0x81) with the value `channel << 8 | program`, in
+  the same queue as Clock, Start, Continue, Stop and SPP from that source (`seq_syncq`). Every byte and
+  every packet still reaches the parser as well; its Program Change case only routes now (MIDI thru).
+- **Applying.** `seq_drainSyncQueues()` pops the entries of the DIN, USB and jack queues in stamp
+  order, so a Program Change acts in its place among Start, Continue, Stop, the clocks and SPP.
+  - It reads the time (`seqp_now()`) before every pop. A pattern switch can load a kit for tens of
+    ms, and an entry stamped during the load would otherwise reach the core at the time read before
+    it instead of at its stamp.
+  - A Program Change acts only when `MIDI_FILTER_PROG_C` is on and its channel is the global channel
+    (`midi_MidiChannels[7]`), as in fw 1.7; `MIDI_FILTER_SYSTEM` does not apply to it. It calls
+    `seq_setNextPattern()`: while running, that sets the next pattern; while stopped, it switches the
+    pattern at once and posts a rewind to the mailbox, which the drain applies (`seq_applyMailbox()`)
+    before it pops the next entry. A Start popped after it therefore starts the new pattern from its
+    first step.
+  - `seqc_process()` then gets the time of the last pop.
+- **Release notes** (unchanged behaviour): a Program Change sent just before a Start selects the
+  pattern that the Start plays, as in fw 1.7, also when both come in one USB transfer.
+
 ## N15. Dropout threshold
 
 A fixed 500 ms dropout cuts a 4 PPQ jack clock below 30 BPM, where the pulses are more than 500 ms
@@ -496,6 +535,13 @@ E2.8), beyond spec §8, §10 and §12:
   that has left a transfer untaken for 100 ms: it has stopped reading.
 - **Song Select:** the MIDI parser routes F3 with its song number, to USB and to DIN out. fw 1.7
   routed it at once, with the data bytes of the message before it.
+- **F4, F5 and F6 alone** (`3771319`, an E2.4 review fix made in E2.8; added in E2.9): the MIDI
+  parser routes these messages without the stale data bytes of the message before them. fw 1.7 kept
+  that message's length, so it sent a Tune Request after a Note On as `F6 3C 64`. They now end
+  running status, as MIDI 1.0 asks: data bytes after them no longer count as running status of the
+  message before (`midiParser_parseUartData()` ignores them). Release notes: a Tune Request (F6)
+  passed on from DIN goes out alone, without the data bytes of the message before it, and stray
+  data bytes after it no longer act as a repeat of that message.
 - **Files beyond §8:** `usb_manager.c/.h` and the new `usb_midiTx.c/.h`; in `usbd_cdc.c/.h` the
   old ring goes and `USBD_CDC_DataIn()` starts the next transfer.
 - **RAM beyond §10:** 444 B for the ring and its transfer buffer, in place of fw 1.7's 136-byte
@@ -732,12 +778,11 @@ the clock count.
   - Costs: `seq_core.c.obj` text 20138 to 22862 B (+2724) and bss 11221 to 11309 B (+88: 24 B in
     the fit and in its copy for the join, 8 B for the kept slot, 32 B for the tentative jack merge),
     measured with the firmware's compile command and Arm GNU 14.3.rel1. After the second review
-    (the bounce rule, no step gate): text 22898 B (+36), bss unchanged.
+    (the bounce rule, no step gate): text 22898 B (+36), bss unchanged. R6.2 allows it (E2.9).
 - **Costs and behaviour changes.**
   - 1192 B of bss over E1.14 (7053 to 8245 B): the 98-point ring and the fit (928 B), and the fit copy
-    and the join state (264 B). E1.17's 101-point ring adds 24 B (8269 B). Review row R6.2 must allow
-    it, as for N20; the controller amends R6.2 before E4.1 with the measured figures (amendments items
-    12, 14 and 17).
+    and the join state (264 B). E1.17's 101-point ring adds 24 B (8269 B). Review row R6.2 allows it,
+    as it allows N20: E2.9 set it to at most 391824 B of DTCM + RAM, with the measured figures.
   - About 2.7 KB of code: `seq_core.c.obj` text 18602 B after E1.15 (b97c1c6) against 15854 B after
     E1.14, measured with the firmware's compile command and Arm GNU 14.3.rel1.
   - A lost DIN clock now costs about 1.5% for about 4 beats, where it cost 0% before. A lost jack pulse

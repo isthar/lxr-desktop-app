@@ -578,13 +578,16 @@ static uint16_t seqc_queueFiresBefore(const seqc_event_t *ev)
 	return lo;
 }
 //------------------------------------------------------------------------------
-/** Merge the staged events into the ring, in one pass. The pending events that
- * fire before every staged one stay where they are, and so do those that fire
- * after every staged one; of the events in between, those on the shorter side
- * move: towards the tail (a merge from the tail, the common case, where it is
- * an append) or towards the head. Each element is written once. Of events with
- * the same key, the staged ones fire first, so the order is that of one insert
- * per event in the order they were staged (N2). */
+/** Merge the staged events into the ring, in one pass from one end (N2):
+ * - a merge from the tail moves every pending event from the first staged one's
+ *   place to the tail (those that do not fire before it) towards the tail; in
+ *   the common case that is none, and the merge is an append;
+ * - a merge from the head moves every pending event before the last staged one's
+ *   place (those that fire before it) towards the head;
+ * - it takes whichever of the two groups is smaller.
+ * Each element is written once. Of events with the same key, the staged ones
+ * fire first, so the order is that of one insert per event in the order they
+ * were staged (N2). */
 static void seqc_queueMerge(void)
 {
 	const uint16_t k = seqc_stage.count;

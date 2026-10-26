@@ -10,7 +10,7 @@ Read this first when picking the project up in a new session.
 | Tracker page (claude.ai artifact) | https://claude.ai/artifact/MPCLCyFzqsp3ViNGuwgTZt |
 | Stage 1 spec | `docs/superpowers/specs/2026-10-23-timing-core-design.md` |
 | Stage 1 plan | `docs/superpowers/plans/2026-10-23-timing-core.md` |
-| Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N20; they win over the spec) |
+| Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N21; they win over the spec) |
 | Reports per milestone | `docs/lichomat/reports/` |
 | fw 1.7 timing replica | `tests/reference/fw17_replica.c` |
 | Work branch | `timing-core`, pushed to the owner's fork: https://github.com/isthar/lxr-desktop-app/tree/timing-core |
@@ -23,7 +23,7 @@ The tools live in `.toolchain/` (git-ignored, about 1.4 GB). Nothing is installe
 tools/setup-toolchain.sh   # downloads Arm GNU 14.3.rel1, CMake 3.31.12, Ninja 1.13.2 if missing (SHA-256 checked)
 source tools/env.sh        # puts them on PATH (bash or zsh), sets ARM_TOOLCHAIN_DIR
 tools/check.sh             # host tests + release build + memory summary + warning count; non-zero exit on failure
-tools/fw_checks.sh         # after check.sh: ELF and source checks of the firmware integration (E2.2-E2.6)
+tools/fw_checks.sh         # after check.sh: ELF and source checks of the firmware integration (E2.2-E2.8)
 ```
 
 The release image lands in `build/release/`, and the full log of the last check in `build/check.log`.

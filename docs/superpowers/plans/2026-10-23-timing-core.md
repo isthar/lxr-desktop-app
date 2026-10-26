@@ -17961,13 +17961,19 @@ void EXTI9_5_IRQHandler(void)
 			const uint16_t pinState = (Reset_In_EXTI5_GPIO_Port->IDR & Reset_In_EXTI5_Pin);
 			seqp_jackIn(pinState ? SEQC_EV_RESET_OFF : SEQC_EV_RESET_ON, stamp);
 		}
-		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
 	}
 }
 #endif
 //--------------------------------------------------
 void trigger_setPin(uint8_t index, uint8_t isOn)
 ```
+
+*Corrected in E2.9 (`ac08e38`, E2.5 review):* the reset handler clears the pending bit once, before it
+reads the pin. An edge after the clear sets the bit again, so the handler runs again and pushes the new
+level. This step's code first cleared the bit a second time after the read, as fw 1.7 did. That second
+clear could erase an edge that came between the read and the clear: the last event queued was then the
+opposite of the pin level, and the run gate stayed stuck until the next edge. The committed handler
+also has a comment that says this.
 
 - [x] **Step 4: `TriggerOut.h`: drop the old declarations**
 
@@ -18064,8 +18070,9 @@ PASS E2.5
 
 - [x] **Step 8: Review**
 
-- [x] Both handlers read the stamp first and clear the pending bit as fw 1.7 did. They act only in
-  sync mode 1, and they call nothing but `seqp_jackIn()`.
+- [x] Both handlers read the stamp first, then clear the pending bit once, before they read the pin
+  (corrected in E2.9: `ac08e38` removed the second clear after the read that fw 1.7 had). They act
+  only in sync mode 1, and they call nothing but `seqp_jackIn()`.
 - [x] Polarity: a low pin (`!pinState`) was "stop and reset" in fw 1.7 and is `SEQC_EV_RESET_ON` now.
 - [x] Both handlers run at preemption priority 3 (`main.c:913-917`). They never interrupt each
   other, so the shared jack queue has one producer at a time.
@@ -18076,6 +18083,11 @@ PASS E2.5
   `trigger_reset(0)` on STOP. The output PPQ prescaler is unchanged.
 
 Intended changes for the report:
+- A reset gate edge is no longer lost (`ac08e38`, added in E2.9). fw 1.7 cleared the reset input's
+  pending bit a second time after it had read the pin, which could erase an edge and leave the run
+  gate stuck, stopped or running against the gate's level, until the next edge. Release notes: the
+  sequencer no longer misses a change of the reset input that comes while the previous one is being
+  handled, so it no longer stays stopped, or keeps running, against the gate.
 - The reset gate's side effects run in `seq_tick()` instead of the interrupt. This includes all
   notes off. They happen up to one `seq_tick()` later. MIDI Stop and Start no longer go out for
   the gate: sync mode 1 is a slave mode, and as a slave the LXR sends no transport messages
@@ -21041,14 +21053,16 @@ changes are in):
     is about 387476 B and 387032 B. R6.2 would then fail by about 350 B with E2.8, and pass by
     about 90 B without it.
   - A smaller ring would not be enough: 64 packets save 256 B.
-  - R6.2 therefore allows the ring on top of the 8704 B, which keeps its margin:
+  - R6.2 therefore allows the ring on top of the 8704 B, which keeps its margin. E2.9 raised it
+    for N21, E1.17, E1.18 and E1.19 as well, so the row reads:
 
     ```markdown
-    | R6.2 | A | the same line | DTCM + RAM is at most 387568 B: the baseline 378420 B plus 8704 B (event queue 6 KB, sync queues 1.5 KB, other state under 1 KB) plus 444 B (the USB MIDI transmit ring of E2.8, N20) | open |
+    | R6.2 | A | the same line | DTCM + RAM is at most 391824 B: the baseline 378420 B plus 8704 B (spec §10: the event queue, the sync queues and other state), 444 B (the USB MIDI transmit ring, N20), 1192 B (N21's tempo fit), 24 B (E1.17's 101-point fit ring), 2952 B (E1.18's staging buffer, N2 amended) and 88 B (E1.19's clock counts and merge state, N21); measured at `3f2a038`: 391660 B | open |
     ```
 
   - In E4.1 Step 4 the resources text `(review row R6.2 allows +8704 B)` becomes
-    `(review row R6.2 allows +8704 B, and 444 B more for the USB MIDI transmit ring of E2.8)`.
+    `(review row R6.2 allows +8704 B, and 444 B more for the USB MIDI transmit ring of E2.8)`. E2.9
+    adds the other allowances of the row to it.
 - **E4.1 Step 4, the stage 1 report.** E2.8 has an *Intended changes* list too (Step 14), so the
   text that E2.7's item 4 makes "lists of E2.2–E2.5 as N18 amended them, and of E2.7" becomes "…,
   and of E2.7 and E2.8", in the task's intro and in Step 4. Under "1. Deviations from the spec",
@@ -23819,8 +23833,8 @@ RAM 271032 B, image 274688 B.
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
 | R6.1 | A | `tools/check.sh`, the `memory:` line | ITCM fits (≤ 16384 B) | open |
-| R6.2 | A | the same line | DTCM + RAM is at most 387568 B: the baseline 378420 B plus 8704 B (event queue 6 KB, sync queues 1.5 KB, other state under 1 KB) plus 444 B (the USB MIDI transmit ring of E2.8, N20) | open |
-| R6.3 | A | the same line | the image grew by about 21.5 KB (the core alone has 19.7 KB of code: `text` 20126 B after E1.17, measured with the firmware's compile command, against 15.7 KB in E1.14 Step 8, with N21's estimator and the ring queue; the USB MIDI out of E2.8 adds 0.75 KB; spec §10: +10–15 KB); more than 30 KB is a finding | open |
+| R6.2 | A | the same line | DTCM + RAM is at most 391824 B: the baseline 378420 B plus 8704 B (spec §10: the event queue, the sync queues and other state), 444 B (the USB MIDI transmit ring, N20), 1192 B (N21's tempo fit), 24 B (E1.17's 101-point fit ring), 2952 B (E1.18's staging buffer, N2 amended) and 88 B (E1.19's clock counts and merge state, N21); measured at `3f2a038`: 391660 B | open |
+| R6.3 | A | the same line | the image grew by about 24 KB: 299092 B at `3f2a038` against the baseline's 274688 B, +24404 B (the core alone has 22.4 KB of code: `seq_core.c.obj` `text` 22898 B, measured with the firmware's compile command, against 15.7 KB in E1.14 Step 8, with N21's estimator and its E1.19 rules and the ring queue with its merge; the USB MIDI out of E2.8 adds 752 B; spec §10: +10–15 KB); more than 30 KB is a finding | open |
 
 ### R7 Compatibility (G8: no file format changes)
 
@@ -24078,8 +24092,10 @@ base = {"ITCM": 15000, "DTCM": 107388, "RAM": 271032, "image": 274688}
 rows = ["| | fw 1.7 | stage 1 | change |", "|---|---|---|---|"]
 for k in ("ITCM", "DTCM", "RAM", "image"):
     rows.append("| %s | %d B | %d B | %+d B |" % (k, base[k], now[k], now[k] - base[k]))
-rows += ["", "Spec §10: about +7.5 KB of DTCM and RAM (review row R6.2 allows +8704 B, and 444 B more for the",
-         "USB MIDI transmit ring of E2.8), about +10–15 KB of flash, and no net growth of ITCM."]
+rows += ["", "Spec §10: about +7.5 KB of DTCM and RAM (review row R6.2 allows +8704 B, and 4700 B more: 444 B for the",
+         "USB MIDI transmit ring of E2.8 (N20), 1192 B for N21's tempo fit, 24 B for E1.17's 101-point fit ring,",
+         "2952 B for E1.18's staging buffer (N2) and 88 B for E1.19 (N21), so at most 391824 B), about +10–15 KB",
+         "of flash, and no net growth of ITCM."]
 s = open(p).read()
 marker = "Filled in by E4.1 Step 4 from `build/check.log` (the `memory:` line of `tools/check.sh`).\n"
 assert s.count(marker) == 1, "the resources marker is not there"
