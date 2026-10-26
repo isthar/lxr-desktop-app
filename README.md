@@ -94,7 +94,7 @@ don't need any extra hardware:
 
 You need [CMake](https://cmake.org/download/) 3.21 or newer, [Ninja](https://ninja-build.org/),
 the [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads)
-(`arm-none-eabi-gcc`, tested with 14.3.rel1 and 11.3.rel1) and [Python 3](https://www.python.org/downloads/)
+(`arm-none-eabi-gcc`, tested with 14.3.rel1; fw 1.7 also with 11.3.rel1) and [Python 3](https://www.python.org/downloads/)
 (to create the `.img` update file). The build finds them on `PATH`.
 
 **1. Install the tools (once)**
