@@ -208,6 +208,16 @@ check_E2_4() {
 	awk '{sub(/\r$/, "")} /^void seq_tick\(\)/{f=1} f&&/seq_drainSyncQueues\(&now\)/{d=1;next} f&&d&&NF{if(/^[[:space:]]+changed = 1;$/)next; if(/^[[:space:]]+seqc_process\(now\);$/)ok=1; d=0}
 		f&&/^}/{exit} END{exit !ok}' \
 		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_tick() does not pass the time of the last pop to seqc_process()"
+	# the order after the drain (E4.1 F36): seqc_process(), then the copies for the UI,
+	# then the MIDI parse as the last statement inside the nesting guard, so that a note
+	# recorded there sees the phase and the step copies of this call
+	awk '{sub(/\r$/, "")} /^void seq_tick\(\)/{f=1; next} f&&/^}/{exit}
+		f&&NF{sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); if(!/^\/\//)l[++n]=$0}
+		END{for(i=1; i<=n; i++){if(l[i]=="seqc_process(now);"){p++; pi=i} if(l[i]=="seq_refreshCopies(changed);"){r++; ri=i}
+			if(l[i]=="seq_parseMidiInput();"){m++; mi=i}}
+			exit !(p==1 && r==1 && m==1 && pi<ri && ri<mi && l[mi+1]=="seq_inTick = 0;" && mi+1==n)}' \
+		Core/Src/Soundengine/Sequencer/sequencer.c \
+		|| fail "seq_tick() does not run seqc_process(), then seq_refreshCopies(), then seq_parseMidiInput() last"
 }
 
 # ---- E2.5: clock in and reset in jacks through the jack sync queue ----------
