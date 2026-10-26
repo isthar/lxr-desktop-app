@@ -23741,7 +23741,7 @@ Row R1.4 checks it, and the release notes (E4.3) take the user-visible changes f
 - Modify: the files each finding names (one commit per finding)
 - Test: `grep -cE '\| (open|fix) \|' docs/lichomat/reports/stage1-review.md` must print `0`
 
-- [ ] **Step 1: Write the checklist**
+- [x] **Step 1: Write the checklist**
 
 Create `docs/lichomat/reports/stage1-review.md`:
 
@@ -23958,12 +23958,12 @@ Filled in when the review is complete: the reviewed commit, the date, and the co
 severity and status.
 ````
 
-- [ ] **Step 2: Run the gate to see it fail**
+- [x] **Step 2: Run the gate to see it fail**
 
 Run: `grep -cE '\| (open|fix) \|' docs/lichomat/reports/stage1-review.md`
 Expected: `51`
 
-- [ ] **Step 3: Commit the checklist**
+- [x] **Step 3: Commit the checklist**
 
 ```bash
 git add docs/lichomat/reports/stage1-review.md
@@ -23972,7 +23972,7 @@ git commit -m "Add the stage 1 review checklist" \
   -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 4: Write the stage 1 report**
+- [x] **Step 4: Write the stage 1 report**
 
 The notes say that the deviations are listed in the stage 1 report; R1.4 checks it, and E4.3 takes the
 user-visible changes from it. It collects what the plan decided on the way: the decision lists of
@@ -24122,7 +24122,7 @@ git commit -m "Add the stage 1 report: deviations and intended changes" \
   -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 5: Run the automated rows**
+- [x] **Step 5: Run the automated rows**
 
 Run `tools/check.sh`, then each row marked **A** in R2–R10 and the commands under "Commands", from
 the repository root. Each Bash call is a new shell, so start every command that uses `cmake` or `ctest`
@@ -24130,7 +24130,7 @@ with `source tools/env.sh && ` (E3.5 made it work in zsh). Write `pass` into the
 when its "Pass when" holds; otherwise add a finding (Step 7) and write its number, `F<n>`, into the
 cell.
 
-- [ ] **Step 6: Review the manual rows in parallel**
+- [x] **Step 6: Review the manual rows in parallel**
 
 Use superpowers:dispatching-parallel-agents with five reviewers. None of them changes a file. Give
 each this prompt, with its group of rows:
@@ -24156,7 +24156,7 @@ The groups:
 
 Write each answer into the rows and the findings table.
 
-- [ ] **Step 7: Fix the findings**
+- [x] **Step 7: Fix the findings**
 
 Follow "Fixing findings" in the review file for every finding: decide it (`fix`, `accepted` or
 `question`), and for each `fix` write the failing test first, see it fail, fix, see it pass, run
@@ -24172,7 +24172,7 @@ git commit -m "Fix F<n>: <what was wrong>" -m "Co-Authored-By: Claude Opus 5.5 <
 Then set the finding's status to `fixed <short commit>`, and rerun the checklist rows the fix touches.
 Add each `question` to `questions` in `docs/lichomat/tracker.json` with its reversible default.
 
-- [ ] **Step 8: Fill in the result**
+- [x] **Step 8: Fill in the result**
 
 Run:
 
@@ -24198,12 +24198,12 @@ EOF
 Expected: one line `Reviewed timing-core at <commit> on <date>. Findings: …`, with the counts of the
 findings table.
 
-- [ ] **Step 9: Run the gate to see it pass**
+- [x] **Step 9: Run the gate to see it pass**
 
 Run: `grep -cE '\| (open|fix) \|' docs/lichomat/reports/stage1-review.md; tools/check.sh`
 Expected: `0`, then `tools/check.sh` exits 0 with `== compiler warnings: 0`.
 
-- [ ] **Step 10: Commit the result**
+- [x] **Step 10: Commit the result**
 
 ```bash
 git add docs/lichomat/reports/stage1-review.md docs/lichomat/reports/stage1-report.md
