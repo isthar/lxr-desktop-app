@@ -25430,6 +25430,20 @@ under `scratchpad/` were the controller's temporary files.
       Both are now rules of the agent scripts (`85056be`), and the remaining B tasks got them as
       controller notes.
 
+22. **E2.9's light review leftovers, for E4.1 (minor).**
+    - The stage 1 report template's §10 RAM row names only N20's 444 B. Use R6.2's breakdown.
+    - The F4/F5/F6 release-note sentence lives only in N20. E4.1 Step 4 must take the intended changes
+      from the notes too (N14, N20, E2.5), not only from the E2.x "Intended changes" lists.
+    - N14 says that `USBD_CDC_DataOut()` passes "every packet of cable 0" to `seqq_usbMessage()`. It
+      passes only packets whose CIN gives a length (0x2–0xF), and it stops at the first CIN 0.
+    - A 117-character line in N14's "Why" bullet.
+23. **Workflow C1's light review leftovers, for E4.1 (minor).**
+    - E3.1: the README still names the update file `LXR_V2_V<version>.img`. E3.5 updates the README.
+    - E3.3: with the CPU page after the global menu's sub-page 2, that sub-page's scroll marker shows
+      only "<", although a page follows. `checkScrollSign()` does not know the CPU page.
+    - E3.3: the CPU meter test that claims the peak is held for one window only checks that the peak
+      is gone in the next window.
+
 ## Progress notes
 
 Notes made while executing the plan, one bullet each, newest last: the date, the task, and what
@@ -25442,6 +25456,7 @@ happened (a deviation from the plan, a surprise, a decision taken on the way).
 - 2026-10-25, execution: E1.15–E1.17 added and done before E2 (items 8 and 12–17); E1.18 added
   to run before E2.1 and E1.19 to run after E2.8 (items 16, 17 and 19).
 - 2026-10-26, workflow B done: E1.18, E2.1–E2.8 and E1.19 (items 20 and 21).
+- 2026-10-26, workflow C1 done: E2.9, E3.1, E3.3, E3.4 and E3.5, each with one light review that passed in round 1 (items 22 and 23).
 
 ## Questions for the owner
 

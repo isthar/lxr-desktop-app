@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 02:09",
+    "updated": "2026-10-26 02:50",
     "phase": "Etap 1: narzędzia i wydanie (E2.9, E3, E4)",
     "focus": "Workflow C1: E2.9 (notatki i plan po przeglądach E2), E3.1 (nazwa, wersja 0.1, ekran startowy), E3.3 (miernik CPU), E3.4 (CI), E3.5 (README). Każde z jednym łącznym przeglądem. Potem E4.1 (przegląd całego etapu, osobny workflow), E4.2, E4.3.",
     "branch": "timing-core",
-    "head": "2063c49",
+    "head": "2178d1a",
     "next": "Po C1: przegląd E4.1 w workflowie stage-review (8 grup recenzentów), potem E4.2 (lista testów sprzętowych) i E4.3 (szkic notatek wydania v0.1).",
-    "updated_at": "2026-10-26T02:09:00+01:00",
-    "now": "E2.9: implementer pracuje od 02:08 (notatki i plan po przeglądach E2: budżet RAM R6.2, Program Change, F4–F6, EXTI9_5)."
+    "updated_at": "2026-10-26T02:50:00+01:00",
+    "now": "E3.5: łączny przegląd od 02:44 (sekcja LICHOMAT w README). Potem przygotowanie i start przeglądu E4.1."
   },
   "epics": [
     {
@@ -309,16 +309,16 @@
     {
       "id": "E2.9",
       "epic": "E2",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Notatki i plan po przeglądach E2 (tylko dokumenty): budżet RAM R6.2 = 391 824 B, R6.3, Program Change przez kolejkę synchronizacji, F4–F6, EXTI9_5, opis scalania w kolejce",
       "updated": "2026-10-26"
     },
     {
       "id": "E3.1",
       "epic": "E3",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Nazwa, wersja 0.1, ekran startowy, nazwa obrazu",
-      "updated": ""
+      "updated": "2026-10-26"
     },
     {
       "id": "E3.2",
@@ -330,30 +330,30 @@
     {
       "id": "E3.3",
       "epic": "E3",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Licznik CPU i podstrona menu globalnego",
-      "updated": ""
+      "updated": "2026-10-26"
     },
     {
       "id": "E3.4",
       "epic": "E3",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "CI: testy na hoście i build firmware",
-      "updated": ""
+      "updated": "2026-10-26"
     },
     {
       "id": "E3.5",
       "epic": "E3",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "README: sekcja LICHOMAT",
-      "updated": ""
+      "updated": "2026-10-26"
     },
     {
       "id": "E4.1",
       "epic": "E4",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Przegląd wielowymiarowy i poprawki",
-      "updated": ""
+      "updated": "2026-10-26"
     },
     {
       "id": "E4.2",
@@ -1442,6 +1442,61 @@
       "n": 166,
       "at": "2026-10-26 02:09",
       "text": "Raport M6 (integracja z firmware) gotowy: docs/lichomat/reports/M6-integracja-z-firmware.md. Kamień milowy M6 jest w trackerze. Zawiera wyniki E1.15–E1.19 i E2.1–E2.8, prawdziwe błędy wyłapane przez przeglądy, zasoby po integracji, porównanie tempa A2 i B oraz zaległości dla E4.1."
+    },
+    {
+      "n": 167,
+      "at": "2026-10-26 02:17",
+      "text": "E2.9 zaimplementowane w 9 min, w 2 commitach (7222c26 i a245e8c z autokontroli implementera). Zawierają R6.2 = 391 824 B z rozbiciem na pozycje, R6.3 ze zmierzonym +24 404 B oraz notatki N14 (Program Change przez kolejkę synchronizacji) i N20 (F4–F6). Poprawione są też tekst E2.5 o EXTI9_5, HANDOFF i opis scalania w kolejce. Od 02:17 trwa łączny przegląd."
+    },
+    {
+      "n": 168,
+      "at": "2026-10-26 02:21",
+      "text": "E2.9 zrobione w 13 min (02:08–02:21): łączny przegląd zaliczony za pierwszym razem. Notatki i plan są gotowe dla przeglądu E4.1. Commity wypchnięte na fork. Od 02:21 trwa E3.1: nazwa LICHOMAT, wersja 0.1, ekran startowy z informacją, że to zmodyfikowana wersja, i plik aktualizacji z nazwą zaczynającą się od LXR (wymaga tego bootloader)."
+    },
+    {
+      "n": 169,
+      "at": "2026-10-26 02:24",
+      "text": "E3.1 zaimplementowane w 3 min, w jednym commicie c3c6971 (Brand the firmware as LICHOMAT 0.1). Nazwa siedzi w jednej zmiennej CMake LICHOMAT_NAME, a wersja to project(VERSION 0.1). Zapisana jest wersja bazowa LXR 1.7, plik aktualizacji to LXR_V2_LICHOMAT_0.1.img, a ekran startowy mówi, że to nieoficjalna wersja. Od 02:24 łączny przegląd."
+    },
+    {
+      "n": 170,
+      "at": "2026-10-26 02:26",
+      "text": "E3.1 zrobione w 5 min (02:21–02:26): łączny przegląd zaliczony za pierwszym razem. Commit wypchnięty na fork. Od 02:26 trwa E3.3: miernik CPU w obu ścieżkach renderowania audio i strona CPU w menu globalnym. Zmierzy na sprzęcie prawdziwy koszt nowego rdzenia (test H12)."
+    },
+    {
+      "n": 171,
+      "at": "2026-10-26 02:32",
+      "text": "E3.3 zaimplementowane w 6 min, w 3 commitach. a384ccc: miernik CPU z testami na hoście. 0bd0450: pomiar pracy audio w obu ścieżkach renderowania. acfdfe9: miernik pokazany na trzeciej stronie menu globalnego. Od 02:32 łączny przegląd."
+    },
+    {
+      "n": 172,
+      "at": "2026-10-26 02:37",
+      "text": "E3.3 zrobione w 11 min (02:26–02:37): miernik CPU i strona CPU są w firmware. Łączny przegląd zaliczony za pierwszym razem. Commity wypchnięte na fork. Od 02:37 trwa E3.4: CI na GitHubie (testy na hoście i build firmware'u) z lokalną próbą przebiegu."
+    },
+    {
+      "n": 173,
+      "at": "2026-10-26 02:39",
+      "text": "E3.4 zaimplementowane w 2 min, w jednym commicie dcf06a7. Doszły CI w .github/workflows/build.yml (testy na hoście i build firmware'u) i tools/ci_dry_run.rb, który odtwarza kroki CI lokalnie. CI uruchomi się na GitHubie przy następnym pushu na forka. Od 02:39 łączny przegląd."
+    },
+    {
+      "n": 174,
+      "at": "2026-10-26 02:41",
+      "text": "E3.4 zrobione w 4 min (02:37–02:41): łączny przegląd zaliczony za pierwszym razem. Po pushu na forka ruszył pierwszy przebieg CI na GitHubie (run 40255459312). Od 02:41 trwa E3.5: sekcja LICHOMAT w README i nowe nazwy plików, ostatnie zadanie workflowu C1."
+    },
+    {
+      "n": 175,
+      "at": "2026-10-26 02:43",
+      "text": "Pierwszy przebieg CI na GitHubie zakończony sukcesem: testy na hoście i build firmware'u (release) przechodzą na czystej maszynie Linux (https://github.com/isthar/lxr-desktop-app/actions/runs/40255459312). To potwierdza, że testy i build nie zależą od tego Maca."
+    },
+    {
+      "n": 176,
+      "at": "2026-10-26 02:44",
+      "text": "E3.5 zaimplementowane w 3 min, w jednym commicie 2178d1a. README ma sekcję LICHOMAT: instalacja, powrót do oficjalnego firmware'u, build i nowe nazwy plików. Kroki 1–6 (tools/env.sh dla zsh) były zrobione wcześniej i zostały sprawdzone. Od 02:44 łączny przegląd, ostatni w workflowie C1."
+    },
+    {
+      "n": 177,
+      "at": "2026-10-26 02:50",
+      "text": "Workflow C1 zakończony (02:08–02:47, 39 min, 10 agentów): E2.9, E3.1, E3.3, E3.4 i E3.5 zrobione, wszystkie łączne przeglądy zaliczone za pierwszym razem. Pełna kontrola po C1: DTCM + RAM 391 732 B (limit R6.2 391 824 B), obraz 299 948 B, 27 testów, 0 ostrzeżeń. Ekran startowy pokazuje LICHOMAT / v0.1 unofficial. Pierwsze CI na GitHubie zielone. Zostało E4.1–E4.3."
     }
   ]
 }
