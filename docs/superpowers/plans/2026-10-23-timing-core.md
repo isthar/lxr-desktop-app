@@ -25056,6 +25056,19 @@ Open each named test and confirm that it asserts the claim. A claim without evid
 from the notes, or becomes a finding of the review with a failing test first (E4.1, "Fixing
 findings").
 
+Then check the notes against review row R10.3, which E4.1 could check only for the README (finding
+F40): LICHOMAT is never presented as official, and "Erica Synths" and "LXR" appear only in truthful
+references. Read every line that this prints:
+
+```bash
+grep -n -e 'Erica' -e 'LXR' -e 'official' docs/lichomat/release-notes-v0.1.md
+```
+
+Each line must describe LICHOMAT as unofficial custom firmware, or name Erica Synths or the LXR-02 as
+what they are (the maker, the instrument, the official firmware 1.7 and its download), and none may
+say or suggest that Erica Synths made, approved or supports LICHOMAT (NOTICE.md, additional term 1).
+Correct the notes before they are committed, and name the result of this check in the task report.
+
 - [ ] **Step 6: Fill in the files**
 
 Run:
