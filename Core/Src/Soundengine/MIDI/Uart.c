@@ -59,8 +59,9 @@ void USART3_IRQHandler(void)
 		// UART_Receive_IT(huart);
 		data = (uint8_t)(USART3->RDR & (uint16_t)0xFF);
 
-		//LICHOMAT (D8): realtime bytes and Song Position Pointers go to the DIN sync queue
-		//with the stamp; every byte also goes to the RX FIFO below, for the MIDI parser
+		//LICHOMAT (D8): realtime bytes, Song Position Pointers and Program Changes go to the
+		//DIN sync queue with the stamp (N14); every byte also goes to the RX FIFO below, for
+		//the MIDI parser
 		seqp_dinByteIn(data, stamp);
 
 		// put the received data in the RX midi buffer

@@ -1021,8 +1021,9 @@ static uint8_t  USBD_CDC_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum)
 
 		if(length != 0)
 		{
-			//LICHOMAT (D8): realtime messages and Song Position Pointers go to the USB sync
-			//queue with the stamp; every message also goes to the message queue, for the parser
+			//LICHOMAT (D8): realtime messages, Song Position Pointers and Program Changes go to
+			//the USB sync queue with the stamp (N14); every message also goes to the message
+			//queue, for the parser
 			seqp_usbMessageIn(usbData.cin, usbData.status, usbData.data1, usbData.data2, stamp);
 
 			//a full message queue keeps its messages and drops the new one (it used to overwrite them all)
