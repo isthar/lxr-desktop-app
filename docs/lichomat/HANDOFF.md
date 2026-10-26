@@ -13,6 +13,8 @@ Read this first when picking the project up in a new session.
 | Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N21; they win over the spec) |
 | Reports per milestone | `docs/lichomat/reports/` |
 | fw 1.7 timing replica | `tests/reference/fw17_replica.c` |
+| Hardware checklist for the owner (H1–H13, U1, X1–X4) | `docs/lichomat/hardware-checklist.md` |
+| Release notes v0.1 (draft) | `docs/lichomat/release-notes-v0.1.md` |
 | Work branch | `timing-core`, pushed to the owner's fork: https://github.com/isthar/lxr-desktop-app/tree/timing-core |
 
 ## Toolchain
@@ -23,7 +25,7 @@ The tools live in `.toolchain/` (git-ignored, about 1.4 GB). Nothing is installe
 tools/setup-toolchain.sh   # downloads Arm GNU 14.3.rel1, CMake 3.31.12, Ninja 1.13.2 if missing (SHA-256 checked)
 source tools/env.sh        # puts them on PATH (bash or zsh), sets ARM_TOOLCHAIN_DIR
 tools/check.sh             # host tests + release build + memory summary + update file check + warning count; non-zero exit on failure
-tools/fw_checks.sh         # after check.sh: ELF and source checks of the firmware integration (E2.2-E2.8)
+tools/fw_checks.sh         # after check.sh: ELF and source checks of the firmware integration (E2.2-E2.8 and E3.3)
 ruby tools/ci_dry_run.rb firmware   # dry run of the CI workflow's firmware job (or host-tests); nothing is pushed
 ```
 
@@ -100,6 +102,11 @@ The scripts in `tools/agent/` drive the work through Claude Code workflows:
 - **`wf_watch.py`** prints one line per agent that starts or finishes in a workflow's
   `journal.jsonl`, and with `--git=<repo>` one line per new commit. Run it under a Monitor:
   `python3 tools/agent/wf_watch.py <workflow transcript dir> <lines already seen> <label> [finished-only] [--git=<repo>]`.
+- **`release-verify.js`** checks the owner's documents of stage 1, `docs/lichomat/hardware-checklist.md`
+  and `docs/lichomat/release-notes-v0.1.md`, as a Workflow script: five read-only lenses (numbers,
+  procedures, coverage, notes, consistency), one skeptic per lens, one documents-only fixer and a
+  light review. Its args are `repo`, `branch`, `plan`, `context` and `known` (a Markdown list of known
+  items).
 
 A workflow can only be resumed (`resumeFromRunId`) in the session that started it. In a new session:
 1. Look at `git log` and the plan's ticked checkboxes to see where the run stopped.
@@ -115,4 +122,4 @@ A workflow can only be resumed (`resumeFromRunId`) in the session that started i
 - Commits use the repo-local identity `Tomasz Krzywicki <tkrzywicki@gmail.com>`; the owner chose the private address. `backup/timing-core-before-reauthor` keeps the history as it was before the re-authoring; it is local only.
 - After each task run `tools/check.sh`. It must show zero warnings, ITCM must fit, and DTCM + RAM must stay within review row R6.2 of `docs/lichomat/reports/stage1-review.md` (at most 391824 B since E2.9; spec §10's about 7.5 KB is exceeded by design).
 - Decisions that belong to the owner go into `questions` in the tracker. Work continues with a reversible default.
-- Hardware checks (H1–H13 in the spec, and U1 from E2.7 and X4 from E2.8 in E4.2's checklist) can only be done by the owner on the LXR-02. They are prepared but never claimed.
+- Hardware checks (H1–H13 in the spec, U1 from E2.7, X4 from E2.8 and the optional clock jack checks X1–X3, all in E4.2's checklist `docs/lichomat/hardware-checklist.md`) can only be done by the owner on the LXR-02. They are prepared but never claimed.
