@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 20:00",
+    "updated": "2026-10-26 20:45",
     "phase": "Etap 1: narzędzia i wydanie (E2.9, E3, E4)",
-    "focus": "Workflow C3: E4.2 (lista testów sprzętowych H1–H13, U1, X4 i dwa pliki aktualizacji) i E4.3 (szkic notatek wydania v0.1), każde z lekkim przeglądem. Potem raport M7.",
+    "focus": "Etap 1 zrobiony poza testami na sprzęcie. Trwa niezależna weryfikacja listy testów sprzętowych i notatek wydania v0.1. Potem raport M7.",
     "branch": "timing-core",
-    "head": "1f3d782",
-    "next": "Po C3: raport M7 (v0.1 gotowe do testów na sprzęcie) i kamień milowy w trackerze. Testy H1–H13, U1 i X4 robisz Ty.",
-    "updated_at": "2026-10-26T20:00:00+01:00",
-    "now": "Start workflowu C3: E4.2 i E4.3 (od 20:10)."
+    "head": "d394c0d",
+    "next": "Po weryfikacji: raport M7 (v0.1 gotowe do testów na sprzęcie) i kamień milowy w trackerze. Testy H1–H13, U1 i X4 robisz Ty (Q6).",
+    "updated_at": "2026-10-26T20:45:00+01:00",
+    "now": "Weryfikacja dokumentów dla Ciebie: 5 recenzentów sprawdza listę testów i notatki wydania (od 20:50)."
   },
   "epics": [
     {
@@ -358,15 +358,22 @@
     {
       "id": "E4.2",
       "epic": "E4",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Checklista testów na sprzęcie H1–H13",
       "updated": "2026-10-26"
     },
     {
       "id": "E4.3",
       "epic": "E4",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Notatki wydania v0.1 (szkic, bez tagu i wydania)",
+      "updated": "2026-10-26"
+    },
+    {
+      "id": "E4.4",
+      "epic": "E4",
+      "status": "w toku",
+      "title": "Niezależna weryfikacja listy testów sprzętowych i notatek wydania (poza planem)",
       "updated": "2026-10-26"
     },
     {
@@ -1683,6 +1690,26 @@
       "n": 210,
       "at": "2026-10-26 20:00",
       "text": "E4.1 zrobione (workflow C2, 82 agentów, 2,5 h pracy, plus pauza 03:39–17:29). Lekki przegląd przeszedł w rundzie 2. Zostały 3 drobne pozostałości. Dwie poprawiłem sam: zawinąłem za długą linię w N14 i dopisałem F4 i F49 do wiersza N21 w raporcie etapu. Trzecia to test na hoście dla Note Off po czasie i idzie na później (poprawka 24 w planie). Sprawdziłem stan: check.sh daje 27 z 27, 0 ostrzeżeń, DTCM + RAM 391788 B (36 B poniżej R6.2), obraz 300492 B (+25804 B). Przegląd ma 52 uwagi: 47 poprawionych, 3 przyjęte, 2 pytania (Q9, Q11). Kod zmieniły 4 poprawki: seqc_init() w callbacku (F6), Note Off po czasie dla rolla i echa (F22), ograniczone przejście songu przy SPP (F33) i znacznik przewijania w menu (F50)."
+    },
+    {
+      "n": 211,
+      "at": "2026-10-26 20:15",
+      "text": "C3, E4.2 (20:01–20:15): commit 0defa3e dodaje docs/lichomat/hardware-checklist.md. Są w nim procedury H1–H13, U1 i X4 oraz opcjonalne X1–X3 dla jacków zegara, każda z oczekiwanym wynikiem i polem na zapis. Na końcu jest arkusz z SHA-256 obu plików aktualizacji. Oficjalny 1.7 zbudowany ze źródeł a43cd4f ma dokładnie oczekiwany hash cdb1ca37…, więc build da się odtworzyć bajt w bajt. LICHOMAT z 9805d15 ma 639c0a43…. Lista uwzględnia stan po E4.1: tempo z zegara USB i Program Change przed Start (H7), Note Off po czasie dla echa i rolla (H10), Q9 i znacznik przewijania (H12), zachowanie z Q11 przy 4 PPQ (X2), szybkie zbocza bramki resetu (X3), Tune Request po Note On (X4). Żadnego testu nie oznaczono jako zrobiony, to Twoja część (Q6)."
+    },
+    {
+      "n": 212,
+      "at": "2026-10-26 20:28",
+      "text": "C3, E4.2 zrobione (20:01–20:28). Lekki przegląd w rundzie 1 znalazł jedną ważną rzecz: H7 krok 6 liczył tempo z USB dla 44,1 kHz, a lista każe nagrywać w 48 kHz, więc test przeszedłby mimo błędu. Poprawka 4a70010: DAW pracuje w tym kroku na 44,1 kHz. Runda 2 przeszła. Zostały drobne uwagi do listy, na przykład zaokrąglenie BPM w H7, opis Q11 w X2 oraz brak testów sprzętowych dla kilku zmian z raportu etapu (bajty realtime na DIN thru, 2 PPQ na clock out w trybie slave, MIDI Start w trybie EXT, start po końcu songu, kwantyzacja nagrywania ze swingiem). Zajmę się nimi w weryfikacji po C3. Teraz E4.3, szkic notatek wydania."
+    },
+    {
+      "n": 213,
+      "at": "2026-10-26 20:39",
+      "text": "C3, E4.3 (20:28–20:38): commit 328b447 dodaje szkic docs/lichomat/release-notes-v0.1.md, a README linkuje do niego. Notatki obejmują: instalację i powrót do 1.7; poprawki D1–D8 i błędy fw 1.7; każdą zmianę oznaczoną w §2 raportu etapu jako Fixed, Changed albo New; to, co zostaje jak w 1.7; stronę CPU; znane ograniczenia; pliki z SHA-256; licencję; publikację, którą robisz Ty. Są w nich też domyślne odpowiedzi Q9, Q10 i Q11 (zegar ze swingiem na jacku 4 PPQ gra równo) oraz dwa przypadki jacka z E4.1 (F4, F49). Plan ma wiersz dowodu dla każdego dodanego twierdzenia. Nic nie zostało otagowane ani wydane."
+    },
+    {
+      "n": 214,
+      "at": "2026-10-26 20:45",
+      "text": "C3 zrobione (20:01–20:45, 6 agentów, 0,8 mln tokenów). E4.3 przeszło lekki przegląd w rundzie 1, z pięcioma drobnymi uwagami. Przykłady: słowo „pad”, choć LXR-02 nie ma padów; poprawka D7 opisana mocniej, niż na to pozwala ograniczenie F49; zdanie o znakach towarowych pomija nazwę pliku aktualizacji, która musi zaczynać się od LXR. Wszystkie zadania etapu 1 z planu są zrobione, poza testami na sprzęcie (Twoja część). Zanim napiszę raport M7, uruchamiam dodatkową, niezależną weryfikację obu dokumentów dla Ciebie: listy testów sprzętowych i notatek wydania. Pięć spojrzeń: przeliczenie liczb, wykonalność kroków na LXR, pokrycie zmian z raportu, prawdziwość notatek i spójność dokumentów. Do tego sceptyk na każde spojrzenie, jeden fixer (tylko dokumenty) i lekki przegląd. Na wejściu dostaje 17 znanych drobnych pozostałości z E4.2 i E4.3."
     }
   ]
 }
