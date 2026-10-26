@@ -487,6 +487,72 @@ TEST(T17_spp_within_the_active_pattern_does_not_reload_it)
 	ASSERT_EQ(h->patternChanges, changes + 2);
 }
 
+TEST(T17_midi_start_stop_continue_in_song_mode)
+{
+	/* song mode without an SPP: a MIDI Start plays the song from entry 0, a
+	 * Stop and a Continue resume inside an entry and the song moves on (N4),
+	 * and a Start while running restarts the song (N13.11) */
+	fake_host_t *h = midiSlave();
+	static const uint8_t song[] = { 1, 1, 2 };	/* identical consecutive entries */
+	fake_setSong(h, song, 3);
+	fake_setSongMode(h, true);
+	fake_setLength(h, 1, 1, 12);			/* polymeter inside the run of pattern 1 */
+	fake_setStep(h, 1, 0, 4, true);
+	fake_setStep(h, 2, 0, 0, true);
+	sync(h, SEQC_EV_START);
+	clocks(h, 1 + 6 * 18);				/* steps 0..18: in the second entry of pattern 1 */
+	ASSERT_EQ(seqc_absStep(), 18);
+	ASSERT_EQ(h->songPos, 1);
+	ASSERT_EQ(h->activePattern, 1);
+	ASSERT_EQ(seqc_trackStep(1), 18 % 12);		/* no index reset between identical entries */
+	clocks(h, 2);					/* tick 1760 */
+	sync(h, SEQC_EV_STOP);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);
+	clocks(h, 7);					/* the master's clock runs on while stopped */
+	ASSERT_EQ(seqc_absStep(), 18);
+	ASSERT_EQ(h->songPos, 1);
+	sync(h, SEQC_EV_CONTINUE);
+	clocks(h, 4 + 6 * 13 - 1);			/* resume in place: steps 19..31 */
+	ASSERT_EQ(seqc_absStep(), 31);
+	ASSERT_EQ(h->songPos, 1);
+	ASSERT_EQ(h->activePattern, 1);
+	clocks(h, 1);					/* step 32: the song moves on to entry 2 */
+	ASSERT_EQ(seqc_absStep(), 32);
+	ASSERT_EQ(h->songPos, 2);
+	ASSERT_EQ(h->activePattern, 2);
+	ASSERT_EQ(fake_count(h, FAKE_SEEK), 0);
+	uint8_t tr[8];
+	ASSERT_EQ(transports(h, 0, tr, 8), 5);		/* ARM, START, STOP, ARM, CONTINUE */
+	ASSERT_EQ(tr[2], SEQC_TRANSPORT_STOP);
+	ASSERT_EQ(tr[4], SEQC_TRANSPORT_CONTINUE);
+	size_t n = fake_triggers(h, 0, trig, 16);
+	ASSERT_EQ(n, 3);				/* steps 4 and 20 of pattern 1, step 32 of pattern 2 */
+	ASSERT_EQ(trig[1]->ev.absStep, 20);
+	ASSERT_EQ(trig[1]->ev.pattern, 1);
+	ASSERT_EQ(trig[2]->ev.absStep, 32);
+	ASSERT_EQ(trig[2]->ev.pattern, 2);
+	/* MIDI Start while running: back to entry 0 of the song */
+	const size_t from = h->logCount;
+	sync(h, SEQC_EV_START);
+	ASSERT_EQ(transports(h, from, tr, 8), 3);
+	ASSERT_EQ(tr[0], SEQC_TRANSPORT_STOP);
+	ASSERT_EQ(tr[1], SEQC_TRANSPORT_REWIND);
+	ASSERT_EQ(tr[2], SEQC_TRANSPORT_ARM);
+	ASSERT_EQ(h->songPos, FAKE_NO_SONG_POS);
+	ASSERT_EQ(seqc_absStep(), -1);
+	clocks(h, 1);					/* step 0 of entry 0 */
+	ASSERT_EQ(seqc_absStep(), 0);
+	ASSERT_EQ(h->songPos, 0);
+	ASSERT_EQ(h->activePattern, 1);
+	clocks(h, 6 * 4);				/* steps 1..4 */
+	ASSERT_EQ(seqc_absStep(), 4);
+	n = fake_triggers(h, 0, trig, 16);
+	ASSERT_EQ(n, 4);
+	ASSERT_EQ(trig[3]->ev.absStep, 4);
+	ASSERT_EQ(trig[3]->ev.pattern, 1);
+	ASSERT_EQ(h->errors, 0);
+}
+
 TEST(T17_spp_then_midi_start_plays_step_0)
 {
 	/* a DAW located, then started from the top: SPP, then Start */
