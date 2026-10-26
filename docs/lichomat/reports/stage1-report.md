@@ -57,7 +57,7 @@ in neither list is a finding.
 | §9.3 CPU page | SHIFT + LOAD/SAVE, then page forward twice | SHIFT + step 12 (the code's real global menu), the 4th press, or the 3rd from a second screen | plan, Part 3 |
 | §9.3 what is measured | the work of `seq_tick()`, the render and MIDI parsing in both paths | the same, except the outer piece of work around a kit autoload, so that a pattern change shows no false peak | plan, Part 3 item 9 |
 | §9.3 block budget | 313 186 cycles | 313 185 (64 × 216 MHz / 44 140 Hz = 313 185.3) | plan, Part 3 |
-| §9.3 the counts shown | the event queue's maximum depth and the overflow counts | the event queue's; the sync queues' overflow count (`seqp_syncOverflows()`) is not on the page | open: question for the owner, Part 3 item 1 |
+| §9.3 the counts shown | the event queue's maximum depth and the overflow counts | the event queue's; the sync queues' overflow count (`seqp_syncOverflows()`) is not on the page | owner question Q9 in the tracker (review F2), plan Part 3 item 1; the default keeps the page as it is |
 | §8 `MenuText.h` | changed for the CPU page | unchanged: the page draws its own text | plan, Part 3 |
 | §12 user interface | unchanged, except for the splash screen and the CPU sub-page | in the global menu the step buttons without SHIFT do nothing, and page up and down keep step 12 blinking and show the step view | N19 (E2.7) |
 | §9.1 host tests | built with `-Wall -Wextra -Werror` | `test_buttons` compiles fw 1.7's `buttonHandler.c` with `-w` and `Core/Inc` as a system include directory; `test_buttons.c` and `tests/stubs/` keep the three flags | N19 (E2.7) |
