@@ -35,8 +35,9 @@ The owner watches this page, so it must move with the work, not only when a task
 log entry for every finished agent step, every commit and every phase change.
 
 1. Log what happened and refresh the status in one go:
-   `python3 tools/tracker_note.py "text" [--focus …] [--next …] [--phase …]`.
+   `python3 tools/tracker_note.py "text" [--focus …] [--next …] [--phase …] [--now …]`.
    It stamps the entry with the local time and sets `status.updated`, `status.updated_at` and `status.head`.
+   `--now` sets `status.now`, the line the page shows while a workflow runs; `--now ""` clears it.
 2. For task, milestone or question changes, edit `docs/lichomat/tracker.json` by hand:
    - status values: `zrobione`, `w toku`, `do zrobienia`, `zablokowane`
    - question status: `otwarte` or `zamknięte`
@@ -79,7 +80,7 @@ The scripts in `tools/agent/` drive the work through Claude Code workflows:
   | `repo` | the repository path |
   | `branch` | the work branch |
   | `plan` | the plan path |
-  | `context` | a scene-setting text |
+  | `context` | a scene-setting text: the content of `tools/agent/stage1-context.md`, which the runs pass and keep current |
   | `tasks` | a list of `{id, title, text}` or `{id, title, file}`, made by `extract_tasks.py`, each with an optional `review` mode |
   | `final` | `{review: true}`, optional |
 
@@ -108,8 +109,10 @@ A workflow can only be resumed (`resumeFromRunId`) in the session that started i
 
 - Small commits ending with the `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` trailer.
 - Add files explicitly; never `git add -A`.
+- Never rewrite a commit (no `git commit --amend`): fix with a new commit.
+- Line endings: the sources in `Core/` use CRLF (except `Core/CMakeLists.txt` and the LF files fw 1.7 already had, such as `encoder.c`), everything else LF; review row R9.4 checks it. After editing a file in `Core/`, run `perl -pi -e 's/\r?\n/\r\n/' <file>` and check that its count of CRLF equals its count of LF bytes.
 - Push `timing-core` only to `origin`, the owner's fork, as work lands; the owner allowed this on 2026-10-24. Never push to `upstream` (Erica Synths), never touch `main`.
 - Commits use the repo-local identity `Tomasz Krzywicki <tkrzywicki@gmail.com>`; the owner chose the private address. `backup/timing-core-before-reauthor` keeps the history as it was before the re-authoring; it is local only.
-- After each task run `tools/check.sh`. It must show zero warnings, ITCM must fit, and RAM must stay within the spec budget.
+- After each task run `tools/check.sh`. It must show zero warnings, ITCM must fit, and DTCM + RAM must stay within review row R6.2 of `docs/lichomat/reports/stage1-review.md` (at most 391824 B since E2.9; spec §10's about 7.5 KB is exceeded by design).
 - Decisions that belong to the owner go into `questions` in the tracker. Work continues with a reversible default.
-- Hardware checks (H1–H13 in the spec) can only be done by the owner on the LXR-02. They are prepared but never claimed.
+- Hardware checks (H1–H13 in the spec, and U1 from E2.7 and X4 from E2.8 in E4.2's checklist) can only be done by the owner on the LXR-02. They are prepared but never claimed.
