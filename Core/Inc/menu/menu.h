@@ -32,6 +32,8 @@
 
 #define MASK_PAGE 0xf8
 #define PAGE_SHIFT 3
+// LICHOMAT: the 3rd sub-page of MENU_MIDI_PAGE is the read-only CPU meter (menu_repaintCpuPage)
+#define MENU_CPU_SUB_PAGE 2
 //-----------------------------------------------------------------
   #define PROGMEM
   #define PGM_P const char *
@@ -270,6 +272,7 @@ enum NamesEnum
 	TEXT_FX_P3,
 	TEXT_FX_P4,
 	TEXT_PATTERN_MODE,
+	TEXT_CPU_METER,	// LICHOMAT: marks the CPU meter sub-page, it has no parameter
 
 
 	NUM_NAMES

@@ -22655,12 +22655,12 @@ git commit -m "Measure the audio work for the CPU meter" \
   -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 14: Write the failing check for the page**
+- [x] **Step 14: Write the failing check for the page**
 
 Run: `strings -a build/release/LXR_V2_STM32F765.bin | grep -c -e '^CPU    % pk    %' -e '^Qmax     ovf'`
 Expected: `0`
 
-- [ ] **Step 15: The CPU sub-page in the menu tables**
+- [x] **Step 15: The CPU sub-page in the menu tables**
 
 In `Core/Inc/menu/menu.h`, replace:
 
@@ -22711,7 +22711,7 @@ with:
 			TEXT_CPU_METER,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,
 ```
 
-- [ ] **Step 16: Draw the page, keep it read only, make it reachable**
+- [x] **Step 16: Draw the page, keep it read only, make it reachable**
 
 In `Core/Src/menu/menu.c`, nine edits:
 
@@ -22927,7 +22927,7 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 	preset_touchTimer(PRESET_KIT_TIMER);
 ```
 
-- [ ] **Step 17: Run the check to see it pass**
+- [x] **Step 17: Run the check to see it pass**
 
 First give the three files of Steps 15 and 16 pure CRLF line endings (Part 3, convention 3):
 
@@ -22944,7 +22944,7 @@ Expected: each `… with CRLF line terminators`.
 
 The page itself is checked on the device in H12 (E4.2).
 
-- [ ] **Step 18: Commit**
+- [x] **Step 18: Commit**
 
 ```bash
 git add Core/Inc/menu/menu.h Core/Inc/menu/menuPages.h Core/Src/menu/menu.c

@@ -32,6 +32,7 @@
 
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Soundengine.h"
+#include "Soundengine/cpuMeter.h"
 
 
 uint8_t display_refresh_state = 0;
@@ -249,6 +250,7 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_P3, CAT_FX, LONG_P3},/*TEXT_FX_P3*/
 		{SHORT_P4, CAT_FX, LONG_P4},/*TEXT_FX_P4*/
 		{SHORT_KCM, CAT_GLOBAL, LONG_PATTERN_MODE},/*TEXT_AUTO_SWITCH_KIT*/
+		{SHORT_EMPTY, CAT_GLOBAL, LONG_EMPTY},/*TEXT_CPU_METER: the page has its own layout*/
 
 
 };
@@ -689,6 +691,13 @@ uint8_t menu_playedPattern = 0;
 uint8_t menu_activePatternBank = 0;
 static uint8_t editModeActive = 0;			/**< when edit mode is active, only the currently active parameter is shown with full name*/
 static uint8_t lastEncoderButton = 0;		/**< stores the state of the encoder button so the edit mode is only switched once when the button is pressed*/
+static uint32_t menu_cpuPageTimer = 0;		/**< LICHOMAT: systick_ticks of the last CPU page repaint */
+
+/** LICHOMAT: true while the read-only CPU meter sub-page of the global menu is shown */
+static uint8_t menu_isCpuPage(void)
+{
+	return (menu_activePage == MENU_MIDI_PAGE) && (((menuIndex & MASK_PAGE) >> PAGE_SHIFT) == MENU_CPU_SUB_PAGE);
+}
 
 /** array holding all the available parameter values*/
 uint8_t mainParameters[NUM_KIT_SLOTS][END_OF_SOUND_PARAMETERS];
@@ -1018,7 +1027,12 @@ void menu_tick()
 		//TODO could possibly be sped up by aborting and restarting running transfer instead of queing a new one
 	}
 
-
+	//LICHOMAT: the CPU page shows live values, repaint it twice a second (systick_ticks run at 4 kHz)
+	if(menu_isCpuPage() && (display_refresh_state == 0) && (systick_ticks - menu_cpuPageTimer >= 2000))
+	{
+		menu_cpuPageTimer = systick_ticks;
+		menu_repaint();
+	}
 
 	sendDisplayBuffer();
 }
@@ -1805,6 +1819,41 @@ void menu_repaintGeneric()
 		}	// for 1 to 4 .. each menu item
 	} // if editmode not active
 }
+//-----------------------------------------------------------------
+// LICHOMAT: num as a right-aligned decimal number in width characters, padded
+// with spaces and clamped to the largest number that fits
+static void menu_numToStrRight(char *buf, uint32_t num, uint8_t width)
+{
+	uint32_t max = 9;
+	for(uint8_t i = 1; i < width; i++)
+		max = max * 10 + 9;
+	if(num > max)
+		num = max;
+	for(int8_t i = (int8_t)(width - 1); i >= 0; i--)
+	{
+		buf[i] = (num || (i == width - 1)) ? (char)('0' + num % 10) : ' ';
+		num /= 10;
+	}
+}
+//-----------------------------------------------------------------
+// LICHOMAT: the read-only CPU meter page, 3rd sub-page of the global menu (spec 9.3).
+// It has no parameters, so activeParameters and the globals file are not affected.
+//  0123456789012345
+// "CPU  42% pk  67%"   mean block load over 1 s, highest block load of that second
+// "Qmax  12 ovf   0"   event queue: highest depth, events rejected because it was full
+static void menu_repaintCpuPage(void)
+{
+	cpuMeter_reading_t r;
+	cpuMeter_get(&r);
+
+	memcpy(&editDisplayBuffer[0][0], "CPU    % pk    %", 16);
+	menu_numToStrRight(&editDisplayBuffer[0][4], r.avgPct, 3);
+	menu_numToStrRight(&editDisplayBuffer[0][12], r.peakPct, 3);
+
+	memcpy(&editDisplayBuffer[1][0], "Qmax     ovf    ", 16);
+	menu_numToStrRight(&editDisplayBuffer[1][5], r.queueMax, 3);
+	menu_numToStrRight(&editDisplayBuffer[1][13], r.queueOverflow, 3);
+}
 
 //-----------------------------------------------------------------
 // repaint the screen
@@ -1822,6 +1871,11 @@ void menu_repaint()
 	else if((menu_activePage >= PATTERN_LOAD_PAGE  && menu_activePage <= SONG_MODE_PAGE) || (copyClear_showClearMenu == 1))
 	{
 		menu_repaintSimplePage();
+	}
+	else if(menu_isCpuPage())
+	{
+		//LICHOMAT: read-only CPU meter page with its own layout
+		menu_repaintCpuPage();
 	}
 	else {
 		menu_repaintGeneric();
@@ -2742,7 +2796,7 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 			else
 			{
 			// toggle edit mode
-				if(!screensaver_Active)
+				if(!screensaver_Active && !menu_isCpuPage()) // LICHOMAT: the CPU page is read only
 					editModeActive = (uint8_t)(1-editModeActive);
 			}
 		}
@@ -3168,8 +3222,14 @@ void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle)
 			// toggle to next if possible
 			if(has2ndPage(activePage))
 				activeParameter=4;
-			else if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)){ // special case for global - wrap around to first
-				activePage=0;
+			else if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)){ // special case for global - next sub-page, or wrap around to first
+				// LICHOMAT: fw 1.7 always wrapped here, so a sub-page after one without a 2nd screen was unreachable
+				if(activePage < NUM_SUB_PAGES-1 &&
+				   pgm_read_byte(&menuPages[menu_activePage][activePage+1].top1) != TEXT_EMPTY) {
+					activePage++;
+				} else {
+					activePage=0;
+				}
 				activeParameter=0;
 			}
 		} else { // we are on 2nd screen
@@ -3917,6 +3977,8 @@ uint8_t getMenuIndx(void)
 uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 {
 	screensaver_touch();
+	if(menu_isCpuPage())
+		return 0; // LICHOMAT: the CPU page is read only, the pots do nothing there
 	preset_touchTimer(PRESET_KIT_TIMER);
 
 	const uint8_t activePage		= (menuIndex&MASK_PAGE)>>PAGE_SHIFT;
