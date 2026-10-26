@@ -12,8 +12,11 @@ The spec asked for Q48.16 fixed point. The STM32F765 has a hardware double-preci
 
 - Internal mode: `pos(now) = anchorPos + (double)(now − anchorTime) × ticksPerCycle`, where
   `ticksPerCycle = bpm × 384 / 60 / cyclesPerSecond`.
-- The anchor moves only on a tempo change, a start or a slave clock. Because the position is never
-  accumulated step by step, it has no drift.
+- The anchor moves only on a tempo change, a start, a slave clock, a switch to internal sync (the
+  internal timeline is anchored at the position reached, `seqc_setSyncMode()`) and the core's first
+  time, at its first `seqc_process()` or `seqc_syncEvent()` call (`seqc_advance()`; plan, epic E1,
+  decision 2). Because the position is never accumulated step by step, it has no drift. (Amended in
+  the E4.1 review, F10: the list named only the first three.)
 - A double holds integer ticks exactly far beyond any session length (2^53 ticks).
 - Test T1 is unchanged: tempo error below 0.01%, drift below 1 tick in 10 min.
 

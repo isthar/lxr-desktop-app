@@ -78,7 +78,9 @@
  * beginning, or from the SPP value after a song position.
  * - Internal sync: the position is computed from an anchor,
  *   pos = anchorPos + (now - anchorTime) * ticksPerCycle. The anchor moves only on
- *   a start or a tempo change, so the position does not drift.
+ *   a start, a tempo change, a switch to internal sync (at the position reached)
+ *   and the core's first time (its first seqc_process() or seqc_syncEvent()
+ *   call), so the position does not drift.
  * - Slave modes: the position follows the incoming clocks (spec 5, N9).
  *
  * Processing order (spec 6.2, 6.3; N3, N4)
