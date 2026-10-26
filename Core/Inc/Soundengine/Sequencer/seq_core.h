@@ -39,8 +39,10 @@
 /*
  * Execution context (spec 4.3, N7)
  * --------------------------------
- * The core has a single context. In the firmware only seq_tick() calls it, and on
- * each call it:
+ * The core has a single context. In the firmware the core is called only in the
+ * seq_tick() context: by seq_tick() as below, and by soundengine_cpuEnd() for
+ * seqc_stats() after it; seq_initCore() calls seqc_init() at boot, before
+ * seq_tick() runs. On each call seq_tick():
  *   1. applies the mailbox of sequencer.c: seqc_setSyncMode(), seqc_setAnalogPpq(),
  *      seqc_setTempo(), seqc_stop(), seqc_rewind(), seqc_start(), and seqc_skipOnce()
  *      for the notes that seq_addNote() moved to the next step;
@@ -53,8 +55,8 @@
  *   3. calls seqc_process() with the time of the drain's last read;
  *   4. parses MIDI input, which reaches the core through the mailbox, except for
  *      the seqc_skipOnce() of a recorded note: seq_postSkipOnce() calls it at once.
- * Other contexts (main loop, interrupts) never call a seqc_ function. They post
- * to the mailbox in sequencer.c instead.
+ * No other context (the main loop after boot, the other interrupts) calls a
+ * seqc_ function. They post to the mailbox in sequencer.c instead.
  *
  * Callbacks run only from inside the core's own functions. Inside a callback,
  * the query functions and seqc_skipOnce() may be called. Any other seqc_ call
