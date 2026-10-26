@@ -56,7 +56,9 @@ void cpuMeter_setQueueStats(uint16_t queueMax, uint32_t queueOverflow);
 /** copy the latest reading; all zero before the first one */
 void cpuMeter_get(cpuMeter_reading_t *out);
 //------------------------------------------------------------------------------
-/** forget everything (host tests) */
+#ifdef CPUMETER_TEST
+/** forget everything; for the host tests only, the firmware never defines CPUMETER_TEST */
 void cpuMeter_reset(void);
+#endif
 
 #endif /* CPUMETER_H_ */

@@ -99,6 +99,7 @@ void cpuMeter_get(cpuMeter_reading_t *out)
 	out->queueOverflow = cpuMeter_reading.queueOverflow;
 }
 //------------------------------------------------------------------------------
+#ifdef CPUMETER_TEST
 void cpuMeter_reset(void)
 {
 	for(uint8_t i = 0; i < CPUMETER_MAX_DEPTH; i++)
@@ -116,3 +117,4 @@ void cpuMeter_reset(void)
 	cpuMeter_reading.queueMax = 0;
 	cpuMeter_reading.queueOverflow = 0;
 }
+#endif

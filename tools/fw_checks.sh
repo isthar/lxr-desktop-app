@@ -1,7 +1,7 @@
 #!/bin/bash
-# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.8), on the
-# release build and on the sources: symbols that must or must not be linked, calls
-# that a function must or must not make, what sits in ITCM, and source patterns.
+# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.8 and E3.3),
+# on the release build and on the sources: symbols that must or must not be linked,
+# calls that a function must or must not make, what sits in ITCM, and source patterns.
 # They stand in for unit tests where the code needs the hardware.
 #
 #   tools/check.sh             first: it builds build/release
@@ -288,7 +288,17 @@ check_E2_8() {
 		|| fail "usb_getMidi() does not order the index, the copy and the freed slot"
 }
 
-check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8"
+# ---- E3.3: the CPU meter; its test hook stays out of the firmware ------------
+check_E3_3() {
+	need cpuMeter_begin cpuMeter_end cpuMeter_get
+	# cpuMeter_reset() exists for the host tests only (CPUMETER_TEST, E4.1 F34): the
+	# firmware object must not have it, not merely the image after --gc-sections
+	local obj="$ROOT/build/release/Core/CMakeFiles/lxr_engine.dir/Src/Soundengine/cpuMeter.c.obj"
+	exists "$obj"
+	[ -e "$obj" ] && arm-none-eabi-nm "$obj" | grep -qw cpuMeter_reset && fail "cpuMeter.c.obj has the test hook cpuMeter_reset"
+}
+
+check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8 E3.3"
 
 if [ $# -gt 0 ]; then check_tasks="$*"; fi
 for task in $check_tasks; do
