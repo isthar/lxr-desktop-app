@@ -5,7 +5,7 @@ export const meta = {
     { title: 'Setup', detail: 'the checklist, the stage 1 report and the automated rows (task Steps 1-5)' },
     { title: 'Review', detail: 'one read-only reviewer per group of manual rows (Step 6)' },
     { title: 'Verify', detail: 'independent skeptics try to refute each finding' },
-    { title: 'Fix', detail: 'record the results, then each finding test-first in its own commit (Step 7)' },
+    { title: 'Fix', detail: 'record the results, then each finding test-first in its own commit (Step 7); minors in batches of 8' },
     { title: 'Gate', detail: 'the result line, the gate and the commit (Steps 8-10)' },
     { title: 'Light review', detail: 'one combined review of the task at high effort, at most 2 rounds' },
   ],
@@ -221,7 +221,16 @@ Findings the skeptics refuted are not recorded; they are listed in the workflow'
 if (!record || record.status !== 'DONE') return { stoppedAt: 'record', setup, confirmed, refuted, record }
 const automatedFindings = setup.findings.map((f, i) => ({ ...f, id: `F${i + 1}` }))
 const all = [...automatedFindings, ...numbered]
-const batches = [...all.filter((f) => f.severity !== 'minor').map((f) => [f]), all.filter((f) => f.severity === 'minor')].filter((b) => b.length)
+// Minor findings go to fixers in batches of at most MINOR_BATCH, each from one reviewer group, so that
+// no fixer carries dozens of findings and the progress shows commit by commit.
+const MINOR_BATCH = 8
+const minors = all.filter((f) => f.severity === 'minor')
+const minorBatches = []
+for (const g of [...new Set(minors.map((f) => f.group || 'automated'))]) {
+  const fs = minors.filter((f) => (f.group || 'automated') === g)
+  for (let i = 0; i < fs.length; i += MINOR_BATCH) minorBatches.push(fs.slice(i, i + MINOR_BATCH))
+}
+const batches = [...all.filter((f) => f.severity !== 'minor').map((f) => [f]), ...minorBatches]
 const fixes = []
 for (const [i, batch] of batches.entries()) {
   const fix = await agent(`You fix findings of the LICHOMAT stage 1 review (task ${A.task.id}). They are in the findings table of ${REVIEW} with status \`fix\`.

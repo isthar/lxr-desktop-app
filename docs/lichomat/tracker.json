@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 02:50",
+    "updated": "2026-10-26 03:39",
     "phase": "Etap 1: narzędzia i wydanie (E2.9, E3, E4)",
     "focus": "Workflow C1: E2.9 (notatki i plan po przeglądach E2), E3.1 (nazwa, wersja 0.1, ekran startowy), E3.3 (miernik CPU), E3.4 (CI), E3.5 (README). Każde z jednym łącznym przeglądem. Potem E4.1 (przegląd całego etapu, osobny workflow), E4.2, E4.3.",
     "branch": "timing-core",
-    "head": "2178d1a",
+    "head": "af13c4e",
     "next": "Po C1: przegląd E4.1 w workflowie stage-review (8 grup recenzentów), potem E4.2 (lista testów sprzętowych) i E4.3 (szkic notatek wydania v0.1).",
-    "updated_at": "2026-10-26T02:50:00+01:00",
-    "now": "E3.5: łączny przegląd od 02:44 (sekcja LICHOMAT w README). Potem przygotowanie i start przeglądu E4.1."
+    "updated_at": "2026-10-26T03:39:00+01:00",
+    "now": "Praca zatrzymana na Twoją prośbę (03:39). Nic nie działa w tle."
   },
   "epics": [
     {
@@ -594,7 +594,7 @@
     {
       "id": "Q6",
       "status": "otwarte",
-      "question": "Testy na sprzęcie H1–H13 wymagają Ciebie i LXR-02.",
+      "question": "Testy na sprzęcie H1–H13 oraz U1 (przyciski kroków w menu globalnym, E2.7) i X4 (USB MIDI out, E2.8) wymagają Ciebie i LXR-02. Listę i pliki aktualizacji przygotuje E4.2.",
       "assumption": "Przygotuję checklistę i obrazy .img do wgrania."
     },
     {
@@ -610,6 +610,20 @@
       "question": "Jak przeglądać zadania etapu 1: pełne przeglądy czy szybciej?",
       "assumption": "Każde zadanie ma przegląd zgodności i przegląd jakości, do 3 rund każdy.",
       "answer": "24.10 22:40: bez zmian. 25.10 09:45: E1 i E2 z pełnymi przeglądami, E3 i E4 z jednym łącznym (najwyżej 2 rundy). 25.10 12:25: w workflowie B (E1.18, E2.1–E2.8) przegląd zgodności i przegląd jakości idą równolegle, a jeden fixer poprawia obie listy uwag. 25.10 12:55: rundy 2 i 3 są skupione: sprawdzają uwagi poprzedniej rundy i commity poprawek, a nie całe zadanie od nowa (runda 1 zostaje pełna)."
+    },
+    {
+      "id": "Q9",
+      "status": "otwarte",
+      "question": "Czy strona CPU w menu globalnym ma pokazywać też licznik przepełnień kolejek synchronizacji MIDI i jacka (seqp_syncOverflows())? Dziś pokazuje obciążenie CPU oraz Qmax i ovf kolejki zdarzeń.",
+      "assumption": "Nie pokazuje. Funkcja zostaje w kodzie i można ją podpiąć później bez zmiany formatu plików.",
+      "answer": null
+    },
+    {
+      "id": "Q10",
+      "status": "otwarte",
+      "question": "Nazwa urządzenia USB MIDI: zostaje „Sonic Potions USB MIDI” jak w fw 1.7, czy zmienić ją na LICHOMAT?",
+      "assumption": "Zostaje „Sonic Potions USB MIDI”, żeby porty MIDI w DAW i istniejące ustawienia zachowały nazwę. W notatkach wydania jest to opisane jako znane ograniczenie.",
+      "answer": null
     }
   ],
   "log": [
@@ -1497,6 +1511,56 @@
       "n": 177,
       "at": "2026-10-26 02:50",
       "text": "Workflow C1 zakończony (02:08–02:47, 39 min, 10 agentów): E2.9, E3.1, E3.3, E3.4 i E3.5 zrobione, wszystkie łączne przeglądy zaliczone za pierwszym razem. Pełna kontrola po C1: DTCM + RAM 391 732 B (limit R6.2 391 824 B), obraz 299 948 B, 27 testów, 0 ostrzeżeń. Ekran startowy pokazuje LICHOMAT / v0.1 unofficial. Pierwsze CI na GitHubie zielone. Zostało E4.1–E4.3."
+    },
+    {
+      "n": 178,
+      "at": "2026-10-26 02:48",
+      "text": "Workflow C2 wystartował (02:48, run wf_a51c1cc8-bbc): E4.1, wielowymiarowy przegląd całego etapu 1. Agent przygotowujący pisze listę kontrolną (51 wierszy w 11 wymiarach) i raport etapu, po czym uruchamia automatyczne wiersze. Potem 8 recenzentów sprawdza ręczne wiersze równolegle, każdą uwagę próbują obalić sceptycy, poprawki idą test-first, a na końcu jest bramka i łączny przegląd. Dostali notatkę z ok. 20 uwagami zebranymi wcześniej."
+    },
+    {
+      "n": 179,
+      "at": "2026-10-26 03:00",
+      "text": "E4.1, przygotowanie (02:48–02:59) w 3 commitach: lista kontrolna (51 wierszy), raport etapu 1 (odstępstwa od specyfikacji i zamierzone zmiany względem fw 1.7) oraz wyniki wierszy automatycznych. Prawie wszystkie wiersze automatyczne przechodzą: D1–D8, testy, konteksty wykonania, budżet RAM (92 B zapasu), obraz, CI na sucho. Jedna drobna uwaga F1: plik tools/agent/stage1-context.md nie ma nagłówka licencji. Od 03:00 8 recenzentów sprawdza wiersze ręczne."
+    },
+    {
+      "n": 180,
+      "at": "2026-10-26 03:17",
+      "text": "E4.1, recenzent kontekstów wykonania i formatów plików (03:00–03:17): wszystkie 4 wiersze zaliczone, bez uwag. Przerwania pobierają tylko znacznik czasu i nie wołają rdzenia; sprawdzone w ELF. Skrzynka jest pisana tylko przy wyłączonych przerwaniach, a strażnik zagnieżdżenia w seq_tick() działa. Formaty plików (kity, patterny, songi, projekty, glo.cfg) są identyczne z fw 1.7: presetManager.c kompiluje się bajt w bajt tak samo."
+    },
+    {
+      "n": 181,
+      "at": "2026-10-26 03:25",
+      "text": "E4.1, recenzent notatek N1–N21 (03:00–03:25): 7 drobnych uwag. Cztery były już znane: zgubiony impuls po skoku tempa na jacku, licznik przy cofnięciu scalenia, zdanie w N14 o pakietach USB, komentarze w Uart.c i usbd_cdc.c. Trzy są nowe: seqc_init() nie ma strażnika ponownego wejścia, więc wywołanie z callbacku zepsułoby stan; N18.2 nieprawdziwie twierdzi, że wznowienie nigdy nie wysyła Continue; N1 nie wymienia dwóch miejsc, w których rdzeń przesuwa punkt odniesienia (kotwicę) czasu."
+    },
+    {
+      "n": 182,
+      "at": "2026-10-26 03:27",
+      "text": "E4.1, recenzent testów i czasu rzeczywistego (03:00–03:27): wczesne wyjście rdzenia przy braku pracy (R5.1) zaliczone. Jedna poważna (major) uwaga do testów: specyfikacja (§13.1) każe testować Start, Continue, Stop i SPP także w trybie song, a testy T17 w trybie song sprawdzają tylko SPP z Continue. Do tego 2 drobne: koszt przejścia przez song przy SPP i pętla po maksymalnie 15 pakietach USB w przerwaniu."
+    },
+    {
+      "n": 183,
+      "at": "2026-10-26 03:29",
+      "text": "E4.1, recenzent komentarzy seq_core.h kontra seq_core.c (03:00–03:29): 10 drobnych uwag. Wszystkie dotyczą komentarzy, które mówią mniej albo co innego niż kod. Przykłady: gdzie rdzeń przesuwa kotwicę czasu, kto poza seq_tick() woła rdzeń (miernik CPU czyta seqc_stats(), seq_initCore() woła seqc_init()), zachowanie seqc_setTempo() w trybie slave i liczba 0,03% dla fałszywego taktu, której recenzent nie potwierdził pomiarem. Pójdą razem do fixera drobnych uwag."
+    },
+    {
+      "n": 184,
+      "at": "2026-10-26 03:30",
+      "text": "E4.1, recenzent MIDI (03:00–03:30). Zaliczone: D4 (R2.5), SPP w kolejce synchronizacji (R8.3) i USB MIDI out (R8.5). 5 drobnych uwag. Rolle wysyłają teraz stałą prędkość MIDI 100, inaczej niż fw 1.7, a nie ma tego w raporcie zmian. Nuty z jednorazowego rolla i echo nie dostają Note Off przy stopie (znane). Komentarze o kolejkach pomijają Program Change. Jacki sprawdzają tryb sync dwa razy. Bramek opróżniania kolejki nie sprawdza żaden automatyczny test."
+    },
+    {
+      "n": 185,
+      "at": "2026-10-26 03:32",
+      "text": "E4.1: skończyło 7 z 8 recenzentów. Specyfikacja (R1.1): 4 drobne uwagi. Dokumentacja: ok. 13 drobnych uwag, m.in. nieaktualne zdania w README, HANDOFF i notatkach oraz wygasający kod rabatowy z upstreamu w README. Dodałem do trackera dwa pytania do Ciebie (Q9 o liczniku przepełnień na stronie CPU, Q10 o nazwie urządzenia USB) i rozszerzyłem Q6 o testy U1 i X4. Czeka jeszcze recenzent raportu odstępstw (R1.4)."
+    },
+    {
+      "n": 186,
+      "at": "2026-10-26 03:36",
+      "text": "E4.1: wszystkie 8 grup recenzentów skończyło (03:00–03:36). Razem 51 uwag: 3 poważne (major) i 48 drobnych, przed usunięciem duplikatów. Ostatni recenzent (raport odstępstw, R1.4) dał 2 poważne. W trybie slave interpolacja może zagrać krok przy przewidywanym takcie, zanim takt przyjdzie (N9). Nuty z jednorazowego rolla i echa nie dostają Note Off po czasie. Od 03:36 sceptycy próbują obalić każdą uwagę."
+    },
+    {
+      "n": 187,
+      "at": "2026-10-26 03:39",
+      "text": "Praca zatrzymana na Twoją prośbę o 03:39. Workflow C2 (E4.1) przerwany w fazie sceptyków. Lista kontrolna, raport etapu i wiersze automatyczne są w 3 lokalnych commitach, jeszcze niewypchniętych. Wyniki 8 recenzentów (51 uwag) są zapisane w dzienniku workflowu i wrócą przy wznowieniu (run wf_a51c1cc8-bbc). Poprawki uwag się nie zaczęły."
     }
   ]
 }
