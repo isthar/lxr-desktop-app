@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 22:29",
-    "phase": "Etap 1: narzędzia i wydanie (E2.9, E3, E4)",
-    "focus": "Etap 1 zrobiony poza testami na sprzęcie. Trwa niezależna weryfikacja listy testów sprzętowych i notatek wydania v0.1. Potem raport M7.",
+    "updated": "2026-10-26 22:31",
+    "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
+    "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Następny jest szkic specyfikacji etapu 1b: emulator na macOS, najpierw renderer WAV, potem aplikacja z wirtualnym panelem.",
     "branch": "timing-core",
-    "head": "ec66824",
-    "next": "Po weryfikacji: raport M7 (v0.1 gotowe do testów na sprzęcie) i kamień milowy w trackerze. Testy H1–H13, U1 i X4 robisz Ty (Q6).",
-    "updated_at": "2026-10-26T22:29:00+01:00",
-    "now": "Raport M7 i kamień milowy w trackerze (od 22:35)."
+    "head": "131a1d0",
+    "next": "Twoje testy H1–H13, U1 i X4 oraz odpowiedzi na Q9–Q11. Ja: szkic specyfikacji etapu 1b do Twojej akceptacji.",
+    "updated_at": "2026-10-26T22:31:00+01:00",
+    "now": "Raport M7 gotowy. Następny krok to szkic specyfikacji etapu 1b."
   },
   "epics": [
     {
@@ -560,6 +560,12 @@
       "date": "2026-10-26",
       "title": "Integracja z firmware (E1.15–E1.19, E2.1–E2.8)",
       "summary": "Firmware działa na seq_core. D4, D7 i D8 oraz błędy fw 1.7 w menu globalnym i w USB MIDI out są naprawione. Przeglądy wyłapały m.in. wyścig przy nagrywaniu automatyki, Program Change wyprzedzany przez Start i zgubione zbocze bramki resetu. Workflow B: 10 zadań w 11 h (ok. 1 h na zadanie, wcześniej 2,5–4 h), 70 agentów. RAM +13 240 B, obraz +24 404 B. Raport: docs/lichomat/reports/M6-integracja-z-firmware.md."
+    },
+    {
+      "id": "M7",
+      "date": "2026-10-26",
+      "title": "v0.1 gotowe do testów na sprzęcie (E2.9, E3, E4)",
+      "summary": "Wszystkie zadania etapu 1 są zrobione, zostały tylko testy na LXR-02, które robisz Ty. Przegląd całego etapu (E4.1) dał 52 uwagi: 47 poprawionych, w tym brak Note Off dla rolla i echa i za długie przejście songu przy SPP, 3 przyjęte i 2 pytania (Q9, Q11). Dodatkowa weryfikacja listy testów i notatek wydania znalazła 80 potwierdzonych uwag, wszystkie są poprawione. Testy i wydanie używają pliku z CI (SHA-256 668abe3f…). Zasoby: DTCM + RAM 391788 B (36 B poniżej R6.2), obraz +25804 B, 27 testów na hoście bez ostrzeżeń. Raport: docs/lichomat/reports/M7-v0.1-do-testow.md."
     }
   ],
   "questions": [
@@ -601,8 +607,8 @@
     {
       "id": "Q6",
       "status": "otwarte",
-      "question": "Testy na sprzęcie H1–H13 oraz U1 (przyciski kroków w menu globalnym, E2.7) i X4 (USB MIDI out, E2.8) wymagają Ciebie i LXR-02. Listę i pliki aktualizacji przygotuje E4.2.",
-      "assumption": "Przygotuję checklistę i obrazy .img do wgrania."
+      "question": "Testy na sprzęcie są gotowe do zrobienia przez Ciebie: docs/lichomat/hardware-checklist.md, czyli H1–H13, U1 (przyciski kroków w menu globalnym), X4 (USB MIDI out) i opcjonalne X1–X3 (jacki zegara). Wgraj plik z CI: artefakt lichomat-firmware-bf64157… przebiegu 40389633686 na GitHubie, LXR_V2_LICHOMAT_0.1.img o SHA-256 668abe3f…. Do H13 i porównań użyj oficjalnego LXR_V2_V1.7.img (SHA-256 cdb1ca37…), który jest zbudowany ze źródeł a43cd4f w build/official-1.7/ albo pochodzi od Erica Synths. Wyniki wpisz w arkusz na końcu listy albo napisz mi je.",
+      "assumption": "Lista i oba pliki są gotowe, a ich hashe są w arkuszu wyników. Żaden test nie jest oznaczony jako zrobiony, dopóki nie podasz wyników."
     },
     {
       "id": "Q7",
@@ -1725,6 +1731,11 @@
       "n": 217,
       "at": "2026-10-26 22:29",
       "text": "Weryfikacja dokumentów zrobiona (20:46–22:27; 12 agentów, 4,1 mln tokenów). Fixer poprawił wszystkie 80 potwierdzonych uwag w 4 commitach (dd86de7..ec66824), bez zmian w kodzie. Lekki przegląd przeszedł w rundzie 1. Jego 4 drobne pozostałości uzupełniłem sam, a poprawkę 25 dopisałem do planu. Najważniejsze zmiany w liście testów: H3 ma tolerancję na rozjazd zegarów (uderzenie 257 w ±5 ms, odstępy ±1,5 ms); H5 używa patternu z H4 i uwzględnia opóźnienie DIN; H6 i H7 mają zegar tylko z jednego portu i ustawiony bufor DAW; U1, H9, H10 i H11 mają poprawione ustawienia. Doszły kroki dla DIN thru, końca songu, dwóch głosów na jednym kanale i rolla. Notatki wydania: D3 do 0,4 %, nowe ograniczenia slave'a po MIDI, dokładne liczby F49, kopia karty przed instalacją, nazwane pytania Q9–Q11. Odkrycie: plik z CI ma inny SHA-256 (668abe3f…) niż build na Macu (639c0a43…), bo newlib jest linkowany w innej kolejności. Testuj i wydawaj plik z CI, artefakt przebiegu 40389633686. Sprawdziłem jego hash po pobraniu. check.sh: 27 z 27, 0 ostrzeżeń."
+    },
+    {
+      "n": 218,
+      "at": "2026-10-26 22:31",
+      "text": "Kamień milowy M7: v0.1 gotowe do testów na sprzęcie. Raport jest w docs/lichomat/reports/M7-v0.1-do-testow.md. Teraz kolej na Ciebie: testy z listy (Q6), na pliku z CI o SHA-256 668abe3f…, oraz pytania Q9, Q10 i Q11. Ja w tym czasie zacznę szkic specyfikacji etapu 1b (emulator na macOS). Plan i kod ruszą dopiero po Twojej akceptacji, a kodu etapu 1 nie ruszam."
     }
   ]
 }
