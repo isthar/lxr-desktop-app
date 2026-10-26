@@ -713,6 +713,22 @@ the clock count.
       pulse at the one pulse after it (about 1 in 600 of the E1.19 review's random runs). Keeping
       the merge tentative for one more pulse would tell the two apart (1.5 against 2 old pulses
       after the merge), at the cost of a second fit copy and a rerun of the sweeps below.
+    - Guards that no measured jump needs (the E4.1 review, F48 and F49). Tests pin the sum band,
+      both sides of the undo threshold near it and the MIDI step gate (F48). Three rules stay as
+      they are, though no jump measured needs them, and changing one needs the sweeps below again:
+      - The MIDI step gate. Without it, or at 2 or 4 times its bound, 5760 MIDI jumps with ±1 to
+        ±4 ms of jitter and 10800 on stamps quantized to buffers of 1 to 23.2 ms give the same
+        restarts and estimates. It only keeps some spurious clocks under jitter from merging: the
+        row restarts the fit instead, within 0.06%.
+      - The undo threshold at half a band, not 0.75 of one (F49, accepted). A jump that merges
+        brings the next pulse at least 0.47 of an old pulse early, about 0.94 of a band, and 5820
+        jack jumps (4 and 24 PPQ, 60 to 300 BPM, 10 phases, 0, 0.3 and 1 ms of jitter) give the
+        same runs either way. A pulse 0.26 to 0.37 of a pulse early after a double trigger undoes
+        the merge: 11% to 29% off at 4 PPQ, where keeping it gives 5% to 7%.
+      - No split after a merged interval (`!merged` in the steady rule; F49, accepted). The same
+        5820 jumps give the same runs without it. A second double trigger on the very next pulse,
+        0.75 of a pulse or later into it, is not merged: up to 9.2% off at 4 PPQ and 1.5% at
+        24 PPQ, where merging it gives 0%.
     - The first version merged at once and guarded jumps with the tight sum test alone, and with no
       merge of two outliers or of two intervals inside the band. The review found that it still
       merged jumps to about 2 to 2.5 times when the change came early in a pulse, and dropped a
