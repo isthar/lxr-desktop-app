@@ -739,8 +739,13 @@ bool seqc_isRunning(void);
 //------------------------------------------------------------------------------
 /** copy the counters into out */
 void seqc_stats(seqc_stats_t *out);
+
 //------------------------------------------------------------------------------
-/** reset queueMax and every counter to 0; queueDepth stays live */
+// Statistics reset
+//------------------------------------------------------------------------------
+/** Reset queueMax and every counter to 0; queueDepth stays live. Not a query:
+ * like the other mutating calls, it is ignored inside a callback and counted in
+ * seqc_stats_t.reentries (N13.9). */
 void seqc_resetStats(void);
 
 #ifdef SEQC_QUEUE_TEST
