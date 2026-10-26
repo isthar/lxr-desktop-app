@@ -13,7 +13,8 @@
 
 #include "Soundengine/Sequencer/seq_platform.h"
 
-/* zeroed at startup, which makes them empty queues and an idle SPP decoder */
+/* zeroed at startup, which makes them empty queues and an idle decoder of the Song
+ * Position Pointer and the Program Change */
 static seqq_t seqp_queues[SEQP_NUM_SOURCES];
 static seqq_din_t seqp_dinDecoder;
 static seqq_t *const seqp_queueList[SEQP_NUM_SOURCES] = {
