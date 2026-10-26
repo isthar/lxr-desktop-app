@@ -24732,6 +24732,27 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | X4 | | | |
 ````
 
+> **Done in execution (release documents review, 2026-10-26).** The checklist as committed is the
+> reference; the text above is its first draft. The review of the owner's documents
+> (`tools/agent/release-verify.js`, findings V1–V80) changed it: H3 allows hit 257 ±5 ms (the clocks
+> of two devices differ by up to 100 ppm) and records the intervals; H5 runs H4's pattern (a Note On
+> delays a DIN clock by about 1 ms), names 1.7's 104 ms at its own settings and adds a song end
+> (step 4); H6 sets a 64-sample DAW buffer (a host that sends a buffer's clocks together delays each
+> kick by up to a buffer), keeps clock off the USB port, and adds DIN thru (step 8) and the START
+> button against the master (step 9); H7 sends clock to one port only, resets the shuffle, and step 6
+> says what it can and cannot show (the LFOs follow the tempo rounded to a whole BPM, 35.6 s per
+> transfer, the host kind seen in the hats), with a DIN run and the clock pairs and frames that test
+> the per-transfer case and N21's 2 ms join with any host; H9 sets shuffle 0 after selecting A; H10
+> sets voice 1's channel, its note override `any` and routing off, and adds a repeating roll
+> (step 5); H11 names the note `C 3`, routes the monitor through the synth's thru and adds two voices
+> on one channel (step 4); H12 tries the knobs and the encoder; U1 selects voice 1 after programming;
+> X4 step 2 saves during the stream, step 3 sends MTC with SendMIDI only, and step 6 drops the raw
+> bytes, which cannot reach the LXR from a computer; X1 adds 2 PPQ; X2 says that an early pulse plays
+> its step at once. "Where things are" names the display labels and says that shuffle and track
+> lengths belong to the pattern. The run sheet now names the CI file (`668abe3f…`, the file the
+> release attaches; a local build gives `639c0a43…`, newlib linked in another order), and the
+> install step checks the hash.
+
 - [x] **Step 6: Fill in the run sheet**
 
 Run:
@@ -25018,42 +25039,45 @@ leave the section as it is.
 | D1 shuffle moves whole steps | T3; H4 |
 | D1 straight MIDI clock out and clock out jack | T5, T6; H5, X1 |
 | D2 choke within a track only | T7; H8 |
-| D3 exact master tempo | T1; H3 |
+| D3 exact master tempo; 1.7 up to 0.4 % fast | T1; `tests/reference/fw17_replica.c` (137 BPM +0.211 %, 177 BPM +0.283 %, 249 BPM +0.394 %, the most over 2–255 BPM); H3 |
 | D4 one Note On per hit, Note Off with the override | review R2.4, R2.5, R8.4; H11 |
 | D5 own parameter locks and velocity, across a pattern change | `T2_event_carries_its_step_data` (T2) for the payload, `T11_early_hit_of_the_next_pattern` and `T11_late_hits_of_the_old_pattern_after_the_switch` (T11) across a pattern change, both ways; review R2.6; H9 |
 | D6 no doubled recorded note | T14; H10 |
 | D7 slave tempo, no dropped notes, SPP | T16 (`T16_swung_ratchet_spills_past_the_next_clock` and `T16_swung_ratchet_spills_past_bunched_clocks` for the swung late hits), T17, T18; H6 (step 7), H7 |
 | D8 time-stamped realtime input, one parsing context | review R2.9, R8.1, R8.2, R8.3; H7 step 5 |
 | recording quantize follows the shuffle | T14 |
-| Continue resumes; SPP while stopped; song mode loads at the locate | T17 |
-| after a song end, the first entry plays once | `T10_song_end_stops_and_rewinds` (T10) |
+| Continue resumes; SPP in the slave modes while stopped, ignored in internal sync; song mode loads at the locate | T17 (`T17_transport_events_are_ignored_in_internal_sync` for internal sync) |
+| after a song end, the first entry plays once; 1.7 played it twice after the usual stop press | `T10_song_end_stops_and_rewinds` (T10); `tests/fake_host.c` (the song end's comment on 1.7); H5 step 4 |
 | `EXT`: MIDI Start, then the next jack pulse starts | `T17_midi_start_in_analog_sync_starts_with_the_next_pulse` (T17) |
 | MIDI echo once | review R2.5; H10 |
 | a spill-over hit cut by a newer early hit; no last-step spill-over at the start | `T20_spill_over_after_a_newer_step_is_choked`, `T20_no_spill_over_of_the_last_step_at_the_start` (T20) |
 | SPP in song mode does not reload the playing pattern | `T17_spp_within_the_active_pattern_does_not_reload_it` (T17) |
-| song end: notes off, MIDI Stop as master; the start/stop button follows every change | `T10_song_end_stops_and_rewinds` (T10); review R1.4, R8.4 |
+| song end: notes off, MIDI Stop as master; the start/stop button follows every change | `T10_song_end_stops_and_rewinds` (T10); review R1.4, R8.4; H5 step 4, H6 step 9 |
 | no MIDI Start, Stop or Continue as a slave | `tools/fw_checks.sh E2.2`; H6 |
 | clock out: 2 PPQ as a slave, on the step grid after Continue or SPP | `tools/fw_checks.sh E2.2`; X1 |
-| Note Offs per voice; muting turns off that track's note | review R8.4; H11 |
+| Note Offs per voice; muting turns off that track's note | review R8.4; H11 (step 4: two voices on one channel) |
 | a roll is recorded where it played | `T13_roll_hit_is_recorded_at_its_own_step` (T13) |
 | roll on muted tracks; local slave start on the master's 16th; reset input as a run gate | T13; T16, T18; `T17_jack_run_gate` (T17), X3 |
 | MIDI clock out runs while stopped | T5 |
 | CPU page: how to reach it, what it shows, `Qmax` since switch-on, `ovf` of the event queue only | `cpumeter`; `tools/fw_checks.sh E3.3`; review F2 (Q9); H12 |
 | no file format change | `layout`; review R7.1, R7.2, R7.3; H2 |
 | global menu: step buttons leave the track lengths alone, page up and down keep step 12 blinking | `buttons`; `tools/fw_checks.sh E2.7`; U1 |
-| USB MIDI out: the right CIN, nothing lost while the computer reads, no stray bytes, no burst of old messages; a routed Song Select keeps its song number | `usbtx`; `tools/fw_checks.sh E2.8`; review R8.5; X4 |
+| USB MIDI out: the right CIN, nothing lost while the computer reads (also while a preset is saved), no stray bytes, no burst of old messages; a routed Song Select keeps its song number | `usbtx`; `tools/fw_checks.sh E2.8`; review R8.5; X4 (step 2 with the saves) |
 | D4: the Note Offs also go out when a slave's clock stops | `T18_dropout_note_off_is_sent`, `T18_dropout_sends_the_note_off_of_the_hit_it_plays` (T18); review R8.4 |
 | one-shot roll and MIDI echo: Note Off one pulse later | `tools/fw_checks.sh E2.3` (the checks of F22); review F22, F31; H10 steps 3 and 4 |
-| D7: the tempo per clock over USB transfers; one spurious MIDI clock or a jack double trigger does not throw it off | `T16_packed_clocks_give_the_clock_tempo`, `T16_packed_audio_buffers_give_the_clock_tempo`, `T16_extra_clock_is_no_tempo_jump` (T16), `T18_double_trigger_is_left_out` (T18); H7 step 6 |
-| D8: a clock inside a DIN message does not break it; realtime messages passed on from DIN go out alone | `tools/fw_checks.sh E2.4` (realtime bytes routed alone at the top of `midiParser_parseUartData()`); review R8.1 |
-| F4, F5 and F6 passed on from DIN go out alone; stray data bytes after them are no repeat | `tools/fw_checks.sh E2.8`; X4 step 6 |
+| D7: the tempo per clock over USB transfers; a single spurious MIDI clock (more than a fifth of a clock from a real one, stamps precise to an eighth of a clock) or a single jack double trigger does not throw it off | `T16_packed_clocks_give_the_clock_tempo`, `T16_packed_audio_buffers_give_the_clock_tempo`, `T16_extra_clock_is_no_tempo_jump`, `T16_extra_clock_needs_a_step_amplitude_within_the_quarter_band` (T16), `T18_double_trigger_is_left_out` (T18); `seq_core.h` (the spurious clock bullet); H7 step 6 (the pairs) |
+| D8: a clock inside a DIN message does not break it; realtime messages passed on from DIN go out alone | `tools/fw_checks.sh E2.4` (realtime bytes routed alone at the top of `midiParser_parseUartData()`); review R8.1; H6 step 8 |
+| F4, F5 and F6 passed on from DIN go out alone; stray data bytes after them are no repeat | `tools/fw_checks.sh E2.8` (no hardware check can show it: X4 step 6 shows only that the Tune Request arrives) |
 | a reset gate edge is no longer lost | `tools/fw_checks.sh E2.5` (the pending bit is cleared before the pin is read); X3 |
 | pattern change: the early hits of the first step come from the next pattern | `T11_early_hit_of_the_next_pattern` (T11); H9 |
-| a repeating roll sends one Note On, velocity 100 | `T13_roll_at_every_rate` (T13: `SEQC_ROLL_VELOCITY`); `tools/fw_checks.sh E2.3` (one Note On per trigger, with the event's velocity); review F28 |
+| a repeating roll sends one Note On, velocity 100 | `T13_roll_at_every_rate` (T13: `SEQC_ROLL_VELOCITY`); `tools/fw_checks.sh E2.3` (one Note On per trigger, with the event's velocity); review F28; H10 step 5 |
 | a slave plays up to the next clock: 4 PPQ plays straight, one more step after the clock stops | `T16_position_is_clamped_to_the_next_clock` (T16), `T18_jack_4ppq_one_pulse_per_step` and `T18_dropout_note_off_is_sent` (T18: step 5 plays after the last pulse, step 4); review F21 (Q11); X2 |
 | song mode: a start after a stop that kept the position plays from the first entry | `T1_stop_keeps_the_position_and_start_rewinds` (T1: the start rewinds), `T10_song_end_stops_and_rewinds` (T10: after the rewind the song plays from entry 0; the fake host's rewind is the glue's `SEQC_TRANSPORT_REWIND` case, `seq_songPositionPointer = 0xff`) |
 | a Program Change just before a Start selects the pattern the Start plays (unchanged) | `syncq_din_program_change` (syncq: queued in order with the Start); `tools/fw_checks.sh E2.4` (applied in the drain, the mailbox before the next entry); H7 step 7 |
-| known limitations of the clock in jack (review F4 and F49, accepted) | review F4, F49; N21 (Limit bullet and the E1.19 jack bullet) |
+| known limitations of the clock in jack (review F4 and F49, accepted): about the old tempo for two or three pulses; up to about 60 % (4 PPQ) after a double trigger and an early pulse, about twice the tempo (up to 2.1 times) after double triggers on adjacent pulses, within about 15 % at 24 PPQ | review F4, F49; N21 (Limit bullet and the E1.19 jack bullet); re-measured at `bf64157` in the release documents review (V7, V65, V66: `jackGlitch()` and `twoDoubleTriggers()` of `tests/test_slave.c` over fractions 0.01 to 0.99) |
+| slave LFOs follow the measured tempo rounded to a whole BPM; from a host that sends a buffer's clocks together up to 1.0 %, 1.4 % and 2.8 % at 256, 512 and 1024 samples (44.1 kHz) | `seq_refreshCopies()` (`sequencer.c`), `lfo_calcPhaseInc()` (`lfo.c`); N21 (Limit); `T16_packed_audio_buffers_give_the_clock_tempo` (T16); H7 step 6 |
+| a lost or close spurious MIDI clock: about 1.5 % for about four beats; with imprecise stamps a spurious clock restarts the fit (up to about 16 %) | N21 (the E1.19 table: 1.57 % and 1.52 % for 93–95 clocks; 8.1 %–15.6 % before, a restart); `seq_core.h` (the spurious clock bullet: stamps precise to 1/8 of a clock, else a restart) |
+| hits within 1.45 ms; 1.7 about 1.7 ms | spec §3; `tests/reference/fw17_replica.c` section 2 (onset spread 1.69 ms) |
 
 Run:
 
@@ -25072,6 +25096,18 @@ and `PASS E2.2`, `PASS E2.7` and `PASS E2.8`.
 > E3.3`; all of them pass. The review rows R1.4, R2.6, R8.1, R8.2 and R8.4 end in their findings
 > (F21 to F31), not in `| pass |`: each of those findings is fixed, except F21, the owner question
 > Q11, whose default the notes describe under "Changed behaviour".
+>
+> **Done in execution (release documents review, 2026-10-26).** The notes as committed are the
+> reference for Step 3's text. The review (`tools/agent/release-verify.js`, V1–V80) corrected D1's
+> figures (with their settings), D3 (up to 0.4 %), D7 (a single spurious clock or double trigger),
+> the one-shot roll (no pads), SPP (slave modes only), the song end (what 1.7 did), the Unchanged
+> list (the start/stop button), the known limitations (the 1.7 onset spread, the rounded slave tempo
+> of the LFOs, N21's per-buffer limits, a lost MIDI clock, F4 and F49 re-measured), the Files bullet
+> (the CI file, `668abe3f…`), the source (the tag), the trademark sentence, the backup and no-rename
+> rule of Installing, and the publishing steps (finalize the file first, what to do if the CI hash
+> differs, the release text). The draft note names the defaults of Q9, Q10 and Q11. Each paragraph
+> and list item is one line, since a GitHub release shows every line break of its text. The rows
+> above trace the changed claims.
 Open each named test and confirm that it asserts the claim. A claim without evidence is either removed
 from the notes, or becomes a finding of the review with a failing test first (E4.1, "Fixing
 findings").
