@@ -434,7 +434,8 @@ typedef struct seqc_host
  * core starts stopped and rewound, in internal sync at SEQC_DEFAULT_BPM, with the
  * analog PPQ at 4, an empty queue and zeroed stats. cyclesPerSecond is the rate
  * of seqc_time_t: SEQC_CPU_HZ in the firmware and in the host tests. No callback
- * is called. */
+ * is called. Called from inside a callback it is ignored and counted in
+ * seqc_stats_t.reentries, like the other mutating calls (N13.9). */
 void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond);
 //------------------------------------------------------------------------------
 /** Set the sync mode (seq_setExtSync()). The transport state and the position

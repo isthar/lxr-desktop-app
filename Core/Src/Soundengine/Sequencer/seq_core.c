@@ -2229,6 +2229,11 @@ static void seqc_leave(void)
 //------------------------------------------------------------------------------
 void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond)
 {
+	if (seqc.busy)
+	{
+		seqc.stats.reentries++;	/* from a callback: ignored (N13.9) */
+		return;
+	}
 	memset(&seqc, 0, sizeof seqc);
 	memset(&seqc_trk, 0, sizeof seqc_trk);
 	memset(&seqc_gen, 0, sizeof seqc_gen);

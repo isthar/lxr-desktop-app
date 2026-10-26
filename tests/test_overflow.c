@@ -144,6 +144,30 @@ TEST(T19_calls_from_a_callback_are_ignored_and_counted)
 	ASSERT_EQ(fake_triggers(h, 5, trig, 8), 1);
 }
 
+static int initCalls;
+static void initFromACallback(fake_host_t *h, uint32_t absStep)
+{
+	if (absStep != 2 || initCalls++ > 0)
+		return;
+	seqc_init(&h->host, SEQC_CPU_HZ);		/* ignored: a reentry (F6) */
+}
+
+TEST(T19_init_from_a_callback_is_ignored_and_counted)
+{
+	fake_host_t *h = fake_init();
+	initCalls = 0;
+	h->onStepBoundary = initFromACallback;
+	fake_setStep(h, 0, 5, 3, true);
+	start(h);
+	runToTick(h, 4 * 96);
+	ASSERT_EQ(initCalls, 1);
+	seqc_stats_t s = stats();
+	ASSERT_EQ(s.reentries, 1);
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_EQ(seqc_absStep(), 4);
+	ASSERT_EQ(fake_triggers(h, 5, trig, 8), 1);
+}
+
 static int skipCalls;
 static void skipAndCallBack(fake_host_t *h, uint32_t absStep)
 {
