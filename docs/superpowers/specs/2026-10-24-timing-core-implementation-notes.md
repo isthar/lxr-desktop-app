@@ -623,6 +623,8 @@ the clock count.
     and 42 tempos.
   - It is exact for transfers of 1 to 16 clocks.
   - DIN with ±0.3 ms jitter stays within 0.007%.
+  - On the jack, a jump to about 2 to 2.7 times the tempo with the pulse right after it lost reads
+    the old tempo for three pulses before the restart (E1.19 bullet below, F4 of the E4.1 review).
 - **Joining bursts (amended 2026-10-25 during E1.15).**
   - A MIDI clock that comes less than `SEQC_TEMPO_JOIN_MS` (2 ms) after the newest stamp of the last
     transfer joins it, whether that transfer is still open or was evaluated. The transfer then takes
@@ -694,6 +696,19 @@ the clock count.
       count back out of `intervalsExcluded` (so a `seqc_resetStats()` between the merge and the undo
       stays a reset; amended in the E4.1 review, F5), and the merged pulse goes in again without a
       merge. The jump then goes through the fit as it would have without one, a pulse later.
+    - Known limitation (the E4.1 review, F4, accepted): the undo misses a jump to about 2 to 2.7
+      times the tempo when the pulse right after the merged one is lost. The next pulse then comes
+      two new pulses, 0.75 to 1 old pulse, after the merged one, as after a double trigger, so the
+      merge stays and the fit takes that pulse in at the old slope. At 4 PPQ, 120 to 240 BPM 0.05
+      into a pulse, with the second new pulse lost, the estimate reads 119.1 BPM for three more
+      pulses (50% off: inside each of those steps the interpolation runs at half speed, so its
+      later hits bunch at the next pulse, which still starts its step) and then restarts at 240
+      (N16), exact from the sixth new pulse. With the first new pulse lost instead (no merge) it
+      reads 139.9, 158.4, 183.2 and 200.0 BPM and is exact from the same pulse; with no pulse lost,
+      197.5 and 237.6, exact from the fourth. It needs a jump of two to three times and a lost
+      pulse at the one pulse after it (about 1 in 600 of the E1.19 review's random runs). Keeping
+      the merge tentative for one more pulse would tell the two apart (1.5 against 2 old pulses
+      after the merge), at the cost of a second fit copy and a rerun of the sweeps below.
     - The first version merged at once and guarded jumps with the tight sum test alone, and with no
       merge of two outliers or of two intervals inside the band. The review found that it still
       merged jumps to about 2 to 2.5 times when the change came early in a pulse, and dropped a
