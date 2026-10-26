@@ -1226,6 +1226,49 @@ TEST(T16_extra_clock_keeps_the_band)
 	checkBandAfterMerge(0.75);
 }
 
+/* E1.19: the MIDI clock at 120 BPM, clock k stamped deltaMs early if k is even
+ * and late if it is odd, and a spurious clock frac of a clock after clock 120.
+ * The intervals turn back at every clock, so each offset is a step of the
+ * stamps: the step amplitude is about 2.3 times deltaMs. */
+static void extraClockAfterAlternatingStamps(double deltaMs, double frac)
+{
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_MIDI);
+	seqc_start();
+	const double per = fake_clockCycles(120.0);
+	size_t n = 0;
+	for (uint32_t k = 0; k < 200 && n < MAX_CLOCKS; k++)
+	{
+		const double t = (double)fake_msToCycles(10.0) + (double)k * per
+				+ (k % 2 ? deltaMs : -deltaMs) * (double)fake_msToCycles(1.0);
+		stamps[n++] = (seqc_time_t)(t + 0.5);
+		if (k == 120)
+			stamps[n++] = (seqc_time_t)(t + frac * per + 0.5);
+	}
+	deliver(h, SEQC_EV_CLOCK, stamps, n, fake_msToCycles(0.1));
+}
+
+TEST(T16_extra_clock_needs_a_step_amplitude_within_the_quarter_band)
+{
+	/* N21, E1.19: the row is taken in one clock earlier only if the step
+	 * amplitude before it is at most the quarter band (2.6 ms at 120 BPM).
+	 * Stamps 0.5 ms early and late give about 1.1 ms: the spurious clock is
+	 * left out, with no restart. Stamps 1.5 ms early and late give about
+	 * 3.4 ms: the row restarts the fit, as a tempo jump would, within 0.1%.
+	 * (The rule guards against jumps; no jump measured in the E4.1 review
+	 * needed it, see review finding F48.) */
+	static const double frac[] = { 0.25, 0.4, 0.55 };
+	for (size_t i = 0; i < sizeof frac / sizeof frac[0]; i++)
+	{
+		extraClockAfterAlternatingStamps(0.5, frac[i]);
+		ASSERT_EQ(stats().tempoRestarts, 0);
+		ASSERT_EQ(stats().intervalsExcluded, SEQC_TEMPO_RESTART - 1);	/* the row less its last point */
+		ASSERT_NEAR(seqc_currentBpm(), 120.0, 1e-3);
+		extraClockAfterAlternatingStamps(1.5, frac[i]);
+		ASSERT_EQ(stats().tempoRestarts, 1);
+		ASSERT_NEAR(seqc_currentBpm(), 120.0, 0.12);
+	}
+}
+
 TEST(T16_alternating_outliers_do_not_restart)
 {
 	/* at 120 BPM, 8 intervals alternately 60% longer and 60% shorter: every
@@ -2684,6 +2727,24 @@ TEST(T18_jump_lags_one_pulse_only)
 	ASSERT_TRUE(err[2] < 1e-3);
 }
 
+TEST(T18_jump_just_outside_the_sum_band_does_not_merge)
+{
+	/* The jack at 4 PPQ: the straddling interval and the first new one merge
+	 * only if they add up to one old pulse within a sixteenth of the band
+	 * (3.1% of a pulse). 120 to 250 BPM at a pulse: they add up to 0.96 of a
+	 * pulse. 120 to 255 BPM 0.05 into a pulse: 0.968. Neither merges, so the
+	 * fit restarts at the second new pulse (N16) and is exact from there;
+	 * merged and undone, the estimate would hold the old tempo for that pulse
+	 * (52% off). */
+	double err[4 * 4 + 1];
+	ASSERT_EQ(jackJump(4, 250.0, 0.0, 0.0, 0, 0.0, err, 4 * 4 + 1), 1);
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_TRUE(worstOf(err, 1, 4 * 4) < 1e-3);
+	ASSERT_EQ(jackJump(4, 255.0, 0.05, 0.0, 0, 0.0, err, 4 * 4 + 1), 1);
+	ASSERT_EQ(stats().intervalsExcluded, 1);
+	ASSERT_TRUE(worstOf(err, 1, 4 * 4) < 1e-3);
+}
+
 /* E1.19: the jack at ppq, 120 BPM, exact stamps, but pulse at + early comes
  * earlyMs early, and a second pulse secondFrac of a pulse plus secondMs after
  * pulse at (none if secondFrac < 0). Returns the largest error of the estimate
@@ -2736,6 +2797,29 @@ TEST(T18_double_trigger_then_an_early_pulse_keeps_the_merge)
 		ASSERT_EQ(stats().intervalsExcluded, 1);
 		ASSERT_TRUE(jackGlitch(24, 2, 0.3, frac[i], 0.0, 120 + 3) < 0.05);
 		ASSERT_EQ(stats().tempoRestarts, 0);
+	}
+}
+
+TEST(T18_merge_holds_for_a_pulse_up_to_half_a_band_early)
+{
+	/* The undo takes back a merge only when the next pulse comes more than half
+	 * a band early (N21). A pulse up to that early after a double trigger keeps
+	 * the merge, and the estimate is exactly as after that early pulse alone:
+	 * 0.32 and 0.48 of a band early, at 4 PPQ 20 and 30 ms (the band is
+	 * 62.5 ms), at 24 PPQ 3.3 and 5 ms (10.4 ms). */
+	static const struct { uint8_t ppq; double ms; } c[] = { { 4, 20.0 }, { 4, 30.0 }, { 24, 3.3 }, { 24, 5.0 } };
+	static const double frac[] = { 0.1, 0.3, 0.5, 0.7, 0.9 };
+	for (size_t i = 0; i < sizeof c / sizeof c[0]; i++)
+	{
+		const uint32_t from = (c[i].ppq == 4 ? 24u : 120u) + 3u;
+		const double alone = jackGlitch(c[i].ppq, 2, c[i].ms, -1.0, 0.0, from);
+		ASSERT_EQ(stats().intervalsExcluded, 0);
+		for (size_t j = 0; j < sizeof frac / sizeof frac[0]; j++)
+		{
+			ASSERT_NEAR(jackGlitch(c[i].ppq, 2, c[i].ms, frac[j], 0.0, from), alone, 1e-6);
+			ASSERT_EQ(stats().intervalsExcluded, 1);
+			ASSERT_EQ(stats().tempoRestarts, 0);
+		}
 	}
 }
 
