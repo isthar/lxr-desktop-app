@@ -461,11 +461,14 @@ void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond);
 void seqc_setSyncMode(seqc_sync_t mode);
 //------------------------------------------------------------------------------
 /** Set the master tempo in BPM, clamped to SEQC_MASTER_BPM_MIN..MAX. The
- * transport position and the free-running timeline are re-anchored at the core's
- * current time, so both stay continuous. In a slave mode the value is kept for
- * internal sync. A call made while the fit has no slope (before its second
- * point, also after a dropout) also sets the tempo used until it has one; a
- * measured estimate stays, and a dropout keeps it as the last known tempo. */
+ * free-running timeline is re-anchored at the core's current time, and in
+ * internal sync the transport position with it, so both stay continuous. In a
+ * slave mode the value is kept for internal sync. A call made while the fit has
+ * no slope (before its second point, also after a dropout) also sets the tempo
+ * used until it has one; a measured estimate stays, and a dropout keeps it as
+ * the last known tempo. In a slave mode the position reached is kept, but the
+ * interpolation stays anchored at the last clock: while the fit has no slope, a
+ * new tempo can move the position forward at once, up to the next clock. */
 void seqc_setTempo(float bpm);
 //------------------------------------------------------------------------------
 /** Set the PPQ of the clock in jack, 4 or 24 (PAR_PRESCALER_CLOCK_IN). Any other
