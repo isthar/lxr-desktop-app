@@ -145,6 +145,7 @@ typedef struct fake_host
 	uint8_t		song[FAKE_SONG_LENGTH];		/**< the active song: patterns, FAKE_SONG_END, FAKE_SONG_LOOP */
 	uint8_t		songPos;			/**< seq_songPositionPointer, FAKE_NO_SONG_POS before the first entry */
 	uint32_t	patternChanges;			/**< activations with the pattern-change side effects */
+	uint32_t	seekLengths;			/**< master lengths the last seekPosition() read (E4.1 F33) */
 
 	/* glue behaviour */
 	bool		recordActive;			/**< seq_recordActive */

@@ -301,6 +301,142 @@ TEST(harness_seek)
 	ASSERT_EQ(h->errors, 0);
 }
 
+/* the master length of each pattern of the walk tests: every track that long */
+static void setMasterLength(fake_host_t *h, uint8_t pattern, uint8_t len)
+{
+	for (uint8_t t = 0; t < FAKE_NUM_TRACKS; t++)
+		fake_setLength(h, pattern, t, len);
+}
+
+/* E4.1 F33: an SPP deep into a looping song of short patterns walked the song entry
+ * by entry, up to 16384 entries for 1-step patterns. The walk now starts one period
+ * before the target, so it reads at most about three passes through the song. */
+TEST(harness_seek_deep_into_a_loop_walks_at_most_three_passes)
+{
+	fake_host_t *h = fake_init();
+	setMasterLength(h, 1, 1);
+	setMasterLength(h, 2, 1);
+	fake_setSongMode(h, true);
+	/* A B LOOP of 1-step patterns: SPP 16383 is entry 1, the first step of its run */
+	static const uint8_t ab[] = { 1, 2, FAKE_SONG_LOOP };
+	fake_setSong(h, ab, 3);
+	ASSERT_EQ(seek(h, 16383), 0);
+	ASSERT_EQ(h->songPos, 1);
+	ASSERT_EQ(h->activePattern, 2);
+	ASSERT_TRUE(h->seekLengths <= 3 * FAKE_SONG_LENGTH);
+	/* a loop of one pattern is one run: the steps since step 0, as in pattern mode */
+	static const uint8_t aa[] = { 1, 1, FAKE_SONG_LOOP };
+	fake_setSong(h, aa, 3);
+	ASSERT_EQ(seek(h, 16383), 16383);
+	ASSERT_EQ(h->songPos, 1);
+	ASSERT_TRUE(h->seekLengths <= 3 * FAKE_SONG_LENGTH);
+	/* 64 entries and no marker loop as well (the index wraps) */
+	uint8_t full[FAKE_SONG_LENGTH];
+	for (size_t i = 0; i < FAKE_SONG_LENGTH; i++)
+		full[i] = 1;
+	fake_setSong(h, full, FAKE_SONG_LENGTH);
+	ASSERT_EQ(seek(h, 16383), 16383);
+	ASSERT_EQ(h->songPos, 63);
+	ASSERT_TRUE(h->seekLengths <= 3 * FAKE_SONG_LENGTH);
+	full[5] = 2;					/* the run breaks at entry 5 and at 6 */
+	fake_setSong(h, full, FAKE_SONG_LENGTH);
+	ASSERT_EQ(seek(h, 16383), 63 - 6);		/* 16383 = 255 * 64 + 63; the run began at entry 6 */
+	ASSERT_EQ(h->songPos, 63);
+	ASSERT_EQ(seek(h, 16384 + 3), 3 + 64 - 6);	/* entry 3 joins the run of 6..63 across the wrap */
+	ASSERT_EQ(h->songPos, 3);
+	ASSERT_TRUE(h->seekLengths <= 3 * FAKE_SONG_LENGTH);
+	ASSERT_EQ(h->errors, 0);
+}
+
+/* the walk as it was before F33, entry by entry from step 0: the reference */
+static uint32_t seekReference(const uint8_t *song, const uint8_t *len, uint32_t absStep, uint8_t *idxOut)
+{
+	uint32_t entryStart = 0, runStart = 0, lastEnd = 0, lastRunStart = 0, steps = 0;
+	uint8_t idx = 0, lastIdx = 0, prev = FAKE_SONG_END;
+	bool found = false;
+	for (;;)
+	{
+		const uint8_t entry = song[idx];
+		if (entry == FAKE_SONG_LOOP)
+		{
+			idx = 0;
+			continue;
+		}
+		if (entry >= FAKE_NUM_PATTERNS)
+			break;
+		if (entry != prev)
+			runStart = entryStart;
+		if (absStep < entryStart + len[entry])
+		{
+			steps = absStep - runStart;
+			found = true;
+			break;
+		}
+		prev = entry;
+		lastIdx = idx;
+		lastRunStart = runStart;
+		entryStart += len[entry];
+		lastEnd = entryStart;
+		idx = (uint8_t)((idx + 1) % FAKE_SONG_LENGTH);
+	}
+	if (!found)
+	{
+		idx = lastIdx;
+		steps = lastEnd - 1 - lastRunStart;
+	}
+	*idxOut = idx;
+	return steps;
+}
+
+/* the bounded walk finds the entry and the steps of the full walk, for random songs
+ * that loop, end or fill all 64 entries, of 1 to 64-step patterns with runs that
+ * cross the wrap, at random positions and at the period's multiples */
+TEST(harness_seek_bounded_walk_matches_the_full_walk)
+{
+	fake_host_t *h = fake_init();
+	fake_setSongMode(h, true);
+	static const uint8_t lengths[] = { 1, 2, 3, 5, 16, 64 };
+	uint64_t rng = 12345;
+#define NEXT(n) ((uint32_t)((rng = rng * 6364136223846793005ULL + 1442695040888963407ULL) >> 33) % (n))
+	for (int song = 0; song < 3000; song++)
+	{
+		uint8_t len[FAKE_NUM_PATTERNS] = { 0 };
+		for (uint8_t p = 1; p <= 3; p++)
+		{
+			len[p] = lengths[NEXT(sizeof lengths)];
+			setMasterLength(h, p, len[p]);
+		}
+		uint8_t entries[FAKE_SONG_LENGTH];
+		const uint8_t kinds = (uint8_t)(1 + NEXT(song % 2 ? 2 : 3));	/* 1 to 3 patterns */
+		const size_t n = 1 + NEXT(FAKE_SONG_LENGTH);
+		for (size_t i = 0; i < n; i++)
+			entries[i] = (uint8_t)(1 + NEXT(kinds));
+		size_t count = n;
+		if (n < FAKE_SONG_LENGTH)
+			entries[count++] = NEXT(3) ? FAKE_SONG_LOOP : FAKE_SONG_END;
+		fake_setSong(h, entries, count);
+		uint32_t period = 0;
+		for (size_t i = 0; i < n; i++)
+			period += len[entries[i]];
+		for (int k = 0; k < 24; k++)
+		{
+			uint32_t absStep = NEXT(16384);
+			if (k < 8)				/* around 1, 2 and 3 periods and more */
+				absStep = (uint32_t)(k / 2 + 1) * period * (k == 7 ? 37 : 1) - (k % 2);
+			if (absStep > 16383)
+				absStep = 16383;
+			uint8_t idx;
+			const uint32_t steps = seekReference(h->song, len, absStep, &idx);
+			ASSERT_EQ(seek(h, absStep), steps);
+			ASSERT_EQ(h->songPos, idx);
+			ASSERT_EQ(h->activePattern, h->song[idx]);
+			ASSERT_TRUE(h->seekLengths <= 3 * FAKE_SONG_LENGTH + 1);
+		}
+	}
+#undef NEXT
+	ASSERT_EQ(h->errors, 0);
+}
+
 TEST(harness_drivers)
 {
 	fake_host_t *h = fake_init();

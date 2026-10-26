@@ -196,6 +196,15 @@ check_E2_4() {
 			exit !(g && s && e && g<s && s<e)}' \
 		|| fail "seq_drainSyncQueues() does not gate system messages with the RX filter before the SPP and the sync events"
 	must_call seq_tick seqc_songPosition
+	# an SPP deep into a looping song walks from one period before its own, not entry by
+	# entry from step 0 (E4.1 F33: up to 16384 entries in seq_tick()); the host tests check
+	# the same walk in tests/fake_host.c against the full walk (harness_seek_*). Here: the
+	# period is skipped, and after walkStep is set the walk never reads absStep again
+	awk '{sub(/\r$/, "")} /^static uint32_t seq_cbSeekPosition\(/{f=1} f&&/^}/{exit}
+		f&&$0=="\tconst uint32_t skipped = (period && (absStep >= 2 * period)) ? (absStep / period - 1) * period : 0;"{k=1}
+		f&&k&&$0=="\tconst uint32_t walkStep = absStep - skipped;"{w=1; next} f&&w&&/absStep/{bad=1}
+		f&&w&&/^[[:space:]]+if\(walkStep < entryStart \+ len\)$/{ok=1} END{exit !(ok && !bad)}' \
+		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_cbSeekPosition() walks a looping song from step 0"
 	awk '{sub(/\r$/, "")} /^void seq_tick\(\)/{f=1} f&&/seq_drainSyncQueues\(&now\)/{d=1;next} f&&d&&NF{if(/^[[:space:]]+changed = 1;$/)next; if(/^[[:space:]]+seqc_process\(now\);$/)ok=1; d=0}
 		f&&/^}/{exit} END{exit !ok}' \
 		Core/Src/Soundengine/Sequencer/sequencer.c || fail "seq_tick() does not pass the time of the last pop to seqc_process()"

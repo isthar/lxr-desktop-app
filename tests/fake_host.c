@@ -290,8 +290,33 @@ static uint32_t cb_seekPosition(void *ctx, uint32_t absStep)
 	fake_host_t *h = ctx;
 	uint32_t steps = absStep;
 
+	h->seekLengths = 0;
 	if (h->songMode && h->song[0] < FAKE_NUM_PATTERNS)
 	{
+		/* E4.1 F33: a looping song repeats every period, one pass through it. A
+		 * position two periods or more into it is walked from one period before its
+		 * own, so that a run that crosses the wrap still finds its start: at most
+		 * about three passes through the song instead of up to 16384 entries. A loop
+		 * of one pattern is a single run, so its steps are those since step 0. */
+		uint32_t period = 0;		/* steps of one pass through a looping song, 0 if it ends */
+		bool uniform = true;		/* every entry of the loop is the same pattern */
+		for (uint8_t i = 0; i < FAKE_SONG_LENGTH; i++)
+		{
+			const uint8_t entry = h->song[i];
+			if (entry == FAKE_SONG_LOOP)
+				break;
+			if (fake_isSongEnd(entry))
+			{
+				period = 0;
+				break;
+			}
+			period += fake_masterLength(h, entry);
+			h->seekLengths++;
+			uniform = uniform && entry == h->song[0];
+		}
+		const uint32_t skipped = (period && absStep >= 2 * period) ? (absStep / period - 1) * period : 0;
+		const uint32_t walkStep = absStep - skipped;
+
 		uint32_t entryStart = 0;	/* absolute step where entry idx begins */
 		uint32_t runStart = 0;		/* absolute step where the run of identical entries began */
 		uint8_t idx = 0;
@@ -315,9 +340,10 @@ static uint32_t cb_seekPosition(void *ctx, uint32_t absStep)
 			if (entry != prev)
 				runStart = entryStart;
 			const uint32_t len = fake_masterLength(h, entry);
-			if (absStep < entryStart + len)
+			h->seekLengths++;
+			if (walkStep < entryStart + len)
 			{
-				steps = absStep - runStart;
+				steps = walkStep - runStart + (uniform ? skipped : 0);
 				found = true;
 				break;
 			}
