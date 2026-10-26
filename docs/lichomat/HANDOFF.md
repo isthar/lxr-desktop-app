@@ -82,6 +82,16 @@ The scripts in `tools/agent/` drive the work through Claude Code workflows:
   | `tasks` | a list of `{id, title, text}` or `{id, title, file}`, made by `extract_tasks.py`, each with an optional `review` mode |
   | `final` | `{review: true}`, optional |
 
+- **`stage-review.js`** runs task E4.1, the multi-dimension review of stage 1, as a Workflow script:
+  - a setup agent writes the checklist and the stage 1 report and runs the automated rows;
+  - one read-only reviewer per group of manual rows, all in parallel;
+  - skeptics try to refute each finding, two for blockers and majors;
+  - one fixer per blocker or major and one for the minors, test-first, each finding in its own
+    commit;
+  - the gate, then one light review.
+
+  Its args are `repo`, `branch`, `plan`, `context`, `task: {id, title, file}` and `groups: [{key,
+  rows, focus}]`.
 - **`extract_tasks.py`** cuts the full text of the chosen tasks out of the plan:
   `python3 tools/agent/extract_tasks.py <plan> <out.json> E1.1 E1.2 …`. Without ids it lists the tasks
   it finds.

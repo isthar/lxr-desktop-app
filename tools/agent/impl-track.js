@@ -27,12 +27,13 @@ const A = args
 const MAX_ROUNDS = 3
 
 const RULES = `Working rules (all mandatory):
-- Work only in ${A.repo} on branch ${A.branch}. Never push, never switch branches, never touch main, never change git config, never run destructive git commands (reset --hard, checkout -- ., clean, rebase, stash drop, branch -D).
+- Work only in ${A.repo} on branch ${A.branch}. Never push, never switch branches, never touch main, never change git config, never run destructive git commands (reset --hard, checkout -- ., clean, rebase, stash drop, branch -D), and never rewrite a commit (no commit --amend): fix with a new commit.
 - Add files explicitly (git add <path> ...); never git add -A or git add . ; commit only the files of your task.
 - Every commit message ends with this trailer line: Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - Do not edit docs/lichomat/tracker.json or docs/lichomat/reports/, and do not run tools/tracker_note.py: the controller keeps the tracker. Where the plan tells you to log a commit in the tracker (its convention 7), skip that step and say so in your report.
 - Toolchain: "source tools/env.sh" puts arm-none-eabi-gcc, cmake and ninja on PATH. "tools/check.sh" runs the host tests, the firmware release build, prints the memory summary and the warning count. It must pass with 0 warnings after your work.
 - Authoritative documents: docs/superpowers/specs/2026-10-23-timing-core-design.md (spec), docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (notes N1-N21; they win over the spec), the plan ${A.plan}.
+- Line endings: files in Core/ use CRLF, the others LF. After you edit a file in Core/, run perl -pi -e 's/\\r?\\n/\\r\\n/' <file> and check before committing that the file's count of CRLF equals its count of LF bytes (python3: d.count(b'\\r\\n') == d.count(b'\\n')); the file command reads only the start of a file.
 - Hardware checks (H1-H13) cannot be run here; never claim them.`
 
 const IMPL = {
