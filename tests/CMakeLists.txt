@@ -143,6 +143,7 @@ seqc_add_test(test_overflow  IDS T19 EXTRA queue_equiv.c CORE seq_core_small_que
 seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c)  # E1.13 fw 1.7 replica (reference/)
 seqc_add_test(test_queue     IDS queue EXTRA queue_equiv.c CORE seq_core_queue_test)  # E1.16, E1.18 queue order and real-time cost
 seqc_add_test(test_syncq     IDS syncq EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/seq_syncq.c)  # E2.1  sync input queues (seq_platform)
+seqc_add_test(test_cpumeter  IDS cpumeter EXTRA ${LXR_ROOT}/Core/Src/Soundengine/cpuMeter.c)  # E3.3 CPU meter
 
 # The front-panel buttons (E2.7): test_buttons compiles the firmware's
 # buttonHandler.c as it is. The headers in stubs/ come first on its include path

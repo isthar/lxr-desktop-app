@@ -21973,7 +21973,7 @@ from the second screen of another page, the menu opens on the first sub-page's s
 - Modify: `Core/Src/menu/menu.c:33-34`, `:251`, `:691`, `:1018-1024`, `:1805-1807`, `:1824-1828`, `:2744-2746`, `:3171-3174`, `:3917-3920`
 - Test: `tests/test_cpumeter.c` (host), plus symbol and string checks of the firmware
 
-- [ ] **Step 1: Check the preconditions**
+- [x] **Step 1: Check the preconditions**
 
 Run:
 
@@ -21997,7 +21997,7 @@ Expected:
 
 If any of them differs, stop: E1 or E2 is not finished.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `tests/test_cpumeter.c`:
 
@@ -22213,7 +22213,7 @@ seqc_add_test(test_syncq     IDS syncq EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Se
 seqc_add_test(test_cpumeter  IDS cpumeter EXTRA ${LXR_ROOT}/Core/Src/Soundengine/cpuMeter.c)  # E3.3 CPU meter
 ```
 
-- [ ] **Step 3: Run it to see it fail**
+- [x] **Step 3: Run it to see it fail**
 
 Run: `bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug' 2>&1 | grep -A3 'CMake Error'`
 Expected (the line number is that of `add_executable` in `seqc_add_test()`: 107, since E1.12 added
@@ -22226,7 +22226,7 @@ CMake Error at CMakeLists.txt:107 (add_executable):
     /Users/tk/Code/lxr/Core/Src/Soundengine/cpuMeter.c
 ```
 
-- [ ] **Step 4: Write the CPU meter**
+- [x] **Step 4: Write the CPU meter**
 
 Create `Core/Inc/Soundengine/cpuMeter.h`:
 
@@ -22435,7 +22435,7 @@ Core/Inc/Soundengine/cpuMeter.h: c program text, ASCII text, with CRLF line term
 Core/Src/Soundengine/cpuMeter.c: c program text, ASCII text, with CRLF line terminators
 ```
 
-- [ ] **Step 5: Run the test to see it pass**
+- [x] **Step 5: Run the test to see it pass**
 
 Run: `bash -c 'source tools/env.sh && cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug > /dev/null && cmake --build build/host-tests > /dev/null && build/host-tests/test_cpumeter'`
 Expected:
@@ -22454,7 +22454,7 @@ PASS cpumeter_queue_stats
 10 of 10 tests passed
 ```
 
-- [ ] **Step 6: Run `tools/check.sh`**
+- [x] **Step 6: Run `tools/check.sh`**
 
 Run: `tools/check.sh`
 Expected: exit 0; the host test summary lists `cpumeter` and ends with
@@ -22462,7 +22462,7 @@ Expected: exit 0; the host test summary lists `cpumeter` and ends with
 `buttons` from E2.7, `usbtx` from E2.8 and `cpumeter`), and
 `== compiler warnings: 0`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add tests/test_cpumeter.c tests/CMakeLists.txt Core/Inc/Soundengine/cpuMeter.h Core/Src/Soundengine/cpuMeter.c
