@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 22:31",
+    "updated": "2026-10-26 22:36",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Następny jest szkic specyfikacji etapu 1b: emulator na macOS, najpierw renderer WAV, potem aplikacja z wirtualnym panelem.",
     "branch": "timing-core",
-    "head": "131a1d0",
+    "head": "3d9ae26",
     "next": "Twoje testy H1–H13, U1 i X4 oraz odpowiedzi na Q9–Q11. Ja: szkic specyfikacji etapu 1b do Twojej akceptacji.",
-    "updated_at": "2026-10-26T22:31:00+01:00",
-    "now": "Raport M7 gotowy. Następny krok to szkic specyfikacji etapu 1b."
+    "updated_at": "2026-10-26T22:36:00+01:00",
+    "now": "Etap 1b: 6 czytelników mapuje zależności firmware od sprzętu (od 22:36)."
   },
   "epics": [
     {
@@ -379,9 +379,9 @@
     {
       "id": "E5.1",
       "epic": "E5",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Specyfikacja i plan emulatora",
-      "updated": ""
+      "updated": "2026-10-26"
     },
     {
       "id": "E5.2",
@@ -1736,6 +1736,11 @@
       "n": 218,
       "at": "2026-10-26 22:31",
       "text": "Kamień milowy M7: v0.1 gotowe do testów na sprzęcie. Raport jest w docs/lichomat/reports/M7-v0.1-do-testow.md. Teraz kolej na Ciebie: testy z listy (Q6), na pliku z CI o SHA-256 668abe3f…, oraz pytania Q9, Q10 i Q11. Ja w tym czasie zacznę szkic specyfikacji etapu 1b (emulator na macOS). Plan i kod ruszą dopiero po Twojej akceptacji, a kodu etapu 1 nie ruszam."
+    },
+    {
+      "n": 219,
+      "at": "2026-10-26 22:36",
+      "text": "Etap 1b (emulator na macOS), E5.1: zaczynam od rozpoznania. Workflow z 6 czytelnikami sprawdza, co w firmware zależy od sprzętu. Obszary: silnik audio i DSP (z próbą kompilacji na hoście), panel i menu, karta SD i presety, MIDI, USB i jacki, inicjalizacja i HAL (inwentarz plików i próba builda), istniejące emulatory i licencje (m.in. NOTICE.md, licencja JUCE, podpisywanie aplikacji na macOS). Jeden agent złoży z tego mapę przenośności. Na jej podstawie zaproponuję projekt do Twojej akceptacji. Kodu etapu 1 nie zmieniam."
     }
   ]
 }
