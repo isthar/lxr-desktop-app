@@ -400,9 +400,12 @@ MIDI parser switched the pattern itself.
     `seqp_dinByteIn()`). A data byte after a `Cn` status byte, also by running status, is a Program
     Change, stamped with that data byte. Realtime bytes leave the running status alone; any other
     status byte, F0–F7 included, ends it.
-  - USB: `USBD_CDC_DataOut()` passes every packet of cable 0 with the transfer's stamp to
-    `seqq_usbMessage()` (through `seqp_usbMessageIn()`). `Cn` with any CIN from 0x2 up is a Program
-    Change, since the parser takes `Cn` as one whatever the CIN.
+  - USB: `USBD_CDC_DataOut()` passes every packet of cable 0 whose CIN gives a message length
+    (0x2–0xF) with the transfer's stamp to `seqq_usbMessage()` (through `seqp_usbMessageIn()`), up
+    to the first packet whose first byte is 0, where it stops reading the transfer. CIN 0x0 and 0x1
+    (reserved) carry no Program Change, realtime byte or SPP. `Cn` with any CIN from 0x2 up is a
+    Program Change, since the parser takes `Cn` as one whatever the CIN. (Amended in the E4.1 review,
+    F8: this said every packet of cable 0.)
 - **Queueing.** The entry is `SEQQ_PROGRAM_CHANGE` (0x81) with the value `channel << 8 | program`, in
   the same queue as Clock, Start, Continue, Stop and SPP from that source (`seq_syncq`). Every byte and
   every packet still reaches the parser as well; its Program Change case only routes now (MIDI thru).
