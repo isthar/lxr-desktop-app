@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-27 00:09",
+    "updated": "2026-10-27 00:44",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Następny jest szkic specyfikacji etapu 1b: emulator na macOS, najpierw renderer WAV, potem aplikacja z wirtualnym panelem.",
     "branch": "timing-core",
-    "head": "5f00406",
-    "next": "Twoje testy H1–H13, U1 i X4 oraz odpowiedzi na Q9–Q11. Ja: szkic specyfikacji etapu 1b do Twojej akceptacji.",
-    "updated_at": "2026-10-27T00:09:00+01:00",
-    "now": "Etap 1b: piszę szkic specyfikacji emulatora. Recenzent sprawdza też dokumenty po E4.5."
+    "head": "da64603",
+    "next": "Twoje testy H1–H13, U1, U2 i X4 na pliku 9a7aff2a… oraz odpowiedzi na Q9–Q18. Ja: szkic specyfikacji etapu 1b do Twojej akceptacji i raport z szukania błędów pod sanitizerami.",
+    "updated_at": "2026-10-27T00:44:00+01:00",
+    "now": "Noc, autonomicznie do ok. 04:36: szkic specyfikacji 1b i nocne szukanie błędów pod sanitizerami w toku."
   },
   "epics": [
     {
@@ -1812,6 +1812,21 @@
       "n": 222,
       "at": "2026-10-27 00:09",
       "text": "Etap 1b, rozpoznanie zakończone (22:36–00:01, 7 agentów, 3,2 mln tokenów). Mapa przenośności ma ok. 1030 linii: 41 pytań z domyślnymi odpowiedziami, 17 ryzyk i działający prototyp. Wniosek: cały firmware może działać na wirtualnym urządzeniu. Wymienić trzeba tylko lcd.c, kodek audio, stos USB i sterownik karty SD. Menu, przyciski, enkoder, potencjometry, MIDI i seq_core zostają bez zmian. Nagrania testowe będą identyczne bit w bit tylko między buildami na hoście, nigdy z LXR. Pytania wymagające Twojej decyzji są w trackerze jako Q12–Q18, każde z domyślną odpowiedzią. Teraz piszę szkic specyfikacji 1b na tych domyślnych odpowiedziach. Plan i kod ruszą dopiero po Twojej akceptacji."
+    },
+    {
+      "n": 223,
+      "at": "2026-10-27 00:11",
+      "text": "Etap 1b, E5.1: workflow specyfikacji ruszył (od 00:11). Pisarz pisze szkic z mapy przenośności i z domyślnych odpowiedzi na Q12–Q18. Potem trzech krytyków (architektura względem kodu; wierność dźwięku, testy i CI; Twój punkt widzenia, licencja i nazewnictwo), sceptyk na każdego i fixer z samoprzeglądem. Szkic trafi do docs/superpowers/specs/2026-10-27-emulator-design.md, do Twojej akceptacji."
+    },
+    {
+      "n": 224,
+      "at": "2026-10-27 00:36",
+      "text": "Idziesz spać (00:36). Mac nie zaśnie przez 4 h, do ok. 04:36 (caffeinate -t 14400). Plan na noc: (1) dokończyć szkic specyfikacji 1b z krytykami; (2) poprawić dokumenty, jeśli recenzent znajdzie błędy po E4.5; (3) przeszukać firmware uruchomiony na Macu pod sanitizerami (ASan, UBSan) w poszukiwaniu kolejnych ukrytych błędów pamięci, takich jak ten z E4.5; (4) test na hoście dla Note Off po czasie (poprawka 24), który nie zmienia obrazu firmware. Przed 04:20 wszystko będzie zapisane, wypchnięte i opisane w trackerze. Rano możesz testować na pliku 9a7aff2a…."
+    },
+    {
+      "n": 225,
+      "at": "2026-10-27 00:44",
+      "text": "Recenzent dokumentów po E4.5 (00:06–00:40) znalazł ważny błąd w nowym teście U2. Porównanie plików patternów przed wczytaniem kitów i po nim nie odróżnia fw 1.7 od poprawki. Wczytanie projektu to też wczytanie kitu, więc fw 1.7 zapisuje zepsuty bajt (wartość parametru 127, czyli 0) już przed pierwszym zapisem. Poprawiłem: U2 ma kroki 5–6. Nowy projekt w pustym slocie ma same puste kroki, a skrypt w Pythonie wypisuje każdy krok, który się różni. fw 1.7 wypisuje jedną linię: krok 52 głosu 3 w 18. patternie. Do tego warunek automatycznego wczytywania kitu w kroku 2 i kanał globalny w poleceniu SendMIDI w kroku 3. Notatki wydania, raport, plan i M7 opisują teraz dokładnie NRPN (nieparzysty MSB albo LSB 127, np. wyciszanie głosów NRPN 1000–1006). Projekty zapisane w fw 1.7 mają już ten bajt: pierwszy p-lock kroku 52 głosu 3 w 18. patternie wskazuje parametr 0, który nic nie robi. Hashe, przebiegi CI i rozmiary recenzent potwierdził."
     }
   ]
 }

@@ -542,29 +542,54 @@ Last Step page showed in step 5.
 ## U2: kit loads and Bank Select leave the patterns alone
 
 Not in the spec's list: a 1.7 bug that LICHOMAT fixes (tracker E4.5). In 1.7 every kit load, and
-every MIDI Bank Select (CC 0) the LXR received, wrote one byte past a table into the pattern memory.
-In our build of the official 1.7 sources that byte is the parameter lock number of step 52 of voice
-3 in the 18th pattern; a pattern save kept it on the card. The check compares the pattern files of a
-project saved before and after kit loads, so it needs no knowledge of where the byte lands. Use a
-project you can spare, or a copy.
+every MIDI Bank Select (CC 0) the LXR acted on, wrote one byte 64 KB past a table into the pattern
+memory; after a kit load that byte holds the kit's parameter 127, which is 0 in practically every
+kit. In our build of the official 1.7 sources that byte is the number of the first parameter lock
+of step 52 of voice 3 in the 18th pattern; a pattern save kept it on the card. Steps 1–4 check that
+kit loads and Bank Selects change no pattern. They do not show the 1.7 bug: a project load is a kit
+load too, so 1.7 writes the byte before the save of step 1, and both of its saves hold the same
+value. Steps 5 and 6 show it: every step of a new project has the values of an empty step, and 1.7
+changes one of them. Use a project you can spare, or a copy, and a project slot shown as `Empty`.
 
-1. With LICHOMAT, load the project and save it (project save). Switch off, put the card in the
-   computer and copy the project's folder (`PROJnn`, nn = the project's slot) to the computer as
-   `before`. Put the card back and switch on.
-2. Load the kit that the active pattern uses 10 times (LOAD, the kit, confirm). A kit load from the
-   menu also stores the kit's number in the active pattern, so load that same kit: then the pattern
-   keeps its kit number.
-3. Send 10 Bank Select messages on the LXR's global MIDI channel (here channel 1) to its USB port:
-   `sendmidi dev "Sonic Potions USB MIDI" ch 1 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0`.
+1. With LICHOMAT and kit autoload on (`kcm` `Aut`, second sub-page of the global menu; the
+   default): load the project and save it (project save). Switch off, put the card in the computer
+   and copy the project's folder (`PROJnn`, nn = the project's slot) to the computer as `before`.
+   Put the card back and switch on.
+2. Load the kit that the LOAD page offers now 10 times (LOAD, the kit, confirm): with kit autoload
+   on it is the active pattern's kit. A kit load from the menu also stores the kit's number in the
+   active pattern, so load that same kit: then the pattern keeps its kit number.
+3. The receive filter (`mrx`) has C, for example `all` (the default). Send 10 Bank Select messages
+   on the LXR's global MIDI channel (`ch`, first sub-page of the global menu) to its USB port:
+   `sendmidi dev "Sonic Potions USB MIDI" ch <global channel> cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0`.
+   If the kit of step 2 is not kit 0, the LOAD page now offers kit 0: the messages arrived.
 4. Save the project again, copy the folder to the computer as `after`, and compare every pattern
    file: `for f in before/*.PAT; do cmp "$f" "after/${f#before/}"; done`.
+5. With the sequencer stopped: LOAD, PROJECT, the `Empty` slot, confirm. The LXR makes a new
+   project there, with empty patterns and the default global settings. Save it to that slot
+   (project save) before you select a pattern, switch off and copy its folder to the computer as
+   `new`.
+6. List the steps of `new` that differ from an empty step (velocity 127, probability 100, note 60,
+   no parameter locks), then put the card back, switch on and load your own project again:
 
-**Expected:** `cmp` prints nothing: every `.PAT` file of `after` is byte for byte the same as in
+   ```
+   python3 -c 'import sys, glob
+   for p in sorted(glob.glob(sys.argv[1] + "/*.PAT")):
+       d = open(p, "rb").read()[14:]
+       for t in range(7):
+           for s in range(64):
+               r = d[t*512 + 7*s : t*512 + 7*s + 7]
+               if r[0] & 127 != 127 or r[1:] != bytes([100, 60, 255, 0, 255, 0]):
+                   print(p, "track", t + 1, "step", s + 1, r.hex())' new
+   ```
+
+**Expected:** 4: `cmp` prints nothing: every `.PAT` file of `after` is byte for byte the same as in
 `before`. A Bank Select loads the kit of its value (here kit 0) into the sound engine without
 changing a pattern, so the sound may change and the kit files may differ; they are not checked.
-With 1.7 a pattern file differs after step 2.
+1.7 gives the same result. 6: the command prints nothing. Our 1.7 build (`LXR_V2_V1.7.img` of the
+run sheet) prints one line, `new/17-….PAT track 3 step 52 7f643c0000ff00`: the first parameter lock
+of that step points at parameter 0.
 
-**Record:** the number of pattern files compared and the output of `cmp`.
+**Record:** the number of pattern files compared and the output of `cmp`; the output of step 6.
 
 ## X4: USB MIDI out
 

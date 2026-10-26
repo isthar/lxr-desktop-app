@@ -25550,8 +25550,9 @@ under `scratchpad/` were the controller's temporary files.
     - Found after E4.1 by the stage 1b host probe (UBSan) and confirmed on both device builds:
       `midiParser_ccHandler()` stored a `MIDI_CC` at `[(uint16_t)(data1 - 1) + 1]`, which is
       index 65536 for CC 0, 64 KB past the 255-byte table and inside `seq_patternSet`. Every kit
-      load sends parameter 127 as CC 0, and so does an incoming Bank Select MSB. An NRPN with a low
-      number byte of 127 or more stored up to 129 bytes past the table.
+      load sends parameter 127 as CC 0, and so does an incoming Bank Select MSB. An NRPN whose
+      number's low 8 bits are 127 or more (an odd MSB, CC 99, or the LSB 127, CC 98; the mute NRPNs
+      1000-1006 among them) stored up to 129 bytes past the table.
     - Fixed in `2680991` with the host test `test_midicc` (ctest id `midicc`; 28 ids now). The
       image grows by 48 B; RAM is unchanged.
     - CI run 40416804934 builds the new release file (`9a7aff2a...`; a local macOS build gives
