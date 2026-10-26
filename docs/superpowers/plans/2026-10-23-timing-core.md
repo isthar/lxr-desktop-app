@@ -22981,7 +22981,7 @@ only, because AddressSanitizer binaries hang in the macOS sandbox that Claude Co
 - Modify: `docs/lichomat/HANDOFF.md:24-25` (toolchain commands, as E2.2 Step 24 left them)
 - Test: `ruby tools/ci_dry_run.rb firmware`, `ruby tools/ci_dry_run.rb host-tests`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tools/ci_dry_run.rb`:
 
@@ -23068,7 +23068,7 @@ abort("no run step of job #{job_name}#{only ? " named #{only}" : ''}") if ran.ze
 puts "dry run of #{job_name}: #{ran} steps passed"
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `ruby tools/ci_dry_run.rb firmware 2> build/e3-ci-dry-run.err; echo "exit=$?"; head -n 1 build/e3-ci-dry-run.err`
 Expected:
@@ -23078,7 +23078,7 @@ exit=1
 /System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0/psych.rb:577:in `initialize': No such file or directory @ rb_sysopen - .github/workflows/build.yml (Errno::ENOENT)
 ```
 
-- [ ] **Step 3: Write the workflow**
+- [x] **Step 3: Write the workflow**
 
 Create `.github/workflows/build.yml`:
 
@@ -23206,7 +23206,7 @@ jobs:
           if-no-files-found: error
 ````
 
-- [ ] **Step 4: Run the firmware job to see it pass**
+- [x] **Step 4: Run the firmware job to see it pass**
 
 Deleting the `.elf` forces a link, so the build log has the linker's memory table.
 
@@ -23237,7 +23237,7 @@ Expected: the heading `### Memory usage`, a code block with `Memory region` and 
 `ITCM_RAM:`, `DTCM:`, `RAM:` and `FLASH:`, then `Image: … of 1015808 bytes of FLASH …` and the
 `Update file:` line.
 
-- [ ] **Step 5: Run the host-test job to see it pass**
+- [x] **Step 5: Run the host-test job to see it pass**
 
 Run: `ruby tools/ci_dry_run.rb host-tests 2>&1 | grep -E '^(ok|FAILED): |^== |tests passed|^dry run'`
 Expected: the six `ok:` lines, then
@@ -23250,7 +23250,7 @@ Expected: the six `ok:` lines, then
 dry run of host-tests: 3 steps passed
 ```
 
-- [ ] **Step 6: Check that the warning gate fails on a warning**
+- [x] **Step 6: Check that the warning gate fails on a warning**
 
 Run:
 
@@ -23270,7 +23270,7 @@ Core/Src/x.c:1:1: warning: test warning
 FAILED: Check for compiler warnings
 ```
 
-- [ ] **Step 7: Mention the tools in the handoff guide**
+- [x] **Step 7: Mention the tools in the handoff guide**
 
 In `docs/lichomat/HANDOFF.md`, replace the end of the toolchain block as E2.2 Step 24 left it:
 
@@ -23292,12 +23292,12 @@ ruby tools/ci_dry_run.rb firmware   # dry run of the CI workflow's firmware job 
 The `tools/fw_checks.sh` line now names E2.2-E2.8: since E2.8 the script has the checks of all
 seven tasks.
 
-- [ ] **Step 8: Run `tools/check.sh`**
+- [x] **Step 8: Run `tools/check.sh`**
 
 Run: `tools/check.sh`
 Expected: exit 0, `== compiler warnings: 0`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add .github/workflows/build.yml tools/ci_dry_run.rb docs/lichomat/HANDOFF.md

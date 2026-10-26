@@ -1,0 +1,121 @@
+# CI for LICHOMAT (spec 9.2): host tests of the sequencer timing core, and the
+# firmware release build with its SD-card update file. It only builds and tests:
+# nothing is pushed, tagged or released from here.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash  # an explicit bash runs with -o pipefail, which "| tee" needs
+
+env:
+  ARM_GNU_VERSION: 14.3.rel1
+  ARM_GNU_PKG: arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi
+  # from arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi.tar.xz.sha256asc on developer.arm.com
+  ARM_GNU_SHA256: 8f6903f8ceb084d9227b9ef991490413014d991874a1e34074443c2a72b14dbd
+
+jobs:
+  host-tests:
+    name: Host tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure
+        run: >-
+          cmake -S tests -B build/host-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DSEQC_SANITIZE=address,undefined -DSEQC_REQUIRE_ALL_TESTS=ON
+
+      - name: Build
+        run: cmake --build build/host-tests
+
+      - name: Test
+        run: ctest --test-dir build/host-tests --output-on-failure
+
+  firmware:
+    name: Firmware (release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Restore the Arm GNU Toolchain
+        id: toolchain
+        uses: actions/cache/restore@v6
+        with:
+          path: .toolchain/${{ env.ARM_GNU_PKG }}
+          key: ${{ env.ARM_GNU_PKG }}-${{ env.ARM_GNU_SHA256 }}
+
+      - name: Download the Arm GNU Toolchain
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .toolchain/dl
+          curl -fL --retry 3 -o ".toolchain/dl/$ARM_GNU_PKG.tar.xz" \
+            "https://developer.arm.com/-/media/Files/downloads/gnu/$ARM_GNU_VERSION/binrel/$ARM_GNU_PKG.tar.xz"
+          echo "$ARM_GNU_SHA256  .toolchain/dl/$ARM_GNU_PKG.tar.xz" | sha256sum -c -
+          tar -xJf ".toolchain/dl/$ARM_GNU_PKG.tar.xz" -C .toolchain
+          rm -rf .toolchain/dl
+
+      - name: Save the Arm GNU Toolchain
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .toolchain/${{ env.ARM_GNU_PKG }}
+          key: ${{ env.ARM_GNU_PKG }}-${{ env.ARM_GNU_SHA256 }}
+
+      - name: Configure (release preset)
+        run: cmake --preset release -DARM_TOOLCHAIN_DIR="$GITHUB_WORKSPACE/.toolchain/$ARM_GNU_PKG/bin"
+
+      - name: Build
+        run: cmake --build --preset release 2>&1 | tee build/release/build.log
+
+      - name: Check for compiler warnings
+        run: |
+          n=$(grep -c "warning:" build/release/build.log || true)
+          echo "compiler warnings: $n"
+          if [ "$n" -ne 0 ]; then grep "warning:" build/release/build.log | sort -u; exit 1; fi
+
+      - name: Check the update file
+        run: python3 tools/check_image.py build/release
+
+      - name: Memory usage
+        run: |
+          B=build/release
+          img=$(ls -1 "$B"/*.img)
+          {
+            echo "### Memory usage"
+            echo
+            echo '```'
+            awk '/^Memory region/ {p=1; print; next}
+                 p && /^[ \t]*[A-Za-z0-9_]+:[ \t]+[0-9]+ [KMG]?B/ {print; next}
+                 p {p=0}' "$B/build.log"
+            echo '```'
+            echo
+            echo "Image: $(wc -c < "$B/LXR_V2_STM32F765.bin" | tr -d ' ') of 1015808 bytes of FLASH" \
+                 "(the FLASH line above leaves out the .dtcm and .itcm_text load images)."
+            echo
+            echo "Update file: \`$(basename "$img")\`, SHA-256 \`$(sha256sum "$img" | cut -d ' ' -f 1)\`"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: lichomat-firmware-${{ github.sha }}
+          path: |
+            build/release/*.img
+            build/release/*.elf
+            build/release/*.map
+          if-no-files-found: error
