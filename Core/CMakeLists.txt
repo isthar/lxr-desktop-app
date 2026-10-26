@@ -29,9 +29,10 @@ add_library(lxr_platform OBJECT
     Src/delay.c
     Src/flash_if.c
 )
-# Shown on the boot splash screen; comes from project(VERSION) in the top-level CMakeLists.txt.
+# Shown on the boot splash screen; LICHOMAT_NAME and project(VERSION) come from the
+# top-level CMakeLists.txt.
 set_source_files_properties(Src/main.c PROPERTIES
-    COMPILE_DEFINITIONS "FIRMWARE_VERSION=\" ${PROJECT_VERSION}\""
+    COMPILE_DEFINITIONS "FIRMWARE_NAME=\"${LICHOMAT_NAME}\";FIRMWARE_VERSION=\"${PROJECT_VERSION}\""
 )
 
 # Hardware inputs/outputs: shift-register buttons/LEDs, pots & faders.

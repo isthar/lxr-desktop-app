@@ -20,10 +20,29 @@ if(NOT CMAKE_TOOLCHAIN_FILE)
 endif()
 
 project(LXR_V2_STM32F765
-    VERSION 1.7
-    DESCRIPTION "LXR V2 drum machine firmware"
+    VERSION 0.1
+    DESCRIPTION "LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02"
     LANGUAGES C ASM
 )
+
+# LICHOMAT branding (spec 9.5). Line 1 of the splash screen is the name, line 2 is
+# "v<version> unofficial": modified firmware must say so on its start-up screen
+# (NOTICE.md, 7(c)). The LCD has 16 characters per line.
+set(LICHOMAT_NAME "LICHOMAT" CACHE STRING "Firmware name on the splash screen and in the update file name")
+string(LENGTH "${LICHOMAT_NAME}" lichomat_name_length)
+string(LENGTH "v${PROJECT_VERSION} unofficial" lichomat_version_length)
+if(NOT LICHOMAT_NAME MATCHES "^[A-Za-z0-9_.-]+$" OR lichomat_name_length GREATER 16)
+    message(FATAL_ERROR "LICHOMAT_NAME '${LICHOMAT_NAME}': use 1 to 16 characters of A-Z a-z 0-9 _ . -")
+endif()
+if(lichomat_version_length GREATER 16)
+    message(FATAL_ERROR "'v${PROJECT_VERSION} unofficial' does not fit the 16 characters of the splash screen")
+endif()
+# The upstream firmware this fork is based on: erica-synths/lxr-desktop-app at a43cd4f.
+set(LXR_BASE_VERSION 1.7)
+# SD-card update file. The bootloader only installs files named LXR*.img, so the
+# LXR prefix is a technical file name, not branding.
+set(LXR_IMAGE_NAME "LXR_V2_${LICHOMAT_NAME}_${PROJECT_VERSION}")
+message(STATUS "${LICHOMAT_NAME} ${PROJECT_VERSION}, based on LXR firmware ${LXR_BASE_VERSION}: ${LXR_IMAGE_NAME}.img")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Debug or Release)" FORCE)
@@ -85,7 +104,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 # Linked at 0x08008000, behind the 32 KB bootloader.
 lxr_firmware_executable(${PROJECT_NAME} LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/STM32F765VGTX_FLASH.ld)
-lxr_add_firmware_outputs(${PROJECT_NAME} IMAGE_MAGIC LXRV2IMG IMAGE_NAME LXR_V2_V${PROJECT_VERSION})
+lxr_add_firmware_outputs(${PROJECT_NAME} IMAGE_MAGIC LXRV2IMG IMAGE_NAME ${LXR_IMAGE_NAME})
 
 # "flash": application only, the bootloader on the device is left alone.
 lxr_add_openocd_flash_target(flash
@@ -151,9 +170,9 @@ if(NOT bootloader)
 endif()
 
 if(bootloader)
-    # LXR_V2_V<version>_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
+    # <LXR_IMAGE_NAME>_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
     lxr_add_combined_image(full_image
-        OUTPUT_NAME LXR_V2_V${PROJECT_VERSION}_full
+        OUTPUT_NAME ${LXR_IMAGE_NAME}_full
         BOOTLOADER ${bootloader}
         APPLICATION ${PROJECT_NAME}
         BOOTLOADER_MAGIC LXRV2IMG
@@ -184,6 +203,6 @@ if(TARGET full_image)
     list(APPEND info_depends full_image)  # print after everything else is done
 endif()
 lxr_add_update_info(update_info
-    IMAGE ${CMAKE_CURRENT_BINARY_DIR}/LXR_V2_V${PROJECT_VERSION}.img
+    IMAGE ${CMAKE_CURRENT_BINARY_DIR}/${LXR_IMAGE_NAME}.img
     DEPENDS ${info_depends}
 )

@@ -2,7 +2,8 @@
 # One-shot verification used during development:
 #   1. host tests (tests/, built with the host compiler), if present
 #   2. firmware release build (build/release), with a memory summary
-#   3. compiler warning count (must stay 0)
+#   3. update file check (tools/check_image.py: name, header, splash screen)
+#   4. compiler warning count (must stay 0)
 # Exit code is non-zero if any step fails. The full log is in build/check.log.
 #
 #   tools/check.sh
@@ -12,6 +13,7 @@
 set -u -o pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"  # "cmake --build --preset" reads CMakePresets.json from the current directory
 # shellcheck source=env.sh
 source "$ROOT/tools/env.sh"
 mkdir -p "$ROOT/build"
@@ -39,7 +41,7 @@ if cmake --preset release -DARM_TOOLCHAIN_DIR="$ARM_TOOLCHAIN_DIR" -S "$ROOT" >>
     $1==".itcm_text"{itcm=$2} $1==".dtcm"||$1==".dtcmz"{dtcm+=$2} $1==".data"||$1==".bss"||$1=="._user_heap"{ram+=$2}
     END{printf "memory: ITCM %d/16384 B (%.1f%%, free %d)  DTCM %d/131072 B (%.1f%%, rest is stack)  RAM %d/393216 B (%.1f%%, free %d)  image %d/1015808 B (%.1f%%)\n",
         itcm,itcm/163.84,16384-itcm, dtcm,dtcm/1310.72, ram,ram/3932.16,393216-ram, bin,bin/10158.08}'
-  ls -1 "$B"/*.img 2>/dev/null | sed 's/^/image: /'
+  python3 "$ROOT/tools/check_image.py" "$B" 2>&1 | tee -a "$LOG" || status=1
 else
   echo "firmware build FAILED"; grep -E "error" "$LOG" | head -n 30; status=1
 fi

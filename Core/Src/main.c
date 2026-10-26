@@ -53,9 +53,13 @@ typedef struct ImageFileHeaderStruct
 
 
 /* Private define ------------------------------------------------------------*/
-// The CMake build passes FIRMWARE_VERSION from project(VERSION); this is the fallback for STM32CubeIDE.
+// The CMake build passes FIRMWARE_NAME (LICHOMAT_NAME) and FIRMWARE_VERSION (project(VERSION));
+// these are the fallbacks for other builds.
+#ifndef FIRMWARE_NAME
+#define FIRMWARE_NAME "LICHOMAT"
+#endif
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION " 2.00"
+#define FIRMWARE_VERSION "0.1"
 #endif
 //#define f_unmount(path) f_mount(0, path, 0)
 
@@ -349,13 +353,13 @@ int main(void)
   lcd_string("Bootloader...");
 
 #else
-	//print boot up message
+	//print boot up message: LICHOMAT is modified firmware, and its start-up screen
+	//must say so (NOTICE.md, 7(c))
 lcd_clear();
-lcd_string("Sonic Potions");
+lcd_string(FIRMWARE_NAME);
 //goto 2nd line
 lcd_setcursor(0,2);
-lcd_string("LXR2 Drums V");
-lcd_string(FIRMWARE_VERSION);
+lcd_string("v" FIRMWARE_VERSION " unofficial");
 #endif
 
 lcd_showSplash();

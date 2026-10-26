@@ -21422,7 +21422,7 @@ uses them.
 - Modify: `tools/check.sh:5`, `tools/check.sh:14`, `tools/check.sh:42`
 - Test: `python3 tools/check_image.py build/release`
 
-- [ ] **Step 1: Build the current state**
+- [x] **Step 1: Build the current state**
 
 Run: `tools/check.sh`
 Expected: exit 0, and the last lines are
@@ -21433,7 +21433,7 @@ image: /Users/tk/Code/lxr/build/release/LXR_V2_V1.7.img
 == compiler warnings: 0
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `tools/check_image.py`:
 
@@ -21542,7 +21542,7 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 3: Run it to see it fail**
+- [x] **Step 3: Run it to see it fail**
 
 Run: `python3 tools/check_image.py build/release --name LICHOMAT --version 0.1; echo "exit=$?"`
 Expected:
@@ -21554,7 +21554,7 @@ image check FAILED: splash line 'v0.1 unofficial' not found in LXR_V2_STM32F765.
 exit=1
 ```
 
-- [ ] **Step 4: Name, version and image name in `CMakeLists.txt`**
+- [x] **Step 4: Name, version and image name in `CMakeLists.txt`**
 
 In `CMakeLists.txt`, replace:
 
@@ -21635,7 +21635,7 @@ with:
     IMAGE ${CMAKE_CURRENT_BINARY_DIR}/${LXR_IMAGE_NAME}.img
 ```
 
-- [ ] **Step 5: Pass the name and version to `main.c`**
+- [x] **Step 5: Pass the name and version to `main.c`**
 
 In `Core/CMakeLists.txt`, replace:
 
@@ -21656,7 +21656,7 @@ set_source_files_properties(Src/main.c PROPERTIES
 )
 ```
 
-- [ ] **Step 6: The start-up screen**
+- [x] **Step 6: The start-up screen**
 
 In `Core/Src/main.c`, replace:
 
@@ -21707,7 +21707,7 @@ lcd_string("v" FIRMWARE_VERSION " unofficial");
 Run: `perl -pi -e 's/\r?\n/\r\n/' Core/Src/main.c && file Core/Src/main.c`
 Expected: `Core/Src/main.c: c program text, ASCII text, with CRLF line terminators`
 
-- [ ] **Step 7: Remove the stale image and rebuild**
+- [x] **Step 7: Remove the stale image and rebuild**
 
 The old `LXR_V2_V1.7.img` is no longer a build output, so the build never deletes it, and the
 updater would install whichever `LXR*.img` it finds first. CI always starts from a clean tree.
@@ -21720,7 +21720,7 @@ image: /Users/tk/Code/lxr/build/release/LXR_V2_LICHOMAT_0.1.img
 == compiler warnings: 0
 ```
 
-- [ ] **Step 8: Run the test to see it pass**
+- [x] **Step 8: Run the test to see it pass**
 
 Run: `python3 tools/check_image.py build/release; echo "exit=$?"`
 Expected, where N is the size of the firmware (`wc -c < build/release/LXR_V2_STM32F765.bin`):
@@ -21739,7 +21739,7 @@ FIRMWARE_NAME=\\\"LICHOMAT\\\"
 FIRMWARE_VERSION=\\\"0.1\\\"
 ```
 
-- [ ] **Step 9: Check that a name the screen or the card can't take is refused**
+- [x] **Step 9: Check that a name the screen or the card can't take is refused**
 
 Run:
 
@@ -21755,7 +21755,7 @@ CMake Error at CMakeLists.txt:35 (message):
   .  -
 ```
 
-- [ ] **Step 10: Let `tools/check.sh` check the update file**
+- [x] **Step 10: Let `tools/check.sh` check the update file**
 
 The check replaces the plain listing of `*.img` files. `cd "$ROOT"` makes the script work from any
 directory: `cmake --build --preset` reads `CMakePresets.json` from the current directory.
@@ -21798,7 +21798,7 @@ with:
   python3 "$ROOT/tools/check_image.py" "$B" 2>&1 | tee -a "$LOG" || status=1
 ```
 
-- [ ] **Step 11: Run `tools/check.sh` from another directory**
+- [x] **Step 11: Run `tools/check.sh` from another directory**
 
 Run: `(cd build && ../tools/check.sh)`
 Expected: exit 0, and the last lines are
@@ -21809,7 +21809,7 @@ image: LXR_V2_LICHOMAT_0.1.img OK (… bytes of firmware, magic LXRV2IMG, splash
 == compiler warnings: 0
 ```
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add tools/check_image.py CMakeLists.txt Core/CMakeLists.txt Core/Src/main.c tools/check.sh
