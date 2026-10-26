@@ -55,8 +55,9 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
 - A voice's MIDI channel and note (the note override) are on the second screen of its MIX sub-page
   (select button 8).
 
-**Measuring times in a recording.** Record the LXR's main output at 48 kHz. Find a hit's onset by
-zooming in on the waveform (or with the DAW's transient detection), and measure from a reference hit.
+**Measuring times in a recording.** Record the LXR's main output at 48 kHz (H7 step 6 at 44.1
+kHz). Find a hit's onset by zooming in on the waveform (or with the DAW's transient detection), and
+measure from a reference hit.
 One audio block of the LXR is 64 samples at 44.14 kHz, 1.45 ms: in fw 1.7 and in LICHOMAT a voice
 starts at the beginning of the block after its event is due, so ±1.5 ms around the expected time is
 on time. At 120 BPM a step (a 16th) is 125 ms, and 1/96 of a step (a tick) is 1.30 ms.
@@ -194,14 +195,15 @@ The DAW sends MIDI clock and Song Position Pointer to the LXR's USB MIDI port (i
    USB transfer; a tempo measured per transfer instead of per clock would read, for example, about
    108 BPM for 120 with 1024-sample buffers. The LXR shows `MID` instead of a tempo, but its
    tempo-synced LFOs run at the tempo it measures.
-   - DAW: audio buffer 1024 samples (the most clocks per transfer), 120 BPM, MIDI clock to the
-     LXR's USB port.
+   - DAW: sample rate 44.1 kHz for this step (not the 48 kHz of the other recordings: the figures
+     here and under **Expected** hold for 44.1 kHz), audio buffer 1024 samples (the most clocks per
+     transfer), 120 BPM, MIDI clock to the LXR's USB port.
    - LXR: voice 6 on all 16 steps, nothing else. On voice 6's LFO page: sync `1/1` (one cycle per
      bar), retrigger `off`, a clear waveform (saw or square) and a large amount on a parameter you
      hear well (for example the pitch or the decay).
    - Start the DAW and record 18 bars. Measure the time of 16 LFO cycles: from the start of one
      cycle to the start of the cycle 16 cycles later, each to the nearest hat hit (125 ms).
-   - If the DAW's audio buffer can be set to 256 samples, do it again there.
+   - If the DAW's audio buffer can be set to 256 samples, do it again there, still at 44.1 kHz.
 7. Program Change just before a Start (N14). DAW stopped, LXR stopped on pattern 1 (in `MID`).
    - Pattern 1: voice 1 on step 1 only. Pattern 3: voice 4 on step 1 only.
    - The global MIDI channel (first sub-page of the global menu) is the channel you send on; the
@@ -221,13 +223,15 @@ The DAW sends MIDI clock and Song Position Pointer to the LXR's USB MIDI port (i
   clock (D8: in 1.7 USB clock stalled while the card was written).
 - 6: 16 LFO cycles take 32.0 s: within ±1.0 s with 1024-sample buffers (2.8%, the worst case of N21
   for them, plus one hat hit of reading) and ±0.45 s with 256 samples (1%, plus one hit). A tempo
-  measured per transfer gives 35.7 s or more.
+  measured per transfer gives 35.7 s or more. All of these hold for 44.1 kHz; at 48 kHz a tempo
+  measured per transfer would read about 117 BPM (32.8 s) and pass the band, so the step does not
+  test anything there.
 - 7: every time, the first sound is voice 4 (pattern 3's step 1), never voice 1, and pattern 3 stays
   selected. The Program Change acts before the Start, also when both come in one USB transfer, as
   in fw 1.7 (N14: the Program Change now travels with the Start in the sync queues).
 
 **Record:** for 2–4 what played first and where; for 5 any drift you hear or measure; for 6 the time
-of 16 LFO cycles and the DAW's buffer size; for 7 the first sound of each try.
+of 16 LFO cycles and the DAW's buffer size and sample rate; for 7 the first sound of each try.
 
 ## H8: per-track choke (D2)
 
