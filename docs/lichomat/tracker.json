@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 18:01",
+    "updated": "2026-10-26 18:51",
     "phase": "Etap 1: narzędzia i wydanie (E2.9, E3, E4)",
     "focus": "Workflow C2: przegląd całego etapu 1 (E4.1). 8 grup recenzentów skończyło (51 uwag). Teraz sceptycy weryfikują każdą uwagę, potem poprawki test-first (poważne pojedynczo, drobne paczkami po 8), bramka i lekki przegląd. Potem C3: E4.2 i E4.3.",
     "branch": "timing-core",
-    "head": "3fa513e",
+    "head": "af26953",
     "next": "Po E4.1: workflow C3, czyli E4.2 (lista testów sprzętowych H1–H13, U1, X4) i E4.3 (szkic notatek wydania v0.1), potem raport M7.",
-    "updated_at": "2026-10-26T18:01:00+01:00",
-    "now": "E4.1: zapis wyników przeglądu w stage1-review.md (od 18:00), potem 14 fixerów po kolei."
+    "updated_at": "2026-10-26T18:51:00+01:00",
+    "now": "E4.1: fixer 10 z 14, 6 drobnych uwag do raportu odstępstw (R1.4: F21, F23–F27) (od 18:47)."
   },
   "epics": [
     {
@@ -623,6 +623,13 @@
       "status": "otwarte",
       "question": "Nazwa urządzenia USB MIDI: zostaje „Sonic Potions USB MIDI” jak w fw 1.7, czy zmienić ją na LICHOMAT?",
       "assumption": "Zostaje „Sonic Potions USB MIDI”, żeby porty MIDI w DAW i istniejące ustawienia zachowały nazwę. W notatkach wydania jest to opisane jako znane ograniczenie.",
+      "answer": null
+    },
+    {
+      "id": "Q11",
+      "status": "otwarte",
+      "question": "Zegar na wejściu clock in (jack), zwłaszcza 4 PPQ: czy LXR ma czekać na każdy impuls, jak fw 1.7, czy grać kroki w tempie dopasowanym do zegara, jak teraz? Teraz (N9) interpolacja dochodzi aż do przewidywanego impulsu, więc krok, który zaczyna się przy następnym impulsie, gra wtedy, gdy dopasowane tempo ten impuls przewiduje, także gdy impuls się spóźnia. Przy 4 PPQ każdy impuls zaczyna krok, więc zegar ze swingiem na jacku gra równo. W próbie z impulsami na przemian co 100 i 150 ms kroki szły równo co 125 ms, a każdy spóźniony krok grał 25 ms przed swoim impulsem. fw 1.7 grał krok przy jego impulsie, więc swing zegara zostawał. Zegar 4 PPQ, który staje bez resetu, gra 9 kroków na 8 impulsów. Przy 24 PPQ i przy MIDI clock błąd mieści się w jednym takcie zegara (ok. 4,6 ms w tej samej próbie). Uwaga F21 z przeglądu E4.1.",
+      "assumption": "Zostaje jak jest we wszystkich trybach slave (N9). Raport etapu i notatki wydania opisują to jako zmianę względem fw 1.7. Jeśli wolisz czekanie na impuls przy jacku 4 PPQ, krok przy granicy poczeka na impuls. Najpierw powstanie test T18 z zegarem ze swingiem.",
       "answer": null
     }
   ],
@@ -1576,6 +1583,61 @@
       "n": 190,
       "at": "2026-10-26 18:01",
       "text": "E4.1, sceptycy skończyli (17:29–18:00). 54 werdykty dla 51 uwag. Potwierdzonych 46: 4 poważne i 42 drobne. Odrzuconych 5: trzy pozwala zapisana decyzja planu albo notatka N20, jedna była już poprawiona w trackerze, jedna opisuje poprawny kod. Poważne: (1) seqc_init() nie sprawdza, czy rdzeń akurat pracuje (sceptyk podniósł z drobnej); (2) nuta z jednorazowego rolla i echo nuty przychodzącej nie dostają Note Off po czasie; (3) testy T17 nie wysyłają Start ani Stop w trybie song; (4) 13 nowych plików narzędzi nie ma w nagłówku odwołania do NOTICE.md (sceptyk podniósł z drobnej). Uwagę o zaciśnięciu N9 w trybie slave obaj sceptycy uznali za lukę w raporcie, więc spadła do drobnych. Teraz agent zapisuje wyniki w stage1-review.md. Potem 14 fixerów po kolei: 4 poważne pojedynczo i 10 paczek drobnych."
+    },
+    {
+      "n": 191,
+      "at": "2026-10-26 18:13",
+      "text": "E4.1: wyniki zapisane w stage1-review.md (commit 29ffd8d, 18:12). 33 wiersze ręczne: 9 zaliczonych (R2.5, R4.2, R4.3, R4.4, R5.1, R7.3, R8.3, R8.5, R11.3), pozostałe 24 wskazują swoje uwagi. W tabeli są uwagi F1–F47, w tym 4 poważne: F6 (seqc_init()), F22 (brak Note Off dla rolla i echa), F32 (testy trybu song), F41 (odwołanie do NOTICE.md w nagłówkach). Teraz pierwszy z 14 fixerów bierze F6, test-first."
+    },
+    {
+      "n": 192,
+      "at": "2026-10-26 18:15",
+      "text": "E4.1, fixer 1 z 14 (18:13–18:15): F6 poprawione w 9f76c5d. seqc_init() wywołane z callbacku jest teraz ignorowane i liczone w reentries, jak każe N13.9. Nowy test T19_init_from_a_callback_is_ignored_and_counted przed poprawką nie przechodził (reentries 0 != 1), po niej przechodzi. check.sh: 27 z 27, 0 ostrzeżeń, DTCM + RAM bez zmian (391732 B), obraz +8 B. Status w stage1-review.md: 1430c76."
+    },
+    {
+      "n": 193,
+      "at": "2026-10-26 18:20",
+      "text": "E4.1, fixer 2 z 14 (18:15–18:19): F22 poprawione w 6755cfa. Jednorazowy roll z pada i echo nuty przychodzącej wysyłały Note On poza rdzeniem, więc nic nie planowało ich Note Off i nuta wisiała do następnej. Teraz Note Off idzie z seq_tick() po SEQC_NOTE_OFF_TICKS, tak jak przy nutach rdzenia. Każdy Note Off albo nowy Note On tego głosu kasuje zaplanowany Note Off. Najpierw dodano 5 nowych kontroli w tools/fw_checks.sh E2.3: przed poprawką nie przechodziły, po niej przechodzą. Raport etapu ma nowy wiersz w §2 (do notatek wydania, Fixed). check.sh: 27 z 27, 0 ostrzeżeń. DTCM + RAM 391796 B, czyli 28 B poniżej limitu R6.2."
+    },
+    {
+      "n": 194,
+      "at": "2026-10-26 18:22",
+      "text": "E4.1, fixer 3 z 14 (18:19–18:22): F32 poprawione w 3c9dad3. Nowy test T17_midi_start_stop_continue_in_song_mode sprawdza trzy rzeczy w trybie song. MIDI Start gra song {1, 1, 2} od pierwszego wpisu. Stop, a potem Continue bez SPP wznawia w miejscu (N4). Start w trakcie grania wraca na początek songu (N13.11). Rdzeń już tak działał. Test łapie mutanta bez REWIND, więc pilnuje zachowania. Status w stage1-review.md: 15d8b89."
+    },
+    {
+      "n": 195,
+      "at": "2026-10-26 18:26",
+      "text": "E4.1, fixer 4 z 14 (18:22–18:25): F41 poprawione w ab2936b. 13 plików narzędzi i CI ma teraz pod linią SPDX akapit o licencji z odwołaniem do NOTICE.md, taki sam jak w nowych plikach Core i testów. Strona trackera ma w komentarzu HTML pełny nagłówek. Polecenie z wiersza R9.5 sprawdza teraz także odwołanie do NOTICE.md. Sprawdziłem składnię zmienionych skryptów: JS, Python, shell, Ruby i YAML. Wszystkie 4 poważne uwagi są poprawione. Zostało 10 paczek drobnych."
+    },
+    {
+      "n": 196,
+      "at": "2026-10-26 18:27",
+      "text": "E4.1, fixer 5 z 14 (18:25–18:27): F1 poprawione w bfd895d. tools/agent/stage1-context.md ma nagłówek licencji w komentarzu HTML, tak jak strona trackera. Generator argumentów workflowu C3 pomija ten komentarz, więc nie trafia do promptów agentów."
+    },
+    {
+      "n": 197,
+      "at": "2026-10-26 18:29",
+      "text": "E4.1, fixer 6 z 14 (18:27–18:29). F2 (licznik przepełnień kolejek synchronizacji nie ma na stronie CPU) idzie jako pytanie do Ciebie. To jest już Q9, a domyślnie zostaje jak jest: strona CPU pokazuje tylko szczyt i przepełnienia kolejki zdarzeń. F3 poprawione w 3389280: raport etapu wymienia nowe wywołanie seq_setClockInPpq() w CortexParser.c."
+    },
+    {
+      "n": 198,
+      "at": "2026-10-26 18:37",
+      "text": "E4.1, fixer 7 z 14 (18:29–18:37): 6 uwag do notatek N1–N21 (R1.2), każda w osobnym commicie. F5 poprawione w e55bc3e: cofnięcie scalenia na jacku po seqc_resetStats() przywracało stary licznik intervalsExcluded. Najpierw powstał test, który nie przechodził. F7, F8, F9 i F10 poprawiają opisy: N18.2 (Continue po przełączeniu na wewnętrzną synchronizację), N14 (dekodowanie USB), komentarze o Program Change w Uart.c i usbd_cdc.c oraz N1 (przesunięcia kotwicy czasu). F4 przyjęte jako znane ograniczenie, opisane w N21 i trafi do notatek wydania. To skok tempa na jacku do 2–2,7× i zgubiony impuls zaraz po nim: przez 3 impulsy tempo jest o połowę za niskie, potem estymacja startuje od nowa. check.sh po każdej zmianie: 27 z 27, 0 ostrzeżeń. DTCM + RAM 391796 B."
+    },
+    {
+      "n": 199,
+      "at": "2026-10-26 18:43",
+      "text": "E4.1, fixer 8 z 14 (18:37–18:43): wszystkie 8 uwag z R1.3 (F11–F18) poprawione. Sześć to zmiany samych komentarzy w seq_core.h: kolejność zdarzeń w jednym ticku, kto zaczyna oczekujący start, które wywołania wolno robić w callbacku, co seqc_setTempo() robi jako slave i kiedy liczone są chokeDrops. F14 i F18 były już poprawione przy F5 i F10. Kod się nie zmienił."
+    },
+    {
+      "n": 200,
+      "at": "2026-10-26 18:47",
+      "text": "E4.1, fixer 9 z 14 (18:43–18:47): F19 i F20 poprawione, tylko komentarze w seq_core.h. F19: rdzeń woła nie tylko seq_tick(), ale też miernik CPU (seqc_stats()) i seq_initCore(). F20: zakres i ograniczenie scalania fałszywego taktu MIDI clock były zawyżone. Wszystkie 10 uwag z R1.3 są zamknięte."
+    },
+    {
+      "n": 201,
+      "at": "2026-10-26 18:51",
+      "text": "E4.1, fixer 10: F21 zostawiony do Twojej decyzji jako pytanie Q11, nowe w trackerze. Chodzi o zegar na jacku clock in 4 PPQ. Teraz kroki grają w tempie dopasowanym do zegara (N9), więc zegar ze swingiem gra równo, a zegar zatrzymany bez resetu daje jeden krok za dużo. fw 1.7 czekał na każdy impuls. Domyślnie zostaje jak jest, a raport i notatki wydania opisują to jako zmianę."
     }
   ]
 }
