@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 02:02",
-    "phase": "Etap 1: E1.18, integracja E2.1–E2.8, E1.19",
-    "focus": "Workflow B: E1.18 (kolejka: jedno scalanie na granicę kroku), potem integracja z firmware E2.1–E2.8, na końcu E1.19. Przeglądy równoległe, rundy 2–3 skupione.",
+    "updated": "2026-10-26 02:09",
+    "phase": "Etap 1: narzędzia i wydanie (E2.9, E3, E4)",
+    "focus": "Workflow C1: E2.9 (notatki i plan po przeglądach E2), E3.1 (nazwa, wersja 0.1, ekran startowy), E3.3 (miernik CPU), E3.4 (CI), E3.5 (README). Każde z jednym łącznym przeglądem. Potem E4.1 (przegląd całego etapu, osobny workflow), E4.2, E4.3.",
     "branch": "timing-core",
-    "head": "3f2a038",
-    "next": "Integracja z firmware (E2.1–E2.8), potem narzędzia i wydanie (E3, E4).",
-    "updated_at": "2026-10-26T02:02:00+01:00",
-    "now": "Przejście z B do C: zapis wyników przeglądu końcowego, commit narzędzi, zadanie E2.9 (notatki i plan po przeglądach E2), raport M6, start workflowu C."
+    "head": "2063c49",
+    "next": "Po C1: przegląd E4.1 w workflowie stage-review (8 grup recenzentów), potem E4.2 (lista testów sprzętowych) i E4.3 (szkic notatek wydania v0.1).",
+    "updated_at": "2026-10-26T02:09:00+01:00",
+    "now": "E2.9: implementer pracuje od 02:08 (notatki i plan po przeglądach E2: budżet RAM R6.2, Program Change, F4–F6, EXTI9_5)."
   },
   "epics": [
     {
@@ -547,6 +547,12 @@
       "date": "2026-10-25",
       "title": "Rdzeń timingu seq_core (E1.1–E1.14)",
       "summary": "Rdzeń zaimplementowany, ok. 25 plików testów na hoście, przeglądy z testami mutacyjnymi (104 agentów, ok. 14 h). Znalezione: spakowany zegar USB (N21, E1.15), koszt kolejki na sprzęcie (E1.16), przyklejone takty DIN (naprawione). Raport: docs/lichomat/reports/M5-rdzen-etapu-1.md."
+    },
+    {
+      "id": "M6",
+      "date": "2026-10-26",
+      "title": "Integracja z firmware (E1.15–E1.19, E2.1–E2.8)",
+      "summary": "Firmware działa na seq_core. D4, D7 i D8 oraz błędy fw 1.7 w menu globalnym i w USB MIDI out są naprawione. Przeglądy wyłapały m.in. wyścig przy nagrywaniu automatyki, Program Change wyprzedzany przez Start i zgubione zbocze bramki resetu. Workflow B: 10 zadań w 11 h (ok. 1 h na zadanie, wcześniej 2,5–4 h), 70 agentów. RAM +13 240 B, obraz +24 404 B. Raport: docs/lichomat/reports/M6-integracja-z-firmware.md."
     }
   ],
   "questions": [
@@ -1426,6 +1432,16 @@
       "n": 164,
       "at": "2026-10-26 02:02",
       "text": "Workflow B zakończony (14:59–02:02, 11 h, 70 agentów). Wszystkie 10 zadań zrobione: E1.18, E2.1–E2.8, E1.19. Przegląd końcowy: brak błędu w kodzie, który psułby normalne użycie. Niezależny test różnicowy: 300 losowych patternów na nowej i na starej kolejce (sprzed E1.18) daje identyczne zdarzenia. Ma 1 ważną uwagę (budżet RAM w R6.2 musi objąć bufor E1.18: 391 824 B, zmierzone 391 660 B) i 4 drobne (notatki po rundach E2, rzadki przypadek zgubionego impulsu po skoku tempa na jacku, luki w testach)."
+    },
+    {
+      "n": 165,
+      "at": "2026-10-26 02:08",
+      "text": "Workflow C1 wystartował (02:08, run wf_81c1d0ec-f5e): E2.9 i E3.1, E3.3–E3.5, wszystkie z jednym łącznym przeglądem na wysokim wysiłku (najwyżej 2 rundy), zgodnie z Twoją decyzją dla E3 i E4. Plan i tracker z wynikami workflowu B są w commicie 2063c49, narzędzia w 85056be, wszystko wypchnięte na fork."
+    },
+    {
+      "n": 166,
+      "at": "2026-10-26 02:09",
+      "text": "Raport M6 (integracja z firmware) gotowy: docs/lichomat/reports/M6-integracja-z-firmware.md. Kamień milowy M6 jest w trackerze. Zawiera wyniki E1.15–E1.19 i E2.1–E2.8, prawdziwe błędy wyłapane przez przeglądy, zasoby po integracji, porównanie tempa A2 i B oraz zaległości dla E4.1."
     }
   ]
 }
