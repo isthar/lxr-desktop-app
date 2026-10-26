@@ -66,7 +66,9 @@ while True:
         elif kind == "result":
             r = e.get("result")
             text = ""
-            if isinstance(r, dict):
+            if isinstance(r, dict) and "real" in r:   # a skeptic's verdict
+                text = f"{'real' if r['real'] else 'refuted'} ({r.get('severity')}): {r.get('reason', '')}"
+            elif isinstance(r, dict):
                 text = str(r.get("summary") or r.get("report") or r.get("area") or "")
             elif isinstance(r, str):
                 text = r
