@@ -23328,7 +23328,7 @@ path, and start at Step 7.
 - Modify: `README.md:11-13` (new section), `:18`, `:66`, `:70-71`, `:75`, `:107`, `:117`, `:163-165`, `:187`, `:221`
 - Test: `zsh -f -c 'source tools/env.sh && command -v cmake'`, `build/e3-readme-check.sh` (a scratch script, not committed)
 
-- [ ] **Step 1: Write the failing test for `tools/env.sh`**
+- [x] **Step 1: Write the failing test for `tools/env.sh`**
 
 Run: `zsh -f -c 'source tools/env.sh && command -v cmake'; echo "exit=$?"`
 Expected:
@@ -23338,7 +23338,7 @@ tools/env.sh:16: no matches found: /Users/tk/Code/lxr/.toolchain/cmake-*/bin
 exit=1
 ```
 
-- [ ] **Step 2: Rewrite `tools/env.sh`**
+- [x] **Step 2: Rewrite `tools/env.sh`**
 
 Replace the whole file with:
 
@@ -23370,7 +23370,7 @@ export PATH
 unset _lxr_root _lxr_tc _lxr_cmake_bin _lxr_dir
 ```
 
-- [ ] **Step 3: Run the test to see it pass, in zsh and in bash**
+- [x] **Step 3: Run the test to see it pass, in zsh and in bash**
 
 Run:
 
@@ -23401,7 +23401,7 @@ ARM_TOOLCHAIN_DIR=[]
 PATH ok
 ```
 
-- [ ] **Step 4: The scripts that source it**
+- [x] **Step 4: The scripts that source it**
 
 Run: `tools/setup-toolchain.sh && tools/check.sh`
 Expected: `setup-toolchain.sh` downloads nothing and prints
@@ -23415,7 +23415,7 @@ toolchain ready in /Users/tk/Code/lxr/.toolchain; run: source tools/env.sh
 
 and `tools/check.sh` exits 0 with `== compiler warnings: 0`.
 
-- [ ] **Step 5: Update the handoff guide**
+- [x] **Step 5: Update the handoff guide**
 
 In `docs/lichomat/HANDOFF.md`, replace:
 
@@ -23429,7 +23429,7 @@ with:
 source tools/env.sh        # puts them on PATH (bash or zsh), sets ARM_TOOLCHAIN_DIR
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tools/env.sh docs/lichomat/HANDOFF.md
@@ -23438,7 +23438,7 @@ git commit -m "Make tools/env.sh work in zsh" \
   -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 7: Write the failing test for the README**
+- [x] **Step 7: Write the failing test for the README**
 
 Create `build/e3-readme-check.sh`:
 
@@ -23457,7 +23457,7 @@ done
 if [ "$ok" = 1 ]; then echo "README check passed"; else echo "README check FAILED"; exit 1; fi
 ```
 
-- [ ] **Step 8: Run it to see it fail**
+- [x] **Step 8: Run it to see it fail**
 
 Run: `bash build/e3-readme-check.sh; echo "exit=$?"`
 Expected:
@@ -23485,7 +23485,7 @@ README check FAILED
 exit=1
 ```
 
-- [ ] **Step 9: The LICHOMAT section**
+- [x] **Step 9: The LICHOMAT section**
 
 In `README.md`, replace:
 
@@ -23569,7 +23569,7 @@ hand, first `source tools/env.sh` (bash or zsh). On other systems follow
 ## Updating your LXR
 ````
 
-- [ ] **Step 10: The new file names and options in the rest of the README**
+- [x] **Step 10: The new file names and options in the rest of the README**
 
 In `README.md`, replace:
 
@@ -23690,7 +23690,7 @@ with:
 bootloader are rejected. It then also writes `LXR_V2_LICHOMAT_<version>_full.hex`/`.bin` (bootloader +
 ```
 
-- [ ] **Step 11: Run the test to see it pass**
+- [x] **Step 11: Run the test to see it pass**
 
 Run: `bash build/e3-readme-check.sh; echo "exit=$?"`
 Expected:
@@ -23700,12 +23700,12 @@ README check passed
 exit=0
 ```
 
-- [ ] **Step 12: Run `tools/check.sh`**
+- [x] **Step 12: Run `tools/check.sh`**
 
 Run: `tools/check.sh`
 Expected: exit 0, `== compiler warnings: 0`.
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add README.md

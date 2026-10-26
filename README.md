@@ -10,12 +10,78 @@ drum voices, FX bus, step sequencer, MIDI (DIN + USB), SD-card preset storage an
 > at your own risk: Erica Synths provides no support for self-built or modified firmware. See
 > [Licence, trademarks and hardware](#licence-trademarks-and-hardware) below and [NOTICE.md](NOTICE.md).
 
+## LICHOMAT
+
+This fork is **LICHOMAT**, unofficial custom firmware for the Erica Synths LXR-02. It is not made,
+approved or supported by Erica Synths. It is based on the official firmware 1.7
+([erica-synths/lxr-desktop-app](https://github.com/erica-synths/lxr-desktop-app) at commit `a43cd4f`)
+and is aimed at groove techno: rolling percussion, swung hats over a straight kick, polymetric loops.
+
+Version 0.1 gives the step sequencer a new timing core and fixes the timing and MIDI problems of 1.7:
+
+- Shuffle moves whole steps, ratchets and microshift included. MIDI clock out and the clock out jack
+  stay straight.
+- The master tempo is exact; 1.7 played up to 0.2 % fast.
+- As a MIDI clock slave over DIN or USB no note is dropped, and Start, Stop, Continue and Song
+  Position Pointer work.
+- One track no longer swallows the ratchets of another, shifted notes keep their own parameter locks
+  and velocity, and a note recorded slightly early no longer plays twice.
+- Exactly one MIDI Note On per hit, and no hanging notes with a MIDI note override.
+- A CPU meter on a new page of the global menu: hold SHIFT and press step button 12 until it
+  appears, right after the page with the clock in and clock out PPQ.
+
+Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged. The start-up
+screen shows `LICHOMAT` and `v0.1 unofficial`.
+
+### Installing LICHOMAT
+
+Install `LXR_V2_LICHOMAT_<version>.img` like any other update, see
+[Installing the update](#installing-the-update). First delete every other `LXR*.img` file from the SD
+card: the updater installs the first one it finds. After the update the start-up screen shows
+`LICHOMAT` and `v0.1 unofficial`.
+
+### Going back to the official firmware
+
+The updater itself is never changed, so you can always go back:
+
+1. Get the official update file `LXR_V2_V1.7.img`, either from Erica Synths or by building the
+   upstream source code:
+
+   ```sh
+   git clone https://github.com/erica-synths/lxr-desktop-app.git lxr-official
+   cd lxr-official
+   git checkout a43cd4f
+   cmake --preset release
+   cmake --build --preset release      # writes build/release/LXR_V2_V1.7.img
+   ```
+
+2. Delete `LXR_V2_LICHOMAT_*.img` from the SD card, copy `LXR_V2_V1.7.img` to its top folder and
+   install it the same way. The start-up screen then shows `Sonic Potions` and `LXR2 Drums V 1.7`.
+
+Your kits, patterns, projects and songs stay on the card, and 1.7 loads them as before: LICHOMAT 0.1
+changes no file format.
+
+### Building LICHOMAT on a Mac
+
+On a Mac with Apple Silicon two scripts do everything inside this folder, with no system-wide
+installs and no admin rights:
+
+```sh
+tools/setup-toolchain.sh   # once: Arm GNU Toolchain 14.3.rel1, CMake 3.31.12 and Ninja 1.13.2 into .toolchain/
+tools/check.sh             # host tests, release build, memory summary, update file check, warning count
+```
+
+`tools/check.sh` exits with an error if any step fails; the full log is in `build/check.log`, and the
+update file is `build/release/LXR_V2_LICHOMAT_<version>.img`. To run CMake, Ninja or the compiler by
+hand, first `source tools/env.sh` (bash or zsh). On other systems follow
+[Building the firmware](#building-the-firmware) below.
+
 ## Updating your LXR
 
 Every LXR has a built-in updater (the bootloader) that installs new firmware from the SD card. You
 don't need any extra hardware:
 
-1. [Build the firmware](#building-the-firmware). This creates the update file `LXR_V2_V<version>.img`.
+1. [Build the firmware](#building-the-firmware). This creates the update file `LXR_V2_LICHOMAT_<version>.img`.
 2. [Copy it to the SD card and install it](#installing-the-update) on the LXR.
 
 ### Building the firmware
@@ -63,16 +129,16 @@ When the build has finished it shows where the update file is and how to install
 ```
 ======================================================================
   Firmware update file:
-    .../lxr_desktop_app/build/release/LXR_V2_V1.7.img
+    .../lxr-desktop-app/build/release/LXR_V2_LICHOMAT_0.1.img
   ...
 ```
 
 The version in the file name, and on the LXR's start-up screen, is set by `project(VERSION ...)` in
-[CMakeLists.txt](CMakeLists.txt).
+[CMakeLists.txt](CMakeLists.txt), and the name by the CMake option `LICHOMAT_NAME`.
 
 ### Installing the update
 
-1. Copy `LXR_V2_V<version>.img` from `build/release/` to the top folder of the SD card. Delete any
+1. Copy `LXR_V2_LICHOMAT_<version>.img` from `build/release/` to the top folder of the SD card. Delete any
    older `LXR*.img` files from the card: the updater installs the first one it finds.
    On a Mac, eject the card in Finder before you take it out. Finder also leaves hidden files starting
    with `._` on the card; the updater ignores them.
@@ -104,7 +170,8 @@ If the updater stops with one of these messages, switch the LXR off, fix the cau
 |---|---|
 | `cmake --preset debug` | Debug build: `-O3 -g3` with `DEBUG` defined, output in `build/debug/`. The release build uses `-O3 -g0`. Both need `-O3` for the audio engine to keep up in real time. |
 | `-DARM_TOOLCHAIN_DIR=<bin folder>` | Use a toolchain that isn't on `PATH`, e.g. `/Applications/ArmGNUToolchain/14.3.rel1/arm-none-eabi/bin` (macOS) or `C:/toolchain_arm-none-eabi/11.3rel1/bin` (Windows) |
-| `-DLXR_ITCM_OPT=<flag>` | Optimisation for the code in the fast ITCM memory, see [Memory map](#memory-map) (default `-O2`) |
+| `-DLXR_ITCM_OPT=<flag>` | Optimisation for the code in the fast ITCM memory, see [Memory map](#memory-map) (default: empty, the same `-O3` as the rest) |
+| `-DLICHOMAT_NAME=<name>` | Firmware name on the start-up screen and in the update file name (default `LICHOMAT`; up to 16 characters of `A-Z a-z 0-9 _ . -`) |
 | `-DLXR_GENERATE_LISTING=ON` | Also write a disassembly listing (`.list`) |
 
 Options are passed when configuring, e.g. `cmake --preset release -DLXR_GENERATE_LISTING=ON`.
@@ -114,7 +181,7 @@ All files the build creates (in `build/<preset>/`):
 
 | File                     | Purpose                                                        |
 |--------------------------|----------------------------------------------------------------|
-| `LXR_V2_V<version>.img`  | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
+| `LXR_V2_LICHOMAT_<version>.img` | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
 | `LXR_V2_STM32F765.elf`   | Firmware with debug information, for a debugger               |
 | `LXR_V2_STM32F765.bin`   | Raw firmware image (from 0x08008000)                          |
 | `LXR_V2_STM32F765.hex`   | Intel HEX of the same                                         |
@@ -160,9 +227,10 @@ The `build/` folder is never committed to git.
 | DTCM     | 0x20000000                | 128 KB | `INDTCM`/`INDTCMZ` data, DMA buffers, the stack       |
 | RAM      | 0x20020000                | 384 KB | `.data`, `.bss`, heap                                 |
 
-The ITCM is tight. Current GCC releases generate too much code at `-O3` for it, so the translation
-units that contain ITCM code are compiled with `LXR_ITCM_OPT` (default `-O2`). The linker prints
-region usage after every build.
+The ITCM is tight. If a compiler generates too much code for it at `-O3`, set `LXR_ITCM_OPT` (for
+example `-O2`) for the translation units that contain ITCM code; by default it is empty, and they are
+compiled with `-O3` like the rest. The linker prints region usage after every build, and the link
+fails with "image too large for FLASH" if the image does not fit.
 
 ## Source layout and CMake targets
 
@@ -184,7 +252,7 @@ Every component is an OBJECT library linked into `LXR_V2_STM32F765`:
 | `lxr_ui`        | `Core/Src/menu`, `lcd.c`, `buttonHandler.c`, ...| LCD, encoder, buttons, LEDs, menu pages               |
 | `lxr_preset`    | `Core/Src/Preset`                               | Kit/pattern/project load & save on SD                 |
 | `lxr_dsp`       | `Core/Src/Soundengine/DSPAudio`                 | Oscillators, filters, envelopes, voices, master FX    |
-| `lxr_engine`    | `Core/Src/Soundengine/*.c`                      | Codec/I2S DMA, sample block rendering, FX bus, clock in/out |
+| `lxr_engine`    | `Core/Src/Soundengine/*.c`                      | Codec/I2S DMA, sample block rendering, FX bus, clock in/out, CPU meter |
 | `lxr_midi`      | `Core/Src/Soundengine/MIDI`                     | MIDI UART, parsers, parameter mapping                 |
 | `lxr_sequencer` | `Core/Src/Soundengine/Sequencer`                | Timing core, sync queues, glue, Euclidean generator   |
 | `lxr_usb_app`   | `Core/Src/Soundengine/USB`                      | USB-MIDI message queue, MIDI out packets and ring     |
@@ -218,7 +286,7 @@ cmake --preset release -DLXR_BOOTLOADER_DIR=path/to/LXR_V2_STM32F765_Bootloader
 
 The build checks that the bootloader is valid for this device: it must fit in the 32 KB bootloader
 sector and accept desktop (`LXRV2IMG`) update images, so the firmware, a full image or the Eurorack
-bootloader are rejected. It then also writes `LXR_V2_V<version>_full.hex`/`.bin` (bootloader +
+bootloader are rejected. It then also writes `LXR_V2_LICHOMAT_<version>_full.hex`/`.bin` (bootloader +
 firmware, the whole flash from 0x08000000) and enables:
 
 ```sh
