@@ -589,11 +589,12 @@ void seqc_setAnalogPpq(uint8_t ppq);
  *   lost clock is a lasting step, which the line takes in: 1.5% off for about
  *   4 beats (N21).
  * - A spurious MIDI clock (E1.19, N21): the clocks after it are one clock early
- *   in the count. If it came 0.2 to 0.85 of a clock after a real one, they
- *   leave the band in a row; instead of a restart, the fit counts one clock
- *   fewer and leaves the spurious clock out, so the estimate stays within
- *   0.03% (with stamps precise to 1/8 of a clock; else it restarts, as
- *   before). Closer to a real clock the line takes it in as a step, as a lost
+ *   in the count. If it came about 0.2 to 0.83 of a clock after a real one,
+ *   they leave the band in a row; instead of a restart, the fit counts one
+ *   clock fewer and leaves the spurious clock out, so the estimate stays
+ *   within about 0.032% while the row forms, and is exact after it (N21;
+ *   with stamps precise to 1/8 of a clock, else it restarts, as before).
+ *   Closer to a real clock the line takes it in as a step, as a lost
  *   clock: 1.57% for about 4 beats. tempoRestarts does not count it. The
  *   position counts it: a slave cannot tell it from a real clock.
  * - Clock in jack: an interval more than SEQC_TEMPO_OUTLIER_PCT off the fitted
