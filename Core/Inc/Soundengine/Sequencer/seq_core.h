@@ -442,8 +442,9 @@ typedef struct seqc_host
 void seqc_init(const seqc_host_t *host, uint32_t cyclesPerSecond);
 //------------------------------------------------------------------------------
 /** Set the sync mode (seq_setExtSync()). The transport state and the position
- * are kept, and the slave tempo estimate and the clock count are cleared. A call
- * with the mode in use, or with a value other than 0..2, is ignored.
+ * are kept, the slave tempo estimate and the clock count are cleared, and the
+ * slave tempo starts again from the master tempo. A call with the mode in use,
+ * or with a value other than 0..2, is ignored.
  * - Internal to slave: the position continues from where it is, and the next
  *   clock adds one clock's worth of ticks. A start that has not begun yet
  *   (seqc_start() with no seqc_process() or seqc_syncEvent() since) becomes the
@@ -462,9 +463,9 @@ void seqc_setSyncMode(seqc_sync_t mode);
 /** Set the master tempo in BPM, clamped to SEQC_MASTER_BPM_MIN..MAX. The
  * transport position and the free-running timeline are re-anchored at the core's
  * current time, so both stay continuous. In a slave mode the value is kept for
- * internal sync, and is the tempo used while the fit has no slope: before its
- * second point, so also after a dropout, where it replaces the last known
- * tempo. A measured estimate stays. */
+ * internal sync. A call made while the fit has no slope (before its second
+ * point, also after a dropout) also sets the tempo used until it has one; a
+ * measured estimate stays, and a dropout keeps it as the last known tempo. */
 void seqc_setTempo(float bpm);
 //------------------------------------------------------------------------------
 /** Set the PPQ of the clock in jack, 4 or 24 (PAR_PRESCALER_CLOCK_IN). Any other
@@ -727,7 +728,9 @@ double seqc_position(void);
 float seqc_stepPhase(void);
 //------------------------------------------------------------------------------
 /** The tempo in BPM: the master tempo in internal sync, the estimate in the
- * slave modes, or the last known tempo while there is no estimate. sequencer.c
+ * slave modes, or the last known tempo while there is no estimate: the last
+ * estimate, or the master tempo after seqc_init(), after a switch of the sync
+ * mode or after a seqc_setTempo() call while the fit has no slope. sequencer.c
  * rounds it for seq_getBpm() and lfo_recalcSync() (N9). */
 float seqc_currentBpm(void);
 //------------------------------------------------------------------------------
