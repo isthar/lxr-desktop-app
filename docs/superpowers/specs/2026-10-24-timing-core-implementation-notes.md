@@ -289,6 +289,9 @@ and cleared on stop.
 - **Display tempo:** `seq_getBpm()` returns the rounded estimate, and `lfo_recalcSync()` is called when
   the rounded value changes.
 
+*Amended: N21 replaces the mean and the ±50% band with a least-squares fit and its own outlier test
+(E1.15).*
+
 ## N10. CPU: early exit
 
 `seqc_process(now)` is called about 36 000 times per second.
@@ -375,7 +378,7 @@ They extend N2, N4, N5 and N7:
     - fw 1.7 set pending to `song[0]` with pointer 0, which skips entry 0 when the last entry equals
       `song[0]`.
 
-## N14. SPP travels in the sync queues
+## N14. SPP and Program Change travel in the sync queues
 
 If SPP were parsed in step 4 of `seq_tick()` while Continue and Clock are drained in step 2, a
 Continue and its first clock drained in the same pass would start the transport before the SPP is
@@ -464,16 +467,8 @@ After a slave dropout (N9, N15) the core sends every pending note-off at once, a
 Otherwise a note on an external MIDI device can hang until the next clock or Stop.
 
 N16 and N17 came out of writing the plan, after the E1.10 section was finished. Task **E1.14**, after
-E1.13, implements both test-first, with tests named `T16_tempo_jump_*` and `T18_dropout_note_off_*`.
-
-The plan sections for the tasks added this way are written and reviewed separately, then inserted into
-the plan after its review:
-- `build/plan/40-E1.14.md`: E1.14, which implements N16, N17 and N18.1;
-- `build/plan/41-E2.7.md`: E2.7, the global-menu step-button bug;
-- `build/plan/42-E2.8.md`: E2.8, the USB MIDI out defects.
-
-A plan review that finds these sections missing is therefore expected. N18.2–N18.4 are not part of
-them: they change E2.1–E2.3, and the plan fix applies them there.
+E1.13, implements N16, N17 and N18.1 test-first, with tests named `T16_tempo_jump_*` and
+`T18_dropout_note_off_*`. N18.2–N18.4 change E2.1–E2.3 and are applied there.
 
 ## N18. Defaults settled while writing the plan
 
@@ -578,8 +573,7 @@ The step grid and absStep stay correct, because clocks are counted. The wrong te
   audio buffer.
 - N16 tempo jumps, the N15 dropout and the jack at 4 PPQ keep working.
 - The design is chosen by a separate design pass and implemented test-first in task **E1.15**, after
-  E1.14 and before E2.1. Until then the E1.10 and E1.14 behaviour stands; reviewers need not raise this
-  case again.
+  E1.14 and before E2.1.
 
 **Design, chosen on 2026-10-25 by a design pass that compared three estimators on 31 harness scenarios
 and about 2800 swept ones.** The estimate is the slope of a least-squares fit of the clock stamps against
