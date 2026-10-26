@@ -13,8 +13,11 @@
 # - the Arm toolchain is the one in .toolchain/ (tools/env.sh), and the download
 #   step is skipped, as on CI when the toolchain cache hits;
 # - the host tests run with UBSan only, because AddressSanitizer binaries hang in
-#   the macOS sandbox that Claude Code runs commands in.
-# The job summary goes to build/ci-dry-run/summary.md.
+#   the macOS sandbox that Claude Code runs commands in;
+# - the host tests build in build/ci-dry-run/host-tests, not in build/host-tests,
+#   so that the job's -DSEQC_REQUIRE_ALL_TESTS=ON stays out of the cache that
+#   tools/check.sh reuses.
+# The job summary goes to build/ci-dry-run/summary.md, emptied at every run.
 #
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
@@ -63,6 +66,7 @@ env = wf.fetch("env").transform_values(&:to_s)
 env["ARM_GNU_PKG"] = File.basename(File.dirname(tc))
 env["GITHUB_WORKSPACE"] = root
 env["GITHUB_STEP_SUMMARY"] = File.join(root, "build/ci-dry-run/summary.md")
+File.write(env["GITHUB_STEP_SUMMARY"], "")	# the steps append to it, as on GitHub
 env["PATH"] = path
 
 ran = 0
@@ -75,6 +79,7 @@ steps.call(job_name).each do |step|
     next
   end
   script = step["run"].gsub("-DSEQC_SANITIZE=address,undefined", "-DSEQC_SANITIZE=undefined")
+                      .gsub("build/host-tests", "build/ci-dry-run/host-tests")
   puts "== #{name}"
   ok = system(env, "bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script)
   abort("FAILED: #{name}") unless ok
