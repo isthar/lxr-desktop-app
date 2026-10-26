@@ -63,8 +63,10 @@ changes no file format.
 
 ### Building LICHOMAT on a Mac
 
-On a Mac with Apple Silicon two scripts do everything inside this folder, with no system-wide
-installs and no admin rights:
+On a Mac with Apple Silicon two scripts install the build tools into this folder and build
+everything, with no admin rights. They need the Xcode Command Line Tools, which give git, the host C
+compiler of the tests in `tests/` and Python 3; if `xcode-select -p` prints no folder, install them
+once with `xcode-select --install` (a system-wide install, which asks for an admin password):
 
 ```sh
 tools/setup-toolchain.sh   # once: Arm GNU Toolchain 14.3.rel1, CMake 3.31.12 and Ninja 1.13.2 into .toolchain/
