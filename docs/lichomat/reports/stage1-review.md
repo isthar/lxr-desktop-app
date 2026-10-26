@@ -91,8 +91,8 @@ RAM 271032 B, image 274688 B.
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
 | R6.1 | A | `tools/check.sh`, the `memory:` line | ITCM fits (≤ 16384 B) | pass |
-| R6.2 | A | the same line | DTCM + RAM is at most 391824 B: the baseline 378420 B plus 8704 B (spec §10: the event queue, the sync queues and other state), 444 B (the USB MIDI transmit ring, N20), 1192 B (N21's tempo fit), 24 B (E1.17's 101-point fit ring), 2952 B (E1.18's staging buffer, N2 amended) and 88 B (E1.19's clock counts and merge state, N21); measured at `3f2a038`: 391660 B | pass |
-| R6.3 | A | the same line | the image grew by about 24 KB: 299092 B at `3f2a038` against the baseline's 274688 B, +24404 B (the core alone has 22.4 KB of code: `seq_core.c.obj` `text` 22898 B, measured with the firmware's compile command, against 15.7 KB in E1.14 Step 8, with N21's estimator and its E1.19 rules and the ring queue with its merge; the USB MIDI out of E2.8 adds 752 B; spec §10: +10–15 KB); more than 30 KB is a finding | pass |
+| R6.2 | A | the same line | DTCM + RAM is at most 391824 B: the baseline 378420 B plus 8704 B (spec §10: the event queue, the sync queues and other state), 444 B (the USB MIDI transmit ring, N20), 1192 B (N21's tempo fit), 24 B (E1.17's 101-point fit ring), 2952 B (E1.18's staging buffer, N2 amended) and 88 B (E1.19's clock counts and merge state, N21); measured at `3f2a038`: 391660 B; at `38681b8`, after the E4.1 fixes: 391788 B, 36 B under (F52; its last 56 B are F22's timed Note Off state, `seq_voiceOffAt` and `seq_voiceOffPending`) | pass |
+| R6.3 | A | the same line | the image grew by about 24 KB: 299092 B at `3f2a038` against the baseline's 274688 B, +24404 B (the core alone has 22.4 KB of code: `seq_core.c.obj` `text` 22898 B, measured with the firmware's compile command, against 15.7 KB in E1.14 Step 8, with N21's estimator and its E1.19 rules and the ring queue with its merge; the USB MIDI out of E2.8 adds 752 B; spec §10: +10–15 KB); more than 30 KB is a finding; at `38681b8`, after the E4.1 fixes: 300492 B, +25804 B (F52) | pass |
 
 ### R7 Compatibility (G8: no file format changes)
 

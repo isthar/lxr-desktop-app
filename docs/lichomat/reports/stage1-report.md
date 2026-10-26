@@ -66,8 +66,8 @@ in neither list is a finding.
 | §8 changes outside the core | the USB realtime intercept in `usbd_cdc.c`; in `MidiParser.c` the echo, realtime and SPP | also the USB MIDI out: `usb_manager.c/.h`, the new `usb_midiTx.c/.h`, `usbd_cdc.c/.h` (the old ring goes, the end of a transfer starts the next), and in `MidiParser.c` a Song Select that waits for its song number and F4, F5 and F6 routed alone | N20 (E2.8) |
 | §4.1, §8 `CortexParser.c` | keeps compiling unchanged, apart from the call sites listed in §8, which does not list it | one new call in the `FRONT_SEQ_TRIGGER_IN_PPQ` handler: `seq_setClockInPpq()` posts the clock-in PPQ to the core through the mailbox of `sequencer.c` (spec §4.2, §4.3) | plan, the E2 Files table and task E2.5 |
 | §4.1, §8 files beyond §8's table | `menu.c`, `buttonHandler.c`, `CortexParser.c` and `presetManager.c` keep compiling unchanged, apart from the call sites listed in §8; §8 lists the files stage 1 changes | also changed or new: `buttonHandler.c` (SHIFT + step 12 sets the global menu's own button mode, `SELECT_MODE_MENU`); `presetManager.c` (two dead comment lines that named removed variables go, no code); `Core/Inc/Soundengine/cpuMeter.h` and `Core/Src/Soundengine/cpuMeter.c` (new: the CPU meter), with the hooks `soundengine_cpuBegin()` and `soundengine_cpuEnd()` in `Soundengine.h` and `MENU_CPU_SUB_PAGE` and `TEXT_CPU_METER` in `menu.h`; the headers of §8's files `Uart.h` (`uart_processMidi(maxBytes)`; `midi_process_block` goes) and `TriggerOut.h` (`trigger_setClockPhase()`; dead timing declarations go); the scripts in `tools/`: `check.sh`, `env.sh`, `setup-toolchain.sh`, `check_image.py`, `ci_dry_run.rb`, `fw_checks.sh`, and the tracker and workflow scripts (`tracker_note.py`, `tracker_export.py`, `tools/agent/`). `CortexParser.c`: the row above | `buttonHandler.c`: N19 (E2.7) and the plan's E2 file table; `presetManager.c`: the E2.6 review (`6fe86f0`), comments only (review row R7.3); the CPU meter and `menu.h`: the plan's Part 3 file map (E3.3); `Uart.h`, `TriggerOut.h` and `Soundengine.h`: the plan's E2 file table (E2.2, E2.4–E2.6, E3.3); `tools/`: the plan's file structure (build and tooling: E2.2, E3.1, E3.4, E3.5) and `docs/lichomat/HANDOFF.md` (the tracker and workflow scripts) |
-| §10 RAM | about 7.5 KB (review row R6.2 first allowed 8704 B) | 13404 B allowed, at most 391824 B of DTCM + RAM: 8704 B (the event queue, the sync queues and other state), 444 B (the USB MIDI transmit ring and its transfer buffer, N20), 1192 B (N21's tempo fit and its copy for the join), 24 B (E1.17's 101-point fit ring), 2952 B (E1.18's staging buffer, its index and the recorded chokes, N2 amended) and 88 B (E1.19's clock counts and merge state, N21); measured in §3 | N2, N20, N21; review row R6.2 (E2.9) |
-| §10 flash | about +10–15 KB | about +25 KB (review row R6.3 allows up to 30 KB): the core alone has about 22.9 KB of code with N21's estimator, its E1.19 rules and the ring queue with its merge, and the USB MIDI out adds about 0.75 KB | N20, N21; review row R6.3 (E2.9) |
+| §10 RAM | about 7.5 KB (review row R6.2 first allowed 8704 B) | 13404 B allowed, at most 391824 B of DTCM + RAM: 8704 B (the event queue, the sync queues and other state), 444 B (the USB MIDI transmit ring and its transfer buffer, N20), 1192 B (N21's tempo fit and its copy for the join), 24 B (E1.17's 101-point fit ring), 2952 B (E1.18's staging buffer, its index and the recorded chokes, N2 amended) and 88 B (E1.19's clock counts and merge state, N21). Measured (§3): +13368 B, 391788 B, 36 B under the bound; the last 56 B are the timed Note Off state of review finding F22 (`seq_voiceOffAt`, 7 × 8 B, and `seq_voiceOffPending`), state of the 8704 B | N2, N20, N21; review row R6.2 (E2.9) |
+| §10 flash | about +10–15 KB | about +25 KB, measured +25804 B (§3; review row R6.3 allows up to 30 KB): the core alone has about 22.9 KB of code with N21's estimator, its E1.19 rules and the ring queue with its merge, and the USB MIDI out adds about 0.75 KB | N20, N21; review row R6.3 (E2.9) |
 
 ## 2. Intended changes against fw 1.7
 
@@ -134,14 +134,17 @@ in neither list is a finding.
 |---|---|---|---|
 | ITCM | 15000 B | 13128 B | -1872 B |
 | DTCM | 107388 B | 107388 B | +0 B |
-| RAM | 271032 B | 284344 B | +13312 B |
-| image | 274688 B | 299948 B | +25260 B |
+| RAM | 271032 B | 284400 B | +13368 B |
+| image | 274688 B | 300492 B | +25804 B |
 
 Spec §10: about +7.5 KB of DTCM and RAM (review row R6.2 allows +8704 B, and 4700 B more: 444 B for the
 USB MIDI transmit ring of E2.8 (N20), 1192 B for N21's tempo fit, 24 B for E1.17's 101-point fit ring,
 2952 B for E1.18's staging buffer (N2) and 88 B for E1.19 (N21), so at most 391824 B), about +10–15 KB
 of flash, and no net growth of ITCM.
 
-Measured at `9e8ae47`, the code E4.1 reviews, with Arm GNU 14.3.rel1: DTCM + RAM is 391732 B,
-+13312 B over fw 1.7's 378420 B and 92 B under R6.2's 391824 B; the image is +25260 B, under
-R6.3's 30 KB.
+Measured at `38681b8`, the code after the fixes of the E4.1 review (the commits after it change
+only documents), with Arm GNU 14.3.rel1: DTCM + RAM is 391788 B, +13368 B over fw 1.7's 378420 B
+and 36 B under R6.2's 391824 B; the image is +25804 B, under R6.3's 30 KB. Against `9e8ae47`, the
+code the review started from (391732 B, image +25260 B), the fixes add 56 B of RAM, the timed Note
+Off state of finding F22 (`seq_voiceOffAt`, 7 × 8 B, and `seq_voiceOffPending`), and 544 B of
+code.
