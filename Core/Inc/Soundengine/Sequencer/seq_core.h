@@ -323,7 +323,7 @@ typedef struct seqc_stats
 	uint16_t queueDepth;		/**< events queued now; inside a callback it can still count events that a choke of the same call removed (N2) */
 	uint16_t queueMax;		/**< largest queue depth since seqc_init() or seqc_resetStats() */
 	uint32_t queueOverflow;		/**< events rejected because the queue was full */
-	uint32_t chokeDrops;		/**< queued events removed by the choke or the same-tick rule; inside a callback it can lag: events that a choke of the same call removed are counted when they reach the head, at the end of the call, or when the queue is cleared (N2) */
+	uint32_t chokeDrops;		/**< queued events removed by the choke or the same-tick rule; inside a callback it can lag: events that a choke of the same call removed are counted when they reach the head, at the next compaction (before a later boundary of the same call stages its events, at a skip-once, or at the end of the call), or when the queue is cleared (N2) */
 	uint32_t muteDrops;		/**< events dropped when they fired because their track was muted */
 	uint32_t skipDrops;		/**< step occurrences not played because of seqc_skipOnce() */
 	uint32_t syncIgnored;		/**< sync events and song positions that did nothing (seqc_sync_ev_t) */
