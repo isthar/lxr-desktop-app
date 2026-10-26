@@ -85,13 +85,22 @@ TEST(cpumeter_peak_is_held_for_one_window)
 	cpuMeter_reset();
 	uint32_t t = 0;
 	ASSERT_EQ(block(&t, PCT80), 0);
-	ASSERT_TRUE(blocksUntilReading(&t, PCT20) > 0);
-	ASSERT_TRUE(blocksUntilReading(&t, PCT20) > 0);	/* the next second is light only */
+	ASSERT_EQ(blocksUntilReading(&t, PCT20), 691);
 
+	/* the next second is light only: the reading keeps the heavy block's peak
+	 * through every one of its 690 blocks, until its own reading replaces it */
 	cpuMeter_reading_t r;
-	cpuMeter_get(&r);
+	uint32_t n = 0;
+	uint8_t published = 0;
+	while (!published && n < 2000)
+	{
+		published = block(&t, PCT20);
+		n++;
+		cpuMeter_get(&r);
+		ASSERT_EQ(r.peakPct, published ? 20 : 80);
+	}
+	ASSERT_EQ(n, 690);
 	ASSERT_EQ(r.avgPct, 20);
-	ASSERT_EQ(r.peakPct, 20);
 }
 
 TEST(cpumeter_calls_without_a_block_count_for_the_next_block)
