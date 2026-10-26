@@ -21,7 +21,7 @@ Version 0.1 gives the step sequencer a new timing core and fixes the timing and 
 
 - Shuffle moves whole steps, ratchets and microshift included. MIDI clock out and the clock out jack
   stay straight.
-- The master tempo is exact; 1.7 played up to 0.2 % fast.
+- The master tempo is exact; 1.7 played up to 0.4 % fast.
 - As a MIDI clock slave over DIN or USB no note is dropped, and Start, Stop, Continue and Song
   Position Pointer work.
 - One track no longer swallows the ratchets of another, shifted notes keep their own parameter locks
@@ -31,8 +31,9 @@ Version 0.1 gives the step sequencer a new timing core and fixes the timing and 
   appears, right after the page with the clock in and clock out PPQ.
 
 Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged. The start-up
-screen shows `LICHOMAT` and `v0.1 unofficial`. All changes are listed in the
-[release notes](docs/lichomat/release-notes-v0.1.md).
+screen shows `LICHOMAT` and `v0.1 unofficial`. The main changes are listed in the
+[release notes](docs/lichomat/release-notes-v0.1.md), and every change against 1.7 in section 2 of the
+[stage 1 report](docs/lichomat/reports/stage1-report.md).
 
 ### Installing LICHOMAT
 
