@@ -25531,6 +25531,21 @@ under `scratchpad/` were the controller's temporary files.
       - The overlong line in N14's "Why" bullet (amendment 22) and the report's N21 row, which
         lacked F4 and F49, were corrected by the controller after the review.
 
+25. **The review of the release documents (2026-10-26, `tools/agent/release-verify.js`).**
+    - Five read-only lenses checked `docs/lichomat/hardware-checklist.md` and
+      `docs/lichomat/release-notes-v0.1.md`: numbers, procedures, coverage, the notes and
+      consistency. They found 81 findings; the skeptics confirmed 80 (19 important) and refuted 1.
+      One fixer applied them all to the documents, with no code change (`dd86de7`..`ec66824`), and
+      the light review passed in round 1. The controller applied its four minor leftovers.
+    - The CI build of the release file differs from a local macOS build of the same sources
+      (newlib linked in another order): CI gives `668abe3f...`, macOS `639c0a43...`. The hardware
+      checks and the release use the CI artifact; the run sheet names the run.
+    - For a later stage (code): the jack tempo fit after compound glitches. A double trigger
+      followed by a pulse about a third of a pulse early puts the tempo off by up to about 60% at
+      4 PPQ, and two double triggers on adjacent pulses by up to about 107% (about twice the
+      tempo), for up to five pulses (F49, re-measured at `bf64157`). F49 stays accepted for v0.1.
+      A fix changes the undo and steady rules of N21 and needs its sweeps again.
+
 ## Progress notes
 
 Notes made while executing the plan, one bullet each, newest last: the date, the task, and what
@@ -25545,6 +25560,7 @@ happened (a deviation from the plan, a surprise, a decision taken on the way).
 - 2026-10-26, workflow B done: E1.18, E2.1–E2.8 and E1.19 (items 20 and 21).
 - 2026-10-26, workflow C1 done: E2.9, E3.1, E3.3, E3.4 and E3.5, each with one light review that passed in round 1 (items 22 and 23).
 - 2026-10-26, workflow C2 done: E4.1 by `tools/agent/stage-review.js`, with 82 agents, paused by the owner from 03:39 to 17:29. The light review passed in round 2 (item 24).
+- 2026-10-26, workflow C3 done: E4.2 and E4.3, each with a light review. Then the release documents review (item 25).
 
 ## Questions for the owner
 

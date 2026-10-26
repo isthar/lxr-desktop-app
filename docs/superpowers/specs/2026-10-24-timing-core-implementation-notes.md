@@ -729,6 +729,12 @@ the clock count.
         5820 jumps give the same runs without it. A second double trigger on the very next pulse,
         0.75 of a pulse or later into it, is not merged: up to 9.2% off at 4 PPQ and 1.5% at
         24 PPQ, where merging it gives 0%.
+      - Re-measured at `bf64157` in the review of the release documents, over all placements: a
+        double trigger followed by a pulse about a third of a pulse early puts the tempo off by up
+        to about 60% at 4 PPQ (6% at 24 PPQ); two double triggers on adjacent pulses, the second
+        earlier than 0.75 of a pulse into its pulse, by up to about 107% (about twice the tempo;
+        13% at 24 PPQ), for up to five pulses. F49 stays accepted at these figures for v0.1, and
+        the release notes give them; a fix needs the sweeps below again (plan, amendment 25).
     - The first version merged at once and guarded jumps with the tight sum test alone, and with no
       merge of two outliers or of two intervals inside the band. The review found that it still
       merged jumps to about 2 to 2.5 times when the change came early in a pulse, and dropped a

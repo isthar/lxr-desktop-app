@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 20:45",
+    "updated": "2026-10-26 22:29",
     "phase": "Etap 1: narzędzia i wydanie (E2.9, E3, E4)",
     "focus": "Etap 1 zrobiony poza testami na sprzęcie. Trwa niezależna weryfikacja listy testów sprzętowych i notatek wydania v0.1. Potem raport M7.",
     "branch": "timing-core",
-    "head": "d394c0d",
+    "head": "ec66824",
     "next": "Po weryfikacji: raport M7 (v0.1 gotowe do testów na sprzęcie) i kamień milowy w trackerze. Testy H1–H13, U1 i X4 robisz Ty (Q6).",
-    "updated_at": "2026-10-26T20:45:00+01:00",
-    "now": "Weryfikacja dokumentów dla Ciebie: 5 recenzentów sprawdza listę testów i notatki wydania (od 20:50)."
+    "updated_at": "2026-10-26T22:29:00+01:00",
+    "now": "Raport M7 i kamień milowy w trackerze (od 22:35)."
   },
   "epics": [
     {
@@ -372,7 +372,7 @@
     {
       "id": "E4.4",
       "epic": "E4",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Niezależna weryfikacja listy testów sprzętowych i notatek wydania (poza planem)",
       "updated": "2026-10-26"
     },
@@ -1710,6 +1710,21 @@
       "n": 214,
       "at": "2026-10-26 20:45",
       "text": "C3 zrobione (20:01–20:45, 6 agentów, 0,8 mln tokenów). E4.3 przeszło lekki przegląd w rundzie 1, z pięcioma drobnymi uwagami. Przykłady: słowo „pad”, choć LXR-02 nie ma padów; poprawka D7 opisana mocniej, niż na to pozwala ograniczenie F49; zdanie o znakach towarowych pomija nazwę pliku aktualizacji, która musi zaczynać się od LXR. Wszystkie zadania etapu 1 z planu są zrobione, poza testami na sprzęcie (Twoja część). Zanim napiszę raport M7, uruchamiam dodatkową, niezależną weryfikację obu dokumentów dla Ciebie: listy testów sprzętowych i notatek wydania. Pięć spojrzeń: przeliczenie liczb, wykonalność kroków na LXR, pokrycie zmian z raportu, prawdziwość notatek i spójność dokumentów. Do tego sceptyk na każde spojrzenie, jeden fixer (tylko dokumenty) i lekki przegląd. Na wejściu dostaje 17 znanych drobnych pozostałości z E4.2 i E4.3."
+    },
+    {
+      "n": 215,
+      "at": "2026-10-26 21:33",
+      "text": "Weryfikacja dokumentów, recenzenci (20:46–21:33): 5 spojrzeń dało 81 uwag. Część się pokrywa, bo różne spojrzenia trafiają w te same miejsca. Liczby: 17 (10 ważnych), wykonalność kroków: 20 (8 ważnych), notatki: 17 (2 ważne), spójność: 16 (1 ważna), pokrycie: 11 (4 ważne). Przykłady ważnych. H3: tolerancja ±1,5 ms na każde uderzenie oblałaby sprawny LXR, bo zegary LXR i interfejsu audio się rozjeżdżają. H5: gęsty pattern opóźnia takty F8 na DIN. U1: programowanie kroku 16 głosu 6 zaznacza głos 6. H10: domyślne kanały i nadpisanie nuty zmieniają wynik. H9 nie ustawia shuffle 0. D3 w notatkach: fw 1.7 grał do 0,39 % za szybko, nie 0,2 %. F49: dwa podwójne impulsy pod rząd mogą dać odczyt tempa dwa razy za wysoki, więcej niż 9 % z opisu. Brakuje też testów: osobne Note Off dla głosów na jednym kanale, bajty realtime na DIN thru, koniec songu, roll. Teraz 5 sceptyków sprawdza każdą uwagę."
+    },
+    {
+      "n": 216,
+      "at": "2026-10-26 22:09",
+      "text": "Weryfikacja dokumentów, sceptycy (21:17–22:09): z 81 uwag potwierdzili 80, a odrzucili 1 (długość linii w źródle, która nie wpływa na wygląd strony). Po weryfikacji 19 uwag jest ważnych, a 61 drobnych. Teraz jeden fixer poprawia listę testów, notatki wydania, raport etapu, README i HANDOFF, tylko dokumenty i bez zmian w kodzie. Potem lekki przegląd jego commitów."
+    },
+    {
+      "n": 217,
+      "at": "2026-10-26 22:29",
+      "text": "Weryfikacja dokumentów zrobiona (20:46–22:27; 12 agentów, 4,1 mln tokenów). Fixer poprawił wszystkie 80 potwierdzonych uwag w 4 commitach (dd86de7..ec66824), bez zmian w kodzie. Lekki przegląd przeszedł w rundzie 1. Jego 4 drobne pozostałości uzupełniłem sam, a poprawkę 25 dopisałem do planu. Najważniejsze zmiany w liście testów: H3 ma tolerancję na rozjazd zegarów (uderzenie 257 w ±5 ms, odstępy ±1,5 ms); H5 używa patternu z H4 i uwzględnia opóźnienie DIN; H6 i H7 mają zegar tylko z jednego portu i ustawiony bufor DAW; U1, H9, H10 i H11 mają poprawione ustawienia. Doszły kroki dla DIN thru, końca songu, dwóch głosów na jednym kanale i rolla. Notatki wydania: D3 do 0,4 %, nowe ograniczenia slave'a po MIDI, dokładne liczby F49, kopia karty przed instalacją, nazwane pytania Q9–Q11. Odkrycie: plik z CI ma inny SHA-256 (668abe3f…) niż build na Macu (639c0a43…), bo newlib jest linkowany w innej kolejności. Testuj i wydawaj plik z CI, artefakt przebiegu 40389633686. Sprawdziłem jego hash po pobraniu. check.sh: 27 z 27, 0 ostrzeżeń."
     }
   ]
 }

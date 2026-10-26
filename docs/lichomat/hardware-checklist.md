@@ -283,7 +283,9 @@ samples, as in H6.
      5.8 ms buffers every clock (20.8 ms apart) comes in a transfer of its own, so this run checks
      only how exact the measured tempo is.
    - Over DIN: once more with 1024 samples, with the DAW's clock going through the MIDI interface
-     into the LXR's DIN MIDI in and no MIDI clock to its USB port. An interface passes the clocks of
+     into the LXR's DIN MIDI in and no MIDI clock to its USB port. Connect the interface's MIDI out
+     to the LXR's DIN MIDI in (where H6's hardware sequencer was), switch the DAW's MIDI clock to the
+     interface back on, and its clock to the USB port off. An interface passes the clocks of
      one buffer on as a burst about 0.32 ms apart when the host sends them together.
    - Pairs (any DAW). Stop the DAW and switch its MIDI clock output off, to both ports; LXR as above.
      Make a file of 768 pairs of clocks, the two clocks of a pair sent one right after the other and
@@ -405,8 +407,9 @@ velocity.
    the keyboard.
 4. Stop the LXR. Still in performance mode with the roll rate `One`, press step button 1 a few
    times, and play a few notes from the keyboard; watch MIDI out.
-5. Repeating roll. Remove the notes recorded on voice 1 in 2 (in voice mode, press their step
-   buttons). Running, REC on. On the performance page set the roll rate to `1/8`, hold step button 1
+5. Repeating roll. Remove the notes recorded on voice 1 in 2: in voice mode press voice button 1
+   first, then their step buttons (programming the guide may have left voice 6 selected). Running,
+   REC on. On the performance page set the roll rate to `1/8`, hold step button 1
    for about a bar, then let go.
 
 **Expected:**
@@ -484,8 +487,9 @@ in and clock out PPQ keep their values. `CPU` and `pk` below 100 in steps 2–4,
 5 the values stay plausible: the meter leaves the kit load itself out. These numbers are the input
 for stage 3 (effects); there is no pass mark beyond `ovf` 0 and no audible dropouts.
 
-**Record:** `CPU`, `pk`, `Qmax`, `ovf` for steps 2–5, with the kit name, the effect settings and the
-BPM.
+**Record:** in step 1, whether the display stayed on the CPU page and what, if anything, the encoder
+and the knobs changed; `CPU`, `pk`, `Qmax`, `ovf` for steps 2–5, with the kit name, the effect
+settings and the BPM.
 
 ## H13: back to the official firmware
 
