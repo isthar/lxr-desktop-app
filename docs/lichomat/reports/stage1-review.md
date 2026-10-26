@@ -45,35 +45,35 @@ write the finding anyway and decide it as `accepted`.
 
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
-| R2.1 | A | D1 swing: `ctest --test-dir build/host-tests -R '^T[35]$' --output-on-failure` | T3 and T5 pass | open |
-| R2.2 | A | D2 choke: `ctest --test-dir build/host-tests -R '^T7$' --output-on-failure` | passes | open |
-| R2.3 | A | D3 tempo: `ctest --test-dir build/host-tests -R '^T1$' --output-on-failure` | passes | open |
-| R2.4 | A | D4: `grep -n 'seq_sendMidiNoteOn' Core/Src/Soundengine/MIDI/MidiVoiceControl.c` | no output | open |
+| R2.1 | A | D1 swing: `ctest --test-dir build/host-tests -R '^T[35]$' --output-on-failure` | T3 and T5 pass | pass |
+| R2.2 | A | D2 choke: `ctest --test-dir build/host-tests -R '^T7$' --output-on-failure` | passes | pass |
+| R2.3 | A | D3 tempo: `ctest --test-dir build/host-tests -R '^T1$' --output-on-failure` | passes | pass |
+| R2.4 | A | D4: `grep -n 'seq_sendMidiNoteOn' Core/Src/Soundengine/MIDI/MidiVoiceControl.c` | no output | pass |
 | R2.5 | M | D4: the trigger callback and `seq_triggerVoice()` send one Note On each; `midiParser_noteOn()` echoes once (N11) | as stated | open |
 | R2.6 | M | D5: the trigger callback applies the event's own p-locks and velocity, never the current step index | as stated | open |
-| R2.7 | A | D6: `ctest --test-dir build/host-tests -R '^T14$' --output-on-failure`, and `grep -n -e seq_postSkipOnce -e seqc_skipOnce Core/Src/Soundengine/Sequencer/sequencer.c` | test passes; `seq_addNote()` hands the marker to `seq_postSkipOnce()`, which calls `seqc_skipOnce()` at once inside `seq_tick()` and posts it otherwise, and `seq_applyMailbox()` passes a posted marker to `seqc_skipOnce()`, one per track | open |
-| R2.8 | A | D7: `ctest --test-dir build/host-tests -R '^T1[678]$' --output-on-failure` | T16, T17 and T18 pass | open |
-| R2.9 | A | D8: `grep -rn -e uart_processMidi -e usb_getMidi -e midiParser_parseMidiMessage Core/Src` | apart from the definitions, comments and the parser's own calls in `MidiParser.c`, the only calls are in `seq_parseMidiInput()` in `sequencer.c`, which only `seq_tick()` calls | open |
+| R2.7 | A | D6: `ctest --test-dir build/host-tests -R '^T14$' --output-on-failure`, and `grep -n -e seq_postSkipOnce -e seqc_skipOnce Core/Src/Soundengine/Sequencer/sequencer.c` | test passes; `seq_addNote()` hands the marker to `seq_postSkipOnce()`, which calls `seqc_skipOnce()` at once inside `seq_tick()` and posts it otherwise, and `seq_applyMailbox()` passes a posted marker to `seqc_skipOnce()`, one per track | pass |
+| R2.8 | A | D7: `ctest --test-dir build/host-tests -R '^T1[678]$' --output-on-failure` | T16, T17 and T18 pass | pass |
+| R2.9 | A | D8: `grep -rn -e uart_processMidi -e usb_getMidi -e midiParser_parseMidiMessage Core/Src` | apart from the definitions, comments and the parser's own calls in `MidiParser.c`, the only calls are in `seq_parseMidiInput()` in `sequencer.c`, which only `seq_tick()` calls | pass |
 
 ### R3 Host tests
 
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
-| R3.1 | A | `cmake -S tests -B build/review-host -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSEQC_REQUIRE_ALL_TESTS=ON && cmake --build build/review-host && ctest --test-dir build/review-host` | `100% tests passed, 0 tests failed out of 27` | open |
-| R3.2 | A | `ruby tools/ci_dry_run.rb host-tests` | ends with `dry run of host-tests: 3 steps passed` | open |
+| R3.1 | A | `cmake -S tests -B build/review-host -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSEQC_REQUIRE_ALL_TESTS=ON && cmake --build build/review-host && ctest --test-dir build/review-host` | `100% tests passed, 0 tests failed out of 27` | pass |
+| R3.2 | A | `ruby tools/ci_dry_run.rb host-tests` | ends with `dry run of host-tests: 3 steps passed` | pass |
 | R3.3 | M | Each spec test T1–T20 asserts what spec §13.1 asks for (tolerances, scenarios) | every test does | open |
-| R3.4 | A | Determinism: run R3.1's `ctest` twice | the same tests pass both times | open |
+| R3.4 | A | Determinism: run R3.1's `ctest` twice | the same tests pass both times | pass |
 
 ### R4 Execution contexts (spec §4.3, N7, N12, N13.9)
 
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
-| R4.1 | A | Calls into the core, see [Commands](#commands) | every call is in the `seq_tick()` path of `sequencer.c` or in its callbacks, or is `seqc_init()` in `seq_initCore()` at boot, before `seq_tick()` runs, or `seqc_stats()` in `soundengine_cpuEnd()`, or `seqc_skipOnce()` in `seq_postSkipOnce()`, which calls it only while `seq_inTick` is set | open |
+| R4.1 | A | Calls into the core, see [Commands](#commands) | every call is in the `seq_tick()` path of `sequencer.c` or in its callbacks, or is `seqc_init()` in `seq_initCore()` at boot, before `seq_tick()` runs, or `seqc_stats()` in `soundengine_cpuEnd()`, or `seqc_skipOnce()` in `seq_postSkipOnce()`, which calls it only while `seq_inTick` is set | pass |
 | R4.2 | M | The USART3, `USBD_CDC_DataOut`, EXTI4 and EXTI9_5 handlers | they only take a stamp and push sync events (and keep writing the RX FIFO) | open |
 | R4.3 | M | The mailbox of `sequencer.c` | each slot is written with interrupts masked and applied at the top of `seq_tick()` | open |
 | R4.4 | M | `seq_tick()` nesting guard (N12) | a nested call skips the mailbox, the drain, `seqc_process()` and MIDI parsing | open |
-| R4.5 | A | `grep -rn 'GetRngValue' Core/Src --include='*.c'` | only the seq_tick and render context calls it | open |
-| R4.6 | A | `grep -n 'seqc_' Core/Src/menu/menu.c Core/Src/buttonHandler.c Core/Src/ledHandler.c Core/Src/Soundengine/MIDI/CortexParser.c` | no output: the UI reads glue copies and `cpuMeter_get()` only | open |
+| R4.5 | A | `grep -rn 'GetRngValue' Core/Src --include='*.c'` | only the seq_tick and render context calls it | pass |
+| R4.6 | A | `grep -n 'seqc_' Core/Src/menu/menu.c Core/Src/buttonHandler.c Core/Src/ledHandler.c Core/Src/Soundengine/MIDI/CortexParser.c` | no output: the UI reads glue copies and `cpuMeter_get()` only | pass |
 
 ### R5 Real time and CPU
 
@@ -81,7 +81,7 @@ write the finding anyway and decide it as `accepted`.
 |---|---|---|---|---|
 | R5.1 | M | `seqc_process()` early exit (N10), and `seq_tick()` with nothing to do | nothing due: the 64-bit compare and the store of `now` (epic E1, decision 1), then return; `seq_tick()` without a post or a queued event masks no interrupt and refreshes only the copies that changed (epic E2, decision 11) | open |
 | R5.2 | M | Interrupt handlers | no loops over queues or patterns, no blocking calls | open |
-| R5.3 | A | `ctest --test-dir build/host-tests -R '^cpumeter$' --output-on-failure` | passes | open |
+| R5.3 | A | `ctest --test-dir build/host-tests -R '^cpumeter$' --output-on-failure` | passes | pass |
 
 ### R6 Memory budget (spec §10, N2, N14)
 
@@ -90,16 +90,16 @@ RAM 271032 B, image 274688 B.
 
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
-| R6.1 | A | `tools/check.sh`, the `memory:` line | ITCM fits (≤ 16384 B) | open |
-| R6.2 | A | the same line | DTCM + RAM is at most 391824 B: the baseline 378420 B plus 8704 B (spec §10: the event queue, the sync queues and other state), 444 B (the USB MIDI transmit ring, N20), 1192 B (N21's tempo fit), 24 B (E1.17's 101-point fit ring), 2952 B (E1.18's staging buffer, N2 amended) and 88 B (E1.19's clock counts and merge state, N21); measured at `3f2a038`: 391660 B | open |
-| R6.3 | A | the same line | the image grew by about 24 KB: 299092 B at `3f2a038` against the baseline's 274688 B, +24404 B (the core alone has 22.4 KB of code: `seq_core.c.obj` `text` 22898 B, measured with the firmware's compile command, against 15.7 KB in E1.14 Step 8, with N21's estimator and its E1.19 rules and the ring queue with its merge; the USB MIDI out of E2.8 adds 752 B; spec §10: +10–15 KB); more than 30 KB is a finding | open |
+| R6.1 | A | `tools/check.sh`, the `memory:` line | ITCM fits (≤ 16384 B) | pass |
+| R6.2 | A | the same line | DTCM + RAM is at most 391824 B: the baseline 378420 B plus 8704 B (spec §10: the event queue, the sync queues and other state), 444 B (the USB MIDI transmit ring, N20), 1192 B (N21's tempo fit), 24 B (E1.17's 101-point fit ring), 2952 B (E1.18's staging buffer, N2 amended) and 88 B (E1.19's clock counts and merge state, N21); measured at `3f2a038`: 391660 B | pass |
+| R6.3 | A | the same line | the image grew by about 24 KB: 299092 B at `3f2a038` against the baseline's 274688 B, +24404 B (the core alone has 22.4 KB of code: `seq_core.c.obj` `text` 22898 B, measured with the firmware's compile command, against 15.7 KB in E1.14 Step 8, with N21's estimator and its E1.19 rules and the ring queue with its merge; the USB MIDI out of E2.8 adds 752 B; spec §10: +10–15 KB); more than 30 KB is a finding | pass |
 
 ### R7 Compatibility (G8: no file format changes)
 
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
-| R7.1 | A | `ctest --test-dir build/host-tests -R '^layout$' --output-on-failure` | passes | open |
-| R7.2 | A | `git diff --stat a43cd4f -- Core/Inc/Parameters.h Core/Src/Preset Core/Inc/Preset` | only `SeqStep.h` and `SeqStepTypes.h` (E1.1, E1.2), and any other change is a reviewed one that does not touch file I/O | open |
+| R7.1 | A | `ctest --test-dir build/host-tests -R '^layout$' --output-on-failure` | passes | pass |
+| R7.2 | A | `git diff --stat a43cd4f -- Core/Inc/Parameters.h Core/Src/Preset Core/Inc/Preset` | only `SeqStep.h` and `SeqStepTypes.h` (E1.1, E1.2), and any other change is a reviewed one that does not touch file I/O | pass |
 | R7.3 | M | `presetManager.c` reads and writes | unchanged sizes and order for kits, patterns, songs, projects and `glo.cfg` | open |
 
 ### R8 MIDI behaviour (spec §7, N11, N14)
@@ -116,20 +116,20 @@ RAM 271032 B, image 274688 B.
 
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
-| R9.1 | A | `tools/check.sh` | exit 0 and `== compiler warnings: 0` | open |
-| R9.2 | A | `ruby tools/ci_dry_run.rb firmware` | ends with `dry run of firmware: 5 steps passed` | open |
-| R9.3 | A | `usbd_cdc.c` is built with `-w`: compile it once with `-Wall`, see [Commands](#commands) | `usbd_cdc.c: no warnings without -w` | open |
-| R9.4 | A | Line endings, see [Commands](#commands) | Core sources CRLF only (no mixed files); tests, tools, docs, CI and CMake files LF only | open |
-| R9.5 | A | Licence headers of new files, see [Commands](#commands) | no output | open |
-| R9.6 | A | `grep -rn -e seq_processFlam -e seq_calcDeltaT -e seq_prescaleCounter -e trigger_clockReceived -e clockSync Core` | no output, or only comments that explain the removal: the pulse machine and `clockSync` are gone (spec §8) | open |
+| R9.1 | A | `tools/check.sh` | exit 0 and `== compiler warnings: 0` | pass |
+| R9.2 | A | `ruby tools/ci_dry_run.rb firmware` | ends with `dry run of firmware: 5 steps passed` | pass |
+| R9.3 | A | `usbd_cdc.c` is built with `-w`: compile it once with `-Wall`, see [Commands](#commands) | `usbd_cdc.c: no warnings without -w` | pass |
+| R9.4 | A | Line endings, see [Commands](#commands) | Core sources CRLF only (no mixed files); tests, tools, docs, CI and CMake files LF only | pass |
+| R9.5 | A | Licence headers of new files, see [Commands](#commands) | no output | F1 |
+| R9.6 | A | `grep -rn -e seq_processFlam -e seq_calcDeltaT -e seq_prescaleCounter -e trigger_clockReceived -e clockSync Core` | no output, or only comments that explain the removal: the pulse machine and `clockSync` are gone (spec §8) | pass |
 | R9.7 | M | Debug leftovers | no `printf`, test hooks or commented-out new code in the firmware | open |
 
 ### R10 Branding and licence (G7, NOTICE.md)
 
 | Row | Kind | Check | Pass when | Result |
 |---|---|---|---|---|
-| R10.1 | A | `python3 tools/check_image.py build/release` | `image: LXR_V2_LICHOMAT_0.1.img OK …` | open |
-| R10.2 | A | `grep -c 'unofficial custom firmware for the Erica Synths LXR-02' README.md` | at least 1 | open |
+| R10.1 | A | `python3 tools/check_image.py build/release` | `image: LXR_V2_LICHOMAT_0.1.img OK …` | pass |
+| R10.2 | A | `grep -c 'unofficial custom firmware for the Erica Synths LXR-02' README.md` | at least 1 | pass |
 | R10.3 | M | README and release notes | LICHOMAT is never presented as official, and "Erica Synths" and "LXR" appear only in truthful references | open |
 | R10.4 | M | Source headers | new files: `Copyright (C) 2026 Tomasz Krzywicki`, SPDX and the NOTICE.md reference; modified files keep their headers | open |
 
@@ -203,6 +203,7 @@ git diff --name-only --diff-filter=A a43cd4f -- Core tests tools .github | while
 
 | F | Row | Where | Finding | Severity | Status |
 |---|---|---|---|---|---|
+| F1 | R9.5 | `tools/agent/stage1-context.md:1` | A new file without the licence header: R9.5's command prints it, because it has no `SPDX-License-Identifier: GPL-3.0-only` line, no copyright line and no NOTICE.md reference (spec §9.5). It is the stage 1 context that the agent scripts put into the task prompts (added in `cdd45eb`) | minor | fix |
 
 ## Result
 
