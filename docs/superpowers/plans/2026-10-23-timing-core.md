@@ -24228,7 +24228,7 @@ menu, USB MIDI out). It also builds the two update files the checks need, LICHOM
 - Create: `docs/lichomat/hardware-checklist.md`
 - Test: `build/e4-checklist-check.sh` (a scratch script, not committed)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `build/e4-checklist-check.sh`:
 
@@ -24249,7 +24249,7 @@ done
 if [ "$ok" = 1 ]; then echo "checklist check passed"; else echo "checklist check FAILED"; exit 1; fi
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `bash build/e4-checklist-check.sh; echo "exit=$?"`
 Expected:
@@ -24259,7 +24259,7 @@ missing: docs/lichomat/hardware-checklist.md
 exit=1
 ```
 
-- [ ] **Step 3: Build the official 1.7 update file for H13**
+- [x] **Step 3: Build the official 1.7 update file for H13**
 
 `git archive` exports the upstream sources without touching the work tree or the branch.
 
@@ -24284,12 +24284,12 @@ cdb1ca371599149083bd0b61564d6864f031b599ccdcead2047a711e0b679db4  build/official
 (The 1.7 sources built with Arm GNU 14.3.rel1 give this file byte for byte. A different hash means a
 different compiler; the file is still the official 1.7, but write the hash down.)
 
-- [ ] **Step 4: Build LICHOMAT**
+- [x] **Step 4: Build LICHOMAT**
 
 Run: `tools/check.sh`
 Expected: exit 0, `image: LXR_V2_LICHOMAT_0.1.img OK (…)` and `== compiler warnings: 0`.
 
-- [ ] **Step 5: Write the checklist**
+- [x] **Step 5: Write the checklist**
 
 Create `docs/lichomat/hardware-checklist.md`:
 
@@ -24732,7 +24732,7 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | X4 | | | |
 ````
 
-- [ ] **Step 6: Fill in the run sheet**
+- [x] **Step 6: Fill in the run sheet**
 
 Run:
 
@@ -24764,7 +24764,7 @@ EOF
 Expected: `run sheet filled in`; the run sheet now has a table with both files, their SHA-256, the
 commit and the folder.
 
-- [ ] **Step 7: Run the test to see it pass**
+- [x] **Step 7: Run the test to see it pass**
 
 Run: `bash build/e4-checklist-check.sh; echo "exit=$?"`
 Expected:
@@ -24774,7 +24774,7 @@ checklist check passed
 exit=0
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add docs/lichomat/hardware-checklist.md
