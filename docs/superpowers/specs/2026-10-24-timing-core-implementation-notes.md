@@ -392,8 +392,8 @@ seen. So:
 realtime messages travel in the queues (SPP joins them through this note), and from fw 1.7, where the
 MIDI parser switched the pattern itself.
 
-- **Why.** With the parser alone, `seq_tick()` drained Start and Continue before it parsed a Program
-  Change that had arrived before them. A slave that got a Program Change and a Start in one USB
+- **Why.** In E2.4 as first written (`cca16a9`), `seq_tick()` drained Start and Continue before it
+  parsed a Program Change that had arrived before them. A slave that got a Program Change and a Start in one USB
   transfer played the old pattern first. fw 1.7 parsed both in arrival order.
 - **Decoding.**
   - DIN: `USART3_IRQHandler` passes every received byte with its stamp to `seqq_dinByte()` (through
