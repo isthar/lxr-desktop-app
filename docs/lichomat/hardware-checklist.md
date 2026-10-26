@@ -1,4 +1,4 @@
-# LICHOMAT 0.1: hardware checklist (H1–H13, U1, X4, optional X1–X3)
+# LICHOMAT 0.1: hardware checklist (H1–H13, U1, U2, X4, optional X1–X3)
 
 These are the checks of spec §13.2, written out as procedures for the LXR-02. Only the owner can run
 them, on the real device; nothing here is ever marked as passed by an agent. Record every result in
@@ -539,6 +539,33 @@ lengths and sets them back; use a pattern you can spare.
 **Record:** whether step 12 kept blinking in step 3; whether a length changed in step 4; what the
 Last Step page showed in step 5.
 
+## U2: kit loads and Bank Select leave the patterns alone
+
+Not in the spec's list: a 1.7 bug that LICHOMAT fixes (tracker E4.5). In 1.7 every kit load, and
+every MIDI Bank Select (CC 0) the LXR received, wrote one byte past a table into the pattern memory.
+In our build of the official 1.7 sources that byte is the parameter lock number of step 52 of voice
+3 in the 18th pattern; a pattern save kept it on the card. The check compares the pattern files of a
+project saved before and after kit loads, so it needs no knowledge of where the byte lands. Use a
+project you can spare, or a copy.
+
+1. With LICHOMAT, load the project and save it (project save). Switch off, put the card in the
+   computer and copy the project's folder (`PROJnn`, nn = the project's slot) to the computer as
+   `before`. Put the card back and switch on.
+2. Load the kit that the active pattern uses 10 times (LOAD, the kit, confirm). A kit load from the
+   menu also stores the kit's number in the active pattern, so load that same kit: then the pattern
+   keeps its kit number.
+3. Send 10 Bank Select messages on the LXR's global MIDI channel (here channel 1) to its USB port:
+   `sendmidi dev "Sonic Potions USB MIDI" ch 1 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0 cc 0 0`.
+4. Save the project again, copy the folder to the computer as `after`, and compare every pattern
+   file: `for f in before/*.PAT; do cmp "$f" "after/${f#before/}"; done`.
+
+**Expected:** `cmp` prints nothing: every `.PAT` file of `after` is byte for byte the same as in
+`before`. A Bank Select loads the kit of its value (here kit 0) into the sound engine without
+changing a pattern, so the sound may change and the kit files may differ; they are not checked.
+With 1.7 a pattern file differs after step 2.
+
+**Record:** the number of pattern files compared and the output of `cmp`.
+
 ## X4: USB MIDI out
 
 Not in the spec's list: 1.7 defects of the USB MIDI out that LICHOMAT fixes (tracker E2.8).
@@ -643,13 +670,13 @@ Update files under test (filled in when the files were built):
 
 | File | SHA-256 | Built from | Where |
 |---|---|---|---|
-| `LXR_V2_LICHOMAT_0.1.img` | `668abe3fe6a6a42717fc1c8816212a78e7bdc1156cb7b939d5e6d4f3a9715940` | `timing-core` at `bf64157`, built by CI (`.github/workflows/build.yml`; the same file at every commit from `9805d15` on) | the artifact `lichomat-firmware-bf6415746058e5085c20b03a796d75043d971906` of CI run 40389633686 |
+| `LXR_V2_LICHOMAT_0.1.img` | `9a7aff2ad9f7284a1b24e14e9700eb822674d1a42a254f8c4b3b74eff9a28c66` | `timing-core` at `2680991`, built by CI (`.github/workflows/build.yml`; later commits that change only documents build the same file) | the artifact `lichomat-firmware-26809918cdf3e7fe6e6cfb1f3a9f431178ec8751` of CI run 40416804934 |
 | `LXR_V2_V1.7.img` | `cdb1ca371599149083bd0b61564d6864f031b599ccdcead2047a711e0b679db4` | `a43cd4f`, the official 1.7 sources | `build/official-1.7/src/build/release/` |
 
 The LICHOMAT file is the one CI builds, the file the release attaches (spec §14). Download it with
-`gh run download 40389633686 --repo isthar/lxr-desktop-app -n lichomat-firmware-bf6415746058e5085c20b03a796d75043d971906`
+`gh run download 40416804934 --repo isthar/lxr-desktop-app -n lichomat-firmware-26809918cdf3e7fe6e6cfb1f3a9f431178ec8751`
 or from the run's page on GitHub (Actions); GitHub keeps the artifact until 2027-01-24, after that
-run the workflow again. A local build in `build/release/` is a different file, `639c0a43…`: the
+run the workflow again. A local build in `build/release/` is a different file, `12be97d7…`: the
 macOS toolchain links newlib's members in another order. Do not use it for these checks.
 
 Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **Record**):
@@ -670,6 +697,7 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | H12 | | | |
 | H13 | | | |
 | U1 | | | |
+| U2 | | | |
 | X1 | | | |
 | X2 | | | |
 | X3 | | | |

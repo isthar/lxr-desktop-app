@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-26 23:43",
+    "updated": "2026-10-27 00:06",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Następny jest szkic specyfikacji etapu 1b: emulator na macOS, najpierw renderer WAV, potem aplikacja z wirtualnym panelem.",
     "branch": "timing-core",
-    "head": "9b4c131",
+    "head": "2680991",
     "next": "Twoje testy H1–H13, U1 i X4 oraz odpowiedzi na Q9–Q11. Ja: szkic specyfikacji etapu 1b do Twojej akceptacji.",
-    "updated_at": "2026-10-26T23:43:00+01:00",
-    "now": "E4.5: poprawka błędu, który nadpisuje pamięć patternów przy wczytaniu kitu (test-first, od 23:45). Testy na sprzęcie wstrzymane do nowego pliku."
+    "updated_at": "2026-10-27T00:06:00+01:00",
+    "now": "Testy na sprzęcie odblokowane (plik 9a7aff2a…). Następny krok to szkic specyfikacji etapu 1b."
   },
   "epics": [
     {
@@ -379,9 +379,9 @@
     {
       "id": "E4.5",
       "epic": "E4",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Błąd fw 1.7: wczytanie kitu i MIDI CC 0 nadpisują bajt pamięci patternów (MidiParser.c)",
-      "updated": "2026-10-26"
+      "updated": "2026-10-27"
     },
     {
       "id": "E5.1",
@@ -572,7 +572,7 @@
       "id": "M7",
       "date": "2026-10-26",
       "title": "v0.1 gotowe do testów na sprzęcie (E2.9, E3, E4)",
-      "summary": "Wszystkie zadania etapu 1 są zrobione, zostały tylko testy na LXR-02, które robisz Ty. Przegląd całego etapu (E4.1) dał 52 uwagi: 47 poprawionych, w tym brak Note Off dla rolla i echa i za długie przejście songu przy SPP, 3 przyjęte i 2 pytania (Q9, Q11). Dodatkowa weryfikacja listy testów i notatek wydania znalazła 80 potwierdzonych uwag, wszystkie są poprawione. Testy i wydanie używają pliku z CI (SHA-256 668abe3f…). Zasoby: DTCM + RAM 391788 B (36 B poniżej R6.2), obraz +25804 B, 27 testów na hoście bez ostrzeżeń. Raport: docs/lichomat/reports/M7-v0.1-do-testow.md."
+      "summary": "Wszystkie zadania etapu 1 są zrobione, zostały tylko testy na LXR-02, które robisz Ty. Przegląd całego etapu (E4.1) dał 52 uwagi: 47 poprawionych, w tym brak Note Off dla rolla i echa i za długie przejście songu przy SPP, 3 przyjęte i 2 pytania (Q9, Q11). Dodatkowa weryfikacja listy testów i notatek wydania znalazła 80 potwierdzonych uwag, wszystkie są poprawione. Testy i wydanie używają pliku z CI (SHA-256 9a7aff2a…, po poprawce E4.5: wczytanie kitu nie nadpisuje już bajtu pamięci patternów, błąd z fw 1.7). Zasoby: DTCM + RAM 391788 B (36 B poniżej R6.2), obraz +25852 B, 28 testów na hoście bez ostrzeżeń. Raport: docs/lichomat/reports/M7-v0.1-do-testow.md."
     }
   ],
   "questions": [
@@ -614,8 +614,8 @@
     {
       "id": "Q6",
       "status": "otwarte",
-      "question": "Testy na sprzęcie są gotowe do zrobienia przez Ciebie: docs/lichomat/hardware-checklist.md, czyli H1–H13, U1 (przyciski kroków w menu globalnym), X4 (USB MIDI out) i opcjonalne X1–X3 (jacki zegara). Wgraj plik z CI: artefakt lichomat-firmware-bf64157… przebiegu 40389633686 na GitHubie, LXR_V2_LICHOMAT_0.1.img o SHA-256 668abe3f…. Do H13 i porównań użyj oficjalnego LXR_V2_V1.7.img (SHA-256 cdb1ca37…), który jest zbudowany ze źródeł a43cd4f w build/official-1.7/ albo pochodzi od Erica Synths. Wyniki wpisz w arkusz na końcu listy albo napisz mi je.",
-      "assumption": "WSTRZYMANE (26.10, 23:43): poprawiam błąd z fw 1.7, który przy każdym wczytaniu kitu nadpisuje bajt pamięci patternów. Po poprawce będzie nowy plik z CI z nowym SHA-256, a lista testów i notatki wydania dostaną nowy hash. Do tego czasu nie testuj starego pliku 668abe3f…."
+      "question": "Testy na sprzęcie są gotowe do zrobienia przez Ciebie: docs/lichomat/hardware-checklist.md, czyli H1–H13, U1 (przyciski kroków w menu globalnym), U2 (wczytanie kitu i Bank Select nie zmieniają patternów), X4 (USB MIDI out) i opcjonalne X1–X3 (jacki zegara). Wgraj plik z CI: artefakt lichomat-firmware-26809918… przebiegu 40416804934 na GitHubie, LXR_V2_LICHOMAT_0.1.img o SHA-256 9a7aff2a…. Do H13 i porównań użyj oficjalnego LXR_V2_V1.7.img (SHA-256 cdb1ca37…), który jest zbudowany ze źródeł a43cd4f w build/official-1.7/ albo pochodzi od Erica Synths. Wyniki wpisz w arkusz na końcu listy albo napisz mi je.",
+      "assumption": "Można testować (od 27.10, 00:06). Poprawka E4.5 jest w pliku 9a7aff2a…, a starego pliku 668abe3f… już nie używaj. Żaden test nie jest oznaczony jako zrobiony, dopóki nie podasz wyników."
     },
     {
       "id": "Q7",
@@ -1753,6 +1753,11 @@
       "n": 220,
       "at": "2026-10-26 23:43",
       "text": "WSTRZYMAJ TESTY NA SPRZĘCIE do nowego pliku. Próbna wersja emulatora (rozpoznanie etapu 1b, czytelnik platformy z UBSan) znalazła błąd z fw 1.7, obecny też w LICHOMAT. W MidiParser.c:168 indeks paramNr = data1 - 1 jest typu uint16_t, więc przy CC 0 zapis trafia 64 KB za tablicę midiParser_originalCcValues. Dzieje się to przy każdym wczytaniu kitu (parametr 127 daje data1 = 0) i przy każdym przychodzącym Bank Select (CC 0). Policzyłem adresy z obu buildów. W LICHOMAT zapis nadpisuje nutę kroku 3 głosu 3 w patternie 14, a w fw 1.7 numer parametru p-locka w kroku 52 głosu 3 patternu 18. Poprawka to jedna linia, więc wchodzi do v0.1 (E4.5): najpierw test, który nie przechodzi, potem poprawka i lekki przegląd. Potem nowy plik z CI i nowe hashe w dokumentach."
+    },
+    {
+      "n": 221,
+      "at": "2026-10-27 00:06",
+      "text": "E4.5 zrobione (23:45–00:01, workflow C4): poprawka 2680991, test-first z nowym testem na hoście test_midicc (6 testów, teraz 28 identyfikatorów ctest). Przy okazji poprawiony drugi zapis poza tablicą: NRPN z niskim bajtem numeru od 127 wzwyż pisał do 129 bajtów za tablicę. Lekki przegląd przeszedł w rundzie 1. CI przebieg 40416804934: testy na hoście (x86 GCC z sanitizerami) i firmware przeszły. Nowy plik do testów: SHA-256 9a7aff2a… (300564 B), hash sprawdziłem po pobraniu. Lista testów: nowy hash w arkuszu i nowy test U2 (porównanie plików patternów przed wczytaniem kitów i po nim). Notatki wydania: nowy hash i poprawka w „Fixed”. Raport etapu, plan (poprawka 26) i M7 uzupełnione. MOŻESZ TESTOWAĆ: na pliku 9a7aff2a…, nie na starym 668abe3f…."
     }
   ]
 }

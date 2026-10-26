@@ -25546,6 +25546,18 @@ under `scratchpad/` were the controller's temporary files.
       tempo), for up to five pulses (F49, re-measured at `bf64157`). F49 stays accepted for v0.1.
       A fix changes the undo and steady rules of N21 and needs its sweeps again.
 
+26. **E4.5: a kit load's out-of-bounds write (2026-10-26, a fw 1.7 bug).**
+    - Found after E4.1 by the stage 1b host probe (UBSan) and confirmed on both device builds:
+      `midiParser_ccHandler()` stored a `MIDI_CC` at `[(uint16_t)(data1 - 1) + 1]`, which is
+      index 65536 for CC 0, 64 KB past the 255-byte table and inside `seq_patternSet`. Every kit
+      load sends parameter 127 as CC 0, and so does an incoming Bank Select MSB. An NRPN with a low
+      number byte of 127 or more stored up to 129 bytes past the table.
+    - Fixed in `2680991` with the host test `test_midicc` (ctest id `midicc`; 28 ids now). The
+      image grows by 48 B; RAM is unchanged.
+    - CI run 40416804934 builds the new release file (`9a7aff2a...`; a local macOS build gives
+      `12be97d7...`). The hardware checklist's run sheet and the release notes name it, and the
+      new check U2 compares the pattern files of a project saved before and after kit loads.
+
 ## Progress notes
 
 Notes made while executing the plan, one bullet each, newest last: the date, the task, and what
@@ -25561,6 +25573,7 @@ happened (a deviation from the plan, a surprise, a decision taken on the way).
 - 2026-10-26, workflow C1 done: E2.9, E3.1, E3.3, E3.4 and E3.5, each with one light review that passed in round 1 (items 22 and 23).
 - 2026-10-26, workflow C2 done: E4.1 by `tools/agent/stage-review.js`, with 82 agents, paused by the owner from 03:39 to 17:29. The light review passed in round 2 (item 24).
 - 2026-10-26, workflow C3 done: E4.2 and E4.3, each with a light review. Then the release documents review (item 25).
+- 2026-10-26, E4.5 added and done (workflow C4, one light review): the kit load's out-of-bounds write (item 26).
 
 ## Questions for the owner
 

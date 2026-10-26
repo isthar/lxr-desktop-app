@@ -13,7 +13,7 @@ Read this first when picking the project up in a new session.
 | Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N21; they win over the spec) |
 | Reports per milestone | `docs/lichomat/reports/` |
 | fw 1.7 timing replica | `tests/reference/fw17_replica.c` |
-| Hardware checklist for the owner (H1–H13, U1, X1–X4) | `docs/lichomat/hardware-checklist.md` |
+| Hardware checklist for the owner (H1–H13, U1, U2, X1–X4) | `docs/lichomat/hardware-checklist.md` |
 | Release notes v0.1 (draft) | `docs/lichomat/release-notes-v0.1.md` |
 | Work branch | `timing-core`, pushed to the owner's fork: https://github.com/isthar/lxr-desktop-app/tree/timing-core |
 
