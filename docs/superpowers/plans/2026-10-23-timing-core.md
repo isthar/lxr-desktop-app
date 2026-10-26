@@ -25366,6 +25366,54 @@ under `scratchpad/` were the controller's temporary files.
       one buffer phase (the worst over phases: 0.97%, 1.35% and 2.80%). Both go to E1.18's controller
       note.
 
+20. **Leftovers of workflow B's reviews, kept for E4.1 and the controller** (collected while B ran).
+    - **E2.2:**
+      - R6.2. DTCM + RAM is 391152 B, +12732 B over the baseline, above the 387568 B allowed.
+        The difference is mostly E1.18's staging buffer (seqc_stage, 2920 B). The controller
+        amends R6.2 with the measured figure after E2.8.
+      - Step 27's list of intended changes misses two transport behaviours: a stop request
+        that finds the core stopped, and the Continue report. They go to the stage 1 report.
+      - The song walk in `seq_cbSeekPosition()` is bounded, but an SPP deep into a song of
+        1-step patterns costs up to about 16k passes, a few ms inside `seq_tick()`. This is
+        for E4.1 R5.
+    - **E2.3:** a one-shot roll (a pad while stopped) and an incoming-note echo get no timed Note
+      Off. Their MIDI note stays on until the voice's next note, a mute or a pattern change, so
+      spec §12's "no hanging notes" holds only for core events. E4.1 decides: fix it, or accept it as
+      a known limitation.
+    - **E2.4:**
+      - Program Change now travels in the sync queues with Start and Continue (`fd0afbe`), so a
+        PC sent just before a Start is applied first. No note covers this design change yet.
+        Amend N14 with it, or let E4.1 R1.2 record it.
+      - Some comments (`Uart.c:64` and others) and the tests of the drain's PC branch lag behind
+        the change.
+      - Routed to E2.8 (its controller note): the stale data bytes of F4/F5/F6 (`[F6 3C 64]`) and
+        the unstated order in the USB MIDI input ring.
+21. **Workflow B (2026-10-25 14:59 to 2026-10-26 02:02).** E1.18, E2.1–E2.8 and E1.19 were done in 11 h
+    with 70 agents, about an hour per task, using the parallel and focused reviews of item 18. The
+    final review found no code defect that breaks normal use. An independent differential test of
+    300 random patterns gave the same fire logs and counters as the E1.16 queue. DTCM + RAM is
+    391660 B (+13240 B), the image 299092 B (+24404 B) and ITCM 13128 B (−1872 B).
+    - **Routed to E2.9, a docs task that runs first in workflow C:**
+      - R6.2 becomes 391824 B (378420 + 8704 + 444 + 1192 + 24 + 2952 + 88: N20, N21, E1.17,
+        E1.18 and E1.19), in both places and in E4.1 Step 4, and R6.3 gets the measured +24404 B;
+      - N21's E1.19 cost bullet;
+      - the E2 review changes the notes lack: Program Change through the sync queues (`fd0afbe`),
+        F4/F5/F6 routed alone (`3771319`), and EXTI9_5 clearing its pending bit once (`ac08e38`),
+        in N14, N20, the plan's E2.5 text and HANDOFF.md;
+      - the merge wording in N2 and in the `seqc_queueMerge()` comment.
+    - **Routed to E4.1, code findings for its review:**
+      - a pulse lost right after a jack tempo jump keeps a wrong merge (1 in 600 random runs);
+      - the undo restores `intervalsExcluded` as an absolute value across a `seqc_resetStats()`;
+      - the mutants that still survive in the E1.19 guards, listed by its reviews and the final
+        review;
+      - the fw_checks order check for `seq_tick()`.
+    - The process lessons:
+      - review fixers rewrote `sequencer.c` with LF twice;
+      - one fixer amended its own unpushed commit.
+
+      Both are now rules of the agent scripts (`85056be`), and the remaining B tasks got them as
+      controller notes.
+
 ## Progress notes
 
 Notes made while executing the plan, one bullet each, newest last: the date, the task, and what
@@ -25377,6 +25425,7 @@ happened (a deviation from the plan, a surprise, a decision taken on the way).
   quality review; the changes are in "Execution amendments", items 1–13.
 - 2026-10-25, execution: E1.15–E1.17 added and done before E2 (items 8 and 12–17); E1.18 added
   to run before E2.1 and E1.19 to run after E2.8 (items 16, 17 and 19).
+- 2026-10-26, workflow B done: E1.18, E2.1–E2.8 and E1.19 (items 20 and 21).
 
 ## Questions for the owner
 

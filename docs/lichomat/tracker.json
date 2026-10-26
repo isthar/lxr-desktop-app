@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-25 14:50",
-    "phase": "Etap 1 — rdzeń: E1.15–E1.17",
-    "focus": "Workflow A2: E1.15–E1.17 gotowe, trwa przegląd końcowy całości. Potem workflow B: E1.18 i integracja E2.1–E2.8.",
+    "updated": "2026-10-26 02:02",
+    "phase": "Etap 1: E1.18, integracja E2.1–E2.8, E1.19",
+    "focus": "Workflow B: E1.18 (kolejka: jedno scalanie na granicę kroku), potem integracja z firmware E2.1–E2.8, na końcu E1.19. Przeglądy równoległe, rundy 2–3 skupione.",
     "branch": "timing-core",
-    "head": "5dad00e",
+    "head": "3f2a038",
     "next": "Integracja z firmware (E2.1–E2.8), potem narzędzia i wydanie (E3, E4).",
-    "updated_at": "2026-10-25T14:50:00+01:00",
-    "now": "Przejście z A2 do B: rozdzielam uwagi z przeglądu końcowego, aktualizuję plan, robię commit i push, uruchamiam workflow B (E1.18, E2.1–E2.8)."
+    "updated_at": "2026-10-26T02:02:00+01:00",
+    "now": "Przejście z B do C: zapis wyników przeglądu końcowego, commit narzędzi, zadanie E2.9 (notatki i plan po przeglądach E2), raport M6, start workflowu C."
   },
   "epics": [
     {
@@ -239,72 +239,79 @@
     {
       "id": "E1.18",
       "epic": "E1",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Kolejka: nowe zdarzenia z granicy kroku zbierane, sortowane i scalane jednym przebiegiem. Koszt ograniczony do ok. 400 zapisów niezależnie od wzorca (dziś do 3861, czyli 22–29% bloku)",
       "updated": "2026-10-25"
     },
     {
       "id": "E1.19",
       "epic": "E1",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Estymator tempa slave: pojedynczy fałszywy takt MIDI albo podwójny impuls na jacku nie restartuje estymacji i nie przekłamuje tempa (dziś do 7–18% przez chwilę), N21. Robione po E2.8.",
-      "updated": "2026-10-25"
+      "updated": "2026-10-26"
     },
     {
       "id": "E2.1",
       "epic": "E2",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "seq_platform: czas z DWT i kolejki sync SPSC",
-      "updated": ""
+      "updated": "2026-10-25"
     },
     {
       "id": "E2.2",
       "epic": "E2",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Klej w sequencer.c zamiast maszyny pulsów",
-      "updated": ""
+      "updated": "2026-10-25"
     },
     {
       "id": "E2.3",
       "epic": "E2",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Jeden MIDI Note On na trigger, echo raz (D4)",
-      "updated": ""
+      "updated": "2026-10-25"
     },
     {
       "id": "E2.4",
       "epic": "E2",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Wątki wejścia MIDI, realtime z przerwań, SPP (D7, D8)",
-      "updated": ""
+      "updated": "2026-10-25"
     },
     {
       "id": "E2.5",
       "epic": "E2",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Jack clock in, reset i clock out przez rdzeń",
-      "updated": ""
+      "updated": "2026-10-25"
     },
     {
       "id": "E2.6",
       "epic": "E2",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Usunięcie clockSync.c i porządki w ITCM",
-      "updated": ""
+      "updated": "2026-10-25"
     },
     {
       "id": "E2.7",
       "epic": "E2",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Błąd fw 1.7: krok bez SHIFT w menu globalnym ustawia długość wszystkich torów (buttonHandler.c:901 przypisuje SEQ_CONFIG = 11 do trybu przycisków, czyli SELECT_MODE_LAST_STEP_ALL)",
-      "updated": "2026-10-24"
+      "updated": "2026-10-25"
     },
     {
       "id": "E2.8",
       "epic": "E2",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Błędy USB MIDI out z fw 1.7: usb_flushMidi() wysyła 128 bajtów za buforem przy każdym zawinięciu i gubi dane przy zajętym endpoincie; usb_sendMidi() daje zły CIN dla system common",
-      "updated": "2026-10-24"
+      "updated": "2026-10-25"
+    },
+    {
+      "id": "E2.9",
+      "epic": "E2",
+      "status": "w toku",
+      "title": "Notatki i plan po przeglądach E2 (tylko dokumenty): budżet RAM R6.2 = 391 824 B, R6.3, Program Change przez kolejkę synchronizacji, F4–F6, EXTI9_5, opis scalania w kolejce",
+      "updated": "2026-10-26"
     },
     {
       "id": "E3.1",
@@ -1089,6 +1096,336 @@
       "n": 98,
       "at": "2026-10-25 14:50",
       "text": "Workflow A2 zakończony (14:50): E1.15–E1.17 zrobione, 24 agentów, 1706 wywołań narzędzi. Przegląd końcowy nie znalazł błędu, który psułby projekt. Ma 1 ważną uwagę, już przypisaną do E1.18 (koszt kolejki), i 3 drobne. Najciekawsza z drobnych: pojedynczy fałszywy takt MIDI albo podwójny impuls na jacku potrafi na chwilę przekłamać tempo o 7–18% i sam zrestartować estymację. Robię z tego zadanie E1.19."
+    },
+    {
+      "n": 99,
+      "at": "2026-10-25 14:59",
+      "text": "Workflow B wystartował (14:59, run wf_1eb61fde-55d): 10 zadań, czyli E1.18, E2.1–E2.8 i E1.19, w nowym trybie: przegląd zgodności i jakości równolegle, rundy 2–3 skupione. Przed startem: plan uzupełniony o E1.15–E1.19 i sekcję poprawek z wykonania (commit 1170608), narzędzia (2706223) i tracker (3af8bc6) wypchnięte na fork."
+    },
+    {
+      "n": 100,
+      "at": "2026-10-25 15:09",
+      "text": "Commit 40cd431 (E1.18, krok 0): drobne poprawki z przeglądów E1.15–E1.17. Jest wśród nich krok, który po SPP i przełączeniu na sync wewnętrzny grał o takt zegara za późno. Dalej opis kasowania kroku, nazwy i poprawione notatki N3 i N21."
+    },
+    {
+      "n": 101,
+      "at": "2026-10-25 15:25",
+      "text": "Commit bf4dad7 (E1.18, główna zmiana): granica kroku zbiera swoje zdarzenia (najwyżej 112) i scala je z kolejką jednym przebiegiem; choke kompaktuje raz, od bliższego końca. Najgorszy koszt wywołania spadł z 3861 do 330 zapisów (wzorzec z hill-climbingu) i z 1691 do 240 (losowe wzorce). Kolejność zdarzeń sprawdzona względem kolejki z E1.16. Koszt: +2952 B RAM, kod −88 B."
+    },
+    {
+      "n": 102,
+      "at": "2026-10-25 15:28",
+      "text": "E1.18 zaimplementowane w 3 commitach (40cd431, bf4dad7, c798052), 29 min. Implementer zgłasza: +2952 B RAM (bufor 112 zdarzeń), liczba cykli to szacunek z mieszanki instrukcji, a test sprzętowy H12 ma ją potwierdzić. Przy ścieżce C1 wybrał raportowanie STOP przed ARM, a nie dopisanie drugiego START. Od 15:28 oba przeglądy pracują jednocześnie."
+    },
+    {
+      "n": 103,
+      "at": "2026-10-25 15:55",
+      "text": "E1.18, przegląd zgodności, runda 1 (15:55): 2 ważne uwagi i 4 drobne. Pierwsza ważna: gdy w tym samym wywołaniu po choke'u kolejka zostanie wyczyszczona (koniec songu, Start, reset), zdarzenia usunięte przez choke giną bez zliczenia w chokeDrops. Druga: brak testu reguły remisu przy scalaniu od początku kolejki, więc mutant z odwróconą kolejnością remisów przechodzi wszystkie testy."
+    },
+    {
+      "n": 104,
+      "at": "2026-10-25 16:00",
+      "text": "E1.18, przegląd jakości, runda 1 (od 15:28): recenzent ma za sobą 68 kroków. Zmierzył najgorszy koszt starej kolejki E1.16 do porównania, sprawdził zasady kontekstu wykonania i właśnie uruchamia testy kolejki z AddressSanitizerem (wykrywanie błędów pamięci)."
+    },
+    {
+      "n": 105,
+      "at": "2026-10-25 16:08",
+      "text": "E1.18, przegląd jakości, runda 1 (16:08): 3 ważne uwagi i 6 drobnych. Dwie ważne pokrywają się z przeglądem zgodności (licznik choke'ów, test remisu). Trzecia jest nowa: poprawka z 40cd431 (krok po SPP i przełączeniu na sync wewnętrzny gra od razu) zgubiła wysłanie taktu MIDI clock i kroku tempa dla tego kroku. Od 16:08 jeden fixer poprawia łącznie 9 blokujących uwag z obu przeglądów."
+    },
+    {
+      "n": 106,
+      "at": "2026-10-25 16:17",
+      "text": "Commit 644218d (E1.18, poprawki po rundzie 1, 9 min): czyszczenie kolejki najpierw zlicza zdarzenia usunięte przez choke; po SPP i przełączeniu na sync wewnętrzny krok wysyła swój takt MIDI clock i krok tempa. Doszły testy remisu przy scalaniu od początku kolejki i skip-once przy zebranych wcześniej zdarzeniach. Od 16:17 trwa runda 2 obu przeglądów, pierwszy raz w trybie skupionym."
+    },
+    {
+      "n": 107,
+      "at": "2026-10-25 16:32",
+      "text": "E1.18, przegląd jakości, runda 2, pierwsza skupiona (16:17–16:32, 15 min zamiast ok. 30): 1 ważna uwaga, czyli luka w teście nowej poprawki. Mutant, który zawsze przesuwa takt zegara do kroku, przechodzi wszystkie testy. Do tego 2 drobne w opisach (chokeDrops, N8)."
+    },
+    {
+      "n": 108,
+      "at": "2026-10-25 16:35",
+      "text": "E1.18, przegląd zgodności, runda 2, skupiona (16:17–16:35): zaliczony; 3 drobne uwagi trafiają na listę zaległości. Od 16:35 fixer dopisuje test, o który prosi przegląd jakości (druga strona nowego warunku: transport bez SPP po przełączeniu na sync wewnętrzny)."
+    },
+    {
+      "n": 109,
+      "at": "2026-10-25 16:37",
+      "text": "Commit be120dc (E1.18, poprawka po rundzie 2, 2 min): test przełączenia na sync wewnętrzny po Stop i Continue bez SPP, który zabija mutanta warunku. Od 16:37 trwa runda 3 przeglądu jakości (ostatnia, skupiona); przegląd zgodności jest już zaliczony."
+    },
+    {
+      "n": 110,
+      "at": "2026-10-25 16:45",
+      "text": "E1.18 zrobione (14:59–16:45, 1 h 46 min; E1.17 trwało 3 h 55 min). Implementacja 29 min, runda 1 obu przeglądów równolegle 40 min, poprawki 9 min, skupiona runda 2 18 min, poprawka 2 min, runda 3 8 min. Kolejka: najgorszy koszt wywołania 330 zapisów zamiast 3861. Commity wypchnięte na fork. Od 16:45 trwa E2.1, pierwsze zadanie integracji z firmware."
+    },
+    {
+      "n": 111,
+      "at": "2026-10-25 16:48",
+      "text": "Commit 0b7ec01 (E2.1): warstwa platformy sekwencera, czyli podstawa czasu z licznika DWT procesora i kolejki wejściowe synchronizacji (SPSC) z testami na hoście. Pierwszy commit integracji z firmware."
+    },
+    {
+      "n": 112,
+      "at": "2026-10-25 16:49",
+      "text": "E2.1 zaimplementowane w 4 min, w jednym commicie 0b7ec01. Kod synchronizacji ma 8-bajtowe wpisy kolejki oraz dekodery bajtów DIN i pakietów USB dla Clock, Start, Continue i Stop. Od 16:49 dwa przeglądy pracują równolegle."
+    },
+    {
+      "n": 113,
+      "at": "2026-10-25 17:06",
+      "text": "E2.1, przegląd jakości, runda 1 (16:49–17:06): zaliczony za pierwszym razem, zostały tylko 4 drobne uwagi. Jedna z nich: 5 reguł dekodera (np. SPP tylko z CIN 0x3) nie ma testów, które łapałyby ich mutanty. Przegląd zgodności jeszcze trwa."
+    },
+    {
+      "n": 114,
+      "at": "2026-10-25 17:08",
+      "text": "E2.1 zrobione w 23 min (16:45–17:08). Oba przeglądy zaliczyły je za pierwszym razem i zostały tylko drobne uwagi. Commit wypchnięty na fork. Od 17:08 trwa E2.2, największe zadanie integracji: sequencer.c przechodzi na rdzeń seq_core, a maszyna 24 impulsów z fw 1.7 znika."
+    },
+    {
+      "n": 115,
+      "at": "2026-10-25 17:11",
+      "text": "Commit 3b3f3db (E2.2, główna zmiana): sekwencer działa na seq_core, a maszyna 24 impulsów z fw 1.7 jest usunięta. sequencer.c: +970 / −1411 linii. Doszedł skrypt tools/fw_checks.sh do kontroli firmware'u."
+    },
+    {
+      "n": 116,
+      "at": "2026-10-25 17:12",
+      "text": "E2.2 zaimplementowane w 4 min. Implementer zastosował edycje z planu mechanicznie i potwierdził je sumami SHA-256 bloków; check.sh i fw_checks.sh przechodzą, 0 ostrzeżeń. Firmware: RAM +12 732 B (plan zakładał +8 484 B, różnica to głównie bufor E1.18), obraz +20 KB, ITCM −1872 B. Od 17:12 oba przeglądy."
+    },
+    {
+      "n": 117,
+      "at": "2026-10-25 17:31",
+      "text": "E2.2, przeglądy, runda 1 (od 17:12): oba w toku. Recenzent zgodności ma za sobą 136 kroków i buduje bazę z E2.1 do porównania. Recenzent jakości ma 107 kroków i spisuje każde wywołanie rdzenia w sequencer.c razem z kontekstem, z którego pada."
+    },
+    {
+      "n": 118,
+      "at": "2026-10-25 17:41",
+      "text": "E2.2, przegląd zgodności, runda 1 (17:12–17:41): tylko 2 drobne uwagi, obie to nieaktualne komentarze w sequencer.c. Jeden mówi, że skasowany krok nie gra, a od E1.17 część Part D (zasada: zaczęty krok gra do końca) już tak nie jest. Drugi opisuje fazę kroku, która przy wyłączonym nagrywaniu nie jest odświeżana. W rundzie 1 nawet drobne uwagi zgodności idą do poprawki."
+    },
+    {
+      "n": 119,
+      "at": "2026-10-25 17:42",
+      "text": "E2.2, przegląd jakości, runda 1 (17:12–17:42): 2 ważne uwagi i 4 drobne. Pierwsza ważna to prawdziwy wyścig: seq_recordAutomation() czyta kopię numeru kroku dwa razy. Jeśli seq_tick() wejdzie między odczytami, a kopia zmieni się na 255 (stop albo koniec songu), funkcja sięga do kroku 255 poza tablicą. Druga ważna: skrypt fw_checks.sh przez SIGPIPE potrafi uznać, że wywołania nie ma, chociaż jest. Drobna uwaga do mnie: budżet RAM w R6.2 trzeba podnieść o bufor E1.18 (2920 B)."
+    },
+    {
+      "n": 120,
+      "at": "2026-10-25 17:44",
+      "text": "Commit 90a307e (E2.2, poprawki po rundzie 1, 2 min; fixer z rundy 2 zastąpił go potem przez amend commitem ad35df4, zanim cokolwiek zostało wypchnięte). seq_recordAutomation() czyta kopię kroku raz, więc nie sięga już do kroku 255. fw_checks.sh nie myli się przez SIGPIPE. Poprawione oba komentarze. Od 17:44 trwa skupiona runda 2 obu przeglądów."
+    },
+    {
+      "n": 121,
+      "at": "2026-10-25 17:54",
+      "text": "E2.2, przegląd jakości, runda 2 (17:44–17:54, skupiona): 1 ważna uwaga. Commit z poprawkami (90a307e) zamienił w całym sequencer.c końce linii CRLF na LF, wbrew zasadzie planu dla plików w Core/. Fixer przywróci CRLF. Do tego 3 drobne uwagi o fw_checks.sh i pustej linii."
+    },
+    {
+      "n": 122,
+      "at": "2026-10-25 17:56",
+      "text": "Commit ad35df4 (E2.2, poprawka po rundzie 2, 1 min): sequencer.c znów ma końce linii CRLF. Ten sam błąd zgłosiły oba przeglądy w rundzie 2. Od 17:56 trwa runda 3 obu przeglądów, ostatnia."
+    },
+    {
+      "n": 123,
+      "at": "2026-10-25 18:08",
+      "text": "E2.2 zrobione (17:08–18:08, 1 h). Sekwencer firmware'u działa na nowym rdzeniu. Przeglądy znalazły i poprawiły wyścig przy nagrywaniu automatyki (odczyt kroku 255 poza tablicą), fałszywe wyniki fw_checks.sh i zgubione końce linii CRLF. Commity wypchnięte na fork. Od 18:08 trwa E2.3 (D4: MIDI Note On i Note Off)."
+    },
+    {
+      "n": 124,
+      "at": "2026-10-25 18:11",
+      "text": "E2.3 zaimplementowane w 3 min, w jednym commicie c0f37a6 (D4). Każde wyzwolenie wysyła dokładnie jedno MIDI Note On: voiceControl_noteOn() już nie wysyła MIDI, robi to tylko callback wyzwolenia. Note Off jest dopasowany do głosu. Od 18:11 dwa przeglądy pracują równolegle."
+    },
+    {
+      "n": 125,
+      "at": "2026-10-25 18:27",
+      "text": "E2.3, runda 1 obu przeglądów (18:11–18:27). Zgodność: 1 drobna uwaga, kontrola E2.3 w fw_checks.sh przepuszcza 4 zepsute wersje (mutanty). Jakość: zaliczony, 5 drobnych uwag. Najważniejsza z nich: nuta z jednorazowego rolla (pad wciśnięty przy zatrzymanym sekwencerze) i echo nuty przychodzącej nie dostają Note Off po czasie, tylko przy następnej nucie tego głosu, wyciszeniu albo zmianie patternu. Od 18:27 fixer poprawia uwagę zgodności."
+    },
+    {
+      "n": 126,
+      "at": "2026-10-25 18:28",
+      "text": "Commit be8c1d3 (E2.3, poprawka po rundzie 1, 1 min): fw_checks.sh pilnuje teraz jednego Note On na wyzwolenie i Note Off dopasowanego do głosu, a 4 mutanty z przeglądu nie przechodzą. Od 18:28 trwa skupiona runda 2."
+    },
+    {
+      "n": 127,
+      "at": "2026-10-25 18:40",
+      "text": "E2.3 zrobione (18:08–18:40, 32 min): D4, czyli jedno MIDI Note On na wyzwolenie i Note Off na głos, jest gotowe. Oba przeglądy zaliczone w rundzie 2. Commity wypchnięte na fork. Od 18:40 trwa E2.4 (D7, D8: przetwarzanie wejścia MIDI)."
+    },
+    {
+      "n": 128,
+      "at": "2026-10-25 18:44",
+      "text": "E2.4 zaimplementowane w 4 min, w 2 commitach (cca16a9, 273e2ea), D7 i D8. Przerwania USART3 i USB pobierają tylko znacznik czasu DWT i przekazują bajty do kolejek synchronizacji, a całe MIDI jest parsowane w seq_tick(). Od 18:44 dwa przeglądy pracują równolegle."
+    },
+    {
+      "n": 129,
+      "at": "2026-10-25 18:59",
+      "text": "E2.4, przegląd zgodności, runda 1 (18:44–18:59): 3 drobne uwagi. Komentarz seq_parseMidiInput() mówi, że handlery docierają do rdzenia tylko przez skrzynkę, a to nieprawda. Kontrola E2.4 w fw_checks.sh przepuściłaby zepsutą wersję. Raport implementera ma dwa błędne zdania o zachowaniu SysEx z fw 1.7. W rundzie 1 wszystkie idą do poprawki."
+    },
+    {
+      "n": 130,
+      "at": "2026-10-25 19:07",
+      "text": "E2.4, przegląd jakości, runda 1 (18:44–19:07): 1 ważna uwaga i 6 drobnych. Ważna: MIDI Start albo Continue może teraz wyprzedzić Program Change, który przyszedł tuż przed nim, bo realtime idzie kolejką synchronizacji, a reszta wiadomości jest parsowana później w tym samym seq_tick(). DAW, który wysyła PC, a potem Start, ruszyłby ze starym patternem. N14 rozwiązało ten sam problem tylko dla SPP."
+    },
+    {
+      "n": 131,
+      "at": "2026-10-25 19:14",
+      "text": "Commit fd0afbe (E2.4, poprawki po rundzie 1, 7 min). Program Change idzie teraz kolejką synchronizacji razem z Start i Continue, więc DAW, który wysyła PC, a potem Start, ruszy z właściwym patternem. Kontrole E2.4 w fw_checks.sh są ostrzejsze, a komentarze poprawione. Czwarta uwaga dotyczyła tylko raportu implementera, nie pliku w repozytorium. Od 19:14 trwa skupiona runda 2."
+    },
+    {
+      "n": 132,
+      "at": "2026-10-25 19:28",
+      "text": "E2.4, przegląd zgodności, runda 2 (19:14–19:28, skupiona): zaliczony, zostało 6 drobnych uwag. Najważniejsza: nowa droga Program Change przez kolejkę synchronizacji nie jest jeszcze opisana w notatkach. Zapisałem ją razem z innymi zaległościami workflowu B dla E4.1 jako poprawkę planu nr 20. Dwie uwagi z kodu MIDI dopisałem do zadania E2.8."
+    },
+    {
+      "n": 133,
+      "at": "2026-10-25 19:33",
+      "text": "E2.4, przegląd jakości, runda 2 (19:14–19:33, skupiona): 1 ważna uwaga, regresja z poprawki fd0afbe. Zmiana patternu przez Program Change działa teraz w środku opróżniania kolejki. Przy zatrzymanym sekwencerze ładuje kit (ok. 228 parametrów), a zdarzenia synchronizacji, które przyjdą w tym czasie, dostają przestarzały czas (zmienna now) sprzed ładowania. Fixer poprawia, potem runda 3."
+    },
+    {
+      "n": 134,
+      "at": "2026-10-25 19:35",
+      "text": "Commit 367cb76 (E2.4, poprawka po rundzie 2, 2 min): opróżnianie kolejki synchronizacji zatrzymuje się po Program Change albo SPP, które ładują kit. Kolejne zdarzenia czekają na następny seq_tick() i dostają świeży czas. Od 19:35 trwa runda 3 przeglądu jakości, ostatnia."
+    },
+    {
+      "n": 135,
+      "at": "2026-10-25 19:54",
+      "text": "E2.4 zrobione (18:40–19:54). Ostatnia runda przeglądu jakości przepuściła je z 2 ważnymi uwagami, bo w rundzie 3 blokują tylko błędy krytyczne. (1) Poprawka 367cb76 znowu zapisała cały sequencer.c z końcami linii LF zamiast CRLF, i to już jest wypchnięte. (2) Przestarzały czas w opróżnianiu kolejki jest naprawiony tylko dla 2 wywołań, nie u przyczyny. Obie idą do E2.6 jako pierwsze kroki. Regułę o CRLF dopisałem do plików wszystkich pozostałych zadań B, bo czytają je też fixery, oraz do reguł agentów na workflow C."
+    },
+    {
+      "n": 136,
+      "at": "2026-10-25 19:57",
+      "text": "E2.5 zaimplementowane w 3 min, w jednym commicie bf109a3, bez odstępstw od planu. Jacki clock in i reset trafiają do rdzenia przez kolejkę synchronizacji jacka, a przerwanie EXTI4 pobiera najpierw znacznik czasu DWT. Od 19:57 oba przeglądy pracują równolegle."
+    },
+    {
+      "n": 137,
+      "at": "2026-10-25 20:13",
+      "text": "E2.5, runda 1 obu przeglądów (19:57–20:13). Jakość: 2 ważne uwagi. Pierwsza to prawdziwy błąd w przerwaniu: EXTI9_5_IRQHandler kasuje flagę przerwania drugi raz, już po odczycie pinu, więc zbocze bramki resetu, które przyjdzie w tym momencie, ginie bez obsługi. Druga: kontrola E2.5 w fw_checks.sh przepuszcza zepsute wersje. Zgodność: 2 drobne. Reset na jacku przy transporcie stojącym na początku nie wyłącza już wszystkich nut, inaczej niż w fw 1.7."
+    },
+    {
+      "n": 138,
+      "at": "2026-10-25 20:16",
+      "text": "Commit ac08e38 (E2.5, poprawki po rundzie 1, 3 min). Przerwanie bramki resetu nie gubi już zbocza: flaga jest kasowana tylko raz, przed odczytem pinu. Każde aktywne zbocze resetu wyłącza wszystkie nuty, jak w fw 1.7. Kontrola E2.5 w fw_checks.sh jest ostrzejsza. Od 20:16 trwa skupiona runda 2. Przy okazji sequencer.c ma znów CRLF (2371 z 2371 linii), bo fixer zastosował się do nowej reguły o końcach linii."
+    },
+    {
+      "n": 139,
+      "at": "2026-10-25 20:35",
+      "text": "E2.5 zrobione (19:54–20:33): jacki clock in i reset idą przez kolejkę synchronizacji. Przegląd naprawił zgubione zbocze w przerwaniu bramki resetu. Oba przeglądy zaliczone w rundzie 2. Commity wypchnięte na fork. Od 20:33 trwa E2.6: najpierw poprawki po E2.4, potem usunięcie starego kodu zegara (clockSync)."
+    },
+    {
+      "n": 140,
+      "at": "2026-10-25 20:40",
+      "text": "E2.6, trzy commity w 7 min. 65548ab: kontrola w fw_checks.sh działa na plikach CRLF. 23a01ac: opróżnianie kolejki synchronizacji odczytuje czas przed każdym wpisem, czyli poprawka u przyczyny z przeglądu E2.4. 4355cb7: usunięty clockSync i martwy kod zegara z fw 1.7, a sequencer.c wychodzi z ITCM (szybkiej pamięci instrukcji)."
+    },
+    {
+      "n": 141,
+      "at": "2026-10-25 20:42",
+      "text": "E2.6 zaimplementowane w 9 min, w 3 commitach, razem z poprawkami po E2.4. CRLF nie wymagał osobnego commitu, bo przywrócił go już fixer E2.5. Od 20:42 oba przeglądy pracują równolegle."
+    },
+    {
+      "n": 142,
+      "at": "2026-10-25 21:02",
+      "text": "E2.6, runda 1 obu przeglądów (20:42–21:02). Jakość: 1 ważna uwaga i 4 drobne. Ważna: nowa kontrola fw_checks.sh nie łapie regresji, dla której powstała, czyli odczytu czasu tylko raz przed pętlą. Wśród drobnych: kolejka nie ma limitu na jedno wywołanie, więc seria Program Change przy zatrzymanym sekwencerze ładuje kit raz po razie w jednym seq_tick(). Od 21:02 fixer."
+    },
+    {
+      "n": 143,
+      "at": "2026-10-25 21:04",
+      "text": "Commit 6fe86f0 (E2.6, poprawki po rundzie 1, 2 min). Kontrola kolejki w fw_checks.sh sprawdza teraz, że czas jest odczytywany w pętli przed każdym wpisem, więc odczyt raz przed pętlą nie przejdzie. Martwe komentarze w presetManager.c usunięte. Od 21:04 trwa skupiona runda 2."
+    },
+    {
+      "n": 144,
+      "at": "2026-10-25 21:19",
+      "text": "E2.6, runda 2 obu przeglądów (21:04–21:19, skupiona). Zgodność zaliczona. Jakość: 1 ważna uwaga do tej samej kontroli fw_checks.sh, tym razem jej druga połowa (czy kolejka jest opróżniana do końca). Kontrole fw_checks.sh przeszukują tekst źródła, a recenzenci zawsze potrafią zbudować mutanta, który je przejdzie. Część z tego sprawdzi dopiero test na sprzęcie. Od 21:19 fixer."
+    },
+    {
+      "n": 145,
+      "at": "2026-10-25 21:20",
+      "text": "Commit 0865011 (E2.6, poprawka po rundzie 2, 1 min): kontrola opróżniania kolejki sprawdza też wyjście z pętli, więc wcześniejszy break albo return nie przejdzie. Od 21:20 trwa runda 3 przeglądu jakości, ostatnia."
+    },
+    {
+      "n": 146,
+      "at": "2026-10-25 21:31",
+      "text": "E2.6 zrobione (20:33–21:31): clockSync i martwy kod zegara z fw 1.7 usunięte, czas w kolejce synchronizacji odczytywany przed każdym wpisem, CRLF na miejscu. Commity wypchnięte na fork. Od 21:31 trwa E2.7 (błąd fw 1.7 w menu globalnym)."
+    },
+    {
+      "n": 147,
+      "at": "2026-10-25 21:33",
+      "text": "E2.7 zaimplementowane w 2 min, w jednym commicie 864b0d1. SHIFT + krok 12 włącza teraz osobny tryb przycisków SELECT_MODE_MENU. W fw 1.7 włączał SEQ_CONFIG (11), czyli tę samą wartość co SELECT_MODE_LAST_STEP_ALL, i dlatego przycisk kroku w menu ustawiał długość wszystkich torów. Od 21:33 oba przeglądy."
+    },
+    {
+      "n": 148,
+      "at": "2026-10-25 21:48",
+      "text": "E2.7, runda 1 obu przeglądów (21:33–21:48). Jakość: zaliczony, 2 drobne uwagi. Kontrola E2.7 czyta wszystkie trzy gałęzie case SEQ_CONFIG i łapie też zakomentowaną linię, a wymiary w raporcie różnią się od planu. Zgodność: drobne uwagi, które w rundzie 1 idą do poprawki. Od 21:48 fixer."
+    },
+    {
+      "n": 149,
+      "at": "2026-10-25 21:50",
+      "text": "Commit 46e0fd2 (E2.7, poprawka po rundzie 1, 2 min). Test przycisków sprawdza teraz naprawdę, że przycisk select w menu globalnym nie przełącza podstrony. Wcześniej atrapa menu_switchSubPage() niczego nie zapisywała, więc test nie mógł tego wykryć. Od 21:50 trwa skupiona runda 2."
+    },
+    {
+      "n": 150,
+      "at": "2026-10-25 21:57",
+      "text": "E2.7 zrobione (21:31–21:57, 26 min): w menu globalnym przycisk kroku bez SHIFT nie ustawia już długości wszystkich torów, a błąd z fw 1.7 jest naprawiony. Oba przeglądy zaliczone w rundzie 2. Commity wypchnięte na fork. Od 21:57 trwa E2.8 (USB MIDI out), ostatnie zadanie integracji."
+    },
+    {
+      "n": 151,
+      "at": "2026-10-25 22:03",
+      "text": "E2.8 zaimplementowane w 6 min, w 3 commitach. c4f1943: USB MIDI out z CIN zgodnym z USB MIDI 1.0 i bufor pierścieniowy, który czeka na wolny endpoint, zamiast wysyłać 128 bajtów spoza bufora. 3771319: F4, F5 i F6 wychodzą bez starych bajtów danych. a057859: bariery pamięci w buforze wejściowym USB MIDI. Od 22:03 oba przeglądy."
+    },
+    {
+      "n": 152,
+      "at": "2026-10-25 22:24",
+      "text": "E2.8, runda 1 obu przeglądów (22:03–22:24). Zgodność: 2 drobne uwagi do testów USB MIDI (przepełnienie 32-bitowego licznika czasu, bajty danych każdego statusu). Jakość: 1 ważna uwaga i 6 drobnych. Ważna: liczba bajtów danych dla każdego statusu jest sprawdzana tylko w kilku punktach, więc mutant, który przesuwa granicę zakresu jednobajtowego, przechodzi testy. Wśród drobnych: licznik zgubionych pakietów USB MIDI nigdzie nie jest pokazywany, a nowe zachowanie F4–F6 nie jest jeszcze opisane w notatkach. Od 22:24 fixer."
+    },
+    {
+      "n": 153,
+      "at": "2026-10-25 22:26",
+      "text": "Commit 6a22df6 (E2.8, poprawki po rundzie 1, 2 min): testy USB MIDI sprawdzają bajty danych każdego statusu i regułę zablokowanego hosta przy przepełnieniu licznika czasu. Sam kod w usb_midiTx.c był poprawny i się nie zmienił. Od 22:26 trwa skupiona runda 2."
+    },
+    {
+      "n": 154,
+      "at": "2026-10-25 22:33",
+      "text": "E2.8 zrobione (21:57–22:33, 36 min). USB MIDI out wysyła pakiety z poprawnym CIN, a bufor pierścieniowy czeka na wolny endpoint: koniec z 128 bajtami spoza bufora i zgubionymi wiadomościami. Doszły dwie poprawki parsera MIDI. Cała integracja z firmware (E2.1–E2.8) jest zrobiona. Commity wypchnięte na fork. Od 22:33 trwa E1.19, ostatnie zadanie workflowu B."
+    },
+    {
+      "n": 155,
+      "at": "2026-10-25 23:00",
+      "text": "Commit 64ddb6a (E1.19, 27 min). Estymator tempa ma własny licznik taktów, który pomija fałszywy takt, a pozycja nadal go liczy. MIDI: rząd wczesnych odchyleń, który tłumaczy jeden fałszywy takt, zostaje przyjęty i nie restartuje estymacji. Jack: dwa interwały, które razem dają jeden okres, łączą się od razu. Szczegóły i zmierzone liczby są w notatce N21. bss +48 B, kod +2284 B."
+    },
+    {
+      "n": 156,
+      "at": "2026-10-25 23:04",
+      "text": "E1.19 zaimplementowane w 31 min, w 2 commitach (64ddb6a i 509b9d4 z autokontroli implementera). Od 23:04 oba przeglądy pracują równolegle. Po E1.19 przyjdzie przegląd końcowy całego workflowu B."
+    },
+    {
+      "n": 157,
+      "at": "2026-10-25 23:35",
+      "text": "E1.19, runda 1 obu przeglądów (23:04–23:32): 4 ważne uwagi. Zgodność: (1) na jacku prawdziwy skok tempa o ok. 2–2,5 raza bywa brany za podwójny impuls i nie restartuje estymacji, wbrew N16; (2) impuls dokładnie w połowie okresu dalej przekłamuje tempo. Jakość: testy nie przypinają projektu, więc mutanty zabezpieczeń przechodzą. Doprecyzowałem cel zadania: (1) i testy są obowiązkowe; dla (2) wystarczy decyzja z wyprzedzeniem o jeden impuls albo udokumentowany, zmierzony limit."
+    },
+    {
+      "n": 158,
+      "at": "2026-10-25 23:55",
+      "text": "Commit b6db990 (E1.19, poprawki po rundzie 1, 23 min). Scalenie podwójnego impulsu na jacku jest teraz wstępne: następny impuls je cofa, jeśli to był początek prawdziwego skoku tempa. Sprawdzone na 36 360 przebiegach (120→200–300 BPM, 4 i 24 PPQ, z jitterem): restarty i błędy są identyczne jak przed E1.19. Impuls dokładnie w połowie okresu ma teraz błąd 0,000%, a było 42,9%. Fixer znalazł i naprawił jeszcze jeden błąd: drugi podwójny impuls kilka taktów później był blokowany. Od 23:55 trwa runda 2."
+    },
+    {
+      "n": 159,
+      "at": "2026-10-26 00:32",
+      "text": "E1.19, przegląd jakości, runda 2 (23:55–00:32): 3 ważne uwagi. Nowa: odbicie styku tuż po prawdziwym impulsie w mniej więcej połowie przypadków jest scalane odwrotnie, więc estymacja pomija prawdziwy impuls, a zostawia odbicie. Kod z 64ddb6a robił to od początku, a recenzent znalazł to przy przeglądaniu poprawki. Do tego luki w testach: dwie z zabezpieczeń przed pomyleniem skoku tempa i progu cofania nie są przypięte testami."
+    },
+    {
+      "n": 160,
+      "at": "2026-10-26 00:37",
+      "text": "E1.19, przegląd zgodności, runda 2 (od 23:55): recenzent ma za sobą 93 kroki. Sprawdza proponowane testy regresji na bazie, na HEAD i na mutantach, a teraz bada, czy przy rampie tempa okno estymacji przełącza się na scalonym impulsie. Przegląd jakości z tej rundy już skończył."
+    },
+    {
+      "n": 161,
+      "at": "2026-10-26 00:40",
+      "text": "E1.19, przegląd zgodności, runda 2 (23:55–00:38): 2 ważne uwagi, oba to brakujące testy, które przypięłyby regułę stałego interwału i obie strony progu cofania scalenia. Kryterium z mojej notatki (każdy mutant z przeglądów) było otwarte, bo każda runda dokładała nowych, więc zamknąłem je listą konkretnych zabezpieczeń. Mutanty spoza listy idą jako drobne zaległości do E4.1. Od 00:38 fixer."
+    },
+    {
+      "n": 162,
+      "at": "2026-10-26 00:55",
+      "text": "Commit 3f2a038 (E1.19, poprawki po rundzie 2, 17 min). Odbicie styku tuż po prawdziwym impulsie nie wypycha już prawdziwego impulsu z estymacji. Nowe testy przypinają regułę stałego interwału i obie strony progu cofania scalenia. Fixer potwierdził wszystkie 5 uwag i poprawił je. Od 00:55 trwa runda 3 obu przeglądów, ostatnia."
+    },
+    {
+      "n": 163,
+      "at": "2026-10-26 01:21",
+      "text": "E1.19 zrobione (22:33–01:21, 2 h 48 min, najtrudniejsze zadanie B). Estymator tempa w trybie slave przechodzi pojedynczy fałszywy takt MIDI, podwójny impuls na jacku, także dokładnie w połowie okresu, i odbicie styku. Prawdziwe skoki tempa restartują estymację jak wcześniej. Commity wypchnięte na fork. Wszystkie 10 zadań workflowu B są zrobione. Od 01:21 trwa przegląd końcowy całego B."
+    },
+    {
+      "n": 164,
+      "at": "2026-10-26 02:02",
+      "text": "Workflow B zakończony (14:59–02:02, 11 h, 70 agentów). Wszystkie 10 zadań zrobione: E1.18, E2.1–E2.8, E1.19. Przegląd końcowy: brak błędu w kodzie, który psułby normalne użycie. Niezależny test różnicowy: 300 losowych patternów na nowej i na starej kolejce (sprzed E1.18) daje identyczne zdarzenia. Ma 1 ważną uwagę (budżet RAM w R6.2 musi objąć bufor E1.18: 391 824 B, zmierzone 391 660 B) i 4 drobne (notatki po rundach E2, rzadki przypadek zgubionego impulsu po skoku tempa na jacku, luki w testach)."
     }
   ]
 }

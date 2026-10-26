@@ -14,8 +14,8 @@ Order of the tasks:
 1. E3.2
 2. E1.1-E1.13, then E1.14, E1.15 (the slave tempo estimate for packed USB clocks, note N21), E1.16 (the event queue as an earliest-first ring, amended N2), E1.17 (the leftovers of the E1 reviews) and E1.18 (one merge per boundary in the queue)
 3. E2.1-E2.6, then E2.7 and E2.8, then E1.19 (one extra clock or a double trigger in the slave tempo fit, N21; it runs after E2 so that the integration is not delayed)
-4. E3.1, E3.3, E3.4, E3.5 (its env.sh part was already done in commit aa70b81)
-5. E4.1-E4.3
+4. E2.9 (the notes and the plan after the E2 reviews; documents only), then E3.1, E3.3, E3.4, E3.5 (its env.sh part was already done in commit aa70b81)
+5. E4.1 (run by tools/agent/stage-review.js), then E4.2 and E4.3
 
 Each task starts from the committed result of the tasks before it on branch timing-core (see git log). The notes file docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md (N1-N21) wins over the spec. The plan applies the notes; where the plan and a note still disagree, follow the note and report it.
 
@@ -27,3 +27,5 @@ State of the core before E2 (read this before an E2 task): the plan's E2 section
 - E1.16 and E1.18 made the event queue an earliest-first ring with one merge per boundary (amended N2).
 - E1.17 hardened the tests: ASSERT_EQ rejects floating-point operands, and there are new tests.
 E2 steps that quote E1 text (for example E2.1's test_fw17 line and E1.3's lxr_sequencer block in tests/CMakeLists.txt and Core/CMakeLists.txt, and E2.4's execution-context comment in seq_core.h) may no longer match: adapt them to the current files, keep the intent, and list every adaptation. Expected RAM, image and test-count figures will differ too; report the measured ones. The E4.1 RAM budget (row R6.2) is being raised for N20 (444 B) and N21 (1192 B).
+
+State before E3 and E4 (read this before an E3 or E4 task): E1.1-E1.19 and E2.1-E2.8 are done, and the firmware runs on seq_core. The plan's E3 and E4 sections were written when the notes ran to N20 and E1 to E1.14. Its "Execution amendments" section (items 1-21) lists what changed since. Adapt the quoted text of a step to the current files, keep its intent, and list every adaptation. Measured at 3f2a038: ITCM 13128 B, DTCM 107388 B, RAM 284272 B, so DTCM + RAM is 391660 B; the image is 299092 B; 26 ctest ids pass. E2.9 sets review row R6.2 to 391824 B. tools/fw_checks.sh (E2.2) checks the firmware ELF and sources task by task.
