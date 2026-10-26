@@ -304,7 +304,7 @@ typedef struct
 	seqc_fit_t	fitBefore;	/**< the fit before the last MIDI transfer, for a clock that joins it; the jack: before a merged double trigger */
 	bool		mergeTentative;	/**< the jack: the last pulse merged a double trigger, which the next one may undo (seqc_fitUndoMerge()) */
 	seqc_point_t	mergePoint;	/**< that pulse, in the position's count */
-	uint32_t	mergeExcluded;	/**< intervalsExcluded before it */
+	bool		mergeCounted;	/**< the merge counted the pulse between in intervalsExcluded */
 	seqc_fit_t	fit;		/**< the tempo fit (N9, N16, N21) */
 	uint32_t	ringClock[SEQC_TEMPO_RING];	/**< the points of the long window */
 	uint32_t	ringStamp[SEQC_TEMPO_RING];	/**< their stamps, low 32 bits */
@@ -1676,7 +1676,7 @@ static seqc_split_t seqc_fitDoubleTrigger(seqc_point_t *p, double *dev, double s
 	seqc_sl.dropStamp = seqc_sl.ringStamp[slot];
 	seqc_sl.mergeTentative = true;
 	seqc_sl.mergePoint = (seqc_point_t){ p->stamp, p->clock + f->extraClocks };
-	seqc_sl.mergeExcluded = seqc.stats.intervalsExcluded;
+	seqc_sl.mergeCounted = !leftOut;	/* an outlier was counted already */
 	if (leftOut)
 		f->phase -= (int64_t)(f->split - 0.5);	/* the phase its interval added (seqc_fitPoint()) */
 	else
@@ -1820,9 +1820,10 @@ static seqc_pointFate_t seqc_fitPoint(seqc_point_t p, bool mayMerge)
  * (seqc_fitDoubleTrigger()). After a double trigger p comes about one slope
  * after that pulse. If it comes more than half a band earlier than that (about
  * half a slope after it, or less), the two short intervals were the start of a
- * tempo jump: the fit, the ring slot that pulse
- * wrote and intervalsExcluded go back to before the merge, and the pulse goes
- * in again without one. The jump then goes through the fit (N16) as it would
+ * tempo jump: the fit and the ring slot that pulse wrote go back to before
+ * the merge, intervalsExcluded takes back the merge's own count (so a
+ * seqc_resetStats() in between stays a reset), and the pulse goes in again
+ * without one. The jump then goes through the fit (N16) as it would
  * have without the merge, one pulse later. */
 static void seqc_fitUndoMerge(seqc_point_t p)
 {
@@ -1837,7 +1838,8 @@ static void seqc_fitUndoMerge(seqc_point_t p)
 	seqc_sl.fit = seqc_sl.fitBefore;
 	seqc_sl.ringClock[seqc_sl.dropSlot] = seqc_sl.dropClock;
 	seqc_sl.ringStamp[seqc_sl.dropSlot] = seqc_sl.dropStamp;
-	seqc.stats.intervalsExcluded = seqc_sl.mergeExcluded;
+	if (seqc_sl.mergeCounted && seqc.stats.intervalsExcluded > 0)
+		seqc.stats.intervalsExcluded--;
 	(void)seqc_fitPoint(m, false);
 }
 //------------------------------------------------------------------------------

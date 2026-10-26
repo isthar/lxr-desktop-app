@@ -2787,6 +2787,36 @@ TEST(T18_undo_keeps_earlier_exclusions)
 	ASSERT_NEAR(seqc_currentBpm(), 245.0, 1e-3);
 }
 
+TEST(T18_undo_after_a_stats_reset_brings_back_no_exclusion)
+{
+	/* as T18_undo_keeps_earlier_exclusions, with seqc_resetStats() after the
+	 * merging pulse 25: the undo at pulse 26 takes back only the merge's own
+	 * count, so the lost pulse 16, counted before the reset, does not come back */
+	fake_host_t *h = slaveWithGrid(SEQC_SYNC_ANALOG);
+	seqc_start();
+	const double perOld = fake_stepCycles(120.0), perNew = fake_stepCycles(245.0);
+	double t = (double)fake_msToCycles(10.0);
+	for (uint32_t k = 0; k < 40; k++)
+	{
+		if (k > 0)
+			t += k < 24 ? perOld : k == 24 ? 0.05 * perOld + 0.95 * perNew : perNew;
+		if (k == 16)
+			continue;
+		const seqc_time_t s = (seqc_time_t)(t + 0.5);
+		fake_runUntil(h, s, fake_msToCycles(0.1));
+		fake_sync(h, SEQC_EV_PULSE, s);
+		fake_process(h, s);
+		if (k == 25)
+		{
+			ASSERT_EQ(stats().intervalsExcluded, 2);	/* the lost pulse and the merge */
+			seqc_resetStats();
+		}
+	}
+	ASSERT_EQ(stats().tempoRestarts, 0);
+	ASSERT_EQ(stats().intervalsExcluded, 0);
+	ASSERT_NEAR(seqc_currentBpm(), 245.0, 1e-3);
+}
+
 TEST(T18_jump_of_30_percent_is_followed_inside_the_band)
 {
 	/* the jack at 4 PPQ, 120 to 156 BPM with ±0.3 ms of jitter: the intervals

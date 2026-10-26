@@ -690,9 +690,10 @@ the clock count.
       The next pulse undoes the merge if it comes more than half a band before one old pulse after
       the merged one: after a double trigger it comes one old pulse later, after such a jump half an
       old pulse or less.
-      The undo puts back the fit, the ring slot the merged pulse wrote and `intervalsExcluded`, and
-      the merged pulse goes in again without a merge. The jump then goes through the fit as it
-      would have without one, a pulse later.
+      The undo puts back the fit and the ring slot the merged pulse wrote, takes the merge's own
+      count back out of `intervalsExcluded` (so a `seqc_resetStats()` between the merge and the undo
+      stays a reset; amended in the E4.1 review, F5), and the merged pulse goes in again without a
+      merge. The jump then goes through the fit as it would have without one, a pulse later.
     - The first version merged at once and guarded jumps with the tight sum test alone, and with no
       merge of two outliers or of two intervals inside the band. The review found that it still
       merged jumps to about 2 to 2.5 times when the change came early in a pulse, and dropped a
