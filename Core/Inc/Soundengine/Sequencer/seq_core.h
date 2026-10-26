@@ -170,7 +170,8 @@
  *     event.
  * - Queue order (N2): tick ascending, then absolute step descending, then note
  *   events before roll events, then track ascending. So events of different
- *   tracks at the same tick fire in track order.
+ *   tracks with the same tick, absolute step and kind fire in track order; at
+ *   one tick an event of a newer step fires first, whatever its track.
  * - Note-off: noteOff() comes 4 ticks after the trigger. If a track triggers again
  *   while its note-off is still pending, the core calls noteOff() right before the
  *   new trigger(). Stopping, rewinding and a slave dropout (N17) send all
