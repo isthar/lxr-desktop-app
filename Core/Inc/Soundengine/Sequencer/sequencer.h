@@ -285,6 +285,9 @@ void seq_sendMidiNoteOn(const uint8_t channel, const uint8_t note, const uint8_t
 // matches the voice's last Note On, also when voices share a channel
 void seq_sendVoiceNoteOn(const uint8_t voice, const uint8_t note, const uint8_t veloc);
 void seq_sendVoiceNoteOff(const uint8_t voice);
+// its Note Off one pulse later, for a Note On the core does not schedule (the one-shot
+// roll, the echo of an incoming note); only in the seq_tick() context
+void seq_sendVoiceNoteOffLater(const uint8_t voice);
 //------------------------------------------------------------------------------
 uint8_t seq_getStepIndex(uint8_t trackNr);
 //------------------------------------------------------------------------------

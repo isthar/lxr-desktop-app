@@ -91,6 +91,12 @@ uint8_t seq_resetBarOnPatternChange=0;
 static uint8_t midi_voiceChan[NUM_TRACKS];	/**< channel of the voice's last Note On */
 static uint8_t midi_voiceNote[NUM_TRACKS];	/**< note of the voice's last Note On */
 static uint8_t midi_voicesOn=0;			/**< voices with a MIDI note on, one bit each */
+//the Note Offs of the Note Ons that the core does not schedule (the one-shot roll, the
+//echo of an incoming note): one pulse later, sent by seq_tick() (spec 12, review F22)
+static seqc_time_t seq_voiceOffAt[NUM_TRACKS];	/**< seqp_now() time of the voice's timed Note Off */
+static uint8_t seq_voiceOffPending=0;		/**< voices with a timed Note Off, one bit each */
+/** SEQC_NOTE_OFF_TICKS in cycles at 1 BPM: divided by the tempo, one pulse */
+#define SEQ_NOTE_OFF_CYCLES_AT_1_BPM ((uint32_t)((uint64_t)SEQC_NOTE_OFF_TICKS * 60u * SEQC_CPU_HZ / SEQC_TICKS_PER_BEAT))
 
 // keep track of which midi notes are playing
 static uint8_t midi_chan_notes[16];		    /**< what note is playing on each channel */
@@ -468,6 +474,8 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 	//send the new note to midi/usb out: the only Note On (D4), with the current step's volume
 	//as in fw 1.7 (N18.3), or the voice's velocity before the first step
 	seq_sendVoiceNoteOn(voiceNr, midiNote, stepData ? (stepData->volume&STEP_VOLUME_MASK) : vol);
+	//the core does not schedule this note: its Note Off one pulse later, as a core event's
+	seq_sendVoiceNoteOffLater(voiceNr);
 }
 //------------------------------------------------------------------------------
 //has to be called AFTER the last pattern switch is finished, so the playing pattern is properly put into the temp buffer
@@ -1619,12 +1627,16 @@ void seq_sendVoiceNoteOn(const uint8_t voice, const uint8_t note, const uint8_t 
 //------------------------------------------------------------------------------
 /* LICHOMAT: the Note Off of the voice's last Note On, on the channel and with the note
  * it was sent with, if it is still on. Not filtered, like seq_midiNoteOff(): the
- * filter may have been switched on while the note sounds. */
+ * filter may have been switched on while the note sounds. It cancels the voice's
+ * timed Note Off, and so does the next Note On, which sends this first. */
 void seq_sendVoiceNoteOff(const uint8_t voice)
 {
 	MidiMsg msg = {0};
 
-	if((voice >= NUM_TRACKS) || !(midi_voicesOn & (1 << voice)))
+	if(voice >= NUM_TRACKS)
+		return;
+	seq_voiceOffPending &= (uint8_t)~(1 << voice);
+	if(!(midi_voicesOn & (1 << voice)))
 		return;
 	midi_voicesOn &= (uint8_t)~(1 << voice);
 
@@ -1633,6 +1645,30 @@ void seq_sendVoiceNoteOff(const uint8_t voice)
 	msg.data2 = 0;
 	msg.bits.length = 2;
 	seq_sendMidi(msg);
+}
+//------------------------------------------------------------------------------
+/* LICHOMAT: the Note Off of the voice's MIDI note one pulse later (SEQC_NOTE_OFF_TICKS
+ * at the current tempo), for a Note On that the core does not schedule: the one-shot
+ * roll and the echo of an incoming note (spec 12: no hanging notes, also while
+ * stopped). Only in the seq_tick() context, where both are sent and where
+ * seq_tick() sends the Note Off; a call from elsewhere does nothing. */
+void seq_sendVoiceNoteOffLater(const uint8_t voice)
+{
+	if(!seq_inTick || (voice >= NUM_TRACKS) || !(midi_voicesOn & (1 << voice)))
+		return;
+	const uint32_t bpm = seq_tempo ? seq_tempo : 1u;
+	seq_voiceOffAt[voice] = seqp_now() + SEQ_NOTE_OFF_CYCLES_AT_1_BPM / bpm;
+	seq_voiceOffPending |= (uint8_t)(1 << voice);
+}
+//------------------------------------------------------------------------------
+/** the timed Note Offs that are due at now (seq_sendVoiceNoteOffLater()) */
+static void seq_sendDueNoteOffs(seqc_time_t now)
+{
+	for(uint8_t i=0;i<NUM_TRACKS;i++)
+	{
+		if((seq_voiceOffPending & (1 << i)) && (now >= seq_voiceOffAt[i]))
+			voiceControl_noteOff(i);     //as the core's noteOff(); it clears the bit
+	}
 }
 
 
@@ -2266,6 +2302,9 @@ void seq_tick()
 	if(seq_drainSyncQueues(&now))
 		changed = 1;
 	seqc_process(now);
+	//the Note Offs one pulse after a one-shot roll or a note echo
+	if(seq_voiceOffPending)
+		seq_sendDueNoteOffs(now);
 
 	seq_refreshCopies(changed);
 

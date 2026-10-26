@@ -79,6 +79,7 @@ in neither list is a finding.
 | Exact master tempo (D3) | E1.3, spec §12 | Fixed |
 | One MIDI Note On per hit, Note Offs per voice, also for voices that share a channel (D4) | E2.3, spec §12 | Fixed, Changed |
 | An incoming MIDI note is echoed once, also in record mode | E2.3, spec §12 | Changed |
+| A one-shot roll (a pad, also while stopped) and the echo of an incoming MIDI note get their MIDI Note Off one pulse later, at the current tempo, as the sequencer's notes do (fw 1.7: none until the voice's next note, a mute, a stop press or a pattern change) | E4.1 (review F22), spec §12 | Fixed |
 | Muting a track turns off that track's MIDI note (fw 1.7 turned off another voice's) | E2.3 | Changed |
 | A slave clock dropout sends the pending MIDI note-offs | E1.14 (N17) | covered by Fixed (D4: no hanging notes) |
 | Shifted notes keep their own p-locks and velocity, also across a pattern change (D5) | E1.5, E1.7, spec §12 | Fixed |

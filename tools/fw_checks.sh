@@ -105,6 +105,23 @@ check_E2_3() {
 	# all notes off (voice 0xFF) ends the Note of every voice, so no note hangs
 	has_source '^[[:space:]]+seq_sendVoiceNoteOff\(i\);' Core/Src/Soundengine/MIDI/MidiVoiceControl.c
 	must_call seq_setMute voiceControl_noteOff
+	# the Note Ons the core does not schedule, the one-shot roll and the echo of an incoming
+	# note, get their Note Off one pulse later from seq_tick(), as core events do (E4.1 F22,
+	# spec 12: no hanging notes)
+	need seq_sendVoiceNoteOffLater
+	must_call midiParser_noteOn seq_sendVoiceNoteOffLater
+	awk '{sub(/\r$/, "")} /^void seq_triggerVoice\(/{f=1} f&&/^}/{exit}
+		f&&/^[[:space:]]+seq_sendVoiceNoteOn\(voiceNr,/{on=1} f&&on&&/^[[:space:]]+seq_sendVoiceNoteOffLater\(voiceNr\);/{ok=1}
+		END{exit !ok}' Core/Src/Soundengine/Sequencer/sequencer.c \
+		|| fail "seq_triggerVoice() does not time the Note Off of its Note On"
+	awk '{sub(/\r$/, "")} /^void seq_tick\(\)/{f=1} f&&/^}/{exit}
+		f&&/^[[:space:]]+seqc_process\(now\);/{p=1} f&&p&&/seq_sendDueNoteOffs\(now\)/{ok=1}
+		END{exit !ok}' Core/Src/Soundengine/Sequencer/sequencer.c \
+		|| fail "seq_tick() does not send the timed Note Offs after seqc_process()"
+	awk '{sub(/\r$/, "")} /^void seq_sendVoiceNoteOff\(/{f=1} f&&/^}/{exit}
+		f&&/seq_voiceOffPending &= /{c=1} f&&/midi_voicesOn & /{if(!c)bad=1}
+		END{exit !(c && !bad)}' Core/Src/Soundengine/Sequencer/sequencer.c \
+		|| fail "seq_sendVoiceNoteOff() does not cancel the timed Note Off of the voice first"
 }
 
 # ---- E2.4: MIDI input only in seq_tick(), realtime and SPP from the ISRs (D7, D8)

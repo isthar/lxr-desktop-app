@@ -1519,10 +1519,10 @@ static void midiParser_noteOn(uint8_t voice, uint8_t note, uint8_t vel, uint8_t 
 
 			//echo the note on the voice's channel, once in play and in record mode (D4):
 			//the voice's last note gets its Note Off first, then the new Note On is sent
-			// todo a user played note will end up being turned off if a pattern switch happens.
-			//           to fix this we'd have to differentiate between a user played note and a
-			//           note triggered from sequencer, and also recognize note off on user played note and send it.
+			//incoming Note Offs are ignored, so the echo gets its Note Off one pulse later
+			//from seq_tick(), as the sequencer's notes do (no hanging notes, spec 12)
 			seq_sendVoiceNoteOn(voice, note, vel);
+			seq_sendVoiceNoteOffLater(voice);
 		}
 
 	}
