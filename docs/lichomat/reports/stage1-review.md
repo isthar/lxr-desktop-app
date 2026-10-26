@@ -171,10 +171,10 @@ git diff --name-only a43cd4f -- Core ':!Core/CMakeLists.txt' | while read -r f; 
 git diff --name-only a43cd4f -- tests tools docs .github CMakeLists.txt Core/CMakeLists.txt README.md | while read -r f; do [ -f "$f" ] && file "$f"; done | grep 'CRLF'
 ```
 
-R9.5, licence headers (must print nothing):
+R9.5, licence headers: the SPDX line and the NOTICE.md reference (must print nothing):
 
 ```sh
-git diff --name-only --diff-filter=A a43cd4f -- Core tests tools .github | while read -r f; do grep -L 'SPDX-License-Identifier: GPL-3.0-only' "$f"; done
+git diff --name-only --diff-filter=A a43cd4f -- Core tests tools .github 'docs/*.html' | while read -r f; do { grep -L 'SPDX-License-Identifier: GPL-3.0-only' "$f"; grep -L 'NOTICE.md' "$f"; } | sort -u; done
 ```
 
 ## Fixing findings

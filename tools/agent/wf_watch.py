@@ -7,6 +7,10 @@ so the tracker can follow the commits agents make between the journal events.
 """
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
 import json, os, subprocess, sys, time
 
 git_repo = None
