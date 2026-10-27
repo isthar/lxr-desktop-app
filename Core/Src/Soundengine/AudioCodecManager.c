@@ -14,8 +14,9 @@
 #include "Soundengine/datatypes.h"
 //------------------------------------------------------------------
 #if DMA_MODE_ACTIVE
-INDTCMZ int16_t dma_buffer[OUTPUT_DMA_SIZE*4];
-INDTCMZ int16_t dma_buffer2[OUTPUT_DMA_SIZE*4];
+//LICHOMAT: the mixer writes these int16_t buffers as int32_t, so they are 4-byte aligned (F7)
+INDTCMZ __attribute__((aligned(4))) int16_t dma_buffer[OUTPUT_DMA_SIZE*4];
+INDTCMZ __attribute__((aligned(4))) int16_t dma_buffer2[OUTPUT_DMA_SIZE*4];
 #endif
 
 volatile INDTCMZ uint8_t bCurrentSampleValid = 0;
