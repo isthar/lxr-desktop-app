@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-27 03:55",
+    "updated": "2026-10-27 04:06",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
-    "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). W nocy poprawiam błędy fw 1.7 znalezione pod sanitizerami (E4.6–E4.9) i robię nowy plik do testów. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
+    "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "06200e2",
-    "next": "Ja do 04:20: przegląd E4.9, CI, nowy plik i dokumenty do testów. Ty rano: testy H1–H13, U1–U3 i X4 na nowym pliku (Q6), specyfikacja 1b (Q20), pytania Q9–Q19.",
-    "updated_at": "2026-10-27T03:55:00+01:00",
-    "now": "Noc: recenzent wykonalności na LXR-02, potem fixer (od 03:55). Dokumenty w repo już można czytać. Jeśli Mac zaśnie (caffeinate do ok. 04:36), dokończę po wybudzeniu."
+    "head": "554b59d",
+    "next": "Ty: testy H1–H13, U1–U3 i X4 na pliku 55091864… (Q6), specyfikacja 1b (Q20), pytania Q9–Q19. Ja: po Twoich wynikach poprawki albo wydanie v0.1, a po akceptacji specyfikacji plan etapu 1b.",
+    "updated_at": "2026-10-27T04:06:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -650,7 +650,7 @@
       "id": "Q6",
       "status": "otwarte",
       "question": "Testy na sprzęcie do zrobienia przez Ciebie: docs/lichomat/hardware-checklist.md, czyli H1–H13, U1 (przyciski kroków w menu globalnym), U2 (wczytanie kitu i Bank Select nie zmieniają patternów), U3 (nocne poprawki błędów fw 1.7), X4 (USB MIDI out) i opcjonalne X1–X3 (jacki zegara). Wgraj plik z CI: artefakt lichomat-firmware-3527cbc… przebiegu 40435442579 na GitHubie, LXR_V2_LICHOMAT_0.1.img o SHA-256 55091864… (300 780 B). Do H13 i porównań użyj oficjalnego LXR_V2_V1.7.img (SHA-256 cdb1ca37…), który jest zbudowany ze źródeł a43cd4f w build/official-1.7/ albo pochodzi od Erica Synths. Wyniki wpisz w arkusz na końcu listy albo napisz mi je.",
-      "assumption": "Gotowe do testów (27.10, 03:57): nowy plik z CI i lista testów z nowym testem U3 (commity od 350dd44). Przegląd dokumentów znalazł drobne nieścisłości, ich poprawki trwają. Jedna dotyczy testów: w H2 kity z fw 1.7, które mają nachylenie EG wysokości 127 albo falę oscylatora 6 lub wyżej, brzmią teraz inaczej. To nocna poprawka, nie błąd. Pliku 9a7aff2a… już nie testuj."
+      "assumption": "Gotowe do testów (27.10, 04:09): nowy plik z CI i lista testów z nowym testem U3. Dwóch recenzentów ją przejrzało, a poprawki są w cebfceb. W H2 kity z fw 1.7, które mają nachylenie EG wysokości 127 albo falę oscylatora 6 lub wyżej, brzmią teraz inaczej: to nocna poprawka, nie błąd. Kroku 5 z U3 (przełączanie delaya) nie powtarzaj na fw 1.7 z kartą, na której Ci zależy. Pliku 9a7aff2a… już nie testuj."
     },
     {
       "id": "Q7",
@@ -1966,6 +1966,21 @@
       "n": 243,
       "at": "2026-10-27 03:55",
       "text": "Przegląd dokumentów: recenzent faktów skończył (03:14–03:55) z 25 uwagami, 1 ważna i 24 drobne. Ważna: H2 mówi, że kity z fw 1.7 brzmią jak dawniej, a B9 i B10 zmieniają brzmienie kitów z nachyleniem EG wysokości 127 albo z falą 6 lub wyżej. Drobne to m.in. za szeroki opis obszaru, w którym filtr się rozbiega, numery linii Oscillator.c sprzed 9353a68 i liczba testów kompilujących pliki firmware w HANDOFF. Recenzent wykonalności na LXR-02 jeszcze pracuje, potem fixer poprawi uwagi obu."
+    },
+    {
+      "n": 244,
+      "at": "2026-10-27 03:58",
+      "text": "Przegląd dokumentów: recenzent wykonalności na LXR-02 skończył (03:14–03:58) z 13 uwagami, 3 ważne. Wszystkie trzy dotyczą warunków początkowych kroków U3: nowy projekt zachowuje tempo i tryb synchronizacji poprzedniego, LXR słucha kanału MIDI z poprzedniego projektu, a parametry delaya rng i ton zostają z poprzednich kitów, więc echo może być niesłyszalne. Od 03:58 fixer poprawia 38 uwag obu recenzentów."
+    },
+    {
+      "n": 245,
+      "at": "2026-10-27 04:04",
+      "text": "Dokumenty: fixer wprowadził poprawki po przeglądzie (cebfceb). H2 wymienia zmiany brzmienia B9 i B10 jako wyjątki. Kroki U3 mają warunki początkowe: tempo, bank patternów, rng i ton delaya, kanał MIDI. Notatki wydania i raporty mają poprawione opisy."
+    },
+    {
+      "n": 246,
+      "at": "2026-10-27 04:06",
+      "text": "Workflow dokumentów zakończony (02:58–04:05, 4 agentów, 1,41 mln tokenów): autor (8 commitów), 2 recenzentów (38 uwag, 4 ważne, wszystkie potwierdzone) i fixer (cebfceb). Moje dopiski (554b59d): przy U3 krok 5 ostrzeżenie, żeby nie powtarzać go na fw 1.7 z ważną kartą; lokalna kopia materiałów z nocy w build/night-2026-10-27/; w HANDOFF specyfikacja 1b, uwaga o GCC w CI i zasada, że inna gałąź potrzebuje osobnej zgody na push."
     }
   ]
 }
