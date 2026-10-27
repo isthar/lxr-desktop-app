@@ -650,7 +650,7 @@
       "id": "Q6",
       "status": "otwarte",
       "question": "Testy na sprzęcie do zrobienia przez Ciebie: docs/lichomat/hardware-checklist.md, czyli H1–H13, U1 (przyciski kroków w menu globalnym), U2 (wczytanie kitu i Bank Select nie zmieniają patternów), U3 (nocne poprawki błędów fw 1.7), X4 (USB MIDI out) i opcjonalne X1–X3 (jacki zegara). Wgraj plik z CI: artefakt lichomat-firmware-3527cbc… przebiegu 40435442579 na GitHubie, LXR_V2_LICHOMAT_0.1.img o SHA-256 55091864… (300 780 B). Do H13 i porównań użyj oficjalnego LXR_V2_V1.7.img (SHA-256 cdb1ca37…), który jest zbudowany ze źródeł a43cd4f w build/official-1.7/ albo pochodzi od Erica Synths. Wyniki wpisz w arkusz na końcu listy albo napisz mi je.",
-      "assumption": "Gotowe do testów (27.10, 04:09): nowy plik z CI i lista testów z nowym testem U3. Dwóch recenzentów ją przejrzało, a poprawki są w cebfceb. W H2 kity z fw 1.7, które mają nachylenie EG wysokości 127 albo falę oscylatora 6 lub wyżej, brzmią teraz inaczej: to nocna poprawka, nie błąd. Kroku 5 z U3 (przełączanie delaya) nie powtarzaj na fw 1.7 z kartą, na której Ci zależy. Pliku 9a7aff2a… już nie testuj."
+      "assumption": "Gotowe do testów (27.10, 04:06): nowy plik z CI i lista testów z nowym testem U3. Dwóch recenzentów ją przejrzało, a poprawki są w cebfceb. W H2 kity z fw 1.7, które mają nachylenie EG wysokości 127 albo falę oscylatora 6 lub wyżej, brzmią teraz inaczej: to nocna poprawka, nie błąd. Kroku 5 z U3 (przełączanie delaya) nie powtarzaj na fw 1.7 z kartą, na której Ci zależy. Pliku 9a7aff2a… już nie testuj."
     },
     {
       "id": "Q7",
