@@ -1,4 +1,4 @@
-# LICHOMAT 0.1: hardware checklist (H1–H13, U1, U2, X4, optional X1–X3)
+# LICHOMAT 0.1: hardware checklist (H1–H13, U1–U3, X4, optional X1–X3)
 
 These are the checks of spec §13.2, written out as procedures for the LXR-02. Only the owner can run
 them, on the real device; nothing here is ever marked as passed by an agent. Record every result in
@@ -27,7 +27,8 @@ files as 1.7 (no format changes), but it is unofficial firmware.
 - For H11: a synth on the LXR's DIN MIDI out, with its MIDI thru (or a MIDI thru box) on to the MIDI
   interface. Without a synth the monitor alone will do: a Note On without its Note Off is a hanging
   note.
-- For H7 and X4: SendMIDI, a command-line tool that sends MIDI messages to a port.
+- For H7, X4 and the optional step 8 of U3: SendMIDI, a command-line tool that sends MIDI messages to
+  a port.
 - For H10: a MIDI keyboard (or any other MIDI note source) on the LXR's MIDI in.
 - For the optional X1–X3: a clock source for the clock in jack at 4 and 24 PPQ that can swing, a
   gate source for the reset input that can give a square wave or a burst of short triggers at 100 Hz
@@ -591,6 +592,81 @@ of that step points at parameter 0.
 
 **Record:** the number of pattern files compared and the output of `cmp`; the output of step 6.
 
+## U3: the night's fixes of fw 1.7 bugs
+
+Not in the spec's list: fw 1.7 bugs that LICHOMAT fixes (tracker E4.6–E4.9). A sanitizer sweep of
+the firmware on a Mac found them (`docs/lichomat/reports/sanitizer-sweep-2026-10-27.md`, B1–B19).
+These steps cover the fixes you can hear or see; the others have host tests only. The remarks on
+1.7 are for the same steps run on 1.7. The check takes about 20 minutes. It works in a new project in
+an `Empty` slot and changes its kit and songs, so your own projects stay as they are.
+
+1. Kit 0's name (B3). With the sequencer stopped: LOAD, `Project`, an `Empty` slot, confirm (as in
+   U2 step 5). Then LOAD, `Kit`, slot `0`: note the name it shows, and leave the page without
+   confirming (press the first mode button).
+2. Save the project twice: SAVE, `Project`, the same slot, confirm; then the same once more. The
+   first save makes the project's folder, the second empties that folder first. Then LOAD, `Kit`,
+   slot `0` again, and leave the page without confirming.
+3. Song page after a stop (B5). Make a pattern with all tracks 16 steps long: voice 1 (kick) on
+   steps 1, 5, 9 and 13, voice 4 (snare) on steps 5 and 13, voice 6 (closed hat) on all 16 steps.
+   Internal sync, BPM 120. Press START, STOP and START again. While it plays, hold SHIFT and press
+   step 10: the song page. Read line 1. Press STOP, then step 5 (the pattern of step 5 goes into
+   the song). Turn the encoder one step to the left, without pressing it.
+4. Song 3 (B5). LOAD, `Song`, slot `3`, confirm. Hold SHIFT and press step 10, and turn the encoder
+   to the right until it stops at entry `[063]`, the last one. Then LOAD, `Song`, slot `0`, confirm.
+5. Ping-pong delay (B2). Voice 4: MIX sub-page (select button 8), second screen, `out` `FX`. Open
+   the FX page: SHIFT + step 15. Knob 1 (`typ`) `del`, `out` `St1`, `d/w` about 50, knob 4 (`typ`,
+   the delay type) `Del`; turn the encoder to `tim` and `fbk` and set them so that the snare's
+   echoes are clear. Press START. While it plays, turn knob 4 from `Del` to `Pp` and back, about 1 s
+   on each, 20 times. Press STOP, then START once more.
+6. Hi-hat filter (B8). Voice button 6, select button 6 (the filter): knob 1 `frq`, knob 2 `res`,
+   knob 3 `typ`, knob 4 `drv`. Note the four values. With the pattern playing, set `typ` `HP`,
+   `drv` 127, `res` 127, and then `frq` 125 (122 to 126 do the same). Listen for 2 bars. Then set
+   `frq` back to its noted value, then the other three, and listen for 2 bars.
+7. Pitch EG slope (B9). Voice button 1, select button 3 (modulation): knob 1 `dec` (the pitch EG
+   decay), knob 2 `slp` (its slope). Note both values. With the pattern playing, turn `slp` to 127
+   and listen for 2 bars, then to 126. Then `slp` 0 with `dec` 127, 2 bars. Set both back to their
+   noted values.
+8. Optional, with a DAW or SendMIDI at hand: waveform 6 or more (B10). The panel's waveforms are 0–5
+   (`Sin` to `PWM`); a MIDI CC or a kit can set more. The receive filter (`mrx`) has C, for example
+   `all` (the default). Note Drum 1's `wav` (voice button 1, select button 1, knob 3). With the
+   pattern playing, send CC 2 (Drum 1's waveform) on the global MIDI channel with the value 6, then
+   127, each for 2 bars, then 0:
+   `sendmidi dev "Sonic Potions USB MIDI" ch <global channel> cc 2 6`, then `cc 2 127`, then
+   `cc 2 0`. Set `wav` back to its noted value.
+9. Press STOP and load your own project again (LOAD, `Project`, its slot, confirm).
+
+**Expected** (the remarks on 1.7 are for the same steps run on 1.7):
+- 2: kit slot `0` shows the name of step 1 after both saves. With 1.7 the second save renames it:
+  the name turns into the end of a file name of the folder, such as `.SND` or `.SNG`, and the save
+  stores kit 0 under that name (a file such as `00-_SND.SND`).
+- 3: line 1 shows `[000]`, the song's first entry. After step 5 the page moves on to `[001]`, and one
+  step to the left shows `[000]` with `p04`, the pattern of step 5. With 1.7 the page opens at
+  `[255]`, past the song's 64 entries, and step 5 writes `p04` into another song.
+- 4: entry `[063]` of song 3 shows `END`, as every entry of the new project's songs but the first.
+  With 1.7 it shows `p04`: in step 3 the press went into the last entry of the song three slots up.
+- 5: the LXR plays on through all 20 switches, the echoes change between one line and left-right
+  ping-pong, and nothing else changes: no freeze, no noise that stays, no other sound changed. The
+  display and the buttons respond afterwards, and START plays again. With 1.7 about every second
+  switch writes past the delay's memory: from no effect to a changed sound, noise, or a freeze
+  until power-off.
+- 6: while `frq` is at 125 the hat may sound broken or drop out, as in 1.7. Within a hit after `frq`
+  goes back, the hat plays again as before (in about 8 audio blocks, 12 ms). With 1.7 the hat stays
+  silent until power-off, whatever the filter is set to, also after a kit load.
+- 7: at `slp` 127 Drum 1 keeps its tone, with a steeper pitch sweep than at 126; at `slp` 0 with
+  `dec` 127 it keeps its tone too. 0 to 126 sound as in 1.7. With 1.7 Drum 1 loses its tone at
+  `slp` 127 and at `slp` 0 with `dec` 127, so only its click and noise remain, until the value
+  changes.
+- 8: with 6 and 127 Drum 1 loses its tone: at most its transient click is left, and no other voice's
+  sound and no noise comes out of it. 0 gives the `Sin` tone again. With 1.7 Drum 1 plays what its
+  buffer held before: other voices' sound (crosstalk) or noise, up to full scale. Turn the volume
+  down before you try this on 1.7.
+
+**Record:** for 1 and 2, kit slot 0's name before and after the saves; for 3 and 4, the entry the song
+page opened at and what entry `[063]` of song 3 showed; for 5, any freeze, noise or changed sound,
+and at which switch; for 6, whether the hat played again after `frq` went back, and how soon; for 7,
+whether Drum 1 kept its tone at `slp` 127 and at `slp` 0 with `dec` 127; for 8 (or SKIPPED), what
+Drum 1 played with the values 6 and 127.
+
 ## X4: USB MIDI out
 
 Not in the spec's list: 1.7 defects of the USB MIDI out that LICHOMAT fixes (tracker E2.8).
@@ -695,14 +771,15 @@ Update files under test (filled in when the files were built):
 
 | File | SHA-256 | Built from | Where |
 |---|---|---|---|
-| `LXR_V2_LICHOMAT_0.1.img` | `9a7aff2ad9f7284a1b24e14e9700eb822674d1a42a254f8c4b3b74eff9a28c66` | `timing-core` at `2680991`, built by CI (`.github/workflows/build.yml`; later commits that change only documents build the same file) | the artifact `lichomat-firmware-26809918cdf3e7fe6e6cfb1f3a9f431178ec8751` of CI run 40416804934 |
+| `LXR_V2_LICHOMAT_0.1.img` | `55091864fff78c641a681636f056449caa1fcb3cb68d09baa5cd3e9e6759a262` | `timing-core` at `3527cbc`, built by CI (`.github/workflows/build.yml`; later commits that change only documents build the same file) | the artifact `lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f` of CI run 40435442579 (300780 B) |
 | `LXR_V2_V1.7.img` | `cdb1ca371599149083bd0b61564d6864f031b599ccdcead2047a711e0b679db4` | `a43cd4f`, the official 1.7 sources | `build/official-1.7/src/build/release/` |
 
 The LICHOMAT file is the one CI builds, the file the release attaches (spec §14). Download it with
-`gh run download 40416804934 --repo isthar/lxr-desktop-app -n lichomat-firmware-26809918cdf3e7fe6e6cfb1f3a9f431178ec8751`
-or from the run's page on GitHub (Actions); GitHub keeps the artifact until 2027-01-24, after that
-run the workflow again. A local build in `build/release/` is a different file, `12be97d7…`: the
-macOS toolchain links newlib's members in another order. Do not use it for these checks.
+`gh run download 40435442579 --repo isthar/lxr-desktop-app -n lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f`
+or from the run's page on GitHub (Actions); GitHub keeps the artifact until 2027-01-25, after that
+run the workflow again. A local build in `build/release/` is a different file, `0f8621a3…`: the
+macOS toolchain links newlib's members in another order. Do not use it for these checks. The earlier
+file `9a7aff2a…` (CI run 40416804934) lacks the fixes of U3: do not test it any more.
 
 Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **Record**):
 
@@ -723,6 +800,7 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | H13 | | | |
 | U1 | | | |
 | U2 | | | |
+| U3 | | | |
 | X1 | | | |
 | X2 | | | |
 | X3 | | | |
