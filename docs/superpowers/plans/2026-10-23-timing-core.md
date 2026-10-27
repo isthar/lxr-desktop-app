@@ -25559,6 +25559,51 @@ under `scratchpad/` were the controller's temporary files.
       `12be97d7...`). The hardware checklist's run sheet and the release notes name it, and the
       new check U2 compares the pattern files of a project saved before and after kit loads.
 
+27. **The sanitizer sweep and E4.6–E4.9 (2026-10-27, fw 1.7 bugs).**
+    - The stage 1b probe ran 68 firmware files on the Mac under ASan and UBSan, in six areas (MIDI
+      in, presets, user interface, sequencer, DSP, sync), from 00:40 to 02:03. All 28 findings
+      reproduced in a second pass; they are 19 bugs, B1–B19
+      (`docs/lichomat/reports/sanitizer-sweep-2026-10-27.md`): 7 corrupt data, 7 behave wrongly, 4
+      are harmless on the device and 1 is host only.
+    - Fixed test first, one commit per fix; E4.6–E4.8 (workflow C5) passed their light reviews in
+      round 1, and E4.9's review found it compliant:
+      - E4.6: B5, the song page at position 255 after a stop (`0712d9a`); B6, SHIFT + a held
+        select button arming an automation step past 63 (`8af1ece`).
+      - E4.7: B3, every project re-save writing past `currentFolder` into the kit names
+        (`040cdea`); B1, the card's kit slot bytes (`2446532`) and a Bank Select of 64–127
+        (`a6bd8b7`); B4, the project number of `PROJ.IDX` (`b0b53ec`); the tests' in-memory card
+        (`20dff39`).
+      - E4.8: B2, the ping-pong delay's out-of-bounds write after a switch from Normal (`2bb5d80`);
+        B7, a Note On past the step array after NRPN 121 (`5b2c224`).
+      - E4.9: B8, the filter state that stays NaN until power-off, because `-ffast-math` removed
+        fw 1.7's NaN test (`eb9712a`); B9, the NaN pitch at pitch EG slope 127 (`6a74b81`); B10,
+        the stale buffer of waveforms of 6 or more (`9353a68`); the test comments (`db41ebb`);
+        `_DEFAULT_SOURCE` for `test_dsp` (`3527cbc`), after CI run 40435161427 on `9797ace`
+        failed to compile it on Linux (`M_PI`; its firmware job passed).
+    - New host tests `test_sequencer`, `test_presets`, `test_delay` and `test_dsp`, and more cases
+      in `test_buttons` and `test_midicc`: 32 ctest ids. The image grows by 216 B to 300756 B
+      (104 B of it in ITCM, 13232 B); RAM is unchanged.
+    - `ResonantFilter.c`, `Decay.c`, `Oscillator.c` and `Delay.c` were unchanged from fw 1.7
+      (`a43cd4f`) before these fixes, and the official build uses the same compiler options,
+      `-ffast-math` included: B2 and B8–B10 are fw 1.7 bugs too.
+    - E4.9's light review leftovers (minor, no change): the message of `6a74b81` says that the test
+      runs every decay, but it samples seven (0, 32, 64, 100, 120, 126, 127); the curve test compares
+      slopes 0–126 within 1e-5 of fw 1.7's formula, not bit for bit; a comment style in the HAL stub
+      header.
+    - CI run 40435442579 (`3527cbc`) builds the new release file (`55091864...`, 300780 B; a local
+      macOS build gives `0f8621a3...`); run 40435161427 built the same file byte for byte. The
+      run sheet and the release notes name it, and the new check U3 covers the fixes a user can
+      observe (B2, B3, B5, B8, B9 and, optionally, B10).
+    - Open, not fixed in v0.1:
+      - B11, the LFO target page with an LFO voice of 0 after a blank card, and B12, the roll
+        label after NRPN 119: known limitations in the release notes.
+      - B13 and B14, the PWM oscillator: part of fw 1.7's PWM sound; they go with the owner's
+        listening check (Q13).
+      - B15–B18, harmless on the device, and B19, host only.
+      - SHIFT + select on steps 1–8 arms another in-range step: a fw 1.x leftover, and a real fix
+        changes behaviour (a known limitation).
+      - The off-by-one guard at `menu.c:2590`, unreachable since `0712d9a`.
+
 ## Progress notes
 
 Notes made while executing the plan, one bullet each, newest last: the date, the task, and what
@@ -25575,6 +25620,7 @@ happened (a deviation from the plan, a surprise, a decision taken on the way).
 - 2026-10-26, workflow C2 done: E4.1 by `tools/agent/stage-review.js`, with 82 agents, paused by the owner from 03:39 to 17:29. The light review passed in round 2 (item 24).
 - 2026-10-26, workflow C3 done: E4.2 and E4.3, each with a light review. Then the release documents review (item 25).
 - 2026-10-26, E4.5 added and done (workflow C4, one light review): the kit load's out-of-bounds write (item 26).
+- 2026-10-27, the sanitizer sweep, then E4.6–E4.8 (workflow C5) and E4.9 added and done, each with one light review: 19 fw 1.7 bugs found, B1–B10 fixed (item 27).
 
 ## Questions for the owner
 
