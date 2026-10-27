@@ -693,6 +693,8 @@ if(sd_card_ok)
 }
 else
 {
+  //LICHOMAT: without a card the morph target is kit 0 too; it was NULL, and a morph read from address 0 (F2)
+  morphParameters = mainParameters[0];
   copyClear_clearCurrentPattern();
   preset_init(0);
   preset_loadDefaultGlobals();
