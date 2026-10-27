@@ -10,7 +10,9 @@ supersedes its fixed and open remarks.*
 (`/private/tmp/claude-501/…/scratchpad/sweep/…`, and paths relative to it such as `build/ub/sweep`,
 `build3/midi_fuzz`, `scen/s_saveproj.c` or `ui/obj/emu_ui`) were in the controller's scratch
 directory of the night's session. They are not in the repository. For the fixed bugs the host tests
-named below replace them.
+named below replace them. A copy is kept on the owner's Mac in `build/night-2026-10-27/`
+(git-ignored): `sweep-and-1b-spec-probes.tar.gz` holds `sweep/` with its sources, scripts and logs,
+such as `scen/s_saveproj.c`, but not its build directories (`build/ub/sweep`, `ui/obj/emu_ui`).
 
 **fw 1.7.** `ResonantFilter.c`, `Decay.c`, `Oscillator.c` and `Delay.c` were unchanged from fw 1.7
 (`a43cd4f`) before the fixes, and the official build uses the same compiler options, `-ffast-math`

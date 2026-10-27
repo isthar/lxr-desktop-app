@@ -662,7 +662,8 @@ an `Empty` slot and changes its kit and songs, so your own projects stay as they
   ping-pong, and nothing else changes: no freeze, no noise that stays, no other sound changed. The
   display and the buttons respond afterwards, and START plays again. With 1.7 about every second
   switch writes past the delay's memory: from no effect to a changed sound, noise, or a freeze
-  until power-off.
+  until power-off. Do not try step 5 on 1.7 with a card you need: the stray write can also hit the
+  card driver's memory, and the next save can then damage files on the card.
 - 6: while `frq` is at 125 the hat sounds broken, for example a harsh buzz on each hit, or drops
   out (1.7 falls silent there). Within a hit after `frq` goes back the hat plays again (in about 8
   audio blocks, 12 ms), loud and ringing while `res` and `drv` are still at 127; once all four

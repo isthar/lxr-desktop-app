@@ -10,6 +10,8 @@ Read this first when picking the project up in a new session.
 | Tracker page (claude.ai artifact) | https://claude.ai/artifact/MPCLCyFzqsp3ViNGuwgTZt |
 | Stage 1 spec | `docs/superpowers/specs/2026-10-23-timing-core-design.md` |
 | Stage 1 plan | `docs/superpowers/plans/2026-10-23-timing-core.md` |
+| Stage 1b spec (emulator; a draft until the owner accepts it, Q20) | `docs/superpowers/specs/2026-10-27-emulator-design.md` |
+| The night's scratch work of 2026-10-27 (the stage 1b host probe, the sweep's harnesses) | `build/night-2026-10-27/` (git-ignored, on the owner's Mac; its README lists the contents) |
 | Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N21; they win over the spec) |
 | Reports per milestone | `docs/lichomat/reports/` |
 | Sanitizer sweep of 2026-10-27 (fw 1.7 bugs B1–B19, with the status of each) | `docs/lichomat/reports/sanitizer-sweep-2026-10-27.md` |
@@ -32,6 +34,12 @@ ruby tools/ci_dry_run.rb firmware   # dry run of the CI workflow's firmware job 
 ```
 
 The release image lands in `build/release/`, and the full log of the last check in `build/check.log`.
+
+CI's host tests build with GCC on Linux in strict C11 (`CMAKE_C_EXTENSIONS OFF`): there the C library
+defines `M_PI` only with `_DEFAULT_SOURCE`, and GCC warns where Apple clang does not
+(`-Wformat-truncation`). Before pushing a host test that compiles firmware files, compile it once with
+the Arm GCC in the same mode (newlib hides `M_PI` the same way), for example:
+`arm-none-eabi-gcc -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -O2 -Itests/stubs -Itests -isystem Core/Inc -c -o /dev/null tests/test_dsp.c`.
 
 ## Updating the tracker page
 
@@ -120,7 +128,7 @@ A workflow can only be resumed (`resumeFromRunId`) in the session that started i
 - Add files explicitly; never `git add -A`.
 - Never rewrite a commit (no `git commit --amend`): fix with a new commit.
 - Line endings: the sources in `Core/` use CRLF (except `Core/CMakeLists.txt` and the LF files fw 1.7 already had, such as `encoder.c`), everything else LF; review row R9.4 checks it. After editing a file in `Core/`, run `perl -pi -e 's/\r?\n/\r\n/' <file>` and check that its count of CRLF equals its count of LF bytes.
-- Push `timing-core` only to `origin`, the owner's fork, as work lands; the owner allowed this on 2026-10-24. Never push to `upstream` (Erica Synths), never touch `main`.
+- Push `timing-core` only to `origin`, the owner's fork, as work lands; the owner allowed this on 2026-10-24 (Q5). Another branch, such as stage 1b's `emulator`, needs its own yes (Q19). Never push to `upstream` (Erica Synths), never touch `main`.
 - Commits use the repo-local identity `Tomasz Krzywicki <tkrzywicki@gmail.com>`; the owner chose the private address. `backup/timing-core-before-reauthor` keeps the history as it was before the re-authoring; it is local only.
 - After each task run `tools/check.sh`. It must show zero warnings, ITCM must fit, and DTCM + RAM must stay within review row R6.2 of `docs/lichomat/reports/stage1-review.md` (at most 391824 B since E2.9; spec §10's about 7.5 KB is exceeded by design).
 - Decisions that belong to the owner go into `questions` in the tracker. Work continues with a reversible default.
