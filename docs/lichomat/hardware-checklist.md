@@ -27,8 +27,8 @@ files as 1.7 (no format changes), but it is unofficial firmware.
 - For H11: a synth on the LXR's DIN MIDI out, with its MIDI thru (or a MIDI thru box) on to the MIDI
   interface. Without a synth the monitor alone will do: a Note On without its Note Off is a hanging
   note.
-- For H7, X4 and the optional step 8 of U3: SendMIDI, a command-line tool that sends MIDI messages to
-  a port.
+- For H7, U2 (step 3), X4 and the optional step 8 of U3: SendMIDI, a command-line tool that sends
+  MIDI messages to a port.
 - For H10: a MIDI keyboard (or any other MIDI note source) on the LXR's MIDI in.
 - For the optional X1–X3: a clock source for the clock in jack at 4 and 24 PPQ that can swing, a
   gate source for the reset input that can give a square wave or a burst of short triggers at 100 Hz
@@ -102,13 +102,17 @@ Use the card with your own projects saved by fw 1.7.
 1. Switch on with LICHOMAT. The LXR loads the global settings and the last used project, as 1.7
    does.
 2. Play a few patterns of that project, switch patterns while it plays, and check that the kits sound
-   as before (the kit of a pattern loads on the pattern change when kit autoload is on).
+   as before (exceptions under Expected; the kit of a pattern loads on the pattern change when kit
+   autoload is on).
 3. Load another project and play it.
 4. Play a song in song mode: hold SHIFT and press START.
 
 **Expected:** no `glo.cfg error` at start-up; the global settings are the ones you set in 1.7 (MIDI
-channels, filters, sync mode); every pattern, kit, song and project loads and plays as in 1.7. Swing
-and ratchets may sound different where both are used together: that is D1, see H4.
+channels, filters, sync mode); every pattern, kit, song and project loads and plays as in 1.7, with
+these exceptions. Swing and ratchets may sound different where both are used together: that is D1,
+see H4. A kit whose Drum 1–3 or snare has a pitch EG slope of 127 (or 0 with the pitch EG decay at
+127) keeps the tone that 1.7 took away. An oscillator waveform of 6 or more, set by MIDI and saved
+in a kit, is silent where 1.7 played other voices' sound or noise (B9, B10; U3 steps 7 and 8).
 
 **Record:** project names used; any file that fails to load or sounds different (and how).
 
@@ -594,30 +598,38 @@ of that step points at parameter 0.
 
 ## U3: the night's fixes of fw 1.7 bugs
 
-Not in the spec's list: fw 1.7 bugs that LICHOMAT fixes (tracker E4.6–E4.9). A sanitizer sweep of
-the firmware on a Mac found them (`docs/lichomat/reports/sanitizer-sweep-2026-10-27.md`, B1–B19).
-These steps cover the fixes you can hear or see; the others have host tests only. The remarks on
+Not in the spec's list: fw 1.7 bugs that LICHOMAT fixes (tracker E4.6–E4.9), B1–B10 of a sanitizer
+sweep of the firmware on a Mac (`docs/lichomat/reports/sanitizer-sweep-2026-10-27.md`, B1–B19).
+These steps cover B2, B3, B5 and B8–B10; B1, B4, B6 and B7 have host tests only. The remarks on
 1.7 are for the same steps run on 1.7. The check takes about 20 minutes. It works in a new project in
 an `Empty` slot and changes its kit and songs, so your own projects stay as they are.
 
 1. Kit 0's name (B3). With the sequencer stopped: LOAD, `Project`, an `Empty` slot, confirm (as in
    U2 step 5). Then LOAD, `Kit`, slot `0`: note the name it shows, and leave the page without
    confirming (press the first mode button).
-2. Save the project twice: SAVE, `Project`, the same slot, confirm; then the same once more. The
-   first save makes the project's folder, the second empties that folder first. Then LOAD, `Kit`,
-   slot `0` again, and leave the page without confirming.
+2. Save the project twice: SAVE, `Project`, the same slot, confirm (press the encoder, and once
+   more at `Edit Name? [y/N]`); then the same once more. The load of step 1 made the project's
+   folder, empty, so the first save has nothing to delete; the second save deletes the first save's
+   files first. Then LOAD, `Kit`, slot `0` again, and leave the page without confirming.
 3. Song page after a stop (B5). Make a pattern with all tracks 16 steps long: voice 1 (kick) on
    steps 1, 5, 9 and 13, voice 4 (snare) on steps 5 and 13, voice 6 (closed hat) on all 16 steps.
-   Internal sync, BPM 120. Press START, STOP and START again. While it plays, hold SHIFT and press
-   step 10: the song page. Read line 1. Press STOP, then step 5 (the pattern of step 5 goes into
-   the song). Turn the encoder one step to the left, without pressing it.
+   Internal sync, BPM 120: in the global menu (SHIFT + step 12) turn `bpm` to 121 and back to 120,
+   also when it shows 120 already. A new project shows the default global settings, but the LXR
+   keeps the sync mode and the tempo of the project before it until the value changes (as in 1.7).
+   Press START, STOP and START again. While it plays, hold SHIFT and press step 10: the song page.
+   Read line 1. Press STOP. Both page LEDs must be off (the first 16 patterns): press page down
+   until they are. Then press step 5 (the pattern of step 5 goes into the song). Turn the encoder
+   one step to the left, without pressing it.
 4. Song 3 (B5). LOAD, `Song`, slot `3`, confirm. Hold SHIFT and press step 10, and turn the encoder
    to the right until it stops at entry `[063]`, the last one. Then LOAD, `Song`, slot `0`, confirm.
 5. Ping-pong delay (B2). Voice 4: MIX sub-page (select button 8), second screen, `out` `FX`. Open
    the FX page: SHIFT + step 15. Knob 1 (`typ`) `del`, `out` `St1`, `d/w` about 50, knob 4 (`typ`,
-   the delay type) `Del`; turn the encoder to `tim` and `fbk` and set them so that the snare's
-   echoes are clear. Press START. While it plays, turn knob 4 from `Del` to `Pp` and back, about 1 s
-   on each, 20 times. Press STOP, then START once more.
+   the delay type) `Del`. Turn the encoder to the second screen (`tim rng ton fbk`) and set `tim`
+   about 60, `rng` 127, `ton` about 100 and `fbk` about 60, so that the snare's echoes are clear: a
+   new project keeps `rng`, `ton` and `fbk` of the kits before it, and with `rng` or `ton` low there
+   are no echoes. Turn the encoder back to the first screen, where knob 4 is the delay type. Press
+   START. While it plays, turn knob 4 from `Del` to `Pp` and back, about 1 s on each, 20 times.
+   Press STOP, then START once more.
 6. Hi-hat filter (B8). Voice button 6, select button 6 (the filter): knob 1 `frq`, knob 2 `res`,
    knob 3 `typ`, knob 4 `drv`. Note the four values. With the pattern playing, set `typ` `HP`,
    `drv` 127, `res` 127, and then `frq` 125 (122 to 126 do the same). Listen for 2 bars. Then set
@@ -627,12 +639,13 @@ an `Empty` slot and changes its kit and songs, so your own projects stay as they
    and listen for 2 bars, then to 126. Then `slp` 0 with `dec` 127, 2 bars. Set both back to their
    noted values.
 8. Optional, with a DAW or SendMIDI at hand: waveform 6 or more (B10). The panel's waveforms are 0–5
-   (`Sin` to `PWM`); a MIDI CC or a kit can set more. The receive filter (`mrx`) has C, for example
-   `all` (the default). Note Drum 1's `wav` (voice button 1, select button 1, knob 3). With the
-   pattern playing, send CC 2 (Drum 1's waveform) on the global MIDI channel with the value 6, then
-   127, each for 2 bars, then 0:
-   `sendmidi dev "Sonic Potions USB MIDI" ch <global channel> cc 2 6`, then `cc 2 127`, then
-   `cc 2 0`. Set `wav` back to its noted value.
+   (`Sin` to `PWM`); a MIDI CC or a kit can set more. In the global menu set `ch` to 1, and set
+   `mrx` to another value and back to `all`: a new project shows `ch` 0 and `mrx` `all`, but the LXR
+   keeps the global channel and the receive filter of the project before it until they change. Note
+   Drum 1's `wav` (voice button 1, select button 1, knob 3). With the pattern playing, send CC 2
+   (Drum 1's waveform) on channel 1 with the value 6, then 127, each for 2 bars, then 0:
+   `sendmidi dev "Sonic Potions USB MIDI" ch 1 cc 2 6`, then `cc 2 127`, then `cc 2 0`. Set `wav`
+   back to its noted value.
 9. Press STOP and load your own project again (LOAD, `Project`, its slot, confirm).
 
 **Expected** (the remarks on 1.7 are for the same steps run on 1.7):
@@ -642,20 +655,26 @@ an `Empty` slot and changes its kit and songs, so your own projects stay as they
 - 3: line 1 shows `[000]`, the song's first entry. After step 5 the page moves on to `[001]`, and one
   step to the left shows `[000]` with `p04`, the pattern of step 5. With 1.7 the page opens at
   `[255]`, past the song's 64 entries, and step 5 writes `p04` into another song.
-- 4: entry `[063]` of song 3 shows `END`, as every entry of the new project's songs but the first.
-  With 1.7 it shows `p04`: in step 3 the press went into the last entry of the song three slots up.
+- 4: entry `[063]` of song 3 shows `END`, as every entry of the new project's songs except entry
+  `[000]` of song 0. With 1.7 it shows `p04`: in step 3 the press went into the last entry of the
+  song three slots up.
 - 5: the LXR plays on through all 20 switches, the echoes change between one line and left-right
   ping-pong, and nothing else changes: no freeze, no noise that stays, no other sound changed. The
   display and the buttons respond afterwards, and START plays again. With 1.7 about every second
   switch writes past the delay's memory: from no effect to a changed sound, noise, or a freeze
   until power-off.
-- 6: while `frq` is at 125 the hat may sound broken or drop out, as in 1.7. Within a hit after `frq`
-  goes back, the hat plays again as before (in about 8 audio blocks, 12 ms). With 1.7 the hat stays
-  silent until power-off, whatever the filter is set to, also after a kit load.
-- 7: at `slp` 127 Drum 1 keeps its tone, with a steeper pitch sweep than at 126; at `slp` 0 with
-  `dec` 127 it keeps its tone too. 0 to 126 sound as in 1.7. With 1.7 Drum 1 loses its tone at
-  `slp` 127 and at `slp` 0 with `dec` 127, so only its click and noise remain, until the value
-  changes.
+- 6: while `frq` is at 125 the hat sounds broken, for example a harsh buzz on each hit, or drops
+  out (1.7 falls silent there). Within a hit after `frq` goes back the hat plays again (in about 8
+  audio blocks, 12 ms), loud and ringing while `res` and `drv` are still at 127; once all four
+  values are back it sounds as at the start. With 1.7 the hat stays silent until power-off,
+  whatever `frq`, `res` and `drv` are set to afterwards, also after a kit load; only the filter
+  types `LP2` and `off`, which bypass the broken filter state, let it play.
+- 7: at `slp` 127 Drum 1 keeps its tone and sounds practically as at 126 (its pitch stays high a
+  few milliseconds longer); at `slp` 0 with `dec` 127 it keeps its tone too, without a pitch sweep.
+  Apart from that case, 0 to 126 sound as in 1.7. With 1.7 Drum 1 loses its tone at `slp` 127 and
+  at `slp` 0 with `dec` 127 until the value changes. In this new project, whose init kit sets Drum
+  1's transient and FM to 0, it falls practically silent: at most a dull click is left on each
+  hit.
 - 8: with 6 and 127 Drum 1 loses its tone: at most its transient click is left, and no other voice's
   sound and no noise comes out of it. 0 gives the `Sin` tone again. With 1.7 Drum 1 plays what its
   buffer held before: other voices' sound (crosstalk) or noise, up to full scale. Turn the volume

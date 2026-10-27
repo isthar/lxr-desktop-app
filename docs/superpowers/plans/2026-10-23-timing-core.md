@@ -25560,8 +25560,9 @@ under `scratchpad/` were the controller's temporary files.
       new check U2 compares the pattern files of a project saved before and after kit loads.
 
 27. **The sanitizer sweep and E4.6–E4.9 (2026-10-27, fw 1.7 bugs).**
-    - The stage 1b probe ran 68 firmware files on the Mac under ASan and UBSan, in six areas (MIDI
-      in, presets, user interface, sequencer, DSP, sync), from 00:40 to 02:03. All 28 findings
+    - The stage 1b probe ran 68 firmware files on the Mac under UBSan in six areas (MIDI in,
+      presets, user interface, sequencer, DSP, sync), and under ASan as well in two of them (user
+      interface, sync), from 00:40 to 02:03. All 28 findings
       reproduced in a second pass; they are 19 bugs, B1–B19
       (`docs/lichomat/reports/sanitizer-sweep-2026-10-27.md`): 7 corrupt data, 7 behave wrongly, 4
       are harmless on the device and 1 is host only.
@@ -25592,16 +25593,16 @@ under `scratchpad/` were the controller's temporary files.
       header.
     - CI run 40435442579 (`3527cbc`) builds the new release file (`55091864...`, 300780 B; a local
       macOS build gives `0f8621a3...`); run 40435161427 built the same file byte for byte. The
-      run sheet and the release notes name it, and the new check U3 covers the fixes a user can
-      observe (B2, B3, B5, B8, B9 and, optionally, B10).
+      run sheet and the release notes name it, and the new check U3 covers B2, B3, B5, B8, B9 and,
+      optionally, B10 (B1, B4, B6 and B7 have host tests only).
     - Open, not fixed in v0.1:
       - B11, the LFO target page with an LFO voice of 0 after a blank card, and B12, the roll
         label after NRPN 119: known limitations in the release notes.
       - B13 and B14, the PWM oscillator: part of fw 1.7's PWM sound; they go with the owner's
         listening check (Q13).
       - B15–B18, harmless on the device, and B19, host only.
-      - SHIFT + select on steps 1–8 arms another in-range step: a fw 1.x leftover, and a real fix
-        changes behaviour (a known limitation).
+      - SHIFT + select after step buttons 1–8 arms an in-range step of the same track, mostly
+        another one: a fw 1.x leftover, and a real fix changes behaviour (a known limitation).
       - The off-by-one guard at `menu.c:2590`, unreachable since `0712d9a`.
 
 ## Progress notes

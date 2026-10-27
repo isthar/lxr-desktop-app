@@ -26,22 +26,23 @@ names the same unchecked read in fw 1.7).
 | B5 | corrupts-data | fixed | `0712d9a` (the song cursor goes to entry 0 for a pointer past the song); `test_sequencer` |
 | B6 | corrupts-data | fixed | `8af1ece` (`buttonHandler_armTimerActionStep()` ignores a step past 63, `seq_armAutomationStep()` disarms); `test_buttons`, `test_sequencer`. The `*8 + part` encoding is unchanged: see the open item below the table |
 | B7 | corrupts-data | fixed | `5b2c224` (`frontParser_parseNrpn()` ignores `PAR_ACTIVE_STEP` ≥ 64, `midiParser_noteOn()` writes no note for such a step); `test_midicc`, `test_presets` |
-| B8 | wrong-behaviour | fixed | `eb9712a` (the guard tests the stored state's exponent bits through a volatile read); `test_dsp`, `tools/fw_checks.sh E4.9`. While a runaway setting is held the filter still sounds broken, as in fw 1.7; after it is turned back the voice sounds again within about 8 audio blocks |
+| B8 | wrong-behaviour | fixed | `eb9712a` (the guard tests the stored state's exponent bits through a volatile read); `test_dsp`, `tools/fw_checks.sh E4.9`. While a runaway setting is held the filter still sounds broken (a buzz or drop-outs, where fw 1.7 was silent); after it is turned back the voice sounds again within about 8 audio blocks |
 | B9 | wrong-behaviour | fixed | `6a74b81` (the amount is limited to 0.99, so slope 127 gives a very steep curve; slope 0 returns 0, its flat curve, instead of the proposed −0.99 limit, which would bend it); `test_dsp` |
 | B10 | wrong-behaviour | fixed | `9353a68` (both default cases clear the buffer: a waveform of 6 or more is silent; 0–5 unchanged); `test_dsp` |
 | B11 | wrong-behaviour | open | Needs a blank or foreign card, reads flash only, no fault: a known limitation in the release notes, for a later version |
 | B12 | wrong-behaviour | open | A wrong label only, no sound change, nothing stored: a known limitation in the release notes |
-| B13 | wrong-behaviour | open | Part of fw 1.7's PWM sound; the fix changes it. Goes with the owner's listening check (Q13, with `Oscillator.c:464`/`:174`), v0.2 at the earliest |
+| B13 | wrong-behaviour | open | Part of fw 1.7's PWM sound; the fix changes it. Goes with the owner's listening check (Q13, with `Oscillator.c:471`/`:175`, lines 464 and 174 before `9353a68`), v0.2 at the earliest |
 | B14 | wrong-behaviour | open | As B13: the PWM table read goes with the same listening check (Q13) |
 | B15 | harmless-on-device | open | VCVT saturates to the intended value on the device; only x86-64 hosts differ. For a clean UBSan baseline in stage 1b |
 | B16 | harmless-on-device | open | The read is multiplied by 0. For a clean UBSan baseline later |
 | B17 | harmless-on-device | open | The write lands in fill bytes; needs malformed USB-MIDI packets. For a clean UBSan baseline later |
 | B18 | harmless-on-device | open | The values read are neither shown, saved nor sent. For a clean UBSan baseline later |
-| B19 | host-only | open | Device and arm64 hosts agree; stage 1b's saturating float-to-uint conversions (spec F6) cover the oscillator sites |
+| B19 | host-only | open | Device and arm64 hosts agree; on the host, stage 1b's `-fno-strict-float-cast-overflow` (spec §8.2) gives the device's saturation at these sites. Spec F6 makes only the 8 FM sites and `freq2PhaseIncr()` defined C, not `freqToMidiNote()`, `freq2PhaseIncr1024()` or `freq2PhaseIncr32767()` |
 
 Also open, not filed as bugs above:
 - SHIFT + a held select button with one of steps 1–8 selected still arms step `selectedStep * 8 +
-  part`, an in-range step other than the selected one (the fw 1.x sub-step leftover of B6). A real
+  part`, an in-range step of the same track, mostly another one (the fw 1.x sub-step leftover of
+  B6). A real
   fix changes behaviour; a known limitation in the release notes.
 - The off-by-one guard at `menu.c:2590` (`> MAX_SONG_LENGTH`, meant `>=`): unreachable since
   `0712d9a`, which keeps the song cursor inside the song.

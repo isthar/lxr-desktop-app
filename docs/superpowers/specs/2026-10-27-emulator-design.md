@@ -747,7 +747,7 @@ firmware thread.
 ### 4.9 Randomness
 
 - On the device, `GetRngValue()` reads the hardware TRNG through `HAL_RNG_GetRandomNumber(&hrng)`. Its
-  run-time consumers are the noise oscillators (`Oscillator.c:336` and its inlined copies), the LFO noise
+  run-time consumers are the noise oscillators (`Oscillator.c:340` and its inlined copies), the LFO noise
   (`lfo.c:76`) and the sequencer's probability draw (`seq_cbRandom()`, `sequencer.c:2115–2119`). Nothing
   calls `rand()`, and `dither_process()` and `calcNoise()` are dead code.
 - The emulator has two random streams:
@@ -1298,10 +1298,10 @@ time from source, so the Command Line Tools are enough to build it.
 | F3 | `menu.c:1079` and `:1083`: the clear-page text is written within its row, with the same visible result | None | M15: the LCD snapshots of the clear-automation pages equal the base build's, built with `-D_FORTIFY_SOURCE=0`; U6 |
 | F4 | `main.c`'s boot becomes `appMain_boot()` and its loop body `appMain_loopOnce()`, in `Core/Src/appMain.c` (below) | None; the code moves, the logic stays | `git diff --color-moved` shows moves plus the edits listed below only; the image check finds the splash; the F4TEST check (below); ITCM use is unchanged; U7 |
 | F5 | `sequencer.c`: `seq_cbRandom()` returns `SEQ_RANDOM()`, a macro that defaults to `GetRngValue()` | None | The release `.bin` is byte-identical to the base build's |
-| F6 | `Oscillator.c`: a saturating float-to-uint32 conversion at the 8 FM sites (lines 117, 140, 165, 193, 231, 509, 536 and 570) and in `freq2PhaseIncr()` (line 24). On the Cortex-M7 it is the plain cast, which `VCVT` already saturates | None | The release `.bin` is byte-identical; M1: the host version equals `FCVTZU` for edge values and NaN |
+| F6 | `Oscillator.c`: a saturating float-to-uint32 conversion at the 8 FM sites (lines 118, 141, 166, 194, 232, 516, 543 and 577) and in `freq2PhaseIncr()` (line 25). On the Cortex-M7 it is the plain cast, which `VCVT` already saturates | None | The release `.bin` is byte-identical; M1: the host version equals `FCVTZU` for edge values and NaN |
 | F7 | `AudioCodecManager.c`: `dma_buffer` and `dma_buffer2` get 4-byte alignment, and so does any other `int16_t` buffer accessed as `int32_t` that UBSan's alignment check finds | None. Both buffers already sit at 4-byte-aligned addresses (`0x20019e1c` and `0x2001a01c` in the release map) | The release `.bin` is byte-identical |
 | F8 | `Core/sources.cmake`: the module source lists leave `Core/CMakeLists.txt`, with the same files in the same order | None | The release `.bin` and `.map` are byte-identical |
-| F9 | `Oscillator.c:464` and `:174`: the interpolation reads `table[row][itg & 1023]` | It changes the sound in one case (below) | M15: no read past the tables under ASan; listening check U8 before it reaches a release |
+| F9 | `Oscillator.c:471` and `:175`: the interpolation reads `table[row][itg & 1023]` | It changes the sound in one case (below) | M15: no read past the tables under ASan; listening check U8 before it reaches a release |
 | F10 | `presetManager.c` and `PresetManager.h`: `uint8_t preset_morphBusy(void)` returns `morph_state` (`presetManager.c:41`), which is file-static today | None. Nothing in the firmware calls it, and the build's `--gc-sections` drops it | The release `.bin` is byte-identical; M17's t0 check |
 
 **F4 in detail.**
@@ -1344,7 +1344,7 @@ timing code needs.
 - For row 10 it reads past the table. On the device it reads the first bytes of whatever the linker put
   next, `CSWTCH.11` in the reference build. On the host it reads whatever follows, which depends on the
   memory layout.
-- Band 10 starts at 14,080 Hz (`Oscillator.c:33–41`, clamped at 10 at `:737–738`). That is above the
+- Band 10 starts at 14,080 Hz (`Oscillator.c:34–42`, clamped at 10 at `:744–745`). That is above the
   highest coarse note, note 127 at 12,543.85 Hz (`MidiNoteNumbers.h:149`), so only pitch modulation
   reaches it: the pitch envelope multiplies the frequency by up to 33 (`DrumVoice.c:188–190`,
   `MidiParser.c:94–97`, `PITCH_AMOUNT_FACTOR` 32). So F9 changes the attack of high voices with strong
@@ -1356,7 +1356,7 @@ timing code needs.
 
 **The ping-pong delay report.** LXR02XXL's PATCHES.md reported that the ping-pong delay's pointers can
 run past `FX_BUFFER` after a mode switch. The study's UBSan runs did not reproduce it; the sanitizer
-sweep did. A switch from normal to ping-pong with a pointer at 0x4000 or above wrote up to 32 KB past
+sweep did. A switch from normal to ping-pong with a pointer above 0x4000 wrote up to 32 KB past
 `FX_BUFFER`. E4.8 fixes it on `timing-core` (`2bb5d80`). M16 keeps the scenario as a regression test.
 
 **Further sanitizer findings** follow the same rules: one commit each, a test, and a device check
@@ -1757,7 +1757,7 @@ When F1–F10 reach a firmware release (v0.2, R6), the hardware checklist gains 
 | U5 | Boot without a card, then turn the morph knob: no noise and no crash (F2) |
 | U6 | The clear-automation pages show 'clear [autom. 1]' and 'clear [autom. 2]' as in v0.1 (F3) |
 | U7 | H1 and H2 again (F4) |
-| U8 | Listening check against v0.1 (F9). Voice 1 with a saw wavetable oscillator at its highest coarse pitch (note 127), pitch modulation amount 127, pitch EG decay 64 or more and pitch slope 64; then the same with the triangle. 16 hits of each sound as in v0.1 |
+| U8 | Listening check against v0.1 (F9). Voice 1 with a saw wavetable oscillator at its highest coarse pitch (note 127), pitch modulation amount 127, pitch EG decay 64 or more and pitch slope 64; then the same with the triangle. 16 hits of each sound as in v0.1; then a PWM oscillator with a nonzero PWM amount, at a low and a very high pitch (B13, B14) |
 
 ## 13. Rollout
 
@@ -1817,7 +1817,7 @@ This draft applies each default. Each question stays open in the tracker until t
 | # | Question | Default applied in this draft | Status |
 |---|---|---|---|
 | Q12 | Do we build stage 1b in the agreed order: the renderer first (goldens in CI, quick listening to stage 2's changes), then the app (virtual panel, CoreMIDI, master and slave), then stage 2? The alternative is the renderer, then stage 2, and the app later. **Agreed order:** the app's live sync checks (A4–A8) exist before stage 2 changes the groove, and stage 2 starts two plans later (R4 and R5). **Alternative:** the groove features reach the device two plans sooner. Their scripted sync tests run in the renderer (G7 and G8 drive DIN and USB clocks), and live tests wait for the device or the app | Renderer, app, stage 2, as agreed on 2026-10-23. Code starts only after the owner accepts this spec | Open |
-| Q13 | Do the small firmware changes the emulator needs go into the firmware? Most leave the device's behaviour unchanged: the two NULL reads, the `strcpy` in `menu.c`, splitting `main()` into a boot and one loop pass, saturating float-to-uint conversions, and a function that tells whether a kit transfer is running. One changes the sound: the read past the end of a table in `Oscillator.c`. The ping-pong delay report is settled: the sanitizer sweep reproduced it, and E4.8 fixed it on `timing-core` (`2bb5d80`) | Yes, as separate small commits on `emulator` (F1–F10), reaching the device in v0.2, after the owner's v0.1 checks. The `Oscillator.c` fix only after a listening check on the device (U8). F2 also changes a morph without a card, which today reads stray bytes from address 0 | Open |
+| Q13 | Do the small firmware changes the emulator needs go into the firmware? Most leave the device's behaviour unchanged: the two NULL reads, the `strcpy` in `menu.c`, splitting `main()` into a boot and one loop pass, saturating float-to-uint conversions, and a function that tells whether a kit transfer is running. One changes the sound: the read past the end of a table in `Oscillator.c`. The ping-pong delay report is settled: the sanitizer sweep reproduced it, and E4.8 fixed it on `timing-core` (`2bb5d80`) | Yes, as separate small commits on `emulator` (F1–F10), reaching the device in v0.2, after the owner's v0.1 checks. The `Oscillator.c` fix only after a listening check on the device (U8), which also decides the PWM oscillator's B13 and B14 from the sanitizer sweep. F2 also changes a morph without a card, which today reads stray bytes from address 0 | Open |
 | Q14 | Names and look: app 'LICHOMAT Emu', renderer 'lichomat-render', CoreMIDI port 'LICHOMAT Emu', tagline 'emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02', bundle ID `io.github.isthar.lichomat-emu` (with your GitHub handle); a schematic panel in its own colours, no logos and no copy of the faceplate. The naming rule also covers release titles and notes, the README and the repository's description | As proposed (§10.2) | Open |
 | Q15 | Distribution: arm64 only, macOS 13 or later, ad hoc signed binaries as release assets on the fork, no paid Apple developer account (Open Anyway at the first start), no Erica factory kits; users bring a copy of their card or a folder | As proposed (§10.3). Intel is not supported: an x86-64 build gives different results and can crash | Open |
 | Q16 | The app's behaviour: knobs like the device (about 134 steps per turn, 22 for list parameters); an instant display; a slave MIDI input delay computed from the audio output's latencies, about 58 ms at the built-in output's 512-frame buffer and about 34 ms at 128 frames, that the user can lower (the earlier figure of 24 ms is too short for the app's audio pipeline, §6.4); sound at the internal 44,140.625 Hz, resampled to the audio device at Normal complexity and maximum quality; the app's own card folder with import and export; the UI in Dear ImGui on Cocoa and Metal | As proposed (§6). The clock jacks are an LED and buttons; an audio pulse out and clock in from audio are options | Open |

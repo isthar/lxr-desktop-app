@@ -13,7 +13,7 @@ Read this first when picking the project up in a new session.
 | Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N21; they win over the spec) |
 | Reports per milestone | `docs/lichomat/reports/` |
 | Sanitizer sweep of 2026-10-27 (fw 1.7 bugs B1–B19, with the status of each) | `docs/lichomat/reports/sanitizer-sweep-2026-10-27.md` |
-| Host tests (32 ctest ids) | `tests/`; `test_buttons`, `test_midicc`, `test_sequencer`, `test_presets`, `test_delay` and `test_dsp` compile firmware files (the last four came with E4.6–E4.9) |
+| Host tests (32 ctest ids) | `tests/`; `test_buttons`, `test_midicc`, `test_sequencer`, `test_presets`, `test_delay` and `test_dsp` compile fw 1.7's firmware files (the last four came with E4.6–E4.9) |
 | fw 1.7 timing replica | `tests/reference/fw17_replica.c` |
 | Hardware checklist for the owner (H1–H13, U1–U3, X1–X4) | `docs/lichomat/hardware-checklist.md` |
 | Release notes v0.1 (draft) | `docs/lichomat/release-notes-v0.1.md` |
