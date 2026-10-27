@@ -5,12 +5,13 @@
  * (test_buttons.c compiles Core/Src/buttonHandler.c, test_midicc.c
  * Core/Src/Soundengine/MIDI/MidiParser.c, test_sequencer.c
  * Core/Src/Soundengine/Sequencer/sequencer.c, test_presets.c
- * Core/Src/Preset/presetManager.c). It has only what the headers of those files
- * need: the handle types that main.h, IO/DIO.h and DSPAudio/random.h name, the
- * DWT and clock calls of the inline functions in delay.h, the CMSIS calls of
- * those in DSPAudio/BufferTools.h, the TIM2 calls of buttonHandler.c, the
- * interrupt mask of sequencer.c, and the tick and the SD card information type
- * of presetManager.c and FATFS/Target/bsp_driver_sd.h.
+ * Core/Src/Preset/presetManager.c, test_delay.c
+ * Core/Src/Soundengine/DSPAudio/FX/Delay.c). It has only what the headers of
+ * those files need: the handle types that main.h, IO/DIO.h and DSPAudio/random.h
+ * name, the DWT and clock calls of the inline functions in delay.h, the CMSIS
+ * calls of those in DSPAudio/BufferTools.h and of Delay.c, the TIM2 calls of
+ * buttonHandler.c, the interrupt mask of sequencer.c, and the tick and the SD
+ * card information type of presetManager.c and FATFS/Target/bsp_driver_sd.h.
  *
  * It also takes the DTCM placement out of the firmware's declarations: INDTCM and
  * INDTCMZ (main.h, Soundengine/config.h) are __attribute__ ((section(".dtcm"))),
@@ -61,8 +62,28 @@ extern DWT_Type host_dwt;
 
 /* CMSIS SIMD intrinsics that inline functions of DSPAudio/BufferTools.h call.
  * Declared only: no host test calls those functions, and a call would not link. */
-uint32_t __QADD16(uint32_t op1, uint32_t op2);
 uint32_t __QSUB16(uint32_t op1, uint32_t op2);
+
+/* The CMSIS intrinsics of the delay (DSPAudio/FX/Delay.c, test_delay.c), with
+ * the results of the Arm instructions: QADD16 adds the two halfwords with signed
+ * saturation, SSAT saturates a signed value to sat bits (the CMSIS macro takes
+ * its argument as int32_t, as this prototype does), and PKHBT is the C macro of
+ * cmsis_gcc.h. */
+static inline int32_t host_ssat(int32_t val, uint32_t sat)
+{
+	const int32_t max = (int32_t)((1u << (sat - 1)) - 1u);
+	const int32_t min = -max - 1;
+	return val > max ? max : (val < min ? min : val);
+}
+static inline uint32_t __QADD16(uint32_t op1, uint32_t op2)
+{
+	const int32_t lo = (int16_t)(op1 & 0xFFFFu) + (int16_t)(op2 & 0xFFFFu);
+	const int32_t hi = (int16_t)(op1 >> 16) + (int16_t)(op2 >> 16);
+	return ((uint32_t)(uint16_t)host_ssat(hi, 16) << 16) | (uint16_t)host_ssat(lo, 16);
+}
+static inline int32_t __SSAT(int32_t val, uint32_t sat) { return host_ssat(val, sat); }
+#define __PKHBT(ARG1, ARG2, ARG3) ((((uint32_t)(ARG1)) & 0x0000FFFFUL) | \
+                                   ((((uint32_t)(ARG2)) << (ARG3)) & 0xFFFF0000UL))
 
 /* The interrupt mask of the mailbox in sequencer.c. The host test runs in one
  * thread with no interrupts, so the mask is only a value kept here. */

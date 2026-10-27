@@ -96,6 +96,14 @@ void Delay_processPingPong(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* o
 	int32_t x;
 	int32_t* stereoOut = (int32_t*)outL;
 
+	// LICHOMAT (E4.8): the ping-pong pointers index one half of FX_BUFFER. A switch from
+	// the normal delay (CC2_FX_DELAY_TYPE: the FX page, a kit load) leaves them in
+	// 0..FX_BUFFER_SIZE, and fw 1.7 then wrote and read the left line past the buffer.
+	// Pointers in range stay as they are.
+	d->write &= FX_BUFFER_SIZE>>1;
+	d->oldRead &= FX_BUFFER_SIZE>>1;
+	d->newRead &= FX_BUFFER_SIZE>>1;
+
 	for(uint8_t i=0;i<size;i++)
 	{
 

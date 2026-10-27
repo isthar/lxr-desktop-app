@@ -210,3 +210,15 @@ if(TARGET test_presets)
         ${LXR_ROOT}/Core/Src/frontPanelParser.c
         PROPERTIES COMPILE_OPTIONS -w)
 endif()
+
+# The ping-pong delay (E4.8): test_delay compiles the firmware's Delay.c with the
+# stand-in headers in stubs/ (the HAL with the CMSIS intrinsics of the delay).
+# For this target FX_BUFFER is a pointer to an array of its size, which the test
+# points into a buffer with guard entries after the array.
+seqc_add_test(test_delay     IDS delay EXTRA ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/Delay.c)  # E4.8  delay type switch
+if(TARGET test_delay)
+    target_include_directories(test_delay BEFORE PRIVATE stubs)
+    target_include_directories(test_delay SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+    target_compile_definitions(test_delay PRIVATE "FX_BUFFER=(*delay_fxBuffer)")
+    set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/Delay.c PROPERTIES COMPILE_OPTIONS -w)
+endif()
