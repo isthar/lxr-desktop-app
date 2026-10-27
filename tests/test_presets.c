@@ -595,6 +595,69 @@ TEST(presets_project_load_autoloads_a_kit_in_range)
 	ASSERT_EQ(namesGuardChanged(), 0);
 }
 
+TEST(presets_last_project_number_is_checked)
+{
+	for (int nr = 0; nr < 256; nr++) {
+		reset();
+		const uint8_t file = (uint8_t)nr;
+		cardPut("/proj.idx", &file, 1);
+		uint8_t projNr = 0xEE;
+		ASSERT_EQ(preset_loadLastUsedProjectNrFromSD(&projNr), FR_OK);
+		ASSERT_EQ(projNr, nr < NUM_KIT_SLOTS ? nr : 0);
+	}
+	/* no file: project 0, as before */
+	reset();
+	uint8_t projNr = 0xEE;
+	ASSERT_EQ(preset_loadLastUsedProjectNrFromSD(&projNr), FR_NO_FILE);
+	ASSERT_EQ(projNr, 0);
+}
+
+TEST(presets_project_save_past_the_64_slots_is_refused)
+{
+	const uint8_t slots[] = { 64, 99, 100, 255 };
+	for (unsigned k = 0; k < sizeof slots; k++) {
+		char folder[16];
+		snprintf(folder, sizeof folder, "/proj%02d", slots[k]);
+		reset();
+		memset(activeParameters, 0x3C, KIT_SIZE);
+		ASSERT_EQ(preset_saveProject(slots[k]), FR_INVALID_PARAMETER);
+		ASSERT_FALSE(cardHas(folder));
+		ASSERT_EQ(namesGuardChanged(), 0);
+		ASSERT_EQ(kitsGuardChanged(), 0);
+		ASSERT_EQ(mainParameters[0][0], 0);	/* the edit buffer was not stored */
+		ASSERT_EQ(lcd_process_display_interrupt, 1);
+	}
+}
+
+TEST(presets_project_load_past_the_64_slots_is_refused)
+{
+	const uint8_t slots[] = { 64, 99, 100, 255 };
+	for (unsigned k = 0; k < sizeof slots; k++) {
+		char folder[16], nfo[32];
+		snprintf(folder, sizeof folder, "/proj%02d", slots[k]);
+		snprintf(nfo, sizeof nfo, "%s/prj.nfo", folder);
+		reset();
+		addEntry(folder, 1);
+		cardPut(nfo, "STRAY   ", 8);
+		ASSERT_EQ(preset_loadProject(slots[k], 0), FR_INVALID_PARAMETER);
+		ASSERT_EQ(namesGuardChanged(), 0);
+		ASSERT_EQ(lcd_process_display_interrupt, 1);
+		/* and no folder is made for a slot that has none */
+		const uint8_t other = (uint8_t)(slots[k] ^ 1);
+		snprintf(folder, sizeof folder, "/proj%02d", other);
+		ASSERT_EQ(preset_loadProject(other, 0), FR_INVALID_PARAMETER);
+		ASSERT_FALSE(cardHas(folder));
+	}
+	/* a project in range loads as before */
+	reset();
+	snprintf(savefileNames[63][PROJECT_NAMES], 8, "LAST");
+	ASSERT_EQ(preset_saveProject(63), FR_OK);
+	resetMemory();
+	ASSERT_EQ(preset_loadProject(63, 0), FR_OK);
+	ASSERT_TRUE(memcmp(savefileNames[63][PROJECT_NAMES], "LAST", 5) == 0);
+	ASSERT_EQ(namesGuardChanged(), 0);
+}
+
 TEST_MAIN()
 
 //------------------------------------------------------------------------------

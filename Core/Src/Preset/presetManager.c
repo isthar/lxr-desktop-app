@@ -1105,6 +1105,8 @@ FRESULT preset_loadLastUsedProjectNrFromSD(uint8_t* projNr)
     res=f_read((FIL*)&SDFile, projNr,1, &bytesRead);
 	//close the file handle
 	f_close((FIL*)&SDFile);
+	//a slot byte from the card: keep it in the 64 projects
+	if(*projNr >= NUM_KIT_SLOTS) *projNr = 0;
 
 
 	return res;
@@ -2307,6 +2309,7 @@ FRESULT preset_saveProject(uint8_t presetNr)
 	FRESULT res;
 	FILINFO fno;
 
+	if(presetNr >= NUM_KIT_SLOTS) return FR_INVALID_PARAMETER; //no project past the 64 slots
 	preset_saveDrumsetRam(menu_selectedPresetNr[SAVE_TYPE_KIT], 0);
 	preset_savePatternRAM(seq_activePattern);
 
@@ -2692,6 +2695,7 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 	FILINFO fno;
 	char text[17];
 
+	if(presetNr >= NUM_KIT_SLOTS) return FR_INVALID_PARAMETER; //no project past the 64 slots
 	lcd_process_display_interrupt = 0;
 	while(sendDisplayBuffer() != 0);
 
