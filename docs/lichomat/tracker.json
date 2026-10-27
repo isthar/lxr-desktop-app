@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-27 02:31",
+    "updated": "2026-10-27 02:51",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
-    "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Następny jest szkic specyfikacji etapu 1b: emulator na macOS, najpierw renderer WAV, potem aplikacja z wirtualnym panelem.",
+    "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). W nocy poprawiam błędy fw 1.7 znalezione pod sanitizerami (E4.6–E4.9) i robię nowy plik do testów. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "5b2c224",
-    "next": "Twoje testy H1–H13, U1, U2 i X4 na pliku 9a7aff2a… oraz odpowiedzi na Q9–Q18. Ja: szkic specyfikacji etapu 1b do Twojej akceptacji i raport z szukania błędów pod sanitizerami.",
-    "updated_at": "2026-10-27T02:31:00+01:00",
-    "now": "Noc: E4.9, czyli NaN w filtrach i w krzywej EG oraz fala ≥ 6 (od 02:31). Fixer specyfikacji 1b w toku."
+    "head": "3b4a741",
+    "next": "Ja do 04:20: przegląd E4.9, CI, nowy plik i dokumenty do testów. Ty rano: testy H1–H13, U1–U3 i X4 na nowym pliku (Q6), specyfikacja 1b (Q20), pytania Q9–Q19.",
+    "updated_at": "2026-10-27T02:51:00+01:00",
+    "now": "Noc: wypycham E4.9 i czekam na CI z nowym plikiem (od 02:58). Potem dokumenty do testów."
   },
   "epics": [
     {
@@ -407,7 +407,7 @@
     {
       "id": "E4.9",
       "epic": "E4",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Błędy fw 1.7 w silniku dźwięku: NaN w filtrze hi-hatu, cymbala i snare oraz w krzywej EG wysokości, fala ≥ 6 przez MIDI",
       "updated": "2026-10-27"
     },
@@ -415,36 +415,43 @@
       "id": "E5.1",
       "epic": "E5",
       "status": "w toku",
-      "title": "Specyfikacja i plan emulatora",
-      "updated": "2026-10-26"
+      "title": "Specyfikacja i plan emulatora (szkic specyfikacji gotowy, czeka na Twoją akceptację: Q20)",
+      "updated": "2026-10-27"
     },
     {
       "id": "E5.2",
       "epic": "E5",
       "status": "do zrobienia",
-      "title": "Build silnika DSP na hoście (shimy CMSIS)",
-      "updated": ""
+      "title": "Cały firmware na wirtualnym urządzeniu: zmiany F1–F10, projekt emu/, rdzeń z planistą i karta (R1)",
+      "updated": "2026-10-27"
     },
     {
       "id": "E5.3",
       "epic": "E5",
       "status": "do zrobienia",
-      "title": "Renderer WAV z projektu z karty SD",
-      "updated": ""
+      "title": "Renderer WAV lichomat-render (R2)",
+      "updated": "2026-10-27"
     },
     {
       "id": "E5.4",
       "epic": "E5",
       "status": "do zrobienia",
-      "title": "Testy golden render w CI",
-      "updated": ""
+      "title": "Testy porównujące nagrania (goldens) i CI emulatora (R3)",
+      "updated": "2026-10-27"
     },
     {
       "id": "E5.5",
       "epic": "E5",
       "status": "do zrobienia",
-      "title": "Aplikacja z wirtualnym panelem (CoreAudio, CoreMIDI)",
-      "updated": ""
+      "title": "Aplikacja LICHOMAT Emu: CoreAudio, CoreMIDI, wirtualny panel (R4, R5)",
+      "updated": "2026-10-27"
+    },
+    {
+      "id": "E5.6",
+      "epic": "E5",
+      "status": "do zrobienia",
+      "title": "Wydanie firmware v0.2 ze zmianami F1–F10, po Twoich testach v0.1 (R6)",
+      "updated": "2026-10-27"
     },
     {
       "id": "E6.1",
@@ -690,14 +697,14 @@
     {
       "id": "Q13",
       "status": "otwarte",
-      "question": "Emulator potrzebuje kilku małych zmian w firmware. Większość nie zmienia działania LXR: dwa odczyty spod adresu 0 (modulationNode.c:49 i morphParameters bez karty SD), strcpy o 1 bajt za daleko w menu.c, podział main() na start i jedno przejście pętli oraz konwersje float→uint z nasyceniem, jak robi to Cortex-M7. Jedna zmiana zmienia dźwięk: odczyt za końcem tablicy w Oscillator.c:464 (i :174). Czy wprowadzać te zmiany w firmware?",
-      "assumption": "Tak, jako osobne małe commity na gałęzi emulatora, przeniesione do firmware po Twoich testach v0.1. Poprawka Oscillator.c dopiero po odsłuchu na LXR. Zgłoszony przez inny projekt błąd wskaźników delaya ping-pong najpierw odtworzę.",
+      "question": "Emulator potrzebuje kilku małych zmian w firmware (F1–F10 w specyfikacji 1b, §7). Większość nie zmienia działania LXR: dwa odczyty spod adresu 0 (modulationNode.c:49 i morphParameters bez karty SD), strcpy o 1 bajt za daleko w menu.c, podział main() na start i jedno przejście pętli, konwersje float→uint z nasyceniem jak na Cortex-M7, funkcja mówiąca, czy trwa transfer kitu (preset_morphBusy). Jedna zmiana zmienia dźwięk: odczyt za końcem tablicy w Oscillator.c:464 (i :174). Błąd delaya ping-pong jest już poprawiony w v0.1 (2bb5d80). Czy wprowadzać te zmiany w firmware?",
+      "assumption": "Tak, jako osobne małe commity na gałęzi emulator, które trafią na LXR w v0.2, po Twoich testach v0.1. Poprawka Oscillator.c dopiero po odsłuchu na LXR. Do tego samego odsłuchu idą dwa błędy PWM z nocnego szukania (B13, B14).",
       "answer": null
     },
     {
       "id": "Q14",
       "status": "otwarte",
-      "question": "Nazwa i wygląd emulatora. Propozycja: aplikacja „LICHOMAT Emu”, renderer „lichomat-render”, port CoreMIDI „LICHOMAT Emu”, opis „emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02”. Panel schematyczny, we własnych kolorach, bez logo i bez kopii frontu urządzenia. NOTICE.md nie pozwala używać „LXR” ani „Erica Synths” jako nazwy i nie daje praw do wyglądu urządzenia. Pasuje?",
+      "question": "Nazwa i wygląd emulatora. Propozycja: aplikacja „LICHOMAT Emu”, renderer „lichomat-render”, port CoreMIDI „LICHOMAT Emu”, identyfikator aplikacji io.github.isthar.lichomat-emu (z Twoją nazwą na GitHubie), opis „emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02”. Panel schematyczny, we własnych kolorach, bez logo i bez kopii frontu urządzenia. NOTICE.md nie pozwala używać „LXR” ani „Erica Synths” jako nazwy i nie daje praw do wyglądu urządzenia. Pasuje?",
       "assumption": "Tak, jak w propozycji.",
       "answer": null
     },
@@ -711,14 +718,14 @@
     {
       "id": "Q16",
       "status": "otwarte",
-      "question": "Działanie aplikacji emulatora. Propozycja: pokrętła jak na LXR (ok. 134 kroki na obrót, 22 dla parametrów-list), wyświetlacz odświeżany od razu (bez opóźnienia LXR, ok. 51 ms na pełne odświeżenie), opóźnienie wejścia MIDI w trybie slave ok. 24 ms do regulacji, dźwięk liczony w wewnętrznej częstotliwości LXR 44140,6 Hz i przeliczany do częstotliwości karty dźwiękowej. Aplikacja trzyma własny folder karty, z importem i eksportem, i nie pracuje bezpośrednio na Twojej karcie. Interfejs w Dear ImGui (lekki, natywny Metal).",
+      "question": "Działanie aplikacji emulatora. Propozycja: pokrętła jak na LXR (ok. 134 kroki na obrót, 22 dla parametrów-list), wyświetlacz odświeżany od razu, opóźnienie wejścia MIDI w trybie slave liczone z opóźnień wyjścia audio (ok. 58 ms przy wbudowanym wyjściu i buforze 512 próbek, ok. 34 ms przy 128) z możliwością zmniejszenia. Wcześniejsze 24 ms są za mało dla toru audio aplikacji (specyfikacja §6.4). Dźwięk liczony w wewnętrznej częstotliwości LXR 44 140,6 Hz i przeliczany do karty dźwiękowej. Aplikacja ma własny folder karty z importem i eksportem. Interfejs w Dear ImGui (Cocoa, Metal).",
       "assumption": "Tak, jak w propozycji. Jacki zegara w aplikacji: dioda i przyciski, a impuls na wyjściu audio i zegar z wejścia audio opcjonalnie.",
       "answer": null
     },
     {
       "id": "Q17",
       "status": "otwarte",
-      "question": "Na DIN takty zegara MIDI (F8) czekają za nutami wysłanymi w tej samej chwili, do ok. 7 ms przy 7 torach. Każda nuta to ok. 1 ms na kablu. Tak jest w fw 1.7 i w LICHOMAT 0.1. Standard MIDI 1.0 pozwala wysłać bajty realtime przed nutami czekającymi w kolejce, więc zegar dla sprzętu za LXR byłby równiejszy. Zmienić to (w 0.1.x albo w etapie 2)?",
+      "question": "Na DIN takty zegara MIDI (F8) czekają za nutami wysłanymi w tej samej chwili, do ok. 7 ms przy 7 torach. Każda nuta to ok. 1 ms na kablu. Tak jest w fw 1.7 i w LICHOMAT 0.1. Standard MIDI 1.0 pozwala wysłać bajty realtime przed nutami czekającymi w kolejce, więc zegar dla sprzętu za LXR byłby równiejszy. Zmienić to, w firmware v0.2 albo w etapie 2? Wersja 0.1.x nie mieści się na ekranie startowym („v0.1.1 unofficial” ma 17 znaków).",
       "assumption": "Zapisuję do etapu 2 i na razie nic nie zmieniam. Test H5 już uwzględnia to opóźnienie.",
       "answer": null
     },
@@ -727,6 +734,20 @@
       "status": "otwarte",
       "question": "Opcjonalnie: czy możesz sfotografować wyświetlacz LXR-02 na stronie songu (strzałki góra/dół) i na innych ekranach ze znakami spoza ASCII? Wirtualny wyświetlacz odwzoruje wtedy font kontrolera WS0010.",
       "assumption": "Bez zdjęć: ogólny font 5×8, a kody 0xC5 i 0xC6 jako strzałki.",
+      "answer": null
+    },
+    {
+      "id": "Q19",
+      "status": "otwarte",
+      "question": "Czy gałąź emulator (etap 1b) ma iść na Twój fork (origin) na bieżąco, tak jak timing-core? Specyfikacja przyjmuje, że Q5 dotyczyło tylko timing-core. CI emulatora (emulator.yml) działa tylko dla wypchniętych commitów.",
+      "assumption": "Tak, jak w Q5 („na bieżąco, na Twój fork”). Gałąź emulator powstanie dopiero po akceptacji specyfikacji (Q20), więc do tego czasu nie ma czego wypychać.",
+      "answer": null
+    },
+    {
+      "id": "Q20",
+      "status": "otwarte",
+      "question": "Czy akceptujesz specyfikację etapu 1b (docs/superpowers/specs/2026-10-27-emulator-design.md)? Najważniejsze do przeczytania: §6.4 (opóźnienie slave ok. 58 ms), §3.3 i §4.2 (jak emulator prowadzi czas), §7 (zmiany w firmware F1–F10, na LXR w v0.2), §8.4–§8.6 (testy porównujące nagrania) i §15 (pytania Q12–Q19).",
+      "assumption": "Bez akceptacji nie piszę planu i nie ruszam kodu etapu 1b.",
       "answer": null
     }
   ],
@@ -1875,6 +1896,21 @@
       "n": 229,
       "at": "2026-10-27 02:31",
       "text": "Nocne poprawki C5 zakończone (01:37–02:30; 6 agentów, 0,8 mln tokenów). E4.6, E4.7 i E4.8 przeszły lekkie przeglądy w rundzie 1. Wszystkie 7 błędów z sweepu, które psują dane, jest poprawionych, każdy z testem na hoście, który przed poprawką nie przechodził. Nowe testy: test_sequencer (cały sequencer.c na hoście z rdzeniem), test_presets (presety z kartą w pamięci) i test_delay. Wcześniejsze testy (test_buttons, test_midicc) rozszerzone. Commity: 0712d9a i 8af1ece (strona songu, krok automatyki), 040cdea, 2446532, b0b53ec i a6bd8b7 (zapis projektu, sloty z karty, PROJ.IDX, Bank Select 64–127), 2bb5d80 i 5b2c224 (delay ping-pong, NRPN 121). Teraz E4.9, czyli 3 błędy silnika dźwięku (od 02:31). Potem nowy plik z CI i aktualizacja dokumentów."
+    },
+    {
+      "n": 230,
+      "at": "2026-10-27 02:47",
+      "text": "Szkic specyfikacji etapu 1b gotowy (00:11–02:44; 8 agentów, 3,3 mln tokenów): docs/superpowers/specs/2026-10-27-emulator-design.md, ok. 1850 linii. Trzej krytycy dali 57 uwag, sceptycy potwierdzili 56, fixer wprowadził wszystkie i zrobił samoprzegląd (a18aa96). Główne decyzje: cały firmware działa na wirtualnym urządzeniu z jednym wątkiem i wirtualnym zegarem. Wymienione są tylko lcd.c, kodek, stos USB i sterownik karty. Testy porównujące nagrania tylko na macOS arm64, z dołączonymi funkcjami libm. Praca dzieli się na 4 plany (R1–R5), a R6 to wydanie v0.2 ze zmianami F1–F10. Pytania zaktualizowane: Q13, Q14, Q16 (opóźnienie slave ok. 58 ms, nie 24 ms), Q17 (v0.2 zamiast 0.1.x). Nowe: Q19 (wypychanie gałęzi emulator) i Q20 (akceptacja specyfikacji). Zadania E5.2–E5.6 dopasowane do specyfikacji."
+    },
+    {
+      "n": 231,
+      "at": "2026-10-27 02:47",
+      "text": "E4.9: trzy poprawki gotowe, każda z testem napisanym najpierw: filtr, który zostawał w stanie NaN do wyłączenia (eb9712a), wysokość NaN przy nachyleniu EG wysokości 127 (6a74b81) i stary bufor grany przez fale 6 i wyżej (9353a68), do tego poprawione komentarze testu (db41ebb). O 02:47 ruszył przegląd zgodności z opisem zadania."
+    },
+    {
+      "n": 232,
+      "at": "2026-10-27 02:51",
+      "text": "E4.9 zrobione (02:31–02:51, 2 agentów, 0,29 mln tokenów). Przegląd: zgodne z opisem zadania, 3 drobne uwagi bez poprawek w kodzie (opis pokrycia testu w komunikacie 6a74b81, nazwa jednego testu, styl listy w nagłówku stuba). Dwie zmiany dźwięku do notatek wydania: fala 6 i wyżej z MIDI jest teraz cisza zamiast przesłuchu lub szumu, a nachylenie EG wysokości 127 daje teraz bardzo stromą krzywą zamiast zaniku tonu. Filtr ustawiony w obszarze rozbiegania (FREQ 122–126 z wysokim RESO) nadal brzmi źle, póki tak stoi, ale po cofnięciu gałki znowu gra, zamiast milczeć do wyłączenia. 32 testy ctest, obraz 300 756 B."
     }
   ]
 }
