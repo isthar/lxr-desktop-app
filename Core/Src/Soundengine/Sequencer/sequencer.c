@@ -698,8 +698,11 @@ void seq_setPendingPatternActive()
 	//moved song list display here to prevent skipping list on same consecutive patterns
 	if(1) {
 
-				//update for song screen to follow patterns
-				menu_songMenuPosition = seq_songPositionPointer;
+				//update for song screen to follow patterns. Before entry 0 (0xff after a
+				//rewind or song mode on) the cursor goes to entry 0, where the first pattern
+				//end moves the pointer; the song page writes at the cursor (fw 1.7 wrote
+				//song[255], E4.6)
+				menu_songMenuPosition = (seq_songPositionPointer < MAX_SONG_LENGTH) ? seq_songPositionPointer : 0;
 
 				if( menu_activePage < PATTERN_LOAD_PAGE || menu_activePage > SONG_MODE_PAGE)
 				{

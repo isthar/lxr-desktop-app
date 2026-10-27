@@ -3,10 +3,12 @@
  *
  * Host stand-in for the STM32 HAL, for host tests that compile firmware files
  * (test_buttons.c compiles Core/Src/buttonHandler.c, test_midicc.c
- * Core/Src/Soundengine/MIDI/MidiParser.c). It has only what the headers of those
- * files need: the handle types that main.h, IO/DIO.h and DSPAudio/random.h name,
- * the DWT and clock calls of the inline functions in delay.h, the CMSIS calls of
- * those in DSPAudio/BufferTools.h, and the TIM2 calls of buttonHandler.c.
+ * Core/Src/Soundengine/MIDI/MidiParser.c, test_sequencer.c
+ * Core/Src/Soundengine/Sequencer/sequencer.c). It has only what the headers of
+ * those files need: the handle types that main.h, IO/DIO.h and DSPAudio/random.h
+ * name, the DWT and clock calls of the inline functions in delay.h, the CMSIS
+ * calls of those in DSPAudio/BufferTools.h, the TIM2 calls of buttonHandler.c and
+ * the interrupt mask of sequencer.c.
  *
  * It also takes the DTCM placement out of the firmware's declarations: INDTCM and
  * INDTCMZ (main.h, Soundengine/config.h) are __attribute__ ((section(".dtcm"))),
@@ -58,6 +60,13 @@ extern DWT_Type host_dwt;
  * Declared only: no host test calls those functions, and a call would not link. */
 uint32_t __QADD16(uint32_t op1, uint32_t op2);
 uint32_t __QSUB16(uint32_t op1, uint32_t op2);
+
+/* The interrupt mask of the mailbox in sequencer.c. The host test runs in one
+ * thread with no interrupts, so the mask is only a value kept here. */
+__attribute__((unused)) static uint32_t host_primask;
+static inline uint32_t __get_PRIMASK(void) { return host_primask; }
+static inline void __set_PRIMASK(uint32_t primask) { host_primask = primask; }
+static inline void __disable_irq(void) { host_primask = 1; }
 
 uint32_t HAL_RCC_GetHCLKFreq(void);
 HAL_StatusTypeDef HAL_TIM_Base_Start_IT(TIM_HandleTypeDef *htim);

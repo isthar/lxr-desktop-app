@@ -176,3 +176,14 @@ if(TARGET test_midicc)
     target_compile_definitions(test_midicc PRIVATE "midiParser_originalCcValues=(*midiParser_ccTable)")
     set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/MIDI/MidiParser.c PROPERTIES COMPILE_OPTIONS -w)
 endif()
+
+# The sequencer glue (E4.6): test_sequencer compiles the firmware's sequencer.c
+# with the timing core, the stand-in headers in stubs/ (the HAL with the interrupt
+# mask of the mailbox) and the firmware's own FX bus header. The song it edits is
+# a buffer of the test with guard bytes after the 64 entries.
+seqc_add_test(test_sequencer IDS sequencer EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c)  # E4.6  song page position
+if(TARGET test_sequencer)
+    target_include_directories(test_sequencer BEFORE PRIVATE stubs)
+    target_include_directories(test_sequencer SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+    set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c PROPERTIES COMPILE_OPTIONS -w)
+endif()
