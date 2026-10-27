@@ -22,6 +22,10 @@
  * of the next track, or of the next pattern. An armed step or track out of range
  * now disarms.
  *
+ * The probability draw (stage 1b F5): seq_cbRandom() returns SEQ_RANDOM(), which
+ * a host build sets to a random stream of its own. stubs/seq_random_test.h, which
+ * tests/CMakeLists.txt forces into sequencer.c, makes it seqTest_random() here.
+ *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
  *
@@ -46,6 +50,7 @@
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/TriggerOut.h"
 #include "Soundengine/USB/usb_manager.h"
+#include "seq_random_test.h"
 
 #define GUARD_AFTER 256		/* past index 255, where fw 1.7 put the pattern */
 #define GUARD_BYTE 0xA5
@@ -273,6 +278,29 @@ TEST(sequencer_automation_step_past_63_is_not_armed)
 	ASSERT_FALSE(seq_isAutomationStepArmed());
 	seq_recordAutomation(0, 10, 11);
 	ASSERT_EQ(memcmp(&nextPattern, &seq_patternSet.seq_subStepPattern[seq_activePattern + 1][0][5], sizeof nextPattern), 0);
+}
+
+//------------------------------------------------------------------------------
+// The probability draw (stage 1b F5): seq_cbRandom() returns SEQ_RANDOM(), which
+// stubs/seq_random_test.h makes seqTest_random() for this target. The firmware
+// keeps GetRngValue(), the hardware RNG.
+//------------------------------------------------------------------------------
+static int seqTestRandomCalls;
+
+uint32_t seqTest_random(void)
+{
+	seqTestRandomCalls++;
+	return 0;
+}
+
+TEST(sequencer_probability_draw_takes_seq_random)
+{
+	reset();
+	seq_setMainStep(0, 0, 0, 1);		/* pattern 0, track 1, step 1 */
+	seqTestRandomCalls = 0;
+	playAndStop(500);
+	seq_setMainStep(0, 0, 0, 0);
+	ASSERT_TRUE(seqTestRandomCalls > 0);
 }
 
 TEST_MAIN()

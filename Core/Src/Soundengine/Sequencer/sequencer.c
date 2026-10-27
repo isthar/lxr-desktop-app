@@ -2111,11 +2111,17 @@ static void seq_cbTransport(void *ctx, seqc_transport_t change)
 	uart_sendFrontpanelByte(seq_running);
 }
 //------------------------------------------------------------------------------
+/* LICHOMAT: the source of the probability draw. A host build defines
+ * SEQ_RANDOM() before this point, to a random stream of its own (stage 1b F5,
+ * emulator spec 4.9); the firmware takes the hardware RNG. */
+#ifndef SEQ_RANDOM
+#define SEQ_RANDOM() GetRngValue()
+#endif
 /** the probability draw: the core uses 1 + random() % 100 */
 static uint32_t seq_cbRandom(void *ctx)
 {
 	(void)ctx;
-	return GetRngValue();
+	return SEQ_RANDOM();
 }
 //------------------------------------------------------------------------------
 static const seqc_host_t seq_host =

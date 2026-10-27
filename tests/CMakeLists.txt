@@ -180,12 +180,15 @@ endif()
 # The sequencer glue (E4.6): test_sequencer compiles the firmware's sequencer.c
 # with the timing core, the stand-in headers in stubs/ (the HAL with the interrupt
 # mask of the mailbox) and the firmware's own FX bus header. The song it edits is
-# a buffer of the test with guard bytes after the 64 entries.
-seqc_add_test(test_sequencer IDS sequencer EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c)  # E4.6  song page position, automation step
+# a buffer of the test with guard bytes after the 64 entries. stubs/seq_random_test.h
+# is forced into sequencer.c: its probability draw, SEQ_RANDOM(), becomes the
+# test's seqTest_random() (stage 1b F5).
+seqc_add_test(test_sequencer IDS sequencer EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c)  # E4.6  song page position, automation step; stage 1b F5 SEQ_RANDOM()
 if(TARGET test_sequencer)
     target_include_directories(test_sequencer BEFORE PRIVATE stubs)
     target_include_directories(test_sequencer SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
-    set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c PROPERTIES COMPILE_OPTIONS -w)
+    set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c PROPERTIES
+        COMPILE_OPTIONS "-w;-include;${CMAKE_CURRENT_SOURCE_DIR}/stubs/seq_random_test.h")
 endif()
 
 # The preset manager (E4.7): test_presets compiles the firmware's presetManager.c
