@@ -1076,11 +1076,13 @@ static void menu_repaintSimplePage()
 			break;
 
 			case CLEAR_AUTOMATION1:
-				strcpy(&editDisplayBuffer[0][7], "autom. 1]?");
+				//LICHOMAT: "autom. 1]?" ran one byte past row 0: its '?' fell into the 17th byte,
+				//off the display, and its NUL into row 1. Row 0 shows the same 16 characters (F3)
+				strcpy(&editDisplayBuffer[0][7], "autom. 1]");
 			break;
 
 			case CLEAR_AUTOMATION2:
-				strcpy(&editDisplayBuffer[0][7], "autom. 2]?");
+				strcpy(&editDisplayBuffer[0][7], "autom. 2]");
 			break;
 		}
 
