@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-27 06:01",
+    "updated": "2026-10-27 08:42",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "d3f161b",
+    "head": "67ec609",
     "next": "Ty: testy H1–H13, U1–U3 i X4 na pliku 55091864… (Q6), specyfikacja 1b (Q20), pytania Q9–Q19. Ja: po Twoich wynikach poprawki albo wydanie v0.1, a po akceptacji specyfikacji plan etapu 1b.",
-    "updated_at": "2026-10-27T06:01:00+01:00",
-    "now": "Plan R1 emulatora: 2 autorów (F1–F10; wirtualne urządzenie), potem 1 recenzent i fixer (od 06:01). Potem kod na lokalnej gałęzi emulator."
+    "updated_at": "2026-10-27T08:42:00+01:00",
+    "now": "Wykonanie części 1 planu R1 (F1–F10) na lokalnej gałęzi emulator: przygotowanie gałęzi i sprawdzenie bazy (od 08:44)."
   },
   "epics": [
     {
@@ -2001,6 +2001,31 @@
       "n": 250,
       "at": "2026-10-27 06:01",
       "text": "Plan R1 emulatora ruszył (06:01), oszczędnie: dwóch autorów naraz (część 1: zmiany w firmware F1–F10; część 2: wirtualne urządzenie emu/), jeden recenzent obu części, fixer zatwierdza. Bez krytyków i sceptyków."
+    },
+    {
+      "n": 251,
+      "at": "2026-10-27 06:31",
+      "text": "Plan R1, po 30 minutach: obaj autorzy jeszcze czytają kod, plików planu jeszcze nie ma. Autor części 1 sprawdza Oscillator.c i main.c (F4, F6, F9), autor części 2 sprawdza FatFs (backend karty). Razem ok. 340 wywołań narzędzi."
+    },
+    {
+      "n": 252,
+      "at": "2026-10-27 07:02",
+      "text": "Plan R1, po godzinie: autor części 2 pisze już kod emu/, który wejdzie do planu: rdzeń i stuby, na razie w katalogu roboczym. Autor części 1 sprawdza F3, czyli tekst strony czyszczenia automatyki (copyClearTools.c). Plików planu jeszcze nie ma."
+    },
+    {
+      "n": 253,
+      "at": "2026-10-27 07:17",
+      "text": "Plan R1, część 1 gotowa (07:17): 12 zadań, 2377 linii. Obejmuje zmiany w firmware F1–F10, każdą z testem, i ścisłą kopię rdzenia timingu w testach; pierwsze zadanie zakłada lokalną gałąź emulator. Autor części 2 (wirtualne urządzenie) jeszcze pisze."
+    },
+    {
+      "n": 254,
+      "at": "2026-10-27 07:32",
+      "text": "Plan R1, część 2 (wirtualne urządzenie): autor dalej pisze i kompiluje kod emu/ w katalogu roboczym (od 07:17 zmienił 12 plików). Pliku planu części 2 jeszcze nie ma."
+    },
+    {
+      "n": 255,
+      "at": "2026-10-27 08:42",
+      "text": "Przerwałem autora części 2 planu R1 po 2 h 40 min i ok. 0,76 mln tokenów wyjścia. Zamiast planu pisał i kompilował cały kod emu/, ok. 5600 linii, a potem musiałby go jeszcze przepisać do planu. Kod zachowany w build/r1b-draft/ (poza gitem) jako materiał do części 2. Część 1 planu (12 zadań, F1–F10) zapisuję bez osobnej recenzji, bo każde zadanie i tak dostaje lekki przegląd. Zaczynam jej wykonanie na lokalnej gałęzi emulator."
     }
   ]
 }
