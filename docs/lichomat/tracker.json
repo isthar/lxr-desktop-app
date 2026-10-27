@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-27 01:33",
+    "updated": "2026-10-27 01:37",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Następny jest szkic specyfikacji etapu 1b: emulator na macOS, najpierw renderer WAV, potem aplikacja z wirtualnym panelem.",
     "branch": "timing-core",
-    "head": "17d9199",
+    "head": "988e636",
     "next": "Twoje testy H1–H13, U1, U2 i X4 na pliku 9a7aff2a… oraz odpowiedzi na Q9–Q18. Ja: szkic specyfikacji etapu 1b do Twojej akceptacji i raport z szukania błędów pod sanitizerami.",
-    "updated_at": "2026-10-27T01:33:00+01:00",
-    "now": "Noc: sceptycy weryfikują błędy z sanitizerów (od 01:26); krytycy sprawdzają szkic specyfikacji 1b."
+    "updated_at": "2026-10-27T01:37:00+01:00",
+    "now": "Noc: poprawki E4.6–E4.8 (od 01:37), sceptycy sweepu i krytycy specyfikacji 1b w toku. Testy na sprzęcie wstrzymane do nowego pliku."
   },
   "epics": [
     {
@@ -384,6 +384,27 @@
       "updated": "2026-10-27"
     },
     {
+      "id": "E4.6",
+      "epic": "E4",
+      "status": "w toku",
+      "title": "Błędy fw 1.7: strona songu na pozycji 255 i krok automatyki powyżej 63 piszą poza tablicą",
+      "updated": "2026-10-27"
+    },
+    {
+      "id": "E4.7",
+      "epic": "E4",
+      "status": "w toku",
+      "title": "Błędy fw 1.7: ponowny zapis projektu nadpisuje nazwę kitu 0; niesprawdzane bajty slotów z karty",
+      "updated": "2026-10-27"
+    },
+    {
+      "id": "E4.8",
+      "epic": "E4",
+      "status": "w toku",
+      "title": "Błędy fw 1.7: przełączenie delaya na ping-pong i Note On po NRPN 121 piszą poza tablicą",
+      "updated": "2026-10-27"
+    },
+    {
       "id": "E5.1",
       "epic": "E5",
       "status": "w toku",
@@ -615,7 +636,7 @@
       "id": "Q6",
       "status": "otwarte",
       "question": "Testy na sprzęcie są gotowe do zrobienia przez Ciebie: docs/lichomat/hardware-checklist.md, czyli H1–H13, U1 (przyciski kroków w menu globalnym), U2 (wczytanie kitu i Bank Select nie zmieniają patternów), X4 (USB MIDI out) i opcjonalne X1–X3 (jacki zegara). Wgraj plik z CI: artefakt lichomat-firmware-26809918… przebiegu 40416804934 na GitHubie, LXR_V2_LICHOMAT_0.1.img o SHA-256 9a7aff2a…. Do H13 i porównań użyj oficjalnego LXR_V2_V1.7.img (SHA-256 cdb1ca37…), który jest zbudowany ze źródeł a43cd4f w build/official-1.7/ albo pochodzi od Erica Synths. Wyniki wpisz w arkusz na końcu listy albo napisz mi je.",
-      "assumption": "Można testować (od 27.10, 00:06). Poprawka E4.5 jest w pliku 9a7aff2a…, a starego pliku 668abe3f… już nie używaj. Żaden test nie jest oznaczony jako zrobiony, dopóki nie podasz wyników."
+      "assumption": "WSTRZYMANE (27.10, 01:37): nocne szukanie pod sanitizerami znalazło 7 kolejnych błędów z fw 1.7, które psują dane na LXR (E4.6–E4.8). Poprawiam je w nocy. Rano będzie nowy plik z CI i nowy hash w liście testów, a do tego czasu nie testuj pliku 9a7aff2a…."
     },
     {
       "id": "Q7",
@@ -1832,6 +1853,11 @@
       "n": 226,
       "at": "2026-10-27 01:33",
       "text": "Nocne szukanie błędów pod sanitizerami (00:40–01:26): 6 badaczy uruchomiło firmware na Macu z ASan i UBSan, w obszarach MIDI, kity i karta, menu, sekwencer, DSP i synchronizacja. Wstępnie, przed weryfikacją, znaleźli kilkanaście błędów odziedziczonych po fw 1.7. Około 8 różnych błędów psuje dane: pozycja 255 na stronie songu po przewinięciu (zapis poza tablicą songów; znaleźli to trzej badacze), przełączenie delaya na ping-pong w trakcie grania (zapis do 32 KB za buforem efektu), zapis projektu do istniejącego folderu (przepełnienie 13-bajtowej nazwy), SHIFT z przytrzymanym przyciskiem select, Note On na stronie kroku po NRPN 121 oraz niesprawdzane bajty z uszkodzonych plików na karcie. Błędy DSP zmieniające dźwięk: krzywa EG wysokości na 127 (NaN, oscylator milknie), skrajne ustawienia filtra hi-hatu, cymbala i snare (NaN, głos milknie do wyłączenia), fala ≥ 6 przez MIDI CC (śmieci w buforze). Teraz sceptycy sprawdzają każdy błąd na kodzie i na mapie pamięci LXR."
+    },
+    {
+      "n": 227,
+      "at": "2026-10-27 01:37",
+      "text": "Nocne poprawki (od 01:37, workflow C5). Nocne szukanie pod sanitizerami znalazło 7 różnych błędów z fw 1.7, które psują dane na LXR. Poprawiam je w trzech zadaniach, test-first, po jednym commicie na błąd. E4.6: strona songu na pozycji 255 po zatrzymaniu i krok automatyki powyżej 63 z SHIFT i przytrzymanym select. E4.7: każdy ponowny zapis projektu nadpisuje nazwę kitu 0, do tego niesprawdzane bajty slotów z uszkodzonej karty (kit w patternie, tmp.snd, PROJ.IDX). E4.8: przełączenie delaya z Normal na Ping-pong w trakcie grania (zapis do 32 KB za buforem efektu, także we wskaźniki samego delaya) i Note On na stronie kroku po NRPN 121. Testy na sprzęcie znów wstrzymane do nowego pliku z CI, który będzie rano. Błędy DSP zmieniające dźwięk (NaN w krzywej EG i w filtrze, fala ≥ 6) zostawiam do Twojej decyzji."
     }
   ]
 }
