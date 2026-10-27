@@ -93,16 +93,38 @@ target_compile_definitions(seq_core_queue_test PUBLIC SEQC_QUEUE_TEST)
 target_compile_options(seq_core_queue_test PRIVATE -ffast-math -freciprocal-math)
 target_link_libraries(seq_core_queue_test PUBLIC seqc_options)
 
-# seqc_add_test(<name> IDS <id>... [EXTRA <source>...] [CORE <library>])
+# The strict copies of the core (stage 1b, emulator spec §8.2). The emulator builds
+# the firmware without -ffast-math and without fused multiply-adds, and with
+# Clang's saturating float-to-int casts. Stage 1's T-tests run against these copies
+# too, as the ctest ids <id>_strict; T19 needs its 16-entry queue here as well.
+# GCC, which builds tests/ on Linux in CI, rejects -fno-strict-float-cast-overflow.
+set(SEQC_STRICT_FP_OPTIONS -fno-fast-math -ffp-contract=off)
+if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+    list(APPEND SEQC_STRICT_FP_OPTIONS -fno-strict-float-cast-overflow)
+endif()
+add_library(seq_core_strict OBJECT "${SEQC_CORE_SOURCE}")
+target_include_directories(seq_core_strict PUBLIC "${LXR_ROOT}/Core/Inc")
+target_compile_options(seq_core_strict PRIVATE ${SEQC_STRICT_FP_OPTIONS})
+target_link_libraries(seq_core_strict PUBLIC seqc_options)
+
+add_library(seq_core_strict_small_queue OBJECT "${SEQC_CORE_SOURCE}")
+target_include_directories(seq_core_strict_small_queue PUBLIC "${LXR_ROOT}/Core/Inc")
+target_compile_definitions(seq_core_strict_small_queue PRIVATE SEQC_QUEUE_CAPACITY=16)
+target_compile_options(seq_core_strict_small_queue PRIVATE ${SEQC_STRICT_FP_OPTIONS})
+target_link_libraries(seq_core_strict_small_queue PUBLIC seqc_options)
+
+# seqc_add_test(<name> IDS <id>... [EXTRA <source>...] [CORE <library>] [STRICT_CORE <library>])
 #
 # Builds <name>.c (plus the EXTRA sources) with the fake host into the executable
 # <name>, and registers one ctest test per id: ctest runs "<name> <id>", which
 # runs the tests named <id> and <id>_... (seqc_test.h). The ids are the test ids
 # of the spec (§13.1). CORE picks the core library (default seq_core). Until a
 # test file exists, its line here only prints a note; with SEQC_REQUIRE_ALL_TESTS
-# a missing file is an error.
+# a missing file is an error. STRICT_CORE builds <name> once more as
+# <name>_strict, against that library, and registers "<name>_strict <id>" as the
+# ctest test <id>_strict.
 function(seqc_add_test name)
-    cmake_parse_arguments(ARG "" "CORE" "IDS;EXTRA" ${ARGN})
+    cmake_parse_arguments(ARG "" "CORE;STRICT_CORE" "IDS;EXTRA" ${ARGN})
     if(NOT ARG_CORE)
         set(ARG_CORE seq_core)
     endif()
@@ -121,6 +143,14 @@ function(seqc_add_test name)
         add_test(NAME ${id} COMMAND ${name} ${id})
         set_tests_properties(${id} PROPERTIES TIMEOUT ${SEQC_TEST_TIMEOUT})
     endforeach()
+    if(ARG_STRICT_CORE)
+        add_executable(${name}_strict ${name}.c ${ARG_EXTRA})
+        target_link_libraries(${name}_strict PRIVATE seqc_fake_host ${ARG_STRICT_CORE})
+        foreach(id IN LISTS ARG_IDS)
+            add_test(NAME ${id}_strict COMMAND ${name}_strict ${id})
+            set_tests_properties(${id}_strict PROPERTIES TIMEOUT ${SEQC_TEST_TIMEOUT})
+        endforeach()
+    endif()
 endfunction()
 
 # One file per area, in the order of the stage 1 tasks (tracker E1.x).
@@ -130,17 +160,17 @@ if(TARGET test_harness)
     set_tests_properties(harness PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL harness_")
 endif()
 seqc_add_test(test_layout    IDS layout)             # E1.2  Step and StepTiming layout
-seqc_add_test(test_clock     IDS T1)                 # E1.3  master clock accuracy
-seqc_add_test(test_tracks    IDS T10)                # E1.4  track counters, master wrap, pattern end
-seqc_add_test(test_generate  IDS T2 T3 T4 T8)        # E1.5  grid, swing, shift, ratchet, probability
-seqc_add_test(test_fire      IDS T7 T9 T15)          # E1.6  choke, mutes, note-off
-seqc_add_test(test_lookahead IDS T11 T12)            # E1.7  pattern change, edits before the boundary
-seqc_add_test(test_clockout  IDS T5 T6)              # E1.8  MIDI clock out, clock out pulses
-seqc_add_test(test_roll      IDS T13 T14)            # E1.9  roll, recording phase, skip-once
-seqc_add_test(test_slave     IDS T16 T18)            # E1.10 MIDI and jack slave, tempo estimate
-seqc_add_test(test_transport IDS T17)                # E1.11 Start, Continue, Stop, SPP, song mode
-seqc_add_test(test_overflow  IDS T19 EXTRA queue_equiv.c CORE seq_core_small_queue)  # E1.12 queue overflow, stats
-seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c)  # E1.13 fw 1.7 replica (reference/)
+seqc_add_test(test_clock     IDS T1 STRICT_CORE seq_core_strict)                 # E1.3  master clock accuracy
+seqc_add_test(test_tracks    IDS T10 STRICT_CORE seq_core_strict)                # E1.4  track counters, master wrap, pattern end
+seqc_add_test(test_generate  IDS T2 T3 T4 T8 STRICT_CORE seq_core_strict)        # E1.5  grid, swing, shift, ratchet, probability
+seqc_add_test(test_fire      IDS T7 T9 T15 STRICT_CORE seq_core_strict)          # E1.6  choke, mutes, note-off
+seqc_add_test(test_lookahead IDS T11 T12 STRICT_CORE seq_core_strict)            # E1.7  pattern change, edits before the boundary
+seqc_add_test(test_clockout  IDS T5 T6 STRICT_CORE seq_core_strict)              # E1.8  MIDI clock out, clock out pulses
+seqc_add_test(test_roll      IDS T13 T14 STRICT_CORE seq_core_strict)            # E1.9  roll, recording phase, skip-once
+seqc_add_test(test_slave     IDS T16 T18 STRICT_CORE seq_core_strict)            # E1.10 MIDI and jack slave, tempo estimate
+seqc_add_test(test_transport IDS T17 STRICT_CORE seq_core_strict)                # E1.11 Start, Continue, Stop, SPP, song mode
+seqc_add_test(test_overflow  IDS T19 EXTRA queue_equiv.c CORE seq_core_small_queue STRICT_CORE seq_core_strict_small_queue)  # E1.12 queue overflow, stats
+seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c STRICT_CORE seq_core_strict)  # E1.13 fw 1.7 replica (reference/)
 seqc_add_test(test_queue     IDS queue EXTRA queue_equiv.c CORE seq_core_queue_test)  # E1.16, E1.18 queue order and real-time cost
 seqc_add_test(test_syncq     IDS syncq EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/seq_syncq.c)  # E2.1  sync input queues (seq_platform)
 seqc_add_test(test_cpumeter  IDS cpumeter EXTRA ${LXR_ROOT}/Core/Src/Soundengine/cpuMeter.c)  # E3.3 CPU meter
