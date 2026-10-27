@@ -7,7 +7,7 @@
     "head": "0273b17",
     "next": "Ty: testy H1–H13, U1–U3 i X4 na pliku 55091864… (Q6), specyfikacja 1b (Q20), pytania Q9–Q19. Ja: po Twoich wynikach poprawki albo wydanie v0.1, a po akceptacji specyfikacji plan etapu 1b.",
     "updated_at": "2026-10-27T09:14:00+01:00",
-    "now": "Zatrzymane na Twoją prośbę (09:15). Nic nie działa. Przy wznowieniu: przegląd części 1 planu R1, potem plan części 2."
+    "now": "Zatrzymane na Twoją prośbę (09:14). Nic nie działa. Przy wznowieniu: przegląd części 1 planu R1, potem plan części 2."
   },
   "epics": [
     {
@@ -2110,7 +2110,7 @@
     {
       "n": 272,
       "at": "2026-10-27 09:14",
-      "text": "Zatrzymane na Twoją prośbę (09:15). Lekki przegląd części 1 przerwany na starcie. Stan: część 1 planu R1 (F1–F10 i ścisła kopia rdzenia) wykonana na lokalnej gałęzi emulator, ostatni commit 0273b17, nic nie wypchnięte (Q19). Przy wznowieniu: przegląd części 1, poprawka sprawdzenia F10 w specyfikacji, potem plan części 2 z gotowego szkicu kodu w build/r1b-draft/."
+      "text": "Zatrzymane na Twoją prośbę (09:14). Lekki przegląd części 1 przerwany na starcie. Stan: część 1 planu R1 (F1–F10 i ścisła kopia rdzenia) wykonana na lokalnej gałęzi emulator, ostatni commit 0273b17, nic nie wypchnięte (Q19). Przy wznowieniu: przegląd części 1, poprawka sprawdzenia F10 w specyfikacji, potem plan części 2 z gotowego szkicu kodu w build/r1b-draft/."
     }
   ]
 }
