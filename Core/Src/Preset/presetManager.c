@@ -694,7 +694,8 @@ void preset_processTimer()
 
 
 FRESULT empty_directory (
-    char* path      /* Working buffer filled with start directory */
+    char* path,     /* Working buffer filled with start directory */
+    UINT sz_buff    /* Size of the working buffer (items) */
 )
 {
 	FILINFO fno;
@@ -711,11 +712,15 @@ FRESULT empty_directory (
             if (fr != FR_OK || !fno.fname[0]) break;
             if (_FS_RPATH && fno.fname[0] == '.') continue;
             j = 0;
-            do
+            do {
+                if (i + j >= sz_buff) { /* the path does not fit the buffer */
+                    fr = FR_INVALID_NAME; break;
+                }
                 path[i+j] = fno.fname[j];
-            while (fno.fname[j++]);
+            } while (fno.fname[j++]);
+            if (fr != FR_OK) break;
             if (fno.fattrib & AM_DIR) {
-                fr = empty_directory(path);
+                fr = empty_directory(path, sz_buff);
                 if (fr != FR_OK) break;
             }
             fr = f_unlink(path);
@@ -2348,7 +2353,11 @@ FRESULT preset_saveProject(uint8_t presetNr)
 	}
 	else
 	{
-		res = empty_directory(currentFolder);
+		//empty_directory() appends '/' and each 8.3 name of the folder to the path,
+		//which does not fit the 13 bytes of currentFolder
+		char path[64];
+		strcpy(path, currentFolder);
+		res = empty_directory(path, sizeof path);
 		if(res != FR_OK)
 		{
 			lcd_process_display_interrupt = 1;

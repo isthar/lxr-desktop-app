@@ -187,3 +187,26 @@ if(TARGET test_sequencer)
     target_include_directories(test_sequencer SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
     set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c PROPERTIES COMPILE_OPTIONS -w)
 endif()
+
+# The preset manager (E4.7): test_presets compiles the firmware's presetManager.c
+# and frontPanelParser.c with the stand-in headers in stubs/presets/ (FatFs
+# without the SD card driver) and stubs/ (the HAL), the firmware's FatFs header
+# and configuration, and an in-memory card in the test. For this target
+# currentFolder, savefileNames and mainParameters are pointers to arrays of their
+# size, which the test points into buffers with guard bytes after the arrays.
+seqc_add_test(test_presets   IDS presets EXTRA ${LXR_ROOT}/Core/Src/Preset/presetManager.c ${LXR_ROOT}/Core/Src/frontPanelParser.c)  # E4.7  project re-save, kit and project slot numbers
+if(TARGET test_presets)
+    target_include_directories(test_presets BEFORE PRIVATE stubs/presets stubs)
+    target_include_directories(test_presets SYSTEM PRIVATE
+        ${LXR_ROOT}/Core/Inc
+        ${LXR_ROOT}/Middlewares/Third_Party/FatFs/src
+        ${LXR_ROOT}/FATFS/Target)
+    target_compile_definitions(test_presets PRIVATE
+        "currentFolder=(*preset_folderBuf)"
+        "savefileNames=(*preset_namesTable)"
+        "mainParameters=(*preset_mainTable)")
+    set_source_files_properties(
+        ${LXR_ROOT}/Core/Src/Preset/presetManager.c
+        ${LXR_ROOT}/Core/Src/frontPanelParser.c
+        PROPERTIES COMPILE_OPTIONS -w)
+endif()

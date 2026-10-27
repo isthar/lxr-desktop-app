@@ -4,11 +4,13 @@
  * Host stand-in for the STM32 HAL, for host tests that compile firmware files
  * (test_buttons.c compiles Core/Src/buttonHandler.c, test_midicc.c
  * Core/Src/Soundengine/MIDI/MidiParser.c, test_sequencer.c
- * Core/Src/Soundengine/Sequencer/sequencer.c). It has only what the headers of
- * those files need: the handle types that main.h, IO/DIO.h and DSPAudio/random.h
- * name, the DWT and clock calls of the inline functions in delay.h, the CMSIS
- * calls of those in DSPAudio/BufferTools.h, the TIM2 calls of buttonHandler.c and
- * the interrupt mask of sequencer.c.
+ * Core/Src/Soundengine/Sequencer/sequencer.c, test_presets.c
+ * Core/Src/Preset/presetManager.c). It has only what the headers of those files
+ * need: the handle types that main.h, IO/DIO.h and DSPAudio/random.h name, the
+ * DWT and clock calls of the inline functions in delay.h, the CMSIS calls of
+ * those in DSPAudio/BufferTools.h, the TIM2 calls of buttonHandler.c, the
+ * interrupt mask of sequencer.c, and the tick and the SD card information type
+ * of presetManager.c and FATFS/Target/bsp_driver_sd.h.
  *
  * It also takes the DTCM placement out of the firmware's declarations: INDTCM and
  * INDTCMZ (main.h, Soundengine/config.h) are __attribute__ ((section(".dtcm"))),
@@ -51,6 +53,7 @@ typedef struct { int unused_; } RNG_HandleTypeDef;
 typedef struct { int unused_; } SPI_HandleTypeDef;
 typedef struct { int unused_; } TIM_HandleTypeDef;
 typedef struct { int unused_; } UART_HandleTypeDef;
+typedef struct { int unused_; } HAL_SD_CardInfoTypeDef;
 typedef struct { volatile uint32_t CTRL; volatile uint32_t CYCCNT; } DWT_Type;
 
 extern DWT_Type host_dwt;
@@ -69,6 +72,7 @@ static inline void __set_PRIMASK(uint32_t primask) { host_primask = primask; }
 static inline void __disable_irq(void) { host_primask = 1; }
 
 uint32_t HAL_RCC_GetHCLKFreq(void);
+uint32_t HAL_GetTick(void);
 HAL_StatusTypeDef HAL_TIM_Base_Start_IT(TIM_HandleTypeDef *htim);
 HAL_StatusTypeDef HAL_TIM_Base_Stop_IT(TIM_HandleTypeDef *htim);
 
