@@ -115,14 +115,19 @@ static int matches(const char *pattern, const char *name)
 	return 0;
 }
 
+/** path as an absolute one, cut at CARD_PATH - 1 characters */
 static void absolutePath(char *out, const char *path)
 {
-	if (path[0] == '/')
-		snprintf(out, CARD_PATH, "%s", path);
-	else if (strcmp(cardCwd, "/") == 0)
-		snprintf(out, CARD_PATH, "/%s", path);
-	else
-		snprintf(out, CARD_PATH, "%s/%s", cardCwd, path);
+	size_t n = 0;
+	if (path[0] != '/') {
+		for (const char *c = cardCwd; *c && n < CARD_PATH - 1; c++)
+			out[n++] = *c;
+		if (strcmp(cardCwd, "/") != 0 && n < CARD_PATH - 1)
+			out[n++] = '/';
+	}
+	for (const char *c = path; *c && n < CARD_PATH - 1; c++)
+		out[n++] = *c;
+	out[n] = 0;
 }
 
 static int findAbsolute(const char *abs)
@@ -189,7 +194,8 @@ static void cardPut(const char *path, const void *data, UINT len)
 		i = addEntry(path, 0);
 	free(card[i].data);
 	card[i].data = malloc(len ? len : 1);
-	memcpy(card[i].data, data, len);
+	if (len)
+		memcpy(card[i].data, data, len);
 	card[i].len = len;
 }
 
@@ -230,7 +236,8 @@ FRESULT f_read(FIL *fp, void *buff, UINT btr, UINT *br)
 	UINT n = fp->fptr < e->len ? e->len - (UINT)fp->fptr : 0;
 	if (n > btr)
 		n = btr;
-	memcpy(buff, e->data + fp->fptr, n);
+	if (n)
+		memcpy(buff, e->data + fp->fptr, n);
 	fp->fptr += n;
 	*br = n;
 	return FR_OK;
@@ -248,7 +255,8 @@ FRESULT f_write(FIL *fp, const void *buff, UINT btw, UINT *bw)
 		memset(e->data + e->len, 0, end - e->len);
 		e->len = end;
 	}
-	memcpy(e->data + fp->fptr, buff, btw);
+	if (btw)
+		memcpy(e->data + fp->fptr, buff, btw);
 	fp->fptr = end;
 	*bw = btw;
 	return FR_OK;
