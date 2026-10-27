@@ -24,7 +24,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/sources.cmake)
 add_library(lxr_platform OBJECT ${LXR_SOURCES_PLATFORM})
 # Shown on the boot splash screen; LICHOMAT_NAME and project(VERSION) come from the
 # top-level CMakeLists.txt.
-set_source_files_properties(Src/main.c PROPERTIES
+set_source_files_properties(Src/appMain.c PROPERTIES
     COMPILE_DEFINITIONS "FIRMWARE_NAME=\"${LICHOMAT_NAME}\";FIRMWARE_VERSION=\"${PROJECT_VERSION}\""
 )
 
