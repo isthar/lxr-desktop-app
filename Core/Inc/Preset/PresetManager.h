@@ -112,6 +112,8 @@ FRESULT preset_loadPatternRAM(uint8_t presetNr);
 /** morph pattern linear to �pattern buffer 2*/
 void preset_morph(uint8_t morph);
 void preset_morph_tick(); //handler for non blocking morph
+/** 1 while a non-blocking morph (preset_morph_tick()) still sends parameters, else 0 */
+uint8_t preset_morphBusy(void);
 uint8_t preset_getMorphValue(uint16_t index, uint8_t morph);
 void preset_sendDrumsetParameters();
 void preset_sendDrumsetParametersImmediate();

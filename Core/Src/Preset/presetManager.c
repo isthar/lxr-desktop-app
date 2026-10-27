@@ -2139,6 +2139,12 @@ FRESULT preset_loadPatternRAM(uint8_t presetNr)
 	return FR_OK;
 }
 //----------------------------------------------------
+//LICHOMAT: 1 while a non-blocking morph still sends parameters, else 0 (F10)
+uint8_t preset_morphBusy(void)
+{
+	return morph_state;
+}
+//----------------------------------------------------
 //called periodically to process non blocking morph
 void preset_morph_tick()
 {

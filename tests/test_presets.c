@@ -8,6 +8,8 @@
  * and the 64 slots of savefileNames for them. Also the active step that NRPN 121
  * sets (frontParser_parseNrpn() in Core/Src/frontPanelParser.c, task E4.8): fw 1.7
  * took 0-127 for the 64 steps, and the step page wrote pattern data past them.
+ * And the morph flag of stage 1b's F10: preset_morphBusy() is 1 while
+ * preset_morph_tick() still has sound parameters to send.
  *
  * presetManager.c and Core/Src/frontPanelParser.c are compiled as they are,
  * against the stand-in headers in tests/stubs/presets/ and tests/stubs/, the
@@ -747,6 +749,32 @@ TEST(presets_nrpn_121_past_the_64_steps_is_ignored)
 		nrpn(NRPN_ACTIVE_STEP, (uint8_t)v);
 		ASSERT_EQ(activeParameters[PAR_ACTIVE_STEP], 7);
 	}
+}
+
+//------------------------------------------------------------------------------
+// The morph flag (stage 1b F10): preset_morphBusy() is 1 while
+// preset_morph_tick() still has sound parameters to send
+//------------------------------------------------------------------------------
+/** preset_morph_tick() until no morph runs, at most limit times; the ticks made */
+static int morphUntilIdle(int limit)
+{
+	int ticks = 0;
+	while (preset_morphBusy() && ticks < limit) {
+		preset_morph_tick();
+		ticks++;
+	}
+	return ticks;
+}
+
+TEST(presets_morph_busy_while_a_morph_runs)
+{
+	reset();
+	morphUntilIdle(END_OF_SOUND_PARAMETERS);	/* a morph that an earlier test started */
+	ASSERT_EQ(preset_morphBusy(), 0);
+	preset_morph(64);
+	ASSERT_EQ(preset_morphBusy(), 1);
+	ASSERT_EQ(morphUntilIdle(1000), END_OF_SOUND_PARAMETERS);	/* one tick per sound parameter */
+	ASSERT_EQ(preset_morphBusy(), 0);
 }
 
 TEST_MAIN()
