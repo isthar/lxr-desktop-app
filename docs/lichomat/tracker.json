@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-27 02:51",
+    "updated": "2026-10-27 03:55",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). W nocy poprawiam błędy fw 1.7 znalezione pod sanitizerami (E4.6–E4.9) i robię nowy plik do testów. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "3b4a741",
+    "head": "06200e2",
     "next": "Ja do 04:20: przegląd E4.9, CI, nowy plik i dokumenty do testów. Ty rano: testy H1–H13, U1–U3 i X4 na nowym pliku (Q6), specyfikacja 1b (Q20), pytania Q9–Q19.",
-    "updated_at": "2026-10-27T02:51:00+01:00",
-    "now": "Noc: wypycham E4.9 i czekam na CI z nowym plikiem (od 02:58). Potem dokumenty do testów."
+    "updated_at": "2026-10-27T03:55:00+01:00",
+    "now": "Noc: recenzent wykonalności na LXR-02, potem fixer (od 03:55). Dokumenty w repo już można czytać. Jeśli Mac zaśnie (caffeinate do ok. 04:36), dokończę po wybudzeniu."
   },
   "epics": [
     {
@@ -607,7 +607,7 @@
       "id": "M7",
       "date": "2026-10-26",
       "title": "v0.1 gotowe do testów na sprzęcie (E2.9, E3, E4)",
-      "summary": "Wszystkie zadania etapu 1 są zrobione, zostały tylko testy na LXR-02, które robisz Ty. Przegląd całego etapu (E4.1) dał 52 uwagi: 47 poprawionych, w tym brak Note Off dla rolla i echa i za długie przejście songu przy SPP, 3 przyjęte i 2 pytania (Q9, Q11). Dodatkowa weryfikacja listy testów i notatek wydania znalazła 80 potwierdzonych uwag, wszystkie są poprawione. Testy i wydanie używają pliku z CI (SHA-256 9a7aff2a…, po poprawce E4.5: wczytanie kitu nie nadpisuje już bajtu pamięci patternów, błąd z fw 1.7). Zasoby: DTCM + RAM 391788 B (36 B poniżej R6.2), obraz +25852 B, 28 testów na hoście bez ostrzeżeń. Raport: docs/lichomat/reports/M7-v0.1-do-testow.md."
+      "summary": "Wszystkie zadania etapu 1 są zrobione, zostały tylko testy na LXR-02, które robisz Ty. Przegląd całego etapu (E4.1) dał 52 uwagi: 47 poprawionych, w tym brak Note Off dla rolla i echa i za długie przejście songu przy SPP, 3 przyjęte i 2 pytania (Q9, Q11). Dodatkowa weryfikacja listy testów i notatek wydania znalazła 80 potwierdzonych uwag, wszystkie są poprawione. Sonda emulatora znalazła błąd z fw 1.7: wczytanie kitu nadpisywało bajt pamięci patternów (poprawione w E4.5). Nocne szukanie pod sanitizerami (27.10) znalazło 19 kolejnych problemów z fw 1.7 (B1–B19). Poprawione test-first: 7 błędów psujących dane i 3 psujące dźwięk (E4.6–E4.9). 4 zostają jako znane ograniczenia albo do odsłuchu (B11–B14), a 5 nie ma skutków na LXR. Testy i wydanie używają pliku z CI (SHA-256 55091864…). Zasoby: DTCM + RAM 391788 B (36 B poniżej R6.2), obraz +26068 B, 32 testy na hoście bez ostrzeżeń. Raport: docs/lichomat/reports/M7-v0.1-do-testow.md."
     }
   ],
   "questions": [
@@ -649,8 +649,8 @@
     {
       "id": "Q6",
       "status": "otwarte",
-      "question": "Testy na sprzęcie są gotowe do zrobienia przez Ciebie: docs/lichomat/hardware-checklist.md, czyli H1–H13, U1 (przyciski kroków w menu globalnym), U2 (wczytanie kitu i Bank Select nie zmieniają patternów), X4 (USB MIDI out) i opcjonalne X1–X3 (jacki zegara). Wgraj plik z CI: artefakt lichomat-firmware-26809918… przebiegu 40416804934 na GitHubie, LXR_V2_LICHOMAT_0.1.img o SHA-256 9a7aff2a…. Do H13 i porównań użyj oficjalnego LXR_V2_V1.7.img (SHA-256 cdb1ca37…), który jest zbudowany ze źródeł a43cd4f w build/official-1.7/ albo pochodzi od Erica Synths. Wyniki wpisz w arkusz na końcu listy albo napisz mi je.",
-      "assumption": "WSTRZYMANE (27.10, 01:37): nocne szukanie pod sanitizerami znalazło 7 kolejnych błędów z fw 1.7, które psują dane na LXR (E4.6–E4.8). Poprawiam je w nocy. Rano będzie nowy plik z CI i nowy hash w liście testów, a do tego czasu nie testuj pliku 9a7aff2a…."
+      "question": "Testy na sprzęcie do zrobienia przez Ciebie: docs/lichomat/hardware-checklist.md, czyli H1–H13, U1 (przyciski kroków w menu globalnym), U2 (wczytanie kitu i Bank Select nie zmieniają patternów), U3 (nocne poprawki błędów fw 1.7), X4 (USB MIDI out) i opcjonalne X1–X3 (jacki zegara). Wgraj plik z CI: artefakt lichomat-firmware-3527cbc… przebiegu 40435442579 na GitHubie, LXR_V2_LICHOMAT_0.1.img o SHA-256 55091864… (300 780 B). Do H13 i porównań użyj oficjalnego LXR_V2_V1.7.img (SHA-256 cdb1ca37…), który jest zbudowany ze źródeł a43cd4f w build/official-1.7/ albo pochodzi od Erica Synths. Wyniki wpisz w arkusz na końcu listy albo napisz mi je.",
+      "assumption": "Gotowe do testów (27.10, 03:57): nowy plik z CI i lista testów z nowym testem U3 (commity od 350dd44). Przegląd dokumentów znalazł drobne nieścisłości, ich poprawki trwają. Jedna dotyczy testów: w H2 kity z fw 1.7, które mają nachylenie EG wysokości 127 albo falę oscylatora 6 lub wyżej, brzmią teraz inaczej. To nocna poprawka, nie błąd. Pliku 9a7aff2a… już nie testuj."
     },
     {
       "id": "Q7",
@@ -739,8 +739,8 @@
     {
       "id": "Q19",
       "status": "otwarte",
-      "question": "Czy gałąź emulator (etap 1b) ma iść na Twój fork (origin) na bieżąco, tak jak timing-core? Specyfikacja przyjmuje, że Q5 dotyczyło tylko timing-core. CI emulatora (emulator.yml) działa tylko dla wypchniętych commitów.",
-      "assumption": "Tak, jak w Q5 („na bieżąco, na Twój fork”). Gałąź emulator powstanie dopiero po akceptacji specyfikacji (Q20), więc do tego czasu nie ma czego wypychać.",
+      "question": "Czy gałąź emulator (etap 1b) może iść na Twój fork (origin) na bieżąco, tak jak timing-core? Q5 dotyczyło tylko timing-core. CI emulatora (emulator.yml) działa tylko dla wypchniętych commitów.",
+      "assumption": "Dopóki nie odpowiesz, nic z gałęzi emulator nie wypycham (tak jak specyfikacja, §15), więc CI emulatora nie działa, a cel G3 czeka. Gałąź powstanie dopiero po akceptacji specyfikacji (Q20).",
       "answer": null
     },
     {
@@ -1911,6 +1911,61 @@
       "n": 232,
       "at": "2026-10-27 02:51",
       "text": "E4.9 zrobione (02:31–02:51, 2 agentów, 0,29 mln tokenów). Przegląd: zgodne z opisem zadania, 3 drobne uwagi bez poprawek w kodzie (opis pokrycia testu w komunikacie 6a74b81, nazwa jednego testu, styl listy w nagłówku stuba). Dwie zmiany dźwięku do notatek wydania: fala 6 i wyżej z MIDI jest teraz cisza zamiast przesłuchu lub szumu, a nachylenie EG wysokości 127 daje teraz bardzo stromą krzywą zamiast zaniku tonu. Filtr ustawiony w obszarze rozbiegania (FREQ 122–126 z wysokim RESO) nadal brzmi źle, póki tak stoi, ale po cofnięciu gałki znowu gra, zamiast milczeć do wyłączenia. 32 testy ctest, obraz 300 756 B."
+    },
+    {
+      "n": 233,
+      "at": "2026-10-27 02:56",
+      "text": "CI dla 9797ace: build firmware OK, ale testy na hoście nie skompilowały się na Linuksie (run 40435161427): w trybie C11 biblioteka C Linuksa nie definiuje M_PI, której używa ResonantFilter.c. Poprawka tylko w budowaniu testu (3527cbc, _DEFAULT_SOURCE), sprawdzona arm-none-eabi-gcc w tym samym trybie. CI dla 3527cbc: wszystko zielone (run 40435442579). Nowy plik do testów: LXR_V2_LICHOMAT_0.1.img, SHA-256 55091864…a262, 300 780 B, artefakt lichomat-firmware-3527cbc…. Run 40435161427 zbudował bajt w bajt ten sam plik."
+    },
+    {
+      "n": 234,
+      "at": "2026-10-27 02:58",
+      "text": "Ruszył workflow dokumentów (02:58): jeden autor aktualizuje listę testów (nowy plik i nowy test U3 dla nocnych poprawek), notatki wydania, raport etapu 1, plan, dodatek do M7 i raport z szukania błędów; potem dwóch recenzentów (fakty w kodzie oraz wykonalność na LXR-02) i fixer."
+    },
+    {
+      "n": 235,
+      "at": "2026-10-27 03:02",
+      "text": "Poprawka w trackerze: domyślne założenie Q19 (wypychanie gałęzi emulator) było „tak, jak w Q5”, a Q5 dotyczyło tylko timing-core. Teraz jak w specyfikacji: bez Twojej odpowiedzi nic z gałęzi emulator nie wypycham."
+    },
+    {
+      "n": 236,
+      "at": "2026-10-27 03:10",
+      "text": "Dokumenty: lista testów wskazuje plik z CI dla 3527cbc i ma nowy test U3 dla nocnych poprawek (350dd44)."
+    },
+    {
+      "n": 237,
+      "at": "2026-10-27 03:11",
+      "text": "Dokumenty: notatki wydania opisują nocne poprawki błędów fw 1.7 i nowy plik (7aa2441)."
+    },
+    {
+      "n": 238,
+      "at": "2026-10-27 03:11",
+      "text": "Dokumenty: raport etapu 1 ma poprawki E4.6–E4.9, nowe testy na hoście i zasoby (04099a2)."
+    },
+    {
+      "n": 239,
+      "at": "2026-10-27 03:12",
+      "text": "Dokumenty: plan ma poprawkę wykonania 27 (szukanie pod sanitizerami i E4.6–E4.9, otwarte punkty) (efab569)."
+    },
+    {
+      "n": 240,
+      "at": "2026-10-27 03:12",
+      "text": "Dokumenty: drugi dodatek do raportu M7 po polsku: co znalazło szukanie, co jest poprawione, co zostaje i dlaczego, nowy plik (6c92d6c)."
+    },
+    {
+      "n": 241,
+      "at": "2026-10-27 03:13",
+      "text": "Dokumenty: raport z szukania błędów pod sanitizerami jest w repo, ze stanem każdego błędu B1–B19 na początku (e5ab283)."
+    },
+    {
+      "n": 242,
+      "at": "2026-10-27 03:14",
+      "text": "Dokumenty: HANDOFF wymienia raport z szukania, nowe testy na hoście i U3 (2c4cbd6). W specyfikacji 1b jej testy na LXR mają teraz numery U4–U8, bo U3 to nocny test (06200e2). Autor skończył, teraz recenzenci."
+    },
+    {
+      "n": 243,
+      "at": "2026-10-27 03:55",
+      "text": "Przegląd dokumentów: recenzent faktów skończył (03:14–03:55) z 25 uwagami, 1 ważna i 24 drobne. Ważna: H2 mówi, że kity z fw 1.7 brzmią jak dawniej, a B9 i B10 zmieniają brzmienie kitów z nachyleniem EG wysokości 127 albo z falą 6 lub wyżej. Drobne to m.in. za szeroki opis obszaru, w którym filtr się rozbiega, numery linii Oscillator.c sprzed 9353a68 i liczba testów kompilujących pliki firmware w HANDOFF. Recenzent wykonalności na LXR-02 jeszcze pracuje, potem fixer poprawi uwagi obu."
     }
   ]
 }
