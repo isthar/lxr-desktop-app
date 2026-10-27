@@ -12,6 +12,7 @@
  */
 
 #include "Soundengine/DSPAudio/ResonantFilter.h"
+#include <string.h>
 
 
 // to make the linker happy. __errno seems not defined
@@ -123,35 +124,23 @@ IN_ITCM_RAM float softClipTwo(float in)
 
 //	return in;
 }
-#pragma GCC push_options
-#pragma GCC optimize("O0")
-#define is_nan(x) ((x) != (x))
-
-float removeMaliciousSample(float in)
+// A NaN or Inf in the filter state never clears by itself (the state feeds back), and
+// a high cutoff with a high resonance can make the state diverge. The firmware is
+// built with -ffast-math, under which the compiler may assume that no float is NaN or
+// Inf and remove a test for them: fw 1.7's test x != x was removed on the device, so
+// the voice stayed silent until power-off (E4.9). This test reads the stored bits
+// (exponent all ones: NaN or Inf) through a volatile read, which the compiler cannot
+// tie to that assumption (clang removes a test of the bits of the float itself).
+static void removeMaliciousSample(float* state)
 {
-	if(is_nan(in))
+	const float stored = *(const volatile float*)state;
+	uint32_t bits;
+	memcpy(&bits, &stored, sizeof bits);
+	if((bits & 0x7F800000u) == 0x7F800000u)
 	{
-		return 0.f;
+		*state = 0.f;
 	}
-
-	return in;
-
-	/*
-	uint32_t* floatInput = (uint32_t*)in;// *inArrayOfFloats;
-    uint32_t sample = *floatInput;// *inArrayOfFloats;
-    uint32_t exponent = sample & 0x7F800000;
-
-            // exponent < 0x7F800000 is 0 if NaN or Infinity, otherwise 1
-            // exponent > 0 is 0 if denormalized, otherwise 1
-
-    int aNaN = exponent < 0x7F800000;
-    int aDen = exponent > 0;
-
-
-    *floatInput = sample * ( aNaN & aDen );
-    *floatInput */
 }
-#pragma GCC pop_options
 #define USE_FMAF 0
 //------------------------------------------------------------------------------------
 IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, int16_t* buf, const uint8_t size)
@@ -211,8 +200,8 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, in
 
 	} else {
 
-		filter->s1 = removeMaliciousSample(filter->s1);
-		filter->s2 = removeMaliciousSample(filter->s2);
+		removeMaliciousSample(&filter->s1);
+		removeMaliciousSample(&filter->s2);
 		for(i=0;i<size;i++)
 		{
 

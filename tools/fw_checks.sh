@@ -1,5 +1,5 @@
 #!/bin/bash
-# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.8 and E3.3),
+# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.8, E3.3 and E4.9),
 # on the release build and on the sources: symbols that must or must not be linked,
 # calls that a function must or must not make, what sits in ITCM, and source patterns.
 # They stand in for unit tests where the code needs the hardware.
@@ -330,7 +330,24 @@ check_E3_3() {
 	rm -rf "$dir"
 }
 
-check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8 E3.3"
+# ---- E4.9: the sound engine's broken states ---------------------------------
+# the compares of the NaN and Inf test (exponent bits 0x7f800000) in function $1
+nan_tests() { local n; for n in $(names "$1"); do arm-none-eabi-objdump -d --disassemble="$n" "$ELF"; done |
+              grep -cE 'cmp(\.w)?[[:space:]].*#2139095040'; }
+check_E4_9() {
+	# the filter state's NaN guard (ResonantFilter.c, removeMaliciousSample()) is in the
+	# device code: under -ffast-math GCC removed fw 1.7's test x != x, so a NaN state of
+	# the snare, cymbal or hi-hat filter stayed until power-off. SVF_calcBlockZDF() tests
+	# s1 and s2, with the test inlined or in a call
+	if linked removeMaliciousSample; then
+		must_call SVF_calcBlockZDF removeMaliciousSample
+		[ "$(nan_tests removeMaliciousSample)" -ge 1 ] || fail "removeMaliciousSample() does not test for NaN and Inf"
+	else
+		[ "$(nan_tests SVF_calcBlockZDF)" -ge 2 ] || fail "SVF_calcBlockZDF() does not test s1 and s2 for NaN and Inf"
+	fi
+}
+
+check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8 E3.3 E4.9"
 
 if [ $# -gt 0 ]; then check_tasks="$*"; fi
 for task in $check_tasks; do

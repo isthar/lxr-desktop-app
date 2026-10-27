@@ -222,3 +222,17 @@ if(TARGET test_delay)
     target_compile_definitions(test_delay PRIVATE "FX_BUFFER=(*delay_fxBuffer)")
     set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/Delay.c PROPERTIES COMPILE_OPTIONS -w)
 endif()
+
+# The sound engine's broken states (E4.9): test_dsp compiles the firmware's DSP
+# files with the stand-in headers in stubs/ and with the firmware's floating-point
+# options at -O3, as the device build has them, so that the compiler may remove a
+# NaN test as GCC does on the device. A NaN or Inf converted to an integer sample is
+# undefined in C; the device's VCVT gives 0 or saturates, so that check of UBSan is
+# off for these files.
+seqc_add_test(test_dsp       IDS dsp EXTRA ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/ResonantFilter.c)  # E4.9  filter NaN state
+if(TARGET test_dsp)
+    target_include_directories(test_dsp BEFORE PRIVATE stubs)
+    target_include_directories(test_dsp SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+    set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/ResonantFilter.c
+        PROPERTIES COMPILE_OPTIONS "-w;-O3;-ffast-math;-freciprocal-math;-fno-sanitize=float-cast-overflow")
+endif()
