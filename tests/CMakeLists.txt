@@ -231,7 +231,9 @@ endif()
 # pitch EG's slope 127 divides by an exact 0, but under -ffast-math clang rewrites
 # that expression to a division by a tiny number. A NaN or Inf converted to an
 # integer sample is undefined in C; the device's VCVT gives 0 or saturates, so that
-# check of UBSan is off for these files.
+# check of UBSan is off for these files. ResonantFilter.c uses M_PI, which the
+# firmware gets from its GNU C mode; the C library of Linux defines it under strict
+# C11 only with _DEFAULT_SOURCE.
 set(DSP_FAST_MATH_SOURCES
     ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/ResonantFilter.c
     ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/Oscillator.c
@@ -241,6 +243,7 @@ seqc_add_test(test_dsp       IDS dsp EXTRA ${DSP_FAST_MATH_SOURCES} ${DSP_STRICT
 if(TARGET test_dsp)
     target_include_directories(test_dsp BEFORE PRIVATE stubs)
     target_include_directories(test_dsp SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+    target_compile_definitions(test_dsp PRIVATE _DEFAULT_SOURCE)
     set_source_files_properties(${DSP_FAST_MATH_SOURCES}
         PROPERTIES COMPILE_OPTIONS "-w;-O3;-ffast-math;-freciprocal-math;-fno-sanitize=float-cast-overflow")
     set_source_files_properties(${DSP_STRICT_MATH_SOURCES}
