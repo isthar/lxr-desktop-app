@@ -225,12 +225,13 @@ endif()
 
 # The sound engine's broken states (E4.9): test_dsp compiles the firmware's DSP
 # files with the stand-in headers in stubs/ at -O3, as the device build has them.
-# ResonantFilter.c gets the firmware's floating-point options, so that the compiler
-# may remove a NaN test as GCC does on the device. Decay.c gets strict IEEE math:
-# on the device the pitch EG's slope 127 divides by an exact 0, but under
-# -ffast-math clang rewrites that expression to a division by a tiny number. A NaN
-# or Inf converted to an integer sample is undefined in C; the device's VCVT gives 0
-# or saturates, so that check of UBSan is off for these files.
+# ResonantFilter.c, Oscillator.c and wavetable.c get the firmware's floating-point
+# options, so that the compiler may remove a NaN test as GCC does on the device
+# (clang removes more than GCC). Decay.c gets strict IEEE math: on the device the
+# pitch EG's slope 127 divides by an exact 0, but under -ffast-math clang rewrites
+# that expression to a division by a tiny number. A NaN or Inf converted to an
+# integer sample is undefined in C; the device's VCVT gives 0 or saturates, so that
+# check of UBSan is off for these files.
 set(DSP_FAST_MATH_SOURCES
     ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/ResonantFilter.c
     ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/Oscillator.c

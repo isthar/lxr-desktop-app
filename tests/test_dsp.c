@@ -25,9 +25,10 @@
  *   turn (the previous voice's block) or the drum voice's modulation buffer.
  *
  * The firmware files are compiled as they are, against the stand-in headers in
- * tests/stubs/, with the firmware's floating-point options and -O3, as on the
- * device (tests/CMakeLists.txt), so that the compiler may remove what GCC
- * removes on the device.
+ * tests/stubs/, at -O3 as on the device (tests/CMakeLists.txt). ResonantFilter.c
+ * and Oscillator.c get the firmware's floating-point options, so that the
+ * compiler may remove what GCC removes on the device; Decay.c gets strict IEEE
+ * math, which divides by 0 at slope 127 as the device does.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -195,8 +196,8 @@ static OscInfo oscillator(uint8_t waveform)
 	return osc;
 }
 
-/** one block of the oscillator (with FM from a sine block if fm) into a buffer that
- *  holds fill before; fills the block it gave */
+/** one block of an oscillator of the waveform (with FM from a sine block if fm) into
+ *  out, which holds the value fill before */
 static void oscBlock(uint8_t waveform, int fm, int16_t fill, int16_t out[BLOCK])
 {
 	OscInfo osc = oscillator(waveform);
