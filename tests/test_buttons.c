@@ -11,6 +11,11 @@
  * SHIFT + step 12 opened the global menu. 11 is also SELECT_MODE_LAST_STEP_ALL,
  * so a step button pressed without SHIFT there set the length of every track.
  *
+ * SHIFT + a select button held in voice mode arms automation step
+ * selectedStep * 8 + button (E4.6). fw 1.7 armed it also past the 64 steps of a
+ * track, up to 127: it played the lock of a step of the next track while the
+ * button was held, and a knob turn wrote that step.
+ *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
  *
@@ -41,6 +46,8 @@ static int toggleMainStepCalls;
 static int updateSeqLedsCalls;
 static int switchSubPageCalls;
 static uint8_t blinking[256];		/* led_setBlinkLed() per LED number */
+static int armCalls;			/* ARM_AUTOMATION_STEP sent with the arm bit */
+static uint8_t armedStep;		/* the step of the last one */
 
 //------------------------------------------------------------------------------
 // Firmware state that buttonHandler.c reads and writes
@@ -124,7 +131,13 @@ void led_setMode2(uint8_t status) { (void)status; }
 void led_setValue(uint8_t val, uint8_t ledNr) { (void)val; (void)ledNr; }
 void led_updateBarLeds(void) {}
 
-void frontPanel_sendData(uint8_t status, uint8_t data1, uint8_t data2) { (void)status; (void)data1; (void)data2; }
+void frontPanel_sendData(uint8_t status, uint8_t data1, uint8_t data2)
+{
+	if (status == ARM_AUTOMATION_STEP && (data2 & 0x40)) {	/* buttonHandler.c ARM_AUTOMATION */
+		armCalls++;
+		armedStep = data1;
+	}
+}
 void copyClear_armClearMenu(uint8_t isShown) { (void)isShown; }
 void copyClear_copyTrack(void) {}
 void copyClear_executeClear(void) {}
@@ -157,6 +170,8 @@ static void reset(void)
 	toggleMainStepCalls = 0;
 	updateSeqLedsCalls = 0;
 	switchSubPageCalls = 0;
+	armCalls = 0;
+	armedStep = 0;
 	menu_activePage = VOICE1_PAGE;
 	menu_activeVoice = 0;
 	menu_activeBar = 0;
@@ -311,6 +326,73 @@ TEST(buttons_last_step_from_the_global_menu_starts_with_one_track)
 	ASSERT_EQ(setTrackLengthCalls, 1);
 	ASSERT_EQ(trackLength[0], 3);
 	ASSERT_EQ(trackLength[1], 16);
+}
+
+//------------------------------------------------------------------------------
+// SHIFT + a held select button arms an automation step (E4.6)
+//------------------------------------------------------------------------------
+/** no parameter locks in the first two tracks of pattern 0, as after a clear */
+static void clearLocks(void)
+{
+	for (int t = 0; t < 2; t++)
+		for (int s = 0; s < NUM_STEPS; s++) {
+			seq_patternSet.seq_subStepPattern[0][t][s].param1Nr = NO_AUTOMATION;
+			seq_patternSet.seq_subStepPattern[0][t][s].param2Nr = NO_AUTOMATION;
+		}
+}
+
+/** hold SHIFT and select button `select` for longer than BUTTON_TIMEOUT */
+static void holdShiftAndSelect(uint8_t select)
+{
+	down(BUT_SHIFT);
+	down(select);
+	systick_ticks += BUTTON_TIMEOUT + 1;
+	buttonHandler_tick();
+}
+
+static void releaseShiftAndSelect(uint8_t select)
+{
+	up(select);
+	up(BUT_SHIFT);
+}
+
+TEST(buttons_automation_step_in_range)
+{
+	/* step 1 selected: select 3 arms step 3 of the voice, as in fw 1.7 (step 1 * 8
+	 * + 2, a leftover of 8 sub-steps per step), and plays its lock while held */
+	reset();
+	clearLocks();
+	press(BUT_SEQ1);
+	ASSERT_EQ(buttonHandler_selectedStep, 0);
+	seq_patternSet.seq_subStepPattern[0][0][2].param1Nr = 10;	/* parameter 9 */
+	seq_patternSet.seq_subStepPattern[0][0][2].param1Val = 99;
+	activeParameters[9] = 3;
+	holdShiftAndSelect(BUT_SELECT3);
+	ASSERT_EQ(armCalls, 1);
+	ASSERT_EQ(armedStep, 2);
+	ASSERT_EQ(activeParameters[9], 99);
+	releaseShiftAndSelect(BUT_SELECT3);
+	ASSERT_EQ(activeParameters[9], 3);
+}
+
+TEST(buttons_automation_step_past_63_is_not_armed)
+{
+	/* step 10 selected: fw 1.7 armed step 9 * 8 + 7 = 79, past the 64 steps of the
+	 * track, which is step 16 of the next track in memory: it played that step's
+	 * lock while held and a knob turn wrote that step */
+	reset();
+	clearLocks();
+	press(BUT_SEQ10);
+	ASSERT_EQ(buttonHandler_selectedStep, 9);
+	seq_patternSet.seq_subStepPattern[0][1][15].param1Nr = 10;
+	seq_patternSet.seq_subStepPattern[0][1][15].param1Val = 99;
+	activeParameters[9] = 3;
+	holdShiftAndSelect(BUT_SELECT8);
+	ASSERT_EQ(armCalls, 0);
+	ASSERT_EQ(activeParameters[9], 3);
+	releaseShiftAndSelect(BUT_SELECT8);
+	ASSERT_EQ(activeParameters[9], 3);
+	ASSERT_EQ(armCalls, 0);
 }
 
 TEST_MAIN()

@@ -181,7 +181,7 @@ endif()
 # with the timing core, the stand-in headers in stubs/ (the HAL with the interrupt
 # mask of the mailbox) and the firmware's own FX bus header. The song it edits is
 # a buffer of the test with guard bytes after the 64 entries.
-seqc_add_test(test_sequencer IDS sequencer EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c)  # E4.6  song page position
+seqc_add_test(test_sequencer IDS sequencer EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c)  # E4.6  song page position, automation step
 if(TARGET test_sequencer)
     target_include_directories(test_sequencer BEFORE PRIVATE stubs)
     target_include_directories(test_sequencer SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)

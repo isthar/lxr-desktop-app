@@ -61,6 +61,11 @@ volatile static int8_t buttonHandler_armedAutomationStep = NO_STEP_SELECTED;
 
 //--------------------------------------------------------
 static void buttonHandler_armTimerActionStep(int8_t stepNr) {
+	//SHIFT + a held select button asks for step selectedStep * 8 + button, a
+	//leftover of fw 1.x's 8 sub-steps per step: up to 127, past the 64 steps of the
+	//track. fw 1.7 armed it, which played and wrote a step of the next track (E4.6)
+	if (stepNr >= NUM_STEPS)
+		return;
 #if 0
 	//check if sub or main step
 	const uint8_t isMainStep = ((stepNr % 8) == 0);

@@ -16,6 +16,12 @@
  * buffer with guard bytes after the 64 entries, so the test sees a store past the
  * song also without a sanitizer.
  *
+ * The automation step (fw 1.7 bug): seq_armAutomationStep() took any step and
+ * track, and seq_recordAutomation() wrote the armed one. SHIFT + a held select
+ * button (buttonHandler.c) asked for steps up to 127, and a knob turn wrote a step
+ * of the next track, or of the next pattern. An armed step or track out of range
+ * now disarms.
+ *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
  *
@@ -231,6 +237,42 @@ TEST(sequencer_song_page_follows_the_song)
 	seq_resetPosition();
 	seq_setRunning(0);
 	run(1);
+}
+
+//------------------------------------------------------------------------------
+// The automation step that a held button arms (CortexParser.c
+// FRONT_ARM_AUTOMATION_STEP), and a knob turn writes (seq_recordAutomation())
+//------------------------------------------------------------------------------
+TEST(sequencer_automation_step_in_range)
+{
+	reset();
+	seq_armAutomationStep(5, 1, 1);
+	ASSERT_TRUE(seq_isAutomationStepArmed());
+	seq_recordAutomation(1, 10, 11);
+	ASSERT_EQ(seq_patternSet.seq_subStepPattern[seq_activePattern][1][5].param1Nr, 10);
+	ASSERT_EQ(seq_patternSet.seq_subStepPattern[seq_activePattern][1][5].param1Val, 11);
+	seq_armAutomationStep(0, 0, 0);
+	ASSERT_FALSE(seq_isAutomationStepArmed());
+	seq_recordAutomation(1, 12, 13);
+	ASSERT_EQ(seq_patternSet.seq_subStepPattern[seq_activePattern][1][5].param1Nr, 10);
+}
+
+TEST(sequencer_automation_step_past_63_is_not_armed)
+{
+	/* fw 1.7 armed step 79 of track 1, and the knob turn wrote step 16 of track 2 */
+	reset();
+	const Step before = seq_patternSet.seq_subStepPattern[seq_activePattern][1][15];
+	seq_armAutomationStep(79, 0, 1);
+	ASSERT_FALSE(seq_isAutomationStepArmed());
+	seq_recordAutomation(0, 10, 11);
+	ASSERT_EQ(memcmp(&before, &seq_patternSet.seq_subStepPattern[seq_activePattern][1][15], sizeof before), 0);
+
+	/* nor a track past the last one: the next pattern's track 1 */
+	const Step nextPattern = seq_patternSet.seq_subStepPattern[seq_activePattern + 1][0][5];
+	seq_armAutomationStep(5, NUM_TRACKS, 1);
+	ASSERT_FALSE(seq_isAutomationStepArmed());
+	seq_recordAutomation(0, 10, 11);
+	ASSERT_EQ(memcmp(&nextPattern, &seq_patternSet.seq_subStepPattern[seq_activePattern + 1][0][5], sizeof nextPattern), 0);
 }
 
 TEST_MAIN()

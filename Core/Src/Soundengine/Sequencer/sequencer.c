@@ -775,7 +775,9 @@ void seq_setExtSync(uint8_t isExt)
 //------------------------------------------------------------------------------
 void seq_armAutomationStep(uint8_t stepNr, uint8_t track,uint8_t isArmed)
 {
-	if(isArmed) {
+	//a step or track out of range disarms: seq_recordAutomation() writes the armed
+	//step, and fw 1.7 armed steps up to 127 from SHIFT + a select button (E4.6)
+	if(isArmed && (stepNr < NUM_STEPS) && (track < NUM_TRACKS)) {
 		seq_armedArmedAutomationStep 	= stepNr;
 		seq_armedArmedAutomationTrack 	= track;
 	} else {
