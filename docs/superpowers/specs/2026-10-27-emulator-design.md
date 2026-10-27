@@ -1284,7 +1284,7 @@ time from source, so the Command Line Tools are enough to build it.
 - Each change is one small commit on `emulator`, with its own test, before the emulator code that relies
   on it. R1 lands all of them before any `emu/` code (§13).
 - The changes reach the device in the next firmware release, v0.2, only after the owner's v0.1 checks,
-  with the device checks U3–U7 (§12.4, increment R6). A 0.1.x version cannot carry them: 'v0.1.1
+  with the device checks U4–U8 (§12.4, increment R6). A 0.1.x version cannot carry them: 'v0.1.1
   unofficial' has 17 characters, and the configure step stops above the splash's 16
   (`CMakeLists.txt:33–39`).
 - 'The base build' below is the firmware built from the commit before the change.
@@ -1293,15 +1293,15 @@ time from source, so the Command Line Tools are enough to build it.
 
 | ID | Change | Effect on the device | Acceptance |
 |---|---|---|---|
-| F1 | `modulationNode.c`: a node whose destination parameter has no pointer (`PAR_NONE`) keeps its original value | None. Today such a node reads its original value from address 0 (ITCM) and never uses it | M15: CC 1 with nodes at destination 0 does not crash; U3 |
-| F2 | `morphParameters = mainParameters[0]` on the boot path without a card too | Without a card, morphing interpolates towards kit slot 0 instead of bytes from address 0 | M15: boot without a card and turn the morph; U4 |
-| F3 | `menu.c:1079` and `:1083`: the clear-page text is written within its row, with the same visible result | None | M15: the LCD snapshots of the clear-automation pages equal the base build's, built with `-D_FORTIFY_SOURCE=0`; U5 |
-| F4 | `main.c`'s boot becomes `appMain_boot()` and its loop body `appMain_loopOnce()`, in `Core/Src/appMain.c` (below) | None; the code moves, the logic stays | `git diff --color-moved` shows moves plus the edits listed below only; the image check finds the splash; the F4TEST check (below); ITCM use is unchanged; U6 |
+| F1 | `modulationNode.c`: a node whose destination parameter has no pointer (`PAR_NONE`) keeps its original value | None. Today such a node reads its original value from address 0 (ITCM) and never uses it | M15: CC 1 with nodes at destination 0 does not crash; U4 |
+| F2 | `morphParameters = mainParameters[0]` on the boot path without a card too | Without a card, morphing interpolates towards kit slot 0 instead of bytes from address 0 | M15: boot without a card and turn the morph; U5 |
+| F3 | `menu.c:1079` and `:1083`: the clear-page text is written within its row, with the same visible result | None | M15: the LCD snapshots of the clear-automation pages equal the base build's, built with `-D_FORTIFY_SOURCE=0`; U6 |
+| F4 | `main.c`'s boot becomes `appMain_boot()` and its loop body `appMain_loopOnce()`, in `Core/Src/appMain.c` (below) | None; the code moves, the logic stays | `git diff --color-moved` shows moves plus the edits listed below only; the image check finds the splash; the F4TEST check (below); ITCM use is unchanged; U7 |
 | F5 | `sequencer.c`: `seq_cbRandom()` returns `SEQ_RANDOM()`, a macro that defaults to `GetRngValue()` | None | The release `.bin` is byte-identical to the base build's |
 | F6 | `Oscillator.c`: a saturating float-to-uint32 conversion at the 8 FM sites (lines 117, 140, 165, 193, 231, 509, 536 and 570) and in `freq2PhaseIncr()` (line 24). On the Cortex-M7 it is the plain cast, which `VCVT` already saturates | None | The release `.bin` is byte-identical; M1: the host version equals `FCVTZU` for edge values and NaN |
 | F7 | `AudioCodecManager.c`: `dma_buffer` and `dma_buffer2` get 4-byte alignment, and so does any other `int16_t` buffer accessed as `int32_t` that UBSan's alignment check finds | None. Both buffers already sit at 4-byte-aligned addresses (`0x20019e1c` and `0x2001a01c` in the release map) | The release `.bin` is byte-identical |
 | F8 | `Core/sources.cmake`: the module source lists leave `Core/CMakeLists.txt`, with the same files in the same order | None | The release `.bin` and `.map` are byte-identical |
-| F9 | `Oscillator.c:464` and `:174`: the interpolation reads `table[row][itg & 1023]` | It changes the sound in one case (below) | M15: no read past the tables under ASan; listening check U7 before it reaches a release |
+| F9 | `Oscillator.c:464` and `:174`: the interpolation reads `table[row][itg & 1023]` | It changes the sound in one case (below) | M15: no read past the tables under ASan; listening check U8 before it reaches a release |
 | F10 | `presetManager.c` and `PresetManager.h`: `uint8_t preset_morphBusy(void)` returns `morph_state` (`presetManager.c:41`), which is file-static today | None. Nothing in the firmware calls it, and the build's `--gc-sections` drops it | The release `.bin` is byte-identical; M17's t0 check |
 
 **F4 in detail.**
@@ -1352,7 +1352,7 @@ timing code needs.
 - The fix reads the row's own first sample. It changes the device's output only for oscillators in band
   10, once per period, by the difference between the stray value and the right one.
 - On `emulator` the fix lands early, because goldens must not depend on the memory layout. It reaches a
-  firmware release only after a listening check on the device (Q13, U7).
+  firmware release only after a listening check on the device (Q13, U8).
 
 **The ping-pong delay report.** LXR02XXL's PATCHES.md reported that the ping-pong delay's pointers can
 run past `FX_BUFFER` after a mode switch. The study's UBSan runs did not reproduce it; the sanitizer
@@ -1753,11 +1753,11 @@ When F1–F10 reach a firmware release (v0.2, R6), the hardware checklist gains 
 
 | ID | Check |
 |---|---|
-| U3 | A kit with LFO and velocity modulation targets loads and modulates as in v0.1. CC 1 (the mod wheel) from a keyboard sounds as in v0.1 (F1) |
-| U4 | Boot without a card, then turn the morph knob: no noise and no crash (F2) |
-| U5 | The clear-automation pages show 'clear [autom. 1]' and 'clear [autom. 2]' as in v0.1 (F3) |
-| U6 | H1 and H2 again (F4) |
-| U7 | Listening check against v0.1 (F9). Voice 1 with a saw wavetable oscillator at its highest coarse pitch (note 127), pitch modulation amount 127, pitch EG decay 64 or more and pitch slope 64; then the same with the triangle. 16 hits of each sound as in v0.1 |
+| U4 | A kit with LFO and velocity modulation targets loads and modulates as in v0.1. CC 1 (the mod wheel) from a keyboard sounds as in v0.1 (F1) |
+| U5 | Boot without a card, then turn the morph knob: no noise and no crash (F2) |
+| U6 | The clear-automation pages show 'clear [autom. 1]' and 'clear [autom. 2]' as in v0.1 (F3) |
+| U7 | H1 and H2 again (F4) |
+| U8 | Listening check against v0.1 (F9). Voice 1 with a saw wavetable oscillator at its highest coarse pitch (note 127), pitch modulation amount 127, pitch EG decay 64 or more and pitch slope 64; then the same with the triangle. 16 hits of each sound as in v0.1 |
 
 ## 13. Rollout
 
@@ -1774,7 +1774,7 @@ When F1–F10 reach a firmware release (v0.2, R6), the hardware checklist gains 
   | R3 | Card fixtures and `make.sh`, G1–G10 with their expectations, `goldens.json`, `tools/emu_golden.py`, `emulator.yml`, the ping-pong regression scenario (M16, M23), the `check.sh` step | E5.4 |
   | R4 | The app: threads and rings, CoreAudio, the time map, CoreMIDI in and out, the panel, the card folder, the clock-jack LED and buttons, power and crash handling, diagnostics (M18; A1–A11) | E5.5 |
   | R5 | The app's audio options for the clock jacks (§6.8) | E5.5 |
-  | R6 | Firmware release v0.2 with F1–F10, on the owner's go-ahead after their v0.1 checks: U3–U7 in `hardware-checklist.md`, the release notes, the image from CI | a new task |
+  | R6 | Firmware release v0.2 with F1–F10, on the owner's go-ahead after their v0.1 checks: U4–U8 in `hardware-checklist.md`, the release notes, the image from CI | a new task |
 
 - **Plans.** This spec is too big for one plan, so it splits into four:
   1. R1, the virtual device, with the firmware changes;
@@ -1817,7 +1817,7 @@ This draft applies each default. Each question stays open in the tracker until t
 | # | Question | Default applied in this draft | Status |
 |---|---|---|---|
 | Q12 | Do we build stage 1b in the agreed order: the renderer first (goldens in CI, quick listening to stage 2's changes), then the app (virtual panel, CoreMIDI, master and slave), then stage 2? The alternative is the renderer, then stage 2, and the app later. **Agreed order:** the app's live sync checks (A4–A8) exist before stage 2 changes the groove, and stage 2 starts two plans later (R4 and R5). **Alternative:** the groove features reach the device two plans sooner. Their scripted sync tests run in the renderer (G7 and G8 drive DIN and USB clocks), and live tests wait for the device or the app | Renderer, app, stage 2, as agreed on 2026-10-23. Code starts only after the owner accepts this spec | Open |
-| Q13 | Do the small firmware changes the emulator needs go into the firmware? Most leave the device's behaviour unchanged: the two NULL reads, the `strcpy` in `menu.c`, splitting `main()` into a boot and one loop pass, saturating float-to-uint conversions, and a function that tells whether a kit transfer is running. One changes the sound: the read past the end of a table in `Oscillator.c`. The ping-pong delay report is settled: the sanitizer sweep reproduced it, and E4.8 fixed it on `timing-core` (`2bb5d80`) | Yes, as separate small commits on `emulator` (F1–F10), reaching the device in v0.2, after the owner's v0.1 checks. The `Oscillator.c` fix only after a listening check on the device (U7). F2 also changes a morph without a card, which today reads stray bytes from address 0 | Open |
+| Q13 | Do the small firmware changes the emulator needs go into the firmware? Most leave the device's behaviour unchanged: the two NULL reads, the `strcpy` in `menu.c`, splitting `main()` into a boot and one loop pass, saturating float-to-uint conversions, and a function that tells whether a kit transfer is running. One changes the sound: the read past the end of a table in `Oscillator.c`. The ping-pong delay report is settled: the sanitizer sweep reproduced it, and E4.8 fixed it on `timing-core` (`2bb5d80`) | Yes, as separate small commits on `emulator` (F1–F10), reaching the device in v0.2, after the owner's v0.1 checks. The `Oscillator.c` fix only after a listening check on the device (U8). F2 also changes a morph without a card, which today reads stray bytes from address 0 | Open |
 | Q14 | Names and look: app 'LICHOMAT Emu', renderer 'lichomat-render', CoreMIDI port 'LICHOMAT Emu', tagline 'emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02', bundle ID `io.github.isthar.lichomat-emu` (with your GitHub handle); a schematic panel in its own colours, no logos and no copy of the faceplate. The naming rule also covers release titles and notes, the README and the repository's description | As proposed (§10.2) | Open |
 | Q15 | Distribution: arm64 only, macOS 13 or later, ad hoc signed binaries as release assets on the fork, no paid Apple developer account (Open Anyway at the first start), no Erica factory kits; users bring a copy of their card or a folder | As proposed (§10.3). Intel is not supported: an x86-64 build gives different results and can crash | Open |
 | Q16 | The app's behaviour: knobs like the device (about 134 steps per turn, 22 for list parameters); an instant display; a slave MIDI input delay computed from the audio output's latencies, about 58 ms at the built-in output's 512-frame buffer and about 34 ms at 128 frames, that the user can lower (the earlier figure of 24 ms is too short for the app's audio pipeline, §6.4); sound at the internal 44,140.625 Hz, resampled to the audio device at Normal complexity and maximum quality; the app's own card folder with import and export; the UI in Dear ImGui on Cocoa and Metal | As proposed (§6). The clock jacks are an LED and buttons; an audio pulse out and clock in from audio are options | Open |
