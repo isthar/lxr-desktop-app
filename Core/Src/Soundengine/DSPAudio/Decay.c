@@ -20,6 +20,9 @@
 //-------------------------------------------------
 float DecayEg_calcSlopeValue(float val, float slope)
 {
+	// slope -1 (EG slope 0) is a flat curve: 0 for every value. The formula gives 0/0
+	// at the value 1, which an EG with decay 0 (EG decay 127) holds (E4.9)
+	if(slope <= -1.f) return 0.f;
 	return (1+slope)*val/(1+slope*fabsf(val));
 }
 //-------------------------------------------------
@@ -73,7 +76,10 @@ void DecayEg_setDecay(DecayEg* eg, uint8_t data2)
 //--------------------------------------------------
 IN_ITCM_RAM void DecayEg_setSlope(DecayEg* eg, uint8_t data2)
 {
-	const float amount 	= ((data2/127.f)-0.5f)*2;
+	float amount 		= ((data2/127.f)-0.5f)*2;
+	// 127 gives the amount 1 and the slope 2/0 = Inf, whose curve is NaN (E4.9); 126
+	// gives 0.984, and a modulator at its top gives 127
+	if(amount > 0.99f) amount = 0.99f;
 	eg->slope 			= 2*amount/(1-amount);
 }
 //--------------------------------------------------

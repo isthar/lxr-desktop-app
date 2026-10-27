@@ -224,15 +224,21 @@ if(TARGET test_delay)
 endif()
 
 # The sound engine's broken states (E4.9): test_dsp compiles the firmware's DSP
-# files with the stand-in headers in stubs/ and with the firmware's floating-point
-# options at -O3, as the device build has them, so that the compiler may remove a
-# NaN test as GCC does on the device. A NaN or Inf converted to an integer sample is
-# undefined in C; the device's VCVT gives 0 or saturates, so that check of UBSan is
-# off for these files.
-seqc_add_test(test_dsp       IDS dsp EXTRA ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/ResonantFilter.c)  # E4.9  filter NaN state
+# files with the stand-in headers in stubs/ at -O3, as the device build has them.
+# ResonantFilter.c gets the firmware's floating-point options, so that the compiler
+# may remove a NaN test as GCC does on the device. Decay.c gets strict IEEE math:
+# on the device the pitch EG's slope 127 divides by an exact 0, but under
+# -ffast-math clang rewrites that expression to a division by a tiny number. A NaN
+# or Inf converted to an integer sample is undefined in C; the device's VCVT gives 0
+# or saturates, so that check of UBSan is off for these files.
+set(DSP_FAST_MATH_SOURCES ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/ResonantFilter.c)
+set(DSP_STRICT_MATH_SOURCES ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/Decay.c)
+seqc_add_test(test_dsp       IDS dsp EXTRA ${DSP_FAST_MATH_SOURCES} ${DSP_STRICT_MATH_SOURCES})  # E4.9  filter NaN state, pitch EG slope
 if(TARGET test_dsp)
     target_include_directories(test_dsp BEFORE PRIVATE stubs)
     target_include_directories(test_dsp SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
-    set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/ResonantFilter.c
+    set_source_files_properties(${DSP_FAST_MATH_SOURCES}
         PROPERTIES COMPILE_OPTIONS "-w;-O3;-ffast-math;-freciprocal-math;-fno-sanitize=float-cast-overflow")
+    set_source_files_properties(${DSP_STRICT_MATH_SOURCES}
+        PROPERTIES COMPILE_OPTIONS "-w;-O3;-fno-sanitize=float-cast-overflow")
 endif()

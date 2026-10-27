@@ -13,6 +13,11 @@
  *   removed: the state stayed NaN, so the voice stayed silent (its samples
  *   convert to 0) until power-off, whatever the filter was set to afterwards.
  *   Only Drum 1-3 reset their filter on a trigger.
+ * - The pitch EG (Core/Src/Soundengine/DSPAudio/Decay.c) of Drum 1-3 and the
+ *   snare. Its slope 127 (PAR_PITCH_SLOPE1-4, CC 79-82, a modulator at its top)
+ *   made the curve's factor 2/0 = Inf, and slope 0 with the pitch decay at 127
+ *   (decay 0: the EG holds at 1) gave 0/0: the curve was NaN, so the oscillator's
+ *   pitch and FM were NaN and its phase increment 0, and the tone vanished.
  *
  * The firmware files are compiled as they are, against the stand-in headers in
  * tests/stubs/, with the firmware's floating-point options and -O3, as on the
@@ -30,6 +35,7 @@
 
 #include <math.h>
 
+#include "Soundengine/DSPAudio/Decay.h"
 #include "Soundengine/DSPAudio/ResonantFilter.h"
 #include "Soundengine/MIDI/valueShaper.h"
 
@@ -103,6 +109,62 @@ TEST(dsp_filter_recovers_from_a_nan_state)
 			for (b = 0; b < 50; b++)
 				ASSERT_TRUE(filterBlock(&filter, type) > BLOCK / 2);
 			ASSERT_TRUE(stateIsFinite(&filter));
+		}
+	}
+}
+
+//------------------------------------------------------------------------------
+// The pitch EG
+//------------------------------------------------------------------------------
+static const uint8_t decays[] = { 0, 32, 64, 100, 120, 126, 127 };
+
+/** fw 1.7's curve for a slope of 1-126, in double: the slope factor of
+ *  DecayEg_setSlope(), the curve of DecayEg_calcSlopeValue() */
+static double slopeCurve(uint8_t slope, double value)
+{
+	const double amount = (slope / 127.0 - 0.5) * 2;
+	const double k = 2 * amount / (1 - amount);
+	return (1 + k) * value / (1 + k * fabs(value));
+}
+
+TEST(dsp_pitch_eg_is_finite_at_every_slope_and_decay)
+{
+	for (unsigned slope = 0; slope <= 127; slope++) {
+		for (unsigned d = 0; d < sizeof decays; d++) {
+			DecayEg eg;
+			DecayEg_init(&eg);
+			DecayEg_setSlope(&eg, (uint8_t)slope);
+			DecayEg_setDecay(&eg, decays[d]);
+			DecayEg_trigger(&eg);
+			for (int n = 0; n < 2000; n++) {
+				const float v = DecayEg_calc(&eg);
+				if (!isfinite(v))
+					printf("slope %u decay %u: value %g after %d steps\n", slope, decays[d], v, n);
+				ASSERT_TRUE(isfinite(v));
+				ASSERT_TRUE(v >= -1.f && v <= 1.f);
+			}
+		}
+	}
+}
+
+TEST(dsp_pitch_eg_curve_of_slopes_0_to_126_is_unchanged)
+{
+	for (unsigned slope = 0; slope <= 126; slope++) {
+		for (unsigned d = 0; d < sizeof decays; d++) {
+			if (slope == 0 && decays[d] == 127)
+				continue;	/* fw 1.7: NaN */
+			DecayEg eg;
+			DecayEg_init(&eg);
+			DecayEg_setSlope(&eg, (uint8_t)slope);
+			DecayEg_setDecay(&eg, decays[d]);
+			DecayEg_trigger(&eg);
+			for (int n = 0; n < 2000; n++) {
+				const float v = DecayEg_calc(&eg);
+				if (slope == 0)		/* a flat curve: 0 for every value below 1 */
+					ASSERT_EQ_DBL(v, 0.0);
+				else
+					ASSERT_NEAR(v, slopeCurve((uint8_t)slope, eg.value), 1e-5);
+			}
 		}
 	}
 }
