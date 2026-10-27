@@ -107,6 +107,7 @@ void frontPanel_ccHandler()
 	DISABLE_SIGN_WARNING
 	if(parNr == 255/*PAR_BANK_CHANGE*/)
 	{
+		if(frontParser_midiMsg.data2 >= NUM_KIT_SLOTS) return; //no kit past the 64 slots
 		menu_selectedPresetNr[0] = frontParser_midiMsg.data2;
 		//preset_loadDrumset(frontParser_midiMsg.data2, 0);
 		preset_loadDrumsetRam(frontParser_midiMsg.data2,0, 0);

@@ -658,6 +658,45 @@ TEST(presets_project_load_past_the_64_slots_is_refused)
 	ASSERT_EQ(namesGuardChanged(), 0);
 }
 
+/* in frontPanelParser.c and presetManager.c, not in their headers */
+void frontPanel_ccHandler(void);
+extern uint8_t preset_kitDirty;
+
+/** CC 0 (Bank Select MSB) as the front panel parser hands it on: parameter 255 */
+static void bankSelect(uint8_t value)
+{
+	frontParser_midiMsg.status = MIDI_CC;
+	frontParser_midiMsg.data1 = 0;
+	frontParser_midiMsg.data2 = value;
+	frontPanel_ccHandler();
+}
+
+TEST(presets_bank_select_past_the_64_kits_is_ignored)
+{
+	for (int v = NUM_KIT_SLOTS; v < 256; v++) {
+		reset();
+		preset_kitDirty = 0;
+		menu_selectedPresetNr[SAVE_TYPE_KIT] = 5;
+		memset(activeParameters, 0x3C, KIT_SIZE);
+		bankSelect((uint8_t)v);
+		ASSERT_EQ(menu_selectedPresetNr[SAVE_TYPE_KIT], 5);
+		ASSERT_EQ(activeDiffers(0x3C), 0);
+		ASSERT_EQ(preset_kitDirty, 0);	/* no autosave of tmp.snd */
+	}
+}
+
+TEST(presets_bank_select_loads_a_kit)
+{
+	for (int v = 0; v < NUM_KIT_SLOTS; v++) {
+		reset();
+		preset_kitDirty = 0;
+		bankSelect((uint8_t)v);
+		ASSERT_EQ(menu_selectedPresetNr[SAVE_TYPE_KIT], v);
+		ASSERT_EQ(activeParameters[0], v);
+		ASSERT_EQ(preset_kitDirty, 1);
+	}
+}
+
 TEST_MAIN()
 
 //------------------------------------------------------------------------------
