@@ -13,6 +13,7 @@
 
 
 #include "Soundengine/DSPAudio/Oscillator.h"
+#include "Soundengine/DSPAudio/f2u32.h"
 #include "Soundengine/DSPAudio/random.h"
 #include "Soundengine/DSPAudio/Samples.h"
 #include "Soundengine/MIDI/MidiParser.h"
@@ -22,7 +23,7 @@
 
 static __inline uint32_t freq2PhaseIncr(const float f) //4096
 {
-	return (((TABLESIZE*f)/REAL_FS))*1048576 ; // 1048576 <-> (<<20)
+	return f2u32_sat((((TABLESIZE*f)/REAL_FS))*1048576) ; // 1048576 <-> (<<20)
 }
 //TODO die phaseInc berechnung kann man doch sicher per LUT machen!
 //-----------------------------------------------------------
@@ -115,7 +116,7 @@ IN_ITCM_RAM void calcFmSineBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf,
 		const uint32_t oscPhase = osc->phase;
 		int16_t oscOut ;
 
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<17);
+		const uint32_t index =  oscPhase + ((f2u32_sat(modBuffer[i]*osc->fmMod))<<17);
 		uint32_t  itg	= index>>20;
 
 	#if INTERPOLATE_FM_OSC
@@ -138,7 +139,7 @@ int16_t calcFmSine(OscInfo* osc, OscInfo* modOsc)
 	const uint32_t oscPhase 	= osc->phase;
 	int16_t oscOut ;
 
-	const uint32_t index =  oscPhase + (((uint32_t)(modOsc->output*osc->fmMod))<<17);
+	const uint32_t index =  oscPhase + ((f2u32_sat(modOsc->output*osc->fmMod))<<17);
 	uint32_t  itg	= index>>20;
 
 #if INTERPOLATE_FM_OSC
@@ -163,7 +164,7 @@ IN_ITCM_RAM void calcFmBlock(OscInfo* osc, const int16_t table[][1024], int16_t*
 	{
 		const uint32_t oscPhase = osc->phase;
 		int16_t oscOut ;
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<19);
+		const uint32_t index =  oscPhase + ((f2u32_sat(modBuffer[i]*osc->fmMod))<<19);
 
 		uint32_t  itg	= index>>22; //10 bit index, 22 bit fractional part
 
@@ -191,7 +192,7 @@ void calcPwmFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size
 	{
 		const uint32_t oscPhase = osc->phase;
 		int16_t oscOut ;
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<19);
+		const uint32_t index =  oscPhase + ((f2u32_sat(modBuffer[i]*osc->fmMod))<<19);
 		const uint32_t index2 = index + pwm * (UINT32_MAX/2);
 
 		 uint32_t  itg	 = index>>22;
@@ -229,7 +230,7 @@ int16_t calcFm(OscInfo* osc, OscInfo* modOsc, const int16_t table[][1024])
 	const uint32_t oscPhase = osc->phase;
 	int16_t oscOut ;
 
-	const uint32_t index =  oscPhase + (((uint32_t)(modOsc->output*osc->fmMod))<<19);
+	const uint32_t index =  oscPhase + ((f2u32_sat(modOsc->output*osc->fmMod))<<19);
 
 	uint32_t  itg	= index>>22;
 
@@ -513,7 +514,7 @@ void calcSampleOscFmBlock(OscInfo* osc,int16_t* modBuffer, int16_t* buf, uint8_t
 		const uint32_t oscPhase 	= osc->phase;
 		int16_t oscOut ;
 
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<14);
+		const uint32_t index =  oscPhase + ((f2u32_sat(modBuffer[i]*osc->fmMod))<<14);
 		uint32_t  itg	= index>>17;
 
 	#if INTERPOLATE_FM_OSC
@@ -540,7 +541,7 @@ int16_t calcSampleOscFm(OscInfo* osc, OscInfo* modOsc)
 	const uint32_t oscPhase 	= osc->phase;
 	int16_t oscOut ;
 
-	const uint32_t index =  oscPhase + (((uint32_t)(modOsc->output*osc->fmMod))<<14);
+	const uint32_t index =  oscPhase + ((f2u32_sat(modOsc->output*osc->fmMod))<<14);
 	uint32_t  itg	= index>>17;
 
 #if INTERPOLATE_FM_OSC
@@ -574,7 +575,7 @@ void calcUserSampleOscFmBlock(OscInfo* osc,int16_t* modBuffer, int16_t* buf, uin
 		const uint32_t oscPhase 	= osc->phase;
 		int16_t oscOut ;
 
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<14);
+		const uint32_t index =  oscPhase + ((f2u32_sat(modBuffer[i]*osc->fmMod))<<14);
 		uint32_t  itg	= index>>17;
 
 	#if INTERPOLATE_FM_OSC

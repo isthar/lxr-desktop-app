@@ -263,3 +263,8 @@ if(TARGET test_modnode)
     target_include_directories(test_modnode SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
     set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/modulationNode.c PROPERTIES COMPILE_OPTIONS -w)
 endif()
+
+# The float-to-uint32 conversion of the oscillators (stage 1b F6): test_f2u32
+# checks f2u32_sat() (Core/Inc/Soundengine/DSPAudio/f2u32.h) at its edge values,
+# and against arm64's FCVTZU on an arm64 host.
+seqc_add_test(test_f2u32     IDS f2u32)  # stage 1b F6  saturating float-to-uint32
