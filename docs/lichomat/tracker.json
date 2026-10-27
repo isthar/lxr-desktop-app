@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-27 01:37",
+    "updated": "2026-10-27 02:31",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Następny jest szkic specyfikacji etapu 1b: emulator na macOS, najpierw renderer WAV, potem aplikacja z wirtualnym panelem.",
     "branch": "timing-core",
-    "head": "988e636",
+    "head": "5b2c224",
     "next": "Twoje testy H1–H13, U1, U2 i X4 na pliku 9a7aff2a… oraz odpowiedzi na Q9–Q18. Ja: szkic specyfikacji etapu 1b do Twojej akceptacji i raport z szukania błędów pod sanitizerami.",
-    "updated_at": "2026-10-27T01:37:00+01:00",
-    "now": "Noc: poprawki E4.6–E4.8 (od 01:37), sceptycy sweepu i krytycy specyfikacji 1b w toku. Testy na sprzęcie wstrzymane do nowego pliku."
+    "updated_at": "2026-10-27T02:31:00+01:00",
+    "now": "Noc: E4.9, czyli NaN w filtrach i w krzywej EG oraz fala ≥ 6 (od 02:31). Fixer specyfikacji 1b w toku."
   },
   "epics": [
     {
@@ -386,22 +386,29 @@
     {
       "id": "E4.6",
       "epic": "E4",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Błędy fw 1.7: strona songu na pozycji 255 i krok automatyki powyżej 63 piszą poza tablicą",
       "updated": "2026-10-27"
     },
     {
       "id": "E4.7",
       "epic": "E4",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Błędy fw 1.7: ponowny zapis projektu nadpisuje nazwę kitu 0; niesprawdzane bajty slotów z karty",
       "updated": "2026-10-27"
     },
     {
       "id": "E4.8",
       "epic": "E4",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Błędy fw 1.7: przełączenie delaya na ping-pong i Note On po NRPN 121 piszą poza tablicą",
+      "updated": "2026-10-27"
+    },
+    {
+      "id": "E4.9",
+      "epic": "E4",
+      "status": "w toku",
+      "title": "Błędy fw 1.7 w silniku dźwięku: NaN w filtrze hi-hatu, cymbala i snare oraz w krzywej EG wysokości, fala ≥ 6 przez MIDI",
       "updated": "2026-10-27"
     },
     {
@@ -1858,6 +1865,16 @@
       "n": 227,
       "at": "2026-10-27 01:37",
       "text": "Nocne poprawki (od 01:37, workflow C5). Nocne szukanie pod sanitizerami znalazło 7 różnych błędów z fw 1.7, które psują dane na LXR. Poprawiam je w trzech zadaniach, test-first, po jednym commicie na błąd. E4.6: strona songu na pozycji 255 po zatrzymaniu i krok automatyki powyżej 63 z SHIFT i przytrzymanym select. E4.7: każdy ponowny zapis projektu nadpisuje nazwę kitu 0, do tego niesprawdzane bajty slotów z uszkodzonej karty (kit w patternie, tmp.snd, PROJ.IDX). E4.8: przełączenie delaya z Normal na Ping-pong w trakcie grania (zapis do 32 KB za buforem efektu, także we wskaźniki samego delaya) i Note On na stronie kroku po NRPN 121. Testy na sprzęcie znów wstrzymane do nowego pliku z CI, który będzie rano. Błędy DSP zmieniające dźwięk (NaN w krzywej EG i w filtrze, fala ≥ 6) zostawiam do Twojej decyzji."
+    },
+    {
+      "n": 228,
+      "at": "2026-10-27 02:03",
+      "text": "Nocne szukanie pod sanitizerami zakończone (00:40–02:03; 13 agentów, 3,8 mln tokenów; ok. 5 h czasu wirtualnego, 500 mln bajtów MIDI). Wszystkie 28 zgłoszeń się powtórzyło. Po usunięciu duplikatów to 19 różnych błędów, prawie wszystkie z fw 1.7. Psujących dane: 7 (B1–B7). Poprawki E4.6 i E4.7 już weszły (0712d9a, 8af1ece, 040cdea, 2446532, b0b53ec, a6bd8b7). E4.8 (delay ping-pong do ok. 94 KB za buforem, który może zawiesić LXR, i NRPN 121) jest w kolejce. Zmieniających działanie: 7. E4.9 poprawi trzy z nich po C5: NaN w filtrze hi-hatu, cymbala i snare (głos milknie do wyłączenia), NaN w krzywej EG wysokości przy 127, fala ≥ 6 przez MIDI CC. PWM (B13, B14) zostaje do Twojego odsłuchu razem z Q13. B11 (cel LFO przy pustej karcie) i B12 (etykieta rolla po NRPN 119) opiszę jako znane ograniczenia. Nieszkodliwe na LXR: 4. Tylko na hoście: 1."
+    },
+    {
+      "n": 229,
+      "at": "2026-10-27 02:31",
+      "text": "Nocne poprawki C5 zakończone (01:37–02:30; 6 agentów, 0,8 mln tokenów). E4.6, E4.7 i E4.8 przeszły lekkie przeglądy w rundzie 1. Wszystkie 7 błędów z sweepu, które psują dane, jest poprawionych, każdy z testem na hoście, który przed poprawką nie przechodził. Nowe testy: test_sequencer (cały sequencer.c na hoście z rdzeniem), test_presets (presety z kartą w pamięci) i test_delay. Wcześniejsze testy (test_buttons, test_midicc) rozszerzone. Commity: 0712d9a i 8af1ece (strona songu, krok automatyki), 040cdea, 2446532, b0b53ec i a6bd8b7 (zapis projektu, sloty z karty, PROJ.IDX, Bank Select 64–127), 2bb5d80 i 5b2c224 (delay ping-pong, NRPN 121). Teraz E4.9, czyli 3 błędy silnika dźwięku (od 02:31). Potem nowy plik z CI i aktualizacja dokumentów."
     }
   ]
 }
