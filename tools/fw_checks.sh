@@ -255,7 +255,7 @@ check_E2_5() {
 check_E2_6() {
 	no_file Core/Src/Soundengine/Sequencer/clockSync.c Core/Inc/Soundengine/Sequencer/clockSync.h
 	no_tree 'clockSync|seq_MidiSyncQueue|seq_getDeltaTShuffleDelay|seq_getMasterStepCnt|seq_prescaleCounter|seq_sync\(|midi_process_block|HANDLE_SEQ_IN_CLOCK_INTERRUPT|trigger_clockReceived' \
-		Core/Src/Soundengine Core/Inc/Soundengine Core/CMakeLists.txt
+		Core/Src/Soundengine Core/Inc/Soundengine Core/CMakeLists.txt Core/sources.cmake
 	no_source 'seq_newPatternAvailable' Core/Inc/Soundengine/Sequencer/sequencer.h
 	no_source 'medianFilter' Core/Src/Soundengine/TriggerOut.c
 	sed -n '/^set(LXR_ITCM_SOURCES/,/^)/p' Core/CMakeLists.txt | grep -q 'sequencer\.c' \

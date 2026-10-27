@@ -17,122 +17,25 @@ target_link_libraries(lxr_app_common INTERFACE
 )
 target_compile_options(lxr_app_common INTERFACE $<$<COMPILE_LANGUAGE:C>:-Wall>)
 
-# Startup, clocks, CubeMX peripheral init, interrupt vectors, newlib stubs.
-add_library(lxr_platform OBJECT
-    Startup/startup_stm32f765vgtx.s
-    Src/main.c
-    Src/stm32f7xx_it.c
-    Src/stm32f7xx_hal_msp.c
-    Src/system_stm32f7xx.c
-    Src/syscalls.c
-    Src/sysmem.c
-    Src/delay.c
-    Src/flash_if.c
-)
+# The module source lists, LXR_SOURCES_PLATFORM ... LXR_SOURCES_USB_APP. The
+# emulator (emu/, stage 1b) compiles the same lists on the host.
+include(${CMAKE_CURRENT_LIST_DIR}/sources.cmake)
+
+add_library(lxr_platform OBJECT ${LXR_SOURCES_PLATFORM})
 # Shown on the boot splash screen; LICHOMAT_NAME and project(VERSION) come from the
 # top-level CMakeLists.txt.
 set_source_files_properties(Src/main.c PROPERTIES
     COMPILE_DEFINITIONS "FIRMWARE_NAME=\"${LICHOMAT_NAME}\";FIRMWARE_VERSION=\"${PROJECT_VERSION}\""
 )
 
-# Hardware inputs/outputs: shift-register buttons/LEDs, pots & faders.
-add_library(lxr_io OBJECT
-    Src/IO/adcPots.c
-    Src/IO/DIO.c
-    Src/IO/uart.c
-)
+add_library(lxr_io OBJECT ${LXR_SOURCES_IO})
+add_library(lxr_ui OBJECT ${LXR_SOURCES_UI})
+add_library(lxr_preset OBJECT ${LXR_SOURCES_PRESET})
+add_library(lxr_dsp OBJECT ${LXR_SOURCES_DSP})
+add_library(lxr_engine OBJECT ${LXR_SOURCES_ENGINE})
+add_library(lxr_midi OBJECT ${LXR_SOURCES_MIDI})
 
-# User interface: LCD, encoder, buttons, LEDs, menu pages, screensaver.
-add_library(lxr_ui OBJECT
-    Src/lcd.c
-    Src/encoder.c
-    Src/buttonHandler.c
-    Src/ledHandler.c
-    Src/graphic.c
-    Src/frontPanelParser.c
-    Src/Parameters.c
-    Src/menu/Cc2Text.c
-    Src/menu/copyClearTools.c
-    Src/menu/menu.c
-    Src/menu/screensaver.c
-)
-
-# Kit/pattern/project storage on the SD card.
-add_library(lxr_preset OBJECT
-    Src/Preset/initKit.c
-    Src/Preset/presetManager.c
-)
-
-# DSP building blocks, drum voices and master effects.
-add_library(lxr_dsp OBJECT
-    Src/Soundengine/DSPAudio/1PoleLp.c
-    Src/Soundengine/DSPAudio/automationNode.c
-    Src/Soundengine/DSPAudio/BufferTools.c
-    Src/Soundengine/DSPAudio/CymbalVoice.c
-    Src/Soundengine/DSPAudio/Decay.c
-    Src/Soundengine/DSPAudio/distortion.c
-    Src/Soundengine/DSPAudio/dither.c
-    Src/Soundengine/DSPAudio/DrumVoice.c
-    Src/Soundengine/DSPAudio/HiHat.c
-    Src/Soundengine/DSPAudio/lfo.c
-    Src/Soundengine/DSPAudio/mixer.c
-    Src/Soundengine/DSPAudio/modulationNode.c
-    Src/Soundengine/DSPAudio/Oscillator.c
-    Src/Soundengine/DSPAudio/random.c
-    Src/Soundengine/DSPAudio/ResonantFilter.c
-    Src/Soundengine/DSPAudio/Samples.c
-    Src/Soundengine/DSPAudio/SlopeEg2.c
-    Src/Soundengine/DSPAudio/snapEg.c
-    Src/Soundengine/DSPAudio/Snare.c
-    Src/Soundengine/DSPAudio/squareRootLut.c
-    Src/Soundengine/DSPAudio/TiltEq.c
-    Src/Soundengine/DSPAudio/transientGenerator.c
-    Src/Soundengine/DSPAudio/transientTables.c
-    Src/Soundengine/DSPAudio/wavetable.c
-    Src/Soundengine/DSPAudio/FX/Compressor.c
-    Src/Soundengine/DSPAudio/FX/Delay.c
-    Src/Soundengine/DSPAudio/FX/Distortion.c
-    Src/Soundengine/DSPAudio/FX/FxRamBuffer.c
-    Src/Soundengine/DSPAudio/FX/Reverb.c
-    Src/Soundengine/DSPAudio/FX/Ringmod.c
-    Src/Soundengine/DSPAudio/FX/VerbTools/AllpassDelay.c
-    Src/Soundengine/DSPAudio/FX/VerbTools/sinCos.c
-    Src/Soundengine/DSPAudio/FX/VerbTools/VerbDelay.c
-    Src/Soundengine/DSPAudio/FX/VerbTools/VerbModDelay.c
-)
-
-# Audio engine: codec/I2S DMA, sample block rendering, FX bus, clock/trigger I/O,
-# CPU meter.
-add_library(lxr_engine OBJECT
-    Src/Soundengine/AudioCodecManager.c
-    Src/Soundengine/cpuMeter.c
-    Src/Soundengine/cs4344_cs5343.c
-    Src/Soundengine/FIFO.c
-    Src/Soundengine/FxBus.c
-    Src/Soundengine/Soundengine.c
-    Src/Soundengine/TriggerOut.c
-)
-
-# MIDI: UART driver, parsers, parameter mapping, voice control.
-add_library(lxr_midi OBJECT
-    Src/Soundengine/MIDI/CortexParser.c
-    Src/Soundengine/MIDI/MidiMessages.c
-    Src/Soundengine/MIDI/MidiParser.c
-    Src/Soundengine/MIDI/MidiVoiceControl.c
-    Src/Soundengine/MIDI/ParameterArray.c
-    Src/Soundengine/MIDI/Uart.c
-)
-
-# Step sequencer: the timing core (seq_core) and the sync input queues (seq_syncq),
-# which the host tests in tests/ build as well, the platform layer (seq_platform:
-# DWT time base, queue instances), the glue (sequencer) and the Euclidean generator.
-add_library(lxr_sequencer OBJECT
-    Src/Soundengine/Sequencer/EuklidGenerator.c
-    Src/Soundengine/Sequencer/seq_core.c
-    Src/Soundengine/Sequencer/seq_platform.c
-    Src/Soundengine/Sequencer/seq_syncq.c
-    Src/Soundengine/Sequencer/sequencer.c
-)
+add_library(lxr_sequencer OBJECT ${LXR_SOURCES_SEQUENCER})
 # The host tests build seq_core.c and seq_syncq.c with -Wall -Wextra -Werror; the
 # firmware warns about the same for them and for seq_platform.c.
 set_property(SOURCE
@@ -141,12 +44,7 @@ set_property(SOURCE
     Src/Soundengine/Sequencer/seq_syncq.c
     APPEND PROPERTY COMPILE_OPTIONS -Wextra)
 
-# USB-MIDI message queue on top of the USB device stack, and the USB MIDI output
-# packets and transmit ring (usb_midiTx), which the host tests in tests/ build as well.
-add_library(lxr_usb_app OBJECT
-    Src/Soundengine/USB/usb_manager.c
-    Src/Soundengine/USB/usb_midiTx.c
-)
+add_library(lxr_usb_app OBJECT ${LXR_SOURCES_USB_APP})
 # The host tests build usb_midiTx.c with -Wall -Wextra -Werror; warn about the same here.
 set_property(SOURCE Src/Soundengine/USB/usb_midiTx.c APPEND PROPERTY COMPILE_OPTIONS -Wextra)
 
