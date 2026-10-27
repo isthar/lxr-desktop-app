@@ -18,6 +18,7 @@
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/MIDI/MidiNoteNumbers.h"
 #include "Soundengine/Sequencer/sequencer.h"
+#include <string.h>
 
 static __inline uint32_t freq2PhaseIncr(const float f) //4096
 {
@@ -277,6 +278,9 @@ IN_ITCM_RAM void calcNextOscSampleFmBlock(OscInfo* osc, int16_t* modBuffer, int1
 			break;
 
 		default:
+			// an unknown waveform (6-255 from a MIDI CC or a kit) is silent: the
+			// user sample oscillator below writes nothing (E4.9)
+			memset(buf, 0, size*sizeof(int16_t));
 			calcUserSampleOscFmBlock(osc,modBuffer,buf,size,gain);
 			break;
 
@@ -401,6 +405,9 @@ IN_ITCM_RAM void calcNextOscSampleBlock(OscInfo* osc, int16_t* buf, const uint8_
 			break;
 
 		default://sample playback
+			// an unknown waveform (6-255 from a MIDI CC or a kit) is silent: the
+			// buffer is the mixer's or a voice's, with an earlier block in it (E4.9)
+			memset(buf, 0, size*sizeof(int16_t));
 		//	if( osc->waveform - OSC_SAMPLE_START > sampleMemory_getNumSamples() ) return; // return if out of range
 
 		//	calcUserSampleOscBlock(osc,buf,size, gain);

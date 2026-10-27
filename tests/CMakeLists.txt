@@ -231,9 +231,12 @@ endif()
 # -ffast-math clang rewrites that expression to a division by a tiny number. A NaN
 # or Inf converted to an integer sample is undefined in C; the device's VCVT gives 0
 # or saturates, so that check of UBSan is off for these files.
-set(DSP_FAST_MATH_SOURCES ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/ResonantFilter.c)
+set(DSP_FAST_MATH_SOURCES
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/ResonantFilter.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/Oscillator.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/wavetable.c)
 set(DSP_STRICT_MATH_SOURCES ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/Decay.c)
-seqc_add_test(test_dsp       IDS dsp EXTRA ${DSP_FAST_MATH_SOURCES} ${DSP_STRICT_MATH_SOURCES})  # E4.9  filter NaN state, pitch EG slope
+seqc_add_test(test_dsp       IDS dsp EXTRA ${DSP_FAST_MATH_SOURCES} ${DSP_STRICT_MATH_SOURCES})  # E4.9  filter NaN state, pitch EG slope, waveforms of 6 or more
 if(TARGET test_dsp)
     target_include_directories(test_dsp BEFORE PRIVATE stubs)
     target_include_directories(test_dsp SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)

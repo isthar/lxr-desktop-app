@@ -18,6 +18,11 @@
  *   made the curve's factor 2/0 = Inf, and slope 0 with the pitch decay at 127
  *   (decay 0: the EG holds at 1) gave 0/0: the curve was NaN, so the oscillator's
  *   pitch and FM were NaN and its phase increment 0, and the tone vanished.
+ * - The oscillators (Core/Src/Soundengine/DSPAudio/Oscillator.c). The panel
+ *   offers 6 waveforms, 0-5, but a MIDI CC or a kit sets any value 0-255. For a
+ *   waveform of 6 or more the block functions wrote nothing, so the voice played
+ *   what its buffer held: a stack buffer of the mixer that the voices share in
+ *   turn (the previous voice's block) or the drum voice's modulation buffer.
  *
  * The firmware files are compiled as they are, against the stand-in headers in
  * tests/stubs/, with the firmware's floating-point options and -O3, as on the
@@ -36,6 +41,7 @@
 #include <math.h>
 
 #include "Soundengine/DSPAudio/Decay.h"
+#include "Soundengine/DSPAudio/Oscillator.h"
 #include "Soundengine/DSPAudio/ResonantFilter.h"
 #include "Soundengine/MIDI/valueShaper.h"
 
@@ -169,4 +175,78 @@ TEST(dsp_pitch_eg_curve_of_slopes_0_to_126_is_unchanged)
 	}
 }
 
+//------------------------------------------------------------------------------
+// The oscillators
+//------------------------------------------------------------------------------
+static uint32_t rngState;
+
+/** an oscillator of a voice, at about 440 Hz */
+static OscInfo oscillator(uint8_t waveform)
+{
+	OscInfo osc;
+	memset(&osc, 0, sizeof osc);
+	osc.waveform = waveform;
+	osc.freq = 440.f;
+	osc.pitchMod = 1.f;
+	osc.modNodeValue = 1.f;
+	osc.fmMod = 0.5f;
+	osc.phaseInc = 0x00A00000u;
+	rngState = 1;
+	return osc;
+}
+
+/** one block of the oscillator (with FM from a sine block if fm) into a buffer that
+ *  holds fill before; fills the block it gave */
+static void oscBlock(uint8_t waveform, int fm, int16_t fill, int16_t out[BLOCK])
+{
+	OscInfo osc = oscillator(waveform);
+	for (int i = 0; i < BLOCK; i++)
+		out[i] = fill;
+	if (fm) {
+		OscInfo modOsc = oscillator(SINE);
+		int16_t modBuf[BLOCK];
+		calcNextOscSampleBlock(&modOsc, modBuf, BLOCK, 0.8f, 0.5f);
+		calcNextOscSampleFmBlock(&osc, modBuf, out, BLOCK, 1.f, 0.5f);
+	} else {
+		calcNextOscSampleBlock(&osc, out, BLOCK, 1.f, 0.5f);
+	}
+}
+
+TEST(dsp_oscillator_output_does_not_depend_on_the_old_buffer)
+{
+	/* PWM is left out: its read past the saw table (out of scope, Q13) */
+	for (unsigned waveform = 0; waveform <= 255; waveform++) {
+		if (waveform == PWM)
+			continue;
+		for (int fm = 0; fm <= 1; fm++) {
+			int16_t a[BLOCK], b[BLOCK];
+			oscBlock((uint8_t)waveform, fm, 0x5A5A, a);
+			oscBlock((uint8_t)waveform, fm, -0x1234, b);
+			for (int i = 0; i < BLOCK; i++) {
+				if (a[i] != b[i])
+					printf("waveform %u fm %d: sample %d is %d or %d\n", waveform, fm, i, a[i], b[i]);
+				ASSERT_EQ(a[i], b[i]);
+				/* an unknown waveform is silent */
+				if (waveform >= NUM_OSC_WAVEFORMS)
+					ASSERT_EQ(a[i], 0);
+			}
+		}
+	}
+}
+
 TEST_MAIN()
+
+//------------------------------------------------------------------------------
+// Stand-ins for the functions that Oscillator.c calls
+//------------------------------------------------------------------------------
+uint32_t GetRngValue(void)
+{
+	rngState = rngState * 1664525u + 1013904223u;
+	return rngState >> 16;
+}
+
+float midiParser_calcDetune(uint8_t value)
+{
+	(void)value;
+	return 1.f;
+}
