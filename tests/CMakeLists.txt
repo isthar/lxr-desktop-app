@@ -169,7 +169,7 @@ seqc_add_test(test_usbtx     IDS usbtx EXTRA ${LXR_ROOT}/Core/Src/Soundengine/US
 # device class) and the firmware's own FX bus header. For this target the table,
 # midiParser_originalCcValues, is a pointer to a 255-byte array, which the test
 # points into a buffer with guard bytes around it.
-seqc_add_test(test_midicc    IDS midicc EXTRA ${LXR_ROOT}/Core/Src/Soundengine/MIDI/MidiParser.c)  # E4.5  CC values stay in their table
+seqc_add_test(test_midicc    IDS midicc EXTRA ${LXR_ROOT}/Core/Src/Soundengine/MIDI/MidiParser.c)  # E4.5  CC values stay in their table; E4.8 the step page's Note On
 if(TARGET test_midicc)
     target_include_directories(test_midicc BEFORE PRIVATE stubs)
     target_include_directories(test_midicc SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
@@ -194,7 +194,7 @@ endif()
 # and configuration, and an in-memory card in the test. For this target
 # currentFolder, savefileNames and mainParameters are pointers to arrays of their
 # size, which the test points into buffers with guard bytes after the arrays.
-seqc_add_test(test_presets   IDS presets EXTRA ${LXR_ROOT}/Core/Src/Preset/presetManager.c ${LXR_ROOT}/Core/Src/frontPanelParser.c)  # E4.7  project re-save, kit and project slot numbers
+seqc_add_test(test_presets   IDS presets EXTRA ${LXR_ROOT}/Core/Src/Preset/presetManager.c ${LXR_ROOT}/Core/Src/frontPanelParser.c)  # E4.7  project re-save, kit and project slot numbers; E4.8 NRPN 121
 if(TARGET test_presets)
     target_include_directories(test_presets BEFORE PRIVATE stubs/presets stubs)
     target_include_directories(test_presets SYSTEM PRIVATE

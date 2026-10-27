@@ -1488,6 +1488,10 @@ static void midiParser_noteOn(uint8_t voice, uint8_t note, uint8_t vel, uint8_t 
 		const uint8_t trackNr = menu_getActiveVoice(); //max 6 => 0x6 = 0b110
 		const uint8_t patternNr = menu_getViewedPattern();
 
+		// LICHOMAT (E4.8): only one of the 64 steps. NRPN 121 from MIDI set the active
+		// step to 0-127 in fw 1.7, and the note went into the next track or past the
+		// step array. frontParser_parseNrpn() now refuses such a step as well.
+		if(step >= NUM_STEPS) return;
 
 		seq_patternSet.seq_subStepPattern[patternNr][trackNr][step].note = note;
 		activeParameters[PAR_STEP_NOTE] = note;

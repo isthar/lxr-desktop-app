@@ -24,6 +24,7 @@
 #include "lcd.h"
 //#include <util/atomic.h>
 #include "Preset/PresetManager.h"
+#include "Soundengine/Sequencer/sequencer.h"
 //--
 
 static uint8_t frontParser_rxCnt=0;
@@ -46,6 +47,11 @@ uint8_t frontParser_nameIndex = 0;
 void frontParser_parseNrpn(uint8_t value)
 {
 	uint16_t paramNr=frontParser_nrpnNr+128;
+
+	// LICHOMAT (E4.8): the active step indexes the 64 steps of a track. fw 1.7 took
+	// 0-127 from NRPN 121, and the step page then wrote the step's note and its
+	// automation past them (the next track, or past the step array).
+	if(paramNr == PAR_ACTIVE_STEP && value >= NUM_STEPS) return;
 
 	if(paramNr < NUM_PARAMS) {
 			activeParameters[paramNr] = value;

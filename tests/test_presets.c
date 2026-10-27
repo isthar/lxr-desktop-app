@@ -5,7 +5,9 @@
  * re-save (empty_directory() in Core/Src/Preset/presetManager.c), and the
  * kit-slot and project numbers that come off the card or in by MIDI. fw 1.7
  * wrote and read past the 13-byte currentFolder, the 64 kits of mainParameters
- * and the 64 slots of savefileNames for them.
+ * and the 64 slots of savefileNames for them. Also the active step that NRPN 121
+ * sets (frontParser_parseNrpn() in Core/Src/frontPanelParser.c, task E4.8): fw 1.7
+ * took 0-127 for the 64 steps, and the step page wrote pattern data past them.
  *
  * presetManager.c and Core/Src/frontPanelParser.c are compiled as they are,
  * against the stand-in headers in tests/stubs/presets/ and tests/stubs/, the
@@ -702,6 +704,48 @@ TEST(presets_bank_select_loads_a_kit)
 		ASSERT_EQ(menu_selectedPresetNr[SAVE_TYPE_KIT], v);
 		ASSERT_EQ(activeParameters[0], v);
 		ASSERT_EQ(preset_kitDirty, 1);
+	}
+}
+
+/** a control change as the front panel parser hands it on */
+static void controlChange(uint8_t number, uint8_t value)
+{
+	frontParser_midiMsg.status = MIDI_CC;
+	frontParser_midiMsg.data1 = number;
+	frontParser_midiMsg.data2 = value;
+	frontPanel_ccHandler();
+}
+
+/** an NRPN as a controller sends it: CC 99, CC 98, CC 6 */
+static void nrpn(uint16_t number, uint8_t value)
+{
+	controlChange(NRPN_COARSE, (uint8_t)(number >> 7));
+	controlChange(NRPN_FINE, (uint8_t)(number & 0x7f));
+	controlChange(NRPN_DATA_ENTRY_COARSE, value);
+}
+
+#define NRPN_ACTIVE_STEP (PAR_ACTIVE_STEP - 128)	/* the NRPN number is the parameter - 128 */
+_Static_assert(NRPN_ACTIVE_STEP == 121, "NRPN 121 is PAR_ACTIVE_STEP");
+
+TEST(presets_nrpn_121_sets_the_active_step)
+{
+	for (int v = 0; v < NUM_STEPS; v++) {
+		reset();
+		activeParameters[PAR_ACTIVE_STEP] = 7;
+		nrpn(NRPN_ACTIVE_STEP, (uint8_t)v);
+		ASSERT_EQ(activeParameters[PAR_ACTIVE_STEP], v);
+	}
+}
+
+TEST(presets_nrpn_121_past_the_64_steps_is_ignored)
+{
+	/* the step page writes the step's note (MidiParser.c) and its automation
+	 * (menu.c, CortexParser.c) at the active step */
+	for (int v = NUM_STEPS; v < 128; v++) {
+		reset();
+		activeParameters[PAR_ACTIVE_STEP] = 7;
+		nrpn(NRPN_ACTIVE_STEP, (uint8_t)v);
+		ASSERT_EQ(activeParameters[PAR_ACTIVE_STEP], 7);
 	}
 }
 

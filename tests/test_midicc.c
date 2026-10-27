@@ -13,6 +13,11 @@
  * Select MSB. A MIDI_CC2 from an NRPN can have data1 up to 255 (the low byte of
  * the NRPN number), so its [data1 + 128] ran up to 129 bytes past the table.
  *
+ * A Note On while the step page is shown sets the note of the active step,
+ * activeParameters[PAR_ACTIVE_STEP], of the shown pattern and track (task E4.8).
+ * fw 1.7 took the step as it is, and NRPN 121 from MIDI sets it to 0-127: a step
+ * of 64-127 wrote the note into the next track, or past the step array.
+ *
  * MidiParser.c is compiled as it is, against the stand-in headers in tests/stubs/
  * and the stand-in functions below. One name is changed for this target
  * (tests/CMakeLists.txt): midiParser_originalCcValues becomes
@@ -203,6 +208,73 @@ TEST(midicc_modulation_and_automation_keep_nothing)
 	}
 }
 
+//------------------------------------------------------------------------------
+// The step page: a Note On sets the note of the active step (E4.8)
+//------------------------------------------------------------------------------
+static PatternSet patternsBefore;
+static uint8_t activeVoice;
+static uint8_t viewedPattern;
+
+/** the step page of pattern and track, with a pattern set that is all 0x5A */
+static void showStepPage(uint8_t pattern, uint8_t track, uint8_t step)
+{
+	reset();
+	memset(&seq_patternSet, 0x5A, sizeof seq_patternSet);
+	memcpy(&patternsBefore, &seq_patternSet, sizeof seq_patternSet);
+	menu_activePage = SEQ_PAGE;
+	viewedPattern = pattern;
+	activeVoice = track;
+	frontParser_activeTrack = track;
+	activeParameters[PAR_ACTIVE_STEP] = step;
+	activeParameters[PAR_STEP_NOTE] = 0x5A;
+}
+
+/** a Note On from MIDI in on channel 1, which every voice and the global channel have here */
+static void noteOn(uint8_t note)
+{
+	MidiMsg msg = { .status = NOTE_ON, .data1 = note, .data2 = 100 };
+	midiParser_parseMidiMessage(msg);
+}
+
+/** bytes of the pattern set that differ from showStepPage() */
+static long changedPatterns(void)
+{
+	const uint8_t *now = (const uint8_t *)&seq_patternSet, *before = (const uint8_t *)&patternsBefore;
+	long n = 0;
+	for (size_t i = 0; i < sizeof seq_patternSet; i++)
+		if (now[i] != before[i])
+			n++;
+	return n;
+}
+
+static const uint8_t patterns[] = { 0, 17, NUM_PATTERN - 1 };
+
+TEST(midicc_note_on_sets_the_note_of_the_active_step)
+{
+	for (unsigned p = 0; p < sizeof patterns; p++)
+		for (uint8_t track = 0; track < NUM_TRACKS; track++)
+			for (int step = 0; step < NUM_STEPS; step++) {
+				showStepPage(patterns[p], track, (uint8_t)step);
+				noteOn(36);
+				ASSERT_EQ(seq_patternSet.seq_subStepPattern[patterns[p]][track][step].note, 36);
+				ASSERT_EQ(changedPatterns(), 1);
+				ASSERT_EQ(activeParameters[PAR_STEP_NOTE], 36);
+			}
+}
+
+TEST(midicc_note_on_past_the_64_steps_changes_no_pattern)
+{
+	/* NRPN 121 sets the active step to 0-127; the panel sets it to 0-63 */
+	for (unsigned p = 0; p < sizeof patterns; p++)
+		for (uint8_t track = 0; track < NUM_TRACKS; track++)
+			for (int step = NUM_STEPS; step <= 128; step = step == 128 ? 255 : step + 1) {
+				showStepPage(patterns[p], track, (uint8_t)step);
+				noteOn(36);
+				ASSERT_EQ(changedPatterns(), 0);
+				ASSERT_EQ(activeParameters[PAR_STEP_NOTE], 0x5A);
+			}
+}
+
 TEST_MAIN()
 
 //------------------------------------------------------------------------------
@@ -247,9 +319,9 @@ void SVF_setReso(ResonantFilter *filter, float feedback) { (void)filter; (void)f
 void Snare_setPan(const uint8_t pan) { (void)pan; }
 void lfo_setFreq(Lfo *lfo, float f) { (void)lfo; (void)f; }
 void lfo_setSync(Lfo *lfo, uint8_t sync) { (void)lfo; (void)sync; }
-uint8_t menu_getActiveVoice(void) { return 0; }
+uint8_t menu_getActiveVoice(void) { return activeVoice; }
 uint8_t menu_getSubPage(void) { return 0; }
-uint8_t menu_getViewedPattern(void) { return 0; }
+uint8_t menu_getViewedPattern(void) { return viewedPattern; }
 void menu_repaint(void) {}
 void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle) { (void)subPageNr; (void)toggle; }
 void osc_recalcFreq(OscInfo *osc) { (void)osc; }
