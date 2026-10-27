@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-27 08:42",
+    "updated": "2026-10-27 09:14",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "67ec609",
+    "head": "0273b17",
     "next": "Ty: testy H1–H13, U1–U3 i X4 na pliku 55091864… (Q6), specyfikacja 1b (Q20), pytania Q9–Q19. Ja: po Twoich wynikach poprawki albo wydanie v0.1, a po akceptacji specyfikacji plan etapu 1b.",
-    "updated_at": "2026-10-27T08:42:00+01:00",
-    "now": "Wykonanie części 1 planu R1 (F1–F10) na lokalnej gałęzi emulator: przygotowanie gałęzi i sprawdzenie bazy (od 08:44)."
+    "updated_at": "2026-10-27T09:14:00+01:00",
+    "now": "Zatrzymane na Twoją prośbę (09:15). Nic nie działa. Przy wznowieniu: przegląd części 1 planu R1, potem plan części 2."
   },
   "epics": [
     {
@@ -415,13 +415,13 @@
       "id": "E5.1",
       "epic": "E5",
       "status": "w toku",
-      "title": "Specyfikacja (przyjęta 27.10, Q20) i plan R1 emulatora (w toku)",
+      "title": "Specyfikacja (przyjęta 27.10, Q20) i plan R1: część 1 gotowa (db25288), część 2 do napisania (szkic kodu w build/r1b-draft)",
       "updated": "2026-10-27"
     },
     {
       "id": "E5.2",
       "epic": "E5",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Cały firmware na wirtualnym urządzeniu: zmiany F1–F10, projekt emu/, rdzeń z planistą i karta (R1)",
       "updated": "2026-10-27"
     },
@@ -2026,6 +2026,91 @@
       "n": 255,
       "at": "2026-10-27 08:42",
       "text": "Przerwałem autora części 2 planu R1 po 2 h 40 min i ok. 0,76 mln tokenów wyjścia. Zamiast planu pisał i kompilował cały kod emu/, ok. 5600 linii, a potem musiałby go jeszcze przepisać do planu. Kod zachowany w build/r1b-draft/ (poza gitem) jako materiał do części 2. Część 1 planu (12 zadań, F1–F10) zapisuję bez osobnej recenzji, bo każde zadanie i tak dostaje lekki przegląd. Zaczynam jej wykonanie na lokalnej gałęzi emulator."
+    },
+    {
+      "n": 256,
+      "at": "2026-10-27 08:43",
+      "text": "Gałąź emulator założona w osobnym katalogu roboczym (build/wt-emulator), żeby timing-core z trackerem zostało w głównym katalogu. Sprawdzenie bazy na niej przechodzi: 32 testy, 0 ostrzeżeń, obraz 300 756 B (zadanie R1a.1). Od 08:43 jeden wykonawca robi R1a.2 (F8, listy źródeł w Core/sources.cmake) i R1a.3 (F4, appMain_boot i appMain_loopOnce)."
+    },
+    {
+      "n": 257,
+      "at": "2026-10-27 08:46",
+      "text": "F8 gotowe (bc07dd9, R1a.2): listy źródeł firmware przeniesione do Core/sources.cmake, z których skorzysta też emulator."
+    },
+    {
+      "n": 258,
+      "at": "2026-10-27 08:49",
+      "text": "F4 zatwierdzone (eaca9a7, R1a.3): start firmware i jedno przejście pętli głównej to teraz appMain_boot() i appMain_loopOnce() w Core/Src/appMain.c. Emulator wywoła je zamiast main(). Wykonawca kończy sprawdzenia, potem lekki przegląd F8 i F4."
+    },
+    {
+      "n": 259,
+      "at": "2026-10-27 08:49",
+      "text": "R1a.2 i R1a.3 zrobione (08:43–08:49, 1 wykonawca, ok. 0,1 mln tokenów). F8: bajt w bajt ten sam plik .bin i .map, także po czystej przebudowie. F4: przeniesienie kodu zgodne z listą w planie, test F4TEST przechodzi, ITCM bez zmian, RAM +8 B (391 796 B, limit 391 824 B), obraz +64 B. 32 testy, 0 ostrzeżeń. Jeden przegląd zrobię na całą część 1. Od 08:49 wykonawca robi R1a.4–R1a.6 (F1, F2, F3)."
+    },
+    {
+      "n": 260,
+      "at": "2026-10-27 08:53",
+      "text": "F1 zatwierdzone (edda220, R1a.4): węzeł modulacji bez celu (PAR_NONE) zachowuje swoją wartość i nie czyta już spod adresu 0. Nowy test na hoście test_modnode."
+    },
+    {
+      "n": 261,
+      "at": "2026-10-27 08:54",
+      "text": "F2 zatwierdzone (95adb57, R1a.5): po starcie bez karty morph też celuje w kit 0, zamiast w bajty spod adresu 0."
+    },
+    {
+      "n": 262,
+      "at": "2026-10-27 08:55",
+      "text": "F3 zatwierdzone (5fd2139, R1a.6): tekst strony czyszczenia automatyki mieści się w swoim wierszu (wcześniej strcpy pisał 1 bajt za daleko); wygląd na wyświetlaczu bez zmian."
+    },
+    {
+      "n": 263,
+      "at": "2026-10-27 08:55",
+      "text": "R1a.4–R1a.6 zrobione (08:49–08:55, 1 wykonawca, ok. 0,1 mln tokenów). Każdy test najpierw nie przechodził z zamierzonego powodu, a po poprawce przechodzi. 33 testy, 0 ostrzeżeń, DTCM + RAM 391 796 B, obraz 300 836 B. Jedno odstępstwo od planu: w F1 klamry wokół return, bo GCC firmware ostrzegał o mylącym wcięciu. Od 08:55 wykonawca robi R1a.7–R1a.9 (F5, F6, F7: każda daje bajt w bajt ten sam plik firmware)."
+    },
+    {
+      "n": 264,
+      "at": "2026-10-27 08:58",
+      "text": "F5 zatwierdzone (eccc047, R1a.7): losowanie prawdopodobieństwa kroku idzie przez SEQ_RANDOM(), które w firmware jest jak dotąd GetRngValue(), a emulator i testy podstawią swoje źródło."
+    },
+    {
+      "n": 265,
+      "at": "2026-10-27 09:00",
+      "text": "F6 zatwierdzone (883c383, R1a.8): w 9 miejscach Oscillator.c konwersja float na uint32 idzie przez f2u32_sat(). Na LXR to ta sama instrukcja co dotąd, a na hoście jest zdefiniowane w C. Nowy test test_f2u32."
+    },
+    {
+      "n": 266,
+      "at": "2026-10-27 09:02",
+      "text": "F7 zatwierdzone (eb08240, R1a.9): bufory DMA kodeka mają jawne wyrównanie do 4 bajtów. Na LXR już tak leżały, a teraz gwarantuje to kod. Nowy test test_dmabuf."
+    },
+    {
+      "n": 267,
+      "at": "2026-10-27 09:03",
+      "text": "R1a.7–R1a.9 zrobione (08:55–09:02, 1 wykonawca, ok. 0,1 mln tokenów). F5, F6 i F7 dają bajt w bajt ten sam plik firmware, a każdy test najpierw nie przechodził z zamierzonego powodu. 35 testów, 0 ostrzeżeń. Uwaga do przeglądu: pragma w test_dmabuf.c jest sprawdzona tylko kompilatorem 32-bitowym, a CI kompiluje na 64-bitowym Linuksie. Od 09:03 ostatni wykonawca części 1 robi R1a.10–R1a.12 (F9, F10, ścisła kopia rdzenia)."
+    },
+    {
+      "n": 268,
+      "at": "2026-10-27 09:05",
+      "text": "F9 zatwierdzone (a932777, R1a.10): oscylatory z tablicą fal interpolują na końcu okresu do początku własnego wiersza, zamiast czytać za tablicą. To zmienia dźwięk tylko w paśmie powyżej 14 kHz (mocny EG wysokości) i trafi na LXR dopiero po Twoim odsłuchu (U8, Q13)."
+    },
+    {
+      "n": 269,
+      "at": "2026-10-27 09:12",
+      "text": "F10 zatwierdzone (6a56e76, R1a.11): preset_morphBusy() mówi, czy trwa przejście kitu (morph); emulator użyje jej do wyboru chwili startu nagrania. Firmware jej nie wywołuje."
+    },
+    {
+      "n": 270,
+      "at": "2026-10-27 09:14",
+      "text": "R1a.12 zatwierdzone (0273b17): testy T z etapu 1 działają też na ścisłej kopii rdzenia timingu (bez -ffast-math), tak jak skompiluje go emulator."
+    },
+    {
+      "n": 271,
+      "at": "2026-10-27 09:14",
+      "text": "Część 1 planu R1 wykonana (08:43–09:13, 4 wykonawców, razem ok. 0,4 mln tokenów): F1–F10 i ścisła kopia rdzenia, 11 commitów na lokalnej gałęzi emulator, 55 testów, 0 ostrzeżeń, ITCM 13 216 B, DTCM + RAM 391 796 B, obraz 300 820 B. Jedno odstępstwo: F10 nie daje bajt w bajt tego samego .bin. Linker inaczej układa skoki do ITCM (veneery), ale wszystkie funkcje są identyczne instrukcja po instrukcji, a ponowne zlinkowanie ze starym obiektem odtwarza bazę. Sprawdzenie F10 w specyfikacji trzeba poprawić. Od 09:15 jeden lekki przegląd całej części 1."
+    },
+    {
+      "n": 272,
+      "at": "2026-10-27 09:14",
+      "text": "Zatrzymane na Twoją prośbę (09:15). Lekki przegląd części 1 przerwany na starcie. Stan: część 1 planu R1 (F1–F10 i ścisła kopia rdzenia) wykonana na lokalnej gałęzi emulator, ostatni commit 0273b17, nic nie wypchnięte (Q19). Przy wznowieniu: przegląd części 1, poprawka sprawdzenia F10 w specyfikacji, potem plan części 2 z gotowego szkicu kodu w build/r1b-draft/."
     }
   ]
 }
