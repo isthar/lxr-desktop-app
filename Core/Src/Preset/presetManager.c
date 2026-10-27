@@ -256,6 +256,8 @@ FRESULT preset_LoadTmpKit()
 		goto closeFile;
 	}
 
+	//a slot byte from the card: keep it in the 64 kits
+	if(kitNr >= NUM_KIT_SLOTS) kitNr = 0;
 	menu_selectedPresetNr[SAVE_TYPE_KIT] = kitNr;
 
 
@@ -450,6 +452,8 @@ FRESULT preset_LoadTmpPat()
 		{
 			f_read((FIL*)&SDFile,(void*)&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesRead);
 			if(bytesRead == 0) success = 0;
+			//a slot byte from the card: keep it in the 64 kits
+			if(seq_patternSet.kitNr[patternNr] >= NUM_KIT_SLOTS) seq_patternSet.kitNr[patternNr] = 0;
 
 		}
 
@@ -838,6 +842,7 @@ static void preset_writeDrumsetData(uint8_t presetNr, uint8_t isMorph)
 //----------------------------------------------------
 void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmediate)
 {
+	if(presetNr >= NUM_KIT_SLOTS) return; //no kit past the 64 slots
 	soundengine_process();
 	if(isMorph)
 	{
@@ -869,6 +874,7 @@ void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmedi
 //----------------------------------------------------
 void preset_saveDrumsetRam(uint8_t presetNr, uint8_t isMorph)
 {
+	if(presetNr >= NUM_KIT_SLOTS) return; //no kit past the 64 slots
 	if(isMorph)
 	{
 		for(uint16_t i=0;i<END_OF_SOUND_PARAMETERS;i++)
@@ -1968,6 +1974,8 @@ static uint8_t preset_readPatternData(uint8_t patternNr, uint8_t dataVersion)
 	{
 		f_read((FIL*)&SDFile,(void*)&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesRead);
 		if(bytesRead == 0) success = 0;
+		//a slot byte from the card: keep it in the 64 kits
+		if(seq_patternSet.kitNr[patternNr] >= NUM_KIT_SLOTS) seq_patternSet.kitNr[patternNr] = 0;
 
 	}
 

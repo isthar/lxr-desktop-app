@@ -366,11 +366,9 @@ FRESULT f_findfirst(DIR *dp, FILINFO *fno, const TCHAR *path, const TCHAR *patte
 //------------------------------------------------------------------------------
 // The state of each test
 //------------------------------------------------------------------------------
-static void reset(void)
+/** the firmware state, with guard bytes past the arrays; the card is kept */
+static void resetMemory(void)
 {
-	cardReset();
-	addEntry("/tmp", 1);
-
 	memset(folderMemory, GUARD_BYTE, sizeof folderMemory);
 	memset(namesMemory, GUARD_BYTE, sizeof namesMemory);
 	memset(kitsMemory, GUARD_BYTE, sizeof kitsMemory);
@@ -389,6 +387,14 @@ static void reset(void)
 	seq_activePattern = seq_pendingPattern = 0;
 	menu_playedPattern = menu_shownPattern = 0;
 	lcd_process_display_interrupt = 1;
+}
+
+/** an empty card with the /tmp folder, and resetMemory() */
+static void reset(void)
+{
+	cardReset();
+	addEntry("/tmp", 1);
+	resetMemory();
 }
 
 //------------------------------------------------------------------------------
@@ -458,6 +464,135 @@ TEST(presets_project_first_save_makes_the_folder)
 	ASSERT_EQ(folderGuardChanged(), 0);
 	ASSERT_TRUE(cardHas("/proj05/prj.nfo"));
 	ASSERT_TRUE(cardHas("/proj05/00-.snd"));
+}
+
+/* in presetManager.c, not in PresetManager.h */
+FRESULT preset_saveTmpKit(void);
+FRESULT preset_saveTmpPat(void);
+
+/** bytes of activeParameters (the sound parameters) that differ from value */
+static int activeDiffers(uint8_t value)
+{
+	int n = 0;
+	for (int i = 0; i < KIT_SIZE; i++)
+		if (activeParameters[i] != value)
+			n++;
+	return n;
+}
+
+TEST(presets_kit_ram_load_stays_in_the_64_kits)
+{
+	for (int slot = NUM_KIT_SLOTS; slot < 256; slot++) {
+		reset();
+		memset(activeParameters, 0x3C, KIT_SIZE);
+		preset_loadDrumsetRam((uint8_t)slot, 0, 0);
+		preset_loadDrumsetRam((uint8_t)slot, 0, 1);
+		ASSERT_EQ(activeDiffers(0x3C), 0);
+		preset_loadDrumsetRam((uint8_t)slot, 1, 0);
+		ASSERT_TRUE(morphParameters == mainParameters[0]);
+	}
+	/* a kit in range is loaded as before (sendDrumsetParameters() puts the
+	 * six LFO voice numbers of the kit, 17, back to 1) */
+	reset();
+	preset_loadDrumsetRam(17, 0, 0);
+	ASSERT_EQ(activeDiffers(17), 6);
+	ASSERT_EQ(activeParameters[PAR_VOICE_LFO1], 1);
+	preset_loadDrumsetRam(63, 1, 0);
+	ASSERT_TRUE(morphParameters == mainParameters[63]);
+}
+
+TEST(presets_kit_ram_save_stays_in_the_64_kits)
+{
+	for (int slot = NUM_KIT_SLOTS; slot < 256; slot++) {
+		reset();
+		memset(activeParameters, 0x3C, KIT_SIZE);
+		preset_saveDrumsetRam((uint8_t)slot, 0);
+		preset_saveDrumsetRam((uint8_t)slot, 1);
+		ASSERT_EQ(kitsGuardChanged(), 0);
+	}
+	reset();
+	memset(activeParameters, 0x3C, KIT_SIZE);
+	preset_saveDrumsetRam(9, 0);
+	ASSERT_TRUE(memcmp(mainParameters[9], activeParameters, KIT_SIZE) == 0);
+	ASSERT_EQ(mainParameters[8][0], 8);
+	ASSERT_EQ(mainParameters[10][0], 10);
+}
+
+/** tmp.snd as preset_saveTmpKit() writes it: the kit slot, then the kit */
+static void putTmpKit(uint8_t slot)
+{
+	uint8_t file[1 + KIT_SIZE];
+	file[0] = slot;
+	memset(file + 1, 0x22, KIT_SIZE);
+	cardPut("/tmp/tmp.snd", file, sizeof file);
+	ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+}
+
+TEST(presets_tmp_kit_slot_is_checked)
+{
+	for (int slot = NUM_KIT_SLOTS; slot < 256; slot++) {
+		reset();
+		putTmpKit((uint8_t)slot);
+		ASSERT_EQ(preset_LoadTmpKit(), FR_OK);
+		ASSERT_EQ(menu_selectedPresetNr[SAVE_TYPE_KIT], 0);
+		ASSERT_EQ(activeParameters[0], 0x22);	/* the kit itself is loaded */
+	}
+	reset();
+	putTmpKit(63);
+	ASSERT_EQ(preset_LoadTmpKit(), FR_OK);
+	ASSERT_EQ(menu_selectedPresetNr[SAVE_TYPE_KIT], 63);
+	/* the autosave writes the slot back as it is */
+	ASSERT_EQ(preset_saveTmpKit(), FR_OK);
+	ASSERT_EQ(card[find("/tmp/tmp.snd")].data[0], 63);
+}
+
+TEST(presets_pattern_file_kit_slot_is_checked)
+{
+	const uint8_t slots[] = { 0, 42, 63, 64, 128, 255 };
+	for (unsigned k = 0; k < sizeof slots; k++) {
+		reset();
+		ASSERT_EQ(f_mkdir("/proj00"), FR_OK);
+		ASSERT_EQ(f_chdir("/proj00"), FR_OK);
+		seq_patternSet.kitNr[5] = slots[k];
+		ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+		seq_patternSet.kitNr[5] = 7;
+		ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+		ASSERT_EQ(seq_patternSet.kitNr[5], slots[k] < NUM_KIT_SLOTS ? slots[k] : 0);
+	}
+}
+
+TEST(presets_tmp_pattern_kit_slot_is_checked)
+{
+	const uint8_t slots[] = { 0, 42, 63, 64, 128, 255 };
+	for (unsigned k = 0; k < sizeof slots; k++) {
+		reset();
+		ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+		menu_playedPattern = 3;
+		seq_patternSet.kitNr[3] = slots[k];
+		ASSERT_EQ(preset_saveTmpPat(), FR_OK);
+		seq_patternSet.kitNr[3] = 7;
+		ASSERT_EQ(preset_LoadTmpPat(), FR_OK);
+		ASSERT_EQ(seq_patternSet.kitNr[3], slots[k] < NUM_KIT_SLOTS ? slots[k] : 0);
+	}
+}
+
+TEST(presets_project_load_autoloads_a_kit_in_range)
+{
+	/* a project whose first pattern names kit 255, loaded with the kit
+	 * autoload on: the boot path of a corrupt or foreign card */
+	reset();
+	activeParameters[PAR_PATTERN_MODE] = 1;
+	seq_patternSet.kitNr[0] = 255;
+	ASSERT_EQ(preset_saveProject(0), FR_OK);
+	resetMemory();
+	memset(activeParameters, 0x3C, KIT_SIZE);
+	ASSERT_EQ(preset_loadProject(0, 0), FR_OK);
+	ASSERT_EQ(activeParameters[PAR_PATTERN_MODE], 1);
+	ASSERT_EQ(seq_patternSet.kitNr[0], 0);
+	ASSERT_EQ(menu_selectedPresetNr[SAVE_TYPE_KIT], 0);
+	ASSERT_EQ(menu_loadedPresetNr[CURRENT_KIT], 0);
+	ASSERT_EQ(kitsGuardChanged(), 0);
+	ASSERT_EQ(namesGuardChanged(), 0);
 }
 
 TEST_MAIN()
