@@ -42,6 +42,11 @@ static void modNode_setOriginalValueChanged(ModulationNode* vm, uint16_t idx)
 	if(vm->destination == idx) { //parameter is active in this modulator
 		const Parameter *p=&parameterArray[idx];
 
+		//LICHOMAT: PAR_NONE, where every node starts, has no pointer: keep the original value (F1)
+		if(!p->ptr) {
+			return;
+		}
+
 			//update orig value
 			switch(p->type)
 			{

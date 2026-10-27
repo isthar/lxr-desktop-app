@@ -249,3 +249,14 @@ if(TARGET test_dsp)
     set_source_files_properties(${DSP_STRICT_MATH_SOURCES}
         PROPERTIES COMPILE_OPTIONS "-w;-O3;-fno-sanitize=float-cast-overflow")
 endif()
+
+# The modulation nodes (stage 1b F1): test_modnode compiles the firmware's
+# modulationNode.c with the stand-in headers in stubs/. A node at destination 0,
+# PAR_NONE, has no parameter pointer, and fw 1.7 read its original value through
+# it at every CC 1.
+seqc_add_test(test_modnode   IDS modnode EXTRA ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/modulationNode.c)  # stage 1b F1  nodes at PAR_NONE keep their value
+if(TARGET test_modnode)
+    target_include_directories(test_modnode BEFORE PRIVATE stubs)
+    target_include_directories(test_modnode SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+    set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/modulationNode.c PROPERTIES COMPILE_OPTIONS -w)
+endif()
