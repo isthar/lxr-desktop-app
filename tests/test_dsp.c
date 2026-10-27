@@ -23,6 +23,11 @@
  *   waveform of 6 or more the block functions wrote nothing, so the voice played
  *   what its buffer held: a stack buffer of the mixer that the voices share in
  *   turn (the previous voice's block) or the drum voice's modulation buffer.
+ * - The wavetable oscillators at the end of a period (stage 1b F9). The last of
+ *   the 1024 samples of a row interpolates towards the row's own first sample.
+ *   fw 1.7 read table[row][1024]: the next row's first sample, which is the same
+ *   for the saw and triangle tables but not for the rect table, and past the
+ *   table for row 10.
  *
  * The firmware files are compiled as they are, against the stand-in headers in
  * tests/stubs/, at -O3 as on the device (tests/CMakeLists.txt). ResonantFilter.c
@@ -44,6 +49,7 @@
 #include "Soundengine/DSPAudio/Decay.h"
 #include "Soundengine/DSPAudio/Oscillator.h"
 #include "Soundengine/DSPAudio/ResonantFilter.h"
+#include "Soundengine/DSPAudio/wavetable.h"
 #include "Soundengine/MIDI/valueShaper.h"
 
 #define BLOCK OUTPUT_DMA_SIZE
@@ -231,6 +237,38 @@ TEST(dsp_oscillator_output_does_not_depend_on_the_old_buffer)
 				if (waveform >= NUM_OSC_WAVEFORMS)
 					ASSERT_EQ(a[i], 0);
 			}
+		}
+	}
+}
+
+//------------------------------------------------------------------------------
+// The wavetable interpolation at the end of a period (stage 1b F9)
+//------------------------------------------------------------------------------
+/** the oscillators' interpolation from a towards b, frac in 22 bits */
+static int16_t towards(int16_t a, int16_t b, uint32_t frac)
+{
+	return (int16_t)(a + (int16_t)(((int64_t)(b - a) * frac) >> 22));
+}
+
+TEST(dsp_wavetable_period_end_reads_the_row_start)
+{
+	/* The last of the 1024 samples of a row interpolates towards the first
+	 * sample of the same row. fw 1.7 read table[row][1024]: the first sample of
+	 * the next row, and past the table for row 10. */
+	const int16_t (*const tables[3])[1024] = { sawTable, triTable, recTable };
+	for (int t = 0; t < 3; t++) {
+		for (uint8_t row = 0; row < 11; row++) {
+			const int16_t expected = towards(tables[t][row][1023], tables[t][row][0], 0x200000u);
+			OscInfo osc = oscillator(SAW);
+			osc.tableOffset = row;
+			osc.phase = 0xFFE00000u;	/* sample 1023, half way to the next */
+			osc.phaseInc = 0;
+			int16_t out[1] = { 0 };
+			calcWavetableOscBlock(&osc, tables[t], out, 1, 1.f);
+			ASSERT_EQ(out[0], expected);
+			int16_t mod[1] = { 0 };		/* no FM: the same phase */
+			calcFmBlock(&osc, tables[t], mod, out, 1, 1.f);
+			ASSERT_EQ(out[0], expected);
 		}
 	}
 }

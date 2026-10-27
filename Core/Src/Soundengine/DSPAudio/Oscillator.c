@@ -173,7 +173,8 @@ IN_ITCM_RAM void calcFmBlock(OscInfo* osc, const int16_t table[][1024], int16_t*
 		//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 		//oscOut += frac*(table[osc->tableOffset][itg] - oscOut);
 		uint32_t frac = index & 0x3FFFFF;
-		oscOut = oscOut + (int16_t)(((int64_t)(table[osc->tableOffset][itg] - oscOut) * frac)   >>22);
+		//LICHOMAT: sample 1023 interpolates towards the row's own sample 0, not table[row][1024] (F9)
+		oscOut = oscOut + (int16_t)(((int64_t)(table[osc->tableOffset][itg & 1023] - oscOut) * frac)   >>22);
 
 	#else
 		oscOut = table[overtoneIndex][itg];
@@ -469,7 +470,8 @@ IN_ITCM_RAM void calcWavetableOscBlock(OscInfo* osc, const int16_t table[][1024]
 			//const float frac = (itg&0x003FFFFF)*2.38418579101562e-07f; //2.38... => 1.f/0x3fffff
 			//oscOut += frac*(table[osc->tableOffset][itg] - oscOut);
 			uint32_t frac = oscPhase & 0x3FFFFF;
-			oscOut = oscOut + (int16_t)(((int64_t)(table[osc->tableOffset][itg] - oscOut) * frac)   >>22);
+			//LICHOMAT: sample 1023 interpolates towards the row's own sample 0, not table[row][1024] (F9)
+			oscOut = oscOut + (int16_t)(((int64_t)(table[osc->tableOffset][itg & 1023] - oscOut) * frac)   >>22);
 		#else
 			oscOut = table[osc->tableOffset][itg];
 		#endif
