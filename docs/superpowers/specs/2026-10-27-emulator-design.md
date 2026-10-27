@@ -1228,7 +1228,7 @@ time from source, so the Command Line Tools are enough to build it.
   and puts the card back in only after the copy has finished. The firmware remounts it as after a card
   swap.
 - **Export project** writes one `/PROJnn` folder into a card folder the user picks, such as the owner's
-  card with his other projects. If the target already has `/PROJnn`, the app asks, moves that folder into
+  card with their other projects. If the target already has `/PROJnn`, the app asks, moves that folder into
   `Card backups` on the Mac, then writes the new one in order. It does not touch `/PROJ.IDX` or `/TMP`.
 
 ### 6.8 Clock jacks
@@ -1743,7 +1743,7 @@ G1–G10 (§8.6), in both CI jobs.
 | A6 | Slave over a hardware DIN interface, as A5 |
 | A7 | MIDI out over DIN to a synth: a pattern with notes on all 7 tracks runs for 5 minutes, with 10 stops and starts; after each stop the synth falls silent, so no note hangs |
 | A8 | The clock jacks: at 4 PPQ and 120 BPM the clock-out LED blinks 8 times per second; in sync mode 1 at 4 PPQ, 16 clicks of the clock-in button advance 16 steps; the reset switch on stops the sequencer, and off lets it run from step 1 |
-| A9 | Export to an empty folder and to a freshly formatted card; the exported card loads on the device. Export one project into a copy of the owner's card; his other projects stay |
+| A9 | Export to an empty folder and to a freshly formatted card; the exported card loads on the device. Export one project into a copy of the owner's card; their other projects stay |
 | A10 | A power cycle works, and the DAW keeps its routing to the virtual ports. A launch after a crash shows the crash note |
 | A11 | Diagnostics with the built-in output: 689.7 ± 0.1 blocks per second, and a firmware-thread load below 10 % on the owner's Mac. A project load during playback gives no output underrun |
 
@@ -1774,7 +1774,7 @@ When F1–F10 reach a firmware release (v0.2, R6), the hardware checklist gains 
   | R3 | Card fixtures and `make.sh`, G1–G10 with their expectations, `goldens.json`, `tools/emu_golden.py`, `emulator.yml`, the ping-pong regression scenario (M16, M23), the `check.sh` step | E5.4 |
   | R4 | The app: threads and rings, CoreAudio, the time map, CoreMIDI in and out, the panel, the card folder, the clock-jack LED and buttons, power and crash handling, diagnostics (M18; A1–A11) | E5.5 |
   | R5 | The app's audio options for the clock jacks (§6.8) | E5.5 |
-  | R6 | Firmware release v0.2 with F1–F10, on the owner's go-ahead after his v0.1 checks: U3–U7 in `hardware-checklist.md`, the release notes, the image from CI | a new task |
+  | R6 | Firmware release v0.2 with F1–F10, on the owner's go-ahead after their v0.1 checks: U3–U7 in `hardware-checklist.md`, the release notes, the image from CI | a new task |
 
 - **Plans.** This spec is too big for one plan, so it splits into four:
   1. R1, the virtual device, with the firmware changes;
