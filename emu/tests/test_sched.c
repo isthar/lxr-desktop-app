@@ -224,6 +224,7 @@ static int passDelayMs;
 
 static void fakePass(void)
 {
+	note("pass");
 	if (passCount < 64)
 		passTimes[passCount] = emu_now();
 	passCount++;
@@ -257,6 +258,29 @@ TEST(M3_pass_rule)
 	for (unsigned i = 0; i < 8; i++)
 		ASSERT_EQ(passTimes[i], want[i]);
 	ASSERT_EQ(emu_now(), 270000);	/* the first pass boundary at or after 250,000 */
+	/* a pass runs after every body due at its time: the SysTick at 216,000 comes
+	 * before the grid pass at 216,000 */
+	ASSERT_EQ(lgCount, 9);
+	int systickAt = -1, passAt = -1;
+	for (unsigned i = 0; i < 9; i++)
+	{
+		if (lgTime[i] == 216000 && !strcmp(lg[i], "systick"))
+			systickAt = (int)i;
+		if (lgTime[i] == 216000 && !strcmp(lg[i], "pass"))
+			passAt = (int)i;
+	}
+	ASSERT_TRUE(systickAt >= 0 && passAt >= 0);
+	ASSERT_TRUE(systickAt < passAt);
+	/* a pass due for both reasons runs once: a block request at 2,700,000, a
+	 * multiple of 54,000 and of 100,000 */
+	emu_src[EMU_SRC_BLOCK] = (emu_source_t){ 2700000u, blockOnce, blockBody, 0 };
+	emu_runUntil(2800000u);
+	unsigned atBoth = 0;
+	for (unsigned i = 0; i < passCount && i < 64u; i++)
+		atBoth += passTimes[i] == 2700000u;
+	ASSERT_EQ(atBoth, 1);
+	ASSERT_EQ(passCount, 8 + 47);	/* the grid from 324,000 to 2,808,000, nothing more */
+	ASSERT_EQ(emu_now(), 2808000);
 }
 
 TEST(M3_pass_after_slow_pass)
