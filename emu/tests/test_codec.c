@@ -166,6 +166,14 @@ TEST(M3_paced_by_ring)
 	ASSERT_EQ(emu_tier.blockHooks, 689);
 	ASSERT_NEAR(emu_tier.wall, 1.0 + (689 - 8) * 0.020, 1e-6);	/* 13.62 s of wall time in waits */
 	ASSERT_FALSE(emu_tier.dogFired);
+	/* one wait longer than the watchdog's 10 s: the device stalls for 12 s on the
+	 * next block. The bracket keeps it from counting; without it, the poll at the
+	 * wait's end would see 12 s without progress. */
+	emu_tier.blockSec = 12.0;
+	emu_tier.maxWait = 0.0;
+	emu_threadAdvance(emu_framesToCycles(64u));	/* at least one block request */
+	ASSERT_TRUE(emu_tier.maxWait >= 12.0);
+	ASSERT_FALSE(emu_tier.dogFired);
 	ASSERT_EQ(emu_watchdogPoll(&emu_tier.dog, emu_tier.wall + 1.0), 0);		/* sees the last progress */
 	ASSERT_EQ(emu_watchdogPoll(&emu_tier.dog, emu_tier.wall + 10.0), 0);	/* 9 s without progress */
 	ASSERT_EQ(emu_watchdogPoll(&emu_tier.dog, emu_tier.wall + 11.5), 1);	/* 10.5 s outside a wait: a hang */

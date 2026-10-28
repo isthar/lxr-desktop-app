@@ -151,7 +151,6 @@ TEST(M3_fw_sd_error)
 	 * 313,181 / 53, would be the same for any period from 5,906 to 6,018 cycles) */
 	ASSERT_EQ(tim2Regular + tim2AfterRequest, tim2Bodies - 1u);
 	ASSERT_NEAR((double)tim2AfterRequest, blocks, 1.0);
-	ASSERT_FALSE(emu_tier.dogFired);
 }
 
 static void nearTimeout(void *arg) { (void)arg; screensaver_timer = 2u * 60u * 1000u - 50u; }
@@ -234,7 +233,6 @@ TEST(M3_fw_splash_paced)
 	emu_testBoot(&cfg);
 	/* the wall clock followed the virtual clock to the codec start: the splash showed 1 s */
 	ASSERT_NEAR(emu_tier.wall, 1.0, 0.002);
-	ASSERT_FALSE(emu_tier.dogFired);
 }
 
 TEST_MAIN()

@@ -61,7 +61,9 @@ static inline void emu_testOnFault(void *ctx, const char *what)
  * Before the codec starts, the hook sleeps to the wall clock. After it, every
  * block request adds a block to a ring of cap blocks; while the ring is full,
  * the hook waits for the fake device, which takes one block per blockSec of wall
- * time. Each wait is bracketed for the watchdog, which the wait polls. */
+ * time. Each wait is bracketed for the watchdog, which the wait polls at its
+ * start and at its end, as the watchdog thread would: so a wait longer than the
+ * watchdog's 10 s fires it unless the bracket works (M3_paced_by_ring). */
 typedef struct emu_testTier
 {
 	double wall;			/* seconds */
@@ -81,6 +83,8 @@ static inline void emu_testTierWait(double until)
 	if (until <= emu_tier.wall)
 		return;
 	emu_waitBegin();
+	if (emu_watchdogPoll(&emu_tier.dog, emu_tier.wall))
+		emu_tier.dogFired = 1;
 	if (until - emu_tier.wall > emu_tier.maxWait)
 		emu_tier.maxWait = until - emu_tier.wall;
 	emu_tier.wall = until;
