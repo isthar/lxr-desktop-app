@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 00:21",
+    "updated": "2026-10-29 00:28",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "997cda8",
+    "head": "db30b52",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-29T00:21:00+01:00",
-    "now": "Od 00:16: jeden agent robi R1b.9–R1b.10; R1b.9 gotowe (00:21, 997cda8), teraz R1b.10 (LCD i diody, M7). Drugi agent przegląda R1b.5–R1b.8."
+    "updated_at": "2026-10-29T00:28:00+01:00",
+    "now": "Od 00:28: jeden agent robi R1b.11–R1b.12 (panel: przyciski, enkoder, gałki, suwaki M8; backend karty M9). Przegląd R1b.5–R1b.8 jeszcze trwa."
   },
   "epics": [
     {
@@ -2201,6 +2201,11 @@
       "n": 290,
       "at": "2026-10-29 00:21",
       "text": "Commit 997cda8 na gałęzi emulator (R1b.9): bramka licencyjna i skan nazw w binarkach (M21)."
+    },
+    {
+      "n": 291,
+      "at": "2026-10-29 00:28",
+      "text": "R1b.9–R1b.10 zakończone (00:28): 997cda8 (bramka licencyjna M21: 205 plików, 102 polecenia kompilacji, 2 binarki czyste) i db30b52 (LCD i diody M7; pełne odświeżenie ekranu dokładnie 6,25 ms). Emulator 61 z 61, 0 ostrzeżeń; 16 mutantów, wszystkie złapane po zaostrzeniu dwóch testów. Firmware bez zmian."
     }
   ]
 }
