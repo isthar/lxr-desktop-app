@@ -114,9 +114,10 @@ The scripts in `tools/agent/` drive the work through Claude Code workflows:
   `journal.jsonl`, and with `--git=<repo>` one line per new commit. Run it under a Monitor:
   `python3 tools/agent/wf_watch.py <workflow transcript dir> <lines already seen> <label> [finished-only] [--git=<repo>]`.
 - **`usage_estimate.py`** estimates the share of the weekly usage limit spent so far:
-  `python3 -I tools/agent/usage_estimate.py [--cal=<UTC ISO>@<percent>]`. It scales the weighted
-  cost of the local transcripts by a reading the owner gave. Since 2026-10-28 the owner allows
-  work up to 50% a week, so check it before each new agent.
+  `python3 -I tools/agent/usage_estimate.py [--reading=<UTC ISO>@<percent>]`. It calibrates the
+  weighted cost of the local transcripts by the last two readings the owner gave (add new ones to
+  its READINGS list). Since 2026-10-28 the owner allows work up to 50% a week, so check it before
+  each new agent.
 - **`release-verify.js`** checks the owner's documents of stage 1, `docs/lichomat/hardware-checklist.md`
   and `docs/lichomat/release-notes-v0.1.md`, as a Workflow script: five read-only lenses (numbers,
   procedures, coverage, notes, consistency), one skeptic per lens, one documents-only fixer and a

@@ -1,11 +1,14 @@
 """Estimate the share of the weekly usage limit spent so far, from local Claude Code transcripts:
 
-    python3 -I usage_estimate.py [--reset=<UTC ISO>] [--cal=<UTC ISO>@<percent>]
+    python3 -I usage_estimate.py [--reading=<UTC ISO>@<percent> ...]
 
 The meter itself can't be read from here. The script sums an API-price-weighted cost of every
 assistant message (deduplicated by message id) in ~/.claude/projects/**/*.jsonl since the weekly
-reset, and scales it by a calibration point: a share the owner read off the meter at a known time.
-It doesn't see usage outside Claude Code on this Mac, so keep a margin.
+reset. The owner's readings of the meter calibrate it: the cost between the last two readings
+gives the cost of one percent, and the estimate is the last reading plus the cost since it.
+The cost before the first reading does not scale the same way (2026-10-27: 19% at 161M units,
+then 15 more points for 44M), so only the latest stretch is used. Usage outside Claude Code on
+this Mac makes the estimate run high, which errs on the safe side.
 """
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
@@ -16,23 +19,25 @@ It doesn't see usage outside Claude Code on this Mac, so keep a margin.
 import glob, json, os, sys
 from datetime import datetime
 
-RESET = "2026-10-26T21:00:00Z"        # Monday 22:00 CET
-CAL = ("2026-10-27T04:50:00Z", 19.0)  # the owner saw 19% at 05:50 CET
+RESET = "2026-10-26T21:00:00Z"   # Monday 22:00 CET
+READINGS = [                     # the owner's readings of the weekly meter
+    ("2026-10-27T04:50:00Z", 19.0),
+    ("2026-10-28T23:29:00Z", 34.0),
+]
 for a in sys.argv[1:]:
-    if a.startswith("--reset="):
-        RESET = a.split("=", 1)[1]
-    elif a.startswith("--cal="):
+    if a.startswith("--reading="):
         t, p = a.split("=", 1)[1].rsplit("@", 1)
-        CAL = (t, float(p))
+        READINGS.append((t, float(p)))
     else:
         sys.exit(__doc__)
+READINGS.sort()
 
 
 def ts(s):
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
-reset, cal_t = ts(RESET), ts(CAL[0])
+reset = ts(RESET)
 TOKEN_WEIGHT = {"input_tokens": 1.0, "cache_creation_input_tokens": 1.25,
                 "cache_read_input_tokens": 0.1, "output_tokens": 5.0}
 MODEL_WEIGHT = {"sonnet": 0.6, "haiku": 0.2}  # relative to Opus; anything else counts as 1
@@ -67,10 +72,17 @@ for f in glob.glob(os.path.expanduser("~/.claude/projects/**/*.jsonl"), recursiv
             if key not in seen or c > seen[key][1]:
                 seen[key] = (t, c)
 
+
+def cost_until(t):
+    return sum(c for when, c in seen.values() if when <= t)
+
+
 total = sum(c for _, c in seen.values())
-before = sum(c for t, c in seen.values() if t <= cal_t)
+(t0, p0), (t1, p1) = READINGS[-2], READINGS[-1]
+c0, c1 = cost_until(ts(t0)), cost_until(ts(t1))
+if p1 <= p0 or c1 <= c0:
+    sys.exit("the last two readings give no rate")
+per_pct = (c1 - c0) / (p1 - p0)
 print(f"cost units since the reset: {total / 1e6:.1f}M ({len(seen)} messages)")
-if not before:
-    sys.exit("no usage before the calibration point; pass --cal")
-print(f"one percent is about {before / CAL[1] / 1e6:.2f}M cost units")
-print(f"estimated weekly share: {CAL[1] * total / before:.1f}%")
+print(f"one percent is about {per_pct / 1e6:.2f}M cost units (between the readings of {t0} and {t1})")
+print(f"estimated weekly share: {p1 + (total - c1) / per_pct:.1f}%")
