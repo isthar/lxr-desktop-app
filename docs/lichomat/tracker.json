@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-28 23:35",
+    "updated": "2026-10-28 23:36",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
     "head": "45f9a0c",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-28T23:35:00+01:00",
-    "now": "Od 23:30: jeden agent robi R1b.1–R1b.2; oba commity są (23:35). Czekam na jego raport, potem R1b.3–R1b.4 (rdzeń, libm, test dryfu)."
+    "updated_at": "2026-10-28T23:36:00+01:00",
+    "now": "Od 23:36: jeden agent robi R1b.3–R1b.4 (rdzeń urządzenia, libm z Arm Optimized Routines, harness; M1, M13, M19, M20). Zużycie ok. 23%."
   },
   "epics": [
     {
@@ -2146,6 +2146,11 @@
       "n": 279,
       "at": "2026-10-28 23:35",
       "text": "Commit 45f9a0c na gałęzi emulator (R1b.2): stuby HAL/CMSIS/USB/FatFs, overlay main.h i 70 plików firmware kompilowanych na hoście."
+    },
+    {
+      "n": 280,
+      "at": "2026-10-28 23:36",
+      "text": "R1b.1–R1b.2 zakończone (raport 23:36): emu/ buduje się z 0 ostrzeżeń, 3 z 3 testów emulatora, bramka firmware bez zmian (55 testów, DTCM+RAM 391796 B). Trzy drobne odstępstwa od planu (składnia CMake, komentarze szkicu). Koszt ok. 0,1% tygodnia."
     }
   ]
 }
