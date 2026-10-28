@@ -130,6 +130,45 @@ if(LICHOMAT_EMU_SANITIZE MATCHES "undefined")
         COMPILE_OPTIONS "-fsanitize-ignorelist=${EMU_DIR}/sanitize/pwm_ignorelist.txt")
 endif()
 
+# --- the vendored libm (spec 8.1): Arm Optimized Routines v23.01 under MIT ---------------
+file(GLOB EMU_LIBM_SOURCES CONFIGURE_DEPENDS "${EMU_DIR}/libm/*.c")
+add_library(emu_libm OBJECT ${EMU_LIBM_SOURCES})
+target_compile_options(emu_libm PRIVATE ${EMU_FP_FLAGS} ${EMU_SAN_FLAGS} -w)
+target_compile_definitions(emu_libm PRIVATE USE_GLIBC_ABI=0)	# Mach-O has no symbol aliases
+
+# --- the virtual device (spec 3.3): C11, -Wall -Wextra -Werror ---------------------------
+file(GLOB EMU_CORE_SOURCES CONFIGURE_DEPENDS "${EMU_DIR}/core/*.c")
+list(REMOVE_ITEM EMU_CORE_SOURCES "${EMU_DIR}/core/emu_hostfs.c")
+add_library(emu_core OBJECT ${EMU_CORE_SOURCES})
+target_link_libraries(emu_core PRIVATE emu_fw_headers)
+target_compile_options(emu_core PRIVATE -Wall -Wextra -Werror)
+# The card backend's POSIX half: <dirent.h> clashes with FatFs's DIR (spec 4.8), and it
+# includes no firmware header, so it gets no section define.
+add_library(emu_hostfs OBJECT "${EMU_DIR}/core/emu_hostfs.c")
+target_compile_options(emu_hostfs PRIVATE ${EMU_FP_FLAGS} ${EMU_SAN_FLAGS} -Wall -Wextra -Werror
+    "SHELL:-ivfsoverlay ${EMU_OVERLAY}")
+set(EMU_DEVICE_OBJECTS $<TARGET_OBJECTS:lxr_firmware> $<TARGET_OBJECTS:emu_core>
+    $<TARGET_OBJECTS:emu_hostfs> $<TARGET_OBJECTS:emu_libm>)
+
+# --- the test harness -------------------------------------------------------------------------
+add_library(emu_test_options INTERFACE)
+target_link_libraries(emu_test_options INTERFACE emu_fw_headers)
+target_include_directories(emu_test_options INTERFACE "${EMU_DIR}/core" "${EMU_DIR}/tests" "${LXR_ROOT}/tests")
+target_compile_options(emu_test_options INTERFACE -Wall -Wextra -Werror)
+
+# emu_add_test(<name> IDS <test>...): emu/tests/<name>.c with the whole virtual
+# device. Each TEST() is a ctest test of its own and runs in its own process: a
+# firmware test powers on once per process (spec 3.3).
+function(emu_add_test name)
+    cmake_parse_arguments(ARG "" "" "IDS" ${ARGN})
+    add_executable(${name} tests/${name}.c ${EMU_DEVICE_OBJECTS})
+    target_link_libraries(${name} PRIVATE emu_test_options)
+    foreach(id IN LISTS ARG_IDS)
+        add_test(NAME ${id} COMMAND ${name} ${id})
+        set_tests_properties(${id} PROPERTIES TIMEOUT 300)
+    endforeach()
+endfunction()
+
 # --- host tests (spec 12.1) -------------------------------------------------------
 enable_testing()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -142,3 +181,18 @@ foreach(mode real extra stale)
 endforeach()
 set_tests_properties(M22_extra PROPERTIES PASS_REGULAR_EXPRESSION "config.h \\(LXR_SOURCES_UI\\) is neither compiled nor excluded")
 set_tests_properties(M22_stale PROPERTIES PASS_REGULAR_EXPRESSION "the exclusion .*/Core/Src/lcd.c is in no list")
+
+emu_add_test(test_intrinsics IDS M1_ssat M1_qadd_qsub M1_qadd16_qsub16 M1_pkhbt M1_clz M1_smlald M1_apsr M1_f2u32)
+emu_add_test(test_random IDS M13_first_values M13_streams_apart)
+
+# M19: the firmware objects import no libm name but the vendored ones and fmod
+add_library(emu_libm_canary OBJECT tests/libm_canary.c)
+target_compile_options(emu_libm_canary PRIVATE ${EMU_FP_FLAGS} -w)
+file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/m19/firmware.txt" CONTENT "$<JOIN:$<TARGET_OBJECTS:lxr_firmware>,\n>\n")
+file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/m19/core.txt"
+    CONTENT "$<JOIN:$<TARGET_OBJECTS:emu_core>,\n>\n$<JOIN:$<TARGET_OBJECTS:emu_hostfs>,\n>\n")
+file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/m19/libm.txt" CONTENT "$<JOIN:$<TARGET_OBJECTS:emu_libm>,\n>\n")
+add_test(NAME M19 COMMAND /bin/bash "${EMU_DIR}/tests/check_libm.sh" "${CMAKE_BINARY_DIR}/m19"
+    "${CMAKE_BINARY_DIR}/m19/firmware.txt" "${CMAKE_BINARY_DIR}/m19/core.txt" "${CMAKE_BINARY_DIR}/m19/libm.txt"
+    "$<TARGET_OBJECTS:emu_libm_canary>" "$<TARGET_FILE:test_intrinsics>")
+set_tests_properties(M19 PROPERTIES PASS_REGULAR_EXPRESSION "M19: [0-9]+ imports, all on the allow-list")
