@@ -35,11 +35,15 @@ bad=$(grep -Ev "$allow" "$work/imports.txt" || true)
 if [ -n "$bad" ]; then
   echo "M19: the firmware imports names off the allow-list:"; echo "$bad"; status=1
 fi
+# nm's output goes to files first: under pipefail, grep -q leaving a pipe early
+# kills nm with SIGPIPE and fails the test although the name is there
+nm -u "$canary" > "$work/canary.txt" || exit 1
+nm -gU "$device" > "$work/device.txt" || exit 1
 for f in _expf _sinf _cosf; do
-  nm -u "$canary" | grep -qx "$f" || { echo "M19: the canary does not import $f"; status=1; }
-  nm -gU "$device" | grep -q " T $f\$" || { echo "M19: $(basename "$device") does not define $f"; status=1; }
+  grep -qx "$f" "$work/canary.txt" || { echo "M19: the canary does not import $f"; status=1; }
+  grep -q " T $f\$" "$work/device.txt" || { echo "M19: $(basename "$device") does not define $f"; status=1; }
 done
-if nm -u "$canary" | grep -q 'sincos'; then
+if grep -q 'sincos' "$work/canary.txt"; then
   echo "M19: the canary imports a sincos function"; status=1
 fi
 [ $status -eq 0 ] && echo "M19: $(wc -l < "$work/imports.txt" | tr -d ' ') imports, all on the allow-list; the canary imports the vendored names"
