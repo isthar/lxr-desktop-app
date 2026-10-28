@@ -1,0 +1,7 @@
+# UBSan's array-bounds check off in the two PWM oscillators of Oscillator.c,
+# which read sawTable[row][1024] (B13, B14 of the sanitizer sweep). They wait for
+# the owner's listening check with F9 (stage 1b spec 7, U8; tracker Q13).
+# Every other function of the file keeps the check, F9's two sites included.
+[array-bounds]
+fun:calcPwmFmBlock
+fun:calcPwmBlock

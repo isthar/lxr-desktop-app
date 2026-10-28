@@ -78,6 +78,58 @@ if(NOT EMU_FIRMWARE_NAME OR NOT EMU_FIRMWARE_VERSION)
 endif()
 message(STATUS "emulator: ${EMU_FIRMWARE_NAME} ${EMU_FIRMWARE_VERSION}")
 
+# --- flags (spec 8.2) -----------------------------------------------------------------
+set(EMU_FP_FLAGS -ffp-contract=off -fno-fast-math -fno-strict-float-cast-overflow
+    -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-expf -fno-builtin-exp -fno-builtin-logf
+    -funsigned-char -fno-strict-aliasing)
+if(LICHOMAT_EMU_FP STREQUAL "firmware-like")
+    list(APPEND EMU_FP_FLAGS -freciprocal-math)
+endif()
+# A sanitizer report is a firmware fault (spec 11), so none recovers.
+set(EMU_SAN_FLAGS "")
+if(LICHOMAT_EMU_SANITIZE)
+    set(EMU_SAN_FLAGS -fsanitize=${LICHOMAT_EMU_SANITIZE} -fno-sanitize-recover=all -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=${LICHOMAT_EMU_SANITIZE})
+endif()
+message(STATUS "emulator: ${CMAKE_BUILD_TYPE}, sanitizers '${LICHOMAT_EMU_SANITIZE}', fp ${LICHOMAT_EMU_FP}")
+
+# Core/Inc/main.h -> emu/overlay/main.h (spec 3.4)
+configure_file(overlay/main_overlay.yaml.in "${CMAKE_BINARY_DIR}/main_overlay.yaml" @ONLY)
+set(EMU_OVERLAY "${CMAKE_BINARY_DIR}/main_overlay.yaml")
+
+# What every object that includes a firmware header needs: the stubs before Core/Inc,
+# the overlay, the flags, and no TCM sections (Mach-O rejects them, spec 3.4).
+add_library(emu_fw_headers INTERFACE)
+target_include_directories(emu_fw_headers BEFORE INTERFACE "${EMU_DIR}/stubs")
+target_include_directories(emu_fw_headers SYSTEM INTERFACE
+    "${LXR_ROOT}/Core/Inc" "${LXR_ROOT}/Middlewares/Third_Party/FatFs/src")
+target_compile_options(emu_fw_headers INTERFACE ${EMU_FP_FLAGS} ${EMU_SAN_FLAGS}
+    "-Dsection(x)=unused" "SHELL:-ivfsoverlay ${EMU_OVERLAY}")
+
+# --- the firmware objects (spec 3.4, 9.2) ------------------------------------------------
+add_library(lxr_firmware OBJECT ${EMU_FW_SOURCES})
+target_link_libraries(lxr_firmware PRIVATE emu_fw_headers)
+target_compile_options(lxr_firmware PRIVATE -w)	# the firmware build is their warning gate
+if(LICHOMAT_EMU_SANITIZE)
+    # ASan and UBSan do not see reads of uninitialised locals (spec 9.2)
+    target_compile_options(lxr_firmware PRIVATE -ftrivial-auto-var-init=pattern)
+endif()
+set(EMU_SRC "${LXR_ROOT}/Core/Src")
+# the splash shows the firmware's own name and version (spec 9.1)
+set_source_files_properties("${EMU_SRC}/appMain.c" PROPERTIES COMPILE_DEFINITIONS
+    "FIRMWARE_NAME=\"${EMU_FIRMWARE_NAME}\";FIRMWARE_VERSION=\"${EMU_FIRMWARE_VERSION}\"")
+# the probability draw takes the sequencer stream (spec 4.9, firmware change F5)
+set_source_files_properties("${EMU_SRC}/Soundengine/Sequencer/sequencer.c" PROPERTIES
+    COMPILE_OPTIONS "-include;${EMU_DIR}/stubs/emu_seq_random.h")
+if(LICHOMAT_EMU_SANITIZE MATCHES "undefined")
+    # arm64 gives x % 0 the device's result, x (EuklidGenerator.c:235-236, spec 8.1, 9.2)
+    set_source_files_properties("${EMU_SRC}/Soundengine/Sequencer/EuklidGenerator.c" PROPERTIES
+        COMPILE_OPTIONS -fno-sanitize=integer-divide-by-zero)
+    # B13, B14: see sanitize/pwm_ignorelist.txt
+    set_source_files_properties("${EMU_SRC}/Soundengine/DSPAudio/Oscillator.c" PROPERTIES
+        COMPILE_OPTIONS "-fsanitize-ignorelist=${EMU_DIR}/sanitize/pwm_ignorelist.txt")
+endif()
+
 # --- host tests (spec 12.1) -------------------------------------------------------
 enable_testing()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
