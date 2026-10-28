@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 00:00",
+    "updated": "2026-10-29 00:07",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "465fa06",
+    "head": "c8e4f3d",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-29T00:00:00+01:00",
-    "now": "Od 00:00: jeden agent robi R1b.7–R1b.8 (boot z kartą i bez, długie wywołania firmware; M6, M3, M4, M5). Zużycie ok. 23%."
+    "updated_at": "2026-10-29T00:07:00+01:00",
+    "now": "Od 00:00: jeden agent robi R1b.7–R1b.8. R1b.7 gotowe (00:07, c8e4f3d); teraz R1b.8 (długie wywołania firmware i hook: M3, M4)."
   },
   "epics": [
     {
@@ -2186,6 +2186,11 @@
       "n": 287,
       "at": "2026-10-29 00:00",
       "text": "R1b.5–R1b.6 i poprawki z przeglądu zakończone (00:00): commity 5f8d378 (kanarek M19 z -O2, nagłówek licencji) i 465fa06 (drugie włączenie urządzenia niczego nie zmienia, nowy test M6_power_on_once). Emulator 42 z 42 testów, 0 ostrzeżeń; bramka firmware bez zmian. Każda poprawka ma mutant, który ją łapie."
+    },
+    {
+      "n": 288,
+      "at": "2026-10-29 00:07",
+      "text": "Commit c8e4f3d na gałęzi emulator (R1b.7): cały firmware bootuje w teście na wirtualnym urządzeniu, z kartą i bez (M6: ekran powitalny, 'SD error: No Card!', brak GLO.CFG)."
     }
   ]
 }
