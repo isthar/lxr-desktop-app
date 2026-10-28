@@ -194,6 +194,8 @@ emu_add_test(test_power IDS M6_power_on_once)
 emu_add_test(test_boot IDS M6_splash M6_no_card M6_card M6_no_globals)
 emu_add_test(test_hook IDS M3_fw_normal_pass M3_fw_kit_load M3_fw_sd_error M3_fw_screensaver M3_fw_splash_paced)
 emu_add_test(test_lcd IDS M7_commands M7_clear M7_cgram M7_row_wrap M7_arrows M7_led_latch M7_led_pulse M7_fw_repaint)
+emu_add_test(test_panel IDS M8_scan M8_gray M8_fw_encoder10 M8_fw_push_phases M8_fw_knob_normal M8_fw_knob_list
+    M8_fw_no_edit_at_boot M8_fw_faders)
 
 # M19: the firmware objects import no libm name but the vendored ones and fmod
 add_library(emu_libm_canary OBJECT tests/libm_canary.c)
