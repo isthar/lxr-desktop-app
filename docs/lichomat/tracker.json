@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-28 23:41",
+    "updated": "2026-10-28 23:43",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "b44c13f",
+    "head": "2e25ab7",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-28T23:41:00+01:00",
-    "now": "Od 23:36: jeden agent robi R1b.3–R1b.4. R1b.3 gotowe (23:41, b44c13f); teraz R1b.4 (test dryfu M20)."
+    "updated_at": "2026-10-28T23:43:00+01:00",
+    "now": "Od 23:43: jeden agent robi R1b.5–R1b.6 (zegar, scheduler, TIM2, kodek; M2–M5), drugi przegląda R1b.1–R1b.4 we własnej kopii. Zużycie ok. 23%."
   },
   "epics": [
     {
@@ -2156,6 +2156,11 @@
       "n": 281,
       "at": "2026-10-28 23:41",
       "text": "Commit b44c13f na gałęzi emulator (R1b.3): rdzeń wirtualnego urządzenia, libm z Arm Optimized Routines, testy M1, M13, M19."
+    },
+    {
+      "n": 282,
+      "at": "2026-10-28 23:43",
+      "text": "R1b.3–R1b.4 zakończone: b44c13f (rdzeń, libm AOR v23.01 z sumami SHA-256, M1, M13, M19; 14 z 14 testów) i 2e25ab7 (dryf M20: 18 fragmentów firmware pod kontrolą; 15 z 15). Bramka firmware bez zmian. Uwaga agenta: krok emulatora w tools/check.sh przychodzi w R3, jak mówi §13."
     }
   ]
 }
