@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-28 22:57",
+    "updated": "2026-10-28 23:30",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "1d951a7",
+    "head": "356d6ce",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-28T22:57:00+01:00",
-    "now": "Od 22:48: jeden agent pisze plan części 2 (wirtualne urządzenie emu/). Potem wykonanie zadań po jednym agencie. Zużycie tygodniowe ok. 22%."
+    "updated_at": "2026-10-28T23:30:00+01:00",
+    "now": "Od 23:30: wykonanie planu części 2 po jednym agencie na 2 zadania, lekki przegląd co 4 zadania. Teraz: R1b.1–R1b.2 (szkielet, listy źródeł, stuby, overlay)."
   },
   "epics": [
     {
@@ -2131,6 +2131,11 @@
       "n": 276,
       "at": "2026-10-28 22:57",
       "text": "Przegląd części 1 skończony: 0 ważnych uwag, bramka zielona (55 testów, 0 ostrzeżeń, DTCM+RAM 391796 B). Jedna uwaga do dokumentów: F9 zmienia też falę rect we wszystkich pasmach (do 2541 LSB przy 1.76–14 kHz), więc specyfikacja (§7) i test odsłuchowy U8 mówią o tym teraz. Na gałęzi emulator nowe narzędzie tools/elf_equiv.py (commit c00219c) do wymagania F10."
+    },
+    {
+      "n": 277,
+      "at": "2026-10-28 23:30",
+      "text": "Plan R1 części 2 gotowy (23:30): docs/superpowers/plans/2026-10-27-emulator-r1b-virtual-device.md, 1474 linie, 16 zadań R1b.1–R1b.16 (M1–M13, M15, M19–M22). Agent skompilował szkic: wszystkie 70 plików firmware kompiluje się na stubach i boot bez karty działa. Luki szkicu, które plan nazywa: brak flag i testów w CMake, pusty libm, błędy w schedulerze przy PRIMASK, model gałek (96 kroków zamiast 134)."
     }
   ]
 }
