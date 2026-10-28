@@ -1301,7 +1301,7 @@ time from source, so the Command Line Tools are enough to build it.
 | F6 | `Oscillator.c`: a saturating float-to-uint32 conversion at the 8 FM sites (lines 118, 141, 166, 194, 232, 516, 543 and 577) and in `freq2PhaseIncr()` (line 25). On the Cortex-M7 it is the plain cast, which `VCVT` already saturates | None | The release `.bin` is byte-identical; M1: the host version equals `FCVTZU` for edge values and NaN |
 | F7 | `AudioCodecManager.c`: `dma_buffer` and `dma_buffer2` get 4-byte alignment, and so does any other `int16_t` buffer accessed as `int32_t` that UBSan's alignment check finds | None. Both buffers already sit at 4-byte-aligned addresses (`0x20019e1c` and `0x2001a01c` in the release map) | The release `.bin` is byte-identical |
 | F8 | `Core/sources.cmake`: the module source lists leave `Core/CMakeLists.txt`, with the same files in the same order | None | The release `.bin` and `.map` are byte-identical |
-| F9 | `Oscillator.c:471` and `:175`: the interpolation reads `table[row][itg & 1023]` | It changes the sound in one case (below) | M15: no read past the tables under ASan; listening check U8 before it reaches a release |
+| F9 | `Oscillator.c:471` and `:175`: the interpolation reads `table[row][itg & 1023]` | It changes the sound in two cases (below) | M15: no read past the tables under ASan; listening check U8 before it reaches a release |
 | F10 | `presetManager.c` and `PresetManager.h`: `uint8_t preset_morphBusy(void)` returns `morph_state` (`presetManager.c:41`), which is file-static today | None. Nothing in the firmware calls it, and the build's `--gc-sections` drops it | The release image is equivalent to the base build's: the same functions and veneers, equal instruction by instruction with branch targets as symbol names, and every other section byte-identical (`tools/elf_equiv.py` on `emulator`). The `.bin` itself differs: the new function's input section shifts the ids GNU ld names its long-branch veneers after, so the 58 veneers between flash and ITCM change order (R1, `6a56e76`); M17's t0 check |
 
 **F4 in detail.**
@@ -1349,8 +1349,14 @@ timing code needs.
   reaches it: the pitch envelope multiplies the frequency by up to 33 (`DrumVoice.c:188–190`,
   `MidiParser.c:94–97`, `PITCH_AMOUNT_FACTOR` 32). So F9 changes the attack of high voices with strong
   pitch envelopes, which the owner's kits may contain.
-- The fix reads the row's own first sample. It changes the device's output only for oscillators in band
-  10, once per period, by the difference between the stray value and the right one.
+- The fix reads the row's own first sample. Below row 10 the old read took the next row's first sample
+  instead. That makes two changes to the device's output, each once per period, at the period's last
+  sample, weighted by its fraction:
+  - oscillators in band 10 change by the difference between the stray value and the right one;
+  - the rect waveform changes in every band. Its rows start with different values (rows 0–10: 0, 0, −1,
+    0, 3, 10, 38, 136, 396, 2879, 338, from `wavetable.c`), so the change is at most 7 LSB in row 4
+    (every pitch below 440 Hz) and 260, 2483 and 2541 LSB in rows 7, 8 and 9 (1.76–3.5, 3.5–7 and
+    7–14 kHz). Found in R1 (`a932777`); the other waveforms' rows all start alike.
 - On `emulator` the fix lands early, because goldens must not depend on the memory layout. It reaches a
   firmware release only after a listening check on the device (Q13, U8).
 
@@ -1757,7 +1763,7 @@ When F1–F10 reach a firmware release (v0.2, R6), the hardware checklist gains 
 | U5 | Boot without a card, then turn the morph knob: no noise and no crash (F2) |
 | U6 | The clear-automation pages show 'clear [autom. 1]' and 'clear [autom. 2]' as in v0.1 (F3) |
 | U7 | H1 and H2 again (F4) |
-| U8 | Listening check against v0.1 (F9). Voice 1 with a saw wavetable oscillator at its highest coarse pitch (note 127), pitch modulation amount 127, pitch EG decay 64 or more and pitch slope 64; then the same with the triangle. 16 hits of each sound as in v0.1; then a PWM oscillator with a nonzero PWM amount, at a low and a very high pitch (B13, B14) |
+| U8 | Listening check against v0.1 (F9). Voice 1 with a saw wavetable oscillator at its highest coarse pitch (note 127), pitch modulation amount 127, pitch EG decay 64 or more and pitch slope 64; then the same with the triangle; then a rect wavetable oscillator at coarse notes 97, 109 and 121 (about 2.2, 4.4 and 8.9 kHz, rows 7, 8 and 9) without pitch modulation. 16 hits of each sound as in v0.1; then a PWM oscillator with a nonzero PWM amount, at a low and a very high pitch (B13, B14) |
 
 ## 13. Rollout
 

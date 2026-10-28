@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-28 22:48",
+    "updated": "2026-10-28 22:57",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "86b6ecd",
+    "head": "1d951a7",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-28T22:48:00+01:00",
-    "now": "Od 22:44 przegląd części 1 (jeden agent), od 22:48 plan części 2 (jeden agent). Zużycie tygodniowe ok. 22%."
+    "updated_at": "2026-10-28T22:57:00+01:00",
+    "now": "Od 22:48: jeden agent pisze plan części 2 (wirtualne urządzenie emu/). Potem wykonanie zadań po jednym agencie. Zużycie tygodniowe ok. 22%."
   },
   "epics": [
     {
@@ -2126,6 +2126,11 @@
       "n": 275,
       "at": "2026-10-28 22:48",
       "text": "22:48: ruszył jeden agent piszący plan R1 części 2 (wirtualne urządzenie emu/, testy M1–M13, M15, M19–M22). Materiał: szkic kodu z nocy (ok. 5600 linii, nieprzejrzany). Tym razem tylko plan, bez kodu; limit ok. 1500 linii."
+    },
+    {
+      "n": 276,
+      "at": "2026-10-28 22:57",
+      "text": "Przegląd części 1 skończony: 0 ważnych uwag, bramka zielona (55 testów, 0 ostrzeżeń, DTCM+RAM 391796 B). Jedna uwaga do dokumentów: F9 zmienia też falę rect we wszystkich pasmach (do 2541 LSB przy 1.76–14 kHz), więc specyfikacja (§7) i test odsłuchowy U8 mówią o tym teraz. Na gałęzi emulator nowe narzędzie tools/elf_equiv.py (commit c00219c) do wymagania F10."
     }
   ]
 }
