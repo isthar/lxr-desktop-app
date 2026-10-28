@@ -2,7 +2,8 @@
  * emu_test.h
  *
  * Helpers for the emulator's host tests (emu/tests): a power-on of the core
- * without the firmware, a temporary card folder, and recorders for the sinks.
+ * without the firmware, a temporary card folder, a fake tier for the hook, and
+ * recorders for the sinks.
  * The test runner is tests/seqc_test.h.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
@@ -52,6 +53,69 @@ static inline void emu_testOnFault(void *ctx, const char *what)
 	(void)ctx;
 	snprintf(emu_testFault, sizeof emu_testFault, "%s", what);
 	emu_testFaults++;
+}
+
+/* A fake tier for the hook tests (spec 3.3, 6.2): a wall clock and an audio ring.
+ * Before the codec starts, the hook sleeps to the wall clock. After it, every
+ * block request adds a block to a ring of cap blocks; while the ring is full,
+ * the hook waits for the fake device, which takes one block per blockSec of wall
+ * time. Each wait is bracketed for the watchdog, which the wait polls. */
+typedef struct emu_testTier
+{
+	double wall;			/* seconds */
+	unsigned fill, cap;		/* blocks in the ring, its size */
+	double blockSec;		/* the fake device takes one block per blockSec */
+	uint64_t blockHooks, timeHooks;
+	double maxWait;			/* the longest single wait */
+	emu_watchdog_t dog;
+	int dogFired;			/* the watchdog fired during a wait */
+	void (*extra)(uint64_t now, emu_hookReason_t why);	/* a test's own work */
+} emu_testTier_t;
+
+__attribute__((unused)) static emu_testTier_t emu_tier;
+
+static inline void emu_testTierWait(double until)
+{
+	if (until <= emu_tier.wall)
+		return;
+	emu_waitBegin();
+	if (until - emu_tier.wall > emu_tier.maxWait)
+		emu_tier.maxWait = until - emu_tier.wall;
+	emu_tier.wall = until;
+	if (emu_watchdogPoll(&emu_tier.dog, emu_tier.wall))
+		emu_tier.dogFired = 1;
+	emu_waitEnd();
+}
+
+static inline void emu_testTierHook(void *ctx, uint64_t now, emu_hookReason_t why)
+{
+	(void)ctx;
+	emu_counters_t c;
+	emu_getCounters(&c);
+	if (why == EMU_HOOK_BLOCK)
+	{
+		emu_tier.blockHooks++;
+		if (++emu_tier.fill > emu_tier.cap)
+		{
+			emu_testTierWait(emu_tier.wall + emu_tier.blockSec);
+			emu_tier.fill--;
+		}
+	}
+	else
+	{
+		emu_tier.timeHooks++;
+		if (c.codecStart == EMU_NEVER)
+			emu_testTierWait((double)now / EMU_CPU_HZ);
+	}
+	if (emu_tier.extra)
+		emu_tier.extra(now, why);
+}
+
+static inline void emu_testTierReset(unsigned cap, double blockSec)
+{
+	memset(&emu_tier, 0, sizeof emu_tier);
+	emu_tier.cap = cap;
+	emu_tier.blockSec = blockSec;
 }
 
 /* a recorder of the DIN out sink */
