@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-28 23:50",
+    "updated": "2026-10-28 23:55",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "cdd4f67",
+    "head": "af6e569",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-28T23:50:00+01:00",
-    "now": "Od 23:43: jeden agent robi R1b.5–R1b.6, a po nich 2–3 poprawki z przeglądu. Zużycie ok. 23%."
+    "updated_at": "2026-10-28T23:55:00+01:00",
+    "now": "Od 23:43: jeden agent robi R1b.5–R1b.6. R1b.5 gotowe (23:55, af6e569); teraz R1b.6 (kodek, hook z udawanym zegarem), potem poprawki z przeglądu."
   },
   "epics": [
     {
@@ -2171,6 +2171,11 @@
       "n": 284,
       "at": "2026-10-28 23:50",
       "text": "Przegląd R1b.1–R1b.4 zakończony (23:50): 3 ważne uwagi. (1) M19 losowo czerwony przez SIGPIPE, już poprawione w 19852d1; (2) kanarek M19 kompilowany z -O0 w Debug, więc nic nie sprawdza; (3) blokada drugiego włączenia urządzenia nie przerywa włączenia, gdy obsługa błędu wraca. Drobna: brak nagłówka GPL w pwm_ignorelist.txt. Stałe (216 MHz, 552960/113, priorytety), M13, M20, M22, flagi i libm sprawdzone jako poprawne. Poprawki (2), (3) i nagłówek robi agent R1b.5–R1b.6 po swoich zadaniach."
+    },
+    {
+      "n": 285,
+      "at": "2026-10-28 23:55",
+      "text": "Commit af6e569 na gałęzi emulator (R1b.5): testy zegara i schedulera (M2–M4) oraz trzy poprawki schedulera wobec szkicu."
     }
   ]
 }
