@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-28 22:43",
+    "updated": "2026-10-28 22:45",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "24556a8",
+    "head": "d293a66",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-28T22:43:00+01:00",
-    "now": "Od 22:50: jeden agent przegląda część 1 planu R1 (11 commitów na gałęzi emulator). Potem poprawka F10 w specyfikacji i plan części 2."
+    "updated_at": "2026-10-28T22:45:00+01:00",
+    "now": "Od 22:44: jeden agent przegląda część 1 planu R1 (11 commitów na gałęzi emulator). Potem plan części 2."
   },
   "epics": [
     {
@@ -2116,6 +2116,11 @@
       "n": 273,
       "at": "2026-10-28 22:43",
       "text": "Wznowione na Twoją prośbę (22:41), z limitem 50% tygodniowego zużycia. Szacunek z lokalnych logów, skalowany do Twojego odczytu 19% z 05:50 27.10: teraz ok. 22%. Nowe narzędzie tools/agent/usage_estimate.py; sprawdzam je przed każdym agentem i kończę ok. 47%."
+    },
+    {
+      "n": 274,
+      "at": "2026-10-28 22:45",
+      "text": "Wymaganie F10 przeformułowane w specyfikacji (§7) i planie R1 części 1: obraz ma być równoważny z bazowym (te same funkcje instrukcja po instrukcji, pozostałe sekcje bajt w bajt), bo linker zmienia tylko kolejność 58 skoków do ITCM. Narzędzie tools/elf_equiv.py trafi na gałąź emulator po przeglądzie."
     }
   ]
 }

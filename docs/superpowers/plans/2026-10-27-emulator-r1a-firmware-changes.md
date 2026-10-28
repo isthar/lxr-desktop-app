@@ -4,7 +4,7 @@
 
 **Goal:** Land the ten firmware changes F1–F10 that the stage 1b emulator needs, each as one small commit with its own test and the acceptance of spec §7, and run stage 1's T-tests also against a strict-FP copy of the timing core (§8.2, §12.1), on the new local branch `emulator`.
 
-**Architecture:** The device firmware stays one build. Five changes keep the release `.bin` byte-identical (F5, F6, F7, F8, F10); their task compares it with `cmp` against the build of the commit before. F4 moves `main()`'s boot and loop body into `appMain.c` with a checked script, so that `git diff --color-moved` shows a move plus the listed edits. F1, F2, F3 and F9 change the binary as §7 describes. The host tests go into the existing `tests/` project (CMake, ctest, UBSan): as in E4.5–E4.9, they compile the firmware file under test against `tests/stubs/`. Part 2 (`docs/superpowers/plans/2026-10-27-emulator-r1b-virtual-device.md`) starts where this plan ends and uses the interfaces listed in its last section.
+**Architecture:** The device firmware stays one build. Four changes keep the release `.bin` byte-identical (F5, F6, F7, F8); their task compares it with `cmp` against the build of the commit before. F10 keeps it equivalent: only the linker's veneers change order, which `tools/elf_equiv.py` allows. F4 moves `main()`'s boot and loop body into `appMain.c` with a checked script, so that `git diff --color-moved` shows a move plus the listed edits. F1, F2, F3 and F9 change the binary as §7 describes. The host tests go into the existing `tests/` project (CMake, ctest, UBSan): as in E4.5–E4.9, they compile the firmware file under test against `tests/stubs/`. Part 2 (`docs/superpowers/plans/2026-10-27-emulator-r1b-virtual-device.md`) starts where this plan ends and uses the interfaces listed in its last section.
 
 **Tech Stack:** C (gnu11 for the STM32F765 with Arm GNU 14.3.rel1; C11 for the host tests with Apple clang, and with GCC on Linux in CI), CMake 3.31 and Ninja, ctest with UBSan, Python 3 for the edit and check scripts, git 2.39.
 
@@ -2031,7 +2031,7 @@ EOF
 
 ### Task R1a.11: F10, `uint8_t preset_morphBusy(void)`
 
-§7 F10, §5.3. `preset_morphBusy()` returns `morph_state` (`presetManager.c:41`, file-static), which is 1 while `preset_morph_tick()` still sends the parameters of a non-blocking morph or kit transfer. The renderer's t0 rule (M17, R2) waits until it is 0. Nothing in the firmware calls it, and `--gc-sections` drops it. Acceptance: the release `.bin` is byte-identical with the base build.
+§7 F10, §5.3. `preset_morphBusy()` returns `morph_state` (`presetManager.c:41`, file-static), which is 1 while `preset_morph_tick()` still sends the parameters of a non-blocking morph or kit transfer. The renderer's t0 rule (M17, R2) waits until it is 0. Nothing in the firmware calls it, and `--gc-sections` drops it. Acceptance: the release image is equivalent to the base build's (amended after the run, 2026-10-28): the same functions and veneers, equal instruction by instruction, and every other section byte-identical. The `.bin` is not byte-identical: the new function's input section shifts the ids GNU ld names its long-branch veneers after, so the veneers change order (`6a56e76`). Step 6 checks it with `tools/elf_equiv.py`.
 
 **Files:**
 - Modify: `Core/Src/Preset/presetManager.c:2141` (the function before `preset_morph_tick()`)
@@ -2161,9 +2161,9 @@ PASS presets_morph_busy_while_a_morph_runs
 
 - [ ] **Step 6: Compare the release image with the base build**
 
-Run: `cd /Users/tk/Code/lxr && source tools/env.sh >/dev/null && cmake --build --preset release > build/after.log 2>&1 && cmp build/base/LXR_V2_STM32F765.bin build/release/LXR_V2_STM32F765.bin && echo BIN_IDENTICAL`
+Run: `cd /Users/tk/Code/lxr && source tools/env.sh >/dev/null && cmake --build --preset release > build/after.log 2>&1 && mkdir -p build/equiv && python3 tools/elf_equiv.py arm-none-eabi-objdump arm-none-eabi-objcopy build/base/LXR_V2_STM32F765.elf build/release/LXR_V2_STM32F765.elf build/equiv | tail -1`
 
-Expected: `BIN_IDENTICAL`.
+Expected: `EQUIVALENT`. A plain `cmp` of the two `.bin` files reports a difference: the long-branch veneers change order (see the acceptance above).
 
 - [ ] **Step 7: Compile the test as CI's GCC would (strict C11)**
 
@@ -2187,8 +2187,8 @@ uint8_t preset_morphBusy(void) returns morph_state, the file-static flag
 that is 1 while preset_morph_tick() still sends the parameters of a
 non-blocking morph or kit transfer. The renderer waits for it before its
 t0 (stage 1b spec §5.3, M17). Nothing in the firmware calls it, and
---gc-sections drops it: the release .bin is byte-identical with the base
-build.
+--gc-sections drops it. The release image is equivalent to the base
+build's; only the order of the linker's long-branch veneers changes.
 
 Test: test_presets starts a morph and counts one tick per sound parameter
 until the flag is 0.
