@@ -66,7 +66,10 @@ void emu_powerOn(const emu_config_t *cfg)
 {
 	static int poweredOn;
 	if (poweredOn)
+	{
 		emu_fault("emu_powerOn: once per process; the firmware's state survives only a new process");
+		return;
+	}
 	poweredOn = 1;
 	emu_corePowerOn(cfg);
 	emu_fw.boot = appMain_boot;
