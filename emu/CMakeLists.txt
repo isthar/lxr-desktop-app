@@ -196,3 +196,6 @@ add_test(NAME M19 COMMAND /bin/bash "${EMU_DIR}/tests/check_libm.sh" "${CMAKE_BI
     "${CMAKE_BINARY_DIR}/m19/firmware.txt" "${CMAKE_BINARY_DIR}/m19/core.txt" "${CMAKE_BINARY_DIR}/m19/libm.txt"
     "$<TARGET_OBJECTS:emu_libm_canary>" "$<TARGET_FILE:test_intrinsics>")
 set_tests_properties(M19 PROPERTIES PASS_REGULAR_EXPRESSION "M19: [0-9]+ imports, all on the allow-list")
+
+# M20: the firmware text that the models re-implement or take their constants from
+add_test(NAME M20 COMMAND ${Python3_EXECUTABLE} "${EMU_DIR}/tests/drift.py" check "${LXR_ROOT}")
