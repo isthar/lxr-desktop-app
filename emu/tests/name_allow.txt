@@ -1,0 +1,4 @@
+# The C strings that may name Erica Synths, LXR or Sonic Potions (stage 1b spec
+# 10.2), one per line: the tagline and the legal notices of --version and the
+# About box. R2 adds them with lichomat-render --version. Lines starting with #
+# are comments.

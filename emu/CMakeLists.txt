@@ -211,3 +211,15 @@ set_tests_properties(M19 PROPERTIES PASS_REGULAR_EXPRESSION "M19: [0-9]+ imports
 
 # M20: the firmware text that the models re-implement or take their constants from
 add_test(NAME M20 COMMAND ${Python3_EXECUTABLE} "${EMU_DIR}/tests/drift.py" check "${LXR_ROOT}")
+
+# M21: the licence gate over what the binaries were built from, and the name scan.
+# The binaries of R1 are the test binaries that link the whole firmware. It runs
+# ninja -t deps, so ctest needs ninja on PATH (source tools/env.sh).
+set(EMU_GATE ${Python3_EXECUTABLE} "${EMU_DIR}/tests/licence_gate.py")
+add_test(NAME M21 COMMAND ${EMU_GATE} "${LXR_ROOT}" "${CMAKE_BINARY_DIR}"
+    $<TARGET_FILE:test_boot> $<TARGET_FILE:test_hook>)
+add_test(NAME M21_rejects COMMAND ${EMU_GATE} --extra Core/Inc/lcd.h --extra Core/Inc/main.h
+    "${LXR_ROOT}" "${CMAKE_BINARY_DIR}" $<TARGET_FILE:test_boot>)
+# exactly these two errors, in this order, and no other
+set_tests_properties(M21_rejects PROPERTIES PASS_REGULAR_EXPRESSION
+    "^licence gate: Core/Inc/lcd\\.h is neither GPL-3\\.0-only nor on the allow-list\nlicence gate: Core/Inc/main\\.h names SLA0044\nlicence gate: 2 errors\n$")
