@@ -2,8 +2,9 @@
  * emu_test.h
  *
  * Helpers for the emulator's host tests (emu/tests): a power-on of the core
- * without the firmware, a temporary card folder, a fake tier for the hook, and
- * recorders for the sinks.
+ * without the firmware, the boot of the whole firmware, a temporary card folder
+ * and a minimal card, a fake tier for the hook, recorders for the sinks, and the
+ * LCD as text.
  * The test runner is tests/seqc_test.h.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
@@ -21,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include "emu_internal.h"
 #include "seqc_test.h"
@@ -145,6 +147,56 @@ static inline void emu_testLcdRow(int row, char out[17])
 	emu_lcdSnapshot(&s);
 	memcpy(out, s.chars[row], 16);
 	out[16] = '\0';
+}
+
+/* the whole firmware: power-on and boot; once per process */
+static inline void emu_testBoot(emu_config_t *cfg)
+{
+	emu_powerOn(cfg);
+	emu_runUntil(1u);	/* returns at the end of the boot */
+}
+
+/* run for ms of virtual time from now, to the next pass boundary */
+static inline void emu_testRunMs(double ms)
+{
+	emu_runUntil(emu_now() + (uint64_t)(ms * (double)EMU_CYCLES_PER_MS));
+}
+
+/* 1 if row 0 or row 1 of the LCD contains text */
+static inline int emu_testLcdHas(const char *text)
+{
+	char r0[17], r1[17];
+	emu_testLcdRow(0, r0);
+	emu_testLcdRow(1, r1);
+	return strstr(r0, text) != NULL || strstr(r1, text) != NULL;
+}
+
+static inline void emu_testWrite(const char *dir, const char *name, const void *data, size_t n)
+{
+	char path[1024];
+	snprintf(path, sizeof path, "%s/%s", dir, name);
+	FILE *f = fopen(path, "wb");
+	if (!f || fwrite(data, 1, n, f) != n || fclose(f) != 0)
+	{
+		perror(path);
+		exit(2);
+	}
+}
+
+/* A minimal card (fixtures come in R3): /PROJ00/PRJ.NFO, and GLO.CFG with a tempo
+ * when bpm is not 0; byte 29, the kit autoload, is 0. */
+static inline void emu_testCard(char *dir, size_t size, uint8_t bpm)
+{
+	emu_testTempDir(dir, size);
+	char proj[1024];
+	snprintf(proj, sizeof proj, "%s/PROJ00", dir);
+	mkdir(proj, 0755);
+	emu_testWrite(proj, "PRJ.NFO", "TESTPROJ", 8);
+	if (bpm)
+	{
+		uint8_t glo[30] = { bpm };
+		emu_testWrite(proj, "GLO.CFG", glo, sizeof glo);
+	}
 }
 
 #endif /* EMU_TEST_H_ */
