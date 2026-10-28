@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-28 23:57",
+    "updated": "2026-10-29 00:00",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "38787d3",
+    "head": "465fa06",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-28T23:57:00+01:00",
-    "now": "Od 23:43: jeden agent robi R1b.5–R1b.6; oba commity są (23:57). Teraz poprawki z przeglądu R1b.1–R1b.4 (kanarek M19, blokada drugiego włączenia, nagłówek)."
+    "updated_at": "2026-10-29T00:00:00+01:00",
+    "now": "Od 00:00: jeden agent robi R1b.7–R1b.8 (boot z kartą i bez, długie wywołania firmware; M6, M3, M4, M5). Zużycie ok. 23%."
   },
   "epics": [
     {
@@ -2181,6 +2181,11 @@
       "n": 286,
       "at": "2026-10-28 23:57",
       "text": "Commit 38787d3 na gałęzi emulator (R1b.6): testy kodeka (M5) i hook warstwy z udawanym ringiem audio (M3)."
+    },
+    {
+      "n": 287,
+      "at": "2026-10-29 00:00",
+      "text": "R1b.5–R1b.6 i poprawki z przeglądu zakończone (00:00): commity 5f8d378 (kanarek M19 z -O2, nagłówek licencji) i 465fa06 (drugie włączenie urządzenia niczego nie zmienia, nowy test M6_power_on_once). Emulator 42 z 42 testów, 0 ostrzeżeń; bramka firmware bez zmian. Każda poprawka ma mutant, który ją łapie."
     }
   ]
 }
