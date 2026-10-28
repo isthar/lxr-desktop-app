@@ -193,7 +193,10 @@ emu_add_test(test_codec IDS M5_requests M5_halves M4_tim2_after_request M5_hook_
 
 # M19: the firmware objects import no libm name but the vendored ones and fmod
 add_library(emu_libm_canary OBJECT tests/libm_canary.c)
-target_compile_options(emu_libm_canary PRIVATE ${EMU_FP_FLAGS} -w)
+# -O2 in every build: clang folds expf of a constant and merges sinf and cosf
+# into ___sincosf_stret when it optimises, not at Debug's -O0, where the canary
+# would pass even without -fno-builtin-*. The last -O on the command line wins.
+target_compile_options(emu_libm_canary PRIVATE ${EMU_FP_FLAGS} -O2 -w)
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/m19/firmware.txt" CONTENT "$<JOIN:$<TARGET_OBJECTS:lxr_firmware>,\n>\n")
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/m19/core.txt"
     CONTENT "$<JOIN:$<TARGET_OBJECTS:emu_core>,\n>\n$<JOIN:$<TARGET_OBJECTS:emu_hostfs>,\n>\n")
