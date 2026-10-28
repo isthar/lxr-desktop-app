@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-28 23:32",
+    "updated": "2026-10-28 23:35",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "c4a3111",
+    "head": "45f9a0c",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-28T23:32:00+01:00",
-    "now": "Od 23:30: jeden agent robi R1b.1–R1b.2. R1b.1 gotowe (23:32, c4a3111); teraz R1b.2 (stuby, overlay, obiekty firmware)."
+    "updated_at": "2026-10-28T23:35:00+01:00",
+    "now": "Od 23:30: jeden agent robi R1b.1–R1b.2; oba commity są (23:35). Czekam na jego raport, potem R1b.3–R1b.4 (rdzeń, libm, test dryfu)."
   },
   "epics": [
     {
@@ -2141,6 +2141,11 @@
       "n": 278,
       "at": "2026-10-28 23:32",
       "text": "Commit c4a3111 na gałęzi emulator (R1b.1): projekt CMake emu/ i wspólne listy źródeł (M22)."
+    },
+    {
+      "n": 279,
+      "at": "2026-10-28 23:35",
+      "text": "Commit 45f9a0c na gałęzi emulator (R1b.2): stuby HAL/CMSIS/USB/FatFs, overlay main.h i 70 plików firmware kompilowanych na hoście."
     }
   ]
 }
