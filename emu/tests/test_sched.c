@@ -134,14 +134,23 @@ TEST(M3_primask_defers)
 	ASSERT_EQ(lgTime[1], 432000);
 }
 
-/* a TIM2 body that releases PRIMASK with SysTick, EXTI4 and a block pending */
+/* a TIM2 body that releases PRIMASK with SysTick, EXTI4, a second TIM2 and a
+ * block pending; the second TIM2 body only notes itself */
+static unsigned tim2Calls;
+
 static void tim2Releases(void)
 {
+	if (tim2Calls++)
+	{
+		note("tim2 again");
+		return;
+	}
 	note("tim2 begin");
 	const uint32_t primask = __get_PRIMASK();
 	__disable_irq();
 	emu_src[EMU_SRC_SYSTICK].pending++;
 	emu_src[EMU_SRC_EXTI4].pending++;
+	emu_src[EMU_SRC_TIM2].pending++;
 	emu_src[EMU_SRC_BLOCK].pending++;
 	__set_PRIMASK(primask);	/* the release runs only higher priorities */
 	note("tim2 end");
@@ -151,15 +160,18 @@ TEST(M3_primask_in_body)
 {
 	setup();
 	emu_fw.tim2 = tim2Releases;
+	tim2Calls = 0;
 	emu_src[EMU_SRC_BLOCK].body = fakeBlock;
 	HAL_TIM_Base_Start_IT(&htim2);
 	emu_threadAdvance(6004u);
-	ASSERT_EQ(lgCount, 5);
+	ASSERT_EQ(lgCount, 6);
 	ASSERT_EQ(strcmp(lg[0], "tim2 begin"), 0);
 	ASSERT_EQ(strcmp(lg[1], "systick"), 0);
 	ASSERT_EQ(strcmp(lg[2], "exti4"), 0);
 	ASSERT_EQ(strcmp(lg[3], "tim2 end"), 0);
-	ASSERT_EQ(strcmp(lg[4], "block"), 0);	/* priority 5 waits for the body's end */
+	/* the equal priority 4 waits for the body's end too, and goes before 5 */
+	ASSERT_EQ(strcmp(lg[4], "tim2 again"), 0);
+	ASSERT_EQ(strcmp(lg[5], "block"), 0);
 }
 
 /* inside a body time stands still */
