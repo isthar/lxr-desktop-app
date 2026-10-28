@@ -55,7 +55,10 @@ static const uint8_t emu_cinLength[16] = { 0, 0, 2, 3, 3, 1, 2, 3, 3, 3, 3, 3, 2
 static void emu_usbSchedule(void)
 {
 	uint64_t due = emu_usb.inDone;
-	if (emu_usb.count)
+	/* While an out body waits behind PRIMASK, the next transfer waits for it: its
+	 * body calls emu_usbFire() again at its end. A due time kept in the past would
+	 * stall the scheduler. */
+	if (emu_usb.count && !emu_src[EMU_SRC_OTG_OUT].pending)
 	{
 		const emu_usbTransfer_t *head = &emu_usb.in[emu_usb.head];
 		uint64_t t = head->t;

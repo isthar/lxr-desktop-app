@@ -386,6 +386,16 @@ static int emu_step(uint64_t limit)
 			else
 				emu_src[s].due = EMU_NEVER;	/* a source without a model never fires */
 		}
+	/* a due time left at t or before would loop here, or turn the clock back at
+	 * the next step (spec 3.1: time passes only forward) */
+	for (int s = 0; s < EMU_NUM_SRC; s++)
+		if (emu_src[s].due <= t)
+		{
+			char what[80];
+			snprintf(what, sizeof what, "scheduler: source %d did not move its due time past %llu", s, (unsigned long long)t);
+			emu_fault(what);
+			emu_src[s].due = EMU_NEVER;
+		}
 	emu_dispatch();
 	if (emu_blockSeen)
 	{
@@ -472,6 +482,11 @@ static void emu_pass(void)
 
 void emu_runUntil(uint64_t t)
 {
+	if (emu_hookDepth || emu_bodyDepth || emu_passing)
+	{
+		emu_fault("emu_runUntil/emu_directCall from the tier hook, a body or a pass");
+		return;
+	}
 	if (!emu_hasBooted)
 	{
 		emu_boot();
@@ -486,6 +501,10 @@ void emu_runUntil(uint64_t t)
 			emu_pass();
 			continue;
 		}
+		/* a direct call may have run past the grid's next pass: it is overdue and
+		 * runs now, instead of turning the clock back */
+		if (emu_nextGridPass < emu_clock)
+			emu_nextGridPass = emu_clock;
 		/* to the next pass: the grid, or a block request outside a pass */
 		while (!emu_passRequested && emu_step(emu_nextGridPass))
 			;
@@ -500,6 +519,11 @@ void emu_runUntil(uint64_t t)
 
 void emu_directCall(void (*fn)(void *arg), void *arg)
 {
+	if (emu_hookDepth || emu_bodyDepth || emu_passing)
+	{
+		emu_fault("emu_runUntil/emu_directCall from the tier hook, a body or a pass");
+		return;
+	}
 	emu_segmentBegin();
 	emu_trailPush(EMU_TRAIL_DIRECT, 0);
 	fn(arg);

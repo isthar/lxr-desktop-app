@@ -184,6 +184,11 @@ set_tests_properties(M22_stale PROPERTIES PASS_REGULAR_EXPRESSION "the exclusion
 
 emu_add_test(test_intrinsics IDS M1_ssat M1_qadd_qsub M1_qadd16_qsub16 M1_pkhbt M1_clz M1_smlald M1_apsr M1_f2u32)
 emu_add_test(test_random IDS M13_first_values M13_streams_apart)
+emu_add_test(test_clock IDS M2_frames M2_cyccnt_and_tick M2_seqp_now_wraps)
+emu_add_test(test_sched IDS M3_periods M3_order_at_equal_times M3_primask_defers M3_primask_in_body
+    M3_time_only_in_thread M3_tick_rule M3_pass_rule M3_pass_after_slow_pass M3_hook M3_watchdog
+    M3_nvic M3_trail M3_spin_under_primask M3_direct_call_grid M3_spin_wait M3_no_run_from_a_body
+    M4_tim2_counter M4_tim2_stop)
 
 # M19: the firmware objects import no libm name but the vendored ones and fmod
 add_library(emu_libm_canary OBJECT tests/libm_canary.c)
