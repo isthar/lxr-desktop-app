@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 00:16",
+    "updated": "2026-10-29 00:21",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "d8e48b6",
+    "head": "997cda8",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-29T00:16:00+01:00",
-    "now": "Od 00:16: jeden agent robi R1b.9–R1b.10 (bramka licencyjna M21, LCD i diody M7), drugi przegląda R1b.5–R1b.8 we własnej kopii."
+    "updated_at": "2026-10-29T00:21:00+01:00",
+    "now": "Od 00:16: jeden agent robi R1b.9–R1b.10; R1b.9 gotowe (00:21, 997cda8), teraz R1b.10 (LCD i diody, M7). Drugi agent przegląda R1b.5–R1b.8."
   },
   "epics": [
     {
@@ -2196,6 +2196,11 @@
       "n": 289,
       "at": "2026-10-29 00:16",
       "text": "R1b.7–R1b.8 zakończone (00:16): c8e4f3d (boot w teście, M6) i d8e48b6 (długie wywołania firmware, M3, M4). Emulator 51 z 51 testów, 0 ostrzeżeń, 10 mutantów złapanych, firmware bez zmian i bez znalezionych błędów. Specyfikacja §3.3 poprawiona: wybudzenie wygaszacza trwa 0–500 ms zależnie od chwili naciśnięcia (361–465 ms to były tylko próbki), więc test sprawdza dokładny koniec jednego wybudzenia."
+    },
+    {
+      "n": 290,
+      "at": "2026-10-29 00:21",
+      "text": "Commit 997cda8 na gałęzi emulator (R1b.9): bramka licencyjna i skan nazw w binarkach (M21)."
     }
   ]
 }
