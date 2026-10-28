@@ -10,7 +10,8 @@ Read this first when picking the project up in a new session.
 | Tracker page (claude.ai artifact) | https://claude.ai/artifact/MPCLCyFzqsp3ViNGuwgTZt |
 | Stage 1 spec | `docs/superpowers/specs/2026-10-23-timing-core-design.md` |
 | Stage 1 plan | `docs/superpowers/plans/2026-10-23-timing-core.md` |
-| Stage 1b spec (emulator; a draft until the owner accepts it, Q20) | `docs/superpowers/specs/2026-10-27-emulator-design.md` |
+| Stage 1b spec (emulator; accepted on 2026-10-27, Q20) | `docs/superpowers/specs/2026-10-27-emulator-design.md` |
+| Stage 1b plan, R1 part 1 (F1–F10; done on the local branch `emulator`, worktree `build/wt-emulator`) | `docs/superpowers/plans/2026-10-27-emulator-r1a-firmware-changes.md` |
 | The night's scratch work of 2026-10-27 (the stage 1b host probe, the sweep's harnesses) | `build/night-2026-10-27/` (git-ignored, on the owner's Mac; its README lists the contents) |
 | Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N21; they win over the spec) |
 | Reports per milestone | `docs/lichomat/reports/` |
@@ -112,6 +113,10 @@ The scripts in `tools/agent/` drive the work through Claude Code workflows:
 - **`wf_watch.py`** prints one line per agent that starts or finishes in a workflow's
   `journal.jsonl`, and with `--git=<repo>` one line per new commit. Run it under a Monitor:
   `python3 tools/agent/wf_watch.py <workflow transcript dir> <lines already seen> <label> [finished-only] [--git=<repo>]`.
+- **`usage_estimate.py`** estimates the share of the weekly usage limit spent so far:
+  `python3 -I tools/agent/usage_estimate.py [--cal=<UTC ISO>@<percent>]`. It scales the weighted
+  cost of the local transcripts by a reading the owner gave. Since 2026-10-28 the owner allows
+  work up to 50% a week, so check it before each new agent.
 - **`release-verify.js`** checks the owner's documents of stage 1, `docs/lichomat/hardware-checklist.md`
   and `docs/lichomat/release-notes-v0.1.md`, as a Workflow script: five read-only lenses (numbers,
   procedures, coverage, notes, consistency), one skeptic per lens, one documents-only fixer and a
