@@ -212,7 +212,9 @@ Every call happens on the firmware thread.
 - `menu_showSdError()`, which starts TIM2 (`menu.c:1994`) and waits in `HAL_Delay(2000)` (`:2039`): 1,378
   blocks rendered by TIM2 inside one call;
 - the screensaver's wake loop, `while (screensaver_process() != 0) soundengine_process();`
-  (`screensaver.c:75`), inside a pass, for 361–465 ms (measured).
+  (`screensaver.c:75`), inside a pass, until the screensaver's current 500 ms step
+  (`SCREENSAVER_PROCESS_SPEED`, `screensaver.c:36`) ends: from 0 to 500 ms, depending on when the button
+  is pressed (361–465 ms in the probe's presses; R1's test pins one press exactly).
 
 A single-threaded core cannot return from 'run until t' in the middle of such a call. So the scheduler
 calls the tier hook on the firmware thread whenever `HAL_Delay()` or `HAL_GetTick()` advance the clock,
