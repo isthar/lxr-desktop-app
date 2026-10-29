@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 05:51",
+    "updated": "2026-10-29 06:21",
     "phase": "Etap 1 czeka na testy na sprzęcie; etap 1b: R2 (renderer) w toku",
-    "focus": "R2.5–R2.6 renderera i lekki przegląd R2.1–R2.4 z poprawkami F11, F12, F6b.",
+    "focus": "Poprawki 9 uwag z przeglądu renderera; R2 (E5.3) prawie gotowe.",
     "branch": "timing-core",
-    "head": "c253669",
-    "next": "Poprawki z przeglądu, potem R3.1–R3.2 (karty testowe, emu_golden.py, G1). Limit ok. 47% tygodnia.",
-    "updated_at": "2026-10-29T05:51:00+01:00",
-    "now": "Od 05:51: agent robi R2.5–R2.6, recenzent przegląda R2.1–R2.4 i poprawki F11, F12, F6b."
+    "head": "a8ea8c6",
+    "next": "Po poprawkach koniec sesji przy ok. 47% tygodnia: dokumentacja wznowienia. Następna sesja: R3.1–R3.6 (karty testowe, goldens G1–G10, CI emulatora z ASan).",
+    "updated_at": "2026-10-29T06:21:00+01:00",
+    "now": "Od 06:21: agent poprawia 9 uwag z przeglądu R2.1–R2.4 (zużycie ok. 44.4%)."
   },
   "epics": [
     {
@@ -429,7 +429,7 @@
       "id": "E5.3",
       "epic": "E5",
       "status": "w toku",
-      "title": "Renderer WAV lichomat-render (R2)",
+      "title": "Renderer WAV lichomat-render (R2): R2.1–R2.6 zrobione, 133 testy emulatora; poprawki po przeglądzie w toku",
       "updated": "2026-10-29"
     },
     {
@@ -2310,6 +2310,21 @@
       "n": 305,
       "at": "2026-10-29 05:51",
       "text": "Od 05:51 równolegle: lekki przegląd R2.1–R2.4 i poprawek F11, F12, F6b (w osobnej kopii roboczej, tylko odczyt) oraz agent wykonawczy R2.5–R2.6 (preludium: --pattern, --song, --bpm, --param, --bars; zdarzenia zapisu, błędy, watchdog). Zużycie ok. 42.3%."
+    },
+    {
+      "n": 306,
+      "at": "2026-10-29 06:10",
+      "text": "Przegląd R2.1–R2.4 i poprawek gotowy (06:10): 1 ważna uwaga i 8 drobnych. Ważna: linia din lub usb po linii din-clock lub usb-clock trafiała do urządzenia dopiero po całym biegu zegara (nuta z 300 ms grała w 1180 ms), bo generator zegara wstawiał swoje impulsy do kolejki FIFO przed nią; testy miały nutę zawsze przed zegarem. Drobne: ostrzeżenie o dwóch plikach na slot podaje ścieżkę kopii zamiast karty, rozmiary WAV powyżej 4 GiB, generator zegara biegnie za koniec renderu, limity listy direct (256) i ostrzeżeń (32), ostrzeżenia gubione przy kodach 1, 2 i 5, commit w --version z chwili konfiguracji, 2 luki w testach (rozmiar RIFF, czas linii +). F11, F12, F6b i poprawka -j8 bez uwag. Poprawki zrobi agent R2.5–R2.6 po swoich zadaniach."
+    },
+    {
+      "n": 307,
+      "at": "2026-10-29 06:21",
+      "text": "R2.5–R2.6 zakończone: 3e0edd3 (preludium: --pattern, --song, --bpm, --param, --bars, ścieżka edycji menu; --version wymienia F1–F12 i F6b), a8ea8c6 (zdarzenia zapisu, obsługa awarii z kodem 3, watchdog z kodem 4, M20). Emulator 133 z 133 w Debug i Release, szeregowo i -j8; firmware 55 z 55, pamięć bez zmian. Odstępstwo od planu przyjęte: zapis projektu najpierw zapisuje edytowany kit do slotu ze strony zapisu (tak działa fw 1.7, presetManager.c:2319), więc test M17_save sprawdza teraz to. f30068b: specyfikacja i plan. Obie gałęzie wypchnięte."
+    },
+    {
+      "n": 308,
+      "at": "2026-10-29 06:21",
+      "text": "Od 06:21: ten sam agent poprawia 9 uwag z przeglądu (najpierw ważną: kolejność nut i zegara w skryptach zdarzeń), każdą z testem, który najpierw pada."
     }
   ]
 }
