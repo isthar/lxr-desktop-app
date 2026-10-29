@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 01:13",
+    "updated": "2026-10-29 01:34",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "d7d6e38",
+    "head": "d6fe7fa",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-29T01:13:00+01:00",
-    "now": "Od 01:13: jeden agent robi ostatnie zadania R1b.15–R1b.16 (gniazda wyjść i synchronizacji M8/M12, zmiany F w emulatorze M15, kontrola końcowa z buildem Release). Potem jeden lekki przegląd R1b.9–R1b.16 i podsumowanie. Zużycie ok. 36%."
+    "updated_at": "2026-10-29T01:34:00+01:00",
+    "now": "Od 01:34: jeden agent robi lekki przegląd końcowy R1b.9–R1b.16 we własnej kopii. Potem ewentualne poprawki, raport R1 i podsumowanie na czacie. Zużycie ok. 37%."
   },
   "epics": [
     {
@@ -755,6 +755,13 @@
       "status": "otwarte",
       "question": "Emulator znalazł błąd w firmware 1.7 (§7, kolejne znaleziska sanitizera): gdy gałka nie stoi na 0° przy włączeniu, pierwsze adc_checkPots() bootu (appMain.c:178) biegnie, zanim morphParameters jest ustawione, i presetManager.c:2263 czyta przez wskaźnik NULL. Na urządzeniu nieszkodliwe (czyta ITCM, a morph 0 odrzuca wartość), na hoście UBSan przerywa. Czy dodać poprawkę F11: ustawić cel morfingu przed tym pierwszym wywołaniem, jak F2, w v0.2?",
       "assumption": "Na razie bez zmian w firmware: test emulatora sam ustawia morphParameters. Jeśli się zgodzisz, F11 to jeden mały commit na gałęzi emulator, z testem, i trafia do v0.2 razem z F1–F10.",
+      "answer": ""
+    },
+    {
+      "id": "Q22",
+      "status": "otwarte",
+      "question": "Drugie znalezisko sanitizera w firmware 1.7 (§7): freq2PhaseIncr1024() i freq2PhaseIncr32767() (Oscillator.c:47–50) zamieniają float na uint32 bez nasycenia. Przy wysokiej wysokości z mocną modulacją pitch (przepis z U8: ok. 414 kHz) wartość przekracza 2^32 i UBSan przerywa; od częstotliwości REAL_FS (44 140 Hz) w górę. Na urządzeniu VCVT nasyca, więc dźwięk się nie zmienia. Czy rozszerzyć F6 (f2u32_sat) na te dwie funkcje?",
+      "assumption": "Propozycja: tak, jako osobny mały commit F6b na gałęzi emulator, z testem; obraz firmware powinien zostać bajt w bajt taki sam jak przy F6. Do Twojej decyzji test M15_f9 używa modulacji 32 (szczyt 38 kHz, nadal pasmo 10), a test U8 i przebieg CI z ASan trafią na to znalezisko.",
       "answer": ""
     }
   ],
@@ -2228,6 +2235,11 @@
       "n": 294,
       "at": "2026-10-29 01:13",
       "text": "R1b.13–R1b.14 zakończone (01:13): b1462f4 (MIDI DIN M10, z nowym testem pętli tych samych chwil, wcześniej niepokrytej) i d7d6e38 (USB M11 z poprawką okna 1 ms). Emulator 94 z 94, 0 ostrzeżeń; firmware bez zmian. Plan miał błędne oczekiwania w M11_out (pierwszy pakiet wychodzi od razu), poprawione w teście według firmware."
+    },
+    {
+      "n": 295,
+      "at": "2026-10-29 01:34",
+      "text": "R1b.15–R1b.16 zakończone (01:34): 21aeee8 (gniazda wyjść i synchronizacji M8/M12) i d6fe7fa (F1, F2, F3, F9 w emulatorze, M15). Cały plan R1 części 2 wykonany: 103 z 103 testów emulatora w Debug (UBSan) i w Release, 0 ostrzeżeń; bramka firmware bez zmian (55 testów, DTCM+RAM 391796 B, 9 PASS w fw_checks). 26 commitów na gałęzi emulator od 0273b17. Nowe pytanie Q22: drugie znalezisko sanitizera w Oscillator.c (konwersja float→uint32 bez nasycenia przy bardzo wysokiej wysokości dźwięku)."
     }
   ]
 }
