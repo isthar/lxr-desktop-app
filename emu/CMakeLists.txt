@@ -187,7 +187,7 @@ emu_add_test(test_random IDS M13_first_values M13_streams_apart)
 emu_add_test(test_clock IDS M2_frames M2_cyccnt_and_tick M2_seqp_now_wraps)
 emu_add_test(test_sched IDS M3_periods M3_order_at_equal_times M3_primask_defers M3_primask_in_body
     M3_time_only_in_thread M3_tick_rule M3_pass_rule M3_pass_after_slow_pass M3_hook M3_block_hook_at_release M3_watchdog
-    M3_nvic M3_trail M3_spin_under_primask M3_direct_call_grid M3_spin_wait M3_no_run_from_a_body
+    M3_nvic M3_trail M3_spin_under_primask M3_direct_call_grid M3_spin_wait M3_no_run_from_a_body M3_no_run_from_a_pass
     M4_tim2_counter M4_tim2_stop)
 emu_add_test(test_codec IDS M5_requests M5_halves M4_tim2_after_request M5_hook_per_block M3_paced_by_ring)
 emu_add_test(test_power IDS M6_power_on_once)

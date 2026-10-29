@@ -565,6 +565,40 @@ TEST(M3_no_run_from_a_body)
 	ASSERT_EQ(emu_testFaults, 2);
 }
 
+/* the first pass calls emu_runUntil(), the second emu_directCall(); each notes
+ * the faults after its call */
+static unsigned reentryPasses, faultsAfterPass[2];
+
+static void passReenters(void)
+{
+	const unsigned k = reentryPasses++;
+	if (k == 0)
+		emu_runUntil(emu_now() + 100u);
+	else if (k == 1)
+		emu_directCall(nothing, NULL);
+	if (k < 2)
+		faultsAfterPass[k] = emu_testFaults;
+}
+
+/* and from a pass (spec 3.3): the guard refuses each, once */
+TEST(M3_no_run_from_a_pass)
+{
+	emu_config_t cfg;
+	emu_configDefaults(&cfg);
+	cfg.fault = emu_testOnFault;
+	emu_corePowerOn(&cfg);
+	emu_fw.pass = passReenters;
+	emu_testFaults = 0;
+	reentryPasses = 0;
+	emu_runUntil(1u);		/* the first pass at 0, the grid pass at 54,000 */
+	ASSERT_EQ(reentryPasses, 2);
+	ASSERT_EQ(faultsAfterPass[0], 1);
+	ASSERT_EQ(faultsAfterPass[1], 2);
+	ASSERT_EQ(emu_testFaults, 2);
+	ASSERT_TRUE(strstr(emu_testFault, "emu_runUntil/emu_directCall") != NULL);
+	ASSERT_EQ(emu_now(), 54000);
+}
+
 /* M4: TIM2's counter */
 TEST(M4_tim2_counter)
 {
