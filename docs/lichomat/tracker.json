@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 06:45",
-    "phase": "Etap 1 czeka na testy na sprzęcie; etap 1b: R2 (renderer) zrobione, następne R3",
-    "focus": "Krok R2 emulatora zrobiony (M9). Następne R3: nagrania wzorcowe i CI emulatora.",
+    "updated": "2026-10-29 07:09",
+    "phase": "Etap 1 czeka na testy na sprzęcie; następny etap 2 (groove), reszta emulatora na koniec",
+    "focus": "Etap 2: specyfikacja ficzerów groove.",
     "branch": "timing-core",
     "head": "1099778",
-    "next": "Ja: R3.1–R3.6 w następnej sesji. Ty: tylko testy v0.1 na LXR-02 (Q6).",
-    "updated_at": "2026-10-29T06:45:00+01:00",
-    "now": "Sesja zakończona o 06:45 (zużycie ok. 45.5%). Nic nie działa. Przy wznowieniu: R3.1–R3.6. Czeka tylko Q6 (Twoje testy na LXR-02)."
+    "next": "Ja: specyfikacja etapu 2. Ty: testy v0.1 na LXR-02 (Q6).",
+    "updated_at": "2026-10-29T07:09:00+01:00",
+    "now": "Od 07:09: nic nie działa; czekam na Twoją odpowiedź, jak robimy specyfikację etapu 2."
   },
   "epics": [
     {
@@ -436,15 +436,15 @@
       "id": "E5.4",
       "epic": "E5",
       "status": "do zrobienia",
-      "title": "Testy porównujące nagrania (goldens) i CI emulatora (R3)",
+      "title": "Testy porównujące nagrania (goldens) i CI emulatora (R3): odłożone na koniec, po etapie 2 (Twoja decyzja z 29.10)",
       "updated": "2026-10-29"
     },
     {
       "id": "E5.5",
       "epic": "E5",
       "status": "do zrobienia",
-      "title": "Aplikacja LICHOMAT Emu: CoreAudio, CoreMIDI, wirtualny panel (R4, R5)",
-      "updated": "2026-10-27"
+      "title": "Aplikacja LICHOMAT Emu: CoreAudio, CoreMIDI, wirtualny panel (R4, R5): odłożona na koniec, po etapie 2 (Twoja decyzja z 29.10)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E5.6",
@@ -2341,6 +2341,11 @@
       "n": 310,
       "at": "2026-10-29 06:45",
       "text": "Sesja zakończona o 06:45 przy ok. 45.5% tygodnia (limit 50%, zostawiam zapas). Nic nie działa. Przy wznowieniu: R3.1–R3.6 (karty testowe, goldens G1–G10, CI emulatora z ASan), jeden wykonawca na dwa zadania, lekki przegląd po R3.4."
+    },
+    {
+      "n": 311,
+      "at": "2026-10-29 07:09",
+      "text": "Twoja decyzja (07:09): reszta emulatora (R3 nagrania wzorcowe i CI, R4–R5 aplikacja) idzie na koniec. Następny jest etap 2 (ficzery groove); do sprawdzania zmian brzmienia używam gotowego renderera lichomat-render."
     }
   ]
 }
