@@ -245,6 +245,32 @@ void rfw_bpm(void *value)
 	rfw_edit(&e);
 }
 
+/* --- the save events (spec 5.3, 5.4) --------------------------------------------- */
+
+void rfw_saveKit(void *arg)
+{
+	preset_saveDrumsetRam(*(const uint8_t *)arg, 0);
+}
+
+void rfw_savePattern(void *arg)
+{
+	(void)preset_savePatternRAM(*(const uint8_t *)arg);
+}
+
+/* menu.c, the save page's case SAVE_TYPE_PROJECT (M20 hashes the original) */
+void rfw_saveProject(void *arg)
+{
+	const uint8_t n = *(const uint8_t *)arg;
+	FRESULT res;
+	if (!seq_isRunning())
+		HAL_TIM_Base_Stop(&htim2);
+	res = preset_saveProject(n);
+	if (!seq_isRunning())
+		HAL_TIM_Base_Start_IT(&htim2);
+	if (res != FR_OK)
+		menu_showSdError(res);
+}
+
 void rfw_selected(void *out)
 {
 	render_selected_t *s = out;

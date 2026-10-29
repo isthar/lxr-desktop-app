@@ -28,7 +28,8 @@ typedef enum
 	RS_RESET, RS_CARD, RS_JACKS,
 	/* the direct events: each runs at the first pass boundary at or after its time */
 	RS_MARK,
-	RS_PARAM	/**< the menu's edit path, as --param (spec 5.3) */
+	RS_PARAM,	/**< the menu's edit path, as --param (spec 5.3) */
+	RS_SAVE_KIT, RS_SAVE_PATTERN, RS_SAVE_PROJECT	/**< the save page's saves (spec 5.3, 5.4) */
 } render_eventKind_t;
 
 typedef struct render_event
@@ -37,7 +38,7 @@ typedef struct render_event
 	unsigned line;
 	render_eventKind_t kind;
 	int a, b;			/**< button, ms, detents, knob, degrees, fader, on/off, PPQ, jack mask;
-						 * param: the parameter number and the value */
+						 * param: the parameter number and the value; save-*: the slot */
 	double level;		/**< fader */
 	uint64_t mbpm;		/**< clocks: BPM x 1000; 0 is off */
 	uint64_t buffer;	/**< usb-clock: the buffer in cycles; 0 is none */

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Host tests of lichomat-render (stage 1b spec 5, 12.1 M14, M17, M23).
 
-    render_test.py --render R --render-test RT --root ROOT --work DIR CASE
+    render_test.py --render R --render-test RT --root ROOT --work DIR [--sanitized 0|1] CASE
 
 Each CASE is a function below; it runs in DIR/CASE, emptied first, and prints
-PASS CASE (exit 0) or the failed check (exit 1). Its renders make their card
+PASS CASE (exit 0) or the failed check (exit 1). --sanitized 1 says that the
+build has UBSan, so that lichomat-render-test --test-fault ubsan reports. Its
+renders make their card
 copies in a TMPDIR of its own, $TMPDIR/lichomat-case-CASE, so that a check for
 copies left behind sees this case's copies only, also when ctest runs cases in
 parallel. The folder is removed at the end when it is empty; a case that leaves
@@ -17,7 +19,7 @@ Licensed under the GNU General Public License version 3, with the additional
 permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
 the repository.
 """
-import argparse, array, fractions, hashlib, json, math, os, re, shutil, struct, subprocess, sys, time, wave
+import argparse, array, fractions, glob, hashlib, json, math, os, re, shutil, struct, subprocess, sys, time, wave
 
 CASES = {}
 def case(fn):
@@ -34,6 +36,7 @@ def check(cond, what):
 class T:
     def __init__(self, a):
         self.r, self.rt, self.root = a.render, a.render_test, a.root
+        self.sanitized = a.sanitized == '1'
         self.work = os.path.join(a.work, a.case)
         shutil.rmtree(self.work, ignore_errors=True)
         os.makedirs(self.work)
@@ -112,6 +115,7 @@ def main():
     ap = argparse.ArgumentParser()
     for o in ('--render', '--render-test', '--root', '--work'):
         ap.add_argument(o, required=True)
+    ap.add_argument('--sanitized', choices=('0', '1'), default='0')
     ap.add_argument('case', choices=sorted(CASES))
     a = ap.parse_args()
     t = T(a)
@@ -811,6 +815,99 @@ def M17_sync_fallback(t):
         want = 'the project syncs to %s; the script sends no clock to that input: 120 BPM internal' % mode
         check(warned == [want] and sel['bpm'] == 120, what)
         check('lichomat-render: warning: ' + want in p.stderr.splitlines(), '%s: stderr %r' % (mode, p.stderr))
+    no_copies_left()
+
+# --- the save events, faults and the watchdog (plan R2.6) --------------------------------
+
+TRAIL_LINE = r'^\d+ (body|pass|boot|input|direct) \d+$'
+
+def one_file(card, pattern):
+    """the bytes of the one file of PROJ00 that matches pattern"""
+    found = glob.glob(os.path.join(card, 'PROJ00', pattern))
+    check(len(found) == 1, '%s: %d files match PROJ00/%s' % (card, len(found), pattern))
+    with open(found[0], 'rb') as f:
+        return f.read()
+
+@case
+def M17_save(t):
+    seed = t.seed()
+    keep = t.path('K')
+    script = t.script('0ms press voice1\n+100ms press step1\n+100ms save-pattern 5\n+100ms param vol1=10\n'
+                      '+100ms save-kit 7\n1s save-project 0\n3.5s mark end\n')
+    s, _, _ = t.render(seed, ['--no-start', '--seconds', '4', '--keep-card', keep, '--events', script])
+    # the pattern: step 1 went into slot 5, which became active, and pattern 0's edit was reverted
+    check(one_file(keep, '05-*.PAT') != one_file(seed, '05-*.PAT'), 'PROJ00/05-*.PAT equals the seed\'s')
+    check(one_file(keep, '00-*.PAT') == one_file(seed, '00-*.PAT'), 'PROJ00/00-*.PAT differs from the seed\'s')
+    # the kit: save-kit 7 took the edited kit; the project save also copies the edit buffer into
+    # the save page's kit slot, 0 after the boot (presetManager.c preset_saveProject()), so kit 0
+    # differs from the seed's in the vol1 byte only, and both files hold the same parameters
+    k7, k0, s0 = one_file(keep, '07-*.SND'), one_file(keep, '00-INITK.SND'), one_file(seed, '00-INITK.SND')
+    check(k7 != one_file(seed, '07-*.SND'), 'PROJ00/07-*.SND equals the seed\'s')
+    diff = [i for i in range(min(len(k0), len(s0))) if k0[i] != s0[i]]
+    check(len(k0) == len(s0) and len(diff) == 1 and k0[diff[0]] == 10,
+          'PROJ00/00-INITK.SND differs from the seed\'s at %r' % [(i, s0[i], k0[i]) for i in diff])
+    check(k7[8:] == k0[8:], 'the parameters of kit 7 and kit 0 differ')
+    # each direct event at the first pass boundary at or after its time
+    events = [d['event'] for d in s['direct']]
+    check(events == ['save-pattern', 'param', 'save-kit', 'save-project', 'mark'], 'the direct events are %r' % events)
+    for d in s['direct']:
+        check(d['at'] >= d['due'] and d['at'] - d['due'] < 54000 + frames_to_cycles(64),
+              '%s ran %d cycles after its time' % (d['event'], d['at'] - d['due']))
+    print('the direct events ran %r cycles after their times' % [d['at'] - d['due'] for d in s['direct']])
+    # a slot out of range is a script error
+    bad = t.script('0ms save-kit 64\n')
+    p = t.run(['--card', seed, '--out', t.path('o.wav'), '--events', bad], code=1)
+    check(p.stderr.startswith('lichomat-render: %s:1: ' % bad), 'save-kit 64: %r' % p.stderr)
+    no_copies_left()
+
+def kept_report(t, p, head):
+    """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
+    'at cycle C', then 32 trail lines, then the card copy's folder, which exists
+    and is removed here; returns the stderr lines before the head line"""
+    lines = p.stderr.splitlines()
+    i = next((k for k, x in enumerate(lines) if x.startswith(head) and re.search(r' at cycle \d+$', x)), None)
+    check(i is not None, 'no line %r ... at cycle C: %r' % (head, p.stderr))
+    trail = lines[i + 1:i + 33]
+    check(len(trail) == 32 and all(re.match(TRAIL_LINE, x) for x in trail), 'not 32 trail lines after %r: %r'
+          % (lines[i], trail))
+    rest = lines[i + 33:]
+    m = re.match(r'^lichomat-render: the card copy is kept in (.+)$', rest[0]) if len(rest) == 1 else None
+    check(m, 'the lines after the trail are %r' % rest)
+    copy = m.group(1)
+    check(os.path.dirname(copy) == t.tmp and os.path.isfile(os.path.join(copy, 'PROJ00', 'PRJ.NFO')),
+          'the kept card copy %s is not a card in %s' % (copy, t.tmp))
+    shutil.rmtree(copy)
+    return lines[i], lines[:i]
+
+@case
+def M17_fault(t):
+    seed = t.seed()
+    faults = [('segv', 'SIGSEGV'), ('abort', 'SIGABRT'), ('model', 'test fault')]
+    if t.sanitized:
+        faults.append(('ubsan', 'SIGABRT'))
+    for fault, what in faults:
+        p = t.run(['--card', seed, '--out', t.path('o.wav'), '--seconds', '1', '--test-fault', fault], code=3, test=True)
+        line, before = kept_report(t, p, 'lichomat-render: firmware fault: ')
+        report = any('Sanitizer' in x or 'runtime error' in x for x in before)
+        # under ASan a read through NULL may end in its report and abort() instead
+        ok = what in line or (fault == 'segv' and 'SIGABRT' in line and report)
+        check(ok, '--test-fault %s: %r' % (fault, line))
+        if fault == 'ubsan':
+            check(any('runtime error: signed integer overflow' in x for x in before),
+                  '--test-fault ubsan: no UBSan report before %r' % line)
+    no_copies_left()
+
+@case
+def M17_hang(t):
+    seed = t.seed()
+    start = time.monotonic()
+    p = t.run(['--card', seed, '--out', t.path('o.wav'), '--seconds', '1', '--test-hang'], code=4, test=True,
+              timeout=120)
+    wall = time.monotonic() - start
+    check(10 <= wall <= 30, 'exit 4 after %.1f s of wall time, not 10-30 s' % wall)
+    line, _ = kept_report(t, p, 'lichomat-render: hang: ')
+    check(line.startswith('lichomat-render: hang: no progress for 10 s at cycle '), 'the hang line is %r' % line)
+    print('exit 4 after %.1f s' % wall)
     no_copies_left()
 
 if __name__ == '__main__':

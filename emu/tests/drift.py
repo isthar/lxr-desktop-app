@@ -27,6 +27,7 @@ MSP = 'Core/Src/stm32f7xx_hal_msp.c'
 MAIN = 'Core/Src/main.c'
 CDC = 'Middlewares/JS/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c'
 CDC_IF = 'USB_DEVICE_MIDI/App/usbd_cdc_if.c'
+MENU = 'Core/Src/menu/menu.c'
 
 # (item, file, kind, argument): kind 'function' takes the function's name,
 # 'lines' a regular expression for the lines, 'block' a pair of expressions for
@@ -52,6 +53,17 @@ ITEMS = [
     ('HAL_NVIC_SetPriority of TIM2 TIM14 USART3 OTG_FS', MSP, 'lines',
      r'HAL_NVIC_SetPriority\((TIM2_IRQn|TIM8_TRG_COM_TIM14_IRQn|USART3_IRQn|OTG_FS_IRQn),'),
     ('TICK_INT_PRIORITY', 'Core/Inc/stm32f7xx_hal_conf.h', 'lines', r'#define\s+TICK_INT_PRIORITY\b'),
+    # lichomat-render (stage 1b spec 5.3): the firmware text that render_fw.c copies.
+    # The save page's block starts at its first if(!seq_isRunning()), the only two
+    # in menu.c: 'case SAVE_TYPE_PROJECT:' occurs three times, and from the first
+    # one a block would take most of the file. The menu ids are copied because
+    # MenuText.h, which defines the name tables, may only be included by menu.c.
+    ('menu_encoderChangeParameter', MENU, 'function', 'menu_encoderChangeParameter'),
+    ('getMaxEntriesForMenu', MENU, 'function', 'getMaxEntriesForMenu'),
+    ('the menu ids of MenuText.h', 'Core/Inc/menu/MenuText.h', 'lines', r'^#define\s+MENU_\w+\s+\d+'),
+    ('sd_formatRoutine', 'Core/Src/appMain.c', 'function', 'sd_formatRoutine'),
+    ('the save page project save', MENU, 'block',
+     (r'if\(!seq_isRunning\(\)\)', r'if\(res != FR_OK\) menu_showSdError\(res\);')),
 ]
 
 

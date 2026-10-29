@@ -61,6 +61,18 @@ void rfw_paramGet(void *arg);
  * a tempo, 0 EXT, 1 MID (CortexParser.c FRONT_SET_BPM) */
 void rfw_bpm(void *value);
 
+/** The save events (spec 5.3, 5.4): the RAM half of the save page's saves, and
+ * its project save. arg points to the slot or project, a uint8_t 0-63.
+ * - save-kit: preset_saveDrumsetRam(N, 0), the active kit into kit slot N;
+ * - save-pattern: preset_savePatternRAM(N), the active pattern into slot N,
+ *   which then becomes the active pattern when it is another slot;
+ * - save-project: menu.c's SAVE_TYPE_PROJECT case: TIM2 stopped while the
+ *   sequencer is stopped, preset_saveProject(N), TIM2 started again, and
+ *   menu_showSdError() on a failure. */
+void rfw_saveKit(void *arg);
+void rfw_savePattern(void *arg);
+void rfw_saveProject(void *arg);
+
 /** what plays (the summary's selected, spec 5.5) */
 typedef struct render_selected
 {

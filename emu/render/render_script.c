@@ -29,7 +29,8 @@
 
 static const char *const kindNames[] = {
 	"down", "up", "press", "encoder", "push", "knob", "fader", "din", "usb", "din-clock", "usb-clock",
-	"jack-clock", "jack-pulse", "reset", "card", "jacks", "mark", "param",
+	"jack-clock", "jack-pulse", "reset", "card", "jacks", "mark", "param", "save-kit", "save-pattern",
+	"save-project",
 };
 
 const char *render_eventName(render_eventKind_t kind)
@@ -482,6 +483,13 @@ static int parseEvent(const ctx_t *c, render_event_t *e, const char *ev, char **
 		e->b = edit.v;
 		return 0;
 	}
+	case RS_SAVE_KIT:
+	case RS_SAVE_PATTERN:
+	case RS_SAVE_PROJECT:
+		if (nargs != 1 || integer(arg[0], &v, 0) != 0 || v > 63)
+			return bad(c, "%s takes a %s 0-63", ev, e->kind == RS_SAVE_PROJECT ? "project" : "slot");
+		e->a = (int)v;
+		return 0;
 	}
 	return bad(c, "unknown event %s", ev);
 }

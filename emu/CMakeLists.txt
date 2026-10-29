@@ -278,10 +278,16 @@ target_link_libraries(emu_name_canary PRIVATE emu_test_options)
 add_test(NAME M21_negative COMMAND ${Python3_EXECUTABLE} "${EMU_DIR}/tests/licence_gate_neg.py"
     "${LXR_ROOT}" "${CMAKE_BINARY_DIR}" $<TARGET_OBJECTS:emu_name_canary>)
 
-# M17, M14, M23: lichomat-render through emu/tests/render_test.py
+# M17, M14, M23: lichomat-render through emu/tests/render_test.py. --sanitized 1:
+# the build has UBSan, so --test-fault ubsan reports (M17_fault).
+if(LICHOMAT_EMU_SANITIZE MATCHES "undefined")
+    set(emu_render_ubsan 1)
+else()
+    set(emu_render_ubsan 0)
+endif()
 set(EMU_RENDER_TEST ${Python3_EXECUTABLE} "${EMU_DIR}/tests/render_test.py"
     --render $<TARGET_FILE:lichomat-render> --render-test $<TARGET_FILE:lichomat-render-test>
-    --root "${LXR_ROOT}" --work "${CMAKE_BINARY_DIR}/render-test")
+    --root "${LXR_ROOT}" --work "${CMAKE_BINARY_DIR}/render-test" --sanitized ${emu_render_ubsan})
 function(emu_render_tests)
     foreach(id IN LISTS ARGN)
         add_test(NAME ${id} COMMAND ${EMU_RENDER_TEST} ${id})
@@ -291,7 +297,7 @@ endfunction()
 emu_render_tests(M17_cli_usage M17_cli_info M17_card_errors M17_seed_card M17_t0 M17_defaults M17_wav
     M17_card_copy M17_out_errors M17_script_errors M17_events_din M17_events_usb M17_events_jacks M17_events_panel
     M17_stereo M17_pattern M17_song M17_bpm M17_param_engine M17_param_refused M17_param_table M17_bars
-    M17_sync_fallback)
+    M17_sync_fallback M17_save M17_fault M17_hang)
 
 # The temporary folders: every test above gets TMPDIR = a folder of this build,
 # which emu_tmp_setup empties first and emu_tmp_clean checks last. A test removes

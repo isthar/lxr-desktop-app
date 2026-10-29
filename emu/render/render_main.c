@@ -12,6 +12,9 @@
  * the repository.
  */
 #include <errno.h>
+#include <limits.h>
+#include <pthread.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +30,9 @@
 #include "render_opts.h"
 #include "render_out.h"
 #include "render_script.h"
+#if EMU_RENDER_TEST_HOOKS
+#include "emu_internal.h"	/* emu_fault(), for --test-fault model only */
+#endif
 
 #define C100 21600000ull	/* 100 ms (spec 5.3) */
 
@@ -80,24 +86,121 @@ static void render_die(int code, const char *fmt, ...)
 	exit(code);
 }
 
-/* code 3 (spec 5.7, plan P2): the message, the trail, the card copy kept; write(2)
- * only, then _exit() without cleanup */
-static void render_fault(const char *what) __attribute__((noreturn));
-static void render_fault(const char *what)
+/* --- faults and the watchdog (spec 5.7, 11, plan P2) ---------------------------- */
+
+/* a line for stderr, built without stdio: the paths below also run in a signal
+ * handler and on the watchdog thread */
+typedef struct
 {
-	char line[EMU_HOST_PATH + 512];
-	int len = snprintf(line, sizeof line, "lichomat-render: firmware fault: %s at cycle %llu\n",
-		what, (unsigned long long)emu_now());
-	if (len > 0)
-		(void)!write(2, line, (size_t)len < sizeof line ? (size_t)len : sizeof line - 1);
+	char b[EMU_HOST_PATH + 256];
+	size_t n;
+} render_line_t;
+
+static void lineAdd(render_line_t *l, const char *s)
+{
+	while (*s && l->n < sizeof l->b - 1u)
+		l->b[l->n++] = *s++;
+}
+
+static void lineNumber(render_line_t *l, uint64_t v)
+{
+	char d[20];
+	unsigned k = 0;
+	do
+	{
+		d[k++] = (char)('0' + v % 10u);
+		v /= 10u;
+	} while (v);
+	while (k && l->n < sizeof l->b - 1u)
+		l->b[l->n++] = d[--k];
+}
+
+static void lineWrite(render_line_t *l)
+{
+	l->b[l->n++] = '\n';
+	(void)!write(2, l->b, l->n);
+	l->n = 0;
+}
+
+/* Codes 3 and 4 (plan P2): "lichomat-render: HEAD WHAT at cycle C", the last 32
+ * trail lines, the card copy's folder; write(2) only, then _exit() without
+ * cleanup, so the copy stays for inspection. The watchdog calls it while the
+ * firmware thread makes no progress, so it is not in the scheduler, which alone
+ * moves the clock and writes the trail: both hold still while they are read. */
+static void render_abort(int code, const char *head, const char *what) __attribute__((noreturn));
+static void render_abort(int code, const char *head, const char *what)
+{
+	render_line_t l;
+	l.n = 0;
+	lineAdd(&l, "lichomat-render: ");
+	lineAdd(&l, head);
+	lineAdd(&l, what);
+	lineAdd(&l, " at cycle ");
+	lineNumber(&l, emu_now());
+	lineWrite(&l);
 	emu_trailWrite(2, 32);
 	if (R.copy[0])
 	{
-		len = snprintf(line, sizeof line, "lichomat-render: the card copy is kept in %s\n", R.copy);
-		if (len > 0)
-			(void)!write(2, line, (size_t)len < sizeof line ? (size_t)len : sizeof line - 1);
+		lineAdd(&l, "lichomat-render: the card copy is kept in ");
+		lineAdd(&l, R.copy);
+		lineWrite(&l);
 	}
-	_exit(3);
+	_exit(code);
+}
+
+/* code 3: a model check, a failed check of the renderer, a fault signal */
+static void render_fault(const char *what) __attribute__((noreturn));
+static void render_fault(const char *what)
+{
+	render_abort(3, "firmware fault: ", what);
+}
+
+static void render_onSignal(int sig)
+{
+	const char *name = "a fault signal";
+	switch (sig)
+	{
+	case SIGSEGV:	name = "SIGSEGV"; break;
+	case SIGBUS:	name = "SIGBUS"; break;
+	case SIGFPE:	name = "SIGFPE"; break;
+	case SIGILL:	name = "SIGILL"; break;
+	case SIGABRT:	name = "SIGABRT"; break;
+	}
+	render_fault(name);
+}
+
+/* the fault signals, on an alternate stack so that a stack overflow is reported
+ * too; a second fault inside the handler takes the default action */
+static void render_signals(void)
+{
+	static char altStack[1u << 17];
+	stack_t ss;
+	memset(&ss, 0, sizeof ss);
+	ss.ss_sp = altStack;
+	ss.ss_size = sizeof altStack;
+	(void)sigaltstack(&ss, NULL);
+	struct sigaction sa;
+	memset(&sa, 0, sizeof sa);
+	sa.sa_handler = render_onSignal;
+	sa.sa_flags = SA_ONSTACK | SA_RESETHAND;
+	sigemptyset(&sa.sa_mask);
+	static const int sigs[] = { SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGABRT };
+	for (size_t i = 0; i < sizeof sigs / sizeof sigs[0]; i++)
+		(void)sigaction(sigs[i], &sa, NULL);
+}
+
+/* A sanitizer report is a firmware fault (spec 11): both sanitizers end in
+ * abort() on every platform, which the SIGABRT handler reports (plan P2). */
+const char *__asan_default_options(void) __attribute__((used, visibility("default")));
+const char *__asan_default_options(void)
+{
+	return "abort_on_error=1";
+}
+
+const char *__ubsan_default_options(void) __attribute__((used, visibility("default")));
+const char *__ubsan_default_options(void)
+{
+	return "abort_on_error=1";
 }
 
 /* The notices of spec 10.1. Each line is one C string, so that each is one run
@@ -127,7 +230,7 @@ static void render_version(void)
 		printf("%s\n", legal[i]);
 }
 
-/* a model check (spec 3.4, 5.7 code 3); the signals come with the watchdog (Task R2.6) */
+/* a model check (spec 3.4, 5.7 code 3) */
 static void render_onFault(void *ctx, const char *what)
 {
 	(void)ctx;
@@ -157,6 +260,38 @@ static void render_onWarn(void *ctx, const char *what)
 	render_warn(what);
 }
 
+/* code 4 (spec 4.2, plan P2): no scheduler progress for 10 s of wall time outside
+ * the hook's waits, polled every 100 ms */
+static void *render_watchdog(void *arg)
+{
+	(void)arg;
+	emu_watchdog_t w;
+	memset(&w, 0, sizeof w);
+	for (;;)
+	{
+		const struct timespec d = { 0, 100000000L };
+		(void)nanosleep(&d, NULL);
+		if (emu_watchdogPoll(&w, wallNow()))
+			render_abort(4, "hang: ", "no progress for 10 s");
+	}
+	return NULL;
+}
+
+/* after power-on */
+static void render_startWatchdog(void)
+{
+	pthread_t thread;
+	const int e = pthread_create(&thread, NULL, render_watchdog, NULL);
+	if (e != 0)
+	{
+		char what[128];
+		snprintf(what, sizeof what, "the watchdog thread did not start: %s", strerror(e));
+		render_warn(what);
+		return;
+	}
+	(void)pthread_detach(thread);
+}
+
 /* --seed-card DIR (spec 6.7): an init card from the firmware's own code */
 static void render_seed(const char *dir)
 {
@@ -174,6 +309,7 @@ static void render_seed(const char *dir)
 	cfg.fault = render_onFault;
 	cfg.warn = render_onWarn;
 	emu_powerOn(&cfg);
+	render_startWatchdog();
 	emu_runUntil(1u);	/* the boot */
 	emu_runUntil(emu_now() + 100u * EMU_CYCLES_PER_MS);
 	int res = -1;
@@ -357,6 +493,9 @@ static void render_inject(unsigned i)
 		break;
 	case RS_MARK:
 	case RS_PARAM:
+	case RS_SAVE_KIT:
+	case RS_SAVE_PATTERN:
+	case RS_SAVE_PROJECT:
 		break;	/* direct events */
 	}
 }
@@ -381,7 +520,8 @@ static void render_startScript(uint64_t now)
 
 static int render_isDirect(const render_event_t *e)
 {
-	return e->kind == RS_MARK || e->kind == RS_PARAM;
+	return e->kind == RS_MARK || e->kind == RS_PARAM || e->kind == RS_SAVE_KIT || e->kind == RS_SAVE_PATTERN
+		|| e->kind == RS_SAVE_PROJECT;
 }
 
 /* the first direct event at or after index i, or R.script.n */
@@ -408,6 +548,12 @@ static void render_runDirect(const render_event_t *e)
 	{
 		rfw_param_t edit = { (uint16_t)e->a, (uint8_t)e->b };
 		emu_directCall(rfw_edit, &edit);
+	}
+	else if (e->kind == RS_SAVE_KIT || e->kind == RS_SAVE_PATTERN || e->kind == RS_SAVE_PROJECT)
+	{
+		uint8_t n = (uint8_t)e->a;
+		emu_directCall(e->kind == RS_SAVE_KIT ? rfw_saveKit : e->kind == RS_SAVE_PATTERN ? rfw_savePattern
+			: rfw_saveProject, &n);
 	}
 }
 
@@ -655,6 +801,46 @@ static uint64_t render_blocks(const render_opts_t *o)
 	return (uint64_t)((frames + EMU_BLOCK_FRAMES - 1u) / EMU_BLOCK_FRAMES);
 }
 
+#if EMU_RENDER_TEST_HOOKS
+/* --test-fault segv: a read through NULL. UBSan's null check is off here, so
+ * that the read is a real SIGSEGV in a UBSan build too. */
+__attribute__((no_sanitize("undefined"))) static void render_testSegv(void)
+{
+	volatile int *volatile p = NULL;
+	(void)*p;
+}
+
+/* --test-fault and --test-hang (P3 step 10): a direct call at the first pass
+ * boundary at or after t0 + 100 ms */
+static void render_testCall(void *arg)
+{
+	const render_opts_t *o = arg;
+	if (o->testHang)
+	{
+		volatile unsigned spin = 0;
+		for (;;)
+			spin++;	/* without the HAL: no scheduler progress */
+	}
+	switch (o->testFault)
+	{
+	case RENDER_FAULT_SEGV:
+		render_testSegv();
+		break;
+	case RENDER_FAULT_ABORT:
+		abort();
+	case RENDER_FAULT_MODEL:
+		emu_fault("test fault");
+		break;
+	case RENDER_FAULT_UBSAN:
+	{
+		volatile int big = INT_MAX;
+		big = big + 1;	/* a signed overflow: a report in a UBSan build */
+		break;
+	}
+	}
+}
+#endif
+
 static void render_run(const render_opts_t *o) __attribute__((noreturn));
 static void render_run(const render_opts_t *o)
 {
@@ -700,6 +886,7 @@ static void render_run(const render_opts_t *o)
 	cfg.fault = render_onFault;
 	cfg.warn = render_onWarn;
 	emu_powerOn(&cfg);
+	render_startWatchdog();
 	emu_runUntil(1u);	/* the boot */
 	R.preludeEnd = emu_now();
 	render_settle();
@@ -748,11 +935,27 @@ static void render_run(const render_opts_t *o)
 
 	/* P3 step 7: render_finish() ends the process from the hook */
 	R.nextDirect = render_findDirect(0);
+#if EMU_RENDER_TEST_HOOKS
+	int testPending = o->testFault != RENDER_FAULT_NONE || o->testHang;
+	uint64_t sliceFrames = 470u;	/* --test-slice: slices of 470 and 471 frames in turn */
+	unsigned slices = 0;
+#endif
 	for (;;)
 	{
 		uint64_t until = R.tEnd + EMU_CPU_HZ;
 		if (R.nextDirect < R.script.n && R.t0 + R.script.ev[R.nextDirect].t < until)
 			until = R.t0 + R.script.ev[R.nextDirect].t;
+#if EMU_RENDER_TEST_HOOKS
+		if (testPending && R.t0 + C100 < until)
+			until = R.t0 + C100;
+		if (o->testSlice)
+		{
+			while (R.t0 + emu_framesToCycles(sliceFrames) <= emu_now())
+				sliceFrames += (slices++ & 1u) ? 470u : 471u;
+			if (R.t0 + emu_framesToCycles(sliceFrames) < until)
+				until = R.t0 + emu_framesToCycles(sliceFrames);
+		}
+#endif
 		emu_runUntil(until);
 		if (emu_now() > R.tEnd + EMU_CPU_HZ)
 			render_fault("the render did not end at its end time");
@@ -761,6 +964,13 @@ static void render_run(const render_opts_t *o)
 			render_runDirect(&R.script.ev[R.nextDirect]);
 			R.nextDirect = render_findDirect(R.nextDirect + 1);
 		}
+#if EMU_RENDER_TEST_HOOKS
+		if (testPending && emu_now() >= R.t0 + C100)
+		{
+			testPending = 0;
+			emu_directCall(render_testCall, (void *)o);
+		}
+#endif
 	}
 }
 
@@ -770,6 +980,7 @@ int main(int argc, char **argv)
 	char err[512];
 	if (render_optsParse(argc, argv, &o, err, sizeof err) != 0)
 		render_die(1, "%s", err);
+	render_signals();
 	if (o.help)
 	{
 		render_optsHelp();
