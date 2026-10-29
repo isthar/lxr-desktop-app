@@ -7,7 +7,9 @@
  *   USB-MIDI 1.0 packets on cable 0 up to the first packet whose first byte is
  *   0, hands each message with a CIN of 0x2-0xF to seqp_usbMessageIn() with one
  *   stamp per transfer, and appends it to usb_MidiMessages[64] unless the ring
- *   is full. At most 16 packets enter in any 1 ms; a transfer is never split.
+ *   is full. At most 16 packets enter in a 1 ms window, which starts at its
+ *   first packet; a transfer that would pass 16 waits, whole, until the window
+ *   ends.
  * - Out: CDC_Transmit_FS() passes the transfer to the USB sink, holds TxState
  *   at 1 for 1 ms, then the OTG_FS in body clears it and calls
  *   usb_midiTxComplete().
@@ -87,7 +89,8 @@ static void emu_usbFire(void)
 		const unsigned packets = head->length / 4u;
 		if (head->t <= now)
 		{
-			if (now >= emu_usb.window + EMU_CYCLES_PER_MS)
+			/* a window starts at its first packet, not at power-on (spec 4.3) */
+			if (emu_usb.windowPackets == 0u || now >= emu_usb.window + EMU_CYCLES_PER_MS)
 			{
 				emu_usb.window = now;
 				emu_usb.windowPackets = 0;
