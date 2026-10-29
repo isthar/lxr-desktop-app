@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 02:54",
+    "updated": "2026-10-29 03:19",
     "phase": "Etap 1 czeka na testy na sprzęcie; etap 1b: krok R1 (wirtualne urządzenie) zrobiony",
     "focus": "Emulator R1 gotowy na lokalnej gałęzi emulator: cały firmware działa na wirtualnym urządzeniu w 103 testach. Nowe pytania Q21 i Q22 (błędy fw 1.7 znalezione przez emulator). Etap 1 nadal czeka na Twoje testy na LXR-02 (Q6).",
     "branch": "timing-core",
-    "head": "e37ae9e",
-    "next": "Ty: Q19 (wypchnąć gałąź emulator?), Q21, Q22, Q23, testy v0.1 na LXR-02 (Q6), Q9–Q11. Ja: dalsze zadania planu R2+R3 z lekkim przeglądem co ok. 4 zadania.",
-    "updated_at": "2026-10-29T02:54:00+01:00",
-    "now": "Od 02:54: ostatni agent tej sesji robi R2.3–R2.4 (oś czasu, reguła t0, WAV, skrypty zdarzeń, logi MIDI) i ostrzeżenie o pominiętych nazwach na karcie; limit ok. 40 min. Potem podsumowanie na czacie. Zużycie ok. 40%."
+    "head": "e7e1543",
+    "next": "Ty: Q19 (wypchnąć gałąź emulator?), Q21, Q22, Q23, testy v0.1 na LXR-02 (Q6), Q9–Q11. Ja przy wznowieniu: przegląd R2.1–R2.4, ctest -j8 w M17, R2.5–R2.6, R3.1–R3.6.",
+    "updated_at": "2026-10-29T03:19:00+01:00",
+    "now": "Sesja zakończona o 03:19 (zużycie ok. 41.0%). Nic nie działa. Przy wznowieniu: lekki przegląd R2.1–R2.4, poprawka równoległego ctest w M17, potem R2.5–R2.6 i R3. Czekają Twoje pytania Q19, Q21, Q22, Q23."
   },
   "epics": [
     {
@@ -2278,6 +2278,11 @@
       "n": 300,
       "at": "2026-10-29 02:54",
       "text": "R2.1–R2.2 zakończone (02:54): 00b0bf1 (cele renderera, opcje, --help/--version, M21 skanuje też renderer), 9b11ffc (kopia karty, --seed-card: 194 pliki, 255 398 B, kod wyjścia 2), e37ae9e (testy sprzątają po sobie i piszą tylko do build/emu/tmp; nowy test pilnuje, że nic nie zostaje). Emulator 109 z 109, bramka firmware bez zmian."
+    },
+    {
+      "n": 301,
+      "at": "2026-10-29 03:19",
+      "text": "R2.3–R2.4 zakończone: 1c98369 (oś czasu, reguła t0, WAV, podsumowanie), 5b4daa2 (skrypty zdarzeń, logi MIDI, zegara i panelu, --stereo), dd373e1 i 257b620 (ostrzeżenie dla każdej nazwy pominiętej na karcie). Potem e7e1543: skan nazw M21 nie czyta już sekcji z kodem (bajty instrukcji w Release przypadkiem dały 'lxr'). Emulator 120 z 120 w Debug i Release przy zwykłym (szeregowym) ctest; równolegle (-j8) 4 testy M17 się wywracają, do poprawy w następnej sesji."
     }
   ]
 }
