@@ -158,6 +158,23 @@ def M17_cli_usage(t):
         usage_error(t, args + co, args[0])
     usage_error(t, ['--seed-card', 'D', '--card', 'C'], '--seed-card')
     usage_error(t, ['--card', 'C', '--out'], '--out')	# an option without its value
+    # The RIFF limit: the RIFF chunk's size, 36 + the data, fits 32 bits. The longest
+    # length that fits passes the options (exit 2: the card C does not exist), one
+    # step more is refused before anything is made.
+    limit = 2 ** 32 - 1 - 36
+    def over_limit(args, name):
+        p = t.run(['--card', 'C', '--out', 'O'] + args, code=1)
+        lines = p.stderr.splitlines()
+        check(len(lines) == 1 and lines[0].startswith('lichomat-render: %s: ' % name) and 'RIFF limit' in lines[0]
+              and str(limit) in lines[0], '%r: %r' % (args, p.stderr))
+    for stereo, ch in (([], 4), (['--stereo', 'sum'], 2)):
+        frames = 64 * (limit // (64 * 2 * ch))
+        us = frames * 8 * 10 ** 6 // 353125	# the longest T in us whose frames fit
+        t.run(['--card', 'C', '--out', 'O', '--seconds', '%d.%06d' % divmod(us, 10 ** 6)] + stereo, code=2)
+        over_limit(['--seconds', '%d.%06d' % divmod(us + 1, 10 ** 6)] + stereo, '--seconds')
+    # --bars with a numeric --bpm: 101 bars at 2 BPM fit 4 channels (12,120 s), 102 do not
+    t.run(['--card', 'C', '--out', 'O', '--bpm', '2', '--bars', '101'], code=2)
+    over_limit(['--bpm', '2', '--bars', '102'], '--bars')
 
 def version_lines(root):
     with open(os.path.join(root, 'CMakeLists.txt')) as f:
@@ -185,6 +202,10 @@ def M17_cli_info(t):
     out = t.run(['--version']).stdout
     m = re.search(r'Built from commit ([0-9a-f]{12}|unknown)\.', out)
     check(m, '--version names no commit of 12 hex digits: %r' % out)
+    # the commit is read at build time: a build after a commit names it
+    head = subprocess.run(['git', '-C', t.root, 'rev-parse', '--short=12', 'HEAD'], capture_output=True, text=True)
+    commit = head.stdout.strip() if head.returncode == 0 and head.stdout.strip() else 'unknown'
+    check(m.group(1) == commit, '--version names the commit %s, but HEAD is %s' % (m.group(1), commit))
     got = out.replace(m.group(1), 'COMMIT', 1)
     check(got == '\n'.join(want) + '\n', '--version printed:\n%s' % out)
     for args in (['--help'], ['--help', '--bogus'], ['--card', 'C', '--help']):
@@ -365,6 +386,18 @@ def M17_wav(t):
         _, w, _ = t.render(seed, ['--seconds', '1', '--stereo', mode])
         ch, _, _, frames, data = wav_info(w)
         check((ch, frames, len(data)) == (2, 44160, 176640), '--stereo %s: %r' % (mode, (ch, frames, len(data))))
+        riff_sizes(w)
+    riff_sizes(a)
+    riff_sizes(b)
+
+def riff_sizes(path):
+    """the canonical header's sizes: RIFF = the file's size - 8, data = - 44"""
+    size = os.path.getsize(path)
+    with open(path, 'rb') as f:
+        h = f.read(44)
+    riff, data = struct.unpack('<I', h[4:8])[0], struct.unpack('<I', h[40:44])[0]
+    check(h[36:40] == b'data' and (riff, data) == (size - 8, size - 44), '%s: RIFF size %d, data size %d, file %d bytes'
+          % (path, riff, data, size))
 
 @case
 def M17_card_copy(t):
@@ -867,6 +900,12 @@ def M17_bars(t):
     check(len(lines) == 2 and lines[0].startswith('lichomat-render: --bars: ') and 'MID' in lines[0]
           and lines[1] == 'lichomat-render: warning: card: %s is not an 8.3 name; the device would not see it'
           % os.path.join(mid, 'PROJ00', 'LongName9.txt'), 'MID with a clock and --bars: %r' % p.stderr)
+    # the card's tempo gives the length only after the prelude: 102 bars at 2 BPM are
+    # above the RIFF limit there (see M17_cli_usage)
+    p = t.run(['--card', glo_card(t, seed, 'slow', 2), '--out', t.path('o.wav'), '--bars', '102'], code=1, timeout=60)
+    lines = p.stderr.splitlines()
+    check(len(lines) == 1 and lines[0].startswith('lichomat-render: --bars: ') and 'RIFF limit' in lines[0],
+          '102 bars at the card\'s 2 BPM: %r' % p.stderr)
     no_copies_left()
 
 @case

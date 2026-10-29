@@ -151,17 +151,19 @@ set(EMU_DEVICE_OBJECTS $<TARGET_OBJECTS:lxr_firmware> $<TARGET_OBJECTS:emu_core>
     $<TARGET_OBJECTS:emu_hostfs> $<TARGET_OBJECTS:emu_libm>)
 
 # --- lichomat-render (spec 5) -------------------------------------------------------------
-# what --version and the summary print (spec 8.4, 10.1), fixed at configure time
-execute_process(COMMAND git -C "${LXR_ROOT}" rev-parse --short=12 HEAD
-    OUTPUT_VARIABLE EMU_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-if(NOT EMU_COMMIT)
-    set(EMU_COMMIT unknown)
-endif()
+# What --version and the summary print (spec 8.4, 10.1): the toolchain, fixed at
+# configure time, and the commit, read at every build by emu_render_build, which
+# rewrites render_build.h only when the commit changes (cmake/RenderBuild.cmake).
 execute_process(COMMAND ${CMAKE_C_COMPILER} --version OUTPUT_VARIABLE emu_cc_version)
 string(REGEX MATCH "^[^\n]*" EMU_CLANG "${emu_cc_version}")
 execute_process(COMMAND xcrun --show-sdk-version OUTPUT_VARIABLE EMU_SDK OUTPUT_STRIP_TRAILING_WHITESPACE)
-configure_file(render/render_build.h.in "${CMAKE_BINARY_DIR}/render_build.h" @ONLY)
-message(STATUS "emulator: commit ${EMU_COMMIT}, ${EMU_CLANG}, SDK ${EMU_SDK}")
+set(EMU_RENDER_BUILD ${CMAKE_COMMAND} "-DLXR_ROOT=${LXR_ROOT}" "-DIN=${EMU_DIR}/render/render_build.h.in"
+    "-DOUT=${CMAKE_BINARY_DIR}/render_build.h" "-DEMU_CLANG=${EMU_CLANG}" "-DEMU_SDK=${EMU_SDK}"
+    "-DEMU_FIRMWARE_VERSION=${EMU_FIRMWARE_VERSION}" -P "${EMU_DIR}/cmake/RenderBuild.cmake")
+execute_process(COMMAND ${EMU_RENDER_BUILD})
+add_custom_target(emu_render_build COMMAND ${EMU_RENDER_BUILD}
+    BYPRODUCTS "${CMAKE_BINARY_DIR}/render_build.h" VERBATIM)
+message(STATUS "emulator: ${EMU_CLANG}, SDK ${EMU_SDK}")
 
 file(GLOB EMU_RENDER_SOURCES CONFIGURE_DEPENDS "${EMU_DIR}/render/*.c")
 list(REMOVE_ITEM EMU_RENDER_SOURCES "${EMU_DIR}/render/render_fw.c")
@@ -180,6 +182,7 @@ function(emu_render_exe name hooks)
     target_compile_options(${name} PRIVATE ${EMU_FP_FLAGS} ${EMU_SAN_FLAGS} -Wall -Wextra -Werror
         "SHELL:-ivfsoverlay ${EMU_OVERLAY}")
     target_compile_definitions(${name} PRIVATE EMU_RENDER_TEST_HOOKS=${hooks})
+    add_dependencies(${name} emu_render_build)
 endfunction()
 emu_render_exe(lichomat-render 0)
 emu_render_exe(lichomat-render-test 1)

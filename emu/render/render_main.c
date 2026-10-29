@@ -895,12 +895,11 @@ static void render_syncFallback(void)
 /* the length in blocks (P3 step 4): whole blocks, rounded up from the frames */
 static uint64_t render_blocks(const render_opts_t *o)
 {
-	unsigned __int128 num, den;
+	unsigned bpm = 0;
 	if (o->bars)
 	{
 		/* B: the numeric --bpm, else seq_getBpm() in internal sync, read after the
 		 * prelude, so after the sync fallback and the --param edits */
-		unsigned bpm;
 		if (o->bpm >= 2)
 			bpm = (unsigned)o->bpm;
 		else if (R.selected.sync == 0)
@@ -908,18 +907,13 @@ static uint64_t render_blocks(const render_opts_t *o)
 		else
 			render_die(1, "--bars: needs an internal tempo; the project syncs to %s",
 				R.selected.sync == 1 ? "EXT" : "MID");
-		num = (unsigned __int128)o->bars * 240u * 353125u;
-		den = (unsigned __int128)8u * bpm;
 	}
-	else
-	{
-		num = (unsigned __int128)o->secondsNum * 353125u;
-		den = 8u;
-		for (unsigned i = 0; i < o->secondsDigits; i++)
-			den *= 10u;
-	}
-	const unsigned __int128 frames = (num + den - 1u) / den;
-	return (uint64_t)((frames + EMU_BLOCK_FRAMES - 1u) / EMU_BLOCK_FRAMES);
+	/* the options checked the RIFF limit already, except for --bars at the card's
+	 * tempo, which only the prelude gives */
+	char err[256];
+	if (render_optsLengthCheck(o, bpm, err, sizeof err) != 0)
+		render_die(1, "%s", err);
+	return render_optsBlocks(o, bpm);
 }
 
 #if EMU_RENDER_TEST_HOOKS

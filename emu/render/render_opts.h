@@ -79,6 +79,18 @@ typedef struct render_opts
  * anywhere, it sets that flag and returns 0 whatever else is given. */
 int render_optsParse(int argc, char **argv, render_opts_t *o, char *err, size_t n);
 
+/** The length in whole blocks (stage 1b plan P3): --seconds T, or for --bars N
+ * the seconds N x 240 / bpm, as frames at 44,140.625 Hz rounded up, then blocks
+ * of 64 rounded up. bpm is used only with --bars. */
+uint64_t render_optsBlocks(const render_opts_t *o, unsigned bpm);
+
+/** The RIFF limit: the WAV's RIFF chunk size, 36 + the data, is 32 bits, so the
+ * data of the length (render_optsBlocks()) in the channels of --stereo must be at
+ * most 4,294,967,259 bytes. Returns 0, or -1 with "--seconds: ..." or "--bars:
+ * ..." in err. render_optsParse() checks it when it knows the length: always for
+ * --seconds, for --bars with a numeric --bpm. */
+int render_optsLengthCheck(const render_opts_t *o, unsigned bpm, char *err, size_t n);
+
 /** the text of --help */
 void render_optsHelp(void);
 

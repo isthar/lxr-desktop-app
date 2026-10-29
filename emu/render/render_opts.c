@@ -382,7 +382,52 @@ int render_optsParse(int argc, char **argv, render_opts_t *o, char *err, size_t 
 		return fail(err, n, "--card: missing; a render needs --card and --out");
 	if (!o->out)
 		return fail(err, n, "--out: missing; a render needs --card and --out");
+	if (!o->bars || o->bpm >= 2)
+		return render_optsLengthCheck(o, o->bars ? (unsigned)o->bpm : 0u, err, n);
 	return 0;
+}
+
+uint64_t render_optsBlocks(const render_opts_t *o, unsigned bpm)
+{
+	unsigned __int128 num, den;
+	if (o->bars)
+	{
+		num = (unsigned __int128)o->bars * 240u * 353125u;
+		den = (unsigned __int128)8u * bpm;
+	}
+	else
+	{
+		num = (unsigned __int128)o->secondsNum * 353125u;
+		den = (unsigned __int128)8u * pow10u(o->secondsDigits);
+	}
+	const unsigned __int128 frames = (num + den - 1u) / den;
+	return (uint64_t)((frames + EMU_BLOCK_FRAMES - 1u) / EMU_BLOCK_FRAMES);
+}
+
+#define RENDER_WAV_MAX_DATA (0xFFFFFFFFull - 36u)	/* the RIFF chunk size is 36 + the data */
+
+int render_optsLengthCheck(const render_opts_t *o, unsigned bpm, char *err, size_t n)
+{
+	const unsigned channels = o->stereo == RENDER_STEREO_NONE ? 4u : 2u;
+	const uint64_t perBlock = EMU_BLOCK_FRAMES * channels * 2u;
+	const uint64_t maxBlocks = RENDER_WAV_MAX_DATA / perBlock;
+	const uint64_t blocks = render_optsBlocks(o, bpm);
+	if (blocks <= maxBlocks)
+		return 0;
+	/* the longest length that fits, in ms rounded down */
+	const unsigned long long maxMs = (unsigned long long)(maxBlocks * EMU_BLOCK_FRAMES * 8u * 1000u / 353125u);
+	char length[64];
+	if (o->bars)
+		snprintf(length, sizeof length, "%u bars at %u BPM", o->bars, bpm);
+	else if (o->secondsDigits)
+		snprintf(length, sizeof length, "%llu.%0*llu s", (unsigned long long)(o->secondsNum / pow10u(o->secondsDigits)),
+			(int)o->secondsDigits, (unsigned long long)(o->secondsNum % pow10u(o->secondsDigits)));
+	else
+		snprintf(length, sizeof length, "%llu s", (unsigned long long)o->secondsNum);
+	return fail(err, n, "%s: %s is %llu bytes of WAV data, above the RIFF limit of %llu bytes: at most %llu blocks, "
+		"%llu.%03llu s, with %u channels", o->bars ? "--bars" : "--seconds", length,
+		(unsigned long long)(blocks * perBlock), (unsigned long long)RENDER_WAV_MAX_DATA,
+		(unsigned long long)maxBlocks, maxMs / 1000u, maxMs % 1000u, channels);
 }
 
 void render_optsHelp(void)
