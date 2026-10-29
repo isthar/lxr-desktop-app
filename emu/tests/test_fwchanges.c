@@ -30,6 +30,11 @@
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/DSPAudio/DrumVoice.h"
 #include "Soundengine/DSPAudio/Oscillator.h"
+#include "Soundengine/DSPAudio/CymbalVoice.h"
+#include "Soundengine/DSPAudio/HiHat.h"
+#include "Soundengine/DSPAudio/Snare.h"
+#include "Soundengine/DSPAudio/modulationNode.h"
+#include "Soundengine/MIDI/ParameterArray.h"
 #include "frontPanelParser_ui.h"
 #include "emu_test.h"
 
@@ -78,9 +83,24 @@ static uint64_t passes(void)
 	return c.passes;
 }
 
+/* the modulation nodes that CC 1 walks (modNode_originalValueChanged()): the six
+ * velocity modulators, then the LFO targets of the six voices */
+static const ModulationNode *node(unsigned i)
+{
+	const ModulationNode *const lfoTargets[6] = {
+		&voiceArray[0].lfo.modTarget, &voiceArray[1].lfo.modTarget, &voiceArray[2].lfo.modTarget,
+		&snareVoice.lfo.modTarget, &cymbalVoice.lfo.modTarget, &hatVoice.lfo.modTarget,
+	};
+	return i < 6u ? &velocityModulators[i] : lfoTargets[i - 6u];
+}
+
 TEST(M15_f1_cc1)
 {
 	bootNoCard();
+	/* F1's case: every node at destination 0, PAR_NONE, which has no pointer */
+	ASSERT_TRUE(parameterArray[PAR_NONE].ptr == NULL);
+	for (unsigned i = 0; i < 12u; i++)
+		ASSERT_EQ(node(i)->destination, PAR_NONE);
 	uint8_t cc1[16 * 3];
 	for (unsigned ch = 0; ch < 16u; ch++)
 	{
