@@ -134,7 +134,7 @@ Test builds (`lichomat-render-test`) add: `--test-fault segv|abort|model|ubsan`,
 ```
 lichomat-render %s, the renderer of LICHOMAT Emu
 emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02
-Runs LICHOMAT %s with the emulator changes F1-F10. Built from commit %s.
+Runs LICHOMAT %s with the emulator changes F1-F12 and F6b. Built from commit %s.
 Copyright (C) 2012-2026 Erica Synths
 Copyright (C) 2026 Tomasz Krzywicki
 Modified from the LXR firmware 1.7 by Erica Synths; LICHOMAT and its emulator by Tomasz Krzywicki, 2026

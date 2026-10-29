@@ -1647,8 +1647,8 @@ it is.
       LICHOMAT and its emulator by Tomasz Krzywicki, 2026';
     - the absence of warranty and the licence;
     - the commit the binary was built from, and the firmware state it runs: 'LICHOMAT 0.1 with the
-      emulator changes F1–F10' until those reach a release. The splash still shows the firmware's own
-      'v0.1 unofficial';
+      emulator changes F1–F12 and F6b' until those reach a release. The splash still shows the
+      firmware's own 'v0.1 unofficial';
     - where the source is;
     - that the product is not affiliated with Erica Synths.
 - The chain of title is assumed, not verified. Erica relicensed Julian Schmidt's 2012 V1 code as
