@@ -944,12 +944,12 @@ A script is text with one event per line. `#` starts a comment.
 | `fader` | 1–6, level 0–1 | moves a fader |
 | `param` | NAME=VALUE | sets a parameter as `--param` does (§5.3) |
 | `save-kit`, `save-pattern` | slot 0–63 | copies the active kit or pattern into RAM slot N, the RAM half of the save page's save |
-| `save-project` | project 0–63 | the save page's project save: empties `/PROJnn` and writes every slot from RAM (§5.3) |
+| `save-project` | project 0–63 | the save page's project save (§5.3): it first stores the edit buffer into the save page's kit slot (`presetManager.c:2319`; kit 0 after boot) and the active pattern into its own slot, then empties `/PROJnn` and writes every slot from RAM |
 | `din` | hex bytes | MIDI into DIN, 320 µs per byte |
 | `usb` | hex bytes | MIDI into USB, as transfers of USB-MIDI packets |
-| `din-clock` | BPM or `off` | a steady MIDI clock into DIN from this time |
-| `usb-clock` | BPM and optional buffer ms, or `off` | a steady MIDI clock into USB. With a buffer length, each transfer carries the clocks of one buffer and is stamped at the buffer's start, as a DAW sends them |
-| `jack-clock` | BPM and PPQ (4 or 24), or `off` | steady pulses into clock in |
+| `din-clock` | BPM or `off` | a steady MIDI clock into DIN from this time, until the next `din-clock` line or the end of the render |
+| `usb-clock` | BPM and optional buffer ms, or `off` | a steady MIDI clock into USB, until the next `usb-clock` line or the end. With a buffer length, each transfer carries the clocks of one buffer and is stamped at the buffer's start, as a DAW sends them |
+| `jack-clock` | BPM and PPQ (4 or 24), or `off` | steady pulses into clock in, until the next `jack-clock` line or the end |
 | `jack-pulse` | none | one clock-in pulse |
 | `reset` | `on` or `off` | the reset-in level |
 | `card` | `in` or `out` | the card switch |
@@ -959,14 +959,19 @@ A script is text with one event per line. `#` starts a comment.
 Songs need no save event: song edits live in `seq_songData`, and `save-project` writes them.
 
 `param` and the save events are direct calls (§5.3), so they act at the first pass boundary at or after
-their time. Every other event enters as a timed input at its own time.
+their time. Every other event enters as a timed input at its own time, the clocks' among the other
+lines', and inputs at equal times in script order: a `din` line inside a `din-clock` run enters between
+its clocks.
 
 A script error stops the renderer with exit code 1 and names the file and line.
 
 ### 5.5 Outputs
 
 - **WAV**: 16-bit PCM with 4 channels, L1, R1, L2, R2. Out 1 comes from `dma_buffer2` and out 2 from
-  `dma_buffer`. The header rate follows `--wav-rate`. With `--stereo` the file has 2 channels.
+  `dma_buffer`. The header rate follows `--wav-rate`. With `--stereo` the file has 2 channels. The RIFF
+  chunk size, 36 + the data, is 32 bits, so a length with more than 4,294,967,259 bytes of data is a usage
+  error (exit 1): above 12,162.7 s with 4 channels, 24,325.5 s with 2. For `--bars` at the card's tempo
+  it is found after the prelude.
 - **MIDI log**: one line per DIN byte and per USB transfer. Each line gives the cycles since t0, the
   milliseconds since t0 with 3 decimals, the port (`DIN` or `USB`), and the byte or the packets (8 hex
   digits each).
@@ -974,8 +979,11 @@ A script error stops the renderer with exit code 1 and names the file and line.
 - **Panel log**: one line per mark, with the time, the mark's name, the two LCD rows (other than
   printable ASCII as `\xNN`), the cursor, and the 41-bit LED mask in hex.
 - **Summary**: the boot's end and t0 in cycles, the number of blocks, the underruns before and after t0,
-  `seqp_syncOverflows()`, `usb_midiTxDropped()`, the fields of `seqc_stats()`, the wall time, the
-  toolchain (§8.4) and the warnings. A short form goes to stderr.
+  every direct event, the number of the script's timed inputs, `seqp_syncOverflows()`,
+  `usb_midiTxDropped()`, the fields of `seqc_stats()`, the wall time, the toolchain (§8.4) and every
+  warning. A short form goes to stderr. The warnings name the card, not its copy, and come last on
+  stderr at every exit, also with an error, which a warning may explain. The commit that `--version`
+  and the summary name is read at each build.
 
 ### 5.6 Card fixtures
 
