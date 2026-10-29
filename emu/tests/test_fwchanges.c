@@ -1,8 +1,8 @@
 /*
  * test_fwchanges.c
  *
- * M15 (stage 1b spec 7, 12.1): the firmware changes F1, F2, F3 and F9 in the
- * emulator, each test a boot without a card.
+ * M15 (stage 1b spec 7, 12.1): the firmware changes F1, F2, F3, F9 and F12 in
+ * the emulator, each test a boot without a card.
  * - F1: CC 1 on all 16 channels, with every modulation node at destination 0.
  * - F2: the morph target is kit 0 after a boot without a card, and a morph runs.
  * - F3: the two clear-automation pages show the base build's rows. The base is
@@ -11,6 +11,8 @@
  * - F9: voice 1 in band 10 reads no sample past its table row. UBSan's bounds
  *   check is on in calcWavetableOscBlock() and calcFmBlock() and fires on any
  *   table[row][1024]; CI runs the same test under ASan.
+ * - F12: a pattern select by the step buttons fills the Euclid parameters from
+ *   the active voice, not from track 16 past the generator's arrays.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -27,6 +29,7 @@
 #include "menu/copyClearTools.h"
 #include "Preset/PresetManager.h"
 #include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Sequencer/EuklidGenerator.h"
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/DSPAudio/DrumVoice.h"
 #include "Soundengine/DSPAudio/Oscillator.h"
@@ -269,6 +272,87 @@ TEST(M15_f9_band10)
 		const double rms = sqrt(energy / (2.0 * (double)frames)) / 32768.0;
 		ASSERT_TRUE(20.0 * log10(rms) > -60.0);
 	}
+}
+
+/* --- F12 -------------------------------------------------------------------------- */
+
+/* a press of button b at *t for 50 ms; the next one 100 ms later */
+static void press(uint64_t *t, unsigned b)
+{
+	emu_inButton(*t, b, 1);
+	emu_inButton(*t + 50u * MS, b, 0);
+	*t += 100u * MS;
+}
+
+/* button b with SHIFT held, as the renderer's reload does */
+static void shiftPress(uint64_t *t, unsigned b)
+{
+	emu_inButton(*t, 32, 1);
+	emu_inButton(*t + 20u * MS, b, 1);
+	emu_inButton(*t + 70u * MS, b, 0);
+	emu_inButton(*t + 100u * MS, 32, 0);
+	*t += 150u * MS;
+}
+
+/* every track's own Euclid values (length 9 + t, steps 1 + t, rotation 3 + t),
+ * and a stale mark in the three parameters that the request fills */
+static void setEuklid(void *arg)
+{
+	(void)arg;
+	for (uint8_t t = 0; t < 7u; t++)
+	{
+		euklid_setLength(t, (uint8_t)(9u + t));
+		euklid_setSteps(t, (uint8_t)(1u + t), seq_activePattern);
+		euklid_setRotation(t, (uint8_t)(3u + t), seq_activePattern);
+	}
+	activeParameters[PAR_EUKLID_LENGTH] = 0xEE;
+	activeParameters[PAR_EUKLID_STEPS] = 0xEE;
+	activeParameters[PAR_EUKLID_ROTATION] = 0xEE;
+}
+
+TEST(M15_f12_euklid)
+{
+	bootNoCard();
+	uint64_t t = emu_now() + MS;
+	press(&t, 3);					/* voice 3: the active voice is 2 */
+	emu_runUntil(t);
+	ASSERT_EQ(menu_getActiveVoice(), 2);
+	emu_directCall(setEuklid, NULL);
+	ASSERT_EQ(euklid_getLength(2), 11);
+	ASSERT_EQ(euklid_getSteps(2), 3);
+	ASSERT_EQ(euklid_getRotation(2), 5);
+	/* pattern 20 by the step buttons (the walk of --pattern): SHIFT + step 16
+	 * opens the pattern page, bar- three times sets bank 0, bar+ bank 1, then
+	 * step 5. The select sends SEQ_REQUEST_EUKLID_PARAMS (buttonHandler.c,
+	 * SELECT_MODE_PATTERN), which fw 1.7 sent with menu_activePage (16) as the
+	 * track, and UBSan stopped at euklid_getLength()'s index 16 */
+	t = emu_now() + MS;
+	shiftPress(&t, 12);
+	for (unsigned k = 0; k < 3u; k++)
+		press(&t, 40);
+	press(&t, 0);
+	press(&t, 31);
+	emu_runUntil(t + 100u * MS);
+	char row[17];
+	emu_testLcdRow(1, row);
+	ASSERT_EQ(strcmp(row, "Current:  21    "), 0);
+	ASSERT_EQ(seq_activePattern, 20);
+	ASSERT_EQ(menu_getActiveVoice(), 2);
+	/* the active voice's values; the unfixed code without UBSan (Release, the host's layout) read
+	 * 5, 0, 0 here: euklid_rotation[2] and two bytes after the arrays */
+	ASSERT_EQ(activeParameters[PAR_EUKLID_LENGTH], 11);
+	ASSERT_EQ(activeParameters[PAR_EUKLID_STEPS], 3);
+	ASSERT_EQ(activeParameters[PAR_EUKLID_ROTATION], 5);
+	/* the Euclid page (SHIFT + mode 2, SELECT_MODE_PAT_GEN) requests them again
+	 * for the active voice (buttonHandler.c:493), so it shows them with and
+	 * without the fix */
+	t = emu_now() + MS;
+	shiftPress(&t, 25);
+	emu_runUntil(t + 100u * MS);
+	emu_testLcdRow(0, row);
+	ASSERT_EQ(strcmp(row, "LEN stp rot mrp "), 0);
+	emu_testLcdRow(1, row);
+	ASSERT_EQ(strcmp(row, " 11   3   5   0 "), 0);
 }
 
 TEST_MAIN()

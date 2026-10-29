@@ -1198,8 +1198,9 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_clearAllBlinkLeds();
 				led_setBlinkLed(led_idx2StepLed(seqButtonPressed), 1);
 
+				//LICHOMAT: the active voice's Euclid values, as the other senders ask; menu_activePage (16) read past the 7-entry arrays (F12)
 				frontPanel_sendData(SEQ_CC, SEQ_REQUEST_EUKLID_PARAMS,
-						menu_activePage/*menu_getActiveVoice()*/);
+						menu_getActiveVoice());
 				//update autosave pattern on manual pattern change
 				preset_touchTimer(PRESET_PAT_TIMER);
 
