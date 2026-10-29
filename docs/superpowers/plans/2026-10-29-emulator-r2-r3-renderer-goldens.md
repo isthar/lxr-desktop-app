@@ -279,11 +279,11 @@ faders [6], jacks, asBooted, noStart, blocks, events}; bootEnd; codecStart; prel
 t0; end; underrunsBeforeT0; underrunsAfterT0; selected {pattern, song, bpm, sync}; params {NAME: value};
 paramNumbers {NAME: number}; direct [{line, event, due, at}]; syncOverflows; usbTxDropped; seqc {the 11 fields of seqc_stats_t,
 by their C names}; counters {the 14 fields of emu_counters_t, by their C names}; wallSeconds;
-virtualSeconds; speed; warnings [..]
+virtualSeconds; speed; scriptInputs; warnings [..]
 ```
 
-`selected.song` is the index S with `seq_activeSong == seq_songData[S]`, or −1. `params` holds `activeParameters[p]` of each `--param`, by its lower-case table name (also when given by number), and `paramNumbers` its number p. `direct` lists each direct event: its script line, its event, its due time (t0 + its time) and the boundary at which it ran. `speed` = `virtualSeconds` (tEnd / 216 MHz) / `wallSeconds` (from `main()` to the end, `CLOCK_MONOTONIC`).
-- **Short form on stderr** at exit 0: `lichomat-render: t0 at S.SSS s, N blocks, U underruns after t0, X.Xx real time`, then each warning as `lichomat-render: warning: …`.
+`selected.song` is the index S with `seq_activeSong == seq_songData[S]`, or −1. `params` holds `activeParameters[p]` of each `--param`, by its lower-case table name (also when given by number), and `paramNumbers` its number p. `direct` lists each direct event: its script line, its event, its due time (t0 + its time) and the boundary at which it ran. `speed` = `virtualSeconds` (tEnd / 216 MHz) / `wallSeconds` (from `main()` to the end, `CLOCK_MONOTONIC`). `scriptInputs` counts the `emu_in*()` calls the script made, clock pulses included (added after the review of R2.1–R2.4, `e10cfb0`). `direct` and `warnings` have no length limit (`14d43ae`).
+- **Short form on stderr** at exit 0: `lichomat-render: t0 at S.SSS s, N blocks, U underruns after t0, X.Xx real time`, then each warning as `lichomat-render: warning: …`. Every other exit also ends with the warnings, after its own message (`14d43ae`; spec §5.5).
 
 ## P6. Golden files and expectations (§8.4)
 
