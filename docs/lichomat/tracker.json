@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 00:31",
+    "updated": "2026-10-29 01:02",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "b1fedba",
+    "head": "ee86ac1",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-29T00:31:00+01:00",
-    "now": "Od 00:28: jeden agent robi R1b.11–R1b.12, potem test bramki M21 i poprawki z przeglądu R1b.5–R1b.8. Zużycie ok. 34% (Twój odczyt), tempo ok. 3%/h; koniec pracy ok. 04:00–04:29."
+    "updated_at": "2026-10-29T01:02:00+01:00",
+    "now": "Od 01:02: jeden agent robi R1b.13–R1b.14 (MIDI DIN i USB: M10, M11). Zużycie ok. 35%."
   },
   "epics": [
     {
@@ -749,6 +749,13 @@
       "question": "Czy akceptujesz specyfikację etapu 1b (docs/superpowers/specs/2026-10-27-emulator-design.md)? Najważniejsze do przeczytania: §6.4 (opóźnienie slave ok. 58 ms), §3.3 i §4.2 (jak emulator prowadzi czas), §7 (zmiany w firmware F1–F10, na LXR w v0.2), §8.4–§8.6 (testy porównujące nagrania) i §15 (pytania Q12–Q19).",
       "assumption": "Bez akceptacji nie piszę planu i nie ruszam kodu etapu 1b.",
       "answer": "Ruszaj teraz (27.10, 05:58): specyfikacja przyjęta z domyślnymi odpowiedziami Q12–Q19. Twoje uwagi do niej wprowadzam, kiedy je zgłosisz."
+    },
+    {
+      "id": "Q21",
+      "status": "otwarte",
+      "question": "Emulator znalazł błąd w firmware 1.7 (§7, kolejne znaleziska sanitizera): gdy gałka nie stoi na 0° przy włączeniu, pierwsze adc_checkPots() bootu (appMain.c:178) biegnie, zanim morphParameters jest ustawione, i presetManager.c:2263 czyta przez wskaźnik NULL. Na urządzeniu nieszkodliwe (czyta ITCM, a morph 0 odrzuca wartość), na hoście UBSan przerywa. Czy dodać poprawkę F11: ustawić cel morfingu przed tym pierwszym wywołaniem, jak F2, w v0.2?",
+      "assumption": "Na razie bez zmian w firmware: test emulatora sam ustawia morphParameters. Jeśli się zgodzisz, F11 to jeden mały commit na gałęzi emulator, z testem, i trafia do v0.2 razem z F1–F10.",
+      "answer": ""
     }
   ],
   "log": [
@@ -2211,6 +2218,11 @@
       "n": 292,
       "at": "2026-10-29 00:31",
       "text": "Twój odczyt licznika (00:31): 34% tygodnia, a mój szacunek pokazywał 24%. Przeliczony na dwóch odczytach (19% o 05:50 27.10 i 34% teraz): 1% to ok. 2,9M jednostek kosztu, obecne tempo ok. 3% na godzinę. Kończę nowe zadania przy ok. 45–47% albo ok. 04:00, przed końcem Twojej 4-godzinnej kofeiny (ok. 04:29), i piszę podsumowanie na czacie. Przegląd R1b.5–R1b.8: model w porządku, 2 ważne luki w testach i 3 drobne; poprawki robi agent R1b.11–R1b.12 po swoich zadaniach."
+    },
+    {
+      "n": 293,
+      "at": "2026-10-29 01:02",
+      "text": "R1b.11–R1b.12 i poprawki z przeglądu zakończone (01:02), 9 commitów db30b52..ee86ac1: fa7d300 (panel M8), d61075e (karta M9), aa064bc (negatywny test bramki M21), 208cd5b, 7d882b7, 3fe9070, 5b2785b, ee86ac1 (5 poprawek z przeglądu R1b.5–R1b.8, w tym hook bloku punktualnie po zwolnieniu PRIMASK). Emulator 81 z 81, 0 ostrzeżeń, 72 mutanty. Model gałek zgodny z §4.6: firmware robi dokładnie 134 kroki na obrót (22 na liście), więc Q16 bez zmian; szkic liczył zmiany wartości. Nowe pytanie Q21: błąd firmware przy gałce nie na 0° przy włączeniu."
     }
   ]
 }
