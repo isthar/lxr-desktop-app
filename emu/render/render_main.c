@@ -49,12 +49,12 @@ static struct
 	enum { PH_PRELUDE, PH_WAIT, PH_PLAY } phase;
 	int t0Hook;		/* the sink found t0; the hook of this request starts the script */
 	render_selected_t selected;
-	char *warnings[RENDER_MAX_WARNINGS];
-	unsigned nwarnings;
+	char **warnings;			/* every warning, for the summary and stderr */
+	unsigned nwarnings, capWarnings;
 	render_script_t script;
 	unsigned nextDirect;		/* the script index from which to look for the next direct event */
-	render_direct_t direct[RENDER_MAX_DIRECT];
-	unsigned ndirect;
+	render_direct_t *direct;	/* every direct event that ran, for the summary */
+	unsigned ndirect, capDirect;
 	uint64_t scriptInputs;		/* the emu_in*() calls of the script's timed events */
 	/* --param, in command-line order: the edits, and for the summary the names,
 	 * the numbers and the values after the prelude */
@@ -72,8 +72,16 @@ static double wallNow(void)
 	return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
 }
 
-/* print "lichomat-render: " + the message + a newline to stderr and exit (spec 5.7);
- * the card copy goes first */
+/* the warnings, last on stderr at every exit (plan P5 prints them after the short
+ * summary at exit 0); while seeding they are printed as they come */
+static void render_printWarnings(void)
+{
+	for (unsigned i = 0; i < R.nwarnings; i++)
+		fprintf(stderr, "lichomat-render: warning: %s\n", R.warnings[i]);
+}
+
+/* print "lichomat-render: " + the message + a newline to stderr, then the warnings,
+ * and exit (spec 5.7); the card copy goes first */
 static void render_die(int code, const char *fmt, ...) __attribute__((format(printf, 2, 3), noreturn));
 static void render_die(int code, const char *fmt, ...)
 {
@@ -83,6 +91,7 @@ static void render_die(int code, const char *fmt, ...)
 	vfprintf(stderr, fmt, ap);
 	fputc('\n', stderr);
 	va_end(ap);
+	render_printWarnings();
 	render_cardRemove(R.copy);
 	exit(code);
 }
@@ -124,7 +133,7 @@ static void lineWrite(render_line_t *l)
 }
 
 /* Codes 3 and 4 (plan P2): "lichomat-render: HEAD WHAT at cycle C", the last 32
- * trail lines, the card copy's folder; write(2) only, then _exit() without
+ * trail lines, the card copy's folder, the warnings; write(2) only, then _exit() without
  * cleanup, so the copy stays for inspection. The watchdog calls it while the
  * firmware thread makes no progress, so it is not in the scheduler, which alone
  * moves the clock and writes the trail: both hold still while they are read. */
@@ -144,6 +153,12 @@ static void render_abort(int code, const char *head, const char *what)
 	{
 		lineAdd(&l, "lichomat-render: the card copy is kept in ");
 		lineAdd(&l, R.copy);
+		lineWrite(&l);
+	}
+	for (unsigned i = 0; i < R.nwarnings; i++)
+	{
+		lineAdd(&l, "lichomat-render: warning: ");
+		lineAdd(&l, R.warnings[i]);
 		lineWrite(&l);
 	}
 	_exit(code);
@@ -238,8 +253,8 @@ static void render_onFault(void *ctx, const char *what)
 	render_fault(what);
 }
 
-/* a warning (spec 4.8, 11): kept for the summary, printed at once while seeding
- * and after the short summary of a render */
+/* a warning (spec 4.8, 11): kept for the summary and printed last at the exit;
+ * printed at once while seeding */
 static void render_warn(const char *what)
 {
 	if (!R.o)
@@ -247,18 +262,49 @@ static void render_warn(const char *what)
 		fprintf(stderr, "lichomat-render: warning: %s\n", what);
 		return;
 	}
-	if (R.nwarnings < RENDER_MAX_WARNINGS)
+	if (R.nwarnings == R.capWarnings)
 	{
-		char *copy = strdup(what);
-		if (copy)
-			R.warnings[R.nwarnings++] = copy;
+		const unsigned cap = R.capWarnings ? 2u * R.capWarnings : 32u;
+		char **grown = realloc(R.warnings, cap * sizeof *grown);
+		if (!grown)
+			render_fault("out of memory for the warnings");
+		R.warnings = grown;
+		R.capWarnings = cap;
 	}
+	char *copy = strdup(what);
+	if (!copy)
+		render_fault("out of memory for the warnings");
+	R.warnings[R.nwarnings++] = copy;
 }
 
+/* A warning of the device (emu_card.c) names the card copy, a temporary folder
+ * that is gone after the render; it names the card instead, as the renderer's own
+ * warnings do: every occurrence of the copy's path becomes the card's. */
 static void render_onWarn(void *ctx, const char *what)
 {
 	(void)ctx;
-	render_warn(what);
+	const size_t n = strlen(R.copy);
+	if (!R.o || !n || !strstr(what, R.copy))
+	{
+		render_warn(what);
+		return;
+	}
+	size_t cardLen = strlen(R.o->card);
+	while (cardLen > 1u && R.o->card[cardLen - 1u] == '/')
+		cardLen--;
+	char text[2u * EMU_HOST_PATH + 256u];
+	size_t len = 0;
+	for (const char *p = what; *p && len < sizeof text - 1u;)
+		if (!strncmp(p, R.copy, n))
+		{
+			for (size_t k = 0; k < cardLen && len < sizeof text - 1u; k++)
+				text[len++] = R.o->card[k];
+			p += n;
+		}
+		else
+			text[len++] = *p++;
+	text[len] = '\0';
+	render_warn(text);
 }
 
 /* code 4 (spec 4.2, plan P2): no scheduler progress for 10 s of wall time outside
@@ -603,8 +649,16 @@ static unsigned render_findDirect(unsigned i)
 static void render_runDirect(const render_event_t *e)
 {
 	const uint64_t now = emu_now();
-	if (R.ndirect < RENDER_MAX_DIRECT)
-		R.direct[R.ndirect++] = (render_direct_t){ e->line, render_eventName(e->kind), R.t0 + e->t, now };
+	if (R.ndirect == R.capDirect)
+	{
+		const unsigned cap = R.capDirect ? 2u * R.capDirect : 256u;
+		render_direct_t *grown = realloc(R.direct, cap * sizeof *grown);
+		if (!grown)
+			render_fault("out of memory for the direct events");
+		R.direct = grown;
+		R.capDirect = cap;
+	}
+	R.direct[R.ndirect++] = (render_direct_t){ e->line, render_eventName(e->kind), R.t0 + e->t, now };
 	if (e->kind == RS_MARK && now < R.tEnd)
 	{
 		emu_lcdSnapshot_t lcd;
@@ -701,9 +755,8 @@ static void render_finish(uint64_t now)
 		fprintf(stderr, "lichomat-render: t0 at %.3f s, %llu blocks, %llu underruns after t0, %.1fx real time\n",
 			(double)R.t0 / (double)EMU_CPU_HZ, (unsigned long long)R.blocks,
 			(unsigned long long)s.underrunsAfter, s.speed);
-		for (unsigned i = 0; i < R.nwarnings; i++)
-			fprintf(stderr, "lichomat-render: warning: %s\n", R.warnings[i]);
 	}
+	render_printWarnings();
 	fflush(NULL);
 	exit(code);
 }

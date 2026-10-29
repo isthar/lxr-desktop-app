@@ -23,8 +23,6 @@
 #include "render_fw.h"
 #include "render_opts.h"
 
-#define RENDER_MAX_WARNINGS 32
-#define RENDER_MAX_DIRECT 256
 
 typedef struct render_out
 {

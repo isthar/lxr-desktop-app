@@ -235,6 +235,15 @@ def M17_card_errors(t):
     # --project 0 on the same card passes too, and --project 5 on idx5's does not
     t.render(lower, ['--seconds', '0.1', '--project', '0'])
     card_error(t, lower, ['--project', '5'], 'project 5 has no PROJ05/PRJ.NFO')
+    # a warning that explains the error is not lost: every exit prints the warnings,
+    # after its message (spec 11; plan P5's exit 0 prints them after the summary line)
+    renamed = card_copy(t, seed, 'renamed')
+    os.rename(os.path.join(renamed, 'PROJ00'), os.path.join(renamed, 'Project00'))
+    p = t.run(['--card', renamed, '--out', t.path('o.wav')], code=2)
+    want = ['lichomat-render: card %s: project 0 has no PROJ00/PRJ.NFO' % renamed,
+            'lichomat-render: warning: card: %s is not an 8.3 name; the device would not see it'
+            % os.path.join(renamed, 'Project00')]
+    check(p.stderr.splitlines() == want, 'PROJ00 renamed Project00: stderr %r, not %r' % (p.stderr, want))
     no_copies_left()
 
 @case
@@ -408,6 +417,22 @@ def M17_card_copy(t):
     p = t.run(['--card', src, '--out', t.path('o.wav'), '--keep-card', full], code=1)
     check('--keep-card' in p.stderr, '--keep-card on a folder with a file: %r' % p.stderr)
     check(tree(src) == before, 'the source card changed')
+    # two files for one slot (spec 11): the device's warning names the source card,
+    # not the copy; and every warning reaches the summary, here 41
+    dup = card_copy(t, t.seed(), 'dup')
+    shutil.copy(os.path.join(dup, 'PROJ00', '05-.PAT'), os.path.join(dup, 'PROJ00', '05-X.PAT'))
+    longs = [os.path.join(dup, 'PROJ00', 'LongName%02d.txt' % k) for k in range(40)]
+    for x in longs:
+        with open(x, 'wb') as f:
+            f.write(b'x')
+    s, _, p = t.render(dup, ['--seconds', '0.1'])
+    slot = 'card: %s holds 05-.PAT and 05-X.PAT for one slot; the older, 05-.PAT, loads' % os.path.join(dup, 'PROJ00')
+    names = ['card: %s is not an 8.3 name; the device would not see it' % x for x in longs]
+    check(sorted(s['warnings']) == sorted(names + [slot]), 'the warnings are %r' % s['warnings'])
+    warned = [x for x in p.stderr.splitlines() if x.startswith('lichomat-render: warning: ')]
+    check(sorted(warned) == sorted('lichomat-render: warning: ' + w for w in names + [slot]),
+          'stderr warns %r' % warned)
+    check(not any(t.tmp in w for w in s['warnings']), 'a warning names the card copy: %r' % s['warnings'])
     no_copies_left()
 
 @case
@@ -606,6 +631,18 @@ def M17_events_panel(t):
     for x, d, ms in zip(lines, s['direct'], (0, 300, 1200, 1800)):
         check(d['due'] == s['t0'] + ms * 216000 and d['at'] >= d['due'] and int(x.split()[0]) == d['at'] - s['t0'],
               '%r does not match the summary entry %r' % (x, d))
+    # + times count from the previous line's time, also after a + line; and the
+    # summary lists every direct event, here 300 marks
+    log = t.path('marks.log')
+    text = '0ms mark a\n+100ms mark b\n+100ms mark c\n' + ''.join('+1ms mark m%d\n' % k for k in range(297))
+    s, _, _ = t.render(seed, ['--no-start', '--seconds', '0.6', '--panel-log', log, '--events', t.script(text)])
+    lines = log_lines(log, PANEL_LINE)
+    check(len(lines) == 300 and len(s['direct']) == 300, '300 marks: %d panel-log lines, %d direct entries'
+          % (len(lines), len(s['direct'])))
+    for x, d, ms in zip(lines, s['direct'], [0, 100, 200] + [201 + k for k in range(297)]):
+        late = int(x.split()[0]) - ms * 216000
+        check(d['due'] == s['t0'] + ms * 216000 and 0 <= late < 54000 + frames_to_cycles(64),
+              '%r: due %d, %d cycles after %d ms' % (x, d['due'] - s['t0'], late, ms))
 
 @case
 def M17_stereo(t):
@@ -820,12 +857,16 @@ def M17_bars(t):
         check(s['inputs']['blocks'] == want and frames == 64 * want and s['selected']['bpm'] == 120
               and s['selected']['sync'] == 0, 'EXT, %r: %d blocks, %d frames, selected %r, not %d blocks at 120 BPM'
               % (args, s['inputs']['blocks'], frames, s['selected'], want))
-    # MID with a clock in the script stays MID: no internal tempo for --bars
+    # MID with a clock in the script stays MID: no internal tempo for --bars; the
+    # card's warning comes after the message
     script = t.script('0ms din-clock 120\n')
+    with open(os.path.join(mid, 'PROJ00', 'LongName9.txt'), 'wb') as f:
+        f.write(b'x')
     p = t.run(['--card', mid, '--out', t.path('o.wav'), '--bars', '2', '--events', script], code=1)
     lines = p.stderr.splitlines()
-    check(len(lines) == 1 and lines[0].startswith('lichomat-render: --bars: ') and 'MID' in lines[0],
-          'MID with a clock and --bars: %r' % p.stderr)
+    check(len(lines) == 2 and lines[0].startswith('lichomat-render: --bars: ') and 'MID' in lines[0]
+          and lines[1] == 'lichomat-render: warning: card: %s is not an 8.3 name; the device would not see it'
+          % os.path.join(mid, 'PROJ00', 'LongName9.txt'), 'MID with a clock and --bars: %r' % p.stderr)
     no_copies_left()
 
 @case
@@ -894,7 +935,8 @@ def M17_save(t):
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists
-    and is removed here; returns the stderr lines before the head line"""
+    and is removed here, then the warnings; returns the head line, the stderr
+    lines before it and the warnings"""
     lines = p.stderr.splitlines()
     i = next((k for k, x in enumerate(lines) if x.startswith(head) and re.search(r' at cycle \d+$', x)), None)
     check(i is not None, 'no line %r ... at cycle C: %r' % (head, p.stderr))
@@ -902,13 +944,15 @@ def kept_report(t, p, head):
     check(len(trail) == 32 and all(re.match(TRAIL_LINE, x) for x in trail), 'not 32 trail lines after %r: %r'
           % (lines[i], trail))
     rest = lines[i + 33:]
-    m = re.match(r'^lichomat-render: the card copy is kept in (.+)$', rest[0]) if len(rest) == 1 else None
-    check(m, 'the lines after the trail are %r' % rest)
+    m = re.match(r'^lichomat-render: the card copy is kept in (.+)$', rest[0]) if rest else None
+    warnings = rest[1:]
+    check(m and all(x.startswith('lichomat-render: warning: ') for x in warnings),
+          'the lines after the trail are %r' % rest)
     copy = m.group(1)
     check(os.path.dirname(copy) == t.tmp and os.path.isfile(os.path.join(copy, 'PROJ00', 'PRJ.NFO')),
           'the kept card copy %s is not a card in %s' % (copy, t.tmp))
     shutil.rmtree(copy)
-    return lines[i], lines[:i]
+    return lines[i], lines[:i], warnings
 
 @case
 def M17_fault(t):
@@ -918,7 +962,8 @@ def M17_fault(t):
         faults.append(('ubsan', 'SIGABRT'))
     for fault, what in faults:
         p = t.run(['--card', seed, '--out', t.path('o.wav'), '--seconds', '1', '--test-fault', fault], code=3, test=True)
-        line, before = kept_report(t, p, 'lichomat-render: firmware fault: ')
+        line, before, warned = kept_report(t, p, 'lichomat-render: firmware fault: ')
+        check(not warned, '--test-fault %s warns %r' % (fault, warned))
         report = any('Sanitizer' in x or 'runtime error' in x for x in before)
         # under ASan a read through NULL may end in its report and abort() instead
         ok = what in line or (fault == 'segv' and 'SIGABRT' in line and report)
@@ -926,6 +971,15 @@ def M17_fault(t):
         if fault == 'ubsan':
             check(any('runtime error: signed integer overflow' in x for x in before),
                   '--test-fault ubsan: no UBSan report before %r' % line)
+    # the warnings come after the card copy's line
+    card = card_copy(t, seed, 'long')
+    with open(os.path.join(card, 'PROJ00', 'LongName9.txt'), 'wb') as f:
+        f.write(b'x')
+    p = t.run(['--card', card, '--out', t.path('o.wav'), '--seconds', '1', '--test-fault', 'model'], code=3, test=True)
+    _, _, warned = kept_report(t, p, 'lichomat-render: firmware fault: ')
+    want = ['lichomat-render: warning: card: %s is not an 8.3 name; the device would not see it'
+            % os.path.join(card, 'PROJ00', 'LongName9.txt')]
+    check(warned == want, 'exit 3 warns %r, not %r' % (warned, want))
     no_copies_left()
 
 @case
@@ -936,7 +990,7 @@ def M17_hang(t):
               timeout=120)
     wall = time.monotonic() - start
     check(10 <= wall <= 30, 'exit 4 after %.1f s of wall time, not 10-30 s' % wall)
-    line, _ = kept_report(t, p, 'lichomat-render: hang: ')
+    line, _, _ = kept_report(t, p, 'lichomat-render: hang: ')
     check(line.startswith('lichomat-render: hang: no progress for 10 s at cycle '), 'the hang line is %r' % line)
     print('exit 4 after %.1f s' % wall)
     no_copies_left()
