@@ -1284,9 +1284,11 @@ time from source, so the Command Line Tools are enough to build it.
 ## 7. Firmware changes (Q13)
 
 - Each change is one small commit on `emulator`, with its own test, before the emulator code that relies
-  on it. R1 lands all of them before any `emu/` code (§13).
+  on it. R1 lands F1–F10 before any `emu/` code (§13). F6b, F11 and F12, for fw 1.7 bugs the emulator
+  found in R1 (Q21, Q22) and while R2 was planned (Q23), land after R2.4: `7f5732f` (F12), `7399c7d`
+  (F11), `cf8fb4d` (F6b).
 - The changes reach the device in the next firmware release, v0.2, only after the owner's v0.1 checks,
-  with the device checks U4–U8 (§12.4, increment R6). A 0.1.x version cannot carry them: 'v0.1.1
+  with the device checks U4–U9 (§12.4, increment R6). A 0.1.x version cannot carry them: 'v0.1.1
   unofficial' has 17 characters, and the configure step stops above the splash's 16
   (`CMakeLists.txt:33–39`).
 - 'The base build' below is the firmware built from the commit before the change.
@@ -1301,10 +1303,13 @@ time from source, so the Command Line Tools are enough to build it.
 | F4 | `main.c`'s boot becomes `appMain_boot()` and its loop body `appMain_loopOnce()`, in `Core/Src/appMain.c` (below) | None; the code moves, the logic stays | `git diff --color-moved` shows moves plus the edits listed below only; the image check finds the splash; the F4TEST check (below); ITCM use is unchanged; U7 |
 | F5 | `sequencer.c`: `seq_cbRandom()` returns `SEQ_RANDOM()`, a macro that defaults to `GetRngValue()` | None | The release `.bin` is byte-identical to the base build's |
 | F6 | `Oscillator.c`: a saturating float-to-uint32 conversion at the 8 FM sites (lines 118, 141, 166, 194, 232, 516, 543 and 577) and in `freq2PhaseIncr()` (line 25). On the Cortex-M7 it is the plain cast, which `VCVT` already saturates | None | The release `.bin` is byte-identical; M1: the host version equals `FCVTZU` for edge values and NaN |
+| F6b | `Oscillator.c`: `freq2PhaseIncr1024()` and `freq2PhaseIncr32767()` (lines 47–55) use F6's conversion too (Q22). The first passes 2^32 from `REAL_FS` (44,140 Hz) up, which U8's recipe reaches: note 127 times the pitch envelope's peak factor 33 is 414 kHz. The second passes it from 32 × `REAL_FS` (1.41 MHz) | None: on the device the conversion is the plain cast. No device check | The release `.bin` and `.map` are byte-identical (`cf8fb4d`); M15: `M15_f9_band10` plays U8's recipe in full, pitch modulation 127 instead of 32, under UBSan |
 | F7 | `AudioCodecManager.c`: `dma_buffer` and `dma_buffer2` get 4-byte alignment, and so does any other `int16_t` buffer accessed as `int32_t` that UBSan's alignment check finds | None. Both buffers already sit at 4-byte-aligned addresses (`0x20019e1c` and `0x2001a01c` in the release map) | The release `.bin` is byte-identical |
 | F8 | `Core/sources.cmake`: the module source lists leave `Core/CMakeLists.txt`, with the same files in the same order | None | The release `.bin` and `.map` are byte-identical |
 | F9 | `Oscillator.c:471` and `:175`: the interpolation reads `table[row][itg & 1023]` | It changes the sound in two cases (below) | M15: no read past the tables under ASan; listening check U8 before it reaches a release |
 | F10 | `presetManager.c` and `PresetManager.h`: `uint8_t preset_morphBusy(void)` returns `morph_state` (`presetManager.c:41`), which is file-static today | None. Nothing in the firmware calls it, and the build's `--gc-sections` drops it | The release image is equivalent to the base build's: the same functions and veneers, equal instruction by instruction with branch targets as symbol names, and every other section byte-identical (`tools/elf_equiv.py` on `emulator`). The `.bin` itself differs: the new function's input section shifts the ids GNU ld names its long-branch veneers after, so the 58 veneers between flash and ITCM change order (R1, `6a56e76`); M17's t0 check |
+| F11 | `appMain.c`: `morphParameters = mainParameters[0]` right after `menu_init()`, before the boot's first `adc_checkPots()` (Q21). With a knob off 0° at power-on that call edits, and the edit's `preset_getMorphValue()` (`menu.c:4304`) read `morphParameters[index]` through NULL (`presetManager.c:2263`). F2's line and the card path's (`appMain.c:356`) stay | None. The read took a byte of ITCM near address 0, and `interpolate()` with morph 0 (`activeParameters[PAR_MORPH]` is still 0 there) returns the active value exactly; the boot's later `preset_init(0)` or kit load replaces the edit anyway. No device check | M15: `M15_f11_knobs_at_boot` powers on with the four knobs at 40°, with and without a card, under UBSan; `M8_fw_no_edit_at_boot` without the morph target it used to set. The image changes in `appMain_boot()` only, the one section of `appMain.c`'s object that differs (0x2d4 → 0x2d0 B), and the code after it moves by 4 bytes (`7399c7d`) |
+| F12 | `buttonHandler.c`, `SELECT_MODE_PATTERN`: a pattern select by the step buttons sends `SEQ_REQUEST_EUKLID_PARAMS` with `menu_getActiveVoice()`, as the commented-out argument meant and the other senders do (`:493`, `:1560`), instead of `menu_activePage` (16), which `CortexParser.c:887–897` passed to the Euclid getters' `uint8_t[7]` arrays (Q23) | After the select, `activeParameters[PAR_EUKLID_*]` hold the active voice's length, steps and rotation, not stray bytes (5, 0, 0 on the host). Only the Euclid page shows them, and the pattern generator mode, the one way to open it, and a voice button on it ask for them again first (`buttonHandler.c:493`, `:1560`). So the page should look as in v0.1; U9 checks it | M15: `M15_f12_euklid` selects pattern 20 by the step buttons with voice 3 active, under UBSan: the parameters hold voice 3's values, and the Euclid page shows them. The image changes in `buttonHandler_seqButtonPressed()` only, which keeps its size: `tools/elf_equiv.py` finds that one function different (`7f5732f`); U9 |
 
 **F4 in detail.**
 - The boot is `main.c` from `dio_init()` at line 319 to the EXTI enables at line 921. The loop body is the
@@ -1335,9 +1340,9 @@ time from source, so the Command Line Tools are enough to build it.
   to 1 must also compile; it prints its `#warning`.
 
 **F6 and the compiler flag.** With `-fno-strict-float-cast-overflow` (§8.2), every float-to-int cast in
-the firmware already follows arm64's saturating conversion, which matches the M7's. F6 still makes the 9
-known sites defined C. That keeps the sanitizer's float-cast check on for all other code, which stage 2's
-timing code needs.
+the firmware already follows arm64's saturating conversion, which matches the M7's. F6 and F6b still make
+the 11 known sites defined C. That keeps the sanitizer's float-cast check on for all other code, which
+stage 2's timing code needs.
 
 **F9, the table read.** `calcWavetableOscBlock()` and `calcFmBlock()` interpolate between
 `table[row][itg]` and `table[row][itg + 1]`, with itg up to 1023. So they read `table[row][1024]`.
@@ -1368,7 +1373,11 @@ sweep did. A switch from normal to ping-pong with a pointer above 0x4000 wrote u
 `FX_BUFFER`. E4.8 fixes it on `timing-core` (`2bb5d80`). M16 keeps the scenario as a regression test.
 
 **Further sanitizer findings** follow the same rules: one commit each, a test, and a device check
-wherever the device's output could change.
+wherever the device's output could change. The emulator found three in fw 1.7, two in R1 and one while R2
+was planned, and the owner approved their fixes for v0.2: F11 (Q21), F6b (Q22) and F12 (Q23) above. The
+emulator no longer works around any of them: R1's `M8_fw_no_edit_at_boot` set the morph target itself,
+`M15_f9_band10` kept the pitch modulation at 32, and R2's plan was to turn the bounds checks off in the
+Euclid getters. Only B13 and B14 (`emu/sanitize/pwm_ignorelist.txt`) still wait, for U8.
 
 ## 8. Fidelity and golden tests
 
@@ -1723,7 +1732,7 @@ They run through ctest in `emu/`, on macOS on arm64, in both CI jobs and in `too
 | M12 | The jacks: clock in at 4 and 24 PPQ only in sync mode 1; the reset gate; clock-out edges |
 | M13 | The random streams: known first values for seeds 1 and 2; a probability edit leaves the DSP stream's draws unchanged |
 | M14 | Determinism, slicing and speed: two runs of G1 are byte-identical; G1 rendered in one run equals G1 rendered as consecutive 'run until t' calls of 470 and 471 frames, with a tier hook that waits at every call; `emu_golden.py check` makes every golden's broken variant fail its expectations; in a Release build, G1 renders at least 10× faster than real time |
-| M15 | The firmware changes: F1 (CC 1 with nodes at destination 0), F2 (morph after a boot without a card), F3 (the clear-page LCD equal to the base build's), F9 (no read past the tables under ASan) |
+| M15 | The firmware changes: F1 (CC 1 with nodes at destination 0), F2 (morph after a boot without a card), F3 (the clear-page LCD equal to the base build's), F6b (U8's recipe in full under UBSan), F9 (no read past the tables under ASan), F11 (a power-on with the knobs off 0°, with and without a card), F12 (a pattern select by the step buttons fills the Euclid parameters from the active voice) |
 | M16 | The ping-pong delay mode-switch scenario under ASan and UBSan, as a regression test of E4.8 |
 | M17 | The renderer: options and defaults; the t0 rule (t0 is the first block request at least 100 ms after the prelude's last event, with `preset_morphBusy()` 0 at every pass of those 100 ms); `--project`; `--bpm`; `--param` for `PAR_BPM`, `PAR_SHUFFLE` and one sound parameter, each setting `activeParameters` and reaching the engine (the F8 rate, the step times in the MIDI log, the audio); a refused special-case parameter; the save events; `/TMP` handling; `--seed-card`; `--stereo sum`; exit codes 1–5 (codes 3 and 4 through a test-only hook) |
 | M18 | The app's timing model, without CoreAudio. A fake output (48 kHz, 512-frame buffers, callbacks of 470–471 frames, `mHostTime` = entry + buffer + 48-frame safety offset + 1.09 ms of converter, a device latency of 60 frames and a stream latency of 690 frames) with §6.2's ring, and DAW-like clock stamps, drive the firmware thread's code. With the default D, steps follow the clock at a constant latency of D + 0–1.45 ms from 90 to 174 BPM, and L is at least every measured lead; with D = 0, the latency varies with the arrival phase by at least 10 ms. A source that sends 6 clocks with distinct timestamps in one event list keeps 6 distinct stamps; 6 clocks stamped 0 in one list enter as one transfer. A re-anchor that moves the map back by 5 ms keeps a port's messages in order |
@@ -1757,7 +1766,9 @@ G1–G10 (§8.6), in both CI jobs.
 
 ### 12.4 Device checks for the firmware changes
 
-When F1–F10 reach a firmware release (v0.2, R6), the hardware checklist gains these checks:
+When F1–F12 reach a firmware release (v0.2, R6), the hardware checklist gains these checks. F5–F8, F6b,
+F10 and F11 have none: their images are byte-identical or equivalent, or, for F11, the value whose read
+moves is discarded (§7).
 
 | ID | Check |
 |---|---|
@@ -1766,6 +1777,7 @@ When F1–F10 reach a firmware release (v0.2, R6), the hardware checklist gains 
 | U6 | The clear-automation pages show 'clear [autom. 1]' and 'clear [autom. 2]' as in v0.1 (F3) |
 | U7 | H1 and H2 again (F4) |
 | U8 | Listening check against v0.1 (F9). Voice 1 with a saw wavetable oscillator at its highest coarse pitch (note 127), pitch modulation amount 127, pitch EG decay 64 or more and pitch slope 64; then the same with the triangle; then a rect wavetable oscillator at coarse notes 97, 109 and 121 (about 2.2, 4.4 and 8.9 kHz, rows 7, 8 and 9) without pitch modulation. 16 hits of each sound as in v0.1; then a PWM oscillator with a nonzero PWM amount, at a low and a very high pitch (B13, B14) |
+| U9 | In the pattern generator (hold SHIFT and press the second mode button), press voice button 3 and give voice 3 a length, steps and rotation unlike voice 1's. Hold SHIFT and press step button 16, select another pattern with a step button, then open the pattern generator again: it shows voice 3's length, steps and rotation, and turning the length knob changes voice 3's steps, as in v0.1 (F12) |
 
 ## 13. Rollout
 
@@ -1778,11 +1790,11 @@ When F1–F10 reach a firmware release (v0.2, R6), the hardware checklist gains 
   | Increment | Contents | Tracker |
   |---|---|---|
   | R1 | First F1–F10, each with its acceptance, and the strict copy of the timing core in `tests/`. Then `emu/` with the stubs, the overlay, the core with the tier hook, and the card backend; boot and passes in a test (M1–M13, M15, M19–M22) | E5.2, whose title changes from 'Build silnika DSP na hoście (shimy CMSIS)', the DSP-only approach of §3.2, to the whole firmware on a virtual device |
-  | R2 | `lichomat-render`: options, card copy, timeline, event scripts, outputs, exit codes, `--seed-card`, `--param` and the save events (M14, M17) | E5.3 |
+  | R2 | `lichomat-render`: options, card copy, timeline, event scripts, outputs, exit codes, `--seed-card`, `--param` and the save events (M14, M17); the firmware changes F6b, F11 and F12 (Q21–Q23), before R2.5 | E5.3 |
   | R3 | Card fixtures and `make.sh`, G1–G10 with their expectations, `goldens.json`, `tools/emu_golden.py`, `emulator.yml`, the ping-pong regression scenario (M16, M23), the `check.sh` step | E5.4 |
   | R4 | The app: threads and rings, CoreAudio, the time map, CoreMIDI in and out, the panel, the card folder, the clock-jack LED and buttons, power and crash handling, diagnostics (M18; A1–A11) | E5.5 |
   | R5 | The app's audio options for the clock jacks (§6.8) | E5.5 |
-  | R6 | Firmware release v0.2 with F1–F10, on the owner's go-ahead after their v0.1 checks: U4–U8 in `hardware-checklist.md`, the release notes, the image from CI | a new task |
+  | R6 | Firmware release v0.2 with F1–F12 (F6b included), on the owner's go-ahead after their v0.1 checks: U4–U9 in `hardware-checklist.md`, the release notes, the image from CI | a new task |
 
 - **Plans.** This spec is too big for one plan, so it splits into four:
   1. R1, the virtual device, with the firmware changes;
@@ -1800,7 +1812,7 @@ When F1–F10 reach a firmware release (v0.2, R6), the hardware checklist gains 
 
 | # | Risk | Mitigation |
 |---|---|---|
-| 1 | Latent memory bugs crash the host or make renders depend on the memory layout. More may sit on paths nobody ran | F1–F3 and F9; the sanitizer sweep and its fixes E4.6–E4.8; ASan, UBSan and pattern-initialised locals in CI with goldens and scenarios; exit code 3 and the crash note with the event trail |
+| 1 | Latent memory bugs crash the host or make renders depend on the memory layout. More may sit on paths nobody ran | F1–F3, F9, F11 and F12; the sanitizer sweep and its fixes E4.6–E4.8; ASan, UBSan and pattern-initialised locals in CI with goldens and scenarios; exit code 3 and the crash note with the event trail |
 | 2 | Firmware code runs on more than one host thread, which turns compiler-only fences, no-op PRIMASK sections and non-reentrant parsers into data races | One firmware thread with rings (§3.1, §6.1); the tier hook instead of a second thread; `MIDISend` and `MIDIReceived` on their own thread |
 | 3 | A busy-wait hangs the virtual clock, or a long firmware call starves the tier | Time passes in `HAL_Delay()` and in `HAL_GetTick()` spins; the tier hook runs inside them; the LCD completes at once; the format routine is unreachable; the watchdog |
 | 4 | The app's MIDI timing misleads a user: late slave steps, future events acting early, callback stamps, MIDI out early or jittered | Hold until due; D computed from the output's latencies; per-packet stamps; sending at the presentation time; the DIN wire model (§4.3, §6.3–§6.5); M18; A4–A6 |

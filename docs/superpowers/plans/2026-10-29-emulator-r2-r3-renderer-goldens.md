@@ -15,16 +15,17 @@ The spec is `docs/superpowers/specs/2026-10-27-emulator-design.md`, accepted wit
 ## Rules for every task
 
 - **Where.** Work in the worktree `/Users/tk/Code/lxr/build/wt-emulator`, branch `emulator`, head `22827f7` at the start. Every Bash call starts in a new shell: begin each command with `cd /Users/tk/Code/lxr/build/wt-emulator &&`, and add `source tools/env.sh >/dev/null &&` where it needs `cmake`, `ctest` or `ninja`.
-- **No `Core/` changes.** No task needs one. A firmware bug found here is stopped around (an ignorelist, a fixture that avoids it) only where this plan says so; anything else stops the task and goes to the controller as an owner question (§7, "Further sanitizer findings").
+- **No `Core/` changes.** No task needs one. The three fw 1.7 bugs that R1 and the planning of R2 found are fixed on `emulator` after R2.4, with the owner's approval, as firmware changes of §7: F12 (`7f5732f`, Q23), F11 (`7399c7d`, Q21) and F6b (`cf8fb4d`, Q22). A firmware bug found here is stopped around (an ignorelist, a fixture that avoids it) only where this plan says so; anything else stops the task and goes to the controller as an owner question (§7, "Further sanitizer findings").
 - **`tools/`** changes only in Task R3.2 (`tools/emu_golden.py`, new) and Task R3.6 (`tools/check.sh`, `tools/ci_dry_run.rb`).
 - **Files.** New files carry the GPL-3.0-only header of R1's files (`Copyright (C) 2026 Tomasz Krzywicki`, the SPDX line, the NOTICE.md sentence; `#` comments in scripts). Everything under `emu/` and `tools/` uses LF.
-- **Sanitizers.** The Debug default is `LICHOMAT_EMU_SANITIZE=undefined`. Never configure `address` locally: ASan binaries hang in this sandbox. ASan runs in CI, which waits for Q19.
+- **Sanitizers.** The Debug default is `LICHOMAT_EMU_SANITIZE=undefined`. Never configure `address` locally: ASan binaries hang in this sandbox. ASan runs in CI: `emulator.yml` (Task R3.6) runs on every push of `emulator`, which Q19 allows.
 - **`time()`.** `Core/Src/graphic.c:25` defines `float time`, which takes the place of libc `time()` in every binary that links the firmware. Never call `time()`; wall time comes from `clock_gettime(CLOCK_MONOTONIC, …)`.
-- **Q22.** In a Debug build, a voice above about 44 kHz (coarse pitch times the pitch envelope, up to ×33) aborts in `freq2PhaseIncr1024()` (`Oscillator.c:47–50`). Fixture scripts never raise a coarse pitch, a pitch modulation amount or a pitch EG above the init kit's values. If a render aborts with UBSan's `is outside the range of representable values of type 'unsigned int'` at `Oscillator.c:47` or `:52`, lower that voice's pitch edit in the fixture script; never touch `Core/`.
-- **Q21.** The renderer powers on with the knobs at 0° (`emu_configDefaults()`; §4.6, §6.6). No option sets a knob angle.
+- **Q22, fixed by F6b.** A voice above 44,140 Hz (coarse pitch times the pitch envelope, up to ×33) made `freq2PhaseIncr1024()` (`Oscillator.c:47–50`) convert a float of 2^32 or more to `uint32_t`, which aborted a Debug build. F6b (`cf8fb4d`) gives it and `freq2PhaseIncr32767()` F6's `f2u32_sat()`, and `M15_f9_band10` plays U8's recipe (414 kHz) under UBSan. Fixture scripts may raise pitches; a UBSan report from `Oscillator.c` is a new finding.
+- **Q21, fixed by F11.** A power-on with a knob off 0° no longer reads the morph target through NULL (F11, `7399c7d`; `M15_f11_knobs_at_boot`). The renderer still powers on with the knobs at 0° (`emu_configDefaults()`; §4.6, §6.6), so that no render depends on a knob's start; no option sets a knob angle.
 - **Measured values.** A value this plan marks *measured* was measured while writing it, at `22827f7`. Every other number a task must find (a hash, a threshold, a time) the task measures, checks against the rule this plan gives for it, and writes into the commit message. Never widen a range to make a test pass; report a value that breaks its rule.
 - **Git.** `git add` names each file; never `git add -A` (the worktree shows `.toolchain` as untracked). Never `--amend`, never push. Each commit message ends with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - **Test names.** ctest runs `<binary> <TEST name>`, and the filter of `tests/seqc_test.h` also runs every test named `<name>_…`. So no `TEST()` name may equal another's name plus `_` and more. This plan keeps the same rule for the Python-driven ids.
+- **Parallel ctest.** `ctest -j8` passes as the serial run does (`c253669`). `render_test.py` gives every case its own TMPDIR, `$TMPDIR/lichomat-case-CASE`, which it removes when it is empty; a case looks only at its own work folder and its own TMPDIR.
 
 **EMU-CHECK**, the command every task runs:
 
@@ -40,7 +41,7 @@ Expected: `== emu build: 0`, `== emu warnings: 0`, then `100% tests passed, 0 te
 
 A scratch worktree at `22827f7` with a throw-away test file found these. Tasks rely on them.
 
-- **A new fw 1.7 read past an array (tracker Q23, new).** Selecting a pattern with the step buttons (`buttonHandler.c:1201`) sends `SEQ_REQUEST_EUKLID_PARAMS` with `menu_activePage` (the pattern page, 16) as the track, and `CortexParser.c:887–895` passes it to `euklid_getLength()`, `euklid_getSteps()` and `euklid_getRotation()`, which index `uint8_t[7]` arrays (`EuklidGenerator.c:21–23`, `:171`). UBSan stops there: `index 16 out of bounds for type 'uint8_t[7]'`. The values land in `activeParameters[PAR_EUKLID_*]`, which only the Euclid page shows. The commented-out argument `/*menu_getActiveVoice()*/` shows the intent. Task R2.5 turns off the bounds checks (UBSan's and ASan's) in those three getters only, with `emu/sanitize/euklid_ignorelist.txt`, as R1 did for B13 and B14; the owner decides a firmware fix (proposal: F11 in v0.2, the active voice as the argument).
+- **A fw 1.7 read past an array (tracker Q23), fixed by F12.** Selecting a pattern with the step buttons (`buttonHandler.c:1201`) sent `SEQ_REQUEST_EUKLID_PARAMS` with `menu_activePage` (the pattern page, 16) as the track, and `CortexParser.c:887–895` passed it to `euklid_getLength()`, `euklid_getSteps()` and `euklid_getRotation()`, which index `uint8_t[7]` arrays (`EuklidGenerator.c:21–23`, `:171`). UBSan stopped there: `index 16 out of bounds for type 'uint8_t[7]'`. The owner approved F12 (§7), which sends `menu_getActiveVoice()`, as the commented-out argument meant and the other senders do (`7f5732f`; `M15_f12_euklid` runs this walk under UBSan). So the walks of Task R2.5 need no ignorelist.
 - **The `--pattern` walk** (Task R2.5) selects P on a fresh boot: SHIFT held + step 16 enters the pattern page (`buttonHandler.c:873–877`), bar− three times sets bank 0, bar+ ⌊P/16⌋ times, then step (P mod 16) + 1. Checked for 0, 5, 16, 21, 47 and 63; the LCD then reads `Select Pattern  ` / `Current:  22    ` for 21.
 - **The `--song` walk** selects S: MODE3 (LOAD) held + step 10 opens the load page for songs (`buttonHandler.c:1004–1010`), encoder −64 then +S (`menu.c` clamps at 0 and 63), then a push loads it (`menu.c`, `case SAVE_TYPE_SONG`: `seq_activeSong = seq_songData[S]`). Checked for 0, 2, 5 and 63; the LCD reads `Load: Song      ` / `[  5]           `.
 - **`--seed-card`'s steps** (§6.7) on an empty folder give `PROJ00/` with 194 files and 255,398 bytes (`PRJ.NFO` = `Init` and four NUL bytes; `GLO.CFG` 30 bytes, byte 0 = 120, byte 29 = 1; kit 0 is `00-INITK.SND`; the other slot files are `NN-.PAT`, `NN-.SND`, `NN-.SNG`), an empty `TMP/`, and no `PROJ.IDX`.
@@ -62,7 +63,6 @@ A scratch worktree at `22827f7` with a throw-away test file found these. Tasks r
 | `emu/render/render_out.{c,h}` | P5: WAV, MIDI, clock and panel logs, the summary | 3, 4 |
 | `emu/render/render_script.{c,h}` | P4: the event-script parser | 4 |
 | `emu/render/gen_params.py`, `render_params.h` | The parameter-name table from `Parameters.h` | 5 |
-| `emu/sanitize/euklid_ignorelist.txt` | Q23's stopgap | 5 |
 | `emu/tests/render_test.py` | M17, M14 and M23 driver | 1, grows to R3.2 |
 | `emu/tests/test_pingpong.c` | M16 | R3.5 |
 | `emu/tests/cards/make.sh`, `cards/scripts/*.txt`, `cards/{init,fx,song}/` | P8: fixtures | R3.1 |
@@ -79,16 +79,18 @@ A scratch worktree at `22827f7` with a throw-away test file found these. Tasks r
 | R2.2 | Card copy, `--seed-card`, exit code 2 | M17 (card, seed) | 107 / 107 |
 | R2.3 | Timeline, t0, WAV, summary core, `--keep-card`, `/TMP`, exit code 5 | M17 (t0, defaults, WAV, card copy, 5) | 112 / 112 |
 | R2.4 | Event scripts, timed inputs, MIDI, clock and panel logs, `--stereo` | M17 (script, stereo) | 118 / 118 |
-| R2.5 | `--pattern`, `--song`, `--bpm`, `--param`, `param`, `--bars`, the sync fallback, Q23's stopgap | M17 (prelude, params) | 126 / 126 |
-| R2.6 | Save events, faults, the watchdog, exit codes 3 and 4, M20's new items | M17 (saves, 3, 4), M20 | 129 / 129 |
-| R3.1 | Fixtures, `make.sh` | M23 | 130 / 130 |
-| R3.2 | `emu_golden.py`, `goldens.json`, G1, determinism, slicing, speed | M14, G1 | 134 / 135 |
-| R3.3 | G2 (seven renders), G3, G4 | G2–G4 | 143 / 144 |
-| R3.4 | G5, G6, G7, G8 (two renders) | G5–G8 | 148 / 149 |
-| R3.5 | G9 (two renders), G10, the ping-pong scenario | G9, G10, M16 | 152 / 153 |
-| R3.6 | `emulator.yml`, its dry run, the `check.sh` step, the end check | §9.2, §9.3 | 152 / 153 |
+| R2.5 | `--pattern`, `--song`, `--bpm`, `--param`, `param`, `--bars`, the sync fallback | M17 (prelude, params) | 130 / 130 |
+| R2.6 | Save events, faults, the watchdog, exit codes 3 and 4, M20's new items | M17 (saves, 3, 4), M20 | 133 / 133 |
+| R3.1 | Fixtures, `make.sh` | M23 | 134 / 134 |
+| R3.2 | `emu_golden.py`, `goldens.json`, G1, determinism, slicing, speed | M14, G1 | 138 / 139 |
+| R3.3 | G2 (seven renders), G3, G4 | G2–G4 | 147 / 148 |
+| R3.4 | G5, G6, G7, G8 (two renders) | G5–G8 | 152 / 153 |
+| R3.5 | G9 (two renders), G10, the ping-pong scenario | G9, G10, M16 | 156 / 157 |
+| R3.6 | `emulator.yml`, its dry run, the `check.sh` step, the end check | §9.2, §9.3 | 156 / 157 |
 
 Release has one id more from R3.2 on: `M14_speed` exists only in a Release build (§9.2: Release "runs M14's speed check").
+
+From R2.5 on the counts hold four ids that the rows of R2.1–R2.4 leave out: `emu_tmp_setup` and `emu_tmp_clean`, the temporary-folder fixture that `e37ae9e` added after R2.2, and `M15_f11_knobs_at_boot` and `M15_f12_euklid`, the tests of F11 and F12. R2.4 ended at 120 ids, and the three firmware changes and the parallel-ctest fix (`c253669`) leave 122 before R2.5, in Debug and in Release, serial and with `ctest -j8`.
 
 ---
 
@@ -336,7 +338,7 @@ A threshold that the firmware does not fix is set from a measurement: an energy 
 |---|---|---|
 | `init` | the seeded card; pattern 0 with steps 1, 5, 9, 13 on voices 1–7; pattern 1 with the same steps on voice 1 only. Keeps `PROJ00/PRJ.NFO PROJ00/GLO.CFG PROJ00/00-*.PAT PROJ00/01-*.PAT PROJ00/00-*.SND` | G1, G5–G10 |
 | `fx` | `init`'s pattern 0; voices 1–4 sent to the FX bus with the dry/wet at half, stored in kit 0. Keeps `PROJ00/PRJ.NFO PROJ00/GLO.CFG PROJ00/00-*.PAT PROJ00/00-*.SND` | G2 |
-| `song` | patterns 0, 1, 2 with different steps, each with its own kit (kits 0, 1, 2, edited in decay and volume only, Q22), song 0 = patterns 0, 1, 2, kit autoload on (`GLO.CFG` byte 29 = 1 from the seed). Keeps `PROJ00/PRJ.NFO PROJ00/GLO.CFG PROJ00/0[0-2]-*.PAT PROJ00/0[0-2]-*.SND PROJ00/00-*.SNG` | G3, G4 |
+| `song` | patterns 0, 1, 2 with different steps, each with its own kit (kits 0, 1, 2, edited in decay and volume only), song 0 = patterns 0, 1, 2, kit autoload on (`GLO.CFG` byte 29 = 1 from the seed). Keeps `PROJ00/PRJ.NFO PROJ00/GLO.CFG PROJ00/0[0-2]-*.PAT PROJ00/0[0-2]-*.SND PROJ00/00-*.SNG` | G3, G4 |
 
 ---
 
@@ -701,44 +703,11 @@ Register the six with `emu_render_tests()`.
 §5.1 (`--pattern`, `--song`, `--bpm`, `--param`, `--bars`, the defaults for what the card lacks), §5.3 ("How the prelude acts"), §5.4 (`param`), §12.1 M17.
 
 **Files:**
-- Create: `emu/render/gen_params.py`, `emu/render/render_params.h`, `emu/sanitize/euklid_ignorelist.txt`
+- Create: `emu/render/gen_params.py`, `emu/render/render_params.h`
 - Modify: `emu/render/render_main.c`, `emu/render/render_fw.{h,c}`, `emu/render/render_script.c`, `emu/tests/render_test.py`, `emu/CMakeLists.txt`
 
 **What to build.**
-- **Q23's stopgap** (the first fact above). `emu/sanitize/euklid_ignorelist.txt`:
-
-```
-# Q23 (found while planning R2): selecting a pattern with the step buttons sends
-# SEQ_REQUEST_EUKLID_PARAMS with menu_activePage as the track (buttonHandler.c,
-# SELECT_MODE_PATTERN), and CortexParser.c passes it to these getters, which index
-# uint8_t[7] arrays with 16. fw 1.7 reads stray bytes into activeParameters
-# [PAR_EUKLID_*], which only the Euclid page shows. The checks stay off in these three
-# functions only, until the owner decides a firmware fix (proposal: F11 in v0.2).
-[array-bounds]
-fun:euklid_getLength
-fun:euklid_getSteps
-fun:euklid_getRotation
-[address]
-fun:euklid_getLength
-fun:euklid_getSteps
-fun:euklid_getRotation
-```
-
-  In `emu/CMakeLists.txt`, replace the EuklidGenerator lines inside `if(LICHOMAT_EMU_SANITIZE MATCHES "undefined")` (keep the Oscillator lines there) with this block after it:
-
-```cmake
-if(LICHOMAT_EMU_SANITIZE)
-    # Q23: see sanitize/euklid_ignorelist.txt
-    set(emu_euklid "-fsanitize-ignorelist=${EMU_DIR}/sanitize/euklid_ignorelist.txt")
-    if(LICHOMAT_EMU_SANITIZE MATCHES "undefined")
-        # arm64 gives x % 0 the device's result, x (EuklidGenerator.c:235-236, spec 8.1, 9.2)
-        list(APPEND emu_euklid -fno-sanitize=integer-divide-by-zero)
-    endif()
-    set_source_files_properties("${EMU_SRC}/Soundengine/Sequencer/EuklidGenerator.c" PROPERTIES
-        COMPILE_OPTIONS "${emu_euklid}")
-endif()
-```
-
+- **No stopgap for Q23.** F12 (`7f5732f`) fixed the cause, the track number of the pattern select's Euclid request (the first fact above), so the `--pattern` walk runs under UBSan with every check on and needs no ignorelist; `emu/CMakeLists.txt`'s EuklidGenerator line (`-fno-sanitize=integer-divide-by-zero`) stays as it is.
 - **The parameter table.** `gen_params.py` writes `render_params.h` from `Core/Inc/Parameters.h`:
 
 ```python
@@ -785,11 +754,10 @@ sys.stdout.write('\n'.join(out))
 
 Register the eight with `emu_render_tests()`; `M17_param_table` runs the generator from `--root`.
 
-- [ ] **Step 1: See Q23 stop the walk.** Before the ignorelist, run `M17_pattern`. Expected: exit 3 with UBSan's `index 16 out of bounds for type 'uint8_t[7]'` at `EuklidGenerator.c:171`. Then add the ignorelist and the CMake block.
-- [ ] **Step 2: Write the rest; run the M17 cases.** Expected: 23 of 23.
-- [ ] **Step 3: EMU-CHECK.** N = 126.
-- [ ] **Step 4: The gate.**
-- [ ] **Step 5: Commit** the three new files and the modified ones: "Emulator: lichomat-render's prelude and the menu's edit path; Q23's stopgap (E5.3 R2, M17)", the body naming the walks derived from `buttonHandler.c` and `menu.c`, the refused special cases, the clamp, the fallback, and Q23 (what the firmware reads, why the checks are off in three getters, that the owner decides).
+- [ ] **Step 1: Write it; run the M17 cases.** Expected: 23 of 23. `M17_pattern` runs the walk under UBSan without a report (F12).
+- [ ] **Step 2: EMU-CHECK.** N = 130.
+- [ ] **Step 3: The gate.**
+- [ ] **Step 4: Commit** the two new files and the modified ones: "Emulator: lichomat-render's prelude and the menu's edit path (E5.3 R2, M17)", the body naming the walks derived from `buttonHandler.c` and `menu.c`, the refused special cases, the clamp and the fallback.
 
 ---
 
@@ -843,8 +811,8 @@ Register the three; pass `--sanitized $<BOOL:${LICHOMAT_EMU_SANITIZE}>` in `EMU_
 
 - [ ] **Step 1: Write the code and the cases; run the M17 cases and M20.** Expected: 26 of 26 and M20 passing.
 - [ ] **Step 2: See M20 catch a change.** In a scratch copy (`git worktree add --detach` under `$TMPDIR`, removed afterwards), change one clamp bound in `menu_encoderChangeParameter()`; `python3 emu/tests/drift.py check <copy>` must fail naming `menu_encoderChangeParameter`.
-- [ ] **Step 3: EMU-CHECK.** N = 129.
-- [ ] **Step 4: The end check of R2.** Configure `build/emu-release` with `-DCMAKE_BUILD_TYPE=Release`, build, run ctest. Expected: `100% tests passed, 0 tests failed out of 129` (`M17_fault` without `ubsan`).
+- [ ] **Step 3: EMU-CHECK.** N = 133.
+- [ ] **Step 4: The end check of R2.** Configure `build/emu-release` with `-DCMAKE_BUILD_TYPE=Release`, build, run ctest. Expected: `100% tests passed, 0 tests failed out of 133` (`M17_fault` without `ubsan`).
 - [ ] **Step 5: The gate.**
 - [ ] **Step 6: Commit** the modified files: "Emulator: lichomat-render's save events, faults and watchdog (E5.3 R2, M17, M20)".
 
@@ -900,7 +868,7 @@ done
 **The fixture scripts** follow P8's table. Each starts with `#! --no-start --seconds S` (S long enough to end 500 ms after its `save-project 0`) and its `#keep` lines. They edit only through the panel, `param` and the save events (§5.6):
 - **`init.txt`**: for n = 1…7: `press voiceN`, then `press step1`, `step5`, `step9`, `step13`, 100 ms apart; `save-pattern 0`; `save-pattern 1` (pattern 1 becomes a copy and the active one); for n = 2…7: `press voiceN`, then the same four steps again, which clears them; `save-pattern 1`; `save-project 0`.
 - **`fx.txt`**: `init.txt`'s pattern 0 part; `param` lines that route voices 1–4 to the FX bus (the FX outputs of `PAR_AUDIO_OUT1`…`4`, values in `outputNamesFx`, `MenuText.h`) and set `fx_dry_wet` to 64; `save-kit 0`; `save-pattern 0`; `save-project 0`.
-- **`song.txt`**: patterns 0, 1, 2 with different steps (pattern 0 as `init`'s, pattern 1 voices 1–3 on every second step, pattern 2 voice 1 on steps 1–16), each saved with `save-pattern`; kits 1 and 2 as kit 0 with `param` edits of decays and volumes only (Q22), saved with `save-kit 1` and `save-kit 2`; each pattern's kit assigned on the load page (LOAD = `mode3` held + step 8 opens the kit load page, `buttonHandler.c` `case SEQ_KIT`; the encoder selects the kit; a push loads it and stores it in the active pattern's `kitNr`, `menu.c` `case SAVE_TYPE_KIT`); song 0 on the song page (SHIFT + step 10 enters song mode, `buttonHandler.c:868–871`; there each step press appends that pattern, `seq_addPatternToSong()`): steps 1, 2, 3; `save-project 0`.
+- **`song.txt`**: patterns 0, 1, 2 with different steps (pattern 0 as `init`'s, pattern 1 voices 1–3 on every second step, pattern 2 voice 1 on steps 1–16), each saved with `save-pattern`; kits 1 and 2 as kit 0 with `param` edits of decays and volumes only, saved with `save-kit 1` and `save-kit 2`; each pattern's kit assigned on the load page (LOAD = `mode3` held + step 8 opens the kit load page, `buttonHandler.c` `case SEQ_KIT`; the encoder selects the kit; a push loads it and stores it in the active pattern's `kitNr`, `menu.c` `case SAVE_TYPE_KIT`); song 0 on the song page (SHIFT + step 10 enters song mode, `buttonHandler.c:868–871`; there each step press appends that pattern, `seq_addPatternToSong()`): steps 1, 2, 3; `save-project 0`.
 
 Check each fixture with a render before committing: `init` plays 112 Note Ons on DIN in 4 bars of pattern 0 at 120 BPM (7 voices × 4 steps × 4 bars) and 16 on pattern 1; `song`'s three `.PAT` files differ, and their `kitNr` bytes are 0, 1, 2 (the byte `preset_savePatternSD()` writes; find its offset there).
 
@@ -909,7 +877,7 @@ Check each fixture with a render before committing: `init` plays 112 Note Ons on
 - [ ] **Step 1: Write `make.sh` and the scripts; run `emu/tests/cards/make.sh build/emu/lichomat-render emu/tests/cards`.** Expected: `make.sh: init: 5 files`, `fx: 4 files`, `song: 9 files`. Each fixture is a few KB (§5.6): check with `du -sk emu/tests/cards/*/` and record the sizes.
 - [ ] **Step 2: The fixture checks above.** Record the Note On counts and the `kitNr` bytes in the task report.
 - [ ] **Step 3: M23 in both builds.** Run `M23` in `build/emu` (Debug) and in `build/emu-release`. Expected: PASS in both (the fixtures do not depend on the optimisation level or the sanitizer).
-- [ ] **Step 4: EMU-CHECK.** N = 130.
+- [ ] **Step 4: EMU-CHECK.** N = 134.
 - [ ] **Step 5: The gate.**
 - [ ] **Step 6: Commit** `make.sh`, the three scripts, every fixture file (`git add emu/tests/cards/init emu/tests/cards/fx emu/tests/cards/song` names the folders, which hold only fixture files), `render_test.py`, `emu/CMakeLists.txt`: "Emulator: card fixtures made by the firmware (E5.4 R3, M23)", listing the fixtures, their files and sizes.
 
@@ -986,7 +954,7 @@ endif()
 - [ ] **Step 3: `diff`.** `python3 tools/emu_golden.py diff G1 --against HEAD`. Expected: `G1: no difference between HEAD and the working tree`.
 - [ ] **Step 4: The M14 cases.** Expected: PASS, and `M14_speed` in `build/emu-release` with the measured speed recorded (R1 measured 65–190× at `-O2`).
 - [ ] **Step 5: See the slicing check bite.** Temporarily make `--test-slice` skip one direct event's boundary rule (run the due `mark` one return late). `M14_slices` must fail on the panel log. Undo.
-- [ ] **Step 6: EMU-CHECK.** N = 134 (Release 135).
+- [ ] **Step 6: EMU-CHECK.** N = 138 (Release 139).
 - [ ] **Step 7: The gate.**
 - [ ] **Step 8: Commit** the four new files, `render_test.py`, `emu/CMakeLists.txt`: "Emulator: golden tests, emu_golden.py and G1 (E5.4 R3, M14)", with G1's measured RMS, the threshold, its SHA-256 prefix, the speed, and that Debug and Release hash the same.
 
@@ -1012,7 +980,7 @@ endif()
 
 - [ ] **Step 1: Write the nine goldens; measure and set their expectations.** For each, run `python3 tools/emu_golden.py check ID` (it fails on the missing entry and prints what it measured), read the panel log in `build/emu/goldens-out/ID/`, write each expectation by P6's rule, and run `check` again: it must report the broken variant failing. Record every measured value in the task report.
 - [ ] **Step 2: Bless** `python3 tools/emu_golden.py bless G2_tube G2_fold G2_rat G2_ringmod G2_comp G2_delay G2_pingpong G3 G4`, then check all nine against `build/emu-release/lichomat-render`. Expected: PASS (Debug and Release equal).
-- [ ] **Step 3: EMU-CHECK.** N = 143 (Release 144).
+- [ ] **Step 3: EMU-CHECK.** N = 147 (Release 148).
 - [ ] **Step 4: The gate.**
 - [ ] **Step 5: Commit** the nine goldens and `goldens.json`: "Emulator: goldens G2-G4, the FX bus, song mode and the panel (E5.4 R3)", with each golden's expectations, measured values and broken variant.
 
@@ -1035,7 +1003,7 @@ endif()
 
 - [ ] **Step 1: Write the five; measure and set the expectations (as in Task R3.3, Step 1).** Every expectation marked fixed must hold as written; a different value stops the task with both numbers.
 - [ ] **Step 2: Bless the five and check them against the Release renderer.** Expected: PASS.
-- [ ] **Step 3: EMU-CHECK.** N = 148 (Release 149).
+- [ ] **Step 3: EMU-CHECK.** N = 152 (Release 153).
 - [ ] **Step 4: The gate.**
 - [ ] **Step 5: Commit** the five goldens and `goldens.json`: "Emulator: goldens G5-G8, master, the F8 behind Note Ons, DIN and USB slave (E5.4 R3)".
 
@@ -1096,7 +1064,7 @@ TEST(M16_pingpong)
 
 - [ ] **Step 1: The three goldens: write, measure, set, bless, check against Release** (as in Task R3.3). Expected: PASS.
 - [ ] **Step 2: M16.** Run `ctest --test-dir build/emu -R M16 --output-on-failure`. Expected: PASS. Record the 12 pointers in the task report. Its detection power is ASan's, which runs in CI only (Q19); say so in the commit.
-- [ ] **Step 3: EMU-CHECK.** N = 152 (Release 153).
+- [ ] **Step 3: EMU-CHECK.** N = 156 (Release 157).
 - [ ] **Step 4: The gate.**
 - [ ] **Step 5: Commit** the three goldens, `goldens.json`, `test_pingpong.c`, `emu/CMakeLists.txt`: "Emulator: goldens G9 and G10, and the ping-pong regression scenario (E5.4 R3, M16)".
 
@@ -1116,7 +1084,7 @@ TEST(M16_pingpong)
 # CI of the LICHOMAT emulator (stage 1b spec 9.3): emu/'s host tests and goldens in a
 # Release build and in a sanitizer build, on macOS arm64 with the Command Line Tools.
 # It only builds and tests: nothing is pushed, tagged or released from here. It runs
-# once the emulator branch is pushed (tracker Q19).
+# on every push of the emulator branch (tracker Q19).
 #
 # (licence header)
 
@@ -1271,23 +1239,22 @@ The warning count at the end now covers the emulator's build too (§9.2: "The wa
 
 - [ ] **Step 1: Write the three changes.**
 - [ ] **Step 2: Dry runs.** `ruby tools/ci_dry_run.rb emu-release` and `ruby tools/ci_dry_run.rb emu-sanitize`. Expected: every check `ok`, `== skipped: Fetch CMake and Ninja`, then `dry run of emu-release: 7 steps passed` (Record, Configure, Build, the warnings, Test, the linked libraries, Package) and `dry run of emu-sanitize: 5 steps passed`. Also `ruby tools/ci_dry_run.rb host-tests` still passes. Unzip the package into a temporary folder: it holds `lichomat-render` (which runs `--version` and is signed: `codesign -v` passes), `LICENSE`, `NOTICE.md`, `LICENSE.arm-optimized-routines`, `LICENSE.fatfs`.
-- [ ] **Step 3: `tools/check.sh`.** Expected: `100% tests passed, 0 tests failed out of 55`, `100% tests passed, 0 tests failed out of 152`, the image line `OK`, `== compiler warnings: 0`, the recorded `memory:` line. Then `tools/fw_checks.sh`: every task `PASS`.
-- [ ] **Step 4: The end check of R2 and R3.** `ctest --test-dir build/emu-release` gives `out of 153`; `git status --short` shows only `?? .toolchain`; `git worktree list` shows no scratch worktree; no `lichomat-render-*` or `lichomat-cards-*` folder is left in `$TMPDIR`.
-- [ ] **Step 5: Commit** `.github/workflows/emulator.yml`, `tools/check.sh`, `tools/ci_dry_run.rb`: "Emulator: CI workflow, its dry run and the check.sh step (E5.4 R3)", the body saying that the workflow runs only once Q19 allows pushing `emulator`, and what the dry run replaces.
+- [ ] **Step 3: `tools/check.sh`.** Expected: `100% tests passed, 0 tests failed out of 55`, `100% tests passed, 0 tests failed out of 156`, the image line `OK`, `== compiler warnings: 0`, the recorded `memory:` line. Then `tools/fw_checks.sh`: every task `PASS`.
+- [ ] **Step 4: The end check of R2 and R3.** `ctest --test-dir build/emu-release` gives `out of 157`, and so does `ctest --test-dir build/emu-release -j8`; `git status --short` shows only `?? .toolchain`; `git worktree list` shows no scratch worktree; no `lichomat-render-*`, `lichomat-case-*` or `lichomat-cards-*` folder is left in `$TMPDIR`.
+- [ ] **Step 5: Commit** `.github/workflows/emulator.yml`, `tools/check.sh`, `tools/ci_dry_run.rb`: "Emulator: CI workflow, its dry run and the check.sh step (E5.4 R3)", the body saying that the workflow runs on every push of `emulator` (Q19 allows pushing), and what the dry run replaces.
 
 ---
 
 ## The end state, which R4 starts from
 
-- Branch `emulator`, local only, 12 more commits. `tools/check.sh` passes 55 host tests and 152 emulator ids (Debug, UBSan) with 0 warnings; Release passes 153.
+- Branch `emulator`, pushed to the owner's fork (`origin`, Q19): R2.4's end, then F12, F11, F6b and the parallel-ctest fix (`7f5732f`, `7399c7d`, `cf8fb4d`, `c253669`), then one commit per task from R2.5 to R3.6. `tools/check.sh` passes 55 host tests and 156 emulator ids (Debug, UBSan) with 0 warnings; Release passes 157; both also with `ctest -j8`.
 - `lichomat-render` and `lichomat-render-test` in `build/emu*/`; `emu/render/render_fw.c` is the only renderer file that calls the firmware. R4's first run of the app runs the bundled `lichomat-render --seed-card` (§6.7).
-- `emulator.yml` has not run on GitHub (Q19). Its first run is also the first ASan run of R1's and R2's tests: findings there are new firmware questions.
+- `emulator.yml` runs on GitHub from the first push after Task R3.6. That run is also the first ASan run of R1's and R2's tests: findings there are new firmware questions.
 
 ## Points for the owner and for the controller
 
-- **Q23 (new).** fw 1.7 reads past the Euclid generator's 7-entry arrays at every pattern select by the step buttons, because `buttonHandler.c` passes `menu_activePage` where the code means the active voice (commented out). Harmless on the device today (it reads DTCM into values only the Euclid page shows). The emulator turns off UBSan's and ASan's bounds checks in the three getters until the owner decides; proposal: F11 in v0.2 passes `menu_getActiveVoice()`.
-- **Q19.** The CI workflow is ready and dry-run locally; it waits for pushing `emulator`. M16's real check, a write past `FX_BUFFER` under ASan, runs only there, and so do R1's tests under ASan.
-- **Q22** stays open; the fixtures keep every pitch at the init kit's values or lower.
+- **Q21–Q23, answered.** The owner approved the three firmware fixes for v0.2, and they are on `emulator` before R2.5: F12 (`7f5732f`, Q23) passes the active voice to the pattern select's Euclid request; F11 (`7399c7d`, Q21) sets the morph target before the boot's first pot read; F6b (`cf8fb4d`, Q22) makes `freq2PhaseIncr1024()` and `freq2PhaseIncr32767()` saturate. No ignorelist and no fixture limit stands in for them. They reach the device with v0.2, with the device check U9 for F12 (§12.4); F11 and F6b leave the device's output unchanged (§7).
+- **Q19.** `emulator` is pushed, so the CI workflow of Task R3.6 runs on GitHub from its first push. M16's real check, a write past `FX_BUFFER` under ASan, runs only there, and so do R1's tests under ASan.
 - **Spec readings this plan made** (to be confirmed or changed): the logs hold only events after t0; the WAV holds whole blocks; the end hook reads three counter getters; expectations take time windows, and `#expect led`, `#broken-drop` and `#pin panel` exist; a broken variant fails when one expectation fails; `goldens.json` keeps per-64-line CRCs of the logs; G2, G8 and G9 are several renders; the `--version` source line joins the name allow-list.
 - **Blesses.** Tasks R3.2–R3.5 bless every golden for the first time, in the commits that add them. The milestone report lists them (§8.5), with the measured values, so that the owner can listen to the renders in `build/emu/goldens-out/`.
 - **`--bars` and the sync fallback.** A project in EXT or MID sync whose script sends no clock renders at 120 BPM internal (§5.1's default), so `--bars` works there; it is a usage error only when the script does send that clock.
