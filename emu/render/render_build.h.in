@@ -1,0 +1,23 @@
+/*
+ * render_build.h
+ *
+ * What lichomat-render --version and the summary print (stage 1b spec 8.4,
+ * 10.1): the commit, the toolchain and the firmware version, filled in by CMake
+ * at configure time from render_build.h.in.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#ifndef RENDER_BUILD_H_
+#define RENDER_BUILD_H_
+
+#define EMU_RENDER_COMMIT  "@EMU_COMMIT@"
+#define EMU_RENDER_CLANG   "@EMU_CLANG@"
+#define EMU_RENDER_SDK     "@EMU_SDK@"
+#define EMU_RENDER_VERSION "@EMU_FIRMWARE_VERSION@"
+
+#endif /* RENDER_BUILD_H_ */

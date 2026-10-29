@@ -3,3 +3,10 @@
 # About box. R2 adds them with lichomat-render --version. Each line is a whole
 # printable run as licence_gate.py finds it in a section (strings -a -n 3), so a
 # text with a newline takes a line per run. Lines starting with # are comments.
+# lichomat-render --version (spec 10.1): the tagline, the copyright, the
+# modification notice, where the source is, and the non-affiliation
+emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02
+Copyright (C) 2012-2026 Erica Synths
+Modified from the LXR firmware 1.7 by Erica Synths; LICHOMAT and its emulator by Tomasz Krzywicki, 2026
+Source: https://github.com/isthar/lxr-desktop-app at the commit above.
+Not affiliated with Erica Synths.

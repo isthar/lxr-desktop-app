@@ -150,6 +150,40 @@ target_compile_options(emu_hostfs PRIVATE ${EMU_FP_FLAGS} ${EMU_SAN_FLAGS} -Wall
 set(EMU_DEVICE_OBJECTS $<TARGET_OBJECTS:lxr_firmware> $<TARGET_OBJECTS:emu_core>
     $<TARGET_OBJECTS:emu_hostfs> $<TARGET_OBJECTS:emu_libm>)
 
+# --- lichomat-render (spec 5) -------------------------------------------------------------
+# what --version and the summary print (spec 8.4, 10.1), fixed at configure time
+execute_process(COMMAND git -C "${LXR_ROOT}" rev-parse --short=12 HEAD
+    OUTPUT_VARIABLE EMU_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT EMU_COMMIT)
+    set(EMU_COMMIT unknown)
+endif()
+execute_process(COMMAND ${CMAKE_C_COMPILER} --version OUTPUT_VARIABLE emu_cc_version)
+string(REGEX MATCH "^[^\n]*" EMU_CLANG "${emu_cc_version}")
+execute_process(COMMAND xcrun --show-sdk-version OUTPUT_VARIABLE EMU_SDK OUTPUT_STRIP_TRAILING_WHITESPACE)
+configure_file(render/render_build.h.in "${CMAKE_BINARY_DIR}/render_build.h" @ONLY)
+message(STATUS "emulator: commit ${EMU_COMMIT}, ${EMU_CLANG}, SDK ${EMU_SDK}")
+
+file(GLOB EMU_RENDER_SOURCES CONFIGURE_DEPENDS "${EMU_DIR}/render/*.c")
+list(REMOVE_ITEM EMU_RENDER_SOURCES "${EMU_DIR}/render/render_fw.c")
+# emu_render_exe(<name> <hooks>): the renderer; hooks 1 adds the test-only options
+# (spec 5.3). Only render_fw.c includes firmware headers; the other files get the
+# overlay flag, which the licence gate requires of every compile command, but not
+# the section define (spec 3.4), as emu_hostfs.c.
+function(emu_render_exe name hooks)
+    add_library(${name}_fw OBJECT "${EMU_DIR}/render/render_fw.c")
+    target_link_libraries(${name}_fw PRIVATE emu_fw_headers)
+    target_include_directories(${name}_fw PRIVATE "${EMU_DIR}/core" "${EMU_DIR}/render" "${CMAKE_BINARY_DIR}")
+    target_compile_options(${name}_fw PRIVATE -Wall -Wextra -Werror)
+    target_compile_definitions(${name}_fw PRIVATE EMU_RENDER_TEST_HOOKS=${hooks})
+    add_executable(${name} ${EMU_RENDER_SOURCES} $<TARGET_OBJECTS:${name}_fw> ${EMU_DEVICE_OBJECTS})
+    target_include_directories(${name} PRIVATE "${EMU_DIR}/core" "${EMU_DIR}/render" "${CMAKE_BINARY_DIR}")
+    target_compile_options(${name} PRIVATE ${EMU_FP_FLAGS} ${EMU_SAN_FLAGS} -Wall -Wextra -Werror
+        "SHELL:-ivfsoverlay ${EMU_OVERLAY}")
+    target_compile_definitions(${name} PRIVATE EMU_RENDER_TEST_HOOKS=${hooks})
+endfunction()
+emu_render_exe(lichomat-render 0)
+emu_render_exe(lichomat-render-test 1)
+
 # --- the test harness -------------------------------------------------------------------------
 add_library(emu_test_options INTERFACE)
 target_link_libraries(emu_test_options INTERFACE emu_fw_headers)
@@ -223,11 +257,12 @@ set_tests_properties(M19 PROPERTIES PASS_REGULAR_EXPRESSION "M19: [0-9]+ imports
 add_test(NAME M20 COMMAND ${Python3_EXECUTABLE} "${EMU_DIR}/tests/drift.py" check "${LXR_ROOT}")
 
 # M21: the licence gate over what the binaries were built from, and the name scan.
-# The binaries of R1 are the test binaries that link the whole firmware. It runs
+# The binaries are two test binaries that link the whole firmware, and
+# lichomat-render with its --version notices. It runs
 # ninja -t deps, so ctest needs ninja on PATH (source tools/env.sh).
 set(EMU_GATE ${Python3_EXECUTABLE} "${EMU_DIR}/tests/licence_gate.py")
 add_test(NAME M21 COMMAND ${EMU_GATE} "${LXR_ROOT}" "${CMAKE_BINARY_DIR}"
-    $<TARGET_FILE:test_boot> $<TARGET_FILE:test_hook>)
+    $<TARGET_FILE:test_boot> $<TARGET_FILE:test_hook> $<TARGET_FILE:lichomat-render>)
 add_test(NAME M21_rejects COMMAND ${EMU_GATE} --extra Core/Inc/lcd.h --extra Core/Inc/main.h
     "${LXR_ROOT}" "${CMAKE_BINARY_DIR}" $<TARGET_FILE:test_boot>)
 # exactly these two errors, in this order, and no other
@@ -241,3 +276,15 @@ add_library(emu_name_canary OBJECT tests/name_canary.c)
 target_link_libraries(emu_name_canary PRIVATE emu_test_options)
 add_test(NAME M21_negative COMMAND ${Python3_EXECUTABLE} "${EMU_DIR}/tests/licence_gate_neg.py"
     "${LXR_ROOT}" "${CMAKE_BINARY_DIR}" $<TARGET_OBJECTS:emu_name_canary>)
+
+# M17, M14, M23: lichomat-render through emu/tests/render_test.py
+set(EMU_RENDER_TEST ${Python3_EXECUTABLE} "${EMU_DIR}/tests/render_test.py"
+    --render $<TARGET_FILE:lichomat-render> --render-test $<TARGET_FILE:lichomat-render-test>
+    --root "${LXR_ROOT}" --work "${CMAKE_BINARY_DIR}/render-test")
+function(emu_render_tests)
+    foreach(id IN LISTS ARGN)
+        add_test(NAME ${id} COMMAND ${EMU_RENDER_TEST} ${id})
+        set_tests_properties(${id} PROPERTIES TIMEOUT 600)
+    endforeach()
+endfunction()
+emu_render_tests(M17_cli_usage M17_cli_info)
