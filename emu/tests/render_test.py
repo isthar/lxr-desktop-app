@@ -4,7 +4,11 @@
     render_test.py --render R --render-test RT --root ROOT --work DIR CASE
 
 Each CASE is a function below; it runs in DIR/CASE, emptied first, and prints
-PASS CASE (exit 0) or the failed check (exit 1).
+PASS CASE (exit 0) or the failed check (exit 1). Its renders make their card
+copies in a TMPDIR of its own, $TMPDIR/lichomat-case-CASE, so that a check for
+copies left behind sees this case's copies only, also when ctest runs cases in
+parallel. The folder is removed at the end when it is empty; a case that leaves
+a copy leaves the folder too, and ctest's emu_tmp_clean names it.
 
 Copyright (C) 2026 Tomasz Krzywicki
 SPDX-License-Identifier: GPL-3.0-only
@@ -34,6 +38,15 @@ class T:
         shutil.rmtree(self.work, ignore_errors=True)
         os.makedirs(self.work)
         self.n = 0
+        self.tmp = os.path.join(os.environ.get('TMPDIR') or '/tmp', 'lichomat-case-' + a.case)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+        os.makedirs(self.tmp)
+        os.environ['TMPDIR'] = self.tmp     # the renders' card copies (render_card.c)
+
+    def done(self):
+        """remove this case's TMPDIR if it is empty"""
+        if not os.listdir(self.tmp):
+            os.rmdir(self.tmp)
 
     def path(self, *p):
         return os.path.join(self.work, *p)
@@ -101,11 +114,14 @@ def main():
         ap.add_argument(o, required=True)
     ap.add_argument('case', choices=sorted(CASES))
     a = ap.parse_args()
+    t = T(a)
     try:
-        CASES[a.case](T(a))
+        CASES[a.case](t)
     except Fail as e:
         print('FAIL %s: %s' % (a.case, e))
         sys.exit(1)
+    finally:
+        t.done()
     print('PASS', a.case)
 
 # --- cases ---------------------------------------------------------------------

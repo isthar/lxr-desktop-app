@@ -296,8 +296,9 @@ emu_render_tests(M17_cli_usage M17_cli_info M17_card_errors M17_seed_card M17_t0
 # which emu_tmp_setup empties first and emu_tmp_clean checks last. A test removes
 # what it makes there, also when it fails (emu_testTempDir() at exit, the
 # renderer at every exit but codes 3 and 4); one that aborts leaves its folder,
-# and emu_tmp_clean names it. These two ids stay last: the list takes the tests
-# defined so far.
+# and emu_tmp_clean names it. render_test.py gives each case a folder of its own
+# inside it, so that tests running in parallel (ctest -j) do not see each other's
+# card copies. These two ids stay last: the list takes the tests defined so far.
 set(EMU_TEST_TMP "${CMAKE_BINARY_DIR}/tmp")
 get_property(emu_tests DIRECTORY PROPERTY TESTS)
 set_property(TEST ${emu_tests} APPEND PROPERTY ENVIRONMENT "TMPDIR=${EMU_TEST_TMP}")
