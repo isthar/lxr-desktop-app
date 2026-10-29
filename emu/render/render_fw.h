@@ -26,4 +26,30 @@ void rfw_seedCard(void *res);
 /** preset_morphBusy() into *(uint8_t *)out */
 void rfw_morphBusy(void *out);
 
+/** what plays (the summary's selected, spec 5.5) */
+typedef struct render_selected
+{
+	int pattern;	/**< seq_activePattern */
+	int song;		/**< S with seq_activeSong == seq_songData[S], or -1 */
+	int bpm;		/**< seq_getBpm() */
+	int sync;		/**< seq_getExtSync(): 0 internal, 1 EXT, 2 MID */
+} render_selected_t;
+
+/** rfw_selected(render_selected_t *), through emu_directCall() */
+void rfw_selected(void *out);
+
+/** the firmware's counters for the summary: the fields of seqc_stats_t by their
+ * C names, seqp_syncOverflows() and usb_midiTxDropped() */
+typedef struct render_fwCounters
+{
+	uint32_t queueDepth, queueMax, queueOverflow, chokeDrops, muteDrops, skipDrops, syncIgnored,
+		intervalsExcluded, dropouts, reentries, tempoRestarts;
+	uint32_t syncOverflows, usbTxDropped;
+} render_fwCounters_t;
+
+/** Copy the three counter getters' values. They only copy counters, so the end
+ * of the render reads them from the tier hook (stage 1b plan R2.3, spec 5.3
+ * step 7): the one firmware read that is not a direct call. */
+void rfw_counters(render_fwCounters_t *out);
+
 #endif /* RENDER_FW_H_ */

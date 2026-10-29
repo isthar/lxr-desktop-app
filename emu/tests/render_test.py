@@ -13,7 +13,7 @@ Licensed under the GNU General Public License version 3, with the additional
 permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
 the repository.
 """
-import argparse, hashlib, json, os, re, shutil, struct, subprocess, sys, wave
+import argparse, hashlib, json, os, re, shutil, struct, subprocess, sys, time, wave
 
 CASES = {}
 def case(fn):
@@ -57,6 +57,32 @@ class T:
         if not os.path.isdir(p):
             self.run(['--seed-card', p])
         return p
+
+    def render(self, card, args, test=False, code=0):
+        """a render with --out and --summary added: (the summary as a dict, the WAV's path, the process)"""
+        self.n += 1
+        wav, summary = self.path('r%d.wav' % self.n), self.path('r%d.json' % self.n)
+        p = self.run(['--card', card, '--out', wav, '--summary', summary] + list(args), code=code, test=test)
+        s = None
+        if code == 0:
+            with open(summary) as f:
+                s = json.load(f)
+        return s, wav, p
+
+C100 = 21600000
+
+def frames_to_cycles(n):
+    return n * 552960 // 113
+
+def wav_info(path):
+    """(channels, rate, sample width, frames, the sample bytes)"""
+    with wave.open(path, 'rb') as w:
+        return w.getnchannels(), w.getframerate(), w.getsampwidth(), w.getnframes(), w.readframes(w.getnframes())
+
+def no_copies_left():
+    tmp = os.environ.get('TMPDIR', '/tmp')
+    left = [x for x in os.listdir(tmp) if x.startswith('lichomat-render-')]
+    check(not left, 'card copies left in %s: %r' % (tmp, left))
 
 def tree(d):
     """{relative path: sha256} of every file and {relative path: None} of every directory"""
@@ -184,11 +210,12 @@ def M17_card_errors(t):
     lower = card_copy(t, seed, 'idx200', 200)
     os.rename(os.path.join(lower, 'PROJ00'), os.path.join(lower, 'proj00'))
     check(os.listdir(lower).count('proj00') == 1, 'the rename to proj00 did not happen')
-    p = t.run(['--card', lower, '--out', t.path('o.wav')], code=1)
-    check('rendering comes in R2.3' in p.stderr, 'PROJ.IDX 200 and proj00: %r' % p.stderr)
+    s, _, _ = t.render(lower, ['--seconds', '0.1'])
+    check(s['inputs']['project'] == 0, 'PROJ.IDX 200 and proj00 loaded project %r' % s['inputs']['project'])
     # --project 0 on the same card passes too, and --project 5 on idx5's does not
-    t.run(['--card', lower, '--out', t.path('o.wav'), '--project', '0'], code=1)
+    t.render(lower, ['--seconds', '0.1', '--project', '0'])
     card_error(t, lower, ['--project', '5'], 'project 5 has no PROJ05/PRJ.NFO')
+    no_copies_left()
 
 @case
 def M17_seed_card(t):
@@ -232,6 +259,143 @@ def M17_seed_card(t):
     # and on a file
     p = t.run(['--seed-card', os.path.join(third, 'x')], code=1)
     check('--seed-card' in p.stderr, '--seed-card on a file: %r' % p.stderr)
+
+def t0_rule(s, t):
+    """spec 5.3's two rules of t0 at the time t of a block request"""
+    busy = s['morphBusyLast']
+    return t - s['preludeEnd'] >= C100 and (busy == 0 or t - busy > C100)
+
+def block_index(s, t):
+    """k with codecStart + frames_to_cycles(64 k) == t, or None"""
+    k = (t - s['codecStart']) * 113 // (64 * 552960)
+    for j in (k - 1, k, k + 1):
+        if j >= 0 and s['codecStart'] + frames_to_cycles(64 * j) == t:
+            return j
+    return None
+
+@case
+def M17_t0(t):
+    seed = t.seed()
+    for test, args in ((False, []), (True, ['--test-prelude-reload'])):
+        s, _, _ = t.render(seed, ['--seconds', '1'] + args, test=test)
+        t0 = s['t0']
+        k = block_index(s, t0)
+        check(k is not None and k > 0, '%r: t0 %d is not a block request' % (args, t0))
+        check(t0_rule(s, t0), '%r: t0 %d breaks the rule: preludeEnd %d, morphBusyLast %d'
+              % (args, t0, s['preludeEnd'], s['morphBusyLast']))
+        prev = s['codecStart'] + frames_to_cycles(64 * (k - 1))
+        check(not t0_rule(s, prev), '%r: the request before t0 (%d) meets the rule too' % (args, prev))
+        print('%r: t0 - preludeEnd %d, morphBusyLast - preludeEnd %s'
+              % (args, t0 - s['preludeEnd'], s['morphBusyLast'] - s['preludeEnd'] if s['morphBusyLast'] else 0))
+        if args:
+            check(s['morphBusyLast'] > s['preludeEnd'], 'the reload ran no transfer after the prelude: %r' % s)
+            # t0 is set by the busy rule: the time rule alone would have taken an earlier request
+            check(t0 - s['preludeEnd'] - C100 > frames_to_cycles(64), 't0 is not later than the time rule gives')
+
+@case
+def M17_defaults(t):
+    seed = t.seed()
+    wav = t.path('d.wav')
+    summary = t.path('d.json')
+    t.run(['--card', seed, '--out', wav, '--summary', summary])
+    with open(summary) as f:
+        s = json.load(f)
+    i = s['inputs']
+    want = {'project': 0, 'pattern': -1, 'song': -1, 'seed': 1, 'faders': [1] * 6, 'jacks': 'all',
+            'asBooted': False, 'noStart': False, 'blocks': 6897}
+    got = {x: i[x] for x in want}
+    check(got == want, 'the inputs are %r, not %r' % (got, want))
+    sel = s['selected']
+    check((sel['pattern'], sel['bpm'], sel['sync']) == (0, 120, 0), 'selected is %r' % sel)
+    ch, rate, width, frames, _ = wav_info(wav)
+    check((ch, rate, width, frames) == (4, 44141, 2, 441408), 'the WAV is %r' % ((ch, rate, width, frames),))
+    check(s['underrunsAfterT0'] == 0, 'underruns after t0: %d' % s['underrunsAfterT0'])
+    k0 = block_index(s, s['t0'])
+    check(k0 is not None, 't0 is not a block request')
+    want_len = frames_to_cycles(64 * (k0 + 6897)) - frames_to_cycles(64 * k0)
+    check(s['end'] - s['t0'] == want_len, 'end - t0 is %d, not %d' % (s['end'] - s['t0'], want_len))
+
+@case
+def M17_wav(t):
+    seed = t.seed()
+    _, a, _ = t.render(seed, ['--seconds', '1'])
+    _, b, _ = t.render(seed, ['--seconds', '1', '--wav-rate', '44100'])
+    ch, rate, width, frames, data = wav_info(a)
+    check((ch, rate, frames, len(data)) == (4, 44141, 44160, 353280), 'the 1 s WAV is %r'
+          % ((ch, rate, frames, len(data)),))
+    with open(a, 'rb') as f:
+        ra = f.read()
+    with open(b, 'rb') as f:
+        rb = f.read()
+    check(len(ra) == len(rb) == 44 + 353280, 'the files have %d and %d bytes' % (len(ra), len(rb)))
+    diff = [j for j in range(len(ra)) if ra[j] != rb[j]]
+    check(diff and all(24 <= j < 32 for j in diff), 'the 44100 file differs at %r' % diff[:16])
+    check(struct.unpack('<II', rb[24:32]) == (44100, 44100 * 8), 'the 44100 header has %r'
+          % (struct.unpack('<II', rb[24:32]),))
+    for mode in ('out1', 'out2', 'sum'):
+        _, w, _ = t.render(seed, ['--seconds', '1', '--stereo', mode])
+        ch, _, _, frames, data = wav_info(w)
+        check((ch, frames, len(data)) == (2, 44160, 176640), '--stereo %s: %r' % (mode, (ch, frames, len(data))))
+
+@case
+def M17_card_copy(t):
+    src = card_copy(t, t.seed(), 'src')
+    with open(os.path.join(src, 'TMP', 'X.SND'), 'wb') as f:
+        f.write(b'x' * 16)
+    shutil.copytree(os.path.join(src, 'PROJ00'), os.path.join(src, 'PROJ01'))
+    glo = os.path.join(src, 'PROJ01', 'GLO.CFG')
+    with open(glo, 'rb') as f:
+        g = bytearray(f.read())
+    g[0] = 90
+    with open(glo, 'wb') as f:
+        f.write(bytes(g))
+    before = tree(src)
+    keep = {}
+    for name, args in (('K1', []), ('K2', ['--as-booted']), ('K3', ['--project', '1'])):
+        keep[name] = t.path(name)
+        s, _, _ = t.render(src, ['--seconds', '0.5', '--keep-card', keep[name]] + args)
+        check(tree(src) == before, 'the render with %r changed the source card' % args)
+        keep[name] = (keep[name], s)
+    k1 = keep['K1'][0]
+    check(os.path.isfile(os.path.join(k1, 'PROJ.IDX')), 'K1 holds no PROJ.IDX: %r' % sorted(os.listdir(k1)))
+    check(os.path.isdir(os.path.join(k1, 'TMP')) and 'X.SND' not in os.listdir(os.path.join(k1, 'TMP')),
+          'K1 has no TMP, or its TMP holds X.SND: %r' % sorted(os.listdir(k1)))
+    k2 = keep['K2'][0]
+    check('X.SND' in os.listdir(os.path.join(k2, 'TMP')), '--as-booted: K2/TMP holds no X.SND')
+    k3, s3 = keep['K3']
+    with open(os.path.join(k3, 'PROJ.IDX'), 'rb') as f:
+        check(f.read() == b'\x01', 'K3/PROJ.IDX is not one byte 01')
+    check(s3['selected']['bpm'] == 90, '--project 1 plays at %d BPM, not 90' % s3['selected']['bpm'])
+    full = t.path('full')
+    os.makedirs(full)
+    with open(os.path.join(full, 'x'), 'w') as f:
+        f.write('x')
+    p = t.run(['--card', src, '--out', t.path('o.wav'), '--keep-card', full], code=1)
+    check('--keep-card' in p.stderr, '--keep-card on a folder with a file: %r' % p.stderr)
+    check(tree(src) == before, 'the source card changed')
+    no_copies_left()
+
+@case
+def M17_out_errors(t):
+    seed = t.seed()
+    missing = t.path('nowhere', 'o.wav')
+    ro = t.path('ro')
+    os.makedirs(ro)
+    os.chmod(ro, 0o555)
+    try:
+        for args, name in ((['--out', missing], missing),
+                           (['--out', t.path('o.wav'), '--summary', os.path.join(ro, 's.json')],
+                            os.path.join(ro, 's.json'))):
+            start = time.monotonic()
+            p = t.run(['--card', seed] + args, code=5)
+            wall = time.monotonic() - start
+            lines = p.stderr.splitlines()
+            check(len(lines) == 1 and lines[0].startswith('lichomat-render: %s: ' % name),
+                  '%r: stderr is %r' % (args, p.stderr))
+            check(wall < 1.0, '%r: exit 5 after %.2f s, not before power-on' % (args, wall))
+    finally:
+        os.chmod(ro, 0o755)
+    no_copies_left()
 
 if __name__ == '__main__':
     main()

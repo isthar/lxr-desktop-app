@@ -16,6 +16,10 @@
 
 #include "main.h"
 #include "Preset/PresetManager.h"
+#include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Sequencer/seq_core.h"
+#include "Soundengine/Sequencer/seq_platform.h"
+#include "Soundengine/USB/usb_manager.h"
 
 void rfw_seedCard(void *res)
 {
@@ -29,4 +33,38 @@ void rfw_seedCard(void *res)
 void rfw_morphBusy(void *out)
 {
 	*(uint8_t *)out = preset_morphBusy();
+}
+
+void rfw_selected(void *out)
+{
+	render_selected_t *s = out;
+	s->pattern = seq_activePattern;
+	s->song = -1;
+	for (int i = 0; i < NUM_KIT_SLOTS; i++)
+		if (seq_activeSong == seq_songData[i])
+		{
+			s->song = i;
+			break;
+		}
+	s->bpm = seq_getBpm();
+	s->sync = seq_getExtSync();
+}
+
+void rfw_counters(render_fwCounters_t *out)
+{
+	seqc_stats_t st;
+	seqc_stats(&st);
+	out->queueDepth = st.queueDepth;
+	out->queueMax = st.queueMax;
+	out->queueOverflow = st.queueOverflow;
+	out->chokeDrops = st.chokeDrops;
+	out->muteDrops = st.muteDrops;
+	out->skipDrops = st.skipDrops;
+	out->syncIgnored = st.syncIgnored;
+	out->intervalsExcluded = st.intervalsExcluded;
+	out->dropouts = st.dropouts;
+	out->reentries = st.reentries;
+	out->tempoRestarts = st.tempoRestarts;
+	out->syncOverflows = seqp_syncOverflows();
+	out->usbTxDropped = usb_midiTxDropped();
 }
