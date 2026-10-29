@@ -13,9 +13,11 @@
 2. Every compile command of the build passes the main.h overlay, except those
    of the vendored libm and of M19's canary.
 3. The strings of each binary, the printable runs of 3 or more bytes in the
-   contents of every section (as strings -a -n 3 finds them; string literals,
-   char arrays, const tables, code), name 'LXR', 'Erica' or 'Sonic Potions'
-   only in the allow-listed texts of emu/tests/name_allow.txt (one per line).
+   contents of every section that does not hold instructions (string literals,
+   char arrays, const tables), name 'LXR', 'Erica' or 'Sonic Potions' only in
+   the allow-listed texts of emu/tests/name_allow.txt (one per line). Code is
+   left out: its bytes can spell 'lxr' by chance (R2.4 saw it in a Release
+   build after an unrelated change), and no text the device shows lives there.
    Paths of the repository and the build inside a string are left out first.
 
 The last line is 'licence gate: N errors' when the gate fails (exit 1).
@@ -115,6 +117,8 @@ MH_MAGIC_64 = 0xfeedfacf
 LC_SEGMENT_64 = 0x19
 # S_ZEROFILL, S_GB_ZEROFILL, S_THREAD_LOCAL_ZEROFILL: no bytes in the file
 ZEROFILL = {0x01, 0x0c, 0x12}
+# S_ATTR_PURE_INSTRUCTIONS, S_ATTR_SOME_INSTRUCTIONS: the section holds code
+CODE_ATTRS = 0x80000000 | 0x00000400
 # a printable run of 3 or more bytes, as strings -a -n 3 finds it
 RUN = re.compile(rb'[\t\x20-\x7e]{3,}')
 
@@ -123,7 +127,8 @@ def strings(binary, errors):
     """(segment, section, run) for the printable runs in the contents of every
     section of a 64-bit Mach-O file: __cstring holds only the string literals,
     while a const char x[][16] lies in __TEXT,__const and a char x[] = "..." in
-    __DATA,__data. Every other section is read too, code included."""
+    __DATA,__data. Every other section is read too, except those that hold
+    instructions (S_ATTR_PURE_INSTRUCTIONS or S_ATTR_SOME_INSTRUCTIONS)."""
     with open(binary, 'rb') as f:
         data = f.read()
     if len(data) < 32 or struct.unpack_from('<I', data)[0] != MH_MAGIC_64:
@@ -139,7 +144,7 @@ def strings(binary, errors):
                 s = at + 72 + 80 * i  # a section_64 after the segment_command_64
                 sect, seg = (n.rstrip(b'\0').decode() for n in struct.unpack_from('<16s16s', data, s))
                 _, size, offset, _, _, _, flags = struct.unpack_from('<QQIIIII', data, s + 32)
-                if flags & 0xff in ZEROFILL or offset == 0:
+                if flags & 0xff in ZEROFILL or offset == 0 or flags & CODE_ATTRS:
                     continue
                 for m in RUN.finditer(data, offset, offset + size):
                     yield seg, sect, m.group().decode('ascii')
