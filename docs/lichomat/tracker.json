@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 01:58",
+    "updated": "2026-10-29 02:39",
     "phase": "Etap 1 czeka na testy na sprzęcie; etap 1b: krok R1 (wirtualne urządzenie) zrobiony",
     "focus": "Emulator R1 gotowy na lokalnej gałęzi emulator: cały firmware działa na wirtualnym urządzeniu w 103 testach. Nowe pytania Q21 i Q22 (błędy fw 1.7 znalezione przez emulator). Etap 1 nadal czeka na Twoje testy na LXR-02 (Q6).",
     "branch": "timing-core",
-    "head": "fd37795",
-    "next": "Ty: Q19 (wypchnąć gałąź emulator?), Q21, Q22, testy v0.1 na LXR-02 (Q6), Q9–Q11. Ja: plan R2+R3 (renderer WAV i testy porównujące nagrania), potem ich wykonanie.",
-    "updated_at": "2026-10-29T01:58:00+01:00",
-    "now": "Od 01:58: jeden agent pisze plan R2+R3. Potem, jeśli starczy czasu i limitu, pierwsze zadania; koniec pracy ok. 04:00, przed końcem kofeiny. Zużycie ok. 38%."
+    "head": "9dccdc7",
+    "next": "Ty: Q19 (wypchnąć gałąź emulator?), Q21, Q22, Q23, testy v0.1 na LXR-02 (Q6), Q9–Q11. Ja: dalsze zadania planu R2+R3 z lekkim przeglądem co ok. 4 zadania.",
+    "updated_at": "2026-10-29T02:39:00+01:00",
+    "now": "Od 02:39: jeden agent robi R2.1–R2.2 (cele budowania renderera, opcje, --version, kopia karty, --seed-card) i poprawkę folderów tymczasowych. Potem podsumowanie; koniec ok. 04:00. Zużycie ok. 39,5%."
   },
   "epics": [
     {
@@ -768,6 +768,13 @@
       "status": "otwarte",
       "question": "Drugie znalezisko sanitizera w firmware 1.7 (§7): freq2PhaseIncr1024() i freq2PhaseIncr32767() (Oscillator.c:47–50) zamieniają float na uint32 bez nasycenia. Przy wysokiej wysokości z mocną modulacją pitch (przepis z U8: ok. 414 kHz) wartość przekracza 2^32 i UBSan przerywa; od częstotliwości REAL_FS (44 140 Hz) w górę. Na urządzeniu VCVT nasyca, więc dźwięk się nie zmienia. Czy rozszerzyć F6 (f2u32_sat) na te dwie funkcje?",
       "assumption": "Propozycja: tak, jako osobny mały commit F6b na gałęzi emulator, z testem; obraz firmware powinien zostać bajt w bajt taki sam jak przy F6. Do Twojej decyzji test M15_f9 używa modulacji 32 (szczyt 38 kHz, nadal pasmo 10), a test U8 i przebieg CI z ASan trafią na to znalezisko.",
+      "answer": ""
+    },
+    {
+      "id": "Q23",
+      "status": "otwarte",
+      "question": "Trzeci błąd fw 1.7 znaleziony przez emulator (§7): przy wyborze wzorca przyciskami kroków firmware przekazuje menu_activePage (wartość 16) jako numer ścieżki do euklid_getLength/Steps/Rotation, które indeksują tablice 7-elementowe. Czytanie poza tablicą; na urządzeniu czyta sąsiednie bajty. Czy dodać poprawkę F12 w v0.2: przekazywać aktywny głos?",
+      "assumption": "Na razie bez zmian w firmware: plan R2+R3 wyłącza sprawdzanie zakresu (UBSan, ASan) tylko w tych trzech funkcjach (emu/sanitize/euklid_ignorelist.txt), jak przy B13/B14. Nazwy poprawek: Q21 → F11, Q23 → F12, Q22 → rozszerzenie F6.",
       "answer": ""
     }
   ],
@@ -2261,6 +2268,11 @@
       "n": 298,
       "at": "2026-10-29 01:58",
       "text": "01:58: ruszył jeden agent piszący plan R2+R3 (renderer lichomat-render, nagrania wzorcowe G1–G10, CI emulatora, krok w tools/check.sh; testy M14, M16, M17, M23). Tylko plan; CI emulatora i tak nie ruszy na GitHubie przed Q19."
+    },
+    {
+      "n": 299,
+      "at": "2026-10-29 02:39",
+      "text": "Plan R2+R3 gotowy (02:39): docs/superpowers/plans/2026-10-29-emulator-r2-r3-renderer-goldens.md, 1294 linie, 12 zadań R2.1–R2.6 i R3.1–R3.6 (M14, M16, M17, M23, G1–G10, emulator.yml, krok w check.sh). Agent znalazł trzeci błąd fw 1.7 (nowe pytanie Q23: zły indeks w funkcjach euklid przy wyborze wzorca). Od 02:39 jeden agent robi R2.1–R2.2 i sprząta po testach R1 (zostawiały ok. 1060 folderów tymczasowych)."
     }
   ]
 }
