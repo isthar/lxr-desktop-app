@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 01:34",
+    "updated": "2026-10-29 01:48",
     "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
     "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
     "branch": "timing-core",
-    "head": "d6fe7fa",
+    "head": "8f49df8",
     "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-29T01:34:00+01:00",
-    "now": "Od 01:34: jeden agent robi lekki przegląd końcowy R1b.9–R1b.16 we własnej kopii. Potem ewentualne poprawki, raport R1 i podsumowanie na czacie. Zużycie ok. 37%."
+    "updated_at": "2026-10-29T01:48:00+01:00",
+    "now": "Od 01:48: jeden agent poprawia 3 uwagi z przeglądu końcowego (skan nazw M21, okno USB M11, warunek testu F1). Potem raport R1 i podsumowanie. Zużycie ok. 37,5%."
   },
   "epics": [
     {
@@ -2240,6 +2240,11 @@
       "n": 295,
       "at": "2026-10-29 01:34",
       "text": "R1b.15–R1b.16 zakończone (01:34): 21aeee8 (gniazda wyjść i synchronizacji M8/M12) i d6fe7fa (F1, F2, F3, F9 w emulatorze, M15). Cały plan R1 części 2 wykonany: 103 z 103 testów emulatora w Debug (UBSan) i w Release, 0 ostrzeżeń; bramka firmware bez zmian (55 testów, DTCM+RAM 391796 B, 9 PASS w fw_checks). 26 commitów na gałęzi emulator od 0273b17. Nowe pytanie Q22: drugie znalezisko sanitizera w Oscillator.c (konwersja float→uint32 bez nasycenia przy bardzo wysokiej wysokości dźwięku)."
+    },
+    {
+      "n": 296,
+      "at": "2026-10-29 01:48",
+      "text": "Przegląd końcowy R1b.9–R1b.16 (01:48): modele DIN, USB, panelu, LCD, karty i gniazd zgodne ze specyfikacją; 103 z 103 w Debug i Release. 2 ważne luki: skan nazw M21 czytał tylko jedną sekcję binarki (teksty menu w tablicach były poza nim; dziś w binarkach nie ma żadnego znaku towarowego) i test M11 przepuszczał model z 31 pakietami USB na 1 ms. Plus 1 drobna. Poprawki robi jeden agent."
     }
   ]
 }
