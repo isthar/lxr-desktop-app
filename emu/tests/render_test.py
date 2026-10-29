@@ -349,15 +349,27 @@ def M17_card_copy(t):
     g[0] = 90
     with open(glo, 'wb') as f:
         f.write(bytes(g))
+    # names that are not 8.3 are skipped, one warning per name (spec 11)
+    skipped = [os.path.join(src, 'PROJ00', 'LongerName.snd'), os.path.join(src, 'A+B.SND')]
+    for x in skipped:
+        with open(x, 'wb') as f:
+            f.write(b'x')
     before = tree(src)
     keep = {}
     for name, args in (('K1', []), ('K2', ['--as-booted']), ('K3', ['--project', '1'])):
         keep[name] = t.path(name)
-        s, _, _ = t.render(src, ['--seconds', '0.5', '--keep-card', keep[name]] + args)
+        s, _, p = t.render(src, ['--seconds', '0.5', '--keep-card', keep[name]] + args)
         check(tree(src) == before, 'the render with %r changed the source card' % args)
+        warned = [x for x in p.stderr.splitlines() if x.startswith('lichomat-render: warning: ')]
+        for x in skipped:
+            n = sum(1 for w in warned if x in w and 'not an 8.3 name' in w)
+            check(n == 1, '%r: %d warnings name %s, not 1: %r' % (args, n, x, p.stderr))
+            check(sum(1 for w in s['warnings'] if x in w) == 1, '%r: the summary warns %r' % (args, s['warnings']))
         keep[name] = (keep[name], s)
     k1 = keep['K1'][0]
     check(os.path.isfile(os.path.join(k1, 'PROJ.IDX')), 'K1 holds no PROJ.IDX: %r' % sorted(os.listdir(k1)))
+    check('A+B.SND' not in os.listdir(k1) and 'LongerName.snd' not in os.listdir(os.path.join(k1, 'PROJ00')),
+          'the copy holds a name that is not 8.3')
     check(os.path.isdir(os.path.join(k1, 'TMP')) and 'X.SND' not in os.listdir(os.path.join(k1, 'TMP')),
           'K1 has no TMP, or its TMP holds X.SND: %r' % sorted(os.listdir(k1)))
     k2 = keep['K2'][0]

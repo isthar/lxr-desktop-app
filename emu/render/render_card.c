@@ -97,8 +97,21 @@ static int hasInfo(const char *copy, const emu_hostEntry_t *root, int count, int
 	return found;
 }
 
-int render_cardPrepare(const render_opts_t *o, char copy[EMU_HOST_PATH], int *project, char *err, size_t n)
+/* the warning of a name the copy skips (spec 11), with the device's wording (emu_card.c) */
+static void (*cardWarn)(const char *what);
+
+static void skippedName(const char *path)
 {
+	char text[EMU_HOST_PATH + 64];
+	snprintf(text, sizeof text, "card: %s is not an 8.3 name; the device would not see it", path);
+	if (cardWarn)
+		cardWarn(text);
+}
+
+int render_cardPrepare(const render_opts_t *o, char copy[EMU_HOST_PATH], int *project, char *err, size_t n,
+	void (*warn)(const char *what))
+{
+	cardWarn = warn;
 	const char *card = o->card;
 	copy[0] = '\0';
 	const int kind = emu_hostKind(card);
@@ -125,7 +138,8 @@ int render_cardPrepare(const render_opts_t *o, char copy[EMU_HOST_PATH], int *pr
 	int status = 0;
 	emu_hostEntry_t *root = NULL;
 	int count = -1;
-	if (emu_hostCopyCard(card, copy, !o->asBooted) != 0 || (count = emu_hostList(copy, &root, NULL)) < 0)
+	if (emu_hostCopyCardSkipped(card, copy, !o->asBooted, skippedName) != 0
+		|| (count = emu_hostList(copy, &root, NULL)) < 0)
 		status = fail(err, n, "card %s: cannot read", card);
 	if (status == 0)
 	{

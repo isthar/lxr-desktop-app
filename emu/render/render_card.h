@@ -27,9 +27,11 @@ int render_cardEmpty(const char *dir);
  * new $TMPDIR/lichomat-render-XXXXXX (copy), /TMP left out unless --as-booted,
  * pick the project (--project, else /PROJ.IDX's byte with 64-255 as 0, else 0)
  * and check that it has PROJnn/PRJ.NFO, names matched as FatFs does. With
- * --project, the copy's /PROJ.IDX holds that byte. Returns 0, or 2 with
- * "card DIR: problem" in err and no copy left. */
-int render_cardPrepare(const render_opts_t *o, char copy[EMU_HOST_PATH], int *project, char *err, size_t n);
+ * --project, the copy's /PROJ.IDX holds that byte. Each name the copy skips
+ * for not being 8.3 is one warning through warn() (spec 11). Returns 0, or 2
+ * with "card DIR: problem" in err and no copy left. */
+int render_cardPrepare(const render_opts_t *o, char copy[EMU_HOST_PATH], int *project, char *err, size_t n,
+	void (*warn)(const char *what));
 
 /** copy the card copy's final state into keep, created if missing; 0 or -1 */
 int render_cardKeep(const char *copy, const char *keep);

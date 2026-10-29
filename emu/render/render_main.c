@@ -554,7 +554,7 @@ static void render_run(const render_opts_t *o)
 	R.o = o;
 	if (o->events && render_scriptLoad(o->events, &R.script, err, sizeof err) != 0)
 		render_die(1, "%s", err);
-	const int status = render_cardPrepare(o, R.copy, &R.project, err, sizeof err);
+	const int status = render_cardPrepare(o, R.copy, &R.project, err, sizeof err, render_warn);
 	if (status != 0)
 		render_die(status, "%s", err);
 	if (render_outOpen(&R.out, o, err, sizeof err) != 0)
