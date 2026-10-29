@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 06:21",
-    "phase": "Etap 1 czeka na testy na sprzęcie; etap 1b: R2 (renderer) w toku",
-    "focus": "Poprawki 9 uwag z przeglądu renderera; R2 (E5.3) prawie gotowe.",
+    "updated": "2026-10-29 06:45",
+    "phase": "Etap 1 czeka na testy na sprzęcie; etap 1b: R2 (renderer) zrobione, następne R3",
+    "focus": "Krok R2 emulatora zrobiony (M9). Następne R3: nagrania wzorcowe i CI emulatora.",
     "branch": "timing-core",
-    "head": "a8ea8c6",
-    "next": "Po poprawkach koniec sesji przy ok. 47% tygodnia: dokumentacja wznowienia. Następna sesja: R3.1–R3.6 (karty testowe, goldens G1–G10, CI emulatora z ASan).",
-    "updated_at": "2026-10-29T06:21:00+01:00",
-    "now": "Od 06:21: agent poprawia 9 uwag z przeglądu R2.1–R2.4 (zużycie ok. 44.4%)."
+    "head": "1099778",
+    "next": "Ja: R3.1–R3.6 w następnej sesji. Ty: tylko testy v0.1 na LXR-02 (Q6).",
+    "updated_at": "2026-10-29T06:45:00+01:00",
+    "now": "Sesja zakończona o 06:45 (zużycie ok. 45.5%). Nic nie działa. Przy wznowieniu: R3.1–R3.6. Czeka tylko Q6 (Twoje testy na LXR-02)."
   },
   "epics": [
     {
@@ -428,8 +428,8 @@
     {
       "id": "E5.3",
       "epic": "E5",
-      "status": "w toku",
-      "title": "Renderer WAV lichomat-render (R2): R2.1–R2.6 zrobione, 133 testy emulatora; poprawki po przeglądzie w toku",
+      "status": "zrobione",
+      "title": "Renderer WAV lichomat-render (R2): R2.1–R2.6 i poprawki po przeglądzie, 133 testy emulatora (M9)",
       "updated": "2026-10-29"
     },
     {
@@ -437,7 +437,7 @@
       "epic": "E5",
       "status": "do zrobienia",
       "title": "Testy porównujące nagrania (goldens) i CI emulatora (R3)",
-      "updated": "2026-10-27"
+      "updated": "2026-10-29"
     },
     {
       "id": "E5.5",
@@ -621,6 +621,12 @@
       "date": "2026-10-29",
       "title": "Emulator R1: cały firmware na wirtualnym urządzeniu (E5.1, E5.2)",
       "summary": "Firmware bootuje i działa na Macu w testach: planista przerwań z zegarem 216 MHz, kodek, LCD, diody, panel, karta, MIDI DIN i USB, gniazda. 103 testy emulatora (Debug z UBSan i Release), firmware bez zmian poza F1–F10. Cztery lekkie przeglądy, wszystkie uwagi poprawione. Emulator znalazł dwa nowe błędy fw 1.7 (Q21, Q22). Raport: docs/lichomat/reports/M8-emulator-R1.md."
+    },
+    {
+      "id": "M9",
+      "date": "2026-10-29",
+      "title": "Emulator R2: renderer WAV lichomat-render (E5.3) i poprawki F11, F12, F6b (E5.7)",
+      "summary": "lichomat-render renderuje cały firmware do WAV ze skryptem zdarzeń: wybór wzorca, songu, tempa i parametrów, zapisy, logi MIDI, zegara i panelu, kody wyjścia dla awarii i zawieszenia. Poprawki błędów fw 1.7 F12 (Q23), F11 (Q21), F6b (Q22), każda z testem. 133 testy emulatora w Debug i Release, szeregowo i równolegle; firmware bez zmian w pamięci. Jeden lekki przegląd: 1 ważna i 8 drobnych uwag, wszystkie poprawione. Gałąź emulator na forku, CI zielone. Raport: docs/lichomat/reports/M9-emulator-R2.md."
     }
   ],
   "questions": [
@@ -2325,6 +2331,16 @@
       "n": 308,
       "at": "2026-10-29 06:21",
       "text": "Od 06:21: ten sam agent poprawia 9 uwag z przeglądu (najpierw ważną: kolejność nut i zegara w skryptach zdarzeń), każdą z testem, który najpierw pada."
+    },
+    {
+      "n": 309,
+      "at": "2026-10-29 06:45",
+      "text": "Poprawki po przeglądzie gotowe: e10cfb0 (wejścia skryptu w kolejności czasu, zegar staje na końcu renderu), 14d43ae (wszystkie ostrzeżenia i zdarzenia direct w podsumowaniu, ostrzeżenia przy każdym kodzie wyjścia), 1099778 (limit 4 GiB pliku WAV, commit w --version przy każdym buildzie, dwie luki w testach); d989329 i 96092be: specyfikacja i plan. Emulator 133 z 133 w Debug i Release, szeregowo i -j8; CI zielone dla obu gałęzi. Kamień milowy M9: krok R2 zrobiony, raport docs/lichomat/reports/M9-emulator-R2.md."
+    },
+    {
+      "n": 310,
+      "at": "2026-10-29 06:45",
+      "text": "Sesja zakończona o 06:45 przy ok. 45.5% tygodnia (limit 50%, zostawiam zapas). Nic nie działa. Przy wznowieniu: R3.1–R3.6 (karty testowe, goldens G1–G10, CI emulatora z ASan), jeden wykonawca na dwa zadania, lekki przegląd po R3.4."
     }
   ]
 }

@@ -14,6 +14,8 @@ Read this first when picking the project up in a new session.
 | Stage 1b plan, R1 part 1 (F1–F10; done on the branch `emulator`, pushed to the fork, worktree `build/wt-emulator`) | `docs/superpowers/plans/2026-10-27-emulator-r1a-firmware-changes.md` |
 | Stage 1b plan, R1 part 2 (the virtual device `emu/`; done on `emulator`, 103 ctest ids: `source tools/env.sh && cmake -S emu -B build/emu -G Ninja && cmake --build build/emu && ctest --test-dir build/emu`, in the worktree) | `docs/superpowers/plans/2026-10-27-emulator-r1b-virtual-device.md` |
 | Milestone report of R1 | `docs/lichomat/reports/M8-emulator-R1.md` |
+| Stage 1b plan, R2 and R3 (the renderer `lichomat-render`, the goldens, the emulator CI; R2.1–R2.6 done on `emulator`, 133 ctest ids, serial and `ctest -j8`; R3.1–R3.6 next) | `docs/superpowers/plans/2026-10-29-emulator-r2-r3-renderer-goldens.md` |
+| Milestone report of R2 | `docs/lichomat/reports/M9-emulator-R2.md` |
 | The night's scratch work of 2026-10-27 (the stage 1b host probe, the sweep's harnesses) | `build/night-2026-10-27/` (git-ignored, on the owner's Mac; its README lists the contents) |
 | Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N21; they win over the spec) |
 | Reports per milestone | `docs/lichomat/reports/` |
