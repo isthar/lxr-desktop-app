@@ -159,6 +159,10 @@ static void nearTimeout(void *arg) { (void)arg; screensaver_timer = 2u * 60u * 1
  * runs now is the trail's last EMU_TRAIL_PASS entry, which the first hook in it
  * still finds; the pass lasts at least to the last hook in it. */
 static uint64_t passStart, wakeStart, wakeLength, dinAtWakeEnd;
+/* A block hook comes at its request's body (spec 3.3): the trail's last block
+ * body is at the hook's time. In the wake, usb_flushMidi() holds PRIMASK around
+ * a paid HAL_GetTick(), and a body released there was hooked up to 248 us late. */
+static unsigned blockHooksSeen, lateBlockHooks;
 static void wakeExtra(uint64_t now, emu_hookReason_t why)
 {
 	emu_trailEntry_t e[EMU_TRAIL_LENGTH];
@@ -169,6 +173,16 @@ static void wakeExtra(uint64_t now, emu_hookReason_t why)
 			passStart = e[i].t;
 			break;
 		}
+	if (why == EMU_HOOK_BLOCK)
+	{
+		blockHooksSeen++;
+		for (unsigned i = n; i-- > 0;)
+			if (e[i].kind == EMU_TRAIL_BODY && e[i].arg == EMU_SRC_BLOCK)
+			{
+				lateBlockHooks += e[i].t != now;
+				break;
+			}
+	}
 	injectExtra(now, why);
 	if (emu_inPass() && now - passStart > wakeLength)
 	{
@@ -210,6 +224,8 @@ TEST(M3_fw_screensaver)
 	/* the hook ran once per ms throughout the wake, and nowhere else */
 	ASSERT_NEAR((double)(emu_tier.timeHooks - timeHooks0), (double)wakeLength / EMU_CYCLES_PER_MS, 1.0);
 	ASSERT_TRUE(emu_tier.wall - wall0 > 0.99);	/* the blocks were paced throughout */
+	ASSERT_TRUE(blockHooksSeen > 680u);			/* about 689 in 1 s */
+	ASSERT_EQ(lateBlockHooks, 0);
 	emu_getCounters(&c1);
 	ASSERT_EQ(c1.underruns, c0.underruns);
 	ASSERT_EQ(dinAt300, c0.dinIn + 1u);

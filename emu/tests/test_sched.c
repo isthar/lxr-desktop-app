@@ -342,6 +342,49 @@ TEST(M3_hook)
 	ASSERT_EQ(delivered, hookTimes[9] + 1000u);		/* the hook's input at its time */
 }
 
+/* the block hooks' times */
+static uint64_t blockHookAt[8];
+static unsigned blockHookCount;
+
+static void blockHook(void *ctx, uint64_t now, emu_hookReason_t why)
+{
+	(void)ctx;
+	if (why != EMU_HOOK_BLOCK)
+		return;
+	if (blockHookCount < 8u)
+		blockHookAt[blockHookCount] = now;
+	blockHookCount++;
+}
+
+/* The hook comes at every block request (spec 3.3), also at one that waited
+ * behind PRIMASK in thread context, as in usb_flushMidi(): its body runs at the
+ * release, and the hook at once, not at the end of the next step. */
+TEST(M3_block_hook_at_release)
+{
+	setup();
+	emu_cfg.hook = blockHook;
+	blockHookCount = 0;
+	emu_src[EMU_SRC_BLOCK] = (emu_source_t){ 100000u, blockFire, blockBody, 0 };
+	__disable_irq();
+	emu_threadAdvance(150000u);		/* the request at 100,000 waits */
+	ASSERT_EQ(blockHookCount, 0);
+	__enable_irq();					/* at 150,000 */
+	ASSERT_EQ(blockHookCount, 1);
+	ASSERT_EQ(blockHookAt[0], 150000);
+	emu_threadAdvance(60000u);		/* the request at 200,000, outside a window */
+	ASSERT_EQ(blockHookCount, 2);
+	ASSERT_EQ(blockHookAt[1], 200000);
+	const uint32_t primask = __get_PRIMASK();
+	__disable_irq();
+	emu_threadAdvance(100000u);		/* the request at 300,000 waits; SysTick at 216,000 too */
+	ASSERT_EQ(blockHookCount, 2);
+	__set_PRIMASK(primask);			/* at 310,000 */
+	ASSERT_EQ(blockHookCount, 3);
+	ASSERT_EQ(blockHookAt[2], 310000);
+	ASSERT_EQ(lgCount, 1);			/* the SysTick ran at the release too */
+	ASSERT_EQ(lgTime[0], 310000);
+}
+
 TEST(M3_watchdog)
 {
 	emu_config_t cfg;

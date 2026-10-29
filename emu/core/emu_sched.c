@@ -335,7 +335,7 @@ void emu_dispatch(void)
 				&& (best < 0 || emu_srcPriority[s] < emu_srcPriority[best]))
 				best = s;
 		if (best < 0)
-			return;
+			break;
 		emu_src[best].pending--;
 		const int saved = emu_runningPrio;
 		emu_runningPrio = emu_srcPriority[best];
@@ -347,6 +347,13 @@ void emu_dispatch(void)
 		emu_sample();
 		emu_bodyDepth--;
 		emu_runningPrio = saved;
+	}
+	/* the hook at every block request (spec 3.3), also one whose body waited
+	 * behind PRIMASK in thread context and ran at its release */
+	if (emu_bodyDepth == 0 && emu_blockSeen)
+	{
+		emu_blockSeen = 0;
+		emu_callHook(EMU_HOOK_BLOCK);
 	}
 }
 
@@ -396,12 +403,7 @@ static int emu_step(uint64_t limit)
 			emu_fault(what);
 			emu_src[s].due = EMU_NEVER;
 		}
-	emu_dispatch();
-	if (emu_blockSeen)
-	{
-		emu_blockSeen = 0;
-		emu_callHook(EMU_HOOK_BLOCK);
-	}
+	emu_dispatch();		/* and the hook after a block request */
 	return 1;
 }
 
