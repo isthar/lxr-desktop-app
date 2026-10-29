@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 07:09",
-    "phase": "Etap 1 czeka na testy na sprzęcie; następny etap 2 (groove), reszta emulatora na koniec",
-    "focus": "Etap 2: specyfikacja ficzerów groove.",
+    "updated": "2026-10-29 07:31",
+    "phase": "Etap 1 czeka na testy na sprzęcie; etap 2: szkic gotowy, następny plan v0.2",
+    "focus": "Etap 2: szkic z rekomendacjami gotowy; następny plan v0.2 (polirytmia, humanize, warunki trigów).",
     "branch": "timing-core",
     "head": "1099778",
-    "next": "Ja: specyfikacja etapu 2. Ty: testy v0.1 na LXR-02 (Q6).",
-    "updated_at": "2026-10-29T07:09:00+01:00",
-    "now": "Od 07:09: nic nie działa; czekam na Twoją odpowiedź, jak robimy specyfikację etapu 2."
+    "next": "Ja: plan v0.2 w następnej sesji. Ty: poprawki do szkicu (jeśli chcesz), testy v0.1 z odczytem CPU (Q6, H12).",
+    "updated_at": "2026-10-29T07:31:00+01:00",
+    "now": "Sesja zakończona o 07:31 (zużycie ok. 46%). Nic nie działa. Przy wznowieniu: plan v0.2 według szkicu etapu 2."
   },
   "epics": [
     {
@@ -463,72 +463,79 @@
     {
       "id": "E6.1",
       "epic": "E6",
-      "status": "do zrobienia",
-      "title": "Specyfikacja i plan etapu 2",
-      "updated": ""
+      "status": "w toku",
+      "title": "Specyfikacja i plan etapu 2: szkic z rekomendacjami gotowy (docs/superpowers/specs/2026-10-29-stage2-draft.md), plan v0.2 następny",
+      "updated": "2026-10-29"
     },
     {
       "id": "E6.2",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Swing per tor i szablony groove",
-      "updated": ""
+      "title": "Odłożone: szablony swingu (wystarczy shuffle i lekki humanize)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E6.3",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Track delay w ms i humanize",
-      "updated": ""
+      "title": "Humanize per ścieżka i opóźnienie ścieżki w ms (v0.2)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E6.4",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Pełny mikrotiming i format PatV04",
-      "updated": ""
+      "title": "Odłożone: pełny mikrotiming i format PatV04",
+      "updated": "2026-10-29"
     },
     {
       "id": "E6.5",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Nagrywanie z zachowaniem mikrotimingu",
-      "updated": ""
+      "title": "Odłożone: nagrywanie z zachowaniem mikrotimingu",
+      "updated": "2026-10-29"
     },
     {
       "id": "E6.6",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Trig conditions (1:2…4:4, FILL, FIRST, PRE)",
-      "updated": ""
+      "title": "Warunki trigów w bajcie prawdopodobieństwa (1:2…4:4, FILL, FIRST, PRE), bez zmiany formatu kroku (v0.2)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E6.7",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Dzielnik tempa per tor i rotacja",
-      "updated": ""
+      "title": "Tempo ścieżki ×1/4…×4 (polirytmia) i rotacja (v0.2)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E6.8",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Tryb fill, sceny mute, roll 1/32 i triole",
-      "updated": ""
+      "title": "Tryb fill, sceny mute, roll 1/32 i triole (v0.4)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E6.9",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "DJ-filtr na masterze",
-      "updated": ""
+      "title": "Filtr DJ na masterze (v0.3)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E6.10",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Wyzwalanie z dokładnością do próbki: blok audio liczony w częściach dzielonych w chwilach zdarzeń (dziś start głosu jest kwantowany do bloku 1,45 ms)",
-      "updated": "2026-10-24"
+      "title": "Odłożone: wyzwalanie z dokładnością do próbki (dziś start głosu kwantowany do bloku 1,45 ms)",
+      "updated": "2026-10-29"
+    },
+    {
+      "id": "E6.11",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "Slide dla Drum 1–3 (acid), flaga w wolnym bicie nuty kroku (v0.4)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E7.1",
@@ -540,37 +547,37 @@
     {
       "id": "E7.2",
       "epic": "E7",
-      "status": "do zrobienia",
-      "title": "Specyfikacja etapu 3",
-      "updated": ""
+      "status": "w toku",
+      "title": "Specyfikacja atmosfery: połączona ze szkicem etapu 2 (v0.3)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E7.3",
       "epic": "E7",
       "status": "do zrobienia",
-      "title": "Reverb: włączenie i strojenie",
-      "updated": ""
+      "title": "Pogłos jako osobny efekt obok delaya, z własnym buforem w RAM, na bazie wyłączonego „Plt” z fw 1.7 (v0.3)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E7.4",
       "epic": "E7",
       "status": "do zrobienia",
-      "title": "Echo zsynchronizowane z tempem",
-      "updated": ""
+      "title": "Delay zsynchronizowany z tempem (v0.3)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E7.5",
       "epic": "E7",
       "status": "do zrobienia",
-      "title": "Ambient: długi, falujący, zamrożony pogłos (freeze z modulacją, bardzo długi ogon)",
-      "updated": "2026-10-24"
+      "title": "Freeze: zamrożony, falujący ogon pogłosu, baza washy (v0.3)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E7.6",
       "epic": "E7",
       "status": "do zrobienia",
-      "title": "Rumble: pogłos z duckingiem od stopy (techno rumble)",
-      "updated": "2026-10-24"
+      "title": "Rumble: pogłos stopy z duckingiem (v0.3)",
+      "updated": "2026-10-29"
     }
   ],
   "milestones": [
@@ -2346,6 +2353,11 @@
       "n": 311,
       "at": "2026-10-29 07:09",
       "text": "Twoja decyzja (07:09): reszta emulatora (R3 nagrania wzorcowe i CI, R4–R5 aplikacja) idzie na koniec. Następny jest etap 2 (ficzery groove); do sprawdzania zmian brzmienia używam gotowego renderera lichomat-render."
+    },
+    {
+      "n": 312,
+      "at": "2026-10-29 07:31",
+      "text": "Szkic etapu 2 z rekomendacjami (07:31), pod Twój opis (industrial, groove, minimal, czasem acid; lekki humanize, polirytmia, atmosfera): v0.2 polirytmia (tempo ścieżki ×1/4…×4), humanize i opóźnienie ścieżki w ms, warunki trigów w wolnych wartościach bajtu prawdopodobieństwa, rotacja; v0.3 atmosfera (pogłos obok delaya, freeze, rumble, delay z tempem, filtr DJ; najpierw Twój odczyt CPU, H12); v0.4 sceny mute, fill, rolle 1/32 i triole, slide dla Drum 1–3. Odłożone: szablony swingu, PatV04, nagrywanie z mikrotimingiem, wyzwalanie co do próbki. Plik: docs/superpowers/specs/2026-10-29-stage2-draft.md. Dwa rendery demo z emulatora w build/demo/."
     }
   ]
 }
