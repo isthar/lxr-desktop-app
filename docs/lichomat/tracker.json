@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 01:57",
+    "updated": "2026-10-29 01:58",
     "phase": "Etap 1 czeka na testy na sprzęcie; etap 1b: krok R1 (wirtualne urządzenie) zrobiony",
     "focus": "Emulator R1 gotowy na lokalnej gałęzi emulator: cały firmware działa na wirtualnym urządzeniu w 103 testach. Nowe pytania Q21 i Q22 (błędy fw 1.7 znalezione przez emulator). Etap 1 nadal czeka na Twoje testy na LXR-02 (Q6).",
     "branch": "timing-core",
-    "head": "22827f7",
+    "head": "fd37795",
     "next": "Ty: Q19 (wypchnąć gałąź emulator?), Q21, Q22, testy v0.1 na LXR-02 (Q6), Q9–Q11. Ja: plan R2+R3 (renderer WAV i testy porównujące nagrania), potem ich wykonanie.",
-    "updated_at": "2026-10-29T01:57:00+01:00",
-    "now": "Od 01:57: R1 zamknięte. Następny krok: plan R2+R3 (jeden agent), jeśli zmieści się przed końcem kofeiny (ok. 04:29) i limitem 47%. Zużycie ok. 38%."
+    "updated_at": "2026-10-29T01:58:00+01:00",
+    "now": "Od 01:58: jeden agent pisze plan R2+R3. Potem, jeśli starczy czasu i limitu, pierwsze zadania; koniec pracy ok. 04:00, przed końcem kofeiny. Zużycie ok. 38%."
   },
   "epics": [
     {
@@ -2256,6 +2256,11 @@
       "n": 297,
       "at": "2026-10-29 01:57",
       "text": "Poprawki z przeglądu końcowego (01:57): 1d6dd63 (skan nazw M21 czyta każdą sekcję binarki, jak strings -a -n 3; nadal 0 trafień), b87b1f5 (M11: 12+8 pakietów naraz, model był dobry), 22827f7 (M15: warunek F1 sprawdzony). 103 z 103 w Debug i Release, bramka firmware bez zmian. Krok R1 zrobiony: kamień milowy M8, raport docs/lichomat/reports/M8-emulator-R1.md; E5.1 i E5.2 zamknięte."
+    },
+    {
+      "n": 298,
+      "at": "2026-10-29 01:58",
+      "text": "01:58: ruszył jeden agent piszący plan R2+R3 (renderer lichomat-render, nagrania wzorcowe G1–G10, CI emulatora, krok w tools/check.sh; testy M14, M16, M17, M23). Tylko plan; CI emulatora i tak nie ruszy na GitHubie przed Q19."
     }
   ]
 }
