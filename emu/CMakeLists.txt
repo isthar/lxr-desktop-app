@@ -288,3 +288,20 @@ function(emu_render_tests)
     endforeach()
 endfunction()
 emu_render_tests(M17_cli_usage M17_cli_info M17_card_errors M17_seed_card)
+
+# The temporary folders: every test above gets TMPDIR = a folder of this build,
+# which emu_tmp_setup empties first and emu_tmp_clean checks last. A test removes
+# what it makes there, also when it fails (emu_testTempDir() at exit, the
+# renderer at every exit but codes 3 and 4); one that aborts leaves its folder,
+# and emu_tmp_clean names it. These two ids stay last: the list takes the tests
+# defined so far.
+set(EMU_TEST_TMP "${CMAKE_BINARY_DIR}/tmp")
+get_property(emu_tests DIRECTORY PROPERTY TESTS)
+set_property(TEST ${emu_tests} APPEND PROPERTY ENVIRONMENT "TMPDIR=${EMU_TEST_TMP}")
+set_property(TEST ${emu_tests} APPEND PROPERTY FIXTURES_REQUIRED emu_tmp)
+add_test(NAME emu_tmp_setup COMMAND ${CMAKE_COMMAND} -DMODE=setup "-DDIR=${EMU_TEST_TMP}"
+    -P "${EMU_DIR}/tests/check_tmp.cmake")
+add_test(NAME emu_tmp_clean COMMAND ${CMAKE_COMMAND} -DMODE=check "-DDIR=${EMU_TEST_TMP}"
+    -P "${EMU_DIR}/tests/check_tmp.cmake")
+set_tests_properties(emu_tmp_setup PROPERTIES FIXTURES_SETUP emu_tmp)
+set_tests_properties(emu_tmp_clean PROPERTIES FIXTURES_CLEANUP emu_tmp)

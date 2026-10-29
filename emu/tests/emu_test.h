@@ -17,6 +17,7 @@
 #ifndef EMU_TEST_H_
 #define EMU_TEST_H_
 
+#include <ftw.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,7 +28,35 @@
 #include "emu_internal.h"
 #include "seqc_test.h"
 
-/* a new empty folder under $TMPDIR */
+/* The folders of emu_testTempDir(), removed when the process exits: after the
+ * tests, a failed ASSERT_ included, or at an exit(). An abort() leaves them,
+ * and ctest's emu_tmp_clean names them. A forked child leaves them to its
+ * parent. */
+#define EMU_TEST_MAX_DIRS 64
+__attribute__((unused)) static char emu_testDirs[EMU_TEST_MAX_DIRS][512];
+__attribute__((unused)) static unsigned emu_testDirCount;
+__attribute__((unused)) static pid_t emu_testDirPid;
+
+static inline int emu_testRemoveEntry(const char *path, const struct stat *st, int flag, struct FTW *ftw)
+{
+	(void)st;
+	(void)flag;
+	(void)ftw;
+	if (remove(path) != 0)
+		perror(path);
+	return 0;
+}
+
+static inline void emu_testRemoveDirs(void)
+{
+	if (getpid() != emu_testDirPid)
+		return;
+	for (unsigned i = 0; i < emu_testDirCount; i++)
+		nftw(emu_testDirs[i], emu_testRemoveEntry, 16, FTW_DEPTH | FTW_PHYS);
+	emu_testDirCount = 0;
+}
+
+/* a new empty folder under $TMPDIR, removed at exit */
 static inline void emu_testTempDir(char *out, size_t size)
 {
 	const char *base = getenv("TMPDIR");
@@ -37,6 +66,21 @@ static inline void emu_testTempDir(char *out, size_t size)
 		perror("mkdtemp");
 		exit(2);
 	}
+	if (emu_testDirPid != getpid())
+	{
+		/* the first folder of this process; a forked child keeps its own list */
+		emu_testDirPid = getpid();
+		emu_testDirCount = 0;
+		atexit(emu_testRemoveDirs);
+	}
+	if (emu_testDirCount >= EMU_TEST_MAX_DIRS || strlen(out) >= sizeof emu_testDirs[0])
+	{
+		fprintf(stderr, "emu_testTempDir: more than %u folders, or a path too long: %s\n",
+			EMU_TEST_MAX_DIRS, out);
+		rmdir(out);
+		exit(2);
+	}
+	snprintf(emu_testDirs[emu_testDirCount++], sizeof emu_testDirs[0], "%s", out);
 }
 
 /* the core alone: clock, scheduler, registers; the test adds models and fakes */
