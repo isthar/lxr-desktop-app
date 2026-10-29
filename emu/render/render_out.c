@@ -404,7 +404,9 @@ int render_summaryWrite(const char *path, const render_summary_t *s, char *err, 
 		jsonU(f, "at", d->at, 0);
 		fputc('}', f);
 	}
-	fputs("],\n ", f);
+	fputs("], ", f);
+	jsonU(f, "scriptInputs", s->scriptInputs, 1);
+	fputs("\n ", f);
 	jsonU(f, "syncOverflows", s->fw.syncOverflows, 1);
 	jsonU(f, "usbTxDropped", s->fw.usbTxDropped, 1);
 	const render_fwCounters_t *q = &s->fw;

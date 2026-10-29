@@ -63,6 +63,7 @@ typedef struct render_summary
 	emu_counters_t counters;
 	const render_direct_t *direct;
 	unsigned ndirect;
+	uint64_t scriptInputs;		/**< the emu_in*() calls of the script's timed events */
 	double wallSeconds, virtualSeconds, speed;
 	const char *const *warnings;
 	unsigned nwarnings;

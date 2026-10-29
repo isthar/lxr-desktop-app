@@ -55,6 +55,7 @@ static struct
 	unsigned nextDirect;		/* the script index from which to look for the next direct event */
 	render_direct_t direct[RENDER_MAX_DIRECT];
 	unsigned ndirect;
+	uint64_t scriptInputs;		/* the emu_in*() calls of the script's timed events */
 	/* --param, in command-line order: the edits, and for the summary the names,
 	 * the numbers and the values after the prelude */
 	rfw_param_t params[RENDER_MAX_PARAMS];
@@ -374,15 +375,10 @@ static void render_clock(void *ctx, uint64_t t, int level)
 		render_outClock(&R.out, t - R.t0, level);
 }
 
-/* the end of a clock generator's run: the next line of the same kind, or the end */
-static uint64_t render_clockEnd(unsigned i)
-{
-	const render_event_t *e = &R.script.ev[i];
-	for (unsigned j = i + 1; j < R.script.n; j++)
-		if (R.script.ev[j].kind == e->kind)
-			return R.t0 + R.script.ev[j].t;
-	return R.tEnd;
-}
+/* --- the script's timed inputs (P3 step 6, P4) ------------------------------------ */
+
+#define CLOCK_DIN 540000000000ull	/* 24 PPQ: cycles per minute x 1000 / 24 */
+#define CLOCK_JACK 12960000000000ull	/* cycles per minute x 1000 */
 
 /* clock k of a generator: t + floor(k * per / mbpm) */
 static uint64_t render_clockAt(uint64_t t, uint64_t k, unsigned long long per, uint64_t mbpm)
@@ -390,107 +386,64 @@ static uint64_t render_clockAt(uint64_t t, uint64_t k, unsigned long long per, u
 	return t + (uint64_t)((unsigned __int128)k * per / mbpm);
 }
 
-#define CLOCK_DIN 540000000000ull	/* 24 PPQ: cycles per minute x 1000 / 24 */
-#define CLOCK_JACK 12960000000000ull	/* cycles per minute x 1000 */
-
-/* one timed event as emu_in*() inputs (plan P4's input column) */
-static void render_inject(unsigned i)
+static int render_isClock(const render_event_t *e)
 {
-	const render_event_t *e = &R.script.ev[i];
+	return e->kind == RS_DIN_CLOCK || e->kind == RS_USB_CLOCK || e->kind == RS_JACK_CLOCK;
+}
+
+/* one input call of the script, counted for the summary */
+#define RENDER_IN(call) (R.scriptInputs++, (void)(call))
+
+/* one timed event that is not a clock generator, as emu_in*() inputs (plan P4's
+ * input column); the direct events do nothing here */
+static void render_inject(const render_event_t *e)
+{
 	const uint64_t t = R.t0 + e->t;
 	switch (e->kind)
 	{
 	case RS_DOWN:
 	case RS_UP:
-		emu_inButton(t, (unsigned)e->a, e->kind == RS_DOWN);
+		RENDER_IN(emu_inButton(t, (unsigned)e->a, e->kind == RS_DOWN));
 		break;
 	case RS_PRESS:
-		emu_inButton(t, (unsigned)e->a, 1);
-		emu_inButton(t + (uint64_t)e->b * EMU_CYCLES_PER_MS, (unsigned)e->a, 0);
+		RENDER_IN(emu_inButton(t, (unsigned)e->a, 1));
+		RENDER_IN(emu_inButton(t + (uint64_t)e->b * EMU_CYCLES_PER_MS, (unsigned)e->a, 0));
 		break;
 	case RS_ENCODER:
-		emu_inEncoder(t, e->a);
+		RENDER_IN(emu_inEncoder(t, e->a));
 		break;
 	case RS_PUSH:
-		emu_inPush(t, (unsigned)e->b);
+		RENDER_IN(emu_inPush(t, (unsigned)e->b));
 		break;
 	case RS_KNOB:
-		emu_inKnob(t, (unsigned)e->a, e->b);
+		RENDER_IN(emu_inKnob(t, (unsigned)e->a, e->b));
 		break;
 	case RS_FADER:
-		emu_inFader(t, (unsigned)e->a, e->level);
+		RENDER_IN(emu_inFader(t, (unsigned)e->a, e->level));
 		break;
 	case RS_DIN:
-		emu_inDin(t, e->bytes, e->nbytes);
+		RENDER_IN(emu_inDin(t, e->bytes, e->nbytes));
 		break;
 	case RS_USB:
 		for (unsigned off = 0; off < e->nbytes; off += 64u)
-			(void)emu_inUsb(t, e->bytes + off, e->nbytes - off > 64u ? 64u : e->nbytes - off);
+			RENDER_IN(emu_inUsb(t, e->bytes + off, e->nbytes - off > 64u ? 64u : e->nbytes - off));
 		break;
-	case RS_DIN_CLOCK:
-	{
-		if (!e->mbpm)
-			break;
-		static const uint8_t f8 = 0xF8;
-		const uint64_t end = render_clockEnd(i);
-		for (uint64_t k = 0, c; (c = render_clockAt(t, k, CLOCK_DIN, e->mbpm)) < end; k++)
-			emu_inDin(c, &f8, 1);
-		break;
-	}
-	case RS_USB_CLOCK:
-	{
-		if (!e->mbpm)
-			break;
-		const uint64_t end = render_clockEnd(i);
-		if (!e->buffer)
-		{
-			static const uint8_t packet[4] = { 0x0F, 0xF8, 0, 0 };
-			for (uint64_t k = 0, c; (c = render_clockAt(t, k, CLOCK_DIN, e->mbpm)) < end; k++)
-				(void)emu_inUsb(c, packet, 4);
-			break;
-		}
-		uint64_t k = 0;
-		for (uint64_t j = 0, start; (start = t + j * e->buffer) < end; j++)
-		{
-			uint8_t buf[64];
-			unsigned count = 0;
-			uint64_t c;
-			while ((c = render_clockAt(t, k, CLOCK_DIN, e->mbpm)) < start + e->buffer && c < end && count < 16u)
-			{
-				buf[4 * count] = 0x0F;
-				buf[4 * count + 1] = 0xF8;
-				buf[4 * count + 2] = 0;
-				buf[4 * count + 3] = 0;
-				count++;
-				k++;
-			}
-			if (count)
-				(void)emu_inUsb(start, buf, 4u * count);
-		}
-		break;
-	}
-	case RS_JACK_CLOCK:
-	{
-		if (!e->mbpm)
-			break;
-		const uint64_t end = render_clockEnd(i);
-		const uint64_t m = e->mbpm * (uint64_t)e->b;
-		for (uint64_t k = 0, c; (c = render_clockAt(t, k, CLOCK_JACK, m)) < end; k++)
-			emu_inClockPulse(c);
-		break;
-	}
 	case RS_JACK_PULSE:
-		emu_inClockPulse(t);
+		RENDER_IN(emu_inClockPulse(t));
 		break;
 	case RS_RESET:
-		emu_inReset(t, e->a);
+		RENDER_IN(emu_inReset(t, e->a));
 		break;
 	case RS_CARD:
-		emu_inCard(t, e->a);
+		RENDER_IN(emu_inCard(t, e->a));
 		break;
 	case RS_JACKS:
-		emu_inJacks(t, (uint8_t)e->a);
+		RENDER_IN(emu_inJacks(t, (uint8_t)e->a));
 		break;
+	case RS_DIN_CLOCK:
+	case RS_USB_CLOCK:
+	case RS_JACK_CLOCK:
+		break;	/* render_gen_t */
 	case RS_MARK:
 	case RS_PARAM:
 	case RS_SAVE_KIT:
@@ -500,7 +453,77 @@ static void render_inject(unsigned i)
 	}
 }
 
-/* P3 step 6: START (SHIFT + START for --song), the script's timed events, the LED latch */
+/* A clock generator of the script (plan P4): its clocks from its line's time
+ * until the next line of its kind or the end, whichever comes first. */
+typedef struct
+{
+	const render_event_t *e;
+	unsigned line;		/* its index in the script */
+	uint64_t t, end;
+	uint64_t k;			/* the next clock */
+	uint64_t next;		/* the time of its next input; EMU_NEVER when done */
+} render_gen_t;
+
+static uint64_t render_genClock(const render_gen_t *g, uint64_t k)
+{
+	if (g->e->kind == RS_JACK_CLOCK)
+		return render_clockAt(g->t, k, CLOCK_JACK, g->e->mbpm * (uint64_t)g->e->b);
+	return render_clockAt(g->t, k, CLOCK_DIN, g->e->mbpm);
+}
+
+/* the time of g's next input: its next clock, or for a usb-clock with a buffer the
+ * start of the buffer that holds it (no transfer for an empty buffer) */
+static void render_genNext(render_gen_t *g)
+{
+	const uint64_t c = render_genClock(g, g->k);
+	if (c >= g->end)
+		g->next = EMU_NEVER;
+	else if (g->e->kind == RS_USB_CLOCK && g->e->buffer)
+		g->next = g->t + (c - g->t) / g->e->buffer * g->e->buffer;
+	else
+		g->next = c;
+}
+
+static void render_genInject(render_gen_t *g)
+{
+	static const uint8_t f8 = 0xF8;
+	static const uint8_t packet[4] = { 0x0F, 0xF8, 0, 0 };
+	switch (g->e->kind)
+	{
+	case RS_DIN_CLOCK:
+		RENDER_IN(emu_inDin(g->next, &f8, 1));
+		g->k++;
+		break;
+	case RS_JACK_CLOCK:
+		RENDER_IN(emu_inClockPulse(g->next));
+		g->k++;
+		break;
+	default:	/* RS_USB_CLOCK */
+		if (!g->e->buffer)
+		{
+			RENDER_IN(emu_inUsb(g->next, packet, 4));
+			g->k++;
+			break;
+		}
+		/* the clocks of [start, start + buffer), at most 16 (one transfer) */
+		uint8_t buf[64];
+		unsigned count = 0;
+		uint64_t c;
+		while (count < 16u && (c = render_genClock(g, g->k)) < g->next + g->e->buffer && c < g->end)
+		{
+			memcpy(&buf[4u * count++], packet, 4);
+			g->k++;
+		}
+		RENDER_IN(emu_inUsb(g->next, buf, 4u * count));
+		break;
+	}
+	render_genNext(g);
+}
+
+/* P3 step 6: START (SHIFT + START for --song), then the script's timed inputs in
+ * time order, the clock generators' clocks merged with the other lines, since the
+ * DIN and USB inputs queue in the order they are given (spec 5.4: each enters at
+ * its own time); at equal times in script order. Then the LED latch. */
 static void render_startScript(uint64_t now)
 {
 	if (!R.o->noStart)
@@ -513,8 +536,52 @@ static void render_startScript(uint64_t now)
 			emu_inButton(now + 60u * EMU_CYCLES_PER_MS, 32, 0);
 		}
 	}
-	for (unsigned i = 0; i < R.script.n; i++)
-		render_inject(i);
+	const render_script_t *sc = &R.script;
+	render_gen_t *gens = NULL;
+	unsigned ngens = 0;
+	for (unsigned i = 0; i < sc->n; i++)
+	{
+		const render_event_t *e = &sc->ev[i];
+		if (!render_isClock(e) || !e->mbpm)
+			continue;
+		uint64_t end = R.tEnd;
+		for (unsigned j = i + 1; j < sc->n; j++)
+			if (sc->ev[j].kind == e->kind)
+			{
+				if (R.t0 + sc->ev[j].t < end)
+					end = R.t0 + sc->ev[j].t;
+				break;
+			}
+		render_gen_t *grown = realloc(gens, (ngens + 1u) * sizeof *gens);
+		if (!grown)
+			render_fault("out of memory for the script's clocks");
+		gens = grown;
+		gens[ngens] = (render_gen_t){ e, i, R.t0 + e->t, end, 0, 0 };
+		render_genNext(&gens[ngens++]);
+	}
+	unsigned line = 0;
+	for (;;)
+	{
+		while (line < sc->n && render_isClock(&sc->ev[line]))
+			line++;
+		uint64_t best = line < sc->n ? R.t0 + sc->ev[line].t : EMU_NEVER;
+		unsigned bestLine = line < sc->n ? line : UINT_MAX;
+		render_gen_t *g = NULL;
+		for (unsigned k = 0; k < ngens; k++)
+			if (gens[k].next != EMU_NEVER && (gens[k].next < best || (gens[k].next == best && gens[k].line < bestLine)))
+			{
+				g = &gens[k];
+				best = g->next;
+				bestLine = g->line;
+			}
+		if (g)
+			render_genInject(g);
+		else if (line < sc->n)
+			render_inject(&sc->ev[line++]);
+		else
+			break;
+	}
+	free(gens);
 	(void)emu_ledSnapshot();
 }
 
@@ -609,6 +676,7 @@ static void render_finish(uint64_t now)
 	s.paramValues = R.paramValues;
 	s.nparams = o->nparams;
 	s.direct = R.direct;
+	s.scriptInputs = R.scriptInputs;
 	s.ndirect = R.ndirect;
 	s.warnings = (const char *const *)R.warnings;
 	s.nwarnings = R.nwarnings;

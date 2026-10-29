@@ -505,9 +505,12 @@ def M17_script_errors(t):
 def M17_events_din(t):
     seed = t.seed()
     log = t.path('din.log')
+    # the second note comes after the clock line and inside its run: it enters at its
+    # own time, between the clocks (spec 5.4), not after the run
     s, wav, _ = t.render(seed, ['--no-start', '--seconds', '2', '--midi-log', log, '--events',
-                                t.script('100ms din 90 30 64\n200ms din-clock 120\n1200ms din-clock off\n')])
-    check(s['counters']['dinIn'] == 51, 'dinIn is %d, not 51 (3 + 48 clocks)' % s['counters']['dinIn'])
+                                t.script('100ms din 90 30 64\n200ms din-clock 120\n300ms din 90 30 64\n'
+                                         '1200ms din-clock off\n')])
+    check(s['counters']['dinIn'] == 54, 'dinIn is %d, not 54 (2 x 3 + 48 clocks)' % s['counters']['dinIn'])
     check(dbfs(wav, (0, 1), 0, 0.1) == float('-inf'), 'out 1 is not silent before the note')
     level = dbfs(wav, (0, 1), 0.1, 0.4)
     check(level > -60, 'out 1 is at %.1f dBFS after the note' % level)
@@ -518,16 +521,36 @@ def M17_events_din(t):
     gaps = f8_gaps(lines)
     check(len(gaps) >= len(f8) - 3, 'only %d of %d DIN F8 gaps are free of the wire' % (len(gaps), len(f8) - 1))
     check(all(abs(g - 4500000) <= 54000 for g in gaps), 'DIN F8 gaps %r' % sorted(set(gaps))[:8])
+    notes_on_time(lines, s, (100, 300))
+
+def notes_on_time(lines, s, times):
+    """Each incoming note at times (ms) comes back out as a Note On on USB: the first
+    transfer that starts with one at or after its time. The first note comes before
+    any clock line, so its delay is the device's; every later one must be as late
+    after its time within 54,000 + 313,181 cycles, the rule of the direct events (the
+    next pass boundary: the grid, or a pass held up by a block), which also covers a
+    USB transfer of the device's own clock still in flight (1 ms, 216,000 cycles)."""
+    ons = [int(x.split()[0]) for x in lines if re.search(r' USB 099[0-9A-F]{5}( |$)', x)]
+    late = []
+    for ms in times:
+        after = [c for c in ons if c >= ms * 216000]
+        check(after, 'no Note On on USB out after the note at %d ms: %r' % (ms, ons))
+        late.append(after[0] - ms * 216000)
+    print('the notes at %r ms come back out %r cycles later' % (list(times), late))
+    for ms, d in zip(times[1:], late[1:]):
+        check(abs(d - late[0]) < 54000 + frames_to_cycles(64), 'the note at %d ms comes back out %d cycles after '
+              'it, the first %d cycles after it' % (ms, d, late[0]))
 
 @case
 def M17_events_usb(t):
     seed = t.seed()
-    for clock, want in (('200ms usb-clock 240 50', 21), ('200ms usb-clock 240', 97)):
+    # the second note: after the clock line, inside its run (as in M17_events_din)
+    for clock, want in (('200ms usb-clock 240 50', 22), ('200ms usb-clock 240', 98)):
         log = t.path('usb%d.log' % want)
         s, _, _ = t.render(seed, ['--no-start', '--seconds', '2', '--midi-log', log, '--events',
-                                  t.script('100ms usb 90 30 64\n%s\n1200ms usb-clock off\n' % clock)])
+                                  t.script('100ms usb 90 30 64\n%s\n300ms usb 90 30 64\n1200ms usb-clock off\n' % clock)])
         check(s['counters']['usbIn'] == want, '%s: usbIn is %d, not %d' % (clock, s['counters']['usbIn'], want))
-        log_lines(log, MIDI_LINE)
+        notes_on_time(log_lines(log, MIDI_LINE), s, (100, 300))
 
 @case
 def M17_events_jacks(t):
@@ -551,6 +574,14 @@ def M17_events_jacks(t):
             check(not rising, 'no clock in: %d rising edges' % len(rising))
         else:
             check(rising, 'pulses: no rising edge')
+    # a clock generator stops at the next line of its kind or at the end, whichever
+    # comes first (plan P4): 1000 BPM at 24 PPQ is a pulse every 540,000 cycles
+    s, _, _ = t.render(seed, ['--bpm', 'ext', '--no-start', '--seconds', '0.1', '--events',
+                              t.script('0ms jack-clock 1000 24\n1s jack-clock off\n')])
+    length = s['end'] - s['t0']
+    want = -(-length // 540000)
+    check(s['scriptInputs'] == want, 'the jack clock made %d inputs, not the %d before the end'
+          % (s['scriptInputs'], want))
 
 @case
 def M17_events_panel(t):
