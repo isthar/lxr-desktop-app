@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 02:39",
+    "updated": "2026-10-29 02:54",
     "phase": "Etap 1 czeka na testy na sprzęcie; etap 1b: krok R1 (wirtualne urządzenie) zrobiony",
     "focus": "Emulator R1 gotowy na lokalnej gałęzi emulator: cały firmware działa na wirtualnym urządzeniu w 103 testach. Nowe pytania Q21 i Q22 (błędy fw 1.7 znalezione przez emulator). Etap 1 nadal czeka na Twoje testy na LXR-02 (Q6).",
     "branch": "timing-core",
-    "head": "9dccdc7",
+    "head": "e37ae9e",
     "next": "Ty: Q19 (wypchnąć gałąź emulator?), Q21, Q22, Q23, testy v0.1 na LXR-02 (Q6), Q9–Q11. Ja: dalsze zadania planu R2+R3 z lekkim przeglądem co ok. 4 zadania.",
-    "updated_at": "2026-10-29T02:39:00+01:00",
-    "now": "Od 02:39: jeden agent robi R2.1–R2.2 (cele budowania renderera, opcje, --version, kopia karty, --seed-card) i poprawkę folderów tymczasowych. Potem podsumowanie; koniec ok. 04:00. Zużycie ok. 39,5%."
+    "updated_at": "2026-10-29T02:54:00+01:00",
+    "now": "Od 02:54: ostatni agent tej sesji robi R2.3–R2.4 (oś czasu, reguła t0, WAV, skrypty zdarzeń, logi MIDI) i ostrzeżenie o pominiętych nazwach na karcie; limit ok. 40 min. Potem podsumowanie na czacie. Zużycie ok. 40%."
   },
   "epics": [
     {
@@ -2273,6 +2273,11 @@
       "n": 299,
       "at": "2026-10-29 02:39",
       "text": "Plan R2+R3 gotowy (02:39): docs/superpowers/plans/2026-10-29-emulator-r2-r3-renderer-goldens.md, 1294 linie, 12 zadań R2.1–R2.6 i R3.1–R3.6 (M14, M16, M17, M23, G1–G10, emulator.yml, krok w check.sh). Agent znalazł trzeci błąd fw 1.7 (nowe pytanie Q23: zły indeks w funkcjach euklid przy wyborze wzorca). Od 02:39 jeden agent robi R2.1–R2.2 i sprząta po testach R1 (zostawiały ok. 1060 folderów tymczasowych)."
+    },
+    {
+      "n": 300,
+      "at": "2026-10-29 02:54",
+      "text": "R2.1–R2.2 zakończone (02:54): 00b0bf1 (cele renderera, opcje, --help/--version, M21 skanuje też renderer), 9b11ffc (kopia karty, --seed-card: 194 pliki, 255 398 B, kod wyjścia 2), e37ae9e (testy sprzątają po sobie i piszą tylko do build/emu/tmp; nowy test pilnuje, że nic nie zostaje). Emulator 109 z 109, bramka firmware bez zmian."
     }
   ]
 }
