@@ -51,6 +51,24 @@ class T:
             f.write(text)
         return p
 
+    def seed(self, name='seed'):
+        """an init card from --seed-card in self.path(name), made once"""
+        p = self.path(name)
+        if not os.path.isdir(p):
+            self.run(['--seed-card', p])
+        return p
+
+def tree(d):
+    """{relative path: sha256} of every file and {relative path: None} of every directory"""
+    out = {}
+    for base, dirs, files in os.walk(d):
+        for x in dirs:
+            out[os.path.relpath(os.path.join(base, x), d)] = None
+        for x in files:
+            with open(os.path.join(base, x), 'rb') as f:
+                out[os.path.relpath(os.path.join(base, x), d)] = hashlib.sha256(f.read()).hexdigest()
+    return out
+
 def main():
     ap = argparse.ArgumentParser()
     for o in ('--render', '--render-test', '--root', '--work'):
@@ -133,6 +151,87 @@ def M17_cli_info(t):
     words = set(re.findall(r'--[a-z][a-z0-9-]*', t.run(['--help'], test=True).stdout))
     missing = [o for o in OPTIONS + TEST_OPTIONS if o not in words]
     check(not missing, 'lichomat-render-test --help names no %s' % ', '.join(missing))
+
+def card_error(t, card, extra, name=None):
+    """exit 2 with one line that names the card, and name when given"""
+    args = ['--card', card, '--out', t.path('o.wav')] + extra
+    p = t.run(args, code=2)
+    lines = p.stderr.splitlines()
+    check(len(lines) == 1 and lines[0].startswith('lichomat-render: card %s: ' % card)
+          and (name is None or name in lines[0]),
+          '%s: stderr is not one line naming the card and %s: %r' % (' '.join(args), name, p.stderr))
+
+def card_copy(t, src, name, index=None):
+    dst = t.path(name)
+    shutil.copytree(src, dst)
+    if index is not None:
+        with open(os.path.join(dst, 'PROJ.IDX'), 'wb') as f:
+            f.write(bytes([index]))
+    return dst
+
+@case
+def M17_card_errors(t):
+    seed = t.seed()
+    card_error(t, t.path('missing'), [])
+    with open(t.path('file'), 'w') as f:
+        f.write('x')
+    card_error(t, t.path('file'), [])
+    os.makedirs(t.path('empty'))
+    card_error(t, t.path('empty'), [], 'project 0 has no PROJ00/PRJ.NFO')
+    card_error(t, seed, ['--project', '3'], 'project 3 has no PROJ03/PRJ.NFO')
+    card_error(t, card_copy(t, seed, 'idx5', 5), [], 'project 5 has no PROJ05/PRJ.NFO')
+    # byte 200 counts as 0 (E4.7), and the lookup ignores case as FatFs does
+    lower = card_copy(t, seed, 'idx200', 200)
+    os.rename(os.path.join(lower, 'PROJ00'), os.path.join(lower, 'proj00'))
+    check(os.listdir(lower).count('proj00') == 1, 'the rename to proj00 did not happen')
+    p = t.run(['--card', lower, '--out', t.path('o.wav')], code=1)
+    check('rendering comes in R2.3' in p.stderr, 'PROJ.IDX 200 and proj00: %r' % p.stderr)
+    # --project 0 on the same card passes too, and --project 5 on idx5's does not
+    t.run(['--card', lower, '--out', t.path('o.wav'), '--project', '0'], code=1)
+    card_error(t, lower, ['--project', '5'], 'project 5 has no PROJ05/PRJ.NFO')
+
+@case
+def M17_seed_card(t):
+    first = t.path('new')
+    t.run(['--seed-card', first])
+    check(sorted(os.listdir(first)) == ['PROJ00', 'TMP'], 'the card holds %r, not PROJ00 and TMP (no PROJ.IDX)'
+          % sorted(os.listdir(first)))
+    check(os.listdir(os.path.join(first, 'TMP')) == [], 'TMP is not empty')
+    proj = os.path.join(first, 'PROJ00')
+    names = os.listdir(proj)
+    check(all(os.path.isfile(os.path.join(proj, x)) for x in names), 'PROJ00 holds a folder')
+    size = sum(os.path.getsize(os.path.join(proj, x)) for x in names)
+    check((len(names), size) == (194, 255398), 'PROJ00 holds %d files of %d bytes, not 194 of 255,398'
+          % (len(names), size))
+    def read(name):
+        with open(os.path.join(proj, name), 'rb') as f:
+            return f.read()
+    check(read('PRJ.NFO') == b'Init\0\0\0\0', 'PRJ.NFO is %r' % read('PRJ.NFO'))
+    glo = read('GLO.CFG')
+    check(len(glo) == 30 and glo[0] == 120 and glo[29] == 1, 'GLO.CFG is %r' % glo)
+    check(len(read('00-INITK.SND')) == 255, '00-INITK.SND has %d bytes' % len(read('00-INITK.SND')))
+    # into an empty folder holding a dot entry: the same card, so seeding is deterministic
+    second = t.path('dot')
+    os.makedirs(second)
+    with open(os.path.join(second, '.DS_Store'), 'wb') as f:
+        f.write(b'x')
+    t.run(['--seed-card', second])
+    tr = tree(second)
+    check('.DS_Store' in tr, '.DS_Store is gone')
+    del tr['.DS_Store']
+    check(tr == tree(first), 'the second card differs from the first')
+    # into a folder with a file: refused, untouched
+    third = t.path('full')
+    os.makedirs(third)
+    with open(os.path.join(third, 'x'), 'wb') as f:
+        f.write(b'x')
+    p = t.run(['--seed-card', third], code=1)
+    check(p.stderr.startswith('lichomat-render: --seed-card: ') and len(p.stderr.splitlines()) == 1,
+          '--seed-card on a folder with a file: %r' % p.stderr)
+    check(os.listdir(third) == ['x'], 'the folder with a file was changed')
+    # and on a file
+    p = t.run(['--seed-card', os.path.join(third, 'x')], code=1)
+    check('--seed-card' in p.stderr, '--seed-card on a file: %r' % p.stderr)
 
 if __name__ == '__main__':
     main()
