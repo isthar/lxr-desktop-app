@@ -21,6 +21,7 @@
 #include <strings.h>
 
 #include "emu_core.h"
+#include "render_fw.h"
 
 #define MAX_TOKENS 300
 #define CLOCK_DIN 540000000000ull	/* cycles per minute x 1000 / 24 PPQ */
@@ -28,7 +29,7 @@
 
 static const char *const kindNames[] = {
 	"down", "up", "press", "encoder", "push", "knob", "fader", "din", "usb", "din-clock", "usb-clock",
-	"jack-clock", "jack-pulse", "reset", "card", "jacks", "mark",
+	"jack-clock", "jack-pulse", "reset", "card", "jacks", "mark", "param",
 };
 
 const char *render_eventName(render_eventKind_t kind)
@@ -467,6 +468,20 @@ static int parseEvent(const ctx_t *c, render_event_t *e, const char *ev, char **
 				RENDER_MARK_NAME - 1);
 		strcpy(e->name, arg[0]);
 		return 0;
+	case RS_PARAM:
+	{
+		/* the name is checked now, the value clamped when it runs (render_fw.c) */
+		if (nargs != 1)
+			return bad(c, "param takes one NAME=VALUE");
+		rfw_param_t edit;
+		const char *name;
+		char what[256];
+		if (rfw_paramParse(arg[0], &edit, &name, what, sizeof what) != 0)
+			return bad(c, "param: %s", what);
+		e->a = edit.p;
+		e->b = edit.v;
+		return 0;
+	}
 	}
 	return bad(c, "unknown event %s", ev);
 }

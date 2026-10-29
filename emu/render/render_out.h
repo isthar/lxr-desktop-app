@@ -53,6 +53,12 @@ typedef struct render_summary
 	uint64_t blocks, bootEnd, codecStart, preludeEnd, morphBusyLast, t0, end;
 	uint64_t underrunsBefore, underrunsAfter;
 	render_selected_t selected;
+	/* each --param after the prelude: its lower-case table name (the number as
+	 * text for a number without one), its number, activeParameters[] */
+	const char *const *paramNames;
+	const unsigned *paramNumbers;
+	const uint8_t *paramValues;
+	unsigned nparams;
 	render_fwCounters_t fw;
 	emu_counters_t counters;
 	const render_direct_t *direct;

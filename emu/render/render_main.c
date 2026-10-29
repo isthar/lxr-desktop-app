@@ -49,6 +49,13 @@ static struct
 	unsigned nextDirect;		/* the script index from which to look for the next direct event */
 	render_direct_t direct[RENDER_MAX_DIRECT];
 	unsigned ndirect;
+	/* --param, in command-line order: the edits, and for the summary the names,
+	 * the numbers and the values after the prelude */
+	rfw_param_t params[RENDER_MAX_PARAMS];
+	const char *paramNames[RENDER_MAX_PARAMS];
+	char paramNumText[RENDER_MAX_PARAMS][8];
+	unsigned paramNumbers[RENDER_MAX_PARAMS];
+	uint8_t paramValues[RENDER_MAX_PARAMS];
 } R;
 
 static double wallNow(void)
@@ -102,7 +109,7 @@ static void render_version(void)
 		"emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02";
 	printf("lichomat-render %s, the renderer of LICHOMAT Emu\n", EMU_RENDER_VERSION);
 	printf("%s\n", tagline);
-	printf("Runs LICHOMAT %s with the emulator changes F1-F10. Built from commit %s.\n",
+	printf("Runs LICHOMAT %s with the emulator changes F1-F12 and F6b. Built from commit %s.\n",
 		EMU_RENDER_VERSION, EMU_RENDER_COMMIT);
 	static const char *const legal[] = {
 		"Copyright (C) 2012-2026 Erica Synths",
@@ -349,7 +356,8 @@ static void render_inject(unsigned i)
 		emu_inJacks(t, (uint8_t)e->a);
 		break;
 	case RS_MARK:
-		break;	/* a direct event */
+	case RS_PARAM:
+		break;	/* direct events */
 	}
 }
 
@@ -373,7 +381,7 @@ static void render_startScript(uint64_t now)
 
 static int render_isDirect(const render_event_t *e)
 {
-	return e->kind == RS_MARK;
+	return e->kind == RS_MARK || e->kind == RS_PARAM;
 }
 
 /* the first direct event at or after index i, or R.script.n */
@@ -395,6 +403,11 @@ static void render_runDirect(const render_event_t *e)
 		emu_lcdSnapshot_t lcd;
 		emu_lcdSnapshot(&lcd);
 		render_outMark(&R.out, now - R.t0, e->name, &lcd, emu_ledSnapshot());
+	}
+	else if (e->kind == RS_PARAM)
+	{
+		rfw_param_t edit = { (uint16_t)e->a, (uint8_t)e->b };
+		emu_directCall(rfw_edit, &edit);
 	}
 }
 
@@ -445,6 +458,10 @@ static void render_finish(uint64_t now)
 	s.underrunsBefore = R.underrunsBefore;
 	s.underrunsAfter = R.lastUnderruns - R.underrunsBefore;
 	s.selected = R.selected;
+	s.paramNames = R.paramNames;
+	s.paramNumbers = R.paramNumbers;
+	s.paramValues = R.paramValues;
+	s.nparams = o->nparams;
 	s.direct = R.direct;
 	s.ndirect = R.ndirect;
 	s.warnings = (const char *const *)R.warnings;
@@ -518,20 +535,112 @@ static void render_settle(void)
 		render_pass();
 }
 
+#define MS(x) ((uint64_t)(x) * EMU_CYCLES_PER_MS)
+
+/* button b down at t and up after ms */
+static void render_press(uint64_t t, unsigned b, unsigned ms)
+{
+	emu_inButton(t, b, 1);
+	emu_inButton(t + MS(ms), b, 0);
+}
+
+/* step n (1-16) as a button (spec 4.6): steps 16-13 are 12-15, 12-9 are 20-23,
+ * 8-5 are 28-31, 4-1 are 36-39 */
+static unsigned render_stepButton(unsigned n)
+{
+	static const unsigned base[4] = { 36, 28, 20, 12 };
+	return base[(n - 1u) / 4u] + 3u - (n - 1u) % 4u;
+}
+
+/* passes until e, the prelude's last event, then a settle (P3 steps 3 and 4) */
+static void render_settleAfter(uint64_t e)
+{
+	while (emu_now() < e)
+		render_pass();
+	R.preludeEnd = e;
+	render_settle();
+}
+
+/* --pattern P (P3 step 4), the buttons a user presses (buttonHandler.c): SHIFT +
+ * step 16 opens the pattern page, bar- three times goes to bank 0, bar+ once per
+ * bank of 16, then step (P mod 16) + 1 selects the pattern */
+static void render_patternWalk(int p)
+{
+	const uint64_t w = emu_now();
+	const unsigned banks = (unsigned)p / 16u;
+	emu_inButton(w, 32, 1);
+	render_press(w + MS(20), 12, 50);
+	emu_inButton(w + MS(100), 32, 0);
+	for (unsigned j = 0; j < 3; j++)
+		render_press(w + MS(150 + 100 * j), 40, 50);
+	for (unsigned j = 0; j < banks; j++)
+		render_press(w + MS(450 + 100 * j), 0, 50);
+	render_press(w + MS(450 + 100 * banks), render_stepButton((unsigned)p % 16u + 1u), 50);
+	render_settleAfter(w + MS(450 + 100 * banks + 50));
+	render_selected_t sel;
+	emu_directCall(rfw_selected, &sel);
+	if (sel.pattern != p)
+	{
+		char what[96];
+		snprintf(what, sizeof what, "the --pattern walk ended on pattern %d, not %d", sel.pattern, p);
+		render_fault(what);
+	}
+}
+
+/* --song S (P3 step 4), the menu's load page (buttonHandler.c, menu.c): MODE3
+ * (LOAD) + step 10 opens it for songs, the encoder goes to 0 (the menu clamps) and
+ * up to S, and a push loads the song */
+static void render_songWalk(int song)
+{
+	const uint64_t w = emu_now();
+	emu_inButton(w, 26, 1);
+	render_press(w + MS(20), 22, 50);
+	emu_inButton(w + MS(100), 26, 0);
+	emu_inEncoder(w + MS(150), -64);
+	if (song > 0)
+		emu_inEncoder(w + MS(500), song);
+	emu_inPush(w + MS(800), 50);
+	render_settleAfter(w + MS(850));
+	render_selected_t sel;
+	emu_directCall(rfw_selected, &sel);
+	if (sel.song != song)
+	{
+		char what[96];
+		snprintf(what, sizeof what, "the --song walk ended on song %d, not %d", sel.song, song);
+		render_fault(what);
+	}
+}
+
+/* the sync fallback (spec 5.1, plan P3): without --bpm, a project in EXT or MID
+ * sync whose script sends no clock to that input plays at 120 BPM internal */
+static void render_syncFallback(void)
+{
+	render_selected_t sel;
+	emu_directCall(rfw_selected, &sel);
+	if ((sel.sync != 1 && sel.sync != 2) || render_scriptHasClock(&R.script, sel.sync))
+		return;
+	uint8_t v = 120;
+	emu_directCall(rfw_bpm, &v);
+	render_warn(sel.sync == 1 ? "the project syncs to EXT; the script sends no clock to that input: 120 BPM internal"
+		: "the project syncs to MID; the script sends no clock to that input: 120 BPM internal");
+}
+
 /* the length in blocks (P3 step 4): whole blocks, rounded up from the frames */
 static uint64_t render_blocks(const render_opts_t *o)
 {
 	unsigned __int128 num, den;
 	if (o->bars)
 	{
+		/* B: the numeric --bpm, else seq_getBpm() in internal sync, read after the
+		 * prelude, so after the sync fallback and the --param edits */
 		unsigned bpm;
 		if (o->bpm >= 2)
 			bpm = (unsigned)o->bpm;
-		else if (R.selected.sync == 0 && o->bpm < 0)
+		else if (R.selected.sync == 0)
 			bpm = (unsigned)R.selected.bpm;
 		else
 			render_die(1, "--bars: needs an internal tempo; the project syncs to %s",
-				(o->bpm == 0 || (o->bpm < 0 && R.selected.sync == 1)) ? "EXT" : "MID");
+				R.selected.sync == 1 ? "EXT" : "MID");
 		num = (unsigned __int128)o->bars * 240u * 353125u;
 		den = (unsigned __int128)8u * bpm;
 	}
@@ -552,6 +661,20 @@ static void render_run(const render_opts_t *o)
 	char err[EMU_HOST_PATH + 256];
 	R.wallStart = wallNow();
 	R.o = o;
+	/* the --param names before power-on (plan R2.5) */
+	for (unsigned i = 0; i < o->nparams; i++)
+	{
+		const char *name;
+		if (rfw_paramParse(o->params[i], &R.params[i], &name, err, sizeof err) != 0)
+			render_die(1, "--param: %s", err);
+		R.paramNumbers[i] = R.params[i].p;
+		if (!name)
+		{
+			snprintf(R.paramNumText[i], sizeof R.paramNumText[i], "%u", R.params[i].p);
+			name = R.paramNumText[i];
+		}
+		R.paramNames[i] = name;
+	}
 	if (o->events && render_scriptLoad(o->events, &R.script, err, sizeof err) != 0)
 		render_die(1, "%s", err);
 	const int status = render_cardPrepare(o, R.copy, &R.project, err, sizeof err, render_warn);
@@ -581,13 +704,23 @@ static void render_run(const render_opts_t *o)
 	R.preludeEnd = emu_now();
 	render_settle();
 
-	/* the prelude's direct calls run at this boundary, which is the prelude's last
-	 * event: --bpm; the sync fallback and --param come in Task R2.5 */
+	/* the prelude (P3 step 4): what plays, through the panel */
+	if (o->pattern >= 0)
+		render_patternWalk(o->pattern);
+	else if (o->song >= 0)
+		render_songWalk(o->song);
+	/* then at one pass boundary, the prelude's last event: --bpm, the sync
+	 * fallback, each --param in command-line order, all through the menu's edit
+	 * path */
 	if (o->bpm >= 0)
 	{
 		uint8_t v = (uint8_t)o->bpm;
 		emu_directCall(rfw_bpm, &v);
 	}
+	else
+		render_syncFallback();
+	for (unsigned i = 0; i < o->nparams; i++)
+		emu_directCall(rfw_edit, &R.params[i]);
 	R.preludeEnd = emu_now();
 #if EMU_RENDER_TEST_HOOKS
 	if (o->testPreludeReload)
@@ -601,6 +734,12 @@ static void render_run(const render_opts_t *o)
 	}
 #endif
 	emu_directCall(rfw_selected, &R.selected);
+	for (unsigned i = 0; i < o->nparams; i++)
+	{
+		rfw_param_t get = R.params[i];
+		emu_directCall(rfw_paramGet, &get);
+		R.paramValues[i] = get.v;
+	}
 	R.blocks = render_blocks(o);
 
 	R.phase = PH_WAIT;

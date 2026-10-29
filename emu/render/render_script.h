@@ -26,7 +26,9 @@ typedef enum
 	RS_DOWN, RS_UP, RS_PRESS, RS_ENCODER, RS_PUSH, RS_KNOB, RS_FADER,
 	RS_DIN, RS_USB, RS_DIN_CLOCK, RS_USB_CLOCK, RS_JACK_CLOCK, RS_JACK_PULSE,
 	RS_RESET, RS_CARD, RS_JACKS,
-	RS_MARK		/**< a direct event: at the first pass boundary at or after its time */
+	/* the direct events: each runs at the first pass boundary at or after its time */
+	RS_MARK,
+	RS_PARAM	/**< the menu's edit path, as --param (spec 5.3) */
 } render_eventKind_t;
 
 typedef struct render_event
@@ -34,7 +36,8 @@ typedef struct render_event
 	uint64_t t;			/**< cycles from t0 */
 	unsigned line;
 	render_eventKind_t kind;
-	int a, b;			/**< button, ms, detents, knob, degrees, fader, on/off, PPQ, jack mask */
+	int a, b;			/**< button, ms, detents, knob, degrees, fader, on/off, PPQ, jack mask;
+						 * param: the parameter number and the value */
 	double level;		/**< fader */
 	uint64_t mbpm;		/**< clocks: BPM x 1000; 0 is off */
 	uint64_t buffer;	/**< usb-clock: the buffer in cycles; 0 is none */

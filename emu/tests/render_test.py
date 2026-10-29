@@ -17,7 +17,7 @@ Licensed under the GNU General Public License version 3, with the additional
 permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
 the repository.
 """
-import argparse, array, hashlib, json, math, os, re, shutil, struct, subprocess, sys, time, wave
+import argparse, array, fractions, hashlib, json, math, os, re, shutil, struct, subprocess, sys, time, wave
 
 CASES = {}
 def case(fn):
@@ -161,7 +161,7 @@ def version_lines(root):
     return version, [
         'lichomat-render %s, the renderer of LICHOMAT Emu' % version,
         'emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02',
-        'Runs LICHOMAT %s with the emulator changes F1-F10. Built from commit COMMIT.' % version,
+        'Runs LICHOMAT %s with the emulator changes F1-F12 and F6b. Built from commit COMMIT.' % version,
         'Copyright (C) 2012-2026 Erica Synths',
         'Copyright (C) 2026 Tomasz Krzywicki',
         'Modified from the LXR firmware 1.7 by Erica Synths; LICHOMAT and its emulator by Tomasz Krzywicki, 2026',
@@ -465,6 +465,15 @@ def log_lines(path, pattern):
 
 MIDI_LINE = r'^\d+ \d+\.\d{3} (DIN [0-9A-F]{2}|USB( [0-9A-F]{8})+)$'
 
+def f8_gaps(lines):
+    """The gaps between the DIN F8 lines of a MIDI log, without those of an F8 that
+    starts one byte time (69,120 cycles) after another DIN byte: it waited behind
+    that byte on the wire, so its gaps measure the wire, not the clock."""
+    f8 = [int(x.split()[0]) for x in lines if x.endswith(' DIN F8')]
+    din = [int(x.split()[0]) for x in lines if ' DIN ' in x]
+    queued = set(b for a, b in zip(din, din[1:]) if b - a == 69120)
+    return [b - a for a, b in zip(f8, f8[1:]) if a not in queued and b not in queued]
+
 @case
 def M17_script_errors(t):
     seed = t.seed()
@@ -501,12 +510,8 @@ def M17_events_din(t):
     lines = log_lines(log, MIDI_LINE)
     f8 = [int(x.split()[0]) for x in lines if x.endswith(' DIN F8')]
     check(95 <= len(f8) <= 97, '%d DIN F8 lines, not 96 +- 1' % len(f8))
-    # The note comes back out on DIN (seven Note Ons and Offs), and an F8 that starts
-    # one byte time (69,120 cycles) after another DIN byte waited behind it on the
-    # wire: its gaps measure the wire, not the clock, and are left out.
-    din = [int(x.split()[0]) for x in lines if ' DIN ' in x]
-    queued = set(b for a, b in zip(din, din[1:]) if b - a == 69120)
-    gaps = [b - a for a, b in zip(f8, f8[1:]) if a not in queued and b not in queued]
+    # the note comes back out on DIN (seven Note Ons and Offs)
+    gaps = f8_gaps(lines)
     check(len(gaps) >= len(f8) - 3, 'only %d of %d DIN F8 gaps are free of the wire' % (len(gaps), len(f8) - 1))
     check(all(abs(g - 4500000) <= 54000 for g in gaps), 'DIN F8 gaps %r' % sorted(set(gaps))[:8])
 
@@ -587,6 +592,226 @@ def M17_stereo(t):
             want = {'out1': (l1, r1), 'out2': (l2, r2), 'sum': ((l1 + l2) >> 1, (r1 + r2) >> 1)}[mode]
             if (b[2 * f], b[2 * f + 1]) != want:
                 raise Fail('--stereo %s: frame %d is %r, not %r' % (mode, f, (b[2 * f], b[2 * f + 1]), want))
+
+# --- the prelude and the edit path (plan R2.5) -----------------------------------------
+
+PANEL_LINE = r'^\d+ \d+\.\d{3} \S+ ".*" ".*" (\d,\d+|-) [0-9A-F]{11}$'
+
+def panel_rows(line):
+    """the two LCD rows of a panel-log line, unescaped"""
+    rows = re.findall(r'"((?:[^"\\]|\\x[0-9A-F]{2})*)"', line)[:2]
+    return [re.sub(r'\\x([0-9A-F]{2})', lambda m: chr(int(m.group(1), 16)), r) for r in rows]
+
+def blocks_of(seconds):
+    """the whole blocks of a length in seconds (a Fraction), as plan P3 counts them"""
+    frames = math.ceil(seconds * fractions.Fraction(353125, 8))
+    return -(-frames // 64)
+
+def glo_card(t, seed, name, byte0):
+    """a copy of the seeded card with GLO.CFG byte 0, the stored tempo, set: 0 EXT, 1 MID"""
+    card = card_copy(t, seed, name)
+    glo = os.path.join(card, 'PROJ00', 'GLO.CFG')
+    with open(glo, 'rb') as f:
+        g = bytearray(f.read())
+    g[0] = byte0
+    with open(glo, 'wb') as f:
+        f.write(bytes(g))
+    return card
+
+@case
+def M17_pattern(t):
+    seed = t.seed()
+    script = t.script('0ms mark a\n')
+    for p in (0, 5, 21, 47, 63):
+        log = t.path('panel%d.log' % p)
+        s, _, _ = t.render(seed, ['--seconds', '0.2', '--panel-log', log, '--events', script, '--pattern', p])
+        check(s['inputs']['pattern'] == p and s['selected']['pattern'] == p,
+              '--pattern %d: inputs %r, selected %r' % (p, s['inputs']['pattern'], s['selected']))
+        lines = log_lines(log, PANEL_LINE)
+        check(len(lines) == 1, '--pattern %d: the panel log has %d lines' % (p, len(lines)))
+        row2 = panel_rows(lines[0])[1]
+        m = re.match(r'Current: +(\d+) *$', row2)
+        check(m and int(m.group(1)) == p + 1, '--pattern %d: row 2 at the mark is %r' % (p, row2))
+    no_copies_left()
+
+@case
+def M17_song(t):
+    seed = t.seed()
+    for song in (0, 2, 63):
+        s, _, _ = t.render(seed, ['--seconds', '0.2', '--song', song])
+        check(s['inputs']['song'] == song and s['selected']['song'] == song,
+              '--song %d: inputs %r, selected %r' % (song, s['inputs']['song'], s['selected']))
+    no_copies_left()
+
+@case
+def M17_bpm(t):
+    seed = t.seed()
+    for bpm, sync in (('137', 0), ('ext', 1), ('mid', 2)):
+        log = t.path('bpm-%s.log' % bpm)
+        s, _, _ = t.render(seed, ['--seconds', '2', '--midi-log', log, '--bpm', bpm])
+        sel = s['selected']
+        f8 = [int(x.split()[0]) for x in log_lines(log, MIDI_LINE) if x.endswith(' DIN F8')]
+        check(sel['sync'] == sync, '--bpm %s: selected %r' % (bpm, sel))
+        if sync:
+            check(not f8, '--bpm %s: %d DIN F8 lines' % (bpm, len(f8)))
+            continue
+        check(sel['bpm'] == 137, '--bpm 137: selected %r' % sel)
+        check(len(f8) > 2, '--bpm 137: %d DIN F8 lines' % len(f8))
+        mean = (f8[-1] - f8[0]) / (len(f8) - 1)
+        print('--bpm 137: %d DIN F8 lines, %.1f cycles apart on average' % (len(f8), mean))
+        check(abs(mean - 540000000 / 137) <= 54000, '--bpm 137: DIN F8 lines %.1f cycles apart, not 3,941,606 +- 54,000'
+              % mean)
+    s, wav, _ = t.render(seed, ['--bpm', '137', '--bars', '2'])
+    want = blocks_of(fractions.Fraction(2 * 240, 137))
+    frames = wav_info(wav)[3]
+    check(s['inputs']['blocks'] == want and frames == 64 * want, '--bpm 137 --bars 2: %d blocks and %d frames, not %d'
+          % (s['inputs']['blocks'], frames, want))
+    no_copies_left()
+
+@case
+def M17_param_engine(t):
+    seed = t.seed()
+    base = ['--no-start', '--seconds', '3']
+    # voice 1 on all 16 steps, then START at 1.7 s
+    steps16 = t.script('0ms press voice1\n' + ''.join('+100ms press step%d\n' % n for n in range(1, 17)) +
+                       '+100ms press start\n')
+    # PAR_BPM: the device's MIDI clock out
+    log = t.path('bpm.log')
+    s, _, _ = t.render(seed, base + ['--midi-log', log, '--events', steps16, '--param', 'bpm=150'])
+    check(s['params'] == {'bpm': 150} and s['selected']['bpm'] == 150 and s['selected']['sync'] == 0,
+          'bpm=150: params %r, selected %r' % (s['params'], s['selected']))
+    lines = log_lines(log, MIDI_LINE)
+    f8 = [int(x.split()[0]) for x in lines if x.endswith(' DIN F8')]
+    # voice 1's notes go out on DIN too, and the F8s that wait behind them are left out
+    gaps = f8_gaps(lines)
+    check(len(f8) > 2 and 2 * len(gaps) >= len(f8) - 1, 'bpm=150: %d DIN F8 lines, %d gaps free of the wire'
+          % (len(f8), len(gaps)))
+    check(all(abs(g - 3600000) <= 54000 for g in gaps), 'bpm=150: DIN F8 gaps %r' % sorted(set(gaps))[:8])
+    mean = (f8[-1] - f8[0]) / (len(f8) - 1)
+    check(abs(mean - 3600000) <= 54000, 'bpm=150: DIN F8 lines %.1f cycles apart on average' % mean)
+    print('bpm=150: %d DIN F8 lines, %d of %d gaps free of the wire, %.1f cycles apart on average'
+          % (len(f8), len(gaps), len(f8) - 1, mean))
+    # PAR_SHUFFLE: the step times in the MIDI log
+    ons = {}
+    for v in (0, 127):
+        log = t.path('shuffle%d.log' % v)
+        s, _, _ = t.render(seed, base + ['--midi-log', log, '--events', steps16, '--param', 'shuffle=%d' % v])
+        check(s['params'] == {'shuffle': v}, 'shuffle=%d: params %r' % (v, s['params']))
+        ons[v] = [int(x.split()[0]) for x in log_lines(log, MIDI_LINE) if re.search(r' DIN 9[0-9A-F]$', x)]
+    pairs = list(zip(ons[0], ons[127]))
+    check(len(pairs) >= 8, 'only %d and %d Note Ons' % (len(ons[0]), len(ons[127])))
+    for k, (a, b) in enumerate(pairs):
+        # the 16ths count from step 1 at START: the odd ones (steps 2, 4, ...) move
+        check(b > a if k % 2 else b == a, 'Note On %d: at %d with shuffle 0, %d with shuffle 127' % (k, a, b))
+    print('shuffle 127 moves the odd 16ths by %r cycles' % sorted(set(b - a for a, b in pairs[1::2])))
+    # PAR_VOL1, a sound parameter: the audio of voice 1
+    steps = t.script(STEPS)
+    _, plain, _ = t.render(seed, base + ['--events', steps])
+    s, quiet, _ = t.render(seed, base + ['--events', steps, '--param', 'vol1=0'])
+    check(s['params'] == {'vol1': 0}, 'vol1=0: params %r' % s['params'])
+    loud = dbfs(plain, (0, 1), 0.5, 3.0)
+    check(loud > -60, 'out 1 without vol1=0 is at %.1f dBFS after 500 ms' % loud)
+    check(dbfs(quiet, (0, 1), 0.5, 3.0) == float('-inf'), 'out 1 with vol1=0 is not digital silence after 500 ms')
+    no_copies_left()
+
+@case
+def M17_param_refused(t):
+    seed = t.seed()
+    out = t.path('o.wav')
+    # the special cases of menu_encoderChangeParameter(), then two that do not exist;
+    # all are refused before power-on, so --out is not made
+    for spec, special in (('voice_lfo1=2', True), ('target_lfo1=3', True), ('vel_dest_1=3', True),
+                          ('nosuch=1', False), ('999=1', False)):
+        name = spec.split('=')[0]
+        p = t.run(['--card', seed, '--out', out, '--param', spec], code=1)
+        lines = p.stderr.splitlines()
+        check(len(lines) == 1 and lines[0].startswith('lichomat-render: --param: parameter %s: ' % name)
+              and ('special case' in lines[0]) == special, '--param %s: %r' % (spec, p.stderr))
+        check(not os.path.exists(out), '--param %s: the WAV was made' % spec)
+    script = t.script('0ms mark a\n0ms param voice_lfo1=2\n')
+    p = t.run(['--card', seed, '--out', out, '--events', script], code=1)
+    lines = p.stderr.splitlines()
+    check(len(lines) == 1 and lines[0].startswith('lichomat-render: %s:2: ' % script) and 'voice_lfo1' in lines[0]
+          and 'special case' in lines[0], 'the param line: %r' % p.stderr)
+    check(not os.path.exists(out), 'the param line: the WAV was made')
+    # a name in upper case, clamped by DTYPE_0B127; then the same parameter by number
+    s, _, _ = t.render(seed, ['--seconds', '0.1', '--param', 'SHUFFLE=200'])
+    check(s['params'] == {'shuffle': 127}, 'SHUFFLE=200: params %r' % s['params'])
+    n = s['paramNumbers']['shuffle']
+    s, _, _ = t.render(seed, ['--seconds', '0.1', '--param', '%d=5' % n])
+    check(s['params'] == {'shuffle': 5} and s['paramNumbers'] == {'shuffle': n},
+          '%d=5: params %r, paramNumbers %r' % (n, s['params'], s['paramNumbers']))
+    no_copies_left()
+
+def par_enumerators(header):
+    """the enumerators of enum ParamEnums that start with PAR_, by a tokenizer: an
+    enumerator is the identifier at the start of the body or after a comma"""
+    with open(header) as f:
+        text = f.read()
+    text = re.sub(r'/\*.*?\*/', ' ', text, flags=re.S)
+    text = re.sub(r'//[^\n]*', ' ', text)
+    tokens = re.findall(r'[A-Za-z_][A-Za-z0-9_]*|\d+|\S', text)
+    i = next(k for k in range(len(tokens) - 2) if tokens[k:k + 3] == ['enum', 'ParamEnums', '{']) + 3
+    names, start = [], True
+    while tokens[i] != '}':
+        if start and re.match(r'[A-Za-z_]', tokens[i]):
+            names.append(tokens[i])
+        start = tokens[i] == ','
+        i += 1
+    return [x for x in names if x.startswith('PAR_')]
+
+@case
+def M17_param_table(t):
+    gen = subprocess.run([sys.executable, os.path.join(t.root, 'emu', 'render', 'gen_params.py'), t.root],
+                         capture_output=True, check=True).stdout
+    with open(os.path.join(t.root, 'emu', 'render', 'render_params.h'), 'rb') as f:
+        committed = f.read()
+    check(gen == committed, 'gen_params.py does not give emu/render/render_params.h byte for byte')
+    entries = re.findall(r'^\t\{ "([a-z0-9_]+)", (PAR_[A-Z0-9_]+) \},$', committed.decode(), re.M)
+    want = par_enumerators(os.path.join(t.root, 'Core', 'Inc', 'Parameters.h'))
+    check([e[1] for e in entries] == want, 'the table has %d entries, enum ParamEnums %d PAR_ enumerators'
+          % (len(entries), len(want)))
+    check(all(n == p[4:].lower() for n, p in entries), 'a table name is not its PAR_ name in lower case')
+    print('%d entries' % len(entries))
+
+@case
+def M17_bars(t):
+    seed = t.seed()
+    ext, mid = glo_card(t, seed, 'ext', 0), glo_card(t, seed, 'mid', 1)
+    want = blocks_of(4)	# 2 bars at 120 BPM
+    for args in (['--bars', '2'], ['--bpm', '120', '--bars', '2']):
+        s, wav, _ = t.render(ext, args)
+        frames = wav_info(wav)[3]
+        check(s['inputs']['blocks'] == want and frames == 64 * want and s['selected']['bpm'] == 120
+              and s['selected']['sync'] == 0, 'EXT, %r: %d blocks, %d frames, selected %r, not %d blocks at 120 BPM'
+              % (args, s['inputs']['blocks'], frames, s['selected'], want))
+    # MID with a clock in the script stays MID: no internal tempo for --bars
+    script = t.script('0ms din-clock 120\n')
+    p = t.run(['--card', mid, '--out', t.path('o.wav'), '--bars', '2', '--events', script], code=1)
+    lines = p.stderr.splitlines()
+    check(len(lines) == 1 and lines[0].startswith('lichomat-render: --bars: ') and 'MID' in lines[0],
+          'MID with a clock and --bars: %r' % p.stderr)
+    no_copies_left()
+
+@case
+def M17_sync_fallback(t):
+    seed = t.seed()
+    ext, mid = glo_card(t, seed, 'ext', 0), glo_card(t, seed, 'mid', 1)
+    for card, mode, text, sync in ((ext, 'EXT', None, 0), (ext, 'EXT', '0ms jack-clock 120 4\n', 1),
+                                   (mid, 'MID', None, 0), (mid, 'MID', '0ms usb-clock 120\n', 2)):
+        args = ['--seconds', '1'] + (['--events', t.script(text)] if text else [])
+        s, _, p = t.render(card, args)
+        sel = s['selected']
+        warned = [w for w in s['warnings'] if 'syncs to' in w]
+        what = '%s, %r: selected %r, warnings %r' % (mode, text, sel, s['warnings'])
+        check(sel['sync'] == sync, what)
+        if text:
+            check(not warned, what)
+            continue
+        want = 'the project syncs to %s; the script sends no clock to that input: 120 BPM internal' % mode
+        check(warned == [want] and sel['bpm'] == 120, what)
+        check('lichomat-render: warning: ' + want in p.stderr.splitlines(), '%s: stderr %r' % (mode, p.stderr))
+    no_copies_left()
 
 if __name__ == '__main__':
     main()

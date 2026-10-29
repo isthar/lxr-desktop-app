@@ -311,6 +311,27 @@ static void jsonI(FILE *f, const char *key, long long v, int comma)
 	fprintf(f, "\"%s\": %lld%s", key, v, comma ? ", " : "");
 }
 
+/* params or paramNumbers (plan P5): one key per name, in command-line order; a
+ * parameter given twice is written once */
+static void summaryParams(FILE *f, const render_summary_t *s, int numbers)
+{
+	int first = 1;
+	for (unsigned i = 0; i < s->nparams; i++)
+	{
+		int seen = 0;
+		for (unsigned j = 0; j < i; j++)
+			if (!strcmp(s->paramNames[j], s->paramNames[i]))
+				seen = 1;
+		if (seen)
+			continue;
+		if (!first)
+			fputs(", ", f);
+		first = 0;
+		jsonString(f, s->paramNames[i]);
+		fprintf(f, ": %u", numbers ? s->paramNumbers[i] : (unsigned)s->paramValues[i]);
+	}
+}
+
 int render_summaryWrite(const char *path, const render_summary_t *s, char *err, size_t n)
 {
 	FILE *f = fopen(path, "w");
@@ -366,7 +387,11 @@ int render_summaryWrite(const char *path, const render_summary_t *s, char *err, 
 	jsonI(f, "song", s->selected.song, 1);
 	jsonI(f, "bpm", s->selected.bpm, 1);
 	jsonI(f, "sync", s->selected.sync, 0);
-	fputs("}, \"params\": {}, \"paramNumbers\": {},\n \"direct\": [", f);
+	fputs("}, \"params\": {", f);
+	summaryParams(f, s, 0);
+	fputs("}, \"paramNumbers\": {", f);
+	summaryParams(f, s, 1);
+	fputs("},\n \"direct\": [", f);
 	for (unsigned i = 0; i < s->ndirect; i++)
 	{
 		const render_direct_t *d = &s->direct[i];
