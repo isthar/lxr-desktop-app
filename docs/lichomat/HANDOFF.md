@@ -11,7 +11,7 @@ Read this first when picking the project up in a new session.
 | Stage 1 spec | `docs/superpowers/specs/2026-10-23-timing-core-design.md` |
 | Stage 1 plan | `docs/superpowers/plans/2026-10-23-timing-core.md` |
 | Stage 1b spec (emulator; accepted on 2026-10-27, Q20) | `docs/superpowers/specs/2026-10-27-emulator-design.md` |
-| Stage 1b plan, R1 part 1 (F1–F10; done on the local branch `emulator`, worktree `build/wt-emulator`) | `docs/superpowers/plans/2026-10-27-emulator-r1a-firmware-changes.md` |
+| Stage 1b plan, R1 part 1 (F1–F10; done on the branch `emulator`, pushed to the fork, worktree `build/wt-emulator`) | `docs/superpowers/plans/2026-10-27-emulator-r1a-firmware-changes.md` |
 | Stage 1b plan, R1 part 2 (the virtual device `emu/`; done on `emulator`, 103 ctest ids: `source tools/env.sh && cmake -S emu -B build/emu -G Ninja && cmake --build build/emu && ctest --test-dir build/emu`, in the worktree) | `docs/superpowers/plans/2026-10-27-emulator-r1b-virtual-device.md` |
 | Milestone report of R1 | `docs/lichomat/reports/M8-emulator-R1.md` |
 | The night's scratch work of 2026-10-27 (the stage 1b host probe, the sweep's harnesses) | `build/night-2026-10-27/` (git-ignored, on the owner's Mac; its README lists the contents) |
@@ -136,7 +136,8 @@ A workflow can only be resumed (`resumeFromRunId`) in the session that started i
 - Add files explicitly; never `git add -A`.
 - Never rewrite a commit (no `git commit --amend`): fix with a new commit.
 - Line endings: the sources in `Core/` use CRLF (except `Core/CMakeLists.txt` and the LF files fw 1.7 already had, such as `encoder.c`), everything else LF; review row R9.4 checks it. After editing a file in `Core/`, run `perl -pi -e 's/\r?\n/\r\n/' <file>` and check that its count of CRLF equals its count of LF bytes.
-- Push `timing-core` only to `origin`, the owner's fork, as work lands; the owner allowed this on 2026-10-24 (Q5). Another branch, such as stage 1b's `emulator`, needs its own yes (Q19). Never push to `upstream` (Erica Synths), never touch `main`.
+- Push the work branches (`timing-core`, `emulator` and later ones) only to `origin`, the owner's fork, as work lands; the owner allowed this for `timing-core` on 2026-10-24 (Q5) and for every branch on 2026-10-29 (Q19). Never push to `upstream` (Erica Synths), never touch `main`, never force-push.
+- Decision questions: since 2026-10-29 the owner wants my own recommendation taken as the answer. Record it in `questions` as closed, with the reasoning, and go on. Hardware checks stay the owner's.
 - Commits use the repo-local identity `Tomasz Krzywicki <tkrzywicki@gmail.com>`; the owner chose the private address. `backup/timing-core-before-reauthor` keeps the history as it was before the re-authoring; it is local only.
 - After each task run `tools/check.sh`. It must show zero warnings, ITCM must fit, and DTCM + RAM must stay within review row R6.2 of `docs/lichomat/reports/stage1-review.md` (at most 391824 B since E2.9; spec §10's about 7.5 KB is exceeded by design).
 - Decisions that belong to the owner go into `questions` in the tracker. Work continues with a reversible default.
