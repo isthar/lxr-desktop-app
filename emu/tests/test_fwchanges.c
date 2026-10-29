@@ -10,7 +10,8 @@
  *   with PRINT_ROWS defined the test prints its rows instead of comparing them.
  * - F9: voice 1 in band 10 reads no sample past its table row. UBSan's bounds
  *   check is on in calcWavetableOscBlock() and calcFmBlock() and fires on any
- *   table[row][1024]; CI runs the same test under ASan.
+ *   table[row][1024]; CI runs the same test under ASan. With U8's pitch
+ *   modulation, the attack also passes 2^32 in freq2PhaseIncr1024() (F6b).
  * - F11: a power-on with the knobs off 0 degrees, with and without a card: the
  *   boot's first adc_checkPots() edits, and the edit reads the morph target.
  * - F12: a pattern select by the step buttons fills the Euclid parameters from
@@ -216,16 +217,15 @@ static void param(uint16_t nr, uint8_t value)
 
 static uint8_t wave, fmMode;
 
-/* U8's recipe with less pitch modulation: coarse 127 (12,543.85 Hz), pitch EG
- * decay 64 and slope 64, and pitch modulation 32, not 127. The envelope's peak
- * factor is 1 + 32 x (32/127)^2 = 3.03 (MidiParser.c:94-98, DrumVoice.c:188-190),
- * so the attack sweeps band 10 from 38 kHz down to 14,080 Hz. With 127 the factor
- * is 33 and the frequency 414 kHz, and freq2PhaseIncr1024() (Oscillator.c:47-50)
- * converts a float of 2^32 or more to uint32_t from REAL_FS (44,140 Hz) up, which
- * UBSan's float-cast check reports; F6's f2u32_sat() does not cover that function.
- * Then the oscillator waveform, and FM (PAR_MIX_MOD_1 0) or the mix of both
- * oscillators (1). */
-#define PITCH_MOD_AMOUNT 32u
+/* U8's recipe: coarse 127 (12,543.85 Hz), pitch modulation 127, pitch EG decay
+ * 64 and slope 64. The envelope's peak factor is 1 + 32 x (127/127)^2 = 33
+ * (MidiParser.c:94-98, DrumVoice.c:188-190), so the attack starts at 414 kHz and
+ * sweeps band 10 down to 14,080 Hz. From REAL_FS (44,140 Hz) up,
+ * freq2PhaseIncr1024() (Oscillator.c:47-50) converts a float of 2^32 or more to
+ * uint32_t, which UBSan's float-cast check reported before F6b gave it
+ * f2u32_sat(). Then the oscillator waveform, and FM (PAR_MIX_MOD_1 0) or the mix
+ * of both oscillators (1). */
+#define PITCH_MOD_AMOUNT 127u
 
 static void band10Voice(void *arg)
 {

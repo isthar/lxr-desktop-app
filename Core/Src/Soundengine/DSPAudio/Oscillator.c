@@ -46,12 +46,12 @@ static __inline uint8_t freqToTableIndex(const float f)
 //-----------------------------------------------------------
 static __inline uint32_t freq2PhaseIncr1024(const float f)
 {
-	return (((1024*f)/REAL_FS))*4194304 ; //(<<22)
+	return f2u32_sat((((1024*f)/REAL_FS))*4194304) ; //(<<22)
 }
 //-----------------------------------------------------------
 static __inline uint32_t freq2PhaseIncr32767(const float f)
 {
-	return (((1024*f)/REAL_FS))*131072 ; //(<<17)
+	return f2u32_sat((((1024*f)/REAL_FS))*131072) ; //(<<17)
 }
 //-----------------------------------------------------------
 IN_ITCM_RAM void calcSineBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain)
