@@ -1,8 +1,8 @@
 /*
  * test_fwchanges.c
  *
- * M15 (stage 1b spec 7, 12.1): the firmware changes F1, F2, F3, F9 and F12 in
- * the emulator, each test a boot without a card.
+ * M15 (stage 1b spec 7, 12.1): the firmware changes F1, F2, F3, F9, F11 and F12
+ * in the emulator, each test a boot without a card (F11's also one with a card).
  * - F1: CC 1 on all 16 channels, with every modulation node at destination 0.
  * - F2: the morph target is kit 0 after a boot without a card, and a morph runs.
  * - F3: the two clear-automation pages show the base build's rows. The base is
@@ -11,6 +11,8 @@
  * - F9: voice 1 in band 10 reads no sample past its table row. UBSan's bounds
  *   check is on in calcWavetableOscBlock() and calcFmBlock() and fires on any
  *   table[row][1024]; CI runs the same test under ASan.
+ * - F11: a power-on with the knobs off 0 degrees, with and without a card: the
+ *   boot's first adc_checkPots() edits, and the edit reads the morph target.
  * - F12: a pattern select by the step buttons fills the Euclid parameters from
  *   the active voice, not from track 16 past the generator's arrays.
  *
@@ -22,6 +24,7 @@
  * the repository.
  */
 #include <math.h>
+#include <sys/wait.h>
 
 #include "stm32f7xx_hal.h"
 #include "Parameters.h"
@@ -272,6 +275,46 @@ TEST(M15_f9_band10)
 		const double rms = sqrt(energy / (2.0 * (double)frames)) / 32768.0;
 		ASSERT_TRUE(20.0 * log10(rms) > -60.0);
 	}
+}
+
+/* --- F11 -------------------------------------------------------------------------- */
+
+/* The boot's first adc_checkPots() (appMain.c:178) compares with positions that
+ * start at 0 (spec 4.6), so a knob at 40 degrees is an edit of +1 (M8). The edit
+ * runs preset_getMorphValue() (menu.c:4304), which reads morphParameters[index]
+ * (presetManager.c:2263). fw 1.7 set the morph target only later in the boot
+ * (appMain.c:356 with a card, F2's line without), and UBSan stopped at the NULL
+ * pointer. One boot per process, so a child boots without a card and the parent
+ * with one; all four knobs at 40 degrees. */
+static void bootKnobs(const char *cardDir)
+{
+	emu_config_t cfg;
+	emu_configDefaults(&cfg);
+	cfg.cardDir = cardDir;
+	cfg.cardIn = cardDir != NULL;
+	for (unsigned k = 0; k < 4u; k++)
+		cfg.knobs[k] = 40;
+	emu_testBoot(&cfg);
+	emu_testRunMs(100);
+}
+
+TEST(M15_f11_knobs_at_boot)
+{
+	const pid_t child = fork();
+	ASSERT_TRUE(child >= 0);
+	if (child == 0)
+	{
+		bootKnobs(NULL);
+		_exit(emu_booted() && morphParameters == mainParameters[0] ? 0 : 1);
+	}
+	char dir[512];
+	emu_testCard(dir, sizeof dir, 120);
+	bootKnobs(dir);
+	ASSERT_TRUE(emu_booted());
+	ASSERT_TRUE(morphParameters == mainParameters[0]);
+	int status = 0;
+	ASSERT_EQ(waitpid(child, &status, 0), child);
+	ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0);
 }
 
 /* --- F12 -------------------------------------------------------------------------- */

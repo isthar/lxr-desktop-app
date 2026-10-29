@@ -263,13 +263,8 @@ TEST(M8_fw_knob_list)
  * boot's later preset_init(0) (appMain.c:698) loads the init kit over any edit,
  * so after the boot both read 31.
  *
- * The child's edit is a firmware finding: the boot's first adc_checkPots()
- * (appMain.c:178) runs before morphParameters is set (appMain.c:356, :697), and
- * the edit's preset_getMorphValue() (menu.c:4304) indexes the NULL pointer
- * (presetManager.c:2263), which UBSan reports. On the device it reads ITCM near
- * address 0, and a morph of 0 discards the value read. Until the firmware sets the
- * morph target first (spec 7, further sanitizer findings), the child sets it as
- * the boot does later, so that the edit itself can be seen. */
+ * The child's edit runs preset_getMorphValue() (menu.c:4304), which reads the
+ * morph target; F11 sets it before the boot's first adc_checkPots() (M15_f11). */
 static uint8_t inBoot[2];	/* the value inside the boot, then after it */
 static int inBootSeen;
 
@@ -304,7 +299,6 @@ TEST(M8_fw_no_edit_at_boot)
 	if (child == 0)
 	{
 		close(fds[0]);
-		morphParameters = mainParameters[0];	/* the workaround above */
 		bootAt(40);
 		_exit(inBootSeen && write(fds[1], inBoot, 2) == 2 ? 0 : 1);
 	}

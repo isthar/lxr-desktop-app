@@ -173,6 +173,8 @@ void appMain_boot(void)
 
 
 
+  //LICHOMAT: the morph target is kit 0 before the first adc_checkPots(): a knob off 0 degrees edits there, and the edit read the target through NULL (F11)
+  morphParameters = mainParameters[0];
   //we have to read out the pots once to have a defined state before loading the preset data
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buf, ADC_BUF_LEN);
   adc_checkPots();
