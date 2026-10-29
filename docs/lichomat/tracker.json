@@ -7,7 +7,7 @@
     "head": "478c8b9",
     "next": "Ja: wykonanie planu v0.2 od V1, po resecie limitu (pon. 2.11, 22:00) albo gdy pozwolisz. Ty: testy v0.1 z odczytem CPU (Q6, H12).",
     "updated_at": "2026-10-30T00:01:00+01:00",
-    "now": "Przerwa od 00:05: limit 50% tygodniowego zużycia osiągnięty. Nic nie działa. Przy wznowieniu: zadania V1–V2 planu v0.2."
+    "now": "Przerwa od 00:01: limit 50% tygodniowego zużycia osiągnięty. Nic nie działa. Przy wznowieniu: zadania V1–V2 planu v0.2."
   },
   "epics": [
     {
