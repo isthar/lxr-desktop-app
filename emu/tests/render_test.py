@@ -350,8 +350,10 @@ def M17_card_copy(t):
     with open(glo, 'wb') as f:
         f.write(bytes(g))
     # names that are not 8.3 are skipped, one warning per name (spec 11)
+    # (a name in TMP only with --as-booted, which copies TMP)
     skipped = [os.path.join(src, 'PROJ00', 'LongerName.snd'), os.path.join(src, 'A+B.SND')]
-    for x in skipped:
+    in_tmp = os.path.join(src, 'TMP', 'LongerName.snd')
+    for x in skipped + [in_tmp]:
         with open(x, 'wb') as f:
             f.write(b'x')
     before = tree(src)
@@ -361,10 +363,11 @@ def M17_card_copy(t):
         s, _, p = t.render(src, ['--seconds', '0.5', '--keep-card', keep[name]] + args)
         check(tree(src) == before, 'the render with %r changed the source card' % args)
         warned = [x for x in p.stderr.splitlines() if x.startswith('lichomat-render: warning: ')]
-        for x in skipped:
+        for x in skipped + [in_tmp]:
+            want = 1 if x != in_tmp or args == ['--as-booted'] else 0
             n = sum(1 for w in warned if x in w and 'not an 8.3 name' in w)
-            check(n == 1, '%r: %d warnings name %s, not 1: %r' % (args, n, x, p.stderr))
-            check(sum(1 for w in s['warnings'] if x in w) == 1, '%r: the summary warns %r' % (args, s['warnings']))
+            check(n == want, '%r: %d warnings name %s, not %d: %r' % (args, n, x, want, p.stderr))
+            check(sum(1 for w in s['warnings'] if x in w) == want, '%r: the summary warns %r' % (args, s['warnings']))
         keep[name] = (keep[name], s)
     k1 = keep['K1'][0]
     check(os.path.isfile(os.path.join(k1, 'PROJ.IDX')), 'K1 holds no PROJ.IDX: %r' % sorted(os.listdir(k1)))

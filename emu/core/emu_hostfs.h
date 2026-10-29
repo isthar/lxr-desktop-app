@@ -67,8 +67,4 @@ void emu_hostOrderLast(const char *dir, const char *path);
  * copies' birth times in that order. skipTmp 1 leaves /TMP out. 0 or -1. */
 int emu_hostCopyCard(const char *src, const char *dst, int skipTmp);
 
-/** emu_hostCopyCard() that passes each name it skips for not being 8.3 to
- * skipped() (may be NULL), once per name, as emu_hostList() does */
-int emu_hostCopyCardSkipped(const char *src, const char *dst, int skipTmp, void (*skipped)(const char *path));
-
 #endif /* EMU_HOSTFS_H_ */

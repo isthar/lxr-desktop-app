@@ -254,11 +254,10 @@ static int emu_hostCopyFile(const char *src, const char *dst)
 	return status;
 }
 
-static int emu_hostCopyDir(const char *src, const char *dst, int skipTmp, int64_t *sec, long *nsec,
-	void (*skipped)(const char *path))
+static int emu_hostCopyDir(const char *src, const char *dst, int skipTmp, int64_t *sec, long *nsec)
 {
 	emu_hostEntry_t *list;
-	const int n = emu_hostList(src, &list, skipped);
+	const int n = emu_hostList(src, &list, NULL);
 	if (n < 0)
 		return -1;
 	int status = 0;
@@ -281,22 +280,17 @@ static int emu_hostCopyDir(const char *src, const char *dst, int skipTmp, int64_
 			status = emu_hostSetBirth(to, *sec, *nsec);
 		}
 		if (status == 0 && list[i].isDir)
-			status = emu_hostCopyDir(from, to, 0, sec, nsec, skipped);
+			status = emu_hostCopyDir(from, to, 0, sec, nsec);
 	}
 	free(list);
 	return status;
 }
 
-int emu_hostCopyCardSkipped(const char *src, const char *dst, int skipTmp, void (*skipped)(const char *path))
+int emu_hostCopyCard(const char *src, const char *dst, int skipTmp)
 {
 	struct timespec now;
 	clock_gettime(CLOCK_REALTIME, &now);
 	int64_t sec = (int64_t)now.tv_sec;
 	long nsec = now.tv_nsec;
-	return emu_hostCopyDir(src, dst, skipTmp, &sec, &nsec, skipped);
-}
-
-int emu_hostCopyCard(const char *src, const char *dst, int skipTmp)
-{
-	return emu_hostCopyCardSkipped(src, dst, skipTmp, NULL);
+	return emu_hostCopyDir(src, dst, skipTmp, &sec, &nsec);
 }

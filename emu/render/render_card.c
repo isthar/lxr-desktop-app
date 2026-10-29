@@ -108,6 +108,24 @@ static void skippedName(const char *path)
 		cardWarn(text);
 }
 
+/* one warning per name of the tree that the copy skips: the folders it copies,
+ * listed as emu_hostCopyCard() lists them */
+static void warnNames(const char *dir, int skipTmp)
+{
+	emu_hostEntry_t *list;
+	const int count = emu_hostList(dir, &list, skippedName);
+	if (count < 0)
+		return;
+	for (int i = 0; i < count; i++)
+		if (list[i].isDir && !(skipTmp && !strcmp(list[i].name, "TMP")))
+		{
+			char path[EMU_HOST_PATH];
+			snprintf(path, sizeof path, "%s/%s", dir, list[i].host);
+			warnNames(path, 0);
+		}
+	free(list);
+}
+
 int render_cardPrepare(const render_opts_t *o, char copy[EMU_HOST_PATH], int *project, char *err, size_t n,
 	void (*warn)(const char *what))
 {
@@ -138,7 +156,8 @@ int render_cardPrepare(const render_opts_t *o, char copy[EMU_HOST_PATH], int *pr
 	int status = 0;
 	emu_hostEntry_t *root = NULL;
 	int count = -1;
-	if (emu_hostCopyCardSkipped(card, copy, !o->asBooted, skippedName) != 0
+	warnNames(card, !o->asBooted);
+	if (emu_hostCopyCard(card, copy, !o->asBooted) != 0
 		|| (count = emu_hostList(copy, &root, NULL)) < 0)
 		status = fail(err, n, "card %s: cannot read", card);
 	if (status == 0)
