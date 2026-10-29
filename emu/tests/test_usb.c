@@ -156,6 +156,16 @@ TEST(M11_window_16)
 	ASSERT_EQ(popAll(), 24);
 	for (unsigned k = 0; k < 24; k++)
 		ASSERT_EQ(stamp[k], k < 16u ? 1000u : 1000u + MS);	/* the 3rd waits, whole */
+
+	/* 12 and 8: the window is not full, but the 8 would pass 16, so it waits
+	 * whole too, and no 1 ms holds more than 16 */
+	setup();
+	clocks(1000, 12);
+	clocks(1000, 8);
+	HAL_Delay(2);
+	ASSERT_EQ(popAll(), 20);
+	for (unsigned k = 0; k < 20; k++)
+		ASSERT_EQ(stamp[k], k < 12u ? 1000u : 1000u + MS);
 }
 
 TEST(M11_window_start)
