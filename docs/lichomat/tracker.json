@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 01:48",
-    "phase": "Etap 1 zrobiony, czekają testy na sprzęcie; etap 1b: specyfikacja",
-    "focus": "Etap 1 skończony poza testami na LXR-02 (Q6). Noc 27.10: 10 błędów fw 1.7 poprawionych (E4.6–E4.9), nowy plik do testów 55091864…, dokumenty zaktualizowane i przejrzane. Szkic specyfikacji etapu 1b czeka na Twoją akceptację (Q20).",
+    "updated": "2026-10-29 01:57",
+    "phase": "Etap 1 czeka na testy na sprzęcie; etap 1b: krok R1 (wirtualne urządzenie) zrobiony",
+    "focus": "Emulator R1 gotowy na lokalnej gałęzi emulator: cały firmware działa na wirtualnym urządzeniu w 103 testach. Nowe pytania Q21 i Q22 (błędy fw 1.7 znalezione przez emulator). Etap 1 nadal czeka na Twoje testy na LXR-02 (Q6).",
     "branch": "timing-core",
-    "head": "8f49df8",
-    "next": "Ja: przegląd części 1, poprawka F10, plan i wykonanie części 2 (wirtualne urządzenie emu/), do 47% tygodniowego limitu. Ty: testy na LXR-02 (Q6), pytania Q9–Q19.",
-    "updated_at": "2026-10-29T01:48:00+01:00",
-    "now": "Od 01:48: jeden agent poprawia 3 uwagi z przeglądu końcowego (skan nazw M21, okno USB M11, warunek testu F1). Potem raport R1 i podsumowanie. Zużycie ok. 37,5%."
+    "head": "22827f7",
+    "next": "Ty: Q19 (wypchnąć gałąź emulator?), Q21, Q22, testy v0.1 na LXR-02 (Q6), Q9–Q11. Ja: plan R2+R3 (renderer WAV i testy porównujące nagrania), potem ich wykonanie.",
+    "updated_at": "2026-10-29T01:57:00+01:00",
+    "now": "Od 01:57: R1 zamknięte. Następny krok: plan R2+R3 (jeden agent), jeśli zmieści się przed końcem kofeiny (ok. 04:29) i limitem 47%. Zużycie ok. 38%."
   },
   "epics": [
     {
@@ -414,16 +414,16 @@
     {
       "id": "E5.1",
       "epic": "E5",
-      "status": "w toku",
-      "title": "Specyfikacja (przyjęta 27.10, Q20) i plan R1: część 1 gotowa (db25288), część 2 do napisania (szkic kodu w build/r1b-draft)",
-      "updated": "2026-10-27"
+      "status": "zrobione",
+      "title": "Specyfikacja (przyjęta 27.10, Q20) i plan R1 w dwóch częściach (db25288, 79ca5b1)",
+      "updated": "2026-10-29"
     },
     {
       "id": "E5.2",
       "epic": "E5",
-      "status": "w toku",
-      "title": "Cały firmware na wirtualnym urządzeniu: zmiany F1–F10, projekt emu/, rdzeń z planistą i karta (R1)",
-      "updated": "2026-10-27"
+      "status": "zrobione",
+      "title": "Cały firmware na wirtualnym urządzeniu (R1): zmiany F1–F10, projekt emu/, 103 testy emulatora; gałąź emulator lokalnie, czeka na Q19",
+      "updated": "2026-10-29"
     },
     {
       "id": "E5.3",
@@ -608,6 +608,12 @@
       "date": "2026-10-26",
       "title": "v0.1 gotowe do testów na sprzęcie (E2.9, E3, E4)",
       "summary": "Wszystkie zadania etapu 1 są zrobione, zostały tylko testy na LXR-02, które robisz Ty. Przegląd całego etapu (E4.1) dał 52 uwagi: 47 poprawionych, w tym brak Note Off dla rolla i echa i za długie przejście songu przy SPP, 3 przyjęte i 2 pytania (Q9, Q11). Dodatkowa weryfikacja listy testów i notatek wydania znalazła 80 potwierdzonych uwag, wszystkie są poprawione. Sonda emulatora znalazła błąd z fw 1.7: wczytanie kitu nadpisywało bajt pamięci patternów (poprawione w E4.5). Nocne szukanie pod sanitizerami (27.10) znalazło 19 kolejnych problemów z fw 1.7 (B1–B19). Poprawione test-first: 7 błędów psujących dane i 3 psujące dźwięk (E4.6–E4.9). 4 zostają jako znane ograniczenia albo do odsłuchu (B11–B14), a 5 nie ma skutków na LXR. Testy i wydanie używają pliku z CI (SHA-256 55091864…). Zasoby: DTCM + RAM 391788 B (36 B poniżej R6.2), obraz +26068 B, 32 testy na hoście bez ostrzeżeń. Raport: docs/lichomat/reports/M7-v0.1-do-testow.md."
+    },
+    {
+      "id": "M8",
+      "date": "2026-10-29",
+      "title": "Emulator R1: cały firmware na wirtualnym urządzeniu (E5.1, E5.2)",
+      "summary": "Firmware bootuje i działa na Macu w testach: planista przerwań z zegarem 216 MHz, kodek, LCD, diody, panel, karta, MIDI DIN i USB, gniazda. 103 testy emulatora (Debug z UBSan i Release), firmware bez zmian poza F1–F10. Cztery lekkie przeglądy, wszystkie uwagi poprawione. Emulator znalazł dwa nowe błędy fw 1.7 (Q21, Q22). Raport: docs/lichomat/reports/M8-emulator-R1.md."
     }
   ],
   "questions": [
@@ -2245,6 +2251,11 @@
       "n": 296,
       "at": "2026-10-29 01:48",
       "text": "Przegląd końcowy R1b.9–R1b.16 (01:48): modele DIN, USB, panelu, LCD, karty i gniazd zgodne ze specyfikacją; 103 z 103 w Debug i Release. 2 ważne luki: skan nazw M21 czytał tylko jedną sekcję binarki (teksty menu w tablicach były poza nim; dziś w binarkach nie ma żadnego znaku towarowego) i test M11 przepuszczał model z 31 pakietami USB na 1 ms. Plus 1 drobna. Poprawki robi jeden agent."
+    },
+    {
+      "n": 297,
+      "at": "2026-10-29 01:57",
+      "text": "Poprawki z przeglądu końcowego (01:57): 1d6dd63 (skan nazw M21 czyta każdą sekcję binarki, jak strings -a -n 3; nadal 0 trafień), b87b1f5 (M11: 12+8 pakietów naraz, model był dobry), 22827f7 (M15: warunek F1 sprawdzony). 103 z 103 w Debug i Release, bramka firmware bez zmian. Krok R1 zrobiony: kamień milowy M8, raport docs/lichomat/reports/M8-emulator-R1.md; E5.1 i E5.2 zamknięte."
     }
   ]
 }

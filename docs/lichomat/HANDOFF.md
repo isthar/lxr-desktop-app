@@ -12,6 +12,8 @@ Read this first when picking the project up in a new session.
 | Stage 1 plan | `docs/superpowers/plans/2026-10-23-timing-core.md` |
 | Stage 1b spec (emulator; accepted on 2026-10-27, Q20) | `docs/superpowers/specs/2026-10-27-emulator-design.md` |
 | Stage 1b plan, R1 part 1 (F1–F10; done on the local branch `emulator`, worktree `build/wt-emulator`) | `docs/superpowers/plans/2026-10-27-emulator-r1a-firmware-changes.md` |
+| Stage 1b plan, R1 part 2 (the virtual device `emu/`; done on `emulator`, 103 ctest ids: `source tools/env.sh && cmake -S emu -B build/emu -G Ninja && cmake --build build/emu && ctest --test-dir build/emu`, in the worktree) | `docs/superpowers/plans/2026-10-27-emulator-r1b-virtual-device.md` |
+| Milestone report of R1 | `docs/lichomat/reports/M8-emulator-R1.md` |
 | The night's scratch work of 2026-10-27 (the stage 1b host probe, the sweep's harnesses) | `build/night-2026-10-27/` (git-ignored, on the owner's Mac; its README lists the contents) |
 | Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N21; they win over the spec) |
 | Reports per milestone | `docs/lichomat/reports/` |
