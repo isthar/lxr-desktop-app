@@ -201,6 +201,7 @@ emu_add_test(test_card IDS M9_scenario M9_truncate M9_order M9_skipped M9_duplic
 emu_add_test(test_din IDS M10_wire_in M10_wire_out M10_tx_enable_late M10_rx_during_tx M10_tx_from_rx_body
     M10_tx_slot_before_pass M10_overrun M10_spp_and_pc)
 emu_add_test(test_usb IDS M11_walk M11_window_16 M11_window_start M11_out M11_no_stall_drop)
+emu_add_test(test_jacks IDS M12_clock_in M12_reset M12_clock_out_core M12_fw_clock_out M8_fw_output_jacks)
 
 # M19: the firmware objects import no libm name but the vendored ones and fmod
 add_library(emu_libm_canary OBJECT tests/libm_canary.c)
