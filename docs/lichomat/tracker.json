@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-29 05:23",
+    "updated": "2026-10-29 05:51",
     "phase": "Etap 1 czeka na testy na sprzęcie; etap 1b: R2 (renderer) w toku",
-    "focus": "Poprawki F11, F12, F6b (błędy fw 1.7 z emulatora, Q21–Q23) i równoległy ctest; potem przegląd R2.1–R2.4 i poprawek, R2.5–R2.6, R3.",
+    "focus": "R2.5–R2.6 renderera i lekki przegląd R2.1–R2.4 z poprawkami F11, F12, F6b.",
     "branch": "timing-core",
-    "head": "e7e1543",
-    "next": "Agent: F11, F12, F6b i ctest -j8. Potem lekki przegląd, R2.5–R2.6, R3.1–R3.2. Limit: ok. 47% tygodnia (teraz ok. 41%).",
-    "updated_at": "2026-10-29T05:23:00+01:00",
-    "now": "Od 05:19: zapisuję decyzje, za chwilę rusza agent z poprawkami F11, F12, F6b i ctest -j8."
+    "head": "c253669",
+    "next": "Poprawki z przeglądu, potem R3.1–R3.2 (karty testowe, emu_golden.py, G1). Limit ok. 47% tygodnia.",
+    "updated_at": "2026-10-29T05:51:00+01:00",
+    "now": "Od 05:51: agent robi R2.5–R2.6, recenzent przegląda R2.1–R2.4 i poprawki F11, F12, F6b."
   },
   "epics": [
     {
@@ -456,8 +456,8 @@
     {
       "id": "E5.7",
       "epic": "E5",
-      "status": "w toku",
-      "title": "Poprawki błędów fw 1.7 znalezionych przez emulator: F11 (Q21), F12 (Q23), F6b (Q22), z testami, na gałęzi emulator",
+      "status": "zrobione",
+      "title": "Poprawki błędów fw 1.7 znalezionych przez emulator: F12 (7f5732f, Q23), F11 (7399c7d, Q21), F6b (cf8fb4d, Q22), z testami; test U9 na LXR w v0.2",
       "updated": "2026-10-29"
     },
     {
@@ -2295,6 +2295,21 @@
       "n": 302,
       "at": "2026-10-29 05:23",
       "text": "Wznowienie o 05:19. Twoja decyzja: na pytania odpowiadam własnymi rekomendacjami. Zamknięte Q9–Q19 i Q21–Q23 (odpowiedzi w zakładce pytań); otwarte zostaje tylko Q6 (testy na LXR-02). Gałąź emulator wypchnięta na fork (05:21). Usunięte ok. 1100 starych folderów testowych z TMPDIR."
+    },
+    {
+      "n": 303,
+      "at": "2026-10-29 05:24",
+      "text": "Ruszył agent (od 05:24): poprawki F12 (Q23), F11 (Q21), F6b (Q22), każda osobnym commitem z testem, i naprawa 4 testów M17, które padają przy równoległym ctest -j8. Potem wpisy F11, F12, F6b do specyfikacji (§7, §12.4) i poprawki planu R2.5."
+    },
+    {
+      "n": 304,
+      "at": "2026-10-29 05:51",
+      "text": "Poprawki gotowe (05:46): 7f5732f F12, wybór wzorca przyciskami kroków pyta o wartości euklid aktywnego głosu (Q23); 7399c7d F11, cel morfingu ustawiony przed pierwszym odczytem gałek przy bootowaniu (Q21); cf8fb4d F6b, freq2PhaseIncr z nasyceniem, obraz bajt w bajt ten sam (Q22); c253669, każdy przypadek renderera ma własny TMPDIR, więc ctest -j8 przechodzi. Każdy test najpierw padał na kodzie bez poprawki. Emulator 122 z 122 w Debug i Release, szeregowo i -j8; firmware 55 z 55, pamięć bez zmian (DTCM+RAM 391 796 B). Na LXR F12 nic nie zmienia na ekranie (strona Euclid i tak odświeża wartości); w specyfikacji nowy test U9. f675074: specyfikacja i plan. Obie gałęzie wypchnięte."
+    },
+    {
+      "n": 305,
+      "at": "2026-10-29 05:51",
+      "text": "Od 05:51 równolegle: lekki przegląd R2.1–R2.4 i poprawek F11, F12, F6b (w osobnej kopii roboczej, tylko odczyt) oraz agent wykonawczy R2.5–R2.6 (preludium: --pattern, --song, --bpm, --param, --bars; zdarzenia zapisu, błędy, watchdog). Zużycie ok. 42.3%."
     }
   ]
 }
