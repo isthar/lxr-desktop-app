@@ -12,9 +12,11 @@
    the overlay: the negative test passes Core/Inc/lcd.h and ST's main.h.
 2. Every compile command of the build passes the main.h overlay, except those
    of the vendored libm and of M19's canary.
-3. The C strings of each binary name 'LXR', 'Erica' or 'Sonic Potions' only in
-   the allow-listed texts of emu/tests/name_allow.txt (one per line). Paths of
-   the repository and the build inside a string are left out first.
+3. The strings of each binary, the printable runs of 3 or more bytes in the
+   contents of every section (as strings -a -n 3 finds them; string literals,
+   char arrays, const tables, code), name 'LXR', 'Erica' or 'Sonic Potions'
+   only in the allow-listed texts of emu/tests/name_allow.txt (one per line).
+   Paths of the repository and the build inside a string are left out first.
 
 The last line is 'licence gate: N errors' when the gate fails (exit 1).
 
@@ -28,6 +30,7 @@ the repository.
 import json
 import os
 import re
+import struct
 import subprocess
 import sys
 
@@ -108,12 +111,39 @@ def check_overlay(root, build, errors):
     return len(commands)
 
 
-def cstrings(binary):
-    text = subprocess.run(['otool', '-v', '-X', '-s', '__TEXT', '__cstring', binary], check=True,
-                          capture_output=True, text=True, errors='replace').stdout
-    for line in text.splitlines():
-        parts = line.split('\t', 1)
-        yield parts[1] if len(parts) == 2 else line
+MH_MAGIC_64 = 0xfeedfacf
+LC_SEGMENT_64 = 0x19
+# S_ZEROFILL, S_GB_ZEROFILL, S_THREAD_LOCAL_ZEROFILL: no bytes in the file
+ZEROFILL = {0x01, 0x0c, 0x12}
+# a printable run of 3 or more bytes, as strings -a -n 3 finds it
+RUN = re.compile(rb'[\t\x20-\x7e]{3,}')
+
+
+def strings(binary, errors):
+    """(segment, section, run) for the printable runs in the contents of every
+    section of a 64-bit Mach-O file: __cstring holds only the string literals,
+    while a const char x[][16] lies in __TEXT,__const and a char x[] = "..." in
+    __DATA,__data. Every other section is read too, code included."""
+    with open(binary, 'rb') as f:
+        data = f.read()
+    if len(data) < 32 or struct.unpack_from('<I', data)[0] != MH_MAGIC_64:
+        errors.append('%s is not a 64-bit Mach-O file' % binary)
+        return
+    ncmds = struct.unpack_from('<I', data, 16)[0]
+    at = 32  # the load commands follow the mach_header_64
+    for _ in range(ncmds):
+        cmd, cmdsize = struct.unpack_from('<II', data, at)
+        if cmd == LC_SEGMENT_64:
+            nsects = struct.unpack_from('<I', data, at + 64)[0]
+            for i in range(nsects):
+                s = at + 72 + 80 * i  # a section_64 after the segment_command_64
+                sect, seg = (n.rstrip(b'\0').decode() for n in struct.unpack_from('<16s16s', data, s))
+                _, size, offset, _, _, _, flags = struct.unpack_from('<QQIIIII', data, s + 32)
+                if flags & 0xff in ZEROFILL or offset == 0:
+                    continue
+                for m in RUN.finditer(data, offset, offset + size):
+                    yield seg, sect, m.group().decode('ascii')
+        at += cmdsize
 
 
 def check_names(root, build, binaries, errors):
@@ -122,12 +152,13 @@ def check_names(root, build, binaries, errors):
         allowed = {l.rstrip('\n') for l in f if l.strip() and not l.startswith('#')}
     prefixes = sorted({os.path.realpath(root), root, os.path.realpath(build), build}, key=len, reverse=True)
     for binary in binaries:
-        for s in cstrings(binary):
+        for seg, sect, s in strings(binary, errors):
             stripped = s
             for p in prefixes:
                 stripped = stripped.replace(p, '')
             if NAMES.search(stripped) and s not in allowed:
-                errors.append('%s: the string "%s" names a trademark (spec 10.2)' % (os.path.basename(binary), s))
+                errors.append('%s: the string "%s" in %s,%s names a trademark (spec 10.2)'
+                              % (os.path.basename(binary), s, seg, sect))
 
 
 def main():

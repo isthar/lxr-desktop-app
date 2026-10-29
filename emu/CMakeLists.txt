@@ -234,8 +234,9 @@ add_test(NAME M21_rejects COMMAND ${EMU_GATE} --extra Core/Inc/lcd.h --extra Cor
 set_tests_properties(M21_rejects PROPERTIES PASS_REGULAR_EXPRESSION
     "^licence gate: Core/Inc/lcd\\.h is neither GPL-3\\.0-only nor on the allow-list\nlicence gate: Core/Inc/main\\.h names SLA0044\nlicence gate: 2 errors\n$")
 # M21 passes with the name scan or the overlay check turned off: this one gives
-# each a case to reject, an object that names the maker and the product, and a
-# compile command without the overlay
+# each a case to reject, an object that names the maker and the product in string
+# literals, a table of char[16] and a char array, and a compile command without
+# the overlay
 add_library(emu_name_canary OBJECT tests/name_canary.c)
 target_link_libraries(emu_name_canary PRIVATE emu_test_options)
 add_test(NAME M21_negative COMMAND ${Python3_EXECUTABLE} "${EMU_DIR}/tests/licence_gate_neg.py"

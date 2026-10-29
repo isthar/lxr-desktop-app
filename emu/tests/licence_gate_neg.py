@@ -4,8 +4,10 @@ they must (stage 1b spec 10.1, 10.2, 12.1). M21 passes on a clean build with
 either check turned off, so this test gives each one a case to reject, through
 licence_gate.py's own functions:
 
-1. check_names() on the object of emu/tests/name_canary.c, whose C strings
-   name Erica Synths and the LXR-02, and a clean one: exactly those two errors.
+1. check_names() on the object of emu/tests/name_canary.c, whose strings name
+   Erica Synths and the LXR-02 in __TEXT,__cstring, Sonic Potions in a table of
+   char[16] (__TEXT,__const) and the LXR in a char array (__DATA,__data), next
+   to clean ones: exactly those four errors, in any order.
 2. check_overlay() on a compile_commands.json of two commands, one with the
    main.h overlay and one without: exactly one error, for the second.
 
@@ -32,8 +34,11 @@ import licence_gate  # noqa: E402
 def names(root, build, canary):
     errors = []
     licence_gate.check_names(root, build, [canary], errors)
-    want = ['%s: the string "%s" names a trademark (spec 10.2)' % (os.path.basename(canary), s)
-            for s in ('Erica Synths', 'LXR-02')]
+    want = ['%s: the string "%s" in %s names a trademark (spec 10.2)' % (os.path.basename(canary), s, where)
+            for s, where in (('Erica Synths', '__TEXT,__cstring'), ('LXR-02', '__TEXT,__cstring'),
+                             ('Sonic Potions', '__TEXT,__const'), ('lxr drum kit', '__DATA,__data'))]
+    errors.sort()
+    want.sort()
     return [] if errors == want else ['the name scan gave %r, not %r' % (errors, want)]
 
 
