@@ -13,7 +13,7 @@ Licensed under the GNU General Public License version 3, with the additional
 permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
 the repository.
 """
-import argparse, hashlib, json, os, re, shutil, struct, subprocess, sys, time, wave
+import argparse, array, hashlib, json, math, os, re, shutil, struct, subprocess, sys, time, wave
 
 CASES = {}
 def case(fn):
@@ -396,6 +396,166 @@ def M17_out_errors(t):
     finally:
         os.chmod(ro, 0o755)
     no_copies_left()
+
+# voice 1 on steps 1, 5, 9 and 13, then START at 500 ms: sound for renders with --no-start
+STEPS = '0ms press voice1\n+100ms press step1\n+100ms press step5\n+100ms press step9\n+100ms press step13\n' \
+        '+100ms press start\n'
+
+def samples(path):
+    """(channels, the int16 samples, interleaved)"""
+    ch, _, _, _, data = wav_info(path)
+    a = array.array('h')
+    a.frombytes(data)
+    if sys.byteorder != 'little':
+        a.byteswap()
+    return ch, a
+
+def dbfs(path, chans, t0, t1):
+    """RMS level of the channels chans over [t0, t1) seconds; -inf for digital silence"""
+    ch, a = samples(path)
+    f0, f1 = int(t0 * 44140.625), int(t1 * 44140.625)
+    acc, n = 0, 0
+    for f in range(f0, f1):
+        for c in chans:
+            v = a[f * ch + c]
+            acc += v * v
+            n += 1
+    return float('-inf') if acc == 0 else 10 * math.log10(acc / n / 32768.0 ** 2)
+
+def log_lines(path, pattern):
+    with open(path) as f:
+        lines = f.read().splitlines()
+    for x in lines:
+        check(re.match(pattern, x), '%s: the line %r does not match %s' % (path, x, pattern))
+        c, ms = x.split()[:2]
+        u = int(c) // 216
+        check(ms == '%d.%03d' % (u // 1000, u % 1000), '%s: %r: MS is not floor(cycles/216)/1000' % (path, x))
+    return lines
+
+MIDI_LINE = r'^\d+ \d+\.\d{3} (DIN [0-9A-F]{2}|USB( [0-9A-F]{8})+)$'
+
+@case
+def M17_script_errors(t):
+    seed = t.seed()
+    bad = ['12xs mark a', '100ms mark a\n50ms mark b', '0ms flip 3', '0ms press 41', '0ms push 30', '0ms knob 5 +1',
+           '0ms fader 1 1.5', '0ms din 9G', '0ms usb F0 01 F7', '0ms usb 30 40', '0ms usb-clock 255 200',
+           '0ms reset maybe', '0ms card sideways', '0ms jacks L3', '0ms mark', '0ms mark a b']
+    for text in bad:
+        s = t.script('# a comment line\n' + text + '\n')
+        line = 1 + text.count('\n') + 1
+        p = t.run(['--card', seed, '--out', t.path('o.wav'), '--events', s], code=1)
+        lines = p.stderr.splitlines()
+        check(len(lines) == 1 and lines[0].startswith('lichomat-render: %s:%d: ' % (s, line)),
+              '%r: stderr does not name %s:%d: %r' % (text, s, line, p.stderr))
+    missing = t.path('missing.txt')
+    p = t.run(['--card', seed, '--out', t.path('o.wav'), '--events', missing], code=1)
+    check(p.stderr.startswith('lichomat-render: %s: ' % missing), 'a missing script: %r' % p.stderr)
+    # the good forms of the same events parse
+    good = t.script('0ms mark a # comment\n+1ms press step16 60\n1.5ms push 40\n441f knob 4 -3\n'
+                    '10ms fader 6 0.25\n\t10ms din 90 30 64\n10ms usb 90 30 64 C0 01 F8 F2 00 01\n'
+                    '11ms usb-clock 255 60\n12ms usb-clock off\n12ms jacks L1,R2\n0.02s mark b\n')
+    t.render(seed, ['--seconds', '0.1', '--events', good])
+    no_copies_left()
+
+@case
+def M17_events_din(t):
+    seed = t.seed()
+    log = t.path('din.log')
+    s, wav, _ = t.render(seed, ['--no-start', '--seconds', '2', '--midi-log', log, '--events',
+                                t.script('100ms din 90 30 64\n200ms din-clock 120\n1200ms din-clock off\n')])
+    check(s['counters']['dinIn'] == 51, 'dinIn is %d, not 51 (3 + 48 clocks)' % s['counters']['dinIn'])
+    check(dbfs(wav, (0, 1), 0, 0.1) == float('-inf'), 'out 1 is not silent before the note')
+    level = dbfs(wav, (0, 1), 0.1, 0.4)
+    check(level > -60, 'out 1 is at %.1f dBFS after the note' % level)
+    lines = log_lines(log, MIDI_LINE)
+    f8 = [int(x.split()[0]) for x in lines if x.endswith(' DIN F8')]
+    check(95 <= len(f8) <= 97, '%d DIN F8 lines, not 96 +- 1' % len(f8))
+    # The note comes back out on DIN (seven Note Ons and Offs), and an F8 that starts
+    # one byte time (69,120 cycles) after another DIN byte waited behind it on the
+    # wire: its gaps measure the wire, not the clock, and are left out.
+    din = [int(x.split()[0]) for x in lines if ' DIN ' in x]
+    queued = set(b for a, b in zip(din, din[1:]) if b - a == 69120)
+    gaps = [b - a for a, b in zip(f8, f8[1:]) if a not in queued and b not in queued]
+    check(len(gaps) >= len(f8) - 3, 'only %d of %d DIN F8 gaps are free of the wire' % (len(gaps), len(f8) - 1))
+    check(all(abs(g - 4500000) <= 54000 for g in gaps), 'DIN F8 gaps %r' % sorted(set(gaps))[:8])
+
+@case
+def M17_events_usb(t):
+    seed = t.seed()
+    for clock, want in (('200ms usb-clock 240 50', 21), ('200ms usb-clock 240', 97)):
+        log = t.path('usb%d.log' % want)
+        s, _, _ = t.render(seed, ['--no-start', '--seconds', '2', '--midi-log', log, '--events',
+                                  t.script('100ms usb 90 30 64\n%s\n1200ms usb-clock off\n' % clock)])
+        check(s['counters']['usbIn'] == want, '%s: usbIn is %d, not %d' % (clock, s['counters']['usbIn'], want))
+        log_lines(log, MIDI_LINE)
+
+@case
+def M17_events_jacks(t):
+    seed = t.seed()
+    pulses = ''.join('%dms jack-pulse\n' % (100 + 125 * j) for j in range(16))
+    runs = (('0ms reset off\n100ms jack-clock 120 4\n2s reset on\n', 'clock'),
+            ('0ms reset off\n2s reset on\n', 'none'),
+            ('0ms reset off\n' + pulses + '2s reset on\n', 'pulses'))
+    for text, name in runs:
+        log = t.path('%s.log' % name)
+        t.render(seed, ['--bpm', 'ext', '--no-start', '--seconds', '3', '--clock-log', log, '--events', t.script(text)])
+        lines = log_lines(log, r'^\d+ \d+\.\d{3} [01]$')
+        levels = [x.split()[2] for x in lines]
+        check(all(a != b for a, b in zip(levels, levels[1:])), '%s: the levels do not alternate' % name)
+        rising = [int(x.split()[0]) for x in lines if x.endswith(' 1')]
+        early = [c for c in rising if 100 * 216000 <= c < 2000 * 216000]
+        late = [c for c in rising if c >= 2200 * 216000]
+        if name == 'clock':
+            check(early and not late, 'clock: %d rising edges in [100 ms, 2 s), %d after 2.2 s' % (len(early), len(late)))
+        elif name == 'none':
+            check(not rising, 'no clock in: %d rising edges' % len(rising))
+        else:
+            check(rising, 'pulses: no rising edge')
+
+@case
+def M17_events_panel(t):
+    seed = t.seed()
+    log = t.path('panel.log')
+    text = ('0ms mark boot\n100ms push\n300ms mark edit\n400ms push\n500ms encoder +1\n600ms knob 1 +20\n'
+            '700ms fader 1 0.5\n800ms press voice1\n1000ms press step1\n1200ms mark step\n1300ms jacks none\n'
+            '1400ms card out\n1600ms card in\n1800ms mark end\n')
+    s, _, _ = t.render(seed, ['--no-start', '--seconds', '2', '--panel-log', log, '--events', t.script(text)])
+    lines = log_lines(log, r'^\d+ \d+\.\d{3} \S+ ".*" ".*" (\d,\d+|-) [0-9A-F]{11}$')
+    names = [x.split()[2] for x in lines]
+    check(names == ['boot', 'edit', 'step', 'end'], 'the marks are %r' % names)
+    for x, ms in zip(lines, (0, 300, 1200, 1800)):
+        late = int(x.split()[0]) - ms * 216000
+        check(0 <= late < 54000 + frames_to_cycles(64), '%r: %d cycles after its time' % (x, late))
+    rows = [re.findall(r'"(?:[^"\\]|\\x[0-9A-F]{2})*"', x)[:2] for x in lines]
+    check(rows[0] != rows[1], 'the edit page shows the rows of the boot: %r' % rows[0])
+    leds = int(lines[2].split()[-1], 16)
+    check(leds >> 39 & 1, 'LED 39 (step 1) is not lit at the mark step: %011X' % leds)
+    check([d['event'] for d in s['direct']] == ['mark'] * 4, 'the summary lists %r' % s['direct'])
+    # each line is at the boundary where its direct event ran, and that is not before its due time
+    for x, d, ms in zip(lines, s['direct'], (0, 300, 1200, 1800)):
+        check(d['due'] == s['t0'] + ms * 216000 and d['at'] >= d['due'] and int(x.split()[0]) == d['at'] - s['t0'],
+              '%r does not match the summary entry %r' % (x, d))
+
+@case
+def M17_stereo(t):
+    seed = t.seed()
+    script = t.script(STEPS + '1500ms jacks L2,R2\n')
+    args = ['--no-start', '--seconds', '3', '--events', script]
+    _, four, _ = t.render(seed, args)
+    ch, a = samples(four)
+    check(ch == 4, 'the default WAV has %d channels' % ch)
+    before, after = dbfs(four, (0, 1), 0.5, 1.5), dbfs(four, (2, 3), 1.6, 3.0)
+    check(before > -60 and after > -60, 'out 1 before 1.5 s: %.1f dBFS, out 2 after it: %.1f dBFS' % (before, after))
+    check(dbfs(four, (2, 3), 0.5, 1.5) < before - 20, 'out 2 is not quieter than out 1 before 1.5 s')
+    for mode in ('out1', 'out2', 'sum'):
+        _, w, _ = t.render(seed, args + ['--stereo', mode])
+        c2, b = samples(w)
+        check(c2 == 2 and len(b) * 2 == len(a), '--stereo %s: %d channels, %d samples' % (mode, c2, len(b)))
+        for f in range(len(b) // 2):
+            l1, r1, l2, r2 = a[4 * f:4 * f + 4]
+            want = {'out1': (l1, r1), 'out2': (l2, r2), 'sum': ((l1 + l2) >> 1, (r1 + r2) >> 1)}[mode]
+            if (b[2 * f], b[2 * f + 1]) != want:
+                raise Fail('--stereo %s: frame %d is %r, not %r' % (mode, f, (b[2 * f], b[2 * f + 1]), want))
 
 if __name__ == '__main__':
     main()

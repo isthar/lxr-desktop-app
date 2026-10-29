@@ -26,6 +26,11 @@ void rfw_seedCard(void *res);
 /** preset_morphBusy() into *(uint8_t *)out */
 void rfw_morphBusy(void *out);
 
+/** --bpm (stage 1b plan P3): the menu's edit of PAR_BPM to *(uint8_t *)value,
+ * 2-255 a tempo, 0 EXT, 1 MID (CortexParser.c FRONT_SET_BPM). Task R2.5's edit
+ * path for every parameter takes its place. */
+void rfw_bpm(void *value);
+
 /** what plays (the summary's selected, spec 5.5) */
 typedef struct render_selected
 {

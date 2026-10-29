@@ -15,6 +15,8 @@
 #include <stdio.h>
 
 #include "main.h"
+#include "Parameters.h"
+#include "menu/menu.h"
 #include "Preset/PresetManager.h"
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Sequencer/seq_core.h"
@@ -33,6 +35,14 @@ void rfw_seedCard(void *res)
 void rfw_morphBusy(void *out)
 {
 	*(uint8_t *)out = preset_morphBusy();
+}
+
+void rfw_bpm(void *value)
+{
+	/* the menu's edit path for PAR_BPM (menu.c menu_encoderChangeParameter()): its
+	 * dtype is DTYPE_0B255, so the clamp keeps every value */
+	activeParameters[PAR_BPM] = *(const uint8_t *)value;
+	menu_parseGlobalParam(PAR_BPM, activeParameters[PAR_BPM]);
 }
 
 void rfw_selected(void *out)

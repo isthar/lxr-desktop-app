@@ -77,9 +77,46 @@ int render_outOpen(render_out_t *o, const render_opts_t *opts, char *err, size_t
 	o->stereo = opts->stereo;
 	if (opts->summary && checkWritable(opts->summary, err, n) != 0)
 		return 5;
+	const struct
+	{
+		const char *path;
+		FILE **f;
+		const char **keep;
+	} logs[] = {
+		{ opts->midiLog, &o->midi, &o->midiPath },
+		{ opts->clockLog, &o->clock, &o->clockPath },
+		{ opts->panelLog, &o->panel, &o->panelPath },
+	};
+	for (size_t i = 0; i < sizeof logs / sizeof logs[0]; i++)
+	{
+		if (!logs[i].path)
+			continue;
+		*logs[i].f = fopen(logs[i].path, "w");
+		*logs[i].keep = logs[i].path;
+		if (!*logs[i].f)
+		{
+			const int e = errno;
+			for (size_t j = 0; j < i; j++)
+				if (*logs[j].f)
+				{
+					fclose(*logs[j].f);
+					*logs[j].f = NULL;
+				}
+			return outFail(err, n, logs[i].path, e);
+		}
+	}
 	o->wav = fopen(opts->out, "wb");
 	if (!o->wav)
-		return outFail(err, n, opts->out, errno);
+	{
+		const int e = errno;
+		for (size_t j = 0; j < sizeof logs / sizeof logs[0]; j++)
+			if (*logs[j].f)
+			{
+				fclose(*logs[j].f);
+				*logs[j].f = NULL;
+			}
+		return outFail(err, n, opts->out, e);
+	}
 	uint8_t h[44];
 	wavHeader(h, channels(o), opts->wavRate, 0);
 	if (fwrite(h, 1, sizeof h, o->wav) != sizeof h)
@@ -141,6 +178,75 @@ void render_outAudio(render_out_t *o, const int16_t *out1, const int16_t *out2)
 	o->frames += EMU_BLOCK_FRAMES;
 }
 
+/* "CYCLES MS" with MS = floor(c / 216) / 1000 in integer arithmetic (plan P5) */
+static void stamp(FILE *f, uint64_t t)
+{
+	const unsigned long long us = (unsigned long long)(t / 216u);
+	fprintf(f, "%llu %llu.%03llu", (unsigned long long)t, us / 1000u, us % 1000u);
+}
+
+void render_outDin(render_out_t *o, uint64_t t, uint8_t byte)
+{
+	if (!o->midi)
+		return;
+	stamp(o->midi, t);
+	fprintf(o->midi, " DIN %02X\n", byte);
+	noteError(o, o->midi, o->midiPath);
+}
+
+void render_outUsb(render_out_t *o, uint64_t t, const uint8_t *data, unsigned length)
+{
+	if (!o->midi)
+		return;
+	stamp(o->midi, t);
+	fputs(" USB", o->midi);
+	for (unsigned i = 0; i + 4u <= length; i += 4u)
+		fprintf(o->midi, " %02X%02X%02X%02X", data[i], data[i + 1], data[i + 2], data[i + 3]);
+	fputc('\n', o->midi);
+	noteError(o, o->midi, o->midiPath);
+}
+
+void render_outClock(render_out_t *o, uint64_t t, int level)
+{
+	if (!o->clock)
+		return;
+	stamp(o->clock, t);
+	fprintf(o->clock, " %d\n", level ? 1 : 0);
+	noteError(o, o->clock, o->clockPath);
+}
+
+static void lcdRow(FILE *f, const uint8_t row[16])
+{
+	fputc('"', f);
+	for (unsigned i = 0; i < 16; i++)
+	{
+		const uint8_t ch = row[i];
+		if (ch < 0x20 || ch > 0x7E || ch == '"' || ch == '\\')
+			fprintf(f, "\\x%02X", ch);
+		else
+			fputc(ch, f);
+	}
+	fputc('"', f);
+}
+
+void render_outMark(render_out_t *o, uint64_t t, const char *name, const emu_lcdSnapshot_t *lcd, uint64_t leds)
+{
+	if (!o->panel)
+		return;
+	FILE *f = o->panel;
+	stamp(f, t);
+	fprintf(f, " %s ", name);
+	lcdRow(f, lcd->chars[0]);
+	fputc(' ', f);
+	lcdRow(f, lcd->chars[1]);
+	if (lcd->cursorOn || lcd->blinkOn)
+		fprintf(f, " %u,%u", lcd->cursorRow, lcd->cursorCol);
+	else
+		fputs(" -", f);
+	fprintf(f, " %011llX\n", (unsigned long long)(leds & ((1ull << EMU_NUM_LEDS) - 1u)));
+	noteError(o, f, o->panelPath);
+}
+
 static int closeOne(render_out_t *o, FILE **f, const char *path)
 {
 	if (!*f)
@@ -165,6 +271,9 @@ int render_outClose(render_out_t *o, unsigned wavRate, char *err, size_t n)
 			noteError(o, o->wav, o->wavPath);
 	}
 	closeOne(o, &o->wav, o->wavPath);
+	closeOne(o, &o->midi, o->midiPath);
+	closeOne(o, &o->clock, o->clockPath);
+	closeOne(o, &o->panel, o->panelPath);
 	if (o->writeError)
 		return outFail(err, n, o->errorPath, o->writeError);
 	return 0;

@@ -28,8 +28,8 @@
 
 typedef struct render_out
 {
-	FILE *wav;
-	const char *wavPath;
+	FILE *wav, *midi, *clock, *panel;
+	const char *wavPath, *midiPath, *clockPath, *panelPath;
 	int stereo;					/**< RENDER_STEREO_* */
 	uint64_t frames;			/**< frames written */
 	int writeError;				/**< 0, or the errno of the first failed write */
@@ -69,6 +69,14 @@ int render_outOpen(render_out_t *o, const render_opts_t *opts, char *err, size_t
 /** one block of 64 frames, out 1 and out 2 interleaved stereo, in the layout of
  * --stereo */
 void render_outAudio(render_out_t *o, const int16_t *out1, const int16_t *out2);
+
+/** The logs (spec 5.5, plan P5); t is cycles from t0. Each does nothing when its
+ * log is not given. */
+void render_outDin(render_out_t *o, uint64_t t, uint8_t byte);
+void render_outUsb(render_out_t *o, uint64_t t, const uint8_t *data, unsigned length);
+void render_outClock(render_out_t *o, uint64_t t, int level);
+/** a panel-log line: the LCD and emu_ledSnapshot()'s mask */
+void render_outMark(render_out_t *o, uint64_t t, const char *name, const emu_lcdSnapshot_t *lcd, uint64_t leds);
 
 /** Write the WAV header's sizes and close every output. Returns 0, or 5 with
  * "FILE: strerror" in err after a failed write or close. */
