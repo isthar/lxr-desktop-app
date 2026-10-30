@@ -123,8 +123,8 @@ The scripts in `tools/agent/` drive the work through Claude Code workflows:
 - **`usage_estimate.py`** estimates the share of the weekly usage limit spent so far:
   `python3 -I tools/agent/usage_estimate.py [--reading=<UTC ISO>@<percent>]`. It calibrates the
   weighted cost of the local transcripts by the last two readings the owner gave (add new ones to
-  its READINGS list). Since 2026-10-28 the owner allows work up to 50% a week, so check it before
-  each new agent.
+  its READINGS list). Since 2026-10-30 the owner allows work up to 65% of this week (they need about 20% on Monday);
+  check it before and after each agent.
 - **`release-verify.js`** checks the owner's documents of stage 1, `docs/lichomat/hardware-checklist.md`
   and `docs/lichomat/release-notes-v0.1.md`, as a Workflow script: five read-only lenses (numbers,
   procedures, coverage, notes, consistency), one skeptic per lens, one documents-only fixer and a

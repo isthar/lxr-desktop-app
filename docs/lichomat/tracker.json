@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 00:01",
-    "phase": "Etap 2: plan v0.2 gotowy; przerwa (limit tygodniowy)",
-    "focus": "Plan v0.2 gotowy (V1–V11); wykonanie po resecie limitu.",
+    "updated": "2026-10-30 06:17",
+    "phase": "Etap 2: wykonanie planu v0.2",
+    "focus": "v0.2: V1–V2 (pliki i rdzeń polirytmii).",
     "branch": "timing-core",
-    "head": "478c8b9",
-    "next": "Ja: wykonanie planu v0.2 od V1, po resecie limitu (pon. 2.11, 22:00) albo gdy pozwolisz. Ty: testy v0.1 z odczytem CPU (Q6, H12).",
-    "updated_at": "2026-10-30T00:01:00+01:00",
-    "now": "Przerwa od 00:01: limit 50% tygodniowego zużycia osiągnięty. Nic nie działa. Przy wznowieniu: zadania V1–V2 planu v0.2."
+    "head": "6e4073d",
+    "next": "Ja: V3–V4 (opóźnienie i humanize), potem przegląd V1–V4. Przerwa i podsumowanie ok. 10:18 albo przy 65% zużycia.",
+    "updated_at": "2026-10-30T06:17:00+01:00",
+    "now": "Agent robi V1 i V2 planu v0.2 (od 06:18)."
   },
   "epics": [
     {
@@ -2373,6 +2373,11 @@
       "n": 315,
       "at": "2026-10-30 00:01",
       "text": "Plan v0.2 gotowy: 2822 linie, zadania V1–V11. Agent sprawdził kod planu na prototypie w kopii poza repo: 79 testów na hoście i 139 w emulatorze przechodzi, pamięć DTCM+RAM 393 864 B (budżet 395 892 B). Rotacja: SHIFT + krok 1 i SHIFT + krok 2, bo SHIFT + bar± ustawia już długość ścieżki. Przerwa: estymator pokazuje 51,9% tygodniowego zużycia, czyli ponad limit 50%. Planowanie z prototypem kosztowało ok. 5 punktów; to mój błąd w zleceniu."
+    },
+    {
+      "n": 316,
+      "at": "2026-10-30 06:17",
+      "text": "Wznowione o 06:16. Twój odczyt: 49% (dopisany do estymatora); nowy limit tego tygodnia: 65%. Start wykonania planu v0.2: jeden agent robi V1 (ustawienia ścieżek, blok w pliku .pat) i V2 (rdzeń: siatka każdej ścieżki we własnym tempie), z testami najpierw; po każdym zadaniu push gałęzi v0.2 na fork."
     }
   ]
 }
