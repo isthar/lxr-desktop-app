@@ -1,4 +1,4 @@
-# LICHOMAT 0.1 and 0.2: hardware checklist (H1–H13, U1–U14, X4, optional X1–X3)
+# LICHOMAT 0.1, 0.2 and 0.3: hardware checklist (H1–H13, U1–U19, X4, optional X1–X3)
 
 These are the checks of spec §13.2, written out as procedures for the LXR-02. Only the owner can run
 them, on the real device; nothing here is ever marked as passed by an agent. Record every result in
@@ -24,12 +24,20 @@ track settings at the end of every pattern file (`.PAT` and `tmp.pat`); 1.7 and 
 Back up the card before you install 0.2, too. U8 compares sounds with 0.1: record them on 0.1
 before you install 0.2.
 
+**LICHOMAT 0.3.** For 0.3 install `LXR_V2_LICHOMAT_0.3.img` (its SHA-256 goes into the run sheet
+when CI builds it); H1 then shows `v0.3 unofficial`. Run U15–U19 on it (plan
+`docs/superpowers/plans/2026-10-30-v0.3-performance-acid.md`); 0.3 keeps everything of 0.2, so the
+0.2 checks need not be repeated. 0.3 writes a 14-byte block with the mute scenes after the name in
+each project's `prj.nfo`, keeps the slide flag in bit 7 of a step's probability byte and the slide
+time in three kit bytes that 1.7 does not use; 1.7 and 0.2 ignore all three. Back up the card
+before you install 0.3, too.
+
 **What you need**
 
 - The LXR-02, its SD card and a card reader.
-- The update files of the [run sheet](#run-sheet): `LXR_V2_LICHOMAT_0.1.img` and
-  `LXR_V2_LICHOMAT_0.2.img` (LICHOMAT), and `LXR_V2_V1.7.img` (official 1.7, for H13, U12, U14 and
-  for comparisons).
+- The update files of the [run sheet](#run-sheet): `LXR_V2_LICHOMAT_0.1.img`,
+  `LXR_V2_LICHOMAT_0.2.img` and `LXR_V2_LICHOMAT_0.3.img` (LICHOMAT), and `LXR_V2_V1.7.img`
+  (official 1.7, for H13, U12, U14, U16, U18 and for comparisons).
 - A computer with a DAW that can record the LXR's audio output and send and receive MIDI over USB
   (and over DIN through a MIDI interface).
 - A MIDI monitor that shows time stamps, for example MIDI Monitor on macOS. Watch the LXR's MIDI
@@ -100,6 +108,21 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
   3:3 1:4 2:4 3:4 4:4 Fil !Fl 1st !1s Pre !Pr`.
 - Rotation (0.2): SHIFT + step 1 moves every step of the selected voice in the shown pattern one
   step earlier, SHIFT + step 2 one step later, within the track's length.
+- The performance mode (0.3): press the second mode button without SHIFT (the first mode button
+  goes back to voice mode). There the voice buttons mute and unmute the voices, steps 1–7 held roll
+  voices 1–7, **step 8 held is the fill mode**, **steps 9–16 recall mute scenes 1–8**, and holding
+  COPY while pressing step 9–16 stores the current mutes as scene 1–8. The display shows the
+  performance page: `rol` (the roll rate) on its first screen, `scn` on its second screen, after
+  `shu`.
+- Roll rates (0.3, `rol`), from slow to fast: `One` (one hit per press), `1/1` (a hit per bar),
+  `1/2`, `1/3`, `1/4`, `1/6`, `1/8`, `12`, `16`, `24`, `32`; `1/3`, `1/6`, `12` and `24` are
+  triplets. A roll runs on its track's own step, so with `tmp` set it follows that tempo.
+- `scn` (0.3, a global setting): `bar`, a recalled scene applies at the next bar of the master
+  track (every 16 master steps), or `stp`, at the next master step. When stopped a scene applies
+  at once.
+- Slide (0.3): the step page has `sld` (`off`/`on`) after `prb`, before its second screen. Drum 1–3
+  (voices 1–3) have `slt`, the slide time (0–127, × 4 ms), on the second screen of their oscillator
+  page (select button 1). `slt` belongs to the kit.
 
 **Measuring times in a recording.** Record the LXR's main output at 48 kHz (H7 step 6 at 44.1
 kHz). Find a hit's onset by zooming in on the waveform (or with the DAW's transient detection), and
@@ -822,8 +845,8 @@ spare, all tracks 16 steps long; each bar is one loop of the tracks. Count the b
 - 2: step 1 in bars 3 and 7 only; step 3 in the other bars.
 - 3: step 1 only in the first bar after START and in the first bar after the pattern change; step 3
   in every bar but those.
-- 4: with `Fil` step 1 never plays (fill mode comes in 0.4) and step 3 plays in every bar; with
-  `!Fl` step 1 plays in every bar and step 3 in none.
+- 4: with `Fil` step 1 never plays (0.2 has no fill mode; 0.3's is U15) and step 3 plays in every
+  bar; with `!Fl` step 1 plays in every bar and step 3 in none.
 - 5: under 1.7 steps 1 and 3 play in every bar (1.7 plays probabilities above 100 like 100). Back on
   0.2, `prb` shows `1:2` and `!Pr`, and the steps alternate as in 1.
 
@@ -879,6 +902,137 @@ spare, all tracks 16 steps long; each bar is one loop of the tracks. Count the b
   Back on 0.2 voice 2 shows ` x1` and 0 everywhere: 1.7's save does not keep the block.
 
 **Record:** what the track page showed after each load in 1–5, and how F played under 1.7.
+
+## U15: fill
+
+0.3's fill mode, step 8 held in the performance mode. Use a pattern you can spare, all tracks 16
+steps long.
+
+1. Internal sync, BPM 120, shuffle 0, voice mode. Voice 6 (closed hat) on steps 1, 5, 9 and 13 (it
+   marks the beats). Voice 1 (kick) on steps 1 and 9; step 1 `prb` `Fil`, step 9 `prb` `!Fl`. Press
+   START and listen for 2 bars.
+2. Press the second mode button (the performance mode). Hold step 8 for about 2 bars, then release
+   it; listen for 2 more bars. Do it twice, once pressing step 8 just after a kick on step 9 and once
+   just before the bar's first step.
+3. Hold step 8, then hold SHIFT, release step 8, then release SHIFT. Listen for a bar. Do the same
+   with LOAD instead of SHIFT.
+4. Press the first mode button (voice mode), select voice 1 and press step 8, then press it again.
+
+**Expected:**
+- 1: step 1 never plays and step 9 plays in every bar.
+- 2: while step 8 is held its LED is lit, step 1 plays and step 9 is silent; after the release step
+  1 is silent and step 9 plays again. The change comes with the first step that has not started
+  yet: a press just before the bar's first step already makes that step 1 play. (A step shifted
+  earlier, with a negative shift or `dly`, is decided one step before its place.)
+- 3: both times the release of step 8 ends the fill, although SHIFT or LOAD is still held.
+- 4: in voice mode step 8 turns voice 1's step 8 on and off as before; there is no fill.
+
+**Record:** for 2, how many steps after the press and after the release the sound changed, and
+whether step 8's LED followed the fill; for 3, whether the fill ended.
+
+## U16: mute scenes
+
+0.3's scenes on steps 9–16 of the performance mode. Use a project you can spare (slot P), with
+its patterns 16 steps long.
+
+1. Internal sync, BPM 120, voice mode. In a pattern of P: voice 1 (kick) on steps 1, 5, 9 and 13;
+   voice 4 (snare) on steps 5 and 13; voice 6 (closed hat) on all 16 steps. Save the pattern.
+2. Press the second mode button (the performance mode). On the performance page's second screen
+   set `scn` to `bar`.
+3. Store three scenes: press voice button 6 (voice 6 muted), hold COPY, press step 9, release COPY;
+   press voice button 6 again. Press voice buttons 1 and 4, hold COPY, press step 10, release COPY;
+   press voice buttons 1 and 4 again. Hold COPY, press step 11 (nothing muted), release COPY.
+4. Press START. In the middle of a bar press step 9; two bars later, in the middle of a bar, step
+   10; then step 11. Record and watch the step and voice LEDs.
+5. Set `scn` to `stp` and do 4 again.
+6. Press STOP. Press step 9, then step 11. Press step 12 (an empty scene).
+7. Save the project (SAVE, `Project`, slot P). Switch off and on, and load P if the LXR does not
+   load it at start-up. In the performance mode press START, then step 10.
+8. Install `LXR_V2_V1.7.img` (H13 step 1), load P and play it; save the project there (slot P).
+   Install `LXR_V2_LICHOMAT_0.3.img` again, load P, enter the performance mode and press step 9.
+
+**Expected:**
+- 4: each recall applies at the first step of the next bar, not at the press: the step LED of the
+  recalled scene blinks until then, then the voice LEDs show the scene. Scene 1: the hats stop;
+  scene 2: kick and snare stop, the hats come back; scene 3: all three play.
+- 5: each recall applies at the next step, within 125 ms.
+- 6: when stopped each recall applies at once (the voice LEDs change with the press); step 12
+  changes nothing.
+- 7: the scenes are back after the restart: step 10 mutes kick and snare at the next bar.
+- 8: under 1.7, P loads without an error and plays as before. Back on 0.3 after 1.7's save, step 9
+  changes nothing: 1.7's project save does not keep the scenes.
+
+**Record:** for 4 and 5, when each change was heard (bar or step) and whether the LEDs blinked and
+then showed the scene; for 6–8, what happened.
+
+## U17: rolls
+
+0.3's roll rates. Use a pattern you can spare, all tracks 16 steps long.
+
+1. Internal sync, BPM 120, shuffle 0, voice mode. Voice 1 (kick) on steps 1, 5, 9 and 13 (the
+   reference). Press the second mode button (the performance mode) and set `rol` to `32`.
+2. Press START. Hold step 6 (voice 6, the closed hat) for about a bar and record.
+3. The same with `rol` at `24`, `12` and `16`.
+4. Voice 6's track page (voice mode, select voice 6, SHIFT + the second mode button, the second
+   screen): `tmp` `3/4`. Back in the performance mode, `rol` `12`: hold step 6 and record.
+5. `rol` `One`: press step 6 briefly three times.
+
+**Expected:**
+- 2 and 3: at `32` the hat hits are 62.5 ms apart, at `24` 83.3 ms, at `12` 166.7 ms and at `16`
+  125 ms (±1.5 ms in a recording); a roll's hits line up with the kick on the beats.
+- 4: at `3/4` the `12` roll hits are 222.2 ms apart (three in every four of the track's steps).
+- 5: one hit per press.
+
+**Record:** the smallest and largest interval of 8 roll hits at each rate in 2–4, and the hits per
+press in 5.
+
+## U18: slide
+
+0.3's slide on Drum 1–3. Use a pattern and a kit you can spare, all tracks 16 steps long.
+
+1. Internal sync, BPM 120, voice mode. Voice 1 (Drum 1) with a long, clearly pitched sound (a long
+   amplitude decay, little pitch envelope). Voice 1's MIDI note (MIX sub-page, second screen) at 0,
+   so that MIDI out sends the step notes. Voice 1 on steps 1, 5, 9 and 13 with step notes (`not` on
+   the step page): step 1 a low note, step 5 an octave higher, step 9 the low note, step 13 a fifth
+   above it.
+2. Steps 5 and 13: `sld` `on`. Voice 1's oscillator page, second screen: `slt` 15. Press START and
+   record 2 bars, with the MIDI monitor on DIN out.
+3. `slt` 127, record 2 bars; `slt` 0, record 2 bars. Then `slt` 15 again.
+4. Step 5: velocity (`vel`) 60. Record a bar with `sld` on step 5, then a bar with it `off`.
+5. Voice 4 (snare) on step 1 with `sld` `on`, then `off`: listen.
+6. Save the pattern and the kit. Install `LXR_V2_V1.7.img` (H13 step 1), load the kit and select
+   the pattern; play it with the MIDI monitor on. Save the kit there (the same slot). Install
+   `LXR_V2_LICHOMAT_0.3.img` again, load the kit and look at voice 1's `slt`.
+
+**Expected:**
+- 2: step 5 starts at step 1's pitch and glides up to its own note in about 60 ms; step 13 glides
+  from step 9's note up to its own; steps 1 and 9 start at their own notes. Every hit restarts the
+  envelopes as before. MIDI out sends each step's own note, one Note On per hit, as before.
+- 3: at `slt` 127 the glide takes about 0.5 s (508 ms), the whole time to the next hit; at 0 there
+  is no glide.
+- 4: step 5 has the same level with `sld` on and off; only the pitch glides.
+- 5: no difference: voices 4–7 ignore `sld`.
+- 6: under 1.7 the pattern plays without glides, every step at its own note, and MIDI out sends the
+  same notes as on 0.3. (In 1.7 a slide step with a probability plays at 100 %; this check gives
+  none.) Back on 0.3 voice 1 shows `slt` 15: the kit keeps it through 1.7's load and save.
+
+**Record:** the measured glide times in 2 and 3, whether the level changed in 4, and what 1.7
+played and sent in 6.
+
+## U19: version and kits
+
+1. Switch the LXR on with 0.3 installed and look at the start-up screen. Check the update file's
+   name on the card.
+2. Load each factory kit and each kit of your own, one after the other, and write down `slt` of
+   voices 1, 2 and 3 (their oscillator page, second screen).
+
+**Expected:**
+- 1: `LICHOMAT` and `v0.3 unofficial`; the file is `LXR_V2_LICHOMAT_0.3.img`.
+- 2: values from 0 to 127. A kit saved before 0.3 may hold values from older firmware there
+  (these bytes once held the voices' MIDI notes); they act only on slide steps, which only 0.3
+  makes.
+
+**Record:** the start-up screen, and `slt` of voices 1–3 for each kit.
 
 ## X4: USB MIDI out
 
@@ -987,6 +1141,7 @@ Update files under test (filled in when the files were built):
 | `LXR_V2_LICHOMAT_0.1.img` | `55091864fff78c641a681636f056449caa1fcb3cb68d09baa5cd3e9e6759a262` | `timing-core` at `3527cbc`, built by CI (`.github/workflows/build.yml`; later commits that change only documents build the same file) | the artifact `lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f` of CI run 40435442579 (300780 B) |
 | `LXR_V2_V1.7.img` | `cdb1ca371599149083bd0b61564d6864f031b599ccdcead2047a711e0b679db4` | `a43cd4f`, the official 1.7 sources | `build/official-1.7/src/build/release/` |
 | `LXR_V2_LICHOMAT_0.2.img` | filled in when CI builds it | branch `v0.2`, built by CI | the artifact `lichomat-firmware-<commit>` of that CI run |
+| `LXR_V2_LICHOMAT_0.3.img` | filled in when CI builds it | branch `v0.3`, built by CI | the artifact `lichomat-firmware-<commit>` of that CI run |
 
 The LICHOMAT file is the one CI builds, the file the release attaches (spec §14). Download it with
 `gh run download 40435442579 --repo isthar/lxr-desktop-app -n lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f`
@@ -994,8 +1149,8 @@ or from the run's page on GitHub (Actions); GitHub keeps the artifact until 2027
 run the workflow again. A local build in `build/release/` is a different file, `0f8621a3…`: the
 macOS toolchain links newlib's members in another order. Do not use it for these checks. The earlier
 file `9a7aff2a…` (CI run 40416804934) lacks the fixes of U3: do not test it any more.
-For 0.2 the same holds: test the file CI builds from branch `v0.2`, whose SHA-256 goes into its row
-above, not a local build.
+For 0.2 and 0.3 the same holds: test the file CI builds from branch `v0.2` or `v0.3`, whose SHA-256
+goes into its row above, not a local build.
 
 Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **Record**):
 
@@ -1028,6 +1183,11 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | U12 | | | |
 | U13 | | | |
 | U14 | | | |
+| U15 | | | |
+| U16 | | | |
+| U17 | | | |
+| U18 | | | |
+| U19 | | | |
 | X1 | | | |
 | X2 | | | |
 | X3 | | | |

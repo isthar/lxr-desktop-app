@@ -57,7 +57,7 @@ Oba wczytują wzorce zapisane przez v0.2 bez błędów: wszystkie ścieżki graj
 - **`A:B`:** krok gra w pętli A z każdych B pętli ścieżki. Pętla to jej własna długość w jej tempie, liczona od START i od zmiany wzorca: `1:2` gra w pętlach 1, 3, 5…, `3:4` w pętlach 3, 7…
 - **`1st`:** tylko w pierwszej pętli po START i po zmianie wzorca; **`!1s`:** we wszystkich poza nią.
 - **`Pre`:** gra, gdy zagrał ostatni krok z warunkiem na tej ścieżce; **`!Pr`:** gdy nie zagrał (jak na Elektronie). Stan ustawiają kroki z prawdopodobieństwem poniżej 100 i z warunkami `A:B`, `Fil`, `!Fl`, `1st`, `!1s`; `Pre`, `!Pr` i 100 go nie zmieniają. Po START i po zmianie wzorca stan to „nie zagrał".
-- **`Fil`, `!Fl`:** tryb fill przyjdzie w v0.4. W v0.2 `Fil` nigdy nie gra, a `!Fl` gra zawsze.
+- **`Fil`, `!Fl`:** tryb fill przyjdzie w v0.3. W v0.2 `Fil` nigdy nie gra, a `!Fl` gra zawsze.
 - Firmware 1.7 i v0.1 grają każde prawdopodobieństwo powyżej 100 jak 100, więc tam kroki z warunkami grają w każdej pętli.
 
 ### Rotacja ścieżki
@@ -105,7 +105,7 @@ Poprawki firmware z pracy nad emulatorem (F1–F12):
 - Ustawień ścieżek (`tmp hmt hmv dly`) nie da się zmieniać przez MIDI CC ani NRPN.
 - Po Song Position Pointer ścieżka w innym tempie niż `x1` biegnie dalej na swojej siatce od początku odtwarzania; jej krok, który trwa w miejscu skoku, nie gra.
 - Zmiana `tmp` działa od następnego kroku ścieżki, a nie od razu.
-- Tryb fill (`Fil`, `!Fl`) przyjdzie w v0.4.
+- Tryb fill (`Fil`, `!Fl`) przyjdzie w v0.3.
 - Ograniczenia v0.1 zostają, np. głos startuje na początku bloku audio (±1,45 ms).
 
 ## Pliki
