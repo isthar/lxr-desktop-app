@@ -39,6 +39,7 @@
 #include "ledHandler.h"
 #include "menu/menu.h"
 #include "Preset/PresetManager.h"
+#include "Soundengine/DSPAudio/DrumVoice.h"
 #include "Soundengine/DSPAudio/automationNode.h"
 #include "Soundengine/DSPAudio/random.h"
 #include "Soundengine/FxBus.h"
@@ -535,6 +536,61 @@ TEST(sequencer_slide_step_arms_the_drum_voice_before_its_note)
 	seq_setMainStep(0, 3, 0, 0);
 	*s0 = old0;
 	*s3 = old3;
+}
+
+/** the modes of Drum_setSlide() for voice 0 since slideCalls was 0, in order */
+static int slideModes0(uint8_t *out, int max)
+{
+	int n = 0;
+	for (int i = 0; i < slideCalls && i < 64; i++)
+		if (slideVoice[i] == 0 && n < max)
+			out[n++] = slideOn[i];
+	return n;
+}
+
+/* LICHOMAT v0.3 (review of P3): the later hits of a slide step let its glide go on; the
+ * first hit of the next step without the flag ends it */
+TEST(sequencer_slide_keeps_gliding_through_its_ratchets)
+{
+	reset();
+	seq_setMainStep(0, 0, 0, 1);
+	seq_setMainStep(0, 0, 1, 1);
+	seq_patternSet.seq_subStepPattern[0][0][0].prob = 100 | STEP_SLIDE_FLAG;
+	seq_patternSet.seq_stepTiming[0][0][0].flam = 1;	/* x2: hit 1 at 62.5 ms */
+	slideCalls = 0;
+	seq_setRunning(1);
+	run(200);					/* step 1 at 125 ms, step 2 at 250 ms */
+	seq_setRunning(0);
+	run(1);
+	uint8_t m[8];
+	ASSERT_EQ(slideModes0(m, 8), 3);
+	ASSERT_EQ(m[0], DRUM_SLIDE_ON);
+	ASSERT_EQ(m[1], DRUM_SLIDE_KEEP);
+	ASSERT_EQ(m[2], DRUM_SLIDE_OFF);
+}
+
+TEST(sequencer_slide_keeps_gliding_through_its_roll_hits)
+{
+	reset();
+	seq_setMainStep(0, 0, 1, 1);			/* step 1 slides, step 2 is off */
+	seq_patternSet.seq_subStepPattern[0][0][1].prob = 100 | STEP_SLIDE_FLAG;
+	seq_setRollRate(10);				/* 1/32: hits at 0 and 62.5 ms of each step */
+	seq_setRunning(1);
+	run(120);
+	seq_setRoll(0, 1);				/* from step 1's boundary on */
+	slideCalls = 0;
+	run(160);					/* to 280 ms */
+	seq_setRoll(0, 0);
+	seq_setRunning(0);
+	run(1);
+	seq_setRollRate(8);				/* 1/16, as before */
+	uint8_t m[8];
+	/* step 1: its hit 0 (the roll hit of the same tick is dropped), the roll hit at 187.5 ms;
+	 * step 2: the roll hit at 250 ms */
+	ASSERT_EQ(slideModes0(m, 8), 3);
+	ASSERT_EQ(m[0], DRUM_SLIDE_ON);
+	ASSERT_EQ(m[1], DRUM_SLIDE_KEEP);
+	ASSERT_EQ(m[2], DRUM_SLIDE_OFF);
 }
 
 //------------------------------------------------------------------------------

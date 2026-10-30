@@ -105,8 +105,13 @@ void initDrumVoice();
 
 void Drum_trigger(const uint8_t voiceNr, const uint8_t vol, const uint8_t note);
 
-//LICHOMAT v0.3: the next trigger of Drum voice voiceNr (0-2) slides when on (plan D24)
-void Drum_setSlide(const uint8_t voiceNr, const uint8_t on);
+//LICHOMAT v0.3: what the next trigger of Drum voice voiceNr (0-2) does with its glide (plan D24):
+//DRUM_SLIDE_ON starts one from the voice's last note, DRUM_SLIDE_KEEP (a later hit of the same
+//step: a ratchet or roll hit) lets the glide in progress go on, DRUM_SLIDE_OFF ends it
+#define DRUM_SLIDE_OFF	0
+#define DRUM_SLIDE_ON	1
+#define DRUM_SLIDE_KEEP	2
+void Drum_setSlide(const uint8_t voiceNr, const uint8_t mode);
 
 void Drum_updatePan(const uint8_t voiceNr);
 

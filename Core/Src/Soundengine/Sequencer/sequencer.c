@@ -1937,6 +1937,27 @@ static uint32_t seq_cbSeekPosition(void *ctx, uint32_t absStep)
 /** An event fires (spec 6.4): note off the voice's last note, apply the event's own
  * p-locks (D5), trigger the voice, send the MIDI Note On with the event's velocity
  * and the note override. A roll hit is recorded at its own step (N11). */
+//LICHOMAT v0.3: per Drum voice 1-3, the occurrence (absStep) of its last slide step while its bit
+//in seq_slideSteps is set; the rewind clears them
+static uint32_t seq_slideStep[3];
+static uint8_t seq_slideSteps;
+/** the glide of a trigger of voice v (< 3): a slide step's hit 0 starts it, the later hits of
+ * that step (ratchets, rolls) keep it, any other trigger ends it */
+static uint8_t seq_slideMode(const uint8_t v, const seqc_event_t *ev)
+{
+	const uint8_t bit = (uint8_t)(1u << v);
+	if(ev->flags & SEQC_EVF_SLIDE)
+	{
+		seq_slideStep[v] = ev->absStep;
+		seq_slideSteps |= bit;
+		return DRUM_SLIDE_ON;
+	}
+	if((seq_slideSteps & bit) && (ev->absStep == seq_slideStep[v]))
+		return DRUM_SLIDE_KEEP;
+	seq_slideSteps &= (uint8_t)~bit;
+	return DRUM_SLIDE_OFF;
+}
+//------------------------------------------------------------------------------
 static void seq_cbTrigger(void *ctx, const seqc_event_t *ev)
 {
 	(void)ctx;
@@ -1948,9 +1969,10 @@ static void seq_cbTrigger(void *ctx, const seqc_event_t *ev)
 
 	seq_parseAutomationNodes(voiceNr, &plocks);
 
-	//LICHOMAT v0.3: hit 0 of a slide step of Drum 1-3 glides from the voice's last note
+	//LICHOMAT v0.3: hit 0 of a slide step of Drum 1-3 glides from the voice's last note, through
+	//the step's later hits
 	if(voiceNr < 3)
-		Drum_setSlide(voiceNr, (ev->flags & SEQC_EVF_SLIDE) ? 1 : 0);
+		Drum_setSlide(voiceNr, seq_slideMode(voiceNr, ev));
 
 	//Trigger internal synth voice
 	voiceControl_noteOn(voiceNr, ev->note, ev->vel);
@@ -2128,6 +2150,7 @@ static void seq_cbTransport(void *ctx, seqc_transport_t change)
 
 	case SEQC_TRANSPORT_REWIND:
 		led_resetBlinkTimer();
+		seq_slideSteps = 0;		//LICHOMAT v0.3: the step count starts again
 		seq_songPositionPointer = 0xff;     //before entry 0: the first pattern end moves it to 0
 		// send notes off on all channels that have notes playing and reset our bitmap to reflect that
 		voiceControl_noteOff(0xFF);

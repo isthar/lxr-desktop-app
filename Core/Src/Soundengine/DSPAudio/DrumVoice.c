@@ -34,12 +34,16 @@ INDTCMZ DrumVoice voiceArray[NUM_DRUM_VOICES];
 _Static_assert(SLIDE_BLOCK == OUTPUT_DMA_SIZE, "the slide counts audio blocks");
 static slide_t drum_slide[3];
 static uint8_t drum_slideNext;	//bit v: the next trigger of voice v slides
+static uint8_t drum_slideKeep;	//bit v: the next trigger of voice v keeps the glide (a later hit of its step)
 
-void Drum_setSlide(const uint8_t voiceNr, const uint8_t on)
+void Drum_setSlide(const uint8_t voiceNr, const uint8_t mode)
 {
 	if(voiceNr >= 3) return;
-	if(on) drum_slideNext |= (uint8_t)(1u << voiceNr);
-	else drum_slideNext &= (uint8_t)~(1u << voiceNr);
+	const uint8_t bit = (uint8_t)(1u << voiceNr);
+	drum_slideNext &= (uint8_t)~bit;
+	drum_slideKeep &= (uint8_t)~bit;
+	if(mode == DRUM_SLIDE_ON) drum_slideNext |= bit;
+	else if(mode == DRUM_SLIDE_KEEP) drum_slideKeep |= bit;
 }
 //---------------------------------------------------
 IN_ITCM_RAM void setPan(const uint8_t voiceNr, const uint8_t pan)
@@ -183,8 +187,9 @@ void Drum_trigger(const uint8_t voiceNr, const uint8_t vol, const uint8_t note)
 		const float from = (float)((int)voiceArray[voiceNr].osc.baseNote - (int)note) + slide_offset(&drum_slide[voiceNr]);
 		slide_start(&drum_slide[voiceNr], from, slide_blocks(activeParameters[PAR_SLIDE_TIME1 + voiceNr]));
 	}
-	else
+	else if(!(drum_slideKeep & (1u << voiceNr)))
 		slide_stop(&drum_slide[voiceNr]);
+	drum_slideKeep &= (uint8_t)~(1u << voiceNr);	//a later hit of the slide step: the glide goes on
 
 	osc_setBaseNote(&voiceArray[voiceNr].osc,note);
 	osc_setBaseNote(&voiceArray[voiceNr].modOsc,note);

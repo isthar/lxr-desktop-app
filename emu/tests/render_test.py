@@ -1178,6 +1178,31 @@ def V03_slide(t):
     no_copies_left()
 
 @case
+def V03_glide_through_ratchets(t):
+    # Drum 1: step 1 note 75, step 9 note 87 with 2 ratchet hits (the second 62.5 ms later) and slide
+    # (508 ms): the glide goes on through hit 1. 5 to 105 ms after hit 1 it is at -10.4 to -8.0
+    # semitones, so step 9 crosses zero about 0.59 times as often as without slide there
+    seed = t.seed()
+    def run(name, on):
+        wav, log = t.path(name + '.wav'), t.path(name + '.log')
+        script = t.script(press_steps(1, (1, 9)) + '+100ms param active_step=0\n+100ms param step_note=75\n'
+                          '+100ms param active_step=8\n+100ms param step_note=87\n+100ms param step_flam=1\n'
+                          '+100ms param slide_time1=127\n+100ms param step_slide=%d\n+100ms press start\n' % on)
+        t.render(seed, ['--no-start', '--seconds', '3.5', '--out', wav, '--stereo', 'out1', '--midi-log', log,
+                        '--events', script])
+        rate, x = wav_left(wav)
+        return rate, x, din_notes(log, '90')
+    rate, plain, notes = run('plain', 0)
+    _, slid, _ = run('slide', 1)
+    check(len(notes) >= 3, 'voice 1 played %d notes, not step 1 and the 2 hits of step 9' % len(notes))
+    near(ms_after(notes[2:3], notes[1][0]), [62.5], 1.0, 'the second hit of step 9')
+    hit1 = int(notes[2][0] * rate / 216e6)
+    a, b = hit1 + rate * 5 // 1000, hit1 + rate * 105 // 1000
+    r = crossings(slid, a, b) / max(1, crossings(plain, a, b))
+    check(0.49 <= r <= 0.69, 'after hit 1 step 9 crosses zero %.2f times as often with slide, not about 0.59' % r)
+    no_copies_left()
+
+@case
 def V03_fill(t):
     # voice 1: step 1 FILL (110), step 9 !FILL (111); voice 2 step 1 is the reference. Fill held
     # (performance mode, step 8) from 1.5 to 3.5 s after start: bar 2 (2-4 s) is the fill bar,
