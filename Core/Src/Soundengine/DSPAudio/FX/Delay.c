@@ -14,6 +14,21 @@
 
 
 #include "Soundengine/DSPAudio/FX/Delay.h"
+#include <string.h>	//LICHOMAT: memcpy() (F18)
+
+//LICHOMAT: the word at p, which mono output puts 2 bytes off a 4-byte boundary
+//(&output[pos + 1]). The M7's LDR loads it unaligned, so the device keeps the plain
+//load; in C it is undefined, so a host build (the emulator) reads it with memcpy() (F18)
+static inline __attribute__((always_inline)) int32_t delay_load32(const int32_t *p)
+{
+#if defined(__arm__)
+	return *p;
+#else
+	int32_t v;
+	memcpy(&v, p, sizeof v);
+	return v;
+#endif
+}
 
 void Delay_init(Delay* d)
 {
@@ -183,7 +198,7 @@ void Delay_processPingPong(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* o
       }
       else
       {
-        *(uint16_t*)stereoOut = __QADD16(*stereoOut, x);
+        *(uint16_t*)stereoOut = __QADD16(delay_load32(stereoOut), x);	//LICHOMAT: F18
         stereoOut++;
       }
 
@@ -269,7 +284,7 @@ void Delay_process(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uin
     }
     else
     {
-      *(uint16_t*)stereoOut = __QADD16(*stereoOut, x);
+      *(uint16_t*)stereoOut = __QADD16(delay_load32(stereoOut), x);	//LICHOMAT: F18
       stereoOut++;
     }
 
