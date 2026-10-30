@@ -58,7 +58,8 @@ Jeśli wolisz atmosferę przed polirytmią: odczytaj stronę CPU (H12) przy test
   Przykłady:
   - ×3/4 przy długości 16 daje trójkę na czwórkę;
   - ×2 daje hihat w 1/32;
-  - ×2/3 daje triolowe ćwierćnuty.
+  - ×3/2 daje triole szesnastkowe, a ×3/4 z nutą na co drugim kroku triolowe ćwierćnuty (poprawka z 30.10:
+    ×2/3 daje krok 187,5 ms przy 120 BPM, czyli szesnastkę z kropką, nie triolę).
 - Z długością 1–64 daje to polimetrię i polirytmię naraz, np. ścieżka 5-krokowa w ×3/4 przeciw stopie
   w 4/4.
 - **Wyrównanie:** wszystkie ścieżki zaczynają od kroku 1 przy starcie i przy zmianie wzorca, a potem biegną

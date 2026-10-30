@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 06:17",
+    "updated": "2026-10-30 07:17",
     "phase": "Etap 2: wykonanie planu v0.2",
     "focus": "v0.2: V1–V2 (pliki i rdzeń polirytmii).",
     "branch": "timing-core",
-    "head": "6e4073d",
-    "next": "Ja: V3–V4 (opóźnienie i humanize), potem przegląd V1–V4. Przerwa i podsumowanie ok. 10:18 albo przy 65% zużycia.",
-    "updated_at": "2026-10-30T06:17:00+01:00",
-    "now": "Agent robi V1 i V2 planu v0.2 (od 06:18)."
+    "head": "596457c",
+    "next": "Ja: poprawki z przeglądu, raport M10, podsumowanie. Przerwa ok. 10:17 albo przy 65% zużycia. Ty: odsłuch build/demo/v02-*.wav, testy v0.1 (Q6, H12), potem v0.2 (U4–U14).",
+    "updated_at": "2026-10-30T07:17:00+01:00",
+    "now": "Od 07:18 agent robi lekki przegląd V5–V11 i poprawek, tylko czytając kod i dokumenty."
   },
   "epics": [
     {
@@ -477,9 +477,9 @@
     {
       "id": "E6.3",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Humanize per ścieżka i opóźnienie ścieżki w ms (v0.2)",
-      "updated": "2026-10-29"
+      "updated": "2026-10-30"
     },
     {
       "id": "E6.4",
@@ -498,16 +498,16 @@
     {
       "id": "E6.6",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Warunki trigów w bajcie prawdopodobieństwa (1:2…4:4, FILL, FIRST, PRE), bez zmiany formatu kroku (v0.2)",
-      "updated": "2026-10-29"
+      "updated": "2026-10-30"
     },
     {
       "id": "E6.7",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Tempo ścieżki ×1/4…×4 (polirytmia) i rotacja (v0.2)",
-      "updated": "2026-10-29"
+      "updated": "2026-10-30"
     },
     {
       "id": "E6.8",
@@ -2378,6 +2378,71 @@
       "n": 316,
       "at": "2026-10-30 06:17",
       "text": "Wznowione o 06:16. Twój odczyt: 49% (dopisany do estymatora); nowy limit tego tygodnia: 65%. Start wykonania planu v0.2: jeden agent robi V1 (ustawienia ścieżek, blok w pliku .pat) i V2 (rdzeń: siatka każdej ścieżki we własnym tempie), z testami najpierw; po każdym zadaniu push gałęzi v0.2 na fork."
+    },
+    {
+      "n": 317,
+      "at": "2026-10-30 06:27",
+      "text": "V1 gotowe (b6b2675): ustawienia ścieżek we wzorcu (tempo, humanize czasu i głośności, opóźnienie), kopiowanie, czyszczenie i bufor zapasowy, blok rozszerzenia w .pat i tmp.pat (plik 3697 B zamiast 3663 B). Testy: 55 na hoście, 133 w emulatorze, 0 ostrzeżeń. RAM +1816 B."
+    },
+    {
+      "n": 318,
+      "at": "2026-10-30 06:27",
+      "text": "V2 gotowe (494a7b2): rdzeń seq_core prowadzi każdą ścieżkę na własnej siatce we własnym tempie; takt mastera, restart przy zmianie wzorca, Song Position. Wszystkie testy etapu 1 bez zmian; 8 nowych (TT1–TT4). Testy: 63 na hoście, 133 w emulatorze, 0 ostrzeżeń. Obraz 308 276 B. Obie zmiany są na forku (gałąź v0.2)."
+    },
+    {
+      "n": 319,
+      "at": "2026-10-30 06:34",
+      "text": "V3 gotowe (ef49e7f): pomijanie kroku, faza nagrywania i numer kroku liczone osobno dla każdej ścieżki. Testy: 65 na hoście, 133 w emulatorze, 0 ostrzeżeń."
+    },
+    {
+      "n": 320,
+      "at": "2026-10-30 06:34",
+      "text": "V4 gotowe (8db66ad): opóźnienie ścieżki i humanize czasu oraz głośności, z limitami: uderzenie najwyżej 7/8 kroku ścieżki wcześniej i najwyżej jeden krok później. Najgorszy przypadek kolejki zdarzeń: 168 z 256. Testy: 73 na hoście, 133 w emulatorze, 0 ostrzeżeń. RAM +56 B."
+    },
+    {
+      "n": 321,
+      "at": "2026-10-30 06:42",
+      "text": "V5 gotowe (f0b9404): warunki trigów w bajcie prawdopodobieństwa (101–115: 1:2…4:4, FILL, !FILL, FIRST, !FIRST, PRE, !PRE), funkcja seqc_setFill() pod tryb fill z v0.4. Testy: 79 na hoście, 133 w emulatorze, 0 ostrzeżeń."
+    },
+    {
+      "n": 322,
+      "at": "2026-10-30 06:42",
+      "text": "V6 gotowe (211c7e5): rdzeń połączony z resztą firmware; diody kroków idą krokami wybranej ścieżki, nagrywanie kwantuje do kroku ścieżki, kopie wzorca odświeżają się per ścieżka. Testy: 79 na hoście, 133 w emulatorze, 0 ostrzeżeń. RAM 286 476 B."
+    },
+    {
+      "n": 323,
+      "at": "2026-10-30 06:52",
+      "text": "V7 gotowe (56b3c87): obsługa na urządzeniu. Wybierz głos, SHIFT + drugi przycisk trybu otwiera stronę Euklid; enkoder w prawo o 4 pozycje daje drugi ekran: tmp (1/4…x1…x4), hmt (0–8 ms), hmv (0–25%), dly (-15…+30 ms). Na stronie kroku prb idzie po 100% w warunki: 1:2…4:4, Fil, !Fl, 1st, !1s, Pre, !Pr. Testy: 79 na hoście, 134 w emulatorze."
+    },
+    {
+      "n": 324,
+      "at": "2026-10-30 06:52",
+      "text": "V8 gotowe (25a2f90): testy całości w emulatorze dla tempa ścieżki, humanize i opóźnienia, warunków trigów i bloku w pliku wzorca. Testy: 79 na hoście, 138 w emulatorze (też równolegle), 0 ostrzeżeń. Obraz 310 368 B."
+    },
+    {
+      "n": 325,
+      "at": "2026-10-30 06:52",
+      "text": "Przegląd V1–V4 skończony: nic blokującego ani poważnego. Dwie drobne usterki w seqc_generateEarly (seq_core.c:1324–1335): gdy ścieżka zmienia tempo w ostatnim kroku mastera przed zmianą wzorca, jej następny krok z ujemnym przesunięciem może nie zagrać; potwierdzone uruchomieniem. Arytmetyka ticków, limity opóźnienia, kolejka (najgorzej 189 z 256), blok w pliku i ścieżka ×1 sprawdzone jako poprawne. Poprawki po V9–V10, z testami najpierw."
+    },
+    {
+      "n": 326,
+      "at": "2026-10-30 07:03",
+      "text": "V9 gotowe (ea96be0): rotacja ścieżki, SHIFT + krok 1 (wcześniej) i SHIFT + krok 2 (później), razem z lockami, timingiem i ratchetami. Testy: 79 na hoście, 139 w emulatorze."
+    },
+    {
+      "n": 327,
+      "at": "2026-10-30 07:03",
+      "text": "V10 gotowe (05bc186): check.sh sprawdza budżet pamięci (DTCM+RAM 393 864 z 395 892 B, DTCM 107 388 z 107 900 B), wersja 0.2 (plik LXR_V2_LICHOMAT_0.2.img, ekran startowy „v0.2 unofficial”), 5 renderów demo w build/demo/ (v02-*.wav, opis w README-v0.2.txt). Testy etapu 1 bez zmian. Testy: 79 na hoście, 139 w emulatorze, 0 ostrzeżeń."
+    },
+    {
+      "n": 328,
+      "at": "2026-10-30 07:17",
+      "text": "Poprawki z przeglądu V1–V4 gotowe, z testami najpierw: 0c0fee9 (krok z ujemnym przesunięciem po zmianie tempa tuż przed zmianą wzorca albo końcem songu już nie ginie) i ef81ab6 (pierwszy krok nowego wzorca po zmianie tempa w ostatnim kroku mastera); nowe testy TT6 i TT7, razem 83 na hoście, 139 w emulatorze, 0 ostrzeżeń. 369c5b8: README gałęzi v0.2 opisuje wersję 0.2."
+    },
+    {
+      "n": 329,
+      "at": "2026-10-30 07:17",
+      "text": "V11 gotowe (596457c, timing-core): lista testów na urządzeniu z U4–U9 (poprawki F1–F12) i nowymi U10–U14 (tempo ścieżki, humanize i opóźnienie, warunki trigów, rotacja, pliki), szkic notatek wydania v0.2 po polsku (docs/lichomat/release-notes-v0.2.md), zasada budżetu pamięci w HANDOFF. Poprawka w szkicu etapu 2: triole szesnastkowe daje ×3/2, a nie ×2/3."
     }
   ]
 }
