@@ -5,7 +5,8 @@ either check turned off, so this test gives each one a case to reject, through
 licence_gate.py's own functions:
 
 1. check_names() on the object of emu/tests/name_canary.c, whose strings name
-   Erica Synths and the LXR-02 in __TEXT,__cstring, Sonic Potions in a table of
+   Erica Synths and the LXR-02 in __TEXT,__cstring (__TEXT,__asan_cstring in an
+   ASan build), Sonic Potions in a table of
    char[16] (__TEXT,__const) and the LXR in a char array (__DATA,__data), next
    to clean ones: exactly those four errors, in any order.
 2. check_overlay() on a compile_commands.json of two commands, one with the
@@ -23,6 +24,7 @@ the repository.
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -31,11 +33,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import licence_gate  # noqa: E402
 
 
+def cstring_section(canary):
+    """where the compiler put the canary's C strings: __TEXT,__cstring, or under ASan
+    (emulator.yml's Debug job) __TEXT,__asan_cstring"""
+    out = subprocess.run(['otool', '-l', canary], capture_output=True, text=True, check=True).stdout
+    return '__TEXT,__asan_cstring' if 'sectname __asan_cstring' in out else '__TEXT,__cstring'
+
+
 def names(root, build, canary):
     errors = []
     licence_gate.check_names(root, build, [canary], errors)
+    cstr = cstring_section(canary)
     want = ['%s: the string "%s" in %s names a trademark (spec 10.2)' % (os.path.basename(canary), s, where)
-            for s, where in (('Erica Synths', '__TEXT,__cstring'), ('LXR-02', '__TEXT,__cstring'),
+            for s, where in (('Erica Synths', cstr), ('LXR-02', cstr),
                              ('Sonic Potions', '__TEXT,__const'), ('lxr drum kit', '__DATA,__data'))]
     errors.sort()
     want.sort()
