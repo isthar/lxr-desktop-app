@@ -16,8 +16,9 @@ Read this first when picking the project up in a new session.
 | Milestone report of R1 | `docs/lichomat/reports/M8-emulator-R1.md` |
 | Stage 1b plan, R2 and R3 (the renderer `lichomat-render`, the goldens, the emulator CI; R2.1–R2.6 done on `emulator`, 133 ctest ids, serial and `ctest -j8`; R3.1–R3.6 next) | `docs/superpowers/plans/2026-10-29-emulator-r2-r3-renderer-goldens.md` |
 | Milestone report of R2 | `docs/lichomat/reports/M9-emulator-R2.md` |
+| Milestone report of v0.2 | `docs/lichomat/reports/M10-v0.2.md` |
 | Stage 2 draft (accepted by the owner's rule of 2026-10-29) | `docs/superpowers/specs/2026-10-29-stage2-draft.md` |
-| Plan v0.2 (tasks V1–V11; V1–V10 on branch `v0.2` from `emulator` at `1099778`, worktree `build/wt-v02`, pushed to the fork: 79 host and 139 emulator ctest ids; V11, the owner's documents, on `timing-core`) | `docs/superpowers/plans/2026-10-29-v0.2-polyrhythm-groove.md` |
+| Plan v0.2 (tasks V1–V11; V1–V10 on branch `v0.2` from `emulator` at `1099778`, worktree `build/wt-v02`, pushed to the fork, head `4b63f2d` after two light reviews and their fixes: 83 host and 139 emulator ctest ids; V11, the owner's documents, on `timing-core`) | `docs/superpowers/plans/2026-10-29-v0.2-polyrhythm-groove.md` |
 | The plan writer's prototype of V1–V10 (git-ignored, on the owner's Mac; for cross-checking only, the tasks are done test-first from the plan) | `build/v0.2-prototype.diff` |
 | The night's scratch work of 2026-10-27 (the stage 1b host probe, the sweep's harnesses) | `build/night-2026-10-27/` (git-ignored, on the owner's Mac; its README lists the contents) |
 | Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N21; they win over the spec) |

@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 07:17",
-    "phase": "Etap 2: wykonanie planu v0.2",
-    "focus": "v0.2: V1–V2 (pliki i rdzeń polirytmii).",
+    "updated": "2026-10-30 07:48",
+    "phase": "Etap 2: v0.2 gotowe w kodzie (M10); v0.3 czeka na odczyt CPU (H12)",
+    "focus": "v0.2 gotowe w kodzie; następny plan v0.4 (sceny mute, fill, rolle, slide).",
     "branch": "timing-core",
-    "head": "596457c",
-    "next": "Ja: poprawki z przeglądu, raport M10, podsumowanie. Przerwa ok. 10:17 albo przy 65% zużycia. Ty: odsłuch build/demo/v02-*.wav, testy v0.1 (Q6, H12), potem v0.2 (U4–U14).",
-    "updated_at": "2026-10-30T07:17:00+01:00",
-    "now": "Od 07:18 agent robi lekki przegląd V5–V11 i poprawek, tylko czytając kod i dokumenty."
+    "head": "4b63f2d",
+    "next": "Ja: plan v0.4, potem jego wykonanie; przerwa i podsumowanie ok. 10:17 albo przy 65% zużycia. Ty: odsłuch build/demo/v02-*.wav, testy v0.1 z odczytem CPU (Q6, H12), potem v0.2 (U4–U14).",
+    "updated_at": "2026-10-30T07:48:00+01:00",
+    "now": "Od 07:48: zapisuję M10 i piszę plan v0.4 (bez prototypu)."
   },
   "epics": [
     {
@@ -477,8 +477,8 @@
     {
       "id": "E6.3",
       "epic": "E6",
-      "status": "w toku",
-      "title": "Humanize per ścieżka i opóźnienie ścieżki w ms (v0.2)",
+      "status": "zrobione",
+      "title": "Humanize per ścieżka i opóźnienie ścieżki w ms (v0.2) – w kodzie v0.2 (gałąź v0.2, 4b63f2d); testy na urządzeniu U10–U14 czekają na Ciebie",
       "updated": "2026-10-30"
     },
     {
@@ -498,15 +498,15 @@
     {
       "id": "E6.6",
       "epic": "E6",
-      "status": "w toku",
-      "title": "Warunki trigów w bajcie prawdopodobieństwa (1:2…4:4, FILL, FIRST, PRE), bez zmiany formatu kroku (v0.2)",
+      "status": "zrobione",
+      "title": "Warunki trigów w bajcie prawdopodobieństwa (1:2…4:4, FILL, FIRST, PRE), bez zmiany formatu kroku (v0.2) – w kodzie v0.2 (gałąź v0.2, 4b63f2d); testy na urządzeniu U10–U14 czekają na Ciebie",
       "updated": "2026-10-30"
     },
     {
       "id": "E6.7",
       "epic": "E6",
-      "status": "w toku",
-      "title": "Tempo ścieżki ×1/4…×4 (polirytmia) i rotacja (v0.2)",
+      "status": "zrobione",
+      "title": "Tempo ścieżki ×1/4…×4 (polirytmia) i rotacja (v0.2) – w kodzie v0.2 (gałąź v0.2, 4b63f2d); testy na urządzeniu U10–U14 czekają na Ciebie",
       "updated": "2026-10-30"
     },
     {
@@ -634,6 +634,12 @@
       "date": "2026-10-29",
       "title": "Emulator R2: renderer WAV lichomat-render (E5.3) i poprawki F11, F12, F6b (E5.7)",
       "summary": "lichomat-render renderuje cały firmware do WAV ze skryptem zdarzeń: wybór wzorca, songu, tempa i parametrów, zapisy, logi MIDI, zegara i panelu, kody wyjścia dla awarii i zawieszenia. Poprawki błędów fw 1.7 F12 (Q23), F11 (Q21), F6b (Q22), każda z testem. 133 testy emulatora w Debug i Release, szeregowo i równolegle; firmware bez zmian w pamięci. Jeden lekki przegląd: 1 ważna i 8 drobnych uwag, wszystkie poprawione. Gałąź emulator na forku, CI zielone. Raport: docs/lichomat/reports/M9-emulator-R2.md."
+    },
+    {
+      "id": "M10",
+      "date": "2026-10-30",
+      "title": "v0.2: polirytmia, humanize, opóźnienie ścieżki, warunki trigów, rotacja (E6.3, E6.6, E6.7)",
+      "summary": "Tempo ścieżki ×1/4…×4 (każda ścieżka na własnej siatce), humanize czasu i głośności, opóźnienie ścieżki w ms, warunki trigów w bajcie prawdopodobieństwa, rotacja SHIFT + krok 1/2; ustawienia w bloku na końcu pliku wzorca, niewidocznym dla fw 1.7. 83 testy na hoście, 139 w emulatorze, 0 ostrzeżeń; DTCM+RAM 393 864 z 395 892 B. Dwa lekkie przeglądy, 5 drobnych usterek poprawionych z testami. Rendery do odsłuchu w build/demo/v02-*.wav. Raport: docs/lichomat/reports/M10-v0.2.md."
     }
   ],
   "questions": [
@@ -2443,6 +2449,11 @@
       "n": 329,
       "at": "2026-10-30 07:17",
       "text": "V11 gotowe (596457c, timing-core): lista testów na urządzeniu z U4–U9 (poprawki F1–F12) i nowymi U10–U14 (tempo ścieżki, humanize i opóźnienie, warunki trigów, rotacja, pliki), szkic notatek wydania v0.2 po polsku (docs/lichomat/release-notes-v0.2.md), zasada budżetu pamięci w HANDOFF. Poprawka w szkicu etapu 2: triole szesnastkowe daje ×3/2, a nie ×2/3."
+    },
+    {
+      "n": 330,
+      "at": "2026-10-30 07:48",
+      "text": "Poprawki z drugiego przeglądu gotowe: b473e9e (ścieżka w innym tempie nie gra już uderzenia kroku za końcem songu, jak ścieżka ×1) i 4b63f2d (tmp nie pokazuje śmieci po NRPN spoza zakresu). 83 testy na hoście, 139 w emulatorze, 0 ostrzeżeń; obraz 312 600 B. Kamień milowy M10: v0.2 gotowe w kodzie, raport docs/lichomat/reports/M10-v0.2.md."
     }
   ]
 }
