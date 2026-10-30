@@ -17,10 +17,16 @@ approved or supported by Erica Synths. It is based on the official firmware 1.7
 ([erica-synths/lxr-desktop-app](https://github.com/erica-synths/lxr-desktop-app) at commit `a43cd4f`)
 and is aimed at groove techno: rolling percussion, swung hats over a straight kick, polymetric loops.
 
-Version 0.2 adds groove per track: a tempo of its own for each track (polyrhythm), humanize and track
-delay, trig conditions and track rotation, together with the fixes F1–F12 of firmware 1.7 found while
-building the emulator. It keeps everything of 0.1, which gave the step sequencer a new timing core and
-fixed the timing and MIDI problems of 1.7:
+Version 0.3 adds tools for playing live and for acid lines. In the performance mode (the second mode
+button) holding step 8 turns the fill mode on, steps 9–16 recall eight mute scenes and COPY + a step
+stores one; the scenes are saved with the project. Rolls go from a whole bar to 1/32, triplets
+included, on each track's own tempo. Drum 1–3 can slide: `sld` on the step page marks a step, and
+`slt` on the voice's first page sets the slide time.
+
+It keeps everything of 0.2, which added groove per track: a tempo of its own for each track
+(polyrhythm), humanize and track delay, trig conditions and track rotation, together with the fixes
+F1–F12 of firmware 1.7 found while building the emulator. And it keeps everything of 0.1, which gave
+the step sequencer a new timing core and fixed the timing and MIDI problems of 1.7:
 
 - Shuffle moves whole steps, ratchets and microshift included. MIDI clock out and the clock out jack
   stay straight.
@@ -34,17 +40,18 @@ fixed the timing and MIDI problems of 1.7:
   appears, right after the page with the clock in and clock out PPQ.
 
 Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged. The start-up
-screen shows `LICHOMAT` and `v0.2 unofficial`. The main changes of 0.1 are listed in its
+screen shows `LICHOMAT` and `v0.3 unofficial`. The main changes of 0.1 are listed in its
 [release notes](docs/lichomat/release-notes-v0.1.md), and every change against 1.7 in section 2 of the
-[stage 1 report](docs/lichomat/reports/stage1-report.md). The release notes of 0.2 are
-`docs/lichomat/release-notes-v0.2.md` on branch `timing-core`.
+[stage 1 report](docs/lichomat/reports/stage1-report.md). The release notes of 0.2 and 0.3 are
+`docs/lichomat/release-notes-v0.2.md` and `docs/lichomat/release-notes-v0.3.md` on branch
+`timing-core`.
 
 ### Installing LICHOMAT
 
 Install `LXR_V2_LICHOMAT_<version>.img` like any other update, see
 [Installing the update](#installing-the-update). First delete every other `LXR*.img` file from the SD
 card: the updater installs the first one it finds. After the update the start-up screen shows
-`LICHOMAT` and `v0.2 unofficial`.
+`LICHOMAT` and `v0.3 unofficial`.
 
 ### Going back to the official firmware
 
@@ -68,10 +75,11 @@ The updater itself is never changed, so you can always go back:
 2. Delete `LXR_V2_LICHOMAT_*.img` from the SD card, copy `LXR_V2_V1.7.img` to its top folder and
    install it the same way. The start-up screen then shows `Sonic Potions` and `LXR2 Drums V 1.7`.
 
-Your kits, patterns, projects and songs stay on the card, and 1.7 loads them as before: LICHOMAT 0.2
-only adds the track settings at the end of each pattern file, after the data 1.7 reads, so 1.7 plays
-such a pattern with every track at ×1, without humanize or delay, and a step with a trig condition
-always plays.
+Your kits, patterns, projects and songs stay on the card, and 1.7 loads them as before. LICHOMAT adds
+the track settings at the end of each pattern file and the mute scenes after the name in each
+project's `prj.nfo`, after the data 1.7 reads. So 1.7 plays such a pattern with every track at ×1,
+without humanize or delay, a step with a trig condition always plays, and a slide step plays without
+the slide (at 100 % if it had a probability). Saving a project in 1.7 drops its mute scenes.
 
 ### Building LICHOMAT on a Mac
 
@@ -143,7 +151,7 @@ When the build has finished it shows where the update file is and how to install
 ```
 ======================================================================
   Firmware update file:
-    .../lxr-desktop-app/build/release/LXR_V2_LICHOMAT_0.2.img
+    .../lxr-desktop-app/build/release/LXR_V2_LICHOMAT_0.3.img
   ...
 ```
 

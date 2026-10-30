@@ -57,7 +57,7 @@ TEST(M6_splash)
 	emu_testBoot(&cfg);
 	ASSERT_TRUE(seen);
 	ASSERT_EQ(strncmp(rows[0], "LICHOMAT", 8), 0);
-	ASSERT_EQ(strncmp(rows[1], "v0.2 unofficial", 15), 0);
+	ASSERT_EQ(strncmp(rows[1], "v0.3 unofficial", 15), 0);
 }
 
 TEST(M6_no_card)
