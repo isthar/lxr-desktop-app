@@ -379,6 +379,14 @@ typedef struct seqc_stats
 	uint32_t tempoRestarts;		/**< slave tempo estimates restarted after a tempo jump (N16) */
 } seqc_stats_t;
 
+/** v0.3: a roll rate: `hits` evenly spaced roll hits every `span` track steps; hit j at
+ * floor(j * span * L / hits) ticks after the start of a step whose index is a multiple of
+ * span (L = the track's step length). span 1..16, hits 1..8. The v0.1 rates 16, 8, 4, 2, 1
+ * are SEQC_ROLL(16..1, 1); 0xFF is never a code (sequencer.c's one-shot) */
+#define SEQC_ROLL(span, hits)	((uint8_t)((((unsigned)(hits) - 1u) << 5) | (unsigned)(span)))
+#define SEQC_ROLL_SPAN(r)	((uint8_t)((r) & 0x1Fu))
+#define SEQC_ROLL_HITS(r)	((uint8_t)(((unsigned)(r) >> 5) + 1u))
+
 /** The host: pattern data, pattern sequencing and outputs (N5). Every pointer
  * but groove and trackStep must be set. ctx is passed back to each callback unchanged. */
 typedef struct seqc_host
@@ -400,8 +408,8 @@ typedef struct seqc_host
 	uint8_t		(*shuffle)(void *ctx);
 	/** true if the track is muted; read when one of its events fires */
 	bool		(*muted)(void *ctx, uint8_t track);
-	/** 0 = no roll; otherwise the roll period in steps (16, 8, 4, 2 or 1).
-	 * Read at every step boundary. The one-shot roll stays in seq_setRoll() */
+	/** 0 = no roll; otherwise SEQC_ROLL(span, hits). Read at every step boundary of the
+	 * track. The one-shot roll stays in seq_setRoll() */
 	uint8_t		(*rollRate)(void *ctx, uint8_t track);
 
 	/* -- pattern sequencing: song mode and pending patterns stay in sequencer.c -- */

@@ -767,7 +767,7 @@ void menu_init()
 
 
 	//initialize the roll value
-	activeParameters[PAR_ROLL] = 5;
+	activeParameters[PAR_ROLL] = 8; //LICHOMAT v0.3: 1/16 in the new order
 	//frontPanel_sendData(SEQ_CC,SEQ_ROLL_RATE,8); //value is initialized in cortex firmware
 
 	activeParameters[PAR_BPM] = 120;
@@ -3651,7 +3651,7 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 
 	case PAR_ROLL:
 	{
-		/*roll rates
+		/*roll rates (LICHOMAT v0.3: the order of rollRateNames and seq_setRollRate())
 			0 - one shot immediate trigger
 			1 - 1/1
 			2 - 1/2
@@ -3663,10 +3663,6 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 			8 - 1/16
 			9 - 1/24
 			10 - 1/32
-			11 - 1/48
-			12 - 1/64
-			13 - 1/96
-			14 - 1/128
 		 */
 		frontPanel_sendData(SEQ_CC,SEQ_ROLL_RATE,value);
 	}

@@ -1216,24 +1216,35 @@ static bool seqc_skipEarly(uint8_t track, uint32_t n, uint8_t pattern, uint8_t s
 	return m->valid && m->absStep == n && m->pattern == pattern && m->step == step;
 }
 //------------------------------------------------------------------------------
-/** the roll event of track t at its step boundary at tick (spec 6.6): at the swung grid
+/** the roll events of track t at its step boundary at tick (spec 6.6): at the swung grid
  * position of the step, with its note and p-locks; v0.2: in the track's own steps, without
- * delay or humanize */
+ * delay or humanize; v0.3: SEQC_ROLL(span, hits), each hit with the step's swing */
 static void seqc_queueRoll(uint8_t t, uint8_t pattern, seqc_tick_t tick)
 {
 	const uint8_t rate = seqc.host.rollRate(seqc.host.ctx, t);
-	const uint8_t step = (uint8_t)seqc_trk.index[t];
-	if (rate == 0 || step % rate != 0)
+	const uint32_t span = SEQC_ROLL_SPAN(rate);
+	if (rate == 0 || span == 0 || span > 16u)
 		return;
+	const uint32_t hits = SEQC_ROLL_HITS(rate);
+	const uint8_t step = (uint8_t)seqc_trk.index[t];
+	const uint32_t len = (uint32_t)seqc_trk.len[t];
+	const uint32_t from = (uint32_t)(step % span) * len;	/* this step's start in the span */
 	const Step *data = seqc.host.step(seqc.host.ctx, pattern, t, step);
 	const uint32_t abs = (uint32_t)seqc_trk.abs[t];
-	const seqc_event_t ev = {
-		.tick = tick + ((abs & 1u) ? seqc_swingFor(seqc_gen.shuffle, seqc_trk.len[t]) : 0),
-		.absStep = abs, .track = t, .pattern = pattern, .step = step, .hit = 0,
-		.vel = SEQC_ROLL_VELOCITY, .note = data->note, .flags = SEQC_EVF_ROLL, .reserved = 0,
-		.p1Nr = data->param1Nr, .p1Val = data->param1Val, .p2Nr = data->param2Nr, .p2Val = data->param2Val,
-	};
-	seqc_queueStage(&ev);
+	const seqc_tick_t base = tick + ((abs & 1u) ? seqc_swingFor(seqc_gen.shuffle, seqc_trk.len[t]) : 0);
+	for (uint32_t j = 0; j < hits; j++)
+	{
+		const uint32_t pos = j * span * len / hits;
+		if (pos < from || pos >= from + len)
+			continue;
+		const seqc_event_t ev = {
+			.tick = base + (seqc_tick_t)(pos - from),
+			.absStep = abs, .track = t, .pattern = pattern, .step = step, .hit = (uint8_t)j,
+			.vel = SEQC_ROLL_VELOCITY, .note = data->note, .flags = SEQC_EVF_ROLL, .reserved = 0,
+			.p1Nr = data->param1Nr, .p1Val = data->param1Val, .p2Nr = data->param2Nr, .p2Val = data->param2Val,
+		};
+		seqc_queueStage(&ev);
+	}
 }
 //------------------------------------------------------------------------------
 /** boundary step 4: the roll events of the tracks this master boundary steps (grid) */

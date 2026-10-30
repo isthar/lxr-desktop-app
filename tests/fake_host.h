@@ -137,7 +137,7 @@ typedef struct fake_host
 	uint8_t		length[FAKE_NUM_PATTERNS][FAKE_NUM_TRACKS];	/**< raw: 0 means 16 */
 	uint8_t		shuffle;					/**< PAR_SHUFFLE 0..127 */
 	bool		muted[FAKE_NUM_TRACKS];
-	uint8_t		rollRate[FAKE_NUM_TRACKS];			/**< what rollRate() returns: 0, or 16/8/4/2/1 */
+	uint8_t		rollRate[FAKE_NUM_TRACKS];			/**< what rollRate() returns: 0, or SEQC_ROLL(span, hits) (16/8/4/2/1 = one hit) */
 	TrackGroove	groove[FAKE_NUM_PATTERNS][FAKE_NUM_TRACKS];	/**< v0.2; zero bytes are the defaults */
 
 	/* pattern sequencing (sequencer.c) */

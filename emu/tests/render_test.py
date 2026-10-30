@@ -1106,6 +1106,23 @@ def V02_rotation(t):
     near(ms_after(din_notes(log, '90'), ref), [125, 625, 1125, 1625], 2.0, 'voice 1 rotated later')
     no_copies_left()
 
+@case
+def V03_rolls(t):
+    # the performance mode (MODE2 = 25), step 1 held while running: the roll of voice 1, 120 BPM
+    seed = t.seed()
+    def gaps(rate):
+        log = t.path('r%d.log' % rate)
+        script = t.script('+100ms press 25\n+100ms param roll=%d\n+100ms press start\n'
+                          '+500ms down step1\n+1400ms up step1\n' % rate)
+        t.render(seed, ['--no-start', '--seconds', '3.5', '--midi-log', log, '--events', script])
+        notes = din_notes(log, '90')
+        check(len(notes) >= 6, 'roll %d: %d Note Ons' % (rate, len(notes)))
+        return [(b[0] - a[0]) / 216000 for a, b in zip(notes, notes[1:])]
+    for rate, gap in ((10, 62.5), (9, 83.333), (7, 166.667), (8, 125.0)):	# 1/32 1/24 1/12 1/16
+        d = gaps(rate)
+        near(d, [gap] * len(d), 2.0, 'roll %d' % rate)
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists

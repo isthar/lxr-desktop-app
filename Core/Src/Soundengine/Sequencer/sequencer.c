@@ -1059,90 +1059,24 @@ void seq_setRoll(uint8_t voice, uint8_t onOff)
 	}
 };
 //--------------------------------------------------------------------------------
+//LICHOMAT v0.3: the performance page's roll rates in the order of rollRateNames (MenuText.h),
+//as seq_core's SEQC_ROLL(span in track steps, hits); 0xFF is the one-shot roll (plan D21, D22)
+static const uint8_t seq_rollRates[] = {
+	0xFF,			// One
+	SEQC_ROLL(16, 1),	// 1/1
+	SEQC_ROLL(8, 1),	// 1/2
+	SEQC_ROLL(16, 3),	// 1/3: half-note triplets
+	SEQC_ROLL(4, 1),	// 1/4
+	SEQC_ROLL(8, 3),	// 1/6: quarter triplets
+	SEQC_ROLL(2, 1),	// 1/8
+	SEQC_ROLL(4, 3),	// 1/12: eighth triplets
+	SEQC_ROLL(1, 1),	// 1/16
+	SEQC_ROLL(2, 3),	// 1/24: sixteenth triplets
+	SEQC_ROLL(1, 2),	// 1/32
+};
 void seq_setRollRate(uint8_t rate)
 {
-	/*
-	0 - one shot immediate trigger
-
-	{"1/1"},
-	{"1/2"},
-	{"1/4"},
-	{"1/8"},
-	{"16"},
-	{"24"},
-	{"32"},
-	{"48"},
-	{"64"},
-	{"128"},
-	{"1/3"},
-	{"1/6"},
-	{"12"},
-				*/
-
-	switch(rate)
-	{
-	case 0:
-		seq_rollRate = 0xfe;
-		break;
-	case 1: // 1/1
-		seq_rollRate = 15;
-		break;
-
-	case 2: // 1/2
-		seq_rollRate = 7;
-		break;
-
-
-
-	case 3:// 1/4
-		seq_rollRate = 3;
-			break;
-
-
-
-	case 4:// 1/8
-			seq_rollRate = 1;
-			break;
-
-
-default:
-	case 5:// 1/16
-		seq_rollRate = 0;
-			break;
-/*
-	case 6: // 1/24
-		seq_rollRate = 0x05;
-		break;
-
-	case 7:// 1/32
-		seq_rollRate = 0x03;
-		break;
-
-	case 8:// 1/48
-		seq_rollRate = 0x02;
-		break;
-
-	case 9://1/64
-		seq_rollRate = 0x01;
-		break;
-
-	case 10://1/128
-		seq_rollRate = 0x00;
-		break;
-
-	case 11:// 1/3
-		seq_rollRate = 0x6;
-			break;
-	case 12:// 1/6
-		seq_rollRate = 0x31;
-			break;
-	case 13:// 1/12
-		seq_rollRate = 0x0a;
-			break;
-			*/
-	}
-	seq_rollRate +=1; //is there a reason for this offset here? seems the value could be assigned directly!?!
-
+	seq_rollRate = (rate < sizeof seq_rollRates) ? seq_rollRates[rate] : SEQC_ROLL(1, 1);
 }
 //------------------------------------------------------------------------
 /** quantize a step to the seq_quantisation value*/
