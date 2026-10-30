@@ -3,7 +3,8 @@
  *
  * Performance and acid of LICHOMAT v0.3 in seq_core: roll rates (RL), the slide
  * flag (SL); plan P1, P2. RL1: the sub-step and triplet rolls at x1 and the roll
- * code; RL2: a triplet roll at x3/4 and the swing of sub-step hits.
+ * code; RL2: a triplet roll at x3/4 and the swing of sub-step hits; SL1: the
+ * slide flag in bit 7 of Step.prob and the masked probability.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -97,6 +98,41 @@ TEST(RL2_sub_step_hits_take_their_steps_swing)
 	ASSERT_EQ(fake_triggers(h, 3, trig, 64), 6u);
 	for (size_t k = 0; k < 6; k++)
 		ASSERT_EQ(trig[k]->ev.tick, want[k]);
+}
+
+TEST(SL1_slide_flag_and_masked_probability)
+{
+	/* track 0, 8 steps, played twice (loops 0 and 1) */
+	fake_host_t *h = fake_init();
+	fake_setLength(h, 0, 0, 8);
+	for (uint8_t s = 0; s < 8; s += 2)
+		fake_setStep(h, 0, 0, s, true);
+	fake_setStepData(h, 0, 0, 0, 100, 60, 100u | STEP_SLIDE_FLAG);		/* plays, slides */
+	fake_setStepData(h, 0, 0, 2, 100, 62, 100u);				/* plays */
+	fake_setStepData(h, 0, 0, 4, 100, 63, 0u | STEP_SLIDE_FLAG);		/* 0 %: never */
+	fake_setStepData(h, 0, 0, 6, 100, 65, STEP_COND_1_2 | STEP_SLIDE_FLAG);	/* loop 0 only */
+	play(h, 16 * 125.0 - 1.0);
+	static const uint32_t abs[5] = { 0, 2, 6, 8, 10 };
+	static const uint8_t flags[5] = { SEQC_EVF_SLIDE, 0, SEQC_EVF_SLIDE, SEQC_EVF_SLIDE, 0 };
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 5u);
+	for (size_t k = 0; k < 5; k++)
+	{
+		ASSERT_EQ(trig[k]->ev.absStep, abs[k]);
+		ASSERT_EQ(trig[k]->ev.flags, flags[k]);
+	}
+	ASSERT_EQ(trig[2]->ev.note, 65);
+	ASSERT_EQ(h->errors, 0);
+}
+
+TEST(SL1_rolls_never_slide)
+{
+	fake_host_t *h = fake_init();
+	fake_setStepData(h, 0, 0, 0, 100, 60, 100u | STEP_SLIDE_FLAG);
+	h->rollRate[0] = SEQC_ROLL(1, 1);
+	play(h, 2 * 125.0 - 1.0);
+	ASSERT_EQ(fake_triggers(h, 0, trig, 64), 2u);	/* roll hits of steps 0 and 1; step 0 itself is off */
+	ASSERT_EQ(trig[0]->ev.flags, SEQC_EVF_ROLL);
+	ASSERT_EQ(trig[1]->ev.flags, SEQC_EVF_ROLL);
 }
 
 TEST_MAIN()

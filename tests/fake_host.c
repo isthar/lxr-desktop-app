@@ -385,7 +385,7 @@ static void cb_trigger(void *ctx, const seqc_event_t *ev)
 
 	if (!fake_validStep(h, "trigger", ev->pattern, ev->track, ev->step))
 		return;
-	if (ev->hit >= 8 || (ev->flags & ~SEQC_EVF_ROLL) != 0 || ev->reserved != 0)
+	if (ev->hit >= 8 || (ev->flags & ~(SEQC_EVF_ROLL | SEQC_EVF_SLIDE)) != 0 || ev->reserved != 0)
 		fake_error(h, "trigger: hit %u, flags 0x%02x, reserved %u", ev->hit, ev->flags, ev->reserved);
 
 	fake_rec_t *r = fake_log(h, FAKE_TRIGGER);

@@ -174,7 +174,7 @@ seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c STRICT_CORE seq_core_s
 seqc_add_test(test_tempo     IDS TT1 TT2 TT3 TT4 TT5 TT6 TT7 STRICT_CORE seq_core_strict)    # v0.2 V2 per-track tempo
 seqc_add_test(test_groove    IDS HD1 HD2 HD3 HD4 STRICT_CORE seq_core_strict)    # v0.2 V4 delay and humanize
 seqc_add_test(test_conditions IDS TC1 TC2 TC3 STRICT_CORE seq_core_strict)    # v0.2 V5 trig conditions
-seqc_add_test(test_perform IDS RL1 RL2 STRICT_CORE seq_core_strict)    # v0.3 P1 rolls, P2 slide
+seqc_add_test(test_perform IDS RL1 RL2 SL1 STRICT_CORE seq_core_strict)    # v0.3 P1 rolls, P2 slide
 seqc_add_test(test_queue     IDS queue EXTRA queue_equiv.c CORE seq_core_queue_test)  # E1.16, E1.18 queue order and real-time cost
 seqc_add_test(test_syncq     IDS syncq EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/seq_syncq.c)  # E2.1  sync input queues (seq_platform)
 seqc_add_test(test_cpumeter  IDS cpumeter EXTRA ${LXR_ROOT}/Core/Src/Soundengine/cpuMeter.c)  # E3.3 CPU meter

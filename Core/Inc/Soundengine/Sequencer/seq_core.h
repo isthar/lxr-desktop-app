@@ -130,14 +130,15 @@
  * For track t at absolute step n, the core reads the active pattern p and the
  * track step s.
  * - The step plays only if its main-step bit is set (stepOn()) and the
- *   probability draw r = 1 + random() % 100 is at most Step.prob (0..100).
- *   v0.2: Step.prob 101..115 is a trig condition instead (SeqStepTypes.h): A:B
+ *   probability draw r = 1 + random() % 100 is at most Step.prob & 0x7F (0..100).
+ *   v0.2: 101..115 is a trig condition instead (SeqStepTypes.h): A:B
  *   plays in loop l of the track (counted from 0 at a start or a pattern change,
  *   at the track's own length) when l % B == A - 1, FIRST in loop 0, FILL in fill
  *   mode; PRE plays when the PRE state is true, the result of the latest
  *   conditional trig of the track since the start or the pattern change (a
- *   probability below 100 counts; PRE, !PRE, 100 and 116..255 do not), false
- *   before the first; 116..255 play like 100.
+ *   probability below 100 counts; PRE, !PRE, 100 and 116..127 do not), false
+ *   before the first; 116..127 play like 100. v0.3: bit 7 is the slide flag
+ *   (STEP_SLIDE_FLAG): hit 0 of the step carries SEQC_EVF_SLIDE; roll hits never do.
  * - r is drawn once per (t, n), together with (p, s). If (p, s) differs between
  *   the early and the late part, a new draw is made.
  * - The early part keeps the swing and the StepTiming it read, whether the step
@@ -340,6 +341,7 @@ typedef enum
 
 /** seqc_event_t.flags */
 #define SEQC_EVF_ROLL	0x01u	/**< a roll hit (spec 6.6), not a step hit */
+#define SEQC_EVF_SLIDE	0x02u	/**< v0.3: hit 0 of a step with STEP_SLIDE_FLAG (plan D24) */
 
 /** One queued note event. It is self-contained: it plays the same way after a
  * pattern switch or an edit of its step (D5). 24 bytes (N2). */

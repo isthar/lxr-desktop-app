@@ -1149,7 +1149,7 @@ static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint
 	{
 		seqc_draw(d, &g);
 		data = seqc.host.step(seqc.host.ctx, pattern, track, step);
-		plays = seqc_plays(d, data->prob, pl);
+		plays = seqc_plays(d, (uint8_t)(data->prob & STEP_PROB_MASK), pl);
 	}
 	else if (!followsEarly)
 		seqc_noTrig(d);
@@ -1187,7 +1187,8 @@ static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint
 			continue;
 		const seqc_event_t ev = {
 			.tick = tick, .absStep = absStep, .track = track, .pattern = pattern, .step = step,
-			.hit = j, .vel = vel, .note = data->note, .flags = 0, .reserved = 0,
+			.hit = j, .vel = vel, .note = data->note, .reserved = 0,
+			.flags = (j == 0 && (data->prob & STEP_SLIDE_FLAG)) ? SEQC_EVF_SLIDE : 0,
 			.p1Nr = data->param1Nr, .p1Val = data->param1Val, .p2Nr = data->param2Nr, .p2Val = data->param2Val,
 		};
 		seqc_queueStage(&ev);

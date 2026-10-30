@@ -94,4 +94,9 @@ static inline TrackGroove trackGroove_checked(TrackGroove g)
 #define STEP_COND_NOT_PRE	115u
 #define STEP_PROB_CODES		116u	// the values the step page offers: 0..115
 
+// LICHOMAT v0.3: bit 7 of Step.prob is the step's slide flag (plan D23); bits 0..6 hold the
+// probability 0..100 or the trig condition 101..115 (116..127 play like 100)
+#define STEP_SLIDE_FLAG		0x80u
+#define STEP_PROB_MASK		0x7Fu
+
 #endif /* SEQSTEPTYPES_H_ */
