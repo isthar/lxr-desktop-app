@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 09:23",
-    "phase": "Etap 2: v0.3 w toku (P1–P6 i poprawki gotowe); przerwa",
-    "focus": "v0.3: P1–P6 gotowe; zostały P7 (zapis scen), P8 (wersja 0.3, demo), P9 (Twoje dokumenty).",
+    "updated": "2026-10-30 21:08",
+    "phase": "Etap 2: v0.3 gotowe w kodzie (M11); v0.4 czeka na odczyt CPU (H12)",
+    "focus": "v0.3 gotowe (gałąź v0.3 72f20c6). Następne: emulator R3 (karty testowe, nagrania wzorcowe, CI z ASan).",
     "branch": "timing-core",
-    "head": "194c2f8",
-    "next": "Ja: dokończyć v0.3 przy wznowieniu (zużycie 55,2%, limit tygodnia 65%). Ty: odsłuch build/demo/v02-*.wav, testy v0.1 z odczytem CPU (Q6, H12), potem v0.2 (U4–U14).",
-    "updated_at": "2026-10-30T09:23:00+01:00",
-    "now": "Przerwa od 09:22 (idziesz do pracy). Nic nie działa. Przy wznowieniu: P7 z gałęzi wip/v0.3-p7, potem P8, P9, przegląd P5–P8, raport M11."
+    "head": "72f20c6",
+    "next": "Ja: emulator R3 (zużycie ok. 54%, limit 75%). Ty: odsłuch build/demo/v02-*.wav i v03-*.wav, testy v0.1 z odczytem CPU (Q6, H12), potem U4–U19.",
+    "updated_at": "2026-10-30T21:08:00+01:00",
+    "now": "Od 21:08: commit M11, potem start agenta R3 w tle."
   },
   "epics": [
     {
@@ -464,7 +464,7 @@
       "id": "E6.1",
       "epic": "E6",
       "status": "w toku",
-      "title": "Specyfikacja i plany etapu 2: szkic gotowy (docs/superpowers/specs/2026-10-29-stage2-draft.md); plan v0.2 gotowy (docs/superpowers/plans/2026-10-29-v0.2-polyrhythm-groove.md, zadania V1–V11); plany v0.3 i v0.4 później",
+      "title": "Specyfikacja i plany etapu 2: szkic gotowy (docs/superpowers/specs/2026-10-29-stage2-draft.md); plany v0.2 (V1–V11) i v0.3 (P1–P9) gotowe i wykonane; plan v0.4 (atmosfera) czeka na odczyt CPU (H12)",
       "updated": "2026-10-30"
     },
     {
@@ -512,8 +512,8 @@
     {
       "id": "E6.8",
       "epic": "E6",
-      "status": "do zrobienia",
-      "title": "Tryb fill, sceny mute, roll 1/32 i triole (v0.3)",
+      "status": "zrobione",
+      "title": "Tryb fill, sceny mute, roll 1/32 i triole (v0.3, M11)",
       "updated": "2026-10-30"
     },
     {
@@ -533,8 +533,8 @@
     {
       "id": "E6.11",
       "epic": "E6",
-      "status": "do zrobienia",
-      "title": "Slide dla Drum 1–3 (acid), flaga w wolnym bicie nuty kroku (v0.3)",
+      "status": "zrobione",
+      "title": "Slide dla Drum 1–3 (acid), znacznik w bicie 7 bajtu prawdopodobieństwa kroku (v0.3, M11)",
       "updated": "2026-10-30"
     },
     {
@@ -640,6 +640,12 @@
       "date": "2026-10-30",
       "title": "v0.2: polirytmia, humanize, opóźnienie ścieżki, warunki trigów, rotacja (E6.3, E6.6, E6.7)",
       "summary": "Tempo ścieżki ×1/4…×4 (każda ścieżka na własnej siatce), humanize czasu i głośności, opóźnienie ścieżki w ms, warunki trigów w bajcie prawdopodobieństwa, rotacja SHIFT + krok 1/2; ustawienia w bloku na końcu pliku wzorca, niewidocznym dla fw 1.7. 83 testy na hoście, 139 w emulatorze, 0 ostrzeżeń; DTCM+RAM 393 864 z 395 892 B. Dwa lekkie przeglądy, 5 drobnych usterek poprawionych z testami. Rendery do odsłuchu w build/demo/v02-*.wav. Raport: docs/lichomat/reports/M10-v0.2.md."
+    },
+    {
+      "id": "M11",
+      "date": "2026-10-30",
+      "title": "v0.3: tryb fill, sceny mute, rolle 1/32 i triole, slide dla Drum 1–3 (E6.8, E6.11)",
+      "summary": "Fill na trzymanym kroku 8 w trybie wykonawczym; 8 scen mute na krokach 9–16 (COPY + krok zapisuje), wejście na takcie albo kroku, zapis w prj.nfo za nazwą projektu; 11 temp rolla od 1/1 do 1/32 z triolami, dokładnie we własnym tempie ścieżki; slide dla Drum 1–3 (sld na kroku, slt w kicie). fw 1.7 wczytuje wszystko bez zmian. 90 testów na hoście, 145 w emulatorze, 0 ostrzeżeń; DTCM+RAM 394 104 z 395 892 B. Dwa lekkie przeglądy: 1 ważna i 8 drobnych usterek, poprawione z testami. Rendery do odsłuchu w build/demo/v03-*.wav. Raport: docs/lichomat/reports/M11-v0.3.md"
     }
   ],
   "questions": [
@@ -2516,6 +2522,46 @@
       "n": 341,
       "at": "2026-10-30 09:23",
       "text": "Poprawki z przeglądu P1–P4 gotowe i na forku: 2e7d202 (reset() testu sekwencera wypełnia bufor zapasowy jak przy starcie, więc testy przechodzą też pojedynczo), 22dda52 (bufor granicy mieści 2 uderzenia rolla 1/32, 119 zdarzeń), 194c2f8 (glide trwa przez kolejne uderzenia kroku ze slide'em). Zatrzymane o 09:22 na Twoją prośbę. P7 było w połowie: zapisane lokalnie na gałęzi wip/v0.3-p7 (457fc34), niesprawdzone."
+    },
+    {
+      "n": 342,
+      "at": "2026-10-30 20:04",
+      "text": "20:04 Wznowienie (Twój odczyt: 53%, limit teraz 75%, kofeina na 8 h). Wracam do P7 z gałęzi wip/v0.3-p7."
+    },
+    {
+      "n": 343,
+      "at": "2026-10-30 20:07",
+      "text": "20:07 P7 gotowe: sceny mute zapisują się w prj.nfo za nazwą projektu i wczytują przy starcie (e29f5d3, wypchnięte). Testy: host 90, emulator 145. DTCM+RAM 394 104 B z 395 892 B."
+    },
+    {
+      "n": 344,
+      "at": "2026-10-30 20:12",
+      "text": "20:12 P8 gotowe: wersja 0.3, plik LXR_V2_LICHOMAT_0.3.img, odbiór względem v0.2 i 6 renderów demo w build/demo/v03-*.wav, sprawdzonych po logach MIDI (a95112f, wypchnięte). Poprawiłem w skrypcie z planu moment wciśnięcia fill i nutę MIDI linii acid."
+    },
+    {
+      "n": 345,
+      "at": "2026-10-30 20:13",
+      "text": "20:13 Start lekkiego przeglądu P5-P8 (jeden agent, w tle) i P9 (piszę sam)."
+    },
+    {
+      "n": 346,
+      "at": "2026-10-30 20:19",
+      "text": "20:19 P9 gotowe: lista sprawdzeń na LXR ma U15-U19 (fill, sceny, rolle, slide, wersja i kity), jest szkic notatek do wydania v0.3 (docs/lichomat/release-notes-v0.3.md). Commit na timing-core, wypchnięty."
+    },
+    {
+      "n": 347,
+      "at": "2026-10-30 20:19",
+      "text": "Stan zaktualizowany: v0.3 P1-P9 gotowe, trwa przegląd P5-P8."
+    },
+    {
+      "n": 348,
+      "at": "2026-10-30 20:31",
+      "text": "20:31 Przegląd P5-P8: 1 ważna uwaga i 5 drobnych, wszystkie poprawione z testami, które najpierw padały (72f20c6, wypchnięte). Ważna: fill wołał rdzeń z pętli głównej; na LXR przerwanie audio mogło wtedy zgubić impuls zegara MIDI albo START. Teraz idzie przez skrzynkę jak reszta. Drobne: diody scen w innych trybach, scena czekająca przy zmianie projektu, scn w nowym projekcie, dioda kroku 8, wyścig przy wyciszaniu."
+    },
+    {
+      "n": 349,
+      "at": "2026-10-30 21:08",
+      "text": "21:08 Raport M11 gotowy: v0.3 skończone w kodzie (docs/lichomat/reports/M11-v0.3.md)."
     }
   ]
 }

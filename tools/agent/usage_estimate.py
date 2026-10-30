@@ -24,6 +24,7 @@ READINGS = [                     # the owner's readings of the weekly meter
     ("2026-10-27T04:50:00Z", 19.0),
     ("2026-10-28T23:29:00Z", 34.0),
     ("2026-10-30T05:16:00Z", 49.0),
+    ("2026-10-30T19:04:00Z", 53.0),
 ]
 for a in sys.argv[1:]:
     if a.startswith("--reading="):

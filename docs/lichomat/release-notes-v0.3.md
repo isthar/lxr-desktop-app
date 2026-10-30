@@ -38,7 +38,7 @@ Wszystkie trzy wczytują projekty, wzorce i kity zapisane przez v0.3 bez błęd�
 
 - **Gdzie:** w trybie wykonawczym kroki 9–16 przywołują sceny 1–8. Żeby zapisać scenę, wycisz głosy przyciskami głosów, przytrzymaj COPY i naciśnij krok 9–16: scena zapamiętuje, które głosy są wyciszone.
 - **Kiedy działa:** ustawienie `scn` (drugi ekran strony trybu wykonawczego, globalne). `bar`: na początku następnego taktu ścieżki mastera (co 16 kroków mastera), domyślnie. `stp`: na następnym kroku mastera. Po zatrzymaniu: od razu. Do tej chwili dioda przywołanego kroku mruga, a potem diody głosów pokazują scenę. Przy kilku przywołaniach przed granicą wygrywa ostatnie.
-- Pusta scena nic nie zmienia.
+- Pusta scena nic nie zmienia. Scena, która czeka w chwili STOP, wchodzi na pierwszym kroku po następnym starcie; wyciszenia ustawione ręcznie po zatrzymaniu jej ustępują. Zmiana projektu odrzuca czekającą scenę.
 - **Zapis:** sceny zapisują się z każdym zapisem projektu i wczytują z każdym wczytaniem projektu, także przy włączeniu LXR. Nowy projekt nie ma scen. Bieżące wyciszenia, jak dotąd, nie zapisują się nigdzie.
 
 ### Rolle
