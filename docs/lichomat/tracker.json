@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 23:57",
+    "updated": "2026-10-31 00:00",
     "phase": "Etap 2: v0.3 gotowe w kodzie (M11), emulator R3 gotowy (M12); v0.4 czeka na odczyt CPU (H12)",
     "focus": "v0.3 z nagraniami wzorcowymi i CI emulatora (gałąź v0.3 5a7008d); emulator R3 gotowy (gałąź emulator 56fe495).",
     "branch": "timing-core",
-    "head": "2876f89",
+    "head": "2d083e0",
     "next": "Ty: jedna sesja testowa na v0.3 według docs/lichomat/test-session-v0.3.md, najpierw H12 (odczyt CPU odblokowuje v0.4); odsłuch build/demo/v02-*, v03-* i build/dlc/*. Ja: przerwa i podsumowanie ok. 04:00 albo przy 73%.",
-    "updated_at": "2026-10-30T23:57:00+01:00",
-    "now": "Od 23:56: podsumowanie nocy; potem przerwa (kofeina do ok. 04:04)."
+    "updated_at": "2026-10-31T00:00:00+01:00",
+    "now": "Od 00:00: agent w tle pisze plan v0.4 (bez prototypu, limit narzędzi); potem przegląd planu i podsumowanie nocy."
   },
   "epics": [
     {
@@ -2754,6 +2754,11 @@
       "n": 382,
       "at": "2026-10-30 23:57",
       "text": "23:57 Propozycja jednej sesji testowej na v0.3 zamiast trzech (v0.1, v0.2, v0.3), z H12 (strona CPU) na początku, bo ten odczyt odblokowuje v0.4: docs/lichomat/test-session-v0.3.md."
+    },
+    {
+      "n": 383,
+      "at": "2026-10-31 00:00",
+      "text": "00:00 Przewodnik po polsku: jak samemu zrobić w emulatorze render swojego projektu z karty, zmieniać parametry, naciskać przyciski skryptem i porównać dwie wersje firmware (docs/lichomat/emulator-jak-uzywac.md). W tle agent pisze plan v0.4 (atmosfera) z bramką H12 i decyzją o budżecie pamięci; bez prototypu."
     }
   ]
 }

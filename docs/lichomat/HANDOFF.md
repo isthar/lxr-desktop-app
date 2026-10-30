@@ -18,6 +18,7 @@ Read this first when picking the project up in a new session.
 | Milestone report of R2 | `docs/lichomat/reports/M9-emulator-R2.md` |
 | Milestone report of R3 (goldens, emulator CI, F13–F18, the random sweeps `tools/emu_fuzz.py`) | `docs/lichomat/reports/M12-emulator-R3.md` |
 | The owner's proposed single test session on 0.3 (H12 first; Polish) | `docs/lichomat/test-session-v0.3.md` |
+| How the owner renders own projects in the emulator (Polish) | `docs/lichomat/emulator-jak-uzywac.md` |
 | Milestone report of v0.2 | `docs/lichomat/reports/M10-v0.2.md` |
 | Plan v0.3 (tasks P1–P9; branch `v0.3` from `v0.2`, worktree `build/wt-v03`, pushed; done: P1–P9, the P5–P8 review fixes, F13–F15, and the merge of `emulator`'s R3 (goldens, emulator CI), head `5a7008d`: 92 host ids, 173 emulator ids in Debug and 174 in Release; DTCM+RAM 394,104 of 395,892 B; report M11) | `docs/superpowers/plans/2026-10-30-v0.3-performance-acid.md` |
 | Stage 2 draft (accepted by the owner's rule of 2026-10-29) | `docs/superpowers/specs/2026-10-29-stage2-draft.md` |
