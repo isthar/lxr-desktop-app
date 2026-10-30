@@ -1090,6 +1090,87 @@ def M14_speed(t):
     print('G1: %.1fx real time (%.3f s of wall time)' % (s['speed'], s['wallSeconds']))
     no_copies_left()
 
+# --- M14: emu_golden.py on outputs made here, without a render ----------------------
+
+def fake_outputs(d, channels, samples, midi=''):
+    """a folder of the outputs that emu_golden.Outputs reads: a canonical WAV of 16-bit
+    samples (interleaved, at the renderer's 44,140 Hz), the logs and a summary"""
+    os.makedirs(d)
+    data = struct.pack('<%dh' % len(samples), *samples)
+    with open(os.path.join(d, 'out.wav'), 'wb') as f:
+        f.write(b'RIFF' + struct.pack('<I', 36 + len(data)) + b'WAVEfmt ' +
+                struct.pack('<IHHIIHH', 16, 1, channels, 44140, 44140 * 2 * channels, 2 * channels, 16) +
+                b'data' + struct.pack('<I', len(data)) + data)
+    for name, text in (('midi.log', midi), ('clock.log', ''), ('panel.log', '')):
+        with open(os.path.join(d, name), 'w') as f:
+            f.write(text)
+    with open(os.path.join(d, 'summary.json'), 'w') as f:
+        f.write('{}\n')
+    return d
+
+@case
+def M14_diff(t):
+    """emu_golden.py diff on two WAVs that are equal up to the shorter one's end"""
+    eg = golden_tool(t)
+    a = [(i * 37) % 2000 - 1000 for i in range(4 * 100)]      # 100 frames, 4 channels
+    b = a + [5] * (4 * 10)                                     # the same and 10 frames more
+    c = list(b)
+    c[4 * 57 + 2] += 1                                         # frame 57, L2
+    here, there = eg.Outputs(fake_outputs(t.path('a'), 4, a)), eg.Outputs(fake_outputs(t.path('b'), 4, b))
+    for x, y, want in ((here, there, ['X: REV renders 110 frames, the working tree 100']),
+                       (there, here, ['X: REV renders 100 frames, the working tree 110']),
+                       (here, eg.Outputs(fake_outputs(t.path('same'), 4, a)), []),
+                       (here, eg.Outputs(fake_outputs(t.path('c'), 4, c)),
+                        ['X: the first differing frame is 57 (0.001291 s), channel L2: -489 at REV, '
+                         '-490 in the working tree'])):
+        got = eg.wav_differences('X', 'REV', x, y)
+        check(got == want, 'wav_differences on %d and %d frames: %r, not %r' % (x.frames, y.frames, got, want))
+        print('%d and %d frames: %r' % (x.frames, y.frames, got))
+
+@case
+def M14_windows(t):
+    """an expectation whose window ends after the render, or on a channel that the WAV
+    lacks, fails and says so; inside the render the same lines hold"""
+    eg = golden_tool(t)
+    o = eg.Outputs(fake_outputs(t.path('out'), 2, [0] * (2 * 44141)))    # 1 s (44,141 frames), L1 and R1
+
+    def ev(text):
+        return eg.Expect(1, '#expect ' + text, text, 'M14_windows').evaluate(o)
+
+    for x in ('silent L1 0s..1s', 'silent R1', 'midi DIN 9n 0..0 0s..1s', 'clock 0..0 0s..44141f'):
+        holds, detail = ev(x)
+        check(holds, '%s on 1 s of silence: %s' % (x, detail))
+    for x, want in (('silent L1 2s..3s', 'after the end of the render'),
+                    ('silent L1 0s..44142f', 'after the end of the render'),
+                    ('midi DIN 9n 0..0 2s..3s', 'after the end of the render'),
+                    ('clock 0..0 0s..1.1s', 'after the end of the render'),
+                    ('energy L1 -90 0.5s..2s', 'after the end of the render'),
+                    ('silent L2', 'the WAV has 2 channels, no L2'),
+                    ('silent R2 0s..1s', 'the WAV has 2 channels, no R2'),
+                    ('energy L2 -90', 'the WAV has 2 channels, no L2')):
+        holds, detail = ev(x)
+        check(not holds and want in detail, '%s on a render of 1 s and 2 channels: %s (%s), not a failure that '
+              'says %r' % (x, 'holds' if holds else 'fails', detail, want))
+        print('%s: fails (%s)' % (x, detail))
+
+@case
+def M14_inventory(t):
+    """every emu/tests/goldens/*.txt has its goldens.json entry and every entry its .txt:
+    CMake's glob drops the ctest id of a golden deleted or renamed by mistake"""
+    eg = golden_tool(t)
+    neg = t.path('neg')
+    os.makedirs(neg)
+    for x in ('A.txt', 'B.txt'):
+        open(os.path.join(neg, x), 'w').close()
+    with open(os.path.join(neg, 'goldens.json'), 'w') as f:
+        json.dump({'A': {}, 'C': {}}, f)
+    want = ['B.txt has no entry in goldens.json', 'goldens.json has an entry C without C.txt']
+    got = eg.inventory(neg)
+    check(got == want, 'inventory of A.txt, B.txt and the entries A, C: %r, not %r' % (got, want))
+    got = eg.inventory()
+    check(not got, 'emu/tests/goldens: %s' % '; '.join(got))
+    print('%d goldens, each with its entry in goldens.json, and no other entry' % len(eg.all_ids()))
+
 # --- M23: the card fixtures (spec 5.6) ----------------------------------------------
 
 @case

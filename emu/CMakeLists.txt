@@ -316,6 +316,9 @@ foreach(g IN LISTS EMU_GOLDENS)
 endforeach()
 # M14: determinism, slicing, the broken-variant check (spec 8.4, 12.1)
 emu_render_tests(M14_repeat M14_slices M14_broken)
+# M14: emu_golden.py's diff and windows on outputs made by the test, and the goldens
+# against goldens.json
+emu_render_tests(M14_diff M14_windows M14_inventory)
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     emu_render_tests(M14_speed)	# spec 9.2: Release runs M14's speed check
 endif()

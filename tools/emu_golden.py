@@ -9,8 +9,11 @@ A golden is emu/tests/goldens/ID.txt: header lines (#! options, #expect,
 #broken, #broken-drop, #pin panel), then an event script. check renders each
 golden into OUT/ID, evaluates its expectations, compares the outputs with its
 entry in emu/tests/goldens/goldens.json, and renders the broken variant into
-OUT/ID-broken, which must fail at least one expectation. --golden-file checks
-one file outside the goldens folder, expectations and broken variant only.
+OUT/ID-broken, which must fail at least one expectation. An expectation whose
+window ends after the render, or on a channel that the WAV lacks, fails.
+Without IDs, check takes every golden and also fails on an entry of
+goldens.json without its .txt. --golden-file checks one file outside the
+goldens folder, expectations and broken variant only.
 bless does what check does and writes the entries; it refuses, writing
 nothing, when an expectation fails or a broken variant passes. diff builds the
 renderer at REV (default: the last commit that changed goldens.json) in a
@@ -163,7 +166,13 @@ class Expect:
             raise Usage('%s: unknown expectation %r' % (where, self.kind))
 
     def evaluate(self, o):
-        """(holds, detail) on the outputs o"""
+        """(holds, detail) on the outputs o. A window that ends after the render's last
+        frame, or a channel that the WAV lacks, fails: neither can be checked."""
+        if self.window is not None and self.window[3] > o.frames:
+            return False, 'the window ends at frame %d (%.6f s), after the end of the render at frame %d (%.6f s)' % (
+                self.window[3], self.window[3] / RATE, o.frames, o.frames / RATE)
+        if self.kind in ('energy', 'silent') and self.channel >= o.channels:
+            return False, 'the WAV has %d channels, no %s' % (o.channels, CHANNELS[self.channel])
         if self.kind == 'midi':
             n = o.midi_count(self.port, self.status, self.window)
             return self.range[0] <= n <= self.range[1], '%d messages' % n
@@ -264,8 +273,21 @@ def load(gid):
     return parse(path)
 
 
-def all_ids():
-    return sorted(x[:-4] for x in os.listdir(GOLDENS) if x.endswith('.txt'))
+def all_ids(folder=GOLDENS):
+    return sorted(x[:-4] for x in os.listdir(folder) if x.endswith('.txt'))
+
+
+def inventory(folder=GOLDENS):
+    """the lines that name each golden of folder without an entry in its goldens.json and
+    each entry without a golden; none when they match. CMake's glob gives a ctest id to
+    each .txt, so a golden deleted or renamed by mistake loses its id silently."""
+    ids, path = set(all_ids(folder)), os.path.join(folder, 'goldens.json')
+    entries = set()
+    if os.path.isfile(path):
+        with open(path) as f:
+            entries = set(json.load(f))
+    return (['%s.txt has no entry in goldens.json' % x for x in sorted(ids - entries)] +
+            ['goldens.json has an entry %s without %s.txt' % (x, x) for x in sorted(entries - ids)])
 
 
 def card_paths(opts):
@@ -543,6 +565,10 @@ def cmd_check(a):
     goldens = [load(x) for x in (a.ids or all_ids())]
     blessed = read_goldens()
     results = [run_golden(g, a, blessed)[0] for g in goldens]
+    if not a.ids:
+        for x in inventory():
+            print(x)
+            results.append(False)
     return 0 if all(results) else 1
 
 
@@ -592,6 +618,28 @@ def build_at(rev, tmp):
     return os.path.join(build, 'lichomat-render')
 
 
+def wav_differences(gid, rev, here, there):
+    """the lines of diff on the WAVs of two renders, here (the working tree's) and there
+    (rev's): the headers, then the first differing frame or else the frame counts;
+    none when they are the same"""
+    out = []
+    if (here.channels, here.rate, here.bits) != (there.channels, there.rate, there.bits):
+        out.append('%s: the WAV headers differ: %s has %d channels, %d Hz, %d bits; the working tree %d, %d, %d' % (
+            gid, rev, there.channels, there.rate, there.bits, here.channels, here.rate, here.bits))
+    n = min(len(here.samples), len(there.samples))     # the samples that both have
+    step = CHUNK_FRAMES * here.channels
+    i = next((j for j in range(0, n, step)
+              if here.samples[j:min(j + step, n)] != there.samples[j:min(j + step, n)]), None)
+    if i is not None:
+        i = next(j for j in range(i, min(i + step, n)) if here.samples[j] != there.samples[j])
+        f, c = divmod(i, here.channels)
+        out.append('%s: the first differing frame is %d (%.6f s), channel %s: %d at %s, %d in the working tree' % (
+            gid, f, f / RATE, CHANNELS[c] if c < 4 else c, there.samples[i], rev, here.samples[i]))
+    elif here.frames != there.frames:
+        out.append('%s: %s renders %d frames, the working tree %d' % (gid, rev, there.frames, here.frames))
+    return out
+
+
 def cmd_diff(a):
     g = load(a.id)
     rev = a.against or git('log', '-1', '--format=%H', '--', os.path.relpath(GOLDENS_JSON, ROOT))
@@ -605,23 +653,10 @@ def cmd_diff(a):
         there = Outputs(render(g, os.path.join(a.out, g.id + '-at-rev'), renderer=old_r))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    same = True
-    if (here.channels, here.rate, here.bits) != (there.channels, there.rate, there.bits):
-        print('%s: the WAV headers differ: %s has %d channels, %d Hz, %d bits; the working tree %d, %d, %d' % (
-            g.id, rev, there.channels, there.rate, there.bits, here.channels, here.rate, here.bits))
-        same = False
-    n = min(len(here.samples), len(there.samples))
-    step = CHUNK_FRAMES * here.channels
-    i = next((j for j in range(0, n, step) if here.samples[j:j + step] != there.samples[j:j + step]), None)
-    if i is not None:
-        i = next(j for j in range(i, min(i + step, n)) if here.samples[j] != there.samples[j])
-        f, c = divmod(i, here.channels)
-        print('%s: the first differing frame is %d (%.6f s), channel %s: %d at %s, %d in the working tree' % (
-            g.id, f, f / RATE, CHANNELS[c] if c < 4 else c, there.samples[i], rev, here.samples[i]))
-        same = False
-    elif here.frames != there.frames:
-        print('%s: %s renders %d frames, the working tree %d' % (g.id, rev, there.frames, here.frames))
-        same = False
+    lines = wav_differences(g.id, rev, here, there)
+    for x in lines:
+        print(x)
+    same = not lines
     for k in LOGS:
         lh, lt = here.lines(k), there.lines(k)
         j = next((j for j in range(max(len(lh), len(lt))) if j >= len(lh) or j >= len(lt) or lh[j] != lt[j]), None)
