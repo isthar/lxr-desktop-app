@@ -35,15 +35,18 @@
 #define SEQC_QUEUE_CAPACITY	SEQC_QUEUE_SIZE
 #endif
 /* The most events one step boundary generates (seqc_boundary()), which the
- * queue's staging buffer holds (E1.18). Per track: one roll event; the late part
- * of step n, at most SEQC_MAX_HITS hits; and the early part of step n+1, its hits
+ * queue's staging buffer holds (E1.18). Per track: the roll hits of step n, at
+ * most SEQC_MAX_ROLL_HITS (v0.3: 1/32 has 2 in every step, 1/24 2 in the even
+ * ones, the others 1); the late part of step n, at most SEQC_MAX_HITS hits; and
+ * the early part of step n+1, its hits
  * before (n+1) * 96. The earliest hit is SEQC_MAX_SHIFT_TICKS before that (the
  * swing only delays), and k hits are 96 / k ticks apart, so at most
  * ceil(84 * k / 96) of them are early: 7 for x8, fewer for smaller k. */
 #define SEQC_MAX_HITS		8u
+#define SEQC_MAX_ROLL_HITS	2u
 #define SEQC_EARLY_HITS		((SEQC_MAX_SHIFT_TICKS * SEQC_MAX_HITS + SEQC_TICKS_PER_STEP - 1u) / SEQC_TICKS_PER_STEP)
-#define SEQC_STAGE_SIZE		(SEQC_NUM_TRACKS * (1u + SEQC_MAX_HITS + SEQC_EARLY_HITS))
-_Static_assert(SEQC_EARLY_HITS == 7u && SEQC_STAGE_SIZE == 112u, "a boundary generates at most 7 x (1 + 8 + 7) events");
+#define SEQC_STAGE_SIZE		(SEQC_NUM_TRACKS * (SEQC_MAX_ROLL_HITS + SEQC_MAX_HITS + SEQC_EARLY_HITS))
+_Static_assert(SEQC_EARLY_HITS == 7u && SEQC_STAGE_SIZE == 119u, "a boundary generates at most 7 x (2 + 8 + 7) events");
 _Static_assert(SEQC_STAGE_SIZE <= 255u, "the staging indices are 8 bits");
 _Static_assert(SEQC_NUM_TRACKS <= 8u, "seqc_queue_t.chokeTracks has a bit per track");
 //------------------------------------------------------------------------------

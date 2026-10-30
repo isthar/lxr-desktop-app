@@ -591,6 +591,36 @@ TEST(queue_dense_moves_are_bounded)
 		denseMovesAreBounded(&denseCases[i]);
 }
 
+/* LICHOMAT v0.3: the most a boundary stages. Every track x8 (flam 5), the even
+ * steps unshifted and the odd ones at -7, and a 1/32 roll (2 hits a step): an
+ * even boundary stages per track 2 roll hits, the 8 hits of its step and the 7
+ * early hits of the next, 7 x 17 = 119 events, into an empty queue. Staged in
+ * one go, each is written twice (staged, merged); a stage that fills up merges
+ * mid-boundary, and the last events then move queued ones. */
+TEST(queue_rolls_at_1_32_with_ratchets_stage_one_boundary)
+{
+	fake_host_t *h = startDenseShuffled(-7, 0, 0);
+	for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+		h->rollRate[t] = SEQC_ROLL(1, 2);
+	const seqc_time_t until = (seqc_time_t)(16.0 * fake_stepCycles(120.0));
+	size_t full = 0, boundaries = 0;
+	for (seqc_time_t t = 0; t < until; t += fake_msToCycles(0.1))
+	{
+		const call_t c = processCall(h, t);
+		if (c.boundaries == 0)
+			continue;
+		boundaries++;
+		if (c.inserted != SEQC_NUM_TRACKS * 17)
+			continue;
+		full++;
+		ASSERT_EQ(c.moves, 2u * SEQC_NUM_TRACKS * 17);
+	}
+	ASSERT_EQ(boundaries, 16);
+	ASSERT_EQ(full, 8);
+	ASSERT_EQ(stats().queueOverflow, 0);
+	ASSERT_EQ(h->errors, 0);
+}
+
 /* A worst case of the E1.16 queue, found by a hill climb over legal settings
  * (the E1.16 review, "climbed2"): every step on, per-step shift and flam, roll
  * rates, shuffle 0. Its boundary calls queue up to 111 events. At 120, 130 and
