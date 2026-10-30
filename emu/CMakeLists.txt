@@ -240,7 +240,8 @@ emu_add_test(test_din IDS M10_wire_in M10_wire_out M10_tx_enable_late M10_rx_dur
 emu_add_test(test_usb IDS M11_walk M11_window_16 M11_window_start M11_out M11_no_stall_drop)
 emu_add_test(test_jacks IDS M12_clock_in M12_reset M12_clock_out_core M12_fw_clock_out M8_fw_output_jacks)
 emu_add_test(test_fwchanges IDS M15_f1_cc1 M15_f2_morph M15_f3_clear_pages M15_f9_band10
-    M15_f11_knobs_at_boot M15_f12_euklid M15_f13_diode_table)
+    M15_f11_knobs_at_boot M15_f12_euklid M15_f13_diode_table
+    M15_f14_transient_shift)
 emu_add_test(test_pingpong IDS M16_pingpong)
 
 # M19: the firmware objects import no libm name but the vendored ones and fmod

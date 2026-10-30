@@ -38,6 +38,8 @@
 #include "Soundengine/DSPAudio/DrumVoice.h"
 #include "Soundengine/DSPAudio/Oscillator.h"
 #include "Soundengine/DSPAudio/CymbalVoice.h"
+#include "Soundengine/DSPAudio/transientGenerator.h"
+#include "Soundengine/DSPAudio/transientTables.h"
 #include "Soundengine/DSPAudio/HiHat.h"
 #include "Soundengine/DSPAudio/Snare.h"
 #include "Soundengine/DSPAudio/modulationNode.h"
@@ -419,6 +421,37 @@ TEST(M15_f13_diode_table)
 	ASSERT_TRUE(diode(0.5f) == table_1n914[192]);	/* below +1 as in fw 1.7 */
 	const float below = diode(0.999f);		/* index 255.87; the table ends flat */
 	ASSERT_TRUE(below >= table_1n914[255] && below <= table_1n914[256]);
+}
+
+/* --- F14 -------------------------------------------------------------------------- */
+
+/* transient_calcBlock() and transient_calc() (transientGenerator.c) scaled the signed
+ * 8-bit transient samples with << 8, undefined in C for a negative sample (UBSan: left
+ * shift of negative value -64). Every kit with a sampled transient reaches it: all 16
+ * demo patterns of a third-party kit pack stopped there. GCC defines the shift as a
+ * multiplication by 256, so the device's output stays the same; F14 writes * 256. */
+TEST(M15_f14_transient_shift)
+{
+	int neg = -1;
+	for (int k = 0; k < TRANSIENT_SAMPLE_LENGTH && neg < 0; k++)
+		if (transientData[0][k] < 0)
+			neg = k;
+	ASSERT_TRUE(neg >= 0);
+	TransientGenerator tr;
+	memset(&tr, 0, sizeof tr);
+	tr.waveform = 2;			/* calcBlock: table waveform - 2 */
+	tr.volume = 1.0f;
+	tr.pitch = 1.0f;
+	tr.phase = (uint32_t)neg << 20;
+	int16_t buf[2];
+	transient_calcBlock(&tr, buf, 2);
+	ASSERT_EQ(buf[0], transientData[0][neg] * 256);
+	memset(&tr, 0, sizeof tr);
+	tr.waveform = 1;			/* calc: table waveform - 1 */
+	tr.volume = 1.0f;
+	tr.phase = (uint32_t)neg << 20;		/* pitch 0: the phase stays */
+	transient_calc(&tr);
+	ASSERT_EQ(tr.output, (int16_t)(transientData[0][neg] * 256 * transientVolumeTable[neg >> 5]));
 }
 
 TEST_MAIN()
