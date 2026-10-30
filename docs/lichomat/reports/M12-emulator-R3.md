@@ -1,4 +1,4 @@
-# M12: emulator, krok R3 – karty testowe, nagrania wzorcowe G1–G10, CI z ASan (E5.4) i poprawki F13–F15
+# M12: emulator, krok R3 – karty testowe, nagrania wzorcowe G1–G10, CI z ASan (E5.4) i poprawki F13–F18
 
 Data: 2026-10-30. Gałąź `emulator`, wypchnięta na fork, głowa `56fe495`.
 Plan: `docs/superpowers/plans/2026-10-29-emulator-r2-r3-renderer-goldens.md`, zadania R3.1–R3.6.
@@ -58,6 +58,18 @@ padał, i jest też na v0.3.
 F14 i F15 znalazła Twoja paczka DLC Hrtl: jej prawdziwe kity przechodzą ścieżkami silnika dźwięku,
 których moje karty nie dotykały. Teraz wszystkie 16 wzorców demo gra pod UBSan bez błędu. Pliki
 paczki zostają tylko na Twoim Macu.
+
+Potem przegląd losowymi parametrami (fuzzing): 1900 krótkich renderów karty `init` pod UBSan, każdy
+z 40 losowymi parametrami brzmienia (skrypt tylko lokalnie). Znalazł jeszcze trzy:
+- **F16** (`MidiParser.c`, `lfo.c`, `DrumVoice.c`): przesunięcie fazy LFO i faza startowa Drum przy 127
+  to 2³² jako float, poza zakresem `uint32`; teraz nasycenie jak na M7.
+- **F17** (`Oscillator.c`): przy modulacji wysokości poniżej zera oscylator liczył log2 z ujemnej
+  częstotliwości; teraz 0 jak na M7.
+- **F18** (`Delay.c`): delay przy FX na jedno wyjście czytał 32 bity spod adresu przesuniętego o 2 bajty;
+  M7 robi to sprzętowo, emulator czyta teraz przez `memcpy`.
+
+Obraz firmware po F14–F18 jest bajt w bajt ten sam co przed nimi. Ostatnia runda (1000 renderów) nie
+znalazła już nic.
 
 ## Przegląd i poprawki
 

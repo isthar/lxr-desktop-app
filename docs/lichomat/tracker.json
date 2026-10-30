@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 23:07",
+    "updated": "2026-10-30 23:28",
     "phase": "Etap 2: v0.3 gotowe w kodzie (M11), emulator R3 gotowy (M12); v0.4 czeka na odczyt CPU (H12)",
     "focus": "v0.3 z nagraniami wzorcowymi i CI emulatora (gałąź v0.3 5a7008d); emulator R3 gotowy (gałąź emulator 56fe495).",
     "branch": "timing-core",
-    "head": "a414137",
+    "head": "c122f55",
     "next": "Ja: przerwa i podsumowanie ok. 04:00 albo przy 73% (teraz ok. 57%). Ty: odsłuch build/demo/v02-*, v03-* i build/dlc/*, testy v0.1 z odczytem CPU (Q6, H12), potem U4–U19.",
-    "updated_at": "2026-10-30T23:07:00+01:00",
-    "now": "Od 23:06: pierwsze CI na v0.3 po scaleniu; raport M12."
+    "updated_at": "2026-10-30T23:28:00+01:00",
+    "now": "Od 23:28: porządki po nocy (raport M12, tracker); potem decyzja o następnym kroku."
   },
   "epics": [
     {
@@ -2704,6 +2704,26 @@
       "n": 372,
       "at": "2026-10-30 23:07",
       "text": "23:07 Raport M12 (emulator R3) gotowy: docs/lichomat/reports/M12-emulator-R3.md. E5.4 zrobione; Q27 zapisuje, że R3 poszło przed końcem etapu 2, bo v0.4 czeka na H12."
+    },
+    {
+      "n": 373,
+      "at": "2026-10-30 23:09",
+      "text": "23:09 Start przeglądu silnika dźwięku losowymi parametrami (fuzzing): 300 krótkich renderów emulatora v0.3 pod UBSan, każdy z 40 losowymi parametrami brzmienia. Szukam kolejnych błędów fw 1.7 jak F13-F15."
+    },
+    {
+      "n": 374,
+      "at": "2026-10-30 23:13",
+      "text": "23:13 Fuzzing, runda 1 (300 renderów): jeden nowy błąd fw 1.7, F16. Przesunięcie fazy LFO i faza startowa Drum przy 127 wychodzą poza uint32 (8 miejsc w MidiParser.c, lfo.c, DrumVoice.c). Poprawione jak F15, obraz bajt w bajt ten sam (e89ff7c, wypchnięte). Runda 2: 600 renderów, bez parametrów, które renderer celowo odrzuca."
+    },
+    {
+      "n": 375,
+      "at": "2026-10-30 23:22",
+      "text": "23:22 Fuzzing, runda 2 (600 renderów): dwa kolejne błędy fw 1.7, poprawione 1:1 (f2e39ac, wypchnięte; obraz bajt w bajt ten sam). F17: przy modulacji wysokości poniżej zera oscylator liczy log2 z ujemnej częstotliwości. F18: delay przy wyjściu FX na jedno wyjście czyta 32 bity spod niewyrównanego adresu (M7 robi to sprzętowo, emulator teraz przez memcpy). Runda 3: 1000 renderów."
+    },
+    {
+      "n": 376,
+      "at": "2026-10-30 23:28",
+      "text": "23:28 Fuzzing, runda 3 (1000 renderów): zero znalezisk; silnik dźwięku przy losowych parametrach jest czysty pod UBSan. F16-F18 przeniesione też na gałąź emulator (3485277, 12654f0) i scalone z powrotem do v0.3 (508acdb, bez zmian w plikach). Raport M12 uzupełniony o F16-F18."
     }
   ]
 }
