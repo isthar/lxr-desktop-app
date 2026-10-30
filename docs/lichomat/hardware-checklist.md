@@ -1141,7 +1141,7 @@ Update files under test (filled in when the files were built):
 | `LXR_V2_LICHOMAT_0.1.img` | `55091864fff78c641a681636f056449caa1fcb3cb68d09baa5cd3e9e6759a262` | `timing-core` at `3527cbc`, built by CI (`.github/workflows/build.yml`; later commits that change only documents build the same file) | the artifact `lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f` of CI run 40435442579 (300780 B) |
 | `LXR_V2_V1.7.img` | `cdb1ca371599149083bd0b61564d6864f031b599ccdcead2047a711e0b679db4` | `a43cd4f`, the official 1.7 sources | `build/official-1.7/src/build/release/` |
 | `LXR_V2_LICHOMAT_0.2.img` | `f99cb713d7f92cbc13d54084cd9603ee71e8bfcb81fa20594a55991ecda5ad7f` | `v0.2` at `4b63f2d`, built by CI | the artifact `lichomat-firmware-4b63f2db6e15e5845599bf554598e6611377d14f` of CI run 41016102539 (kept until 2027-01-28) |
-| `LXR_V2_LICHOMAT_0.3.img` | `d630eabc990fe19a6dca1d620162f3f4af5efde970e975ccaff914574604aee9` | `v0.3` at `813aaf6`, built by CI (a later firmware fix on `v0.3` replaces this row) | the artifact `lichomat-firmware-813aaf665353f9c7c2004f803cf7e08a4273049e` of CI run 41126736959 (kept until 2027-01-28) |
+| `LXR_V2_LICHOMAT_0.3.img` | `d630eabc990fe19a6dca1d620162f3f4af5efde970e975ccaff914574604aee9` | `v0.3` at `813aaf6`, built by CI; `a9865dc` (F14–F18 and the emulator's goldens) builds the same file, CI run 41140852554 (a later firmware change on `v0.3` replaces this row) | the artifact `lichomat-firmware-813aaf665353f9c7c2004f803cf7e08a4273049e` of CI run 41126736959 (kept until 2027-01-28) |
 
 The LICHOMAT file is the one CI builds, the file the release attaches (spec §14). Download it with
 `gh run download 40435442579 --repo isthar/lxr-desktop-app -n lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f`

@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 23:44",
+    "updated": "2026-10-30 23:56",
     "phase": "Etap 2: v0.3 gotowe w kodzie (M11), emulator R3 gotowy (M12); v0.4 czeka na odczyt CPU (H12)",
     "focus": "v0.3 z nagraniami wzorcowymi i CI emulatora (gałąź v0.3 5a7008d); emulator R3 gotowy (gałąź emulator 56fe495).",
     "branch": "timing-core",
-    "head": "0400354",
+    "head": "d3c818d",
     "next": "Ja: przerwa i podsumowanie ok. 04:00 albo przy 73% (teraz ok. 57%). Ty: odsłuch build/demo/v02-*, v03-* i build/dlc/*, testy v0.1 z odczytem CPU (Q6, H12), potem U4–U19.",
-    "updated_at": "2026-10-30T23:44:00+01:00",
-    "now": "Od 23:44: porządki i podsumowanie nocy."
+    "updated_at": "2026-10-30T23:56:00+01:00",
+    "now": "Od 23:56: podsumowanie nocy; potem przerwa (kofeina do ok. 04:04)."
   },
   "epics": [
     {
@@ -2739,6 +2739,16 @@
       "n": 379,
       "at": "2026-10-30 23:44",
       "text": "23:44 Fuzzing sekwencera: 600 renderów, zero znalezisk (57 edycji na render naprawdę trafia do firmware). Wszystkie trzy przeglądy (brzmienia, MIDI, sekwencer) są teraz narzędziem tools/emu_fuzz.py (b3a7904 na emulator, 0c9412d na v0.3, wypchnięte), do powtórzenia po zmianach w v0.4."
+    },
+    {
+      "n": 380,
+      "at": "2026-10-30 23:52",
+      "text": "23:52 CI z ASan na v0.3 wyłapało, że host-owa wersja F18 (memcpy z typowanym wskaźnikiem) przeszkadza ASan; lokalnie UBSan tego nie widzi. Poprawione (570090b na emulator, a9865dc na v0.3): host składa słowo z dwóch wyrównanych połówek, urządzenie bez zmian (obraz bajt w bajt). CI na obu gałęziach w toku."
+    },
+    {
+      "n": 381,
+      "at": "2026-10-30 23:56",
+      "text": "23:56 CI w całości zielone na emulator (570090b) i v0.3 (a9865dc): Release i ASan+UBSan. Plik LXR_V2_LICHOMAT_0.3.img z CI dla a9865dc ma ten sam SHA-256 co dla 813aaf6 (d630eabc…), więc F14-F18 nie zmieniają ani bajtu firmware na LXR. Run sheet zaktualizowany."
     }
   ]
 }
