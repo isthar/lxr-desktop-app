@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 23:28",
+    "updated": "2026-10-30 23:44",
     "phase": "Etap 2: v0.3 gotowe w kodzie (M11), emulator R3 gotowy (M12); v0.4 czeka na odczyt CPU (H12)",
     "focus": "v0.3 z nagraniami wzorcowymi i CI emulatora (gałąź v0.3 5a7008d); emulator R3 gotowy (gałąź emulator 56fe495).",
     "branch": "timing-core",
-    "head": "c122f55",
+    "head": "0400354",
     "next": "Ja: przerwa i podsumowanie ok. 04:00 albo przy 73% (teraz ok. 57%). Ty: odsłuch build/demo/v02-*, v03-* i build/dlc/*, testy v0.1 z odczytem CPU (Q6, H12), potem U4–U19.",
-    "updated_at": "2026-10-30T23:28:00+01:00",
-    "now": "Od 23:28: porządki po nocy (raport M12, tracker); potem decyzja o następnym kroku."
+    "updated_at": "2026-10-30T23:44:00+01:00",
+    "now": "Od 23:44: porządki i podsumowanie nocy."
   },
   "epics": [
     {
@@ -2724,6 +2724,21 @@
       "n": 376,
       "at": "2026-10-30 23:28",
       "text": "23:28 Fuzzing, runda 3 (1000 renderów): zero znalezisk; silnik dźwięku przy losowych parametrach jest czysty pod UBSan. F16-F18 przeniesione też na gałąź emulator (3485277, 12654f0) i scalone z powrotem do v0.3 (508acdb, bez zmian w plikach). Raport M12 uzupełniony o F16-F18."
+    },
+    {
+      "n": 377,
+      "at": "2026-10-30 23:30",
+      "text": "23:30 Start fuzzingu wejścia MIDI: 800 renderów pod UBSan, każdy z 40-200 losowymi wiadomościami na DIN (CC, NRPN, nuty, Program Change, pitch bend, aftertouch, SPP, śmieci). MIDI to dane z zewnątrz, więc błąd tutaj byłby błędem na LXR."
+    },
+    {
+      "n": 378,
+      "at": "2026-10-30 23:34",
+      "text": "23:34 Fuzzing wejścia MIDI: 800 renderów, zero znalezisk (firmware odbierał wszystko, np. 314 bajtów w jednym renderze, bez strat). Start fuzzingu sekwencera: losowe kroki (prawdopodobieństwo i warunki, flam, shift, nuty, slide), ustawienia ścieżek v0.2, rolle, sceny, rotacja, start/stop; 600 renderów. Pierwsza próba trafiła na krok 112, którego na LXR nie da się wybrać (przyciski dają 0-63, NRPN blokuje E4.8), więc fuzzer jest teraz ograniczony do 0-63."
+    },
+    {
+      "n": 379,
+      "at": "2026-10-30 23:44",
+      "text": "23:44 Fuzzing sekwencera: 600 renderów, zero znalezisk (57 edycji na render naprawdę trafia do firmware). Wszystkie trzy przeglądy (brzmienia, MIDI, sekwencer) są teraz narzędziem tools/emu_fuzz.py (b3a7904 na emulator, 0c9412d na v0.3, wypchnięte), do powtórzenia po zmianach w v0.4."
     }
   ]
 }

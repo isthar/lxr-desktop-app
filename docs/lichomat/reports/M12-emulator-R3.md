@@ -69,7 +69,10 @@ z 40 losowymi parametrami brzmienia (skrypt tylko lokalnie). Znalazł jeszcze tr
   M7 robi to sprzętowo, emulator czyta teraz przez `memcpy`.
 
 Obraz firmware po F14–F18 jest bajt w bajt ten sam co przed nimi. Ostatnia runda (1000 renderów) nie
-znalazła już nic.
+znalazła już nic. Tak samo czyste są wejście MIDI (800 renderów, każdy z 40–200 losowymi wiadomościami
+na DIN: CC, NRPN, nuty, Program Change, pitch bend, śmieci) i sekwencer (600 renderów z losowymi
+edycjami kroków, ścieżek v0.2, rolli, scen, rotacji i start/stop). Te przeglądy są teraz narzędziem:
+`tools/emu_fuzz.py sound|midi|seq` (`b3a7904`, też na v0.3); przydadzą się po zmianach w v0.4.
 
 ## Przegląd i poprawki
 
