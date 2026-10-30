@@ -8,7 +8,8 @@
  * rolls in the track's steps, leaving and rejoining the master grid; TT3: the master
  * bar ends the pattern, a pattern change restarts every track; TT4: the early hits
  * of the first step after a restart; TT5: a song position, and the recording phase,
- * skip-once and step serial in the track's own steps.
+ * skip-once and step serial in the track's own steps; TT6: a track that leaves the
+ * master grid at the boundary that predicts a pattern change or a song end.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -436,6 +437,87 @@ TEST(TT5_own_steps_for_phase_skip_and_copies)
 	ASSERT_EQ(r[2]->ev.tick, 144);
 	ASSERT_EQ(fake_count(h, FAKE_TRACK_STEP), 4);	/* 48, 96, 144, 192 */
 	ASSERT_EQ(seqc_barStep(), 2);
+	ASSERT_EQ(h->errors, 0);
+}
+
+/* the step hit of track at tick, or NULL */
+static const fake_rec_t *hitAt(const fake_host_t *h, int track, seqc_tick_t tick)
+{
+	const fake_rec_t *r[512];
+	const size_t n = hits(h, track, r, 512);
+	for (size_t i = 0; i < n && i < 512; i++)
+		if (r[i]->ev.tick == tick)
+			return r[i];
+	return NULL;
+}
+
+/* every step of track 1 in patterns 0 and 1 on and shifted by shift units */
+static void shiftedTrack1(fake_host_t *h, int8_t shift)
+{
+	for (uint8_t p = 0; p < 2; p++)
+	{
+		allOn(h, p, 1);
+		for (uint8_t s = 0; s < FAKE_NUM_STEPS; s++)
+			fake_setTiming(h, p, 1, s, 0, shift);
+	}
+}
+
+/* stepBoundary() hook: track 1 of pattern 0 goes to x2 at the master boundary at 1440,
+ * where the master track's wrap at 1536 is predicted */
+static void toX2At15(fake_host_t *h, uint32_t absStep)
+{
+	askPattern1(h, absStep);
+	if (absStep == 15)
+		fake_setTempo(h, 0, 1, 8);
+}
+
+TEST(TT6_leaving_the_grid_where_a_change_is_predicted)
+{
+	/* track 1 leaves the master grid at 1440 for x2 (48 ticks, 6-tick units, -3: -18):
+	 * its own step at 1488, step 0 of pattern 0, plays at 1470 with or without the change
+	 * to pattern 1 at 1536 that the same master boundary predicts; with the change,
+	 * pattern 1's first step (x1, -36) follows at 1500 */
+	for (int run = 0; run < 2; run++)
+	{
+		fake_host_t *h = fake_init();
+		shiftedTrack1(h, -3);
+		changeAt = run == 0 ? 10 : UINT32_MAX;
+		h->onStepBoundary = toX2At15;
+		play(h, 2100.0);
+		const fake_rec_t *r = hitAt(h, 1, 1470);
+		ASSERT_TRUE(r != NULL);
+		ASSERT_EQ(r->ev.pattern, 0);
+		ASSERT_EQ(r->ev.step, 0);
+		ASSERT_EQ(r->ev.absStep, 16);
+		if (run == 0)
+		{
+			const fake_rec_t *f = firstOf(h, 1, 1);
+			ASSERT_TRUE(f != NULL);
+			ASSERT_EQ(f->ev.step, 0);
+			ASSERT_EQ(f->ev.tick, 1500);
+		}
+		ASSERT_EQ(h->errors, 0);
+	}
+}
+
+TEST(TT6_leaving_the_grid_before_a_song_end)
+{
+	/* the song is pattern 0 once and ends at 1536, which the master boundary at 1440
+	 * predicts; track 1 leaves the master grid there for x2: its own step at 1488 still
+	 * belongs to the song and plays at 1470 */
+	fake_host_t *h = fake_init();
+	static const uint8_t song[] = { 0 };
+	fake_setSong(h, song, 1);
+	fake_setSongMode(h, true);
+	shiftedTrack1(h, -3);
+	changeAt = UINT32_MAX;
+	h->onStepBoundary = toX2At15;
+	play(h, 2100.0);
+	ASSERT_EQ(seqc_state(), SEQC_STOPPED);		/* the song ended at 1536 */
+	const fake_rec_t *r = hitAt(h, 1, 1470);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->ev.step, 0);
+	ASSERT_EQ(r->ev.absStep, 16);
 	ASSERT_EQ(h->errors, 0);
 }
 

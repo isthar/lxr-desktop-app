@@ -1318,8 +1318,10 @@ static void seqc_trackEarly(uint8_t t, uint8_t pattern, seqc_tick_t nextTick, se
  * - step n+1 of each track at x1 on the master grid, as in v0.1; at a predicted
  *   restart (the master track wraps at n+1 and the pattern changes) the next pattern's
  *   first step;
- * - the next step of each track that leaves the master grid here;
- * - at a predicted restart, the first step of each track on its own grid that has no
+ * - the next step of each track that leaves the master grid here, or the predicted
+ *   restart's first step if that comes first (seqc_trackEarly()); at a song end at n+1
+ *   only a next step that begins before it;
+ * - at a predicted restart, the first step of each other track on its own grid that has no
  *   boundary of its own before the restart, or one with a step of 96 ticks or more
  *   (that boundary skips it); the others generate it at their last boundary before
  *   the restart (seqc_trackEarly()) */
@@ -1334,7 +1336,14 @@ static void seqc_generateEarly(uint8_t pattern, uint8_t grid, seqc_tick_t tick)
 	{
 		restart = seqc.host.peekNextPattern(seqc.host.ctx, &next);
 		if (next == SEQC_NO_PATTERN)
-			return;			/* the song ends at n+1 */
+		{
+			/* the song ends at n+1: only the next step of a track that leaves the master
+			 * grid here, if it begins before the end */
+			for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
+				if ((grid & seqc_trk.own & SEQC_BIT(t)) && seqc_trk.next[t] < at)
+					seqc_trackEarly(t, pattern, seqc_trk.next[t], tick);
+			return;
+		}
 	}
 	if (restart)
 	{
@@ -1359,6 +1368,8 @@ static void seqc_generateEarly(uint8_t pattern, uint8_t grid, seqc_tick_t tick)
 			const seqc_place_t pl = seqc_place(at, tick, SEQC_TICKS_PER_STEP, seqc_nextLoop(t, step), false);
 			seqc_generate(t, abs, next, step, true, &pl);
 		}
+		else if (grid & bit)
+			seqc_trackEarly(t, pattern, seqc_trk.next[t], tick);	/* it leaves the master grid here */
 		else if (restart)
 		{
 			if (seqc_trk.next[t] >= at)
@@ -1369,8 +1380,6 @@ static void seqc_generateEarly(uint8_t pattern, uint8_t grid, seqc_tick_t tick)
 			else if (seqc_trk.len[t] >= SEQC_TICKS_PER_STEP)
 				seqc_generateFirst(t, abs + 1u, tick);
 		}
-		else if (grid & bit)
-			seqc_trackEarly(t, pattern, seqc_trk.next[t], tick);	/* it leaves the master grid here */
 	}
 }
 
