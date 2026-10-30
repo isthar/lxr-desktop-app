@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 00:00",
-    "phase": "Etap 2: v0.3 gotowe w kodzie (M11), emulator R3 gotowy (M12); v0.4 czeka na odczyt CPU (H12)",
-    "focus": "v0.3 z nagraniami wzorcowymi i CI emulatora (gałąź v0.3 5a7008d); emulator R3 gotowy (gałąź emulator 56fe495).",
+    "updated": "2026-10-31 00:49",
+    "phase": "Etap 2: v0.4 (atmosfera) w toku, część przed H12 (A1-A6)",
+    "focus": "v0.4: A1-A6 na gałęzi v0.4 od v0.3; pogłos, freeze i rumble (A7-A9) czekają na odczyt CPU (H12).",
     "branch": "timing-core",
-    "head": "2d083e0",
+    "head": "c6558fc",
     "next": "Ty: jedna sesja testowa na v0.3 według docs/lichomat/test-session-v0.3.md, najpierw H12 (odczyt CPU odblokowuje v0.4); odsłuch build/demo/v02-*, v03-* i build/dlc/*. Ja: przerwa i podsumowanie ok. 04:00 albo przy 73%.",
-    "updated_at": "2026-10-31T00:00:00+01:00",
-    "now": "Od 00:00: agent w tle pisze plan v0.4 (bez prototypu, limit narzędzi); potem przegląd planu i podsumowanie nocy."
+    "updated_at": "2026-10-31T00:49:00+01:00",
+    "now": "Od 00:49: agent w tle robi v0.4 A3 (parametry, blok w kicie) i A4 (menu)."
   },
   "epics": [
     {
@@ -548,8 +548,8 @@
       "id": "E7.2",
       "epic": "E7",
       "status": "w toku",
-      "title": "Specyfikacja atmosfery: połączona ze szkicem etapu 2 (v0.4)",
-      "updated": "2026-10-30"
+      "title": "Specyfikacja i plan atmosfery: plan v0.4 gotowy (docs/superpowers/plans/2026-10-31-v0.4-atmosphere.md, A1–A11, D30–D44); A1–A6 przed H12, A7–A9 po H12",
+      "updated": "2026-10-31"
     },
     {
       "id": "E7.3",
@@ -842,6 +842,13 @@
       "question": "Etap 2 stoi: v0.4 (atmosfera) czeka na odczyt CPU (H12). R3 emulatora (nagrania wzorcowe, CI z ASan) było odłożone na koniec etapu 2. Robić R3 teraz?",
       "assumption": "Tak: R3 nie zależy od sprzętu, a chroni każdą kolejną wersję.",
       "answer": "Moja rekomendacja, zapowiedziana 30.10 o 20:37 bez sprzeciwu, zapisana 23:07: R3 zrobione teraz i scalone do v0.3. Aplikacja emulatora (E5.5, R4–R5) zostaje odłożona na koniec etapu 2, jak zdecydowałeś 29.10."
+    },
+    {
+      "id": "Q28",
+      "status": "zamknięte",
+      "question": "Plan v0.4 (atmosfera) jest gotowy (c45f5cd). Zadania A1–A6 (oszacowanie kosztu pogłosu, budżet i bufor, parametry, menu, delay z tempem, filtr DJ) nie zależą od odczytu CPU; A7–A9 (pogłos, freeze, rumble) zależą. Zaczynać A1–A6 przed H12?",
+      "assumption": "Tak, w ramach limitu 75%; A7–A9 czekają na H12.",
+      "answer": "Moja rekomendacja według Twojej reguły z 29.10, 05:19, 31.10, 00:31: A1–A6 ruszają teraz na gałęzi v0.4 od v0.3; A7–A9 dopiero po Twoim odczycie H12, według reguły D41 z planu. To doprecyzowuje Q24 (tam: cała atmosfera po H12), bo pomiar dotyczy tylko pogłosu."
     }
   ],
   "log": [
@@ -2759,6 +2766,31 @@
       "n": 383,
       "at": "2026-10-31 00:00",
       "text": "00:00 Przewodnik po polsku: jak samemu zrobić w emulatorze render swojego projektu z karty, zmieniać parametry, naciskać przyciski skryptem i porównać dwie wersje firmware (docs/lichomat/emulator-jak-uzywac.md). W tle agent pisze plan v0.4 (atmosfera) z bramką H12 i decyzją o budżecie pamięci; bez prototypu."
+    },
+    {
+      "n": 384,
+      "at": "2026-10-31 00:31",
+      "text": "00:31 Plan v0.4 (atmosfera) gotowy (c45f5cd, wypchnięty): A1-A11, decyzje D30-D44. Budżet pamięci: nowy limit DTCM+RAM 455 544 B z uzasadnieniem (limit DTCM, który chroni stos, bez zmian). Pogłos z własnym buforem 56 KB w RAM, więc gra razem z delayem. Reguła CPU D41 z odczytu H12 wybiera pełną albo połowiczną częstotliwość. Nowe parametry w bloku za 255 bajtami kitu (fw 1.7 go nie czyta). Q28: A1-A6 ruszają teraz, A7-A9 po H12."
+    },
+    {
+      "n": 385,
+      "at": "2026-10-31 00:31",
+      "text": "00:31 Start v0.4: agent w tle robi A1 (worktree, punkt odniesienia, statyczne oszacowanie kosztu pogłosu) i A2 (budżet, bufor pogłosu w RAM, poprawka błędu fw 1.7 w Reverb.c:375)."
+    },
+    {
+      "n": 386,
+      "at": "2026-10-31 00:38",
+      "text": "00:38 v0.4 A1 gotowe (c6558fc, wypchnięte): statyczne oszacowanie kosztu pogłosu Plt z fw 1.7 z kodu maszynowego. Pełna częstotliwość ok. 35% czasu bloku audio (z zapasem x1,5), połowiczna ok. 18%. Reguła D41 z liczbami: pełna, jeśli pk z H12 ≤ 47,9%; połowiczna, jeśli ≤ 65,0%; inaczej wariant oszczędny. Punkt odniesienia v0.4 zgodny z v0.3. Agent robi A2."
+    },
+    {
+      "n": 387,
+      "at": "2026-10-31 00:49",
+      "text": "00:49 v0.4 A2 gotowe (0feb080, wypchnięte): własny bufor pogłosu 57 344 B w RAM i nowy budżet pamięci (DTCM+RAM 451 976 z 455 544 B; DTCM bez zmian, 107 388 B; RAM 344 588 z 389 120 B). Poprawiony błąd fw 1.7: pierwsza pętla pogłosu szła przez bufor drugiej (Reverb.c:375), test RV1. Nagrania wzorcowe bez zmian. Host 93, emulator 176."
+    },
+    {
+      "n": 388,
+      "at": "2026-10-31 00:49",
+      "text": "00:49 Start v0.4 A3 i A4 w tle (agent): nowe parametry z blokiem za 255 bajtami kitu, menu FX i filtr DJ na stronie trybu wykonawczego."
     }
   ]
 }
