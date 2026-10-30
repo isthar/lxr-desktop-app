@@ -7,7 +7,8 @@
  * a grid of its own. TT1: the grids and the x1 path; TT2: ratchets, shift, swing and
  * rolls in the track's steps, leaving and rejoining the master grid; TT3: the master
  * bar ends the pattern, a pattern change restarts every track; TT4: the early hits
- * of the first step after a restart.
+ * of the first step after a restart; TT5: a song position, and the recording phase,
+ * skip-once and step serial in the track's own steps.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only

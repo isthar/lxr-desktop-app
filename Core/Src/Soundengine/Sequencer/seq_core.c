@@ -153,10 +153,12 @@ typedef struct
 	uint8_t		step;
 	uint8_t		r;		/**< 1..100 */
 	uint8_t		hits;		/**< the ratchet hits it read */
-	int16_t		offset;		/**< the swing + shift it read, ticks after absStep * 96 */
+	int16_t		offset;		/**< the offset it read (swing + shift, v0.2: + delay + humanize), ticks after its grid tick */
 	uint16_t	len;		/**< v0.2: the track step length the early part read */
 	int8_t		jitter;		/**< v0.2: the humanize time draw, ticks */
 	int8_t		velPct;		/**< v0.2: the humanize volume draw, percent */
+	bool		preIn;		/**< v0.2: the PRE state before this occurrence */
+	bool		preOut;		/**< v0.2: and after it */
 } seqc_draw_t;
 
 //------------------------------------------------------------------------------
@@ -166,6 +168,7 @@ typedef struct
 	seqc_draw_t	draw[SEQC_NUM_TRACKS][2];	/**< N3: slots for n and n+1, by absStep & 1 */
 	uint8_t		swing;				/**< swing ticks read at the last boundary */
 	uint8_t		shuffle;			/**< v0.2: shuffle() read at the last master boundary */
+	bool		fill;				/**< v0.2: fill mode (seqc_setFill()) */
 } seqc_gen_t;
 
 //------------------------------------------------------------------------------
@@ -1001,19 +1004,24 @@ static seqc_place_t seqc_place(seqc_tick_t base, seqc_tick_t minTick, uint16_t l
 	return pl;
 }
 //------------------------------------------------------------------------------
-/** the slot of occurrence (track, absStep) at (pattern, step), N3. A slot that
- * holds another occurrence, or the same one at another (pattern, step), is
- * cleared for it, so a different step gets a new draw. */
-static seqc_draw_t *seqc_slot(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step)
+/** the slot of occurrence (track, absStep) at (pattern, step), N3. A slot that holds
+ * another occurrence, or the same one at another (pattern, step), is cleared for it, so a
+ * different step gets a new draw. v0.2: a new slot takes the PRE state left by the
+ * occurrence before it on the track, or false for the first of a run */
+static seqc_draw_t *seqc_slot(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step, bool first)
 {
 	seqc_draw_t *d = &seqc_gen.draw[track][absStep & 1u];
 	if (!d->valid || d->absStep != absStep || d->pattern != pattern || d->step != step)
 	{
+		const seqc_draw_t *prev = &seqc_gen.draw[track][(absStep + 1u) & 1u];
+		const bool pre = !first && prev->valid && prev->absStep + 1u == absStep && prev->preOut;
 		memset(d, 0, sizeof *d);
 		d->valid = true;
 		d->absStep = absStep;
 		d->pattern = pattern;
 		d->step = step;
+		d->preIn = pre;
+		d->preOut = pre;
 	}
 	return d;
 }
@@ -1045,16 +1053,46 @@ static void seqc_draw(seqc_draw_t *d, const TrackGroove *g)
 	d->drawn = true;
 }
 //------------------------------------------------------------------------------
-/** whether an occurrence with Step.prob plays (V5 adds the trig conditions) */
+/** whether an occurrence with Step.prob plays: 0..100 the probability (r <= prob), 101..115
+ * the trig conditions (SeqStepTypes.h) on the track's loop count, 116..255 like 100. A
+ * probability below 100 and the conditions but PRE and !PRE set the PRE state */
 static bool seqc_plays(seqc_draw_t *d, uint8_t prob, const seqc_place_t *pl)
 {
-	(void)pl;
-	return d->r <= prob;
+	static const uint8_t ab[9][2] = { {1,2}, {2,2}, {1,3}, {2,3}, {3,3}, {1,4}, {2,4}, {3,4}, {4,4} };
+	bool plays;
+	bool counts = true;
+	if (prob <= 100u)
+	{
+		plays = d->r <= prob;
+		counts = prob < 100u;
+	}
+	else if (prob > STEP_COND_NOT_PRE)
+	{
+		plays = true;
+		counts = false;
+	}
+	else if (prob < STEP_COND_FILL)
+	{
+		const uint8_t *c = ab[prob - STEP_COND_1_2];
+		plays = pl->loop % c[1] == (uint32_t)(c[0] - 1u);
+	}
+	else switch (prob)
+	{
+	case STEP_COND_FILL:		plays = seqc_gen.fill; break;
+	case STEP_COND_NOT_FILL:	plays = !seqc_gen.fill; break;
+	case STEP_COND_FIRST:		plays = pl->loop == 0u; break;
+	case STEP_COND_NOT_FIRST:	plays = pl->loop != 0u; break;
+	case STEP_COND_PRE:		plays = d->preIn; counts = false; break;
+	default:			plays = !d->preIn; counts = false; break;	/* !PRE */
+	}
+	d->preOut = counts ? plays : d->preIn;
+	return plays;
 }
-/** an occurrence without a trig (V5: the PRE state passes on) */
+//------------------------------------------------------------------------------
+/** an occurrence without a trig: the PRE state passes on */
 static void seqc_noTrig(seqc_draw_t *d)
 {
-	(void)d;
+	d->preOut = d->preIn;
 }
 //------------------------------------------------------------------------------
 /** the first hit's offset from the grid tick: swing on an odd occurrence, shift, and
@@ -1100,7 +1138,7 @@ static uint8_t seqc_humanVel(uint8_t vel, const seqc_draw_t *d)
 static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint8_t step, bool early,
 		const seqc_place_t *pl)
 {
-	seqc_draw_t *d = seqc_slot(track, absStep, pattern, step);
+	seqc_draw_t *d = seqc_slot(track, absStep, pattern, step, pl->first);
 	const bool followsEarly = !early && d->timed && d->offset < 0;
 	if (followsEarly && !d->played)
 		return;
@@ -2867,6 +2905,14 @@ void seqc_skipOnce(uint8_t track, uint8_t step)
 	m->step = step;
 	m->absStep = n;
 	seqc_queueRemoveStep(track, n, pattern, step);
+}
+//------------------------------------------------------------------------------
+void seqc_setFill(bool on)
+{
+	if (!seqc_enter())
+		return;
+	seqc_gen.fill = on;
+	seqc_leave();
 }
 //------------------------------------------------------------------------------
 uint8_t seqc_trackStep(uint8_t track)

@@ -130,7 +130,14 @@
  * For track t at absolute step n, the core reads the active pattern p and the
  * track step s.
  * - The step plays only if its main-step bit is set (stepOn()) and the
- *   probability draw r = 1 + random() % 100 is at most Step.prob.
+ *   probability draw r = 1 + random() % 100 is at most Step.prob (0..100).
+ *   v0.2: Step.prob 101..115 is a trig condition instead (SeqStepTypes.h): A:B
+ *   plays in loop l of the track (counted from 0 at a start or a pattern change,
+ *   at the track's own length) when l % B == A - 1, FIRST in loop 0, FILL in fill
+ *   mode; PRE plays when the PRE state is true, the result of the latest
+ *   conditional trig of the track since the start or the pattern change (a
+ *   probability below 100 counts; PRE, !PRE, 100 and 116..255 do not), false
+ *   before the first; 116..255 play like 100.
  * - r is drawn once per (t, n), together with (p, s). If (p, s) differs between
  *   the early and the late part, a new draw is made.
  * - The early part keeps the swing and the StepTiming it read, whether the step
@@ -742,6 +749,11 @@ void seqc_process(seqc_time_t now);
  * - Ignored while stopped, or with track >= 7 or step >= 64. It may be called
  *   from a callback. */
 void seqc_skipOnce(uint8_t track, uint8_t step);
+//------------------------------------------------------------------------------
+/** v0.2: fill mode, for the trig conditions FILL and !FILL. Off after seqc_init(); in
+ * v0.2 nothing turns it on (fill mode is v0.4). It applies to the step occurrences
+ * evaluated from the next call on. Ignored inside a callback, like the other mutating calls */
+void seqc_setFill(bool on);
 
 //------------------------------------------------------------------------------
 // Queries. Pure reads, allowed at any time in the core's context, also inside
