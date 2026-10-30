@@ -207,7 +207,8 @@
  *   progress of a track on its own grid ends there. The early part of the new first step
  *   is generated with the prediction one master step ahead, or at the track's last
  *   boundary before the change when that is later; a hit before the boundary that
- *   generates it is not played.
+ *   generates it is not played. At a song end a track on its own grid, like one at x1,
+ *   plays no hit of a step that begins at or after the end.
  * - After a song position a track on its own grid continues on it from the start of the
  *   run; its step in progress at the located step does not play.
  * MIDI clock out, the clock out pulses, tempoStep() and stepBoundary() stay on the master grid.

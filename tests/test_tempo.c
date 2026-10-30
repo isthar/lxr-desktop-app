@@ -501,16 +501,41 @@ TEST(TT6_leaving_the_grid_where_a_change_is_predicted)
 	}
 }
 
+/* the last occurrence (absStep) among the step hits of track, or -1 if none */
+static int64_t lastOccurrence(const fake_host_t *h, int track)
+{
+	const fake_rec_t *r[512];
+	const size_t n = hits(h, track, r, 512);
+	int64_t last = -1;
+	for (size_t i = 0; i < n && i < 512; i++)
+		if ((int64_t)r[i]->ev.absStep > last)
+			last = (int64_t)r[i]->ev.absStep;
+	return last;
+}
+
 TEST(TT6_leaving_the_grid_before_a_song_end)
 {
 	/* the song is pattern 0 once and ends at 1536, which the master boundary at 1440
-	 * predicts; track 1 leaves the master grid there for x2: its own step at 1488 still
-	 * belongs to the song and plays at 1470 */
+	 * predicts. Like a track at x1, a track on its own grid plays no hit of a step that
+	 * begins at or after the end, and every hit of a step that begins before it:
+	 * - track 1 leaves the master grid at 1440 for x2: its own step at 1488 still belongs
+	 *   to the song and plays at 1470; its step at 1536 (-18: 1518) does not play;
+	 * - track 2 is at x1/2 (192 ticks, 24-tick units, -3: -72) from the start: its step
+	 *   at 1344 plays at 1272; its step at 1536, whose early part its boundary at 1344
+	 *   generated for 1464, does not play;
+	 * - track 3 at x1 (-36) plays its step at 1440 at 1404, and nothing at 1500 */
 	fake_host_t *h = fake_init();
 	static const uint8_t song[] = { 0 };
 	fake_setSong(h, song, 1);
 	fake_setSongMode(h, true);
 	shiftedTrack1(h, -3);
+	for (uint8_t track = 2; track < 4; track++)
+	{
+		allOn(h, 0, track);
+		for (uint8_t s = 0; s < FAKE_NUM_STEPS; s++)
+			fake_setTiming(h, 0, track, s, 0, -3);
+	}
+	fake_setTempo(h, 0, 2, 2);
 	changeAt = UINT32_MAX;
 	h->onStepBoundary = toX2At15;
 	play(h, 2100.0);
@@ -519,6 +544,16 @@ TEST(TT6_leaving_the_grid_before_a_song_end)
 	ASSERT_TRUE(r != NULL);
 	ASSERT_EQ(r->ev.step, 0);
 	ASSERT_EQ(r->ev.absStep, 16);
+	ASSERT_TRUE(hitAt(h, 1, 1518) == NULL);
+	ASSERT_EQ(lastOccurrence(h, 1), 16);
+	r = hitAt(h, 2, 1272);
+	ASSERT_TRUE(r != NULL);
+	ASSERT_EQ(r->ev.absStep, 7);
+	ASSERT_TRUE(hitAt(h, 2, 1464) == NULL);
+	ASSERT_EQ(lastOccurrence(h, 2), 7);
+	ASSERT_TRUE(hitAt(h, 3, 1404) != NULL);
+	ASSERT_TRUE(hitAt(h, 3, 1500) == NULL);
+	ASSERT_EQ(lastOccurrence(h, 3), 15);
 	ASSERT_EQ(h->errors, 0);
 }
 

@@ -130,8 +130,8 @@ typedef struct
 	uint8_t		own;			/**< v0.2: bit t: track t steps on its own grid */
 	uint8_t		first;			/**< v0.2: bit t: its occurrence at this master boundary begins a run */
 	uint8_t		restartDone;		/**< v0.2: bit t: the predicted restart's first step is generated */
-	uint8_t		restartPattern;		/**< v0.2: the pattern of the predicted restart */
-	seqc_tick_t	restartAt;		/**< v0.2: the tick of the predicted restart, SEQC_NO_TICK if none */
+	uint8_t		restartPattern;		/**< v0.2: the pattern of the predicted restart, SEQC_NO_PATTERN at a song end */
+	seqc_tick_t	restartAt;		/**< v0.2: the tick of the predicted restart or song end, SEQC_NO_TICK if none */
 	int32_t		abs[SEQC_NUM_TRACKS];	/**< v0.2: the track's occurrence count (events' absStep), -1 before the first */
 	uint32_t	loop[SEQC_NUM_TRACKS];	/**< v0.2: the track's loops since the start or the last restart */
 	seqc_tick_t	next[SEQC_NUM_TRACKS];	/**< v0.2: own grid: the tick of the track's next boundary */
@@ -1297,9 +1297,10 @@ static void seqc_generateFirst(uint8_t t, uint32_t abs, seqc_tick_t minTick)
 //------------------------------------------------------------------------------
 /** v0.2: at a boundary of track t (own grid, or leaving the master grid) at now, the
  * early part of its next step, which begins at nextTick, or of the predicted restart's
- * first step if that comes first. If the prediction took this boundary for the track's
- * last before the restart but the tempo read here puts another one before it, the
- * predicted first step is removed, and the last boundary generates it again */
+ * first step if that comes first (nothing at a predicted song end). If the prediction
+ * took this boundary for the track's last before the restart but the tempo read here
+ * puts another one before it, the predicted first step is removed, and the last
+ * boundary generates it again */
 static void seqc_trackEarly(uint8_t t, uint8_t pattern, seqc_tick_t nextTick, seqc_tick_t now)
 {
 	const uint32_t abs = (uint32_t)seqc_trk.abs[t] + 1u;
@@ -1307,7 +1308,7 @@ static void seqc_trackEarly(uint8_t t, uint8_t pattern, seqc_tick_t nextTick, se
 	{
 		if (nextTick >= seqc_trk.restartAt)
 		{
-			if (!(seqc_trk.restartDone & SEQC_BIT(t)))
+			if (seqc_trk.restartPattern != SEQC_NO_PATTERN && !(seqc_trk.restartDone & SEQC_BIT(t)))
 				seqc_generateFirst(t, abs, now);
 			return;
 		}
@@ -1331,6 +1332,10 @@ static void seqc_trackEarly(uint8_t t, uint8_t pattern, seqc_tick_t nextTick, se
  * - the next step of each track that leaves the master grid here, or the predicted
  *   restart's first step if that comes first (seqc_trackEarly()); at a song end at n+1
  *   only a next step that begins before it;
+ * - at a song end at n+1, as at x1, no step of a track on its own grid that begins at
+ *   or after the end: the end is predicted like a restart into no pattern, which its
+ *   boundaries before the end do not generate (seqc_trackEarly()), and the prediction
+ *   of such a step is removed;
  * - at a predicted restart, the first step of each other track on its own grid that has no
  *   boundary of its own before the restart, or one with a step of 96 ticks or more
  *   (that boundary skips it, unless the tempo it reads puts another one before the
@@ -1348,11 +1353,20 @@ static void seqc_generateEarly(uint8_t pattern, uint8_t grid, seqc_tick_t tick)
 		restart = seqc.host.peekNextPattern(seqc.host.ctx, &next);
 		if (next == SEQC_NO_PATTERN)
 		{
-			/* the song ends at n+1: only the next step of a track that leaves the master
-			 * grid here, if it begins before the end */
+			/* the song ends at n+1: only the next step of a track on its own grid that
+			 * begins before the end */
+			seqc_trk.restartAt = at;
+			seqc_trk.restartPattern = SEQC_NO_PATTERN;
+			seqc_trk.restartDone = 0;
 			for (uint8_t t = 0; t < SEQC_NUM_TRACKS; t++)
-				if ((grid & seqc_trk.own & SEQC_BIT(t)) && seqc_trk.next[t] < at)
-					seqc_trackEarly(t, pattern, seqc_trk.next[t], tick);
+			{
+				if (!(seqc_trk.own & SEQC_BIT(t)))
+					continue;
+				if (grid & SEQC_BIT(t))
+					seqc_trackEarly(t, pattern, seqc_trk.next[t], tick);	/* it leaves the master grid here */
+				else if (seqc_trk.next[t] >= at)
+					seqc_queueRemoveLater(t);	/* its prediction of a step after the end */
+			}
 			return;
 		}
 	}
