@@ -188,10 +188,15 @@ static void run(int ms)
 }
 
 /** a fresh sequencer, stopped, in pattern mode on pattern 0, with the test's
- * song: patterns 0, 1, 2, then SONG_END, and guard bytes after it */
+ * song: patterns 0, 1, 2, then SONG_END, and guard bytes after it. The backup
+ * buffer holds the active pattern, as the boot's project load leaves it
+ * (preset_loadProject(), appMain.c): seq_init() does not touch it, and the
+ * pattern switch below copies it back into the active pattern, so a stale or
+ * zeroed buffer would give pattern 0 lengths of 0 and silent steps. */
 static void reset(void)
 {
 	seq_init();
+	seq_copyPatternToBackupBuffer(seq_activePattern);
 	seq_setRunning(0);
 	seq_setSongModeEnabled(0);
 	seq_setNextPattern(0);
