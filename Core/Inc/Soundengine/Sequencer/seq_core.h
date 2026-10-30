@@ -762,7 +762,7 @@ void seqc_process(seqc_time_t now);
 void seqc_skipOnce(uint8_t track, uint8_t step);
 //------------------------------------------------------------------------------
 /** v0.2: fill mode, for the trig conditions FILL and !FILL. Off after seqc_init(); in
- * v0.2 nothing turns it on (fill mode is v0.4). It applies to the step occurrences
+ * v0.3 step 8 held in the performance mode turns it on (seq_setFill()). It applies to the step occurrences
  * evaluated from the next call on. Ignored inside a callback, like the other mutating calls */
 void seqc_setFill(bool on);
 

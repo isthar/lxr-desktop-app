@@ -253,6 +253,10 @@ void seq_setRoll(uint8_t voice, uint8_t onOff);
 //------------------------------------------------------------------------------
 void seq_setRollRate(uint8_t rate);
 //------------------------------------------------------------------------------
+/** LICHOMAT v0.3: fill mode for the trig conditions FILL and !FILL, while step 8 is held in the
+ * performance mode (plan D16); it applies to the steps generated from now, one step ahead */
+void seq_setFill(uint8_t on);
+//------------------------------------------------------------------------------
 /** add a note to the current pattern position*/
 void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note);
 //------------------------------------------------------------------------------

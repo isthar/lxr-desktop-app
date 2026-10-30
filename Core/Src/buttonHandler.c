@@ -54,6 +54,8 @@ volatile struct {
 } buttonHandler_stateMemory;
 
 static uint8_t buttonHandler_mutedVoices = 0;
+//LICHOMAT v0.3: step 8 is held as fill in the performance mode (plan D16)
+static uint8_t buttonHandler_fillHeld = 0;
 volatile static int8_t buttonHandler_armedAutomationStep = NO_STEP_SELECTED;
 
 #define ARM_AUTOMATION		0x40
@@ -1227,12 +1229,17 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			break;
 
 
-		case SELECT_MODE_PERF: //--- buttons 1-8 initiate a manual roll
-			if (seqButtonPressed < 8) {
+		case SELECT_MODE_PERF: //--- buttons 1-7 initiate a manual roll
+			if (seqButtonPressed < 7) {
 				//turn roll on
 				frontPanel_sendData(SEQ_CC, SEQ_ROLL_ON_OFF,
 						(uint8_t) ((seqButtonPressed & 0xf) + 0x10));
 				//turn button led on
+				led_setValue(1, ledNr);
+			} else if (seqButtonPressed == 7) {
+				//LICHOMAT v0.3: step 8 held = fill mode (plan D16)
+				buttonHandler_fillHeld = 1;
+				seq_setFill(1);
 				led_setValue(1, ledNr);
 			} else {
 				/*
@@ -1307,6 +1314,15 @@ static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 
 	uint8_t ledNr = led_idx2StepLed(seqButtonPressed);
 
+	//LICHOMAT v0.3: the release of step 8 ends fill mode whatever is held now (plan D16)
+	if((seqButtonPressed == 7) && buttonHandler_fillHeld)
+	{
+		buttonHandler_fillHeld = 0;
+		seq_setFill(0);
+		led_setValue(0, ledNr);
+		return;
+	}
+
 	if(buttonHandler_stateMemory.selectButtonMode == SEQ_LAST_STEP)
 	{
 
@@ -1321,7 +1337,7 @@ static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 
 			//always check seq buttons to turn off any active rolls
 		case SELECT_MODE_PERF:
-			if (seqButtonPressed < 8) {
+			if (seqButtonPressed < 7) {
 				//turn roll off
 				frontPanel_sendData(SEQ_CC, SEQ_ROLL_ON_OFF, (seqButtonPressed & 0xf));
 				//turn button led off
@@ -1365,7 +1381,7 @@ static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 
 		break;
 	case SELECT_MODE_PERF:
-		if (seqButtonPressed < 8) {
+		if (seqButtonPressed < 7) {
 			//turn roll off
 			frontPanel_sendData(SEQ_CC, SEQ_ROLL_ON_OFF, (seqButtonPressed & 0xf));
 			//turn button led off

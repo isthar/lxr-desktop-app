@@ -428,4 +428,48 @@ TEST(buttons_shift_step1_and_step2_rotate_the_active_track)
 	ASSERT_EQ(rotateCalls, 2);
 }
 
+//------------------------------------------------------------------------------
+// LICHOMAT v0.3 (plan P5, P6): fill and mute scenes in the performance mode
+//------------------------------------------------------------------------------
+static int fillCalls, recallCalls, storeCalls;
+static uint8_t fillOn, recallScene, storeScene;
+void seq_setFill(uint8_t on) { fillCalls++; fillOn = on; }
+uint8_t seq_recallMuteScene(uint8_t scene) { recallCalls++; recallScene = scene; return 1; }
+void seq_storeMuteScene(uint8_t scene) { storeCalls++; storeScene = scene; }
+uint8_t seq_appliedMuteScene(uint8_t *mutes) { *mutes = 0; return 0; }
+
+static void enterPerf(void)
+{
+	reset();
+	press(BUT_MODE2);
+	fillCalls = recallCalls = storeCalls = 0;
+}
+
+TEST(buttons_perf_step8_holds_fill)
+{
+	enterPerf();
+	ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_PERF);	/* the state struct is static */
+	down(BUT_SEQ8);
+	ASSERT_EQ(fillCalls, 1);
+	ASSERT_EQ(fillOn, 1);
+	up(BUT_SEQ8);
+	ASSERT_EQ(fillCalls, 2);
+	ASSERT_EQ(fillOn, 0);
+	down(BUT_SEQ8); down(BUT_SHIFT); up(BUT_SEQ8);	/* SHIFT while held: the release ends it */
+	ASSERT_EQ(fillOn, 0);
+	up(BUT_SHIFT);
+	down(BUT_SEQ8); down(BUT_MODE3); up(BUT_SEQ8);	/* LOAD too */
+	ASSERT_EQ(fillOn, 0);
+	up(BUT_MODE3);
+	ASSERT_EQ(fillCalls, 6);
+}
+
+TEST(buttons_voice_mode_step8_is_no_fill)
+{
+	enterPerf();
+	press(BUT_MODE1);
+	press(BUT_SEQ8);
+	ASSERT_EQ(fillCalls, 0);
+}
+
 TEST_MAIN()

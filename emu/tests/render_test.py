@@ -1177,6 +1177,24 @@ def V03_slide(t):
     check(0.45 <= r <= 0.65, 'step 9 crosses zero %.2f times as often with slide, not about 0.54' % r)
     no_copies_left()
 
+@case
+def V03_fill(t):
+    # voice 1: step 1 FILL (110), step 9 !FILL (111); voice 2 step 1 is the reference. Fill held
+    # (performance mode, step 8) from 1.5 to 3.5 s after start: bar 2 (2-4 s) is the fill bar,
+    # decided one step ahead
+    seed = t.seed()
+    log = t.path('f.log')
+    script = t.script(press_steps(2, (1,)) + press_steps(1, (1, 9))
+                      + '+100ms param active_step=0\n+100ms param step_prob=110\n'
+                      '+100ms param active_step=8\n+100ms param step_prob=111\n'
+                      '+100ms press 25\n+100ms press start\n+1500ms down step8\n+2000ms up step8\n')
+    t.render(seed, ['--no-start', '--seconds', '9.5', '--param', 'midi_chan_2=2', '--midi-log', log,
+                    '--events', script])
+    ref = din_notes(log, '91')[0][0]
+    near(ms_after(din_notes(log, '90'), ref), [1000, 2000, 5000, 7000], 2.0, 'FILL and !FILL around the fill bar')
+    check(len(din_notes(log, '90')) == 4, 'voice 1 played %d times' % len(din_notes(log, '90')))
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists

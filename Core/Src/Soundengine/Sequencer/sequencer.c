@@ -1078,6 +1078,13 @@ void seq_setRollRate(uint8_t rate)
 {
 	seq_rollRate = (rate < sizeof seq_rollRates) ? seq_rollRates[rate] : SEQC_ROLL(1, 1);
 }
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.3: fill mode for the trig conditions FILL and !FILL, while step 8 is held in the
+ * performance mode (plan D16); it applies to the steps generated from now, one step ahead */
+void seq_setFill(uint8_t on)
+{
+	seqc_setFill(on != 0);
+}
 //------------------------------------------------------------------------
 /** quantize a step to the seq_quantisation value*/
 /*
