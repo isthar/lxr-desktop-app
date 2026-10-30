@@ -355,7 +355,7 @@ void frontPanel_parseData(uint8_t data)
 						break;	
 
 						case SEQ_SET_PAT_NEXT:
-						parameter_values[PAR_PATTERN_NEXT] = frontParser_midiMsg.data2;
+						parameter_values[PAR_STEP_SLIDE] = frontParser_midiMsg.data2;
 						menu_repaint();
 						break;
 						*/
@@ -395,6 +395,11 @@ void frontPanel_parseData(uint8_t data)
 						
 						case SEQ_PROB:
 							activeParameters[PAR_STEP_PROB] = frontParser_midiMsg.data2;
+						menu_repaintAll();
+						break;
+
+						case SEQ_STEP_SLIDE:	//LICHOMAT v0.3: the selected step's slide flag (plan D26)
+							activeParameters[PAR_STEP_SLIDE] = frontParser_midiMsg.data2;
 						menu_repaintAll();
 						break;
 						

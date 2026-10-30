@@ -1123,6 +1123,60 @@ def V03_rolls(t):
         near(d, [gap] * len(d), 2.0, 'roll %d' % rate)
     no_copies_left()
 
+def wav_left(path):
+    """(rate, the left channel as floats) of a PCM 16/24-bit or float 32-bit WAV"""
+    with open(path, 'rb') as f:
+        b = f.read()
+    pos, fmt, data = 12, None, b''
+    while pos + 8 <= len(b):
+        cid, size = b[pos:pos + 4], struct.unpack_from('<I', b, pos + 4)[0]
+        if cid == b'fmt ':
+            tag, ch, rate, _, _, bits = struct.unpack_from('<HHIIHH', b, pos + 8)
+            fmt = (tag, ch, rate, bits)
+        elif cid == b'data':
+            data = b[pos + 8:pos + 8 + size]
+        pos += 8 + size + (size & 1)
+    tag, ch, rate, bits = fmt
+    step = ch * bits // 8
+    idx = range(0, len(data) - step + 1, step)
+    if tag == 3 and bits == 32:
+        return rate, [struct.unpack_from('<f', data, i)[0] for i in idx]
+    if bits == 16:
+        return rate, [struct.unpack_from('<h', data, i)[0] / 32768 for i in idx]
+    if bits == 24:
+        return rate, [int.from_bytes(data[i:i + 3], 'little', signed=True) / 8388608 for i in idx]
+    raise ValueError('WAV format %r' % (fmt,))
+
+def crossings(x, a, b):
+    return sum(1 for i in range(a + 1, b) if (x[i - 1] < 0) != (x[i] < 0))
+
+@case
+def V03_slide(t):
+    # Drum 1: step 1 note 75, step 9 note 87. With slide (508 ms) step 9 starts an octave low:
+    # its first 100 ms cross zero about 0.54 times as often as without; slide time 0 = no slide
+    seed = t.seed()
+    def run(name, time, on):
+        wav, log = t.path(name + '.wav'), t.path(name + '.log')
+        script = t.script(press_steps(1, (1, 9)) + '+100ms param active_step=0\n+100ms param step_note=75\n'
+                          '+100ms param active_step=8\n+100ms param step_note=87\n'
+                          '+100ms param slide_time1=%d\n+100ms param step_slide=%d\n+100ms press start\n' % (time, on))
+        t.render(seed, ['--no-start', '--seconds', '3.5', '--out', wav, '--stereo', 'out1', '--midi-log', log,
+                        '--events', script])
+        rate, x = wav_left(wav)
+        return rate, x, din_notes(log, '90')
+    rate, plain, notes = run('plain', 127, 0)
+    _, slid, _ = run('slide', 127, 1)
+    _, zero, _ = run('zero', 0, 1)
+    check(zero == plain, 'slide time 0 changed the sound')
+    on = next((i for i, (a, b) in enumerate(zip(plain, slid)) if abs(a - b) > 1e-4), None)
+    check(on is not None, 'the slide changed nothing')
+    want = notes[1][0] * rate / 216e6		# step 9's Note On, as a sample (WAV sample 0 = cycle 0)
+    check(abs(on - want) <= rate * 0.004, 'the sound differs from sample %d, step 9 is at %d' % (on, want))
+    a, b = on + rate * 5 // 1000, on + rate * 105 // 1000
+    r = crossings(slid, a, b) / max(1, crossings(plain, a, b))
+    check(0.45 <= r <= 0.65, 'step 9 crosses zero %.2f times as often with slide, not about 0.54' % r)
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists

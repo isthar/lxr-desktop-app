@@ -362,7 +362,7 @@ enum ParamEnums
 	PAR_SHUFFLE,
 
 	PAR_TRACK_TEMPO,			// LICHOMAT v0.2: the selected track's tempo (menu only, saved in the pattern)
-	PAR_PATTERN_NEXT,				//  - UNUSED
+	PAR_STEP_SLIDE,				// LICHOMAT v0.3: the selected step's slide flag (menu only, plan D26)
 	
 	PAR_TRACK_LENGTH,
 	

@@ -751,8 +751,12 @@ static void frontParser_handleSeqCC()
 		break;
 
 	case FRONT_SEQ_PROB:
+		//LICHOMAT v0.3: bit 7 is the slide flag
+		seq_setStepProbKeepSlide(frontParser_shownPattern, frontParser_activeTrack, frontParser_activeStep, cortex_midiMsg.data2);
+		break;
 
-		seq_patternSet.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][frontParser_activeStep].prob = (cortex_midiMsg.data2);
+	case FRONT_SEQ_STEP_SLIDE:	//LICHOMAT v0.3: the step page's sld (plan D26)
+		seq_setStepSlide(frontParser_shownPattern, frontParser_activeTrack, frontParser_activeStep, cortex_midiMsg.data2);
 		break;
 
 	case FRONT_SEQ_EUKLID_LENGTH:
@@ -933,9 +937,14 @@ static void frontParser_handleSeqCC()
 		uart_sendFrontpanelByte(FRONT_SEQ_NOTE);
 		uart_sendFrontpanelByte(seq_patternSet.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][cortex_midiMsg.data2].note);
 
+		//LICHOMAT v0.3: the probability or condition without the slide flag, then the flag (plan D26)
 		uart_sendFrontpanelByte(FRONT_SEQ_CC);
 		uart_sendFrontpanelByte(FRONT_SEQ_PROB);
-		uart_sendFrontpanelByte(seq_patternSet.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][cortex_midiMsg.data2].prob);
+		uart_sendFrontpanelByte(seq_patternSet.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][cortex_midiMsg.data2].prob & STEP_PROB_MASK);
+
+		uart_sendFrontpanelByte(FRONT_SEQ_CC);
+		uart_sendFrontpanelByte(FRONT_SEQ_STEP_SLIDE);
+		uart_sendFrontpanelByte((seq_patternSet.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][cortex_midiMsg.data2].prob & STEP_SLIDE_FLAG) ? 1 : 0);
 
 
 		uart_sendFrontpanelByte(FRONT_SEQ_CC);

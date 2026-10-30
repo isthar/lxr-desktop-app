@@ -88,6 +88,7 @@ extern uint8_t frontPanel_sysexMode;
 
 //seq_cc messages
 #define SEQ_RUN_STOP		0x01
+#define SEQ_STEP_SLIDE		0x02	//LICHOMAT v0.3: a step's slide flag (plan D26)
 
 #define SEQ_MUTE_TRACK		0x09
 #define SEQ_UNMUTE_TRACK	0x0a

@@ -256,6 +256,7 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_HUM_VOL, CAT_PATTERN, LONG_HUM_VOL},/*TEXT_HUMAN_VOL*/
 		{SHORT_TRK_DELAY, CAT_PATTERN, LONG_TRK_DELAY},/*TEXT_TRACK_DELAY*/
 		{SHORT_SLIDE_TIME, CAT_OSC, LONG_SLIDE_TIME},/*TEXT_SLIDE_TIME, LICHOMAT v0.3*/
+		{SHORT_STEP_SLIDE, CAT_STEP, LONG_STEP_SLIDE},/*TEXT_STEP_SLIDE*/
 
 
 };
@@ -532,7 +533,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_P2_VAL*/ 			DTYPE_0B127,
 	    /*PAR_SHUFFLE*/ 		DTYPE_0B127,
 	    /*PAR_TRACK_TEMPO*/ 	DTYPE_MENU | (MENU_TRK_TEMPO<<8),	// LICHOMAT v0.2
-	    /*PAR_PATTERN_NEXT*/ 	DTYPE_MENU | (MENU_NEXT_PATTERN<<8),
+	    /*PAR_STEP_SLIDE*/ 	DTYPE_ON_OFF,	// LICHOMAT v0.3: the step page's sld (plan D26)
 	    /*PAR_TRACK_LENGTH*/ 	DTYPE_1B64,
 	    /*PAR_GLO_SAT*/			DTYPE_0B127,
 	    /*PAR_HUMAN_TIME*/ 		DTYPE_MENU | (MENU_HUM_TIME<<8),	// LICHOMAT v0.2
@@ -3731,7 +3732,7 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 		frontPanel_sendData(SEQ_CC,SEQ_SET_PAT_BEAT,value);
 		break;
 
-	case PAR_PATTERN_NEXT:
+	case PAR_STEP_SLIDE:
 		frontPanel_sendData(SEQ_CC,SEQ_SET_PAT_NEXT,value);
 		break;
 */
@@ -3743,6 +3744,10 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 
 	case PAR_STEP_PROB:
 		frontPanel_sendData(SEQ_CC,SEQ_PROB,value);
+		break;
+
+	case PAR_STEP_SLIDE:	// LICHOMAT v0.3: the step page's sld (plan D26)
+		frontPanel_sendData(SEQ_CC,SEQ_STEP_SLIDE,value);
 		break;
 
 	case PAR_STEP_NOTE:

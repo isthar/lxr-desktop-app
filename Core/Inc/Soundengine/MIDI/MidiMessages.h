@@ -446,6 +446,7 @@ extern Param2EnumsDefinition Param2Enums;
 
 //Sequencer commands
 #define FRONT_SEQ_RUN_STOP				0x01
+#define FRONT_SEQ_STEP_SLIDE			0x02	//LICHOMAT v0.3: a step's slide flag (plan D26)
 
 #define FRONT_SEQ_MUTE_TRACK			0x09
 #define FRONT_SEQ_UNMUTE_TRACK			0x0a

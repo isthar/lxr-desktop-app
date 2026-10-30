@@ -276,7 +276,7 @@ static const struct { const char *name; uint16_t par; } render_params[] = {
 	{ "p2_val", PAR_P2_VAL },
 	{ "shuffle", PAR_SHUFFLE },
 	{ "track_tempo", PAR_TRACK_TEMPO },
-	{ "pattern_next", PAR_PATTERN_NEXT },
+	{ "step_slide", PAR_STEP_SLIDE },
 	{ "track_length", PAR_TRACK_LENGTH },
 	{ "human_time", PAR_HUMAN_TIME },
 	{ "human_vol", PAR_HUMAN_VOL },

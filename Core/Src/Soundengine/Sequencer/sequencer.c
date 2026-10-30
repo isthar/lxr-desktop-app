@@ -640,7 +640,7 @@ void seq_setPendingPatternActive()
 
 				//frontPanel_sendData(SEQ_CC,SEQ_REQUEST_PATTERN_PARAMS,frontParser_midiMsg.data2); muss auch gem,acht werdne!
 				//parameter_values[PAR_PATTERN_BEAT] = seq_patternSet.seq_patternSettings[frontParser_shownPattern].changeBar;
-				//parameter_values[PAR_PATTERN_NEXT] = seq_patternSet.seq_patternSettings[frontParser_shownPattern].nextPattern;
+				//parameter_values[PAR_STEP_SLIDE] = seq_patternSet.seq_patternSettings[frontParser_shownPattern].nextPattern;
 				menu_repaint();
 
 
@@ -725,7 +725,7 @@ void seq_setPendingPatternActive()
 
 					//frontPanel_sendData(SEQ_CC,SEQ_REQUEST_PATTERN_PARAMS,frontParser_midiMsg.data2); muss auch gem,acht werdne!
 					//parameter_values[PAR_PATTERN_BEAT] = seq_patternSet.seq_patternSettings[frontParser_shownPattern].changeBar;
-					//parameter_values[PAR_PATTERN_NEXT] = seq_patternSet.seq_patternSettings[frontParser_shownPattern].nextPattern;
+					//parameter_values[PAR_STEP_SLIDE] = seq_patternSet.seq_patternSettings[frontParser_shownPattern].nextPattern;
 					menu_repaint();
 
 
@@ -1867,6 +1867,10 @@ static void seq_cbTrigger(void *ctx, const seqc_event_t *ev)
 
 	seq_parseAutomationNodes(voiceNr, &plocks);
 
+	//LICHOMAT v0.3: hit 0 of a slide step of Drum 1-3 glides from the voice's last note
+	if(voiceNr < 3)
+		Drum_setSlide(voiceNr, (ev->flags & SEQC_EVF_SLIDE) ? 1 : 0);
+
 	//Trigger internal synth voice
 	voiceControl_noteOn(voiceNr, ev->note, ev->vel);
 
@@ -2346,6 +2350,24 @@ void seq_setGrooveParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 	case PAR_TRACK_DELAY:	g->delay = (int8_t)(value <= GROOVE_DELAY_MAX - GROOVE_DELAY_MIN ? value + GROOVE_DELAY_MIN : 0); break;
 	default: break;
 	}
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.3: the slide flag of a step (bit 7 of Step.prob, plan D23), probability kept */
+void seq_setStepSlide(uint8_t pattern, uint8_t track, uint8_t step, uint8_t on)
+{
+	if((pattern >= NUM_PATTERN) || (track >= NUM_TRACKS)
+			|| (step >= sizeof seq_patternSet.seq_subStepPattern[0][0] / sizeof(Step))) return;
+	Step *s = &seq_patternSet.seq_subStepPattern[pattern][track][step];
+	s->prob = (uint8_t)(on ? (s->prob | STEP_SLIDE_FLAG) : (s->prob & STEP_PROB_MASK));
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.3: the step page's probability or condition (7 bits), slide flag kept */
+void seq_setStepProbKeepSlide(uint8_t pattern, uint8_t track, uint8_t step, uint8_t prob)
+{
+	if((pattern >= NUM_PATTERN) || (track >= NUM_TRACKS)
+			|| (step >= sizeof seq_patternSet.seq_subStepPattern[0][0] / sizeof(Step))) return;
+	Step *s = &seq_patternSet.seq_subStepPattern[pattern][track][step];
+	s->prob = (uint8_t)((s->prob & STEP_SLIDE_FLAG) | (prob & STEP_PROB_MASK));
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.2: move every step of the track in pattern one step later (dir +1) or

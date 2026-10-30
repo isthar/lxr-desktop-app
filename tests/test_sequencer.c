@@ -150,6 +150,19 @@ void uart_sendFrontpanelSysExByte(uint8_t data) { (void)data; }
 void uart_sendMidi(MidiMsg msg) { (void)msg; }
 uint8_t usb_getMidi(MidiMsg *msg) { (void)msg; return 0; }
 void usb_sendMidi(MidiMsg msg) { (void)msg; }
+static int slideCalls;			/* Drum_setSlide() (LICHOMAT v0.3, plan P4) */
+static uint8_t slideVoice[64], slideOn[64];
+static int slideAtNoteOn[64];		/* noteOns at the call */
+void Drum_setSlide(const uint8_t voiceNr, const uint8_t on)
+{
+	if (slideCalls < 64)
+	{
+		slideVoice[slideCalls] = voiceNr;
+		slideOn[slideCalls] = on;
+		slideAtNoteOn[slideCalls] = noteOns;
+	}
+	slideCalls++;
+}
 void voiceControl_noteOff(uint8_t voice) { (void)voice; }
 void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
 {
@@ -453,6 +466,70 @@ TEST(sequencer_rotate_moves_steps_within_the_length)
 	const Step s3 = seq_patternSet.seq_subStepPattern[p][3][0];
 	seq_rotateTrack(3, p, 1);
 	ASSERT_EQ(memcmp(&seq_patternSet.seq_subStepPattern[p][3][0], &s3, sizeof s3), 0);
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT v0.3 (plan P4): the slide flag and the probability share Step.prob
+TEST(sequencer_step_slide_and_probability_keep_each_other)
+{
+	Step *s = &seq_patternSet.seq_subStepPattern[3][1][5];
+	s->prob = 50;
+	seq_setStepSlide(3, 1, 5, 1);
+	ASSERT_EQ(s->prob, 0xB2);
+	seq_setStepProbKeepSlide(3, 1, 5, 110);
+	ASSERT_EQ(s->prob, 0xEE);
+	seq_setStepSlide(3, 1, 5, 0);
+	ASSERT_EQ(s->prob, 110);
+	seq_setStepProbKeepSlide(3, 1, 5, 0xC0);	/* only 7 bits of the edit value count */
+	ASSERT_EQ(s->prob, 0x40);
+	seq_setStepSlide(64, 1, 5, 1);			/* out of range: nothing */
+	seq_setStepSlide(3, 7, 5, 1);
+	ASSERT_EQ(s->prob, 0x40);
+}
+
+// LICHOMAT v0.3 (plan P4): a slide step of track 0 sets Drum voice 0's slide before
+// its Note On; a step of track 3 (not a Drum voice) calls nothing
+TEST(sequencer_slide_step_arms_the_drum_voice_before_its_note)
+{
+	reset();
+	Step *s0 = &seq_patternSet.seq_subStepPattern[0][0][0];
+	Step *s3 = &seq_patternSet.seq_subStepPattern[0][3][0];
+	const Step old0 = *s0, old3 = *s3;
+	seq_setMainStep(0, 0, 0, 1);
+	seq_setMainStep(0, 3, 0, 1);
+	s0->volume |= STEP_ACTIVE_MASK;
+	s3->volume |= STEP_ACTIVE_MASK;
+	s0->prob = 100 | STEP_SLIDE_FLAG;
+	s3->prob = 100;
+	noteOns = slideCalls = 0;
+	seq_setRunning(1);
+	run(100);					/* step 0 only: step 1 is at 125 ms */
+	seq_setRunning(0);
+	run(1);
+	int on0 = -1, on3 = -1;
+	for (int i = 0; i < noteOns && i < 64; i++)
+	{
+		if (noteOnVoice[i] == 0 && on0 < 0) on0 = i;
+		if (noteOnVoice[i] == 3 && on3 < 0) on3 = i;
+	}
+	ASSERT_TRUE(on0 >= 0);
+	ASSERT_TRUE(on3 >= 0);
+	int calls0 = 0;
+	for (int i = 0; i < slideCalls && i < 64; i++)
+	{
+		ASSERT_TRUE(slideVoice[i] < 3);
+		if (slideVoice[i] == 0)
+		{
+			calls0++;
+			ASSERT_EQ(slideOn[i], 1);
+			ASSERT_EQ(slideAtNoteOn[i], on0);	/* right before voice 0's Note On */
+		}
+	}
+	ASSERT_EQ(calls0, 1);
+	seq_setMainStep(0, 0, 0, 0);
+	seq_setMainStep(0, 3, 0, 0);
+	*s0 = old0;
+	*s3 = old3;
 }
 
 TEST_MAIN()
