@@ -12,6 +12,7 @@
  */
 
 //-------------------------------------------------------------
+#include "Soundengine/DSPAudio/f2u32.h"	//LICHOMAT: f2u32_sat() (F16)
 #include "Soundengine/DSPAudio/lfo.h"
 #include "Soundengine/DSPAudio/random.h"
 #include <math.h>
@@ -115,7 +116,7 @@ IN_ITCM_RAM uint32_t lfo_calcPhaseInc(float freq, uint8_t sync)
 {
 	if(sync==0)//no sync
 	{
-		return freq/(LFO_SR) * 0xffffffff;
+		return f2u32_sat(freq/(LFO_SR) * 0xffffffff);	//LICHOMAT: F16
 	}
 
 	//sync is on
@@ -130,7 +131,7 @@ IN_ITCM_RAM uint32_t lfo_calcPhaseInc(float freq, uint8_t sync)
 	{
 		default: //no sync
 
-		return freq/(LFO_SR) * 0xffffffff;
+		return f2u32_sat(freq/(LFO_SR) * 0xffffffff);	//LICHOMAT: F16
 		break;
 
 		case 1: // 4/1
@@ -179,7 +180,7 @@ IN_ITCM_RAM uint32_t lfo_calcPhaseInc(float freq, uint8_t sync)
 	}
 
 	float lfoSyncfreq = tempoAsFrequency * scaler;
-	return (lfoSyncfreq / (LFO_SR)) * 0xffffffff;
+	return f2u32_sat((lfoSyncfreq / (LFO_SR)) * 0xffffffff);	//LICHOMAT: F16
 }
 //-------------------------------------------------------------
 IN_ITCM_RAM void lfo_setFreq(Lfo *lfo, float f)

@@ -12,6 +12,7 @@
  */
 
 
+#include "Soundengine/DSPAudio/f2u32.h"	//LICHOMAT: f2u32_sat() (F16)
 #include <Soundengine/MIDI/CortexParser.h>
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/MIDI/MidiNoteNumbers.h"
@@ -1300,16 +1301,16 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 			case CC2_OFFSET_LFO1:
 			case CC2_OFFSET_LFO2:
 			case CC2_OFFSET_LFO3:
-				voiceArray[msg.data1-CC2_OFFSET_LFO1].lfo.phaseOffset = value.flt * 0xffffffff;
+				voiceArray[msg.data1-CC2_OFFSET_LFO1].lfo.phaseOffset = f2u32_sat(value.flt * 0xffffffff);	//LICHOMAT: saturates at 127 as on the device (F16)
 				break;
 			case CC2_OFFSET_LFO4:
-				snareVoice.lfo.phaseOffset = value.flt * 0xffffffff;
+				snareVoice.lfo.phaseOffset = f2u32_sat(value.flt * 0xffffffff);	//LICHOMAT: saturates at 127 as on the device (F16)
 				break;
 			case CC2_OFFSET_LFO5:
-				cymbalVoice.lfo.phaseOffset = value.flt * 0xffffffff;
+				cymbalVoice.lfo.phaseOffset = f2u32_sat(value.flt * 0xffffffff);	//LICHOMAT: saturates at 127 as on the device (F16)
 				break;
 			case CC2_OFFSET_LFO6:
-				hatVoice.lfo.phaseOffset = value.flt * 0xffffffff;
+				hatVoice.lfo.phaseOffset = f2u32_sat(value.flt * 0xffffffff);	//LICHOMAT: saturates at 127 as on the device (F16)
 				break;
 
 			case CC2_AUDIO_OUT1:

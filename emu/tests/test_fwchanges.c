@@ -454,4 +454,32 @@ TEST(M15_f14_transient_shift)
 	ASSERT_EQ(tr.output, (int16_t)(transientData[0][neg] * 256 * transientVolumeTable[neg >> 5]));
 }
 
+/* --- F16 -------------------------------------------------------------------------- */
+
+/* The LFO phase offsets (CC2_OFFSET_LFO1-6 in midiParser_ccHandler()) and the Drum
+ * voices' start phase (drum_setPhase()) scale 0..1 with * 0xffffffff, which is 2^32 as
+ * a float: at 127 the conversion to uint32 is out of range (UBSan; a random sweep of
+ * sound parameters found it). The M7 saturates at UINT32_MAX, which F16's f2u32_sat()
+ * gives in C. */
+static void fullPhase(void *arg)
+{
+	(void)arg;
+	MidiMsg m;
+	memset(&m, 0, sizeof m);
+	m.status = MIDI_CC2;
+	m.data1 = CC2_OFFSET_LFO1;
+	m.data2 = 127;
+	midiParser_ccHandler(m, 0, 0, 0.f);
+	drum_setPhase(127, 0);
+}
+
+TEST(M15_f16_full_phase)
+{
+	bootNoCard();
+	emu_directCall(fullPhase, NULL);
+	ASSERT_EQ(voiceArray[0].lfo.phaseOffset, UINT32_MAX);
+	ASSERT_EQ(voiceArray[0].osc.startPhase, UINT32_MAX);
+	ASSERT_EQ(voiceArray[0].modOsc.startPhase, UINT32_MAX);
+}
+
 TEST_MAIN()
