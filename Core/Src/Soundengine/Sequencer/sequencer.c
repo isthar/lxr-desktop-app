@@ -158,6 +158,8 @@ typedef struct
 	uint8_t tempoValid;             /**< tempo holds a post */
 	uint16_t tempo;                 /**< master tempo in BPM */
 	uint8_t rollMask;               /**< one-shot roll triggers, one bit per voice */
+	uint8_t fillValid;              /**< LICHOMAT v0.3: fill holds a post */
+	uint8_t fill;                   /**< LICHOMAT v0.3: fill mode on or off (seq_setFill()) */
 	uint8_t skipMask;               /**< skip-once markers (D6), one bit per track */
 	uint8_t skipStep[NUM_TRACKS];   /**< the step of each skip-once marker */
 } SeqMailbox;
@@ -944,16 +946,20 @@ void seq_setMute(uint8_t trackNr, uint8_t isMuted)
 		seq_mutedTracks = 0;
 	} else {
 		//mute/unmute tracks
+		//LICHOMAT v0.3: masked, so that a mute scene applied by seq_tick() in between is not lost
+		const uint32_t primask = seq_mailboxLock();
 		if(isMuted) {
 			//mute track
 			seq_mutedTracks |= (1<<trackNr);
-			// turn off the midi note that may be playing on that track
-			// (fw 1.7 passed the MIDI channel here, which turned off another voice)
-			voiceControl_noteOff(trackNr);
 		} else {
 			//unmute track
 			seq_mutedTracks &= ~(1<<trackNr);
 		}
+		seq_mailboxUnlock(primask);
+		// turn off the midi note that may be playing on that track
+		// (fw 1.7 passed the MIDI channel here, which turned off another voice)
+		if(isMuted)
+			voiceControl_noteOff(trackNr);
 	}
 };
 //------------------------------------------------------------------------------
@@ -974,10 +980,20 @@ static uint8_t seq_sceneQuant;			/**< 0: at the bar, 1: at the step (PAR_SCENE_Q
 static volatile uint8_t seq_sceneSerial;	/**< counts the applied scenes */
 static volatile uint8_t seq_sceneMutes;		/**< the mutes of the latest */
 
+static void seq_applyMutes(uint8_t mutes);
+
+/** no scenes (a new or loaded project); a waiting recall is dropped and counts as applied with
+ * the mutes as they are, so that the panel stops its LED */
 void seq_clearMuteScenes(void)
 {
 	memset(seq_muteScenes, 0, sizeof seq_muteScenes);
-	seq_sceneWanted = 0;
+	const uint32_t primask = seq_mailboxLock();
+	if(seq_sceneWanted & MUTE_SCENE_STORED)
+	{
+		seq_sceneWanted = 0;
+		seq_applyMutes(seq_mutedTracks);
+	}
+	seq_mailboxUnlock(primask);
 }
 
 void seq_storeMuteScene(uint8_t scene)
@@ -1154,10 +1170,15 @@ void seq_setRollRate(uint8_t rate)
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.3: fill mode for the trig conditions FILL and !FILL, while step 8 is held in the
- * performance mode (plan D16); it applies to the steps generated from now, one step ahead */
+ * performance mode (plan D16); posted, so the next seq_tick() applies it, for the steps
+ * generated from then on */
 void seq_setFill(uint8_t on)
 {
-	seqc_setFill(on != 0);
+	const uint32_t primask = seq_mailboxLock();
+	seq_mailbox.fill = on ? 1 : 0;
+	seq_mailbox.fillValid = 1;
+	seq_mailboxPosted = 1;
+	seq_mailboxUnlock(primask);
 }
 //------------------------------------------------------------------------
 /** quantize a step to the seq_quantisation value*/
@@ -2259,6 +2280,8 @@ static void seq_applyMailbox(void)
 		seqc_setAnalogPpq(mb.ppq);
 	if(mb.tempoValid)
 		seqc_setTempo((float)mb.tempo);
+	if(mb.fillValid)
+		seqc_setFill(mb.fill != 0);
 
 	if(mb.transport & SEQ_MB_STOP)
 		seqc_stop();

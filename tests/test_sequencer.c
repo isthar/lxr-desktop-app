@@ -165,6 +165,7 @@ void Drum_setSlide(const uint8_t voiceNr, const uint8_t on)
 	slideCalls++;
 }
 void voiceControl_noteOff(uint8_t voice) { (void)voice; }
+static int fillOnNoteOn = -1;		/* >= 0: the next Note On calls seq_setFill() with it, once */
 void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
 {
 	(void)note; (void)vel;
@@ -174,6 +175,12 @@ void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
 		noteOnAt[noteOns] = hostNow;
 	}
 	noteOns++;
+	if (fillOnNoteOn >= 0)
+	{
+		const int on = fillOnNoteOn;
+		fillOnNoteOn = -1;
+		seq_setFill((uint8_t)on);
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -620,6 +627,71 @@ TEST(sequencer_mute_scene_store_and_recall_at_the_bar)
 	ASSERT_EQ((uint8_t)(seq_appliedMuteScene(&m) - serial0), 1);
 	ASSERT_EQ(m, 0x12);
 	seq_muteSceneBoundary(48);		/* nothing waits */
+	ASSERT_EQ((uint8_t)(seq_appliedMuteScene(&m) - serial0), 1);
+	seq_setMute(7, 0);
+}
+
+// LICHOMAT v0.3 (the P5-P8 review): seq_setFill() posts to the mailbox, so a call made while
+// the core runs (here from a Note On inside seq_tick(); on the device the main loop that the
+// audio interrupt's seq_tick() preempts) is applied by the next seq_tick(): the FILL step plays
+// and the core counts no reentry
+TEST(sequencer_fill_set_while_the_core_runs_applies)
+{
+	reset();
+	Step *s0 = &seq_patternSet.seq_subStepPattern[0][0][0];
+	Step *s4 = &seq_patternSet.seq_subStepPattern[0][0][32];
+	const Step old0 = *s0, old4 = *s4;
+	seq_setMainStep(0, 0, 0, 1);
+	seq_setMainStep(0, 0, 4, 1);
+	s0->volume |= STEP_ACTIVE_MASK;
+	s4->volume |= STEP_ACTIVE_MASK;
+	s0->prob = 100;
+	s4->prob = STEP_COND_FILL;
+	seqc_stats_t st0, st1;
+	seqc_stats(&st0);
+	noteOns = 0;
+	fillOnNoteOn = 1;				/* step 0's Note On turns fill on */
+	seq_setRunning(1);
+	run(600);					/* steps 0 to 4; step 4 at 500 ms */
+	seq_setFill(0);
+	seq_setRunning(0);
+	run(1);
+	fillOnNoteOn = -1;
+	int ons0 = 0;
+	for (int i = 0; i < noteOns && i < 64; i++)
+		if (noteOnVoice[i] == 0)
+			ons0++;
+	seqc_stats(&st1);
+	ASSERT_EQ(st1.reentries, st0.reentries);
+	ASSERT_EQ(ons0, 2);				/* step 0 and the FILL step 4 */
+	seq_setMainStep(0, 0, 0, 0);
+	seq_setMainStep(0, 0, 4, 0);
+	*s0 = old0;
+	*s4 = old4;
+}
+
+// LICHOMAT v0.3 (the P5-P8 review): clearing the scenes (a new or loaded project) drops a
+// waiting recall; the panel sees it as applied with the mutes unchanged, so its LED stops
+TEST(sequencer_mute_scene_clear_drops_a_waiting_recall)
+{
+	uint8_t m;
+	seq_clearMuteScenes();
+	seq_setMuteSceneQuant(0);
+	seq_setMute(7, 0);
+	seq_setMute(2, 1);
+	seq_storeMuteScene(0);
+	seq_setMute(7, 0);
+	seq_setMute(5, 1);
+	const uint8_t serial0 = seq_appliedMuteScene(&m);
+	ASSERT_EQ(seq_recallMuteSceneAt(0, 1), 1);
+	seq_clearMuteScenes();
+	ASSERT_EQ((uint8_t)(seq_appliedMuteScene(&m) - serial0), 1);
+	ASSERT_EQ(m, 0x20);				/* track 5, as before */
+	seq_muteSceneBoundary(0);			/* nothing waits any more */
+	ASSERT_EQ(seq_isTrackMuted(2), 0);
+	ASSERT_EQ(seq_isTrackMuted(5), 1);
+	ASSERT_EQ((uint8_t)(seq_appliedMuteScene(&m) - serial0), 1);
+	seq_clearMuteScenes();				/* nothing waits: no count */
 	ASSERT_EQ((uint8_t)(seq_appliedMuteScene(&m) - serial0), 1);
 	seq_setMute(7, 0);
 }

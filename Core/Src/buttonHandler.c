@@ -334,7 +334,9 @@ void buttonHandler_tick() {
 		buttonHandler_sceneSerial = sceneSerial;
 		buttonHandler_mutedVoices = sceneMutes;
 		if(menu_muteModeActive) led_setActiveVoiceLeds((uint8_t)~sceneMutes);
-		if(buttonHandler_sceneLed) led_setBlinkLed(buttonHandler_sceneLed, 0);
+		//another mode may blink that LED for itself (the FX mode step 15)
+		if(buttonHandler_sceneLed && (buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_PERF))
+			led_setBlinkLed(buttonHandler_sceneLed, 0);
 		buttonHandler_sceneLed = 0;
 	}
 }
@@ -455,6 +457,8 @@ static void buttonHandler_handleModeButtons(uint8_t mode) {
 		menu_switchPage(PERF_PAGE);
 		//menu_switchSubPage(0);
 		menu_repaintAll();
+		//LICHOMAT v0.3: a recalled mute scene that still waits blinks again (the mode change cleared it)
+		if(buttonHandler_sceneLed) led_setBlinkLed(buttonHandler_sceneLed, 1);
 
 	}
 		break;
@@ -1332,7 +1336,8 @@ static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 	{
 		buttonHandler_fillHeld = 0;
 		seq_setFill(0);
-		led_setValue(0, ledNr);
+		if(buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_PERF)
+			led_setValue(0, ledNr);
 		return;
 	}
 

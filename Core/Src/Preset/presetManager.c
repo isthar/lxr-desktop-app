@@ -2322,6 +2322,7 @@ FRESULT preset_createProject(uint8_t presetNr)
 	int i;
 
 	preset_loadDefaultGlobals();
+	seq_setMuteSceneQuant(activeParameters[PAR_SCENE_QUANT]);	//LICHOMAT v0.3: the sequencer as the menu shows
 	//give active song pointer a proper value
 	seq_activeSong = seq_songData[0];
 
@@ -2361,7 +2362,7 @@ void preset_writeSceneBlock(void)
 /** after the name: the scenes of a complete block of this version, else none */
 void preset_readSceneBlock(void)
 {
-	memset(seq_muteScenes, 0, MUTE_SCENES);
+	seq_clearMuteScenes();	//also drops a recall that waits
 	uint8_t b[SCENE_BLOCK_SIZE];
 	UINT bytesRead = 0;
 	if((f_read((FIL*)&SDFile, b, sizeof b, &bytesRead) != FR_OK) || (bytesRead != sizeof b)) return;

@@ -128,7 +128,8 @@ void led_setActiveSelectButton(uint8_t butNr) { (void)butNr; }
 void led_setActiveVoice(uint8_t voiceNr) { (void)voiceNr; }
 void led_setActiveVoiceLeds(uint8_t pattern) { (void)pattern; }
 void led_setMode2(uint8_t status) { (void)status; }
-void led_setValue(uint8_t val, uint8_t ledNr) { (void)val; (void)ledNr; }
+static uint8_t ledValue[256];		/* led_setValue() per LED number */
+void led_setValue(uint8_t val, uint8_t ledNr) { ledValue[ledNr] = val; }
 void led_updateBarLeds(void) {}
 
 void frontPanel_sendData(uint8_t status, uint8_t data1, uint8_t data2)
@@ -436,7 +437,8 @@ static uint8_t fillOn, recallScene, storeScene;
 void seq_setFill(uint8_t on) { fillCalls++; fillOn = on; }
 uint8_t seq_recallMuteScene(uint8_t scene) { recallCalls++; recallScene = scene; return 1; }
 void seq_storeMuteScene(uint8_t scene) { storeCalls++; storeScene = scene; }
-uint8_t seq_appliedMuteScene(uint8_t *mutes) { *mutes = 0; return 0; }
+static uint8_t appliedSerial;		/* seq_appliedMuteScene(): the count of applied scenes */
+uint8_t seq_appliedMuteScene(uint8_t *mutes) { *mutes = 0; return appliedSerial; }
 
 static void enterPerf(void)
 {
@@ -489,6 +491,49 @@ TEST(buttons_perf_steps_9_to_16_recall_and_copy_stores)
 	press(BUT_SEQ8);				/* fill, not a scene */
 	ASSERT_EQ(recallCalls, 2);
 	ASSERT_EQ(storeCalls, 1);
+}
+
+// the P5-P8 review: the release of step 8 in another mode ends fill, but leaves that mode's
+// step 8 LED alone
+TEST(buttons_fill_release_in_voice_mode_keeps_the_step_led)
+{
+	enterPerf();
+	down(BUT_SEQ8);
+	ASSERT_EQ(fillOn, 1);
+	press(BUT_MODE1);
+	ledValue[LED_STEP8] = 0x55;
+	up(BUT_SEQ8);
+	ASSERT_EQ(fillOn, 0);
+	ASSERT_EQ(ledValue[LED_STEP8], 0x55);
+}
+
+// the P5-P8 review: a scene that applies in another mode (here the FX mode, which blinks step
+// 15's LED itself) stops no blink; back in the performance mode a waiting recall blinks again
+TEST(buttons_scene_apply_leaves_other_modes_blinking)
+{
+	enterPerf();
+	press(BUT_SEQ15);
+	ASSERT_EQ(blinking[LED_STEP15], 1);
+	pressWith(BUT_SHIFT, BUT_SEQ15);		/* the FX mode */
+	ASSERT_EQ(blinking[LED_STEP15], 1);
+	appliedSerial++;
+	buttonHandler_tick();
+	ASSERT_EQ(blinking[LED_STEP15], 1);
+	press(BUT_MODE2);
+	ASSERT_EQ(blinking[LED_STEP15], 0);		/* applied: no blink */
+}
+
+TEST(buttons_scene_blink_back_after_a_mode_change)
+{
+	enterPerf();
+	press(BUT_SEQ10);
+	ASSERT_EQ(blinking[LED_STEP10], 1);
+	press(BUT_MODE1);
+	press(BUT_MODE2);
+	ASSERT_EQ(blinking[LED_STEP10], 1);		/* still waiting */
+	appliedSerial++;
+	buttonHandler_tick();
+	ASSERT_EQ(blinking[LED_STEP10], 0);
 }
 
 TEST(buttons_voice_mode_steps_do_not_recall_scenes)

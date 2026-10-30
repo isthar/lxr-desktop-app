@@ -977,6 +977,9 @@ TEST(presets_tmp_pattern_keeps_the_settings)
 static const uint8_t nfo22[22] = { 'A', 'c', 'i', 'd', ' ', '3', '0', '3', 'L', 'C', 'H', 'M', 1, 8,
 				   0x80, 0, 0x85, 0, 0, 0, 0, 0x05 };
 
+static int clearScenesCalls;		/* seq_clearMuteScenes() */
+static int sceneQuant = -1;		/* seq_setMuteSceneQuant() */
+
 static void readNfo(const uint8_t *file, UINT len)
 {
 	char name[8];
@@ -1025,6 +1028,23 @@ TEST(presets_scene_block_read_back_and_defaults)
 		for (int s = 0; s < MUTE_SCENES; s++)
 			ASSERT_EQ(seq_muteScenes[s], 0);
 	}
+}
+
+// the P5-P8 review: a project load clears the scenes through the sequencer, which drops a
+// waiting recall; a new project also sets scn to bar in the sequencer, as its menu shows
+TEST(presets_scene_block_read_clears_through_the_sequencer)
+{
+	const int before = clearScenesCalls;
+	readNfo(nfo22, sizeof nfo22);
+	ASSERT_EQ(clearScenesCalls, before + 1);
+}
+
+TEST(presets_new_project_scene_quant_is_bar)
+{
+	cardReset();
+	sceneQuant = 1;
+	ASSERT_EQ(preset_createProject(3), FR_OK);
+	ASSERT_EQ(sceneQuant, 0);
 }
 
 TEST_MAIN()
@@ -1083,7 +1103,8 @@ void seq_copyPattern(uint8_t src, uint8_t dst) { (void)src; (void)dst; }
 void seq_copyPatternToBackupBuffer(uint8_t patternNr) { (void)patternNr; }
 void seq_setNextPattern(const uint8_t patNr) { (void)patNr; }
 uint8_t seq_muteScenes[MUTE_SCENES];	/* LICHOMAT v0.3 (plan P7) */
-void seq_clearMuteScenes(void) { memset(seq_muteScenes, 0, MUTE_SCENES); }
+void seq_clearMuteScenes(void) { clearScenesCalls++; memset(seq_muteScenes, 0, MUTE_SCENES); }
+void seq_setMuteSceneQuant(uint8_t step) { sceneQuant = step; }
 void soundengine_process(void) {}
 void uart_checkAndParse(void) {}
 uint8_t buttonHandler_getMode(void) { return 0; }
