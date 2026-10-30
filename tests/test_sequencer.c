@@ -281,6 +281,30 @@ TEST(sequencer_automation_step_past_63_is_not_armed)
 }
 
 //------------------------------------------------------------------------------
+// LICHOMAT v0.2 (plan V1): the per-track settings follow the pattern operations
+//------------------------------------------------------------------------------
+TEST(sequencer_groove_follows_copy_clear_and_backup)
+{
+	reset();
+	static const TrackGroove none[NUM_TRACKS];
+	const TrackGroove g = { .tempo = -1, .humTime = 4, .humVol = 10, .delay = -3 };
+	seq_patternSet.groove[3][2] = g;
+	seq_copyTrack(2, 5, 3);
+	ASSERT_EQ(memcmp(&seq_patternSet.groove[3][5], &g, sizeof g), 0);
+	seq_copyPattern(3, 7);
+	ASSERT_EQ(memcmp(seq_patternSet.groove[7], seq_patternSet.groove[3], sizeof none), 0);
+	seq_copyPatternToBackupBuffer(3);
+	memset(seq_patternSet.groove[3], 0, sizeof none);
+	seq_copyBackupBufferToPattern(3);
+	ASSERT_EQ(memcmp(&seq_patternSet.groove[3][2], &g, sizeof g), 0);
+	seq_clearTrack(2, 3);
+	ASSERT_EQ(memcmp(&seq_patternSet.groove[3][2], &none[0], sizeof g), 0);
+	ASSERT_EQ(memcmp(&seq_patternSet.groove[3][5], &g, sizeof g), 0);	/* the other track stays */
+	seq_clearPattern(7);
+	ASSERT_EQ(memcmp(seq_patternSet.groove[7], none, sizeof none), 0);
+}
+
+//------------------------------------------------------------------------------
 // The probability draw (stage 1b F5): seq_cbRandom() returns SEQ_RANDOM(), which
 // stubs/seq_random_test.h makes seqTest_random() for this target. The firmware
 // keeps GetRngValue(), the hardware RNG.

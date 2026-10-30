@@ -103,6 +103,7 @@ typedef struct PatternSetStruct
 	uint8_t length[NUM_PATTERN][NUM_TRACKS];	//only used in euklid generator?
 	uint8_t shuffle[NUM_PATTERN];
 	uint8_t kitNr[NUM_PATTERN];
+	TrackGroove groove[NUM_PATTERN][NUM_TRACKS];	//LICHOMAT v0.2: tempo, humanize, delay (file extension block)
 }PatternSet;
 
 typedef struct PatternBackupBufferStruct
@@ -114,6 +115,7 @@ typedef struct PatternBackupBufferStruct
 	uint8_t length[NUM_TRACKS];	//only used in euklid generator?
 	uint8_t shuffle;
 	uint8_t kitNr;
+	TrackGroove groove[NUM_TRACKS];
 }PatternBackupBuffer;
 
 /*

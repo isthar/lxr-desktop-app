@@ -301,6 +301,41 @@ FRESULT preset_LoadTmpKit()
 		return res;
 }
 
+//----------------------------------------------------
+// LICHOMAT v0.2: the extension block after the kit number of a pattern file (.pat and
+// tmp.pat), 34 bytes: "LCHM", the version 1, the track count 7, then the TrackGroove of
+// each track (tempo, humanize time, humanize volume, delay). fw 1.7 reads up to the kit
+// number and closes the file, so it does not see the block. Loading sets the defaults
+// first; a block that is missing, short, of another version or track count leaves them,
+// and a field out of range takes its default.
+//----------------------------------------------------
+#define PATTERN_EXT_VERSION 1
+
+static void preset_writePatternExt(uint8_t patternNr)
+{
+	UINT bytesWritten;
+	const uint8_t head[6] = { 'L', 'C', 'H', 'M', PATTERN_EXT_VERSION, NUM_TRACKS };
+	f_write((FIL*)&SDFile, head, sizeof head, &bytesWritten);
+	f_write((FIL*)&SDFile, seq_patternSet.groove[patternNr], sizeof seq_patternSet.groove[patternNr], &bytesWritten);
+}
+
+static void preset_readPatternExt(uint8_t patternNr)
+{
+	UINT bytesRead = 0;
+	uint8_t head[6];
+	TrackGroove g[NUM_TRACKS];
+
+	memset(seq_patternSet.groove[patternNr], 0, sizeof seq_patternSet.groove[patternNr]);
+	if((f_read((FIL*)&SDFile, head, sizeof head, &bytesRead) != FR_OK) || (bytesRead != sizeof head))
+		return;
+	if((memcmp(head, "LCHM", 4) != 0) || (head[4] != PATTERN_EXT_VERSION) || (head[5] != NUM_TRACKS))
+		return;
+	if((f_read((FIL*)&SDFile, g, sizeof g, &bytesRead) != FR_OK) || (bytesRead != sizeof g))
+		return;
+	for(uint8_t t=0; t<NUM_TRACKS; t++)
+		seq_patternSet.groove[patternNr][t] = trackGroove_checked(g[t]);
+}
+
 FRESULT preset_LoadTmpPat()
 {
 
@@ -456,6 +491,7 @@ FRESULT preset_LoadTmpPat()
 			if(seq_patternSet.kitNr[patternNr] >= NUM_KIT_SLOTS) seq_patternSet.kitNr[patternNr] = 0;
 
 		}
+		preset_readPatternExt(patternNr);	//LICHOMAT v0.2: the per-track settings
 
 		if( success == 0)
 		{
@@ -580,6 +616,7 @@ FRESULT preset_saveTmpPat()
 
 		//write associated kit nr
 		f_write((FIL*)&SDFile,&seq_patternSet.kitNr[presetNr],sizeof(uint8_t),&bytesWritten);
+		preset_writePatternExt(presetNr);	//LICHOMAT v0.2: the per-track settings
 
 #endif
 
@@ -1634,6 +1671,7 @@ static void preset_writePatternData(uint8_t patternNr)
 
 		//write associated kit nr
 		f_write((FIL*)&SDFile,&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesWritten);
+		preset_writePatternExt(patternNr);	//LICHOMAT v0.2: the per-track settings
 
 #endif
 }
@@ -1980,6 +2018,7 @@ static uint8_t preset_readPatternData(uint8_t patternNr, uint8_t dataVersion)
 		if(seq_patternSet.kitNr[patternNr] >= NUM_KIT_SLOTS) seq_patternSet.kitNr[patternNr] = 0;
 
 	}
+	preset_readPatternExt(patternNr);	//LICHOMAT v0.2: the per-track settings
 
 	return success;
 #endif

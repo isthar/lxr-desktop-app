@@ -30,6 +30,8 @@
  */
 #include "seqc_test.h"
 
+#include <stddef.h>
+
 #include "frontPanelParser_ui.h"
 #include "lcd.h"
 #include "menu/CcNr2Text.h"
@@ -775,6 +777,198 @@ TEST(presets_morph_busy_while_a_morph_runs)
 	ASSERT_EQ(preset_morphBusy(), 1);
 	ASSERT_EQ(morphUntilIdle(1000), END_OF_SOUND_PARAMETERS);	/* one tick per sound parameter */
 	ASSERT_EQ(preset_morphBusy(), 0);
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT v0.2 (plan V1): the extension block after the PatV03 data
+//------------------------------------------------------------------------------
+#define PAT_V03_SIZE 3663	/* name 8, tag 6, 7 x (448 + 64), 56, shuffle, 7 lengths, kit */
+#define PAT_EXT_SIZE 34		/* "LCHM", version 1, 7 tracks, 7 x 4 */
+
+static const TrackGroove noGroove[NUM_TRACKS];	/* the defaults */
+
+/** pattern p with data in every field of the PatV03 part, and settings on every track */
+static void fillPattern(uint8_t p, uint8_t salt)
+{
+	uint8_t *steps = (uint8_t *)seq_patternSet.seq_subStepPattern[p];
+	for (size_t i = 0; i < sizeof seq_patternSet.seq_subStepPattern[p]; i++)
+		steps[i] = (uint8_t)(i * 7 + salt);
+	uint8_t *timing = (uint8_t *)seq_patternSet.seq_stepTiming[p];
+	for (size_t i = 0; i < sizeof seq_patternSet.seq_stepTiming[p]; i++)
+		timing[i] = (uint8_t)(i * 3 + salt);
+	for (int b = 0; b < NUM_BARS; b++)
+		for (int t = 0; t < NUM_TRACKS; t++)
+			seq_patternSet.seq_mainSteps[b][p][t] = (uint16_t)(0x1234 * (b + 1) + t + salt);
+	seq_patternSet.shuffle[p] = (uint8_t)(77 + salt);
+	seq_patternSet.kitNr[p] = 9;
+	for (int t = 0; t < NUM_TRACKS; t++)
+	{
+		seq_patternSet.length[p][t] = (uint8_t)(3 + 9 * t);
+		seq_patternSet.groove[p][t] = (TrackGroove){ .tempo = (int8_t)(t - 5), .humTime = (uint8_t)t,
+			.humVol = (uint8_t)(3 * t + salt % 2), .delay = (int8_t)(4 * t - 15) };
+	}
+}
+
+typedef struct {
+	Step steps[NUM_TRACKS][NUM_STEPS];
+	StepTiming timing[NUM_TRACKS][NUM_STEPS];
+	uint16_t mainSteps[NUM_BARS][NUM_TRACKS];
+	uint8_t length[NUM_TRACKS], shuffle, kit;
+	TrackGroove groove[NUM_TRACKS];
+} Slot;
+
+static void snap(uint8_t p, Slot *s)
+{
+	memcpy(s->steps, seq_patternSet.seq_subStepPattern[p], sizeof s->steps);
+	memcpy(s->timing, seq_patternSet.seq_stepTiming[p], sizeof s->timing);
+	for (int b = 0; b < NUM_BARS; b++)
+		memcpy(s->mainSteps[b], seq_patternSet.seq_mainSteps[b][p], sizeof s->mainSteps[b]);
+	memcpy(s->length, seq_patternSet.length[p], sizeof s->length);
+	s->shuffle = seq_patternSet.shuffle[p];
+	s->kit = seq_patternSet.kitNr[p];
+	memcpy(s->groove, seq_patternSet.groove[p], sizeof s->groove);
+}
+
+/** the card entry of the one file whose path starts with prefix (8.3 names: any case) */
+static CardEntry *fileStarting(const char *prefix)
+{
+	CardEntry *found = NULL;
+	const size_t n = strlen(prefix);
+	for (int i = 0; i < CARD_ENTRIES; i++)
+	{
+		if (!card[i].used || card[i].isDir || strlen(card[i].path) < n)
+			continue;
+		size_t k = 0;
+		while (k < n && lowerChar((unsigned char)card[i].path[k]) == lowerChar((unsigned char)prefix[k]))
+			k++;
+		if (k == n)
+		{
+			if (found)
+				return NULL;
+			found = &card[i];
+		}
+	}
+	return found;
+}
+
+/** a fresh card with /proj00 as the current folder and pattern 5 saved from
+ * fillPattern(5, salt); its file, or NULL (each test asserts it) */
+static CardEntry *savedPattern5(uint8_t salt)
+{
+	reset();
+	if (f_mkdir("/proj00") != FR_OK || f_chdir("/proj00") != FR_OK)
+		return NULL;
+	fillPattern(5, salt);
+	if (preset_savePatternSD(5) != FR_OK)
+		return NULL;
+	return fileStarting("/proj00/05-");
+}
+
+TEST(presets_pattern_ext_block_follows_the_v03_part)
+{
+	CardEntry *e = savedPattern5(0);
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE);
+	static const uint8_t head[6] = { 'L', 'C', 'H', 'M', 1, 7 };
+	ASSERT_EQ(memcmp(e->data + PAT_V03_SIZE, head, sizeof head), 0);
+	ASSERT_EQ(memcmp(e->data + PAT_V03_SIZE + 6, seq_patternSet.groove[5], 28), 0);
+	/* the PatV03 part is the same whatever the settings are */
+	static uint8_t first[PAT_V03_SIZE];
+	memcpy(first, e->data, PAT_V03_SIZE);
+	memset(seq_patternSet.groove[5], 0, sizeof seq_patternSet.groove[5]);
+	ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+	e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(memcmp(e->data, first, PAT_V03_SIZE), 0);
+	ASSERT_EQ(memcmp(e->data + PAT_V03_SIZE + 6, noGroove, sizeof noGroove), 0);
+}
+
+TEST(presets_pattern_ext_block_is_invisible_to_the_v03_reading)
+{
+	CardEntry *e = savedPattern5(1);
+	ASSERT_TRUE(e != NULL);
+	static uint8_t file[PAT_V03_SIZE + PAT_EXT_SIZE];
+	memcpy(file, e->data, sizeof file);
+	static Slot with, without, saved;
+	snap(5, &saved);
+	memset(&seq_patternSet, 0, sizeof seq_patternSet);
+	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+	snap(5, &with);
+	/* the same file as fw 1.7 writes it, and stale settings in the slot */
+	cardPut(e->path, file, PAT_V03_SIZE);
+	memset(&seq_patternSet, 0x5A, sizeof seq_patternSet);
+	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+	snap(5, &without);
+	/* everything fw 1.7 reads is the same; the settings are the file's or the defaults */
+	ASSERT_EQ(memcmp(&with, &without, offsetof(Slot, groove)), 0);
+	ASSERT_EQ(memcmp(&with, &saved, sizeof with), 0);
+	ASSERT_EQ(memcmp(without.groove, noGroove, sizeof noGroove), 0);
+}
+
+TEST(presets_pattern_ext_block_unknown_or_out_of_range)
+{
+	CardEntry *e = savedPattern5(0);
+	ASSERT_TRUE(e != NULL);
+	static uint8_t file[PAT_V03_SIZE + PAT_EXT_SIZE], f[PAT_V03_SIZE + PAT_EXT_SIZE];
+	memcpy(file, e->data, sizeof file);
+	/* another version, another magic, another track count, a short block: the defaults */
+	static const struct { int at; uint8_t value; UINT len; } bad[4] = {
+		{ PAT_V03_SIZE + 4, 2, sizeof file }, { PAT_V03_SIZE, 'X', sizeof file },
+		{ PAT_V03_SIZE + 5, 6, sizeof file }, { -1, 0, PAT_V03_SIZE + 20 },
+	};
+	for (unsigned k = 0; k < 4; k++)
+	{
+		memcpy(f, file, sizeof f);
+		if (bad[k].at >= 0)
+			f[bad[k].at] = bad[k].value;
+		cardPut(e->path, f, bad[k].len);
+		fillPattern(5, 0);		/* stale settings */
+		ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+		ASSERT_EQ(memcmp(seq_patternSet.groove[5], noGroove, sizeof noGroove), 0);
+	}
+	/* a field out of range takes its default, the others stay */
+	memcpy(f, file, sizeof f);
+	uint8_t *g = f + PAT_V03_SIZE + 6;
+	g[0] = 6;			/* track 0: tempo index 11 */
+	g[4 + 1] = 9;			/* track 1: humanize time 9 ms */
+	g[8 + 2] = 26;			/* track 2: humanize volume 26 % */
+	g[12 + 3] = 31;			/* track 3: delay +31 ms */
+	g[16 + 3] = (uint8_t)-16;	/* track 4: delay -16 ms */
+	cardPut(e->path, f, sizeof f);
+	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+	TrackGroove want[NUM_TRACKS];
+	fillPattern(6, 0);
+	memcpy(want, seq_patternSet.groove[6], sizeof want);
+	want[0].tempo = 0;
+	want[1].humTime = 0;
+	want[2].humVol = 0;
+	want[3].delay = 0;
+	want[4].delay = 0;
+	ASSERT_EQ(memcmp(seq_patternSet.groove[5], want, sizeof want), 0);
+}
+
+TEST(presets_tmp_pattern_keeps_the_settings)
+{
+	reset();
+	ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+	menu_playedPattern = 3;
+	fillPattern(3, 1);
+	TrackGroove saved[NUM_TRACKS];
+	memcpy(saved, seq_patternSet.groove[3], sizeof saved);
+	ASSERT_EQ(preset_saveTmpPat(), FR_OK);
+	const int i = find("/tmp/tmp.pat");
+	ASSERT_TRUE(i >= 0);
+	ASSERT_EQ(card[i].len, 1 + PAT_V03_SIZE - 14 + PAT_EXT_SIZE);
+	memset(seq_patternSet.groove[3], 0x11, sizeof saved);
+	ASSERT_EQ(preset_LoadTmpPat(), FR_OK);
+	ASSERT_EQ(memcmp(seq_patternSet.groove[3], saved, sizeof saved), 0);
+	/* tmp.pat of fw 1.7, without the block: the defaults */
+	static uint8_t old[1 + PAT_V03_SIZE - 14];
+	memcpy(old, card[i].data, sizeof old);
+	cardPut("/tmp/tmp.pat", old, sizeof old);
+	memset(seq_patternSet.groove[3], 0x11, sizeof saved);
+	ASSERT_EQ(preset_LoadTmpPat(), FR_OK);
+	ASSERT_EQ(memcmp(seq_patternSet.groove[3], noGroove, sizeof noGroove), 0);
 }
 
 TEST_MAIN()

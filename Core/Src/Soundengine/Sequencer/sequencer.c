@@ -312,6 +312,7 @@ void seq_copyPatternToBackupBuffer(uint8_t patternNr)
 
 	patternBackupBuffer.shuffle = seq_patternSet.shuffle[patternNr];;
 	patternBackupBuffer.kitNr = seq_patternSet.kitNr[patternNr];
+	memcpy(patternBackupBuffer.groove, seq_patternSet.groove[patternNr], sizeof patternBackupBuffer.groove); //LICHOMAT v0.2: the per-track settings
 
 }
 //------------------------------------------------------------------------------
@@ -327,6 +328,7 @@ void seq_copyBackupBufferToPattern(uint8_t patternNr)
 
 	seq_patternSet.shuffle[patternNr] = patternBackupBuffer.shuffle;
 	seq_patternSet.kitNr[patternNr] = patternBackupBuffer.kitNr;
+	memcpy(seq_patternSet.groove[patternNr], patternBackupBuffer.groove, sizeof patternBackupBuffer.groove); //LICHOMAT v0.2: the per-track settings
 }
 /*
 //------------------------------------------------------------------------------
@@ -1432,6 +1434,7 @@ void seq_clearTrack(uint8_t trackNr, uint8_t pattern)
 
 	//**PATROT all pattern rotations off and all patterns set to length 16
 	seq_patternSet.length[pattern][trackNr]=16;
+	memset(&seq_patternSet.groove[pattern][trackNr], 0, sizeof(TrackGroove)); //LICHOMAT v0.2: the defaults
 
 }
 //------------------------------------------------------------------------------
@@ -1489,6 +1492,7 @@ void seq_copyTrack(uint8_t srcNr, uint8_t dstNr, uint8_t pattern)
 
 	// copy length and rotation offset from source track
 	seq_patternSet.length[pattern][dstNr] = seq_patternSet.length[pattern][srcNr];
+	seq_patternSet.groove[pattern][dstNr] = seq_patternSet.groove[pattern][srcNr]; //LICHOMAT v0.2: the per-track settings
 
 
 }
@@ -1521,6 +1525,7 @@ void seq_copyPattern(uint8_t src, uint8_t dst)
 
 		// copy length and rotation offset from source pattern for the track
 		seq_patternSet.length[dst][j] = seq_patternSet.length[src][j];
+		seq_patternSet.groove[dst][j] = seq_patternSet.groove[src][j]; //LICHOMAT v0.2: the per-track settings
 
 		seq_patternSet.shuffle[dst] = seq_patternSet.shuffle[src];
 		seq_patternSet.kitNr[dst] = seq_patternSet.kitNr[src];

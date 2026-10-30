@@ -278,7 +278,7 @@ def M17_seed_card(t):
     names = os.listdir(proj)
     check(all(os.path.isfile(os.path.join(proj, x)) for x in names), 'PROJ00 holds a folder')
     size = sum(os.path.getsize(os.path.join(proj, x)) for x in names)
-    check((len(names), size) == (194, 255398), 'PROJ00 holds %d files of %d bytes, not 194 of 255,398'
+    check((len(names), size) == (194, 257574), 'PROJ00 holds %d files of %d bytes, not 194 of 257,574'
           % (len(names), size))
     def read(name):
         with open(os.path.join(proj, name), 'rb') as f:
