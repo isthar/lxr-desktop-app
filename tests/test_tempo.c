@@ -384,4 +384,58 @@ TEST(TT4_restart_brings_the_first_steps_early_hits)
 	ASSERT_EQ(h->errors, 0);
 }
 
+/* a MIDI slave at 120 BPM, as tests/test_transport.c */
+static fake_host_t *midiSlave(void)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = FAKE_LOG_NO_CLOCKS;
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	fake_process(h, fake_msToCycles(1.0));
+	return h;
+}
+
+TEST(TT5_song_position_places_own_tracks)
+{
+	fake_host_t *h = midiSlave();
+	allOn(h, 0, 1);
+	fake_setTempo(h, 0, 1, 4);		/* x3/4: its step 4 runs 512..640, across tick 576 */
+	seqc_songPosition(6);
+	ASSERT_EQ(seqc_trackStep(1), 4);
+	ASSERT_FALSE(seqc_trackOnMasterGrid(1));
+	ASSERT_TRUE(seqc_trackOnMasterGrid(0));
+	fake_sync(h, SEQC_EV_CONTINUE, h->now + 100);
+	const double per = fake_clockCycles(120.0);
+	fake_runClocks(h, SEQC_EV_CLOCK, h->now + (seqc_time_t)per, per, 12, fake_msToCycles(0.1));
+	const fake_rec_t *r[8];
+	ASSERT_EQ(hits(h, 1, r, 8), 1);		/* step 4 is not played; step 5 at 640 is */
+	ASSERT_EQ(r[0]->ev.tick, 640);
+	ASSERT_EQ(r[0]->ev.step, 5);
+}
+
+TEST(TT5_own_steps_for_phase_skip_and_copies)
+{
+	fake_host_t *h = fake_init();
+	fake_setTempo(h, 0, 2, 8);		/* x2: 48 ticks */
+	allOn(h, 0, 2);
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	const double tick = fake_tickCycles(120.0);
+	const uint32_t serial = seqc_stepSerial();
+	fake_process(h, (seqc_time_t)(72 * tick));
+	ASSERT_EQ(seqc_trackStep(2), 1);
+	ASSERT_EQ(seqc_trackStep(0), 0);
+	ASSERT_NEAR(seqc_trackPhase(2), 0.5, 1e-6);	/* 24 of its 48 ticks */
+	ASSERT_NEAR(seqc_trackPhase(0), 0.75, 1e-6);	/* the master step: seqc_stepPhase() */
+	ASSERT_TRUE(seqc_stepSerial() != serial);
+	seqc_skipOnce(2, 2);				/* its own next step, 2 at 96 */
+	fake_process(h, (seqc_time_t)(200 * tick));
+	const fake_rec_t *r[8];
+	ASSERT_EQ(hits(h, 2, r, 8), 4);			/* 0, 48, 144, 192 */
+	ASSERT_EQ(r[2]->ev.tick, 144);
+	ASSERT_EQ(fake_count(h, FAKE_TRACK_STEP), 4);	/* 48, 96, 144, 192 */
+	ASSERT_EQ(seqc_barStep(), 2);
+	ASSERT_EQ(h->errors, 0);
+}
+
 TEST_MAIN()

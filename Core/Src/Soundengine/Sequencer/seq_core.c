@@ -2827,7 +2827,10 @@ void seqc_skipOnce(uint8_t track, uint8_t step)
 	if (seqc.state == SEQC_STOPPED || track >= SEQC_NUM_TRACKS || step >= SEQC_NUM_STEPS)
 		return;
 	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
-	const uint32_t n = seqc_nextBoundaryStep();
+	/* the track's next occurrence: on the master grid the next master boundary's (also
+	 * after a song position), on its own grid its own next (v0.2) */
+	const uint32_t n = (uint32_t)(seqc_trk.abs[track] +
+			((seqc_trackOnMasterGrid(track) && seqc_trk.seeked) ? 0 : 1));
 	seqc_skip_t *m = &seqc_skip[track];	/* N18.1: only this track's marker */
 
 	m->valid = true;
@@ -2884,6 +2887,27 @@ float seqc_stepPhase(void)
 	/* clamped after the conversion: a phase within 2^-25 of 1 rounds to 1.0f */
 	const float f = (float)phase;
 	return f < 1.0f ? f : 0.99999994f;
+}
+//------------------------------------------------------------------------------
+float seqc_trackPhase(uint8_t track)
+{
+	if (seqc_trackOnMasterGrid(track))
+		return seqc_stepPhase();
+	if (seqc.state != SEQC_RUNNING || seqc_trk.index[track] < 0)
+		return 0.0f;
+	const double len = (double)seqc_trk.len[track];
+	const double x = seqc_position() - ((double)seqc_trk.next[track] - len);
+	if (x <= 0.0)
+		return 0.0f;
+	const double half = (len + (double)seqc_swingFor(seqc_gen.shuffle, seqc_trk.len[track])) / 2.0;
+	const double phase = x < half ? 0.5 * x / half : 0.5 + 0.5 * (x - half) / (len - half);
+	const float f = (float)phase;
+	return f < 1.0f ? f : 0.99999994f;
+}
+//------------------------------------------------------------------------------
+uint32_t seqc_stepSerial(void)
+{
+	return seqc_trk.serial;
 }
 //------------------------------------------------------------------------------
 float seqc_currentBpm(void)

@@ -699,7 +699,7 @@ void fake_addNote(fake_host_t *h, uint8_t track, uint8_t vel, uint8_t note)
 	const uint8_t len = fake_effectiveLength(h->length[pattern][track]);
 	/* from half the step on, the note belongs to the next step, which on a track
 	 * of length 1 is the same step again */
-	const bool late = seqc_stepPhase() >= 0.5f;
+	const bool late = seqc_trackPhase(track) >= 0.5f;
 	const uint8_t target = late ? (uint8_t)((step + 1) % len) : step;
 	if (late)
 		seqc_skipOnce(track, target);	/* D6: the sequencer must not play it again */

@@ -778,6 +778,15 @@ double seqc_position(void);
  * - 0 while stopped or armed, and before the first step. */
 float seqc_stepPhase(void);
 //------------------------------------------------------------------------------
+/** v0.2: the recording phase of the track's current step: seqc_stepPhase() for a track
+ * on the master grid; for one on its own grid the same rule in its own step (its length
+ * and swing). seq_addNote() quantises a note to the track's own steps with it. */
+float seqc_trackPhase(uint8_t track);
+//------------------------------------------------------------------------------
+/** v0.2: a number that changes whenever a track index can have changed (a master or a
+ * track boundary, a rewind, a song position), for the glue's copies */
+uint32_t seqc_stepSerial(void);
+//------------------------------------------------------------------------------
 /** The tempo in BPM: the master tempo in internal sync, the estimate in the
  * slave modes, or the last known tempo while there is no estimate: the last
  * estimate, or the master tempo after seqc_init(), after a switch of the sync
