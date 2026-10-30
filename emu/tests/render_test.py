@@ -278,12 +278,13 @@ def M17_seed_card(t):
     names = os.listdir(proj)
     check(all(os.path.isfile(os.path.join(proj, x)) for x in names), 'PROJ00 holds a folder')
     size = sum(os.path.getsize(os.path.join(proj, x)) for x in names)
-    check((len(names), size) == (194, 257574), 'PROJ00 holds %d files of %d bytes, not 194 of 257,574'
+    check((len(names), size) == (194, 257588), 'PROJ00 holds %d files of %d bytes, not 194 of 257,588'
           % (len(names), size))
     def read(name):
         with open(os.path.join(proj, name), 'rb') as f:
             return f.read()
-    check(read('PRJ.NFO') == b'Init\0\0\0\0', 'PRJ.NFO is %r' % read('PRJ.NFO'))
+    # v0.3 (plan D20, D28): the name, then the scene block with no scenes stored
+    check(read('PRJ.NFO') == b'Init\0\0\0\0LCHM\x01\x08' + bytes(8), 'PRJ.NFO is %r' % read('PRJ.NFO'))
     glo = read('GLO.CFG')
     check(len(glo) == 30 and glo[0] == 120 and glo[29] == 1, 'GLO.CFG is %r' % glo)
     check(len(read('00-INITK.SND')) == 255, '00-INITK.SND has %d bytes' % len(read('00-INITK.SND')))
@@ -1243,6 +1244,27 @@ def V03_scenes(t):
     v1, v2 = run(1)
     near(v2, [500.0 * k for k in range(6)], 2.0, 'voice 2 until the step')
     check(len(v2) == 6, 'voice 2 after the step: %r' % [round(x) for x in v2[6:]])
+    no_copies_left()
+
+@case
+def V03_scene_file(t):
+    # scene 3 = voices 1 and 3 muted, saved with project 0: PRJ.NFO holds the name and the block.
+    # A render from the kept card (the boot loads the project) recalls it while stopped
+    seed = t.seed()
+    keep = t.path('K')
+    script = t.script(press_steps(1, (1, 5, 9, 13)) + press_steps(3, (1, 5, 9, 13)) + press_steps(2, (1,))
+                      + '+100ms press 25\n+100ms press voice1\n+100ms press voice3\n'
+                      '+100ms down copy\n+50ms press step11\n+100ms up copy\n'
+                      '+100ms press voice1\n+100ms press voice3\n+100ms save-project 0\n')
+    t.render(seed, ['--no-start', '--seconds', '4', '--keep-card', keep, '--events', script])
+    nfo = one_file(keep, 'PRJ.NFO')
+    check(len(nfo) == 22 and nfo[8:14] == b'LCHM\x01\x08', 'PRJ.NFO: %d bytes, block %r' % (len(nfo), nfo[8:14]))
+    check(nfo[14:] == bytes([0, 0, 0x85, 0, 0, 0, 0, 0]), 'the scenes are %r' % nfo[14:])
+    log = t.path('f.log')
+    t.render(keep, ['--no-start', '--seconds', '3', '--param', 'midi_chan_2=2', '--param', 'midi_chan_3=3',
+                    '--midi-log', log, '--events', t.script('100ms press 25\n+100ms press step11\n+100ms press start\n')])
+    check(din_notes(log, '91'), 'voice 2 is silent too')
+    check(not din_notes(log, '90') and not din_notes(log, '92'), 'voices 1 or 3 play after the recall')
     no_copies_left()
 
 def kept_report(t, p, head):

@@ -2305,6 +2305,7 @@ uint8_t preset_getMorphValue(uint16_t index, uint8_t morph)
 
 FRESULT preset_createProject(uint8_t presetNr)
 {
+	seq_clearMuteScenes();	//LICHOMAT v0.3: a new project has no mute scenes
 
 
 	//create default globals
@@ -2343,6 +2344,30 @@ FRESULT preset_createProject(uint8_t presetNr)
 	preset_clearTmpFolder();
 
 	return FR_OK;
+}
+//------------------------------------------------------------------------------
+//LICHOMAT v0.3: the mute scenes after the project name in prj.nfo (plan D20): "LCHM", version,
+//count, the scenes. fw 1.7 reads the 8-byte name and closes the file, so it never sees them
+#define SCENE_BLOCK_VERSION	1
+#define SCENE_BLOCK_SIZE	(6 + MUTE_SCENES)
+void preset_writeSceneBlock(void)
+{
+	uint8_t b[SCENE_BLOCK_SIZE] = { 'L', 'C', 'H', 'M', SCENE_BLOCK_VERSION, MUTE_SCENES };
+	memcpy(&b[6], seq_muteScenes, MUTE_SCENES);
+	UINT bytesWritten;
+	f_write((FIL*)&SDFile, b, sizeof b, &bytesWritten);
+}
+//------------------------------------------------------------------------------
+/** after the name: the scenes of a complete block of this version, else none */
+void preset_readSceneBlock(void)
+{
+	memset(seq_muteScenes, 0, MUTE_SCENES);
+	uint8_t b[SCENE_BLOCK_SIZE];
+	UINT bytesRead = 0;
+	if((f_read((FIL*)&SDFile, b, sizeof b, &bytesRead) != FR_OK) || (bytesRead != sizeof b)) return;
+	if(memcmp(b, "LCHM", 4) || (b[4] != SCENE_BLOCK_VERSION) || (b[5] != MUTE_SCENES)) return;
+	for(uint8_t s = 0; s < MUTE_SCENES; s++)
+		seq_muteScenes[s] = (b[6 + s] & MUTE_SCENE_STORED) ? b[6 + s] : 0;
 }
 //----------------------------------------------------
 // **SAVEALL
@@ -2477,6 +2502,7 @@ FRESULT preset_saveProject(uint8_t presetNr)
 
 		return res;
 	}
+	preset_writeSceneBlock();	//LICHOMAT v0.3: the mute scenes after the name
 	//close the file
 	f_close((FIL*)&SDFile);
 
@@ -2866,6 +2892,7 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 	{
 		sprintf((void*)savefileNames[presetNr][PROJECT_NAMES], "Empty");
 	}
+	preset_readSceneBlock();	//LICHOMAT v0.3: the mute scenes after the name, or none
 	//close the file
 	f_close((FIL*)&SDFile);
 

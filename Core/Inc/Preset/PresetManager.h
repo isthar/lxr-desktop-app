@@ -93,6 +93,10 @@ void preset_loadDefaultGlobals();
 FRESULT preset_saveProject(uint8_t presetNr);
 FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp);
 FRESULT preset_createProject(uint8_t presetNr);
+//LICHOMAT v0.3: the mute scenes after the 8-byte name in prj.nfo (plan D20), at the file position
+//of SDFile after the name: write them, or read them (no block or another version: none)
+void preset_writeSceneBlock(void);
+void preset_readSceneBlock(void);
 void preset_loadProjectNames(uint8_t projectNr);
 
 FRESULT preset_loadSongSD(uint8_t songNr);

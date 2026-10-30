@@ -971,6 +971,62 @@ TEST(presets_tmp_pattern_keeps_the_settings)
 	ASSERT_EQ(memcmp(seq_patternSet.groove[3], noGroove, sizeof noGroove), 0);
 }
 
+//------------------------------------------------------------------------------
+// LICHOMAT v0.3 (plan P7): the mute scenes after the project name in prj.nfo
+//------------------------------------------------------------------------------
+static const uint8_t nfo22[22] = { 'A', 'c', 'i', 'd', ' ', '3', '0', '3', 'L', 'C', 'H', 'M', 1, 8,
+				   0x80, 0, 0x85, 0, 0, 0, 0, 0x05 };
+
+static void readNfo(const uint8_t *file, UINT len)
+{
+	char name[8];
+	UINT br;
+	cardReset();
+	cardPut("/prj.nfo", file, len);
+	memset(seq_muteScenes, 0x55, MUTE_SCENES);
+	ASSERT_EQ(f_open((FIL*)&SDFile, "prj.nfo", FA_OPEN_EXISTING | FA_READ), FR_OK);
+	ASSERT_EQ(f_read((FIL*)&SDFile, name, 8, &br), FR_OK);
+	preset_readSceneBlock();
+	f_close((FIL*)&SDFile);
+}
+
+TEST(presets_scene_block_follows_the_project_name)
+{
+	static const uint8_t scenes[8] = { 0x80, 0, 0x85, 0, 0, 0, 0, 0xFF };
+	UINT bw;
+	cardReset();
+	memcpy(seq_muteScenes, scenes, MUTE_SCENES);
+	ASSERT_EQ(f_open((FIL*)&SDFile, "prj.nfo", FA_CREATE_ALWAYS | FA_WRITE), FR_OK);
+	ASSERT_EQ(f_write((FIL*)&SDFile, "Acid 303", 8, &bw), FR_OK);
+	preset_writeSceneBlock();
+	f_close((FIL*)&SDFile);
+	const int i = findAbsolute("/prj.nfo");
+	ASSERT_TRUE(i >= 0);
+	ASSERT_EQ(card[i].len, 22u);
+	ASSERT_EQ(memcmp(card[i].data, "Acid 303", 8), 0);
+	ASSERT_EQ(memcmp(card[i].data + 8, "LCHM\x01\x08", 6), 0);
+	ASSERT_EQ(memcmp(card[i].data + 14, scenes, 8), 0);
+}
+
+TEST(presets_scene_block_read_back_and_defaults)
+{
+	static const uint8_t want[8] = { 0x80, 0, 0x85, 0, 0, 0, 0, 0 };	/* 0x05: not stored */
+	readNfo(nfo22, sizeof nfo22);
+	ASSERT_EQ(memcmp(seq_muteScenes, want, MUTE_SCENES), 0);
+	/* fw 1.7's 8-byte file, a short block, version 2, a count of 7: no scenes */
+	static const UINT lens[4] = { 8, 17, 22, 22 };
+	for (int k = 0; k < 4; k++)
+	{
+		uint8_t f[22];
+		memcpy(f, nfo22, sizeof f);
+		if (k == 2) f[12] = 2;
+		if (k == 3) f[13] = 7;
+		readNfo(f, lens[k]);
+		for (int s = 0; s < MUTE_SCENES; s++)
+			ASSERT_EQ(seq_muteScenes[s], 0);
+	}
+}
+
 TEST_MAIN()
 
 //------------------------------------------------------------------------------
@@ -1026,6 +1082,8 @@ void seq_clearPattern(uint8_t pattern) { (void)pattern; }
 void seq_copyPattern(uint8_t src, uint8_t dst) { (void)src; (void)dst; }
 void seq_copyPatternToBackupBuffer(uint8_t patternNr) { (void)patternNr; }
 void seq_setNextPattern(const uint8_t patNr) { (void)patNr; }
+uint8_t seq_muteScenes[MUTE_SCENES];	/* LICHOMAT v0.3 (plan P7) */
+void seq_clearMuteScenes(void) { memset(seq_muteScenes, 0, MUTE_SCENES); }
 void soundengine_process(void) {}
 void uart_checkAndParse(void) {}
 uint8_t buttonHandler_getMode(void) { return 0; }
