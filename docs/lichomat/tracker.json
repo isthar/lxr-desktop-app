@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 21:08",
+    "updated": "2026-10-30 21:53",
     "phase": "Etap 2: v0.3 gotowe w kodzie (M11); v0.4 czeka na odczyt CPU (H12)",
     "focus": "v0.3 gotowe (gałąź v0.3 72f20c6). Następne: emulator R3 (karty testowe, nagrania wzorcowe, CI z ASan).",
     "branch": "timing-core",
-    "head": "72f20c6",
+    "head": "df34208",
     "next": "Ja: emulator R3 (zużycie ok. 54%, limit 75%). Ty: odsłuch build/demo/v02-*.wav i v03-*.wav, testy v0.1 z odczytem CPU (Q6, H12), potem U4–U19.",
-    "updated_at": "2026-10-30T21:08:00+01:00",
-    "now": "Od 21:08: commit M11, potem start agenta R3 w tle."
+    "updated_at": "2026-10-30T21:53:00+01:00",
+    "now": "Od ok. 21:50 (zaraz po R3.4): agent w tle robi R3.5 i R3.6 (G9, G10, ping-pong, CI emulatora z ASan). Potem F13 na gałąź emulator i lekki przegląd R3."
   },
   "epics": [
     {
@@ -815,6 +815,13 @@
       "question": "Atmosfera (pogłos, freeze, rumble, delay z tempem, filtr DJ) czeka na odczyt strony CPU (H12), a występ i acid (sceny mute, tryb fill, rolle, slide) nie zależą od pomiarów. Którą paczkę robić jako następną i jak numerować wydania?",
       "assumption": "Występ i acid jako następne wydanie v0.3, atmosfera jako v0.4.",
       "answer": "Moja rekomendacja według Twojej reguły z 29.10, 05:19 („użyj własnych rekomendacji”), 30.10, 07:49: występ i acid wychodzą jako v0.3 na gałęzi od v0.2, a atmosfera jako v0.4, gdy będzie odczyt CPU (H12). Numery wydań idą po kolei, więc na urządzeniu nie będzie przeskoku. Jeśli odczytasz CPU wcześniej, atmosfera może wejść przed v0.3 bez straty pracy."
+    },
+    {
+      "id": "Q25",
+      "status": "zamknięte",
+      "question": "Emulator (R3.3) znalazł błąd fw 1.7 w Distortion.c: krzywa diody efektu clp przy sygnale +1 czyta jeden element za końcem tabeli (table_1n914[257]). Poprawić w firmware?",
+      "assumption": "Poprawić jako F13, z testem.",
+      "answer": "Moja rekomendacja według Twojej reguły z 29.10, 05:19, 30.10, 21:53: poprawione jako F13 (813aaf6 na v0.3, potem także na gałęzi emulator). Przy +1 funkcja zwraca ostatni element tabeli, czyli to samo, co fw 1.7 dawał, gdy liczba za tabelą była skończona; poniżej +1 nic się nie zmienia. Na LXR każda dodatnio obcięta próbka clp czytała przypadkową pamięć za tabelą."
     }
   ],
   "log": [
@@ -2562,6 +2569,46 @@
       "n": 349,
       "at": "2026-10-30 21:08",
       "text": "21:08 Raport M11 gotowy: v0.3 skończone w kodzie (docs/lichomat/reports/M11-v0.3.md)."
+    },
+    {
+      "n": 350,
+      "at": "2026-10-30 21:09",
+      "text": "21:09 Start emulatora R3 w tle: agent robi R3.1 (karty testowe, make.sh) i R3.2 (emu_golden.py, goldens.json, nagranie wzorcowe G1) na gałęzi emulator. Każdy jego commit trafi tu do logu."
+    },
+    {
+      "n": 351,
+      "at": "2026-10-30 21:23",
+      "text": "21:23 R3.1 gotowe (0b52657): karty testowe zrobione przez sam firmware (init, fx, song) i skrypt make.sh, który je odtwarza (M23). Agent przechodzi do R3.2."
+    },
+    {
+      "n": 352,
+      "at": "2026-10-30 21:33",
+      "text": "21:33 R3.2 gotowe (66d44bd, wypchnięte): tools/emu_golden.py (check, bless, diff), goldens.json i pierwsze nagranie wzorcowe G1. Debug i Release dają ten sam WAV; renderer w Release 88,8x szybszy od czasu rzeczywistego. Bez znalezisk w firmware."
+    },
+    {
+      "n": 353,
+      "at": "2026-10-30 21:33",
+      "text": "21:33 Start R3.3 i R3.4 w tle (drugi agent): nagrania wzorcowe G2-G8."
+    },
+    {
+      "n": 354,
+      "at": "2026-10-30 21:44",
+      "text": "21:44 R3.3 gotowe (c5713de, wypchnięte): 9 nagrań wzorcowych G2-G4 (efekty FX, tryb song, panel). Uwaga do przeglądu: przy ustawieniach karty fx pięć efektów daje te same próbki, więc G2 pilnuje strony FX i toru, ale nie odróżnia algorytmów."
+    },
+    {
+      "n": 355,
+      "at": "2026-10-30 21:49",
+      "text": "21:49 R3.4 gotowe (30606e9, wypchnięte): 5 nagrań wzorcowych G5-G8: tempo master z MIDI clock i jackiem zegara, F8 za Note On, slave po DIN i po USB przy 120 i 137 BPM. Wszystkie oczekiwania z planu trzymają bez zmian. Bez znalezisk w firmware."
+    },
+    {
+      "n": 356,
+      "at": "2026-10-30 21:53",
+      "text": "21:53 F13 poprawione na v0.3 (813aaf6, wypchnięte): efekt clp przy sygnale +1 czytał jeden element za końcem tabeli diody (błąd fw 1.7, znaleziony przez emulator pod UBSan). Test M15_f13_diode_table najpierw padał. Decyzja Q25 według Twojej reguły. Na gałąź emulator przeniosę to po R3.6."
+    },
+    {
+      "n": 357,
+      "at": "2026-10-30 21:53",
+      "text": "Poprawka linii Teraz: agent R3.5-R3.6 działa od ok. 21:50, zaraz po R3.4."
     }
   ]
 }
