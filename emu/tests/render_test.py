@@ -994,6 +994,101 @@ def V02_ui(t):
     check('1:2' in rows['prob'][1], 'the step page shows %r, not the condition 1:2' % rows['prob'])
     no_copies_left()
 
+def din_notes(path, status):
+    """(cycles from t0, note, velocity) of each DIN Note On with this status byte"""
+    lines = [x for x in log_lines(path, MIDI_LINE) if ' DIN ' in x and not x.endswith(' DIN F8')]
+    return [(int(x.split()[0]), int(lines[i + 1].split()[-1], 16), int(lines[i + 2].split()[-1], 16))
+            for i, x in enumerate(lines) if x.endswith(' DIN ' + status) and i + 2 < len(lines)]
+
+def press_steps(voice, steps):
+    return '+100ms press voice%d\n' % voice + ''.join('+100ms press step%d\n' % s for s in steps)
+
+def ms_after(notes, ref):
+    return [(c - ref) / 216000 for c, _, _ in notes]
+
+def near(got, want, tol, what):
+    check(len(got) >= len(want) and all(abs(g - w) <= tol for g, w in zip(got, want)),
+          '%s: %r, not %r +- %g ms' % (what, [round(x, 2) for x in got[:len(want) + 2]], want, tol))
+
+@case
+def V02_tempo(t):
+    # 3 against 4: voice 1 on the quarters at x1, voice 2 on the same steps at x3/4
+    seed = t.seed()
+    log = t.path('m.log')
+    script = t.script(press_steps(1, (1, 5, 9, 13)) + press_steps(2, (1, 5, 9, 13))
+                      + '+100ms param track_tempo=4\n+100ms press start\n')
+    t.render(seed, ['--no-start', '--seconds', '4.5', '--param', 'midi_chan_2=2', '--midi-log', log,
+                    '--events', script])
+    v1, v2 = din_notes(log, '90'), din_notes(log, '91')
+    check(v1 and v2, 'no Note Ons: %d and %d' % (len(v1), len(v2)))
+    ref = v1[0][0]
+    near(ms_after(v1, ref), [0, 500, 1000, 1500, 2000], 2.0, 'voice 1 at x1')
+    near(ms_after(v2, ref), [0, 666.667, 1333.333, 2000], 2.0, 'voice 2 at x3/4')
+    no_copies_left()
+
+@case
+def V02_groove(t):
+    # voice 2, step 1 at the start, is the reference; voice 1 plays steps 2-16 with one setting
+    seed = t.seed()
+    def run(setting, seed_n=1):
+        log = t.path('g%d.log' % (t.n + 1))
+        script = t.script(press_steps(2, (1,)) + press_steps(1, range(2, 17)) + '+100ms param %s\n' % setting
+                          + '+100ms press start\n')
+        t.render(seed, ['--no-start', '--seconds', '4.2', '--seed', str(seed_n), '--param', 'midi_chan_2=2',
+                        '--midi-log', log, '--events', script])
+        ref = din_notes(log, '91')[0][0]
+        notes = din_notes(log, '90')
+        return ms_after(notes, ref), [v for _, _, v in notes]
+    grid = [125.0 * k for k in range(1, 16)]
+    near(run('track_delay=15')[0], grid, 1.5, 'no delay')
+    near(run('track_delay=45')[0], [g + 23 * 500 / 384 for g in grid], 1.5, 'delay +30 ms: 23 ticks')
+    near(run('track_delay=0')[0], [g - 12 * 500 / 384 for g in grid], 1.5, 'delay -15 ms: -12 ticks')
+    h1, h1b, h2 = run('human_time=8', 1)[0], run('human_time=8', 1)[0], run('human_time=8', 2)[0]
+    check(h1 == h1b, 'humanize with --seed 1, twice: %r and %r' % (h1, h1b))
+    check(h1 != h2, 'humanize with --seed 1 and --seed 2 gives the same times')
+    dev = [round(a - g, 1) for a, g in zip(h1, grid)]
+    check(len(h1) >= 15 and all(abs(d) <= 6 * 500 / 384 + 1.5 for d in dev) and len(set(dev)) >= 3,
+          'humanize time 8 ms (+-6 ticks): %r' % dev)
+    vel = run('human_vol=25')[1][:15]     # the 16th Note On is step 2 of the next loop
+    check(len(vel) == 15 and all(95 <= v <= 127 for v in vel) and len(set(vel)) >= 3,
+          'humanize volume 25 %%: %r' % vel)
+    no_copies_left()
+
+@case
+def V02_conditions(t):
+    # voice 1: 1:2 on step 1, !PRE on step 3. Loops 1 and 3 play step 1, loops 2 and 4 step 3
+    seed = t.seed()
+    log = t.path('c.log')
+    script = t.script(press_steps(1, (1, 3)) + '+100ms param active_step=0\n+100ms param step_prob=101\n'
+                      '+100ms param active_step=2\n+100ms param step_prob=115\n+100ms press start\n')
+    t.render(seed, ['--no-start', '--seconds', '8.5', '--midi-log', log, '--events', script])   # loops 1-4
+    v1 = din_notes(log, '90')
+    check(v1, 'no Note On')
+    got = ms_after(v1, v1[0][0])
+    near(got, [0, 2250, 4000, 6250], 2.0, 'the conditions')
+    check(len(got) == 4, '%d Note Ons, not 4: %r' % (len(got), got))
+    no_copies_left()
+
+@case
+def V02_files(t):
+    seed = t.seed()
+    keep = t.path('K')
+    script = t.script(press_steps(2, (1, 5, 9, 13)) + '+100ms param track_tempo=4\n+100ms param human_vol=9\n'
+                      '+100ms save-project 0\n')
+    t.render(seed, ['--no-start', '--seconds', '3', '--keep-card', keep, '--events', script])
+    pat = one_file(keep, '00-*.PAT')
+    check(len(pat) == 3697 and pat[3663:3669] == b'LCHM\x01\x07',
+          'PROJ00/00-*.PAT: %d bytes, block %r' % (len(pat), pat[3663:3669]))
+    check(pat[3669:] == bytes(4) + bytes([0xFF, 0, 9, 0]) + bytes(20), 'the block holds %r' % pat[3669:])
+    # a new render from the kept card: voice 2 plays at x3/4 without being set
+    log = t.path('f.log')
+    t.render(keep, ['--no-start', '--seconds', '3.5', '--param', 'midi_chan_2=2', '--midi-log', log,
+                    '--events', t.script('100ms press start\n')])
+    v2 = din_notes(log, '91')
+    check(v2, 'no Note On of voice 2')
+    near(ms_after(v2, v2[0][0]), [0, 666.667, 1333.333, 2000], 2.0, 'voice 2 after the reload')
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists
