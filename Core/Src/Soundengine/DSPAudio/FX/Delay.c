@@ -14,19 +14,18 @@
 
 
 #include "Soundengine/DSPAudio/FX/Delay.h"
-#include <string.h>	//LICHOMAT: memcpy() (F18)
 
 //LICHOMAT: the word at p, which mono output puts 2 bytes off a 4-byte boundary
 //(&output[pos + 1]). The M7's LDR loads it unaligned, so the device keeps the plain
-//load; in C it is undefined, so a host build (the emulator) reads it with memcpy() (F18)
-static inline __attribute__((always_inline)) int32_t delay_load32(const int32_t *p)
+//load; in C it is undefined, so a host build (the emulator) puts it together from its
+//two half-words, which are aligned, low half first as on the little-endian M7 (F18)
+static inline __attribute__((always_inline)) int32_t delay_load32(const void *p)
 {
 #if defined(__arm__)
-	return *p;
+	return *(const int32_t *)p;
 #else
-	int32_t v;
-	memcpy(&v, p, sizeof v);
-	return v;
+	const uint16_t *h = (const uint16_t *)p;
+	return (int32_t)((uint32_t)h[0] | ((uint32_t)h[1] << 16));
 #endif
 }
 
