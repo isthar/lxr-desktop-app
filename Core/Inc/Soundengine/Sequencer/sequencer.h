@@ -183,7 +183,8 @@ uint8_t seq_getTrackLength(uint8_t trackNr);
 //------------------------------------------------------------------------------
 void seq_init();
 //------------------------------------------------------------------------------
-float seq_getElapsedStepTimePercent();
+/** LICHOMAT v0.2: % [0:100) elapsed of the track's own step, while recording */
+float seq_getElapsedStepTimePercent(uint8_t trackNr);
 //------------------------------------------------------------------------------
 /** call periodically to check if the next step has to be processed */
 void seq_tick();

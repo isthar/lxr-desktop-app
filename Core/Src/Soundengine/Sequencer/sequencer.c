@@ -166,7 +166,7 @@ static SeqMailbox seq_mailbox;
 static volatile uint8_t seq_mailboxPosted;          /**< a post waits; seq_tick() reads this without masking */
 
 static volatile uint8_t seq_stepCopy[NUM_TRACKS];   /**< seqc_trackStep(); SEQC_NO_STEP before the first step */
-static volatile float seq_phaseCopy;                /**< seqc_stepPhase(), while recording */
+static volatile float seq_phaseCopy[NUM_TRACKS];    /**< LICHOMAT v0.2: seqc_trackPhase() of each track, while recording */
 static volatile uint8_t seq_inTick;                 /**< seq_tick() is running */
 static volatile uint8_t seq_coreReady;              /**< seq_init() has set up the core */
 static uint8_t seq_coreSyncMode = SEQC_SYNC_INTERNAL; /**< the sync mode applied to the core; seq_isSyncExternal changes one seq_tick() earlier */
@@ -789,16 +789,17 @@ void seq_armAutomationStep(uint8_t stepNr, uint8_t track,uint8_t isArmed)
 }
 
 //------------------------------------------------------------------------------
-//returns how many % [0:100) of the current step have elapsed, for the MIDI record
-//quantisation: from 50% on, a note goes to the next step (spec 6.7).
-//It is seqc_stepPhase() x 100, which reaches 50 halfway between the swung grid times
-//of this step and the next one. 0 while stopped and before the first step.
+//returns how many % [0:100) of the track's current step have elapsed, for the MIDI
+//record quantisation: from 50% on, a note goes to the next step (spec 6.7).
+//It is seqc_trackPhase() x 100 (LICHOMAT v0.2: of the track's own step), which
+//reaches 50 halfway between the swung grid times of this step and the next one.
+//0 while stopped, before the first step and for trackNr >= NUM_TRACKS.
 //Valid only while recording (seq_recordActive): seq_tick() refreshes the copy only
 //then, so with recording off, and until the first seq_tick() after REC is switched
 //on, it holds the phase of the last tick that ran while recording.
-float seq_getElapsedStepTimePercent()
+float seq_getElapsedStepTimePercent(uint8_t trackNr)
 {
-	return seq_phaseCopy * 100.f;
+	return (trackNr < NUM_TRACKS ? seq_phaseCopy[trackNr] : 0.f) * 100.f;
 }
 //------------------------------------------------------------------------------
 void seq_setQuantisation(uint8_t value)
@@ -1272,7 +1273,7 @@ void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note)
 	//from half the step on, the note belongs to the next step, and the sequencer
 	//must not play that step again when it gets there (D6)
 	uint8_t step = current;
-	if(seq_getElapsedStepTimePercent() >= 50.f)
+	if(seq_getElapsedStepTimePercent(trackNr) >= 50.f)
 	{
 		step = (uint8_t)((current + 1) % len);
 		seq_postSkipOnce(trackNr, step);
@@ -1952,29 +1953,11 @@ static void seq_cbNoteOff(void *ctx, uint8_t track)
 	voiceControl_noteOff(track);
 }
 //------------------------------------------------------------------------------
-/** Step boundary, the rest of fw 1.7 seq_nextStep(): beat LED, erase on the active
- * track, follow-bar, chase light and the MTC check. The erase runs before the core
- * generates the step's late part, so an erased step does not play, unless its early
- * part already played hits before n * 96; its late hits then follow it (N3). */
-static void seq_cbStepBoundary(void *ctx, uint32_t absStep)
+/** LICHOMAT v0.2: the part of a step boundary that follows the active track: erase,
+ * follow-bar, chase light. At the master boundary for a track on the master grid, at its
+ * own boundary (trackStep()) for a track at another tempo */
+static void seq_activeTrackStep(void)
 {
-	(void)ctx;
-	(void)absStep;
-
-	//---------- now check if the master track is at a full beat position to flash the start/stop button --------
-	const uint8_t masterStepPos = seqc_trackStep(seqc_masterTrack());
-	if((masterStepPos&3) == 0)
-	{
-		//a quarter beat occured (multiple of 4 steps in the 16 step pattern)
-		//turn on the start/stop led (beat indicator)
-		led_setValue(1,LED_START_STOP);
-	}
-	else if ((masterStepPos&3) == 1)
-	{
-		//turn it of again on the next step
-		led_setValue(0,LED_START_STOP);
-	}
-
 	// **RECORD if we are in erase mode (shift clear while record and playing)
 	// and this is the active track on the front, we erase the note value
 	const uint8_t eraseTrack = frontParser_activeTrack;
@@ -2030,9 +2013,44 @@ static void seq_cbStepBoundary(void *ctx, uint32_t absStep)
 	} else {
 		led_clearActive_step();
 	}
+}
+//------------------------------------------------------------------------------
+/** Step boundary, the rest of fw 1.7 seq_nextStep(): beat LED, erase on the active
+ * track, follow-bar, chase light and the MTC check. The erase runs before the core
+ * generates the step's late part, so an erased step does not play, unless its early
+ * part already played hits before n * 96; its late hits then follow it (N3). */
+static void seq_cbStepBoundary(void *ctx, uint32_t absStep)
+{
+	(void)ctx;
+	(void)absStep;
+
+	//---------- now check if the master track is at a full beat position to flash the start/stop button --------
+	const uint8_t masterStepPos = seqc_barStep();   //LICHOMAT v0.2: the master bar
+	if((masterStepPos&3) == 0)
+	{
+		//a quarter beat occured (multiple of 4 steps in the 16 step pattern)
+		//turn on the start/stop led (beat indicator)
+		led_setValue(1,LED_START_STOP);
+	}
+	else if ((masterStepPos&3) == 1)
+	{
+		//turn it of again on the next step
+		led_setValue(0,LED_START_STOP);
+	}
+
+	if(seqc_trackOnMasterGrid(frontParser_activeTrack))
+		seq_activeTrackStep();
 
 	// check mtc, which might stop the sequencer if we haven't seen one in a while
 	midiParser_checkMtc();
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.2: a track at another tempo began its next step */
+static void seq_cbTrackStep(void *ctx, uint8_t track)
+{
+	(void)ctx;
+	if(track == frontParser_activeTrack)
+		seq_activeTrackStep();
 }
 //------------------------------------------------------------------------------
 /** every step of the tempo, also while stopped (N8) */
@@ -2129,6 +2147,13 @@ static uint32_t seq_cbRandom(void *ctx)
 	return SEQ_RANDOM();
 }
 //------------------------------------------------------------------------------
+/** LICHOMAT v0.2: the track's settings in the pattern (tempo, humanize, delay) */
+static TrackGroove seq_cbGroove(void *ctx, uint8_t pattern, uint8_t track)
+{
+	(void)ctx;
+	return seq_patternSet.groove[pattern][track];
+}
+//------------------------------------------------------------------------------
 static const seqc_host_t seq_host =
 {
 	.ctx = NULL,
@@ -2151,13 +2176,17 @@ static const seqc_host_t seq_host =
 	.clockOutPulse = seq_cbClockOutPulse,
 	.transport = seq_cbTransport,
 	.random = seq_cbRandom,
+	.groove = seq_cbGroove,
+	.trackStep = seq_cbTrackStep,
 };
 //------------------------------------------------------------------------------
 static void seq_initCore(void)
 {
 	for(uint8_t i=0;i<NUM_TRACKS;i++)
+	{
 		seq_stepCopy[i] = SEQC_NO_STEP;
-	seq_phaseCopy = 0.f;
+		seq_phaseCopy[i] = 0.f;
+	}
 
 	seqp_init();
 	seqc_init(&seq_host, SEQC_CPU_HZ);
@@ -2272,23 +2301,27 @@ static uint8_t seq_drainSyncQueues(seqc_time_t *now)
 }
 //------------------------------------------------------------------------------
 /** Copy the core state that other contexts read (N7), only what can have changed:
- * - the step indices change at a step boundary, which moves the absolute step, or
- *   through a post or a sync event (a rewind, a song position);
- * - the phase, the costly one, is read only by recording (seq_addNote());
+ * - the step indices change at a step boundary or through a post or a sync event (a
+ *   rewind, a song position); LICHOMAT v0.2: each of them changes seqc_stepSerial(),
+ *   also a boundary of a track at another tempo;
+ * - the phases, the costly ones, are read only by recording (seq_addNote());
  * - in the slave modes seq_getBpm() shows the incoming tempo, rounded, and the
  *   LFOs follow it (N9); it changes only with a clock. */
 static void seq_refreshCopies(uint8_t changed)
 {
-	static int32_t lastAbsStep = -2;    //never an absolute step: the first call copies
-	const int32_t absStep = seqc_absStep();
-	if(changed || (absStep != lastAbsStep))
+	static uint8_t copied = 0;          //nothing copied yet: the first call copies
+	static uint32_t lastSerial;
+	const uint32_t serial = seqc_stepSerial();
+	if(changed || !copied || (serial != lastSerial))
 	{
-		lastAbsStep = absStep;
+		copied = 1;
+		lastSerial = serial;
 		for(uint8_t i=0;i<NUM_TRACKS;i++)
 			seq_stepCopy[i] = seqc_trackStep(i);
 	}
 	if(seq_recordActive)
-		seq_phaseCopy = seqc_stepPhase();
+		for(uint8_t i=0;i<NUM_TRACKS;i++)
+			seq_phaseCopy[i] = seqc_trackPhase(i);   //LICHOMAT v0.2: each track's own step
 
 	if(changed && seq_isSyncExternal)
 	{

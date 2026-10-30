@@ -114,7 +114,17 @@ void led_clearSequencerLeds(void) {}
 uint8_t led_idx2StepLed(uint8_t idx) { return idx; }
 void led_initPatternSelectLeds(void) {}
 void led_resetBlinkTimer(void) {}
-void led_setActive_step(uint8_t stepNr) { (void)stepNr; }
+static int chaseCalls;			/* led_setActive_step() */
+static uint8_t chaseStep[64];
+static int noteOns;			/* voiceControl_noteOn() */
+static uint8_t noteOnVoice[64];
+static seqc_time_t noteOnAt[64];
+void led_setActive_step(uint8_t stepNr)
+{
+	if (chaseCalls < 64)
+		chaseStep[chaseCalls] = stepNr;
+	chaseCalls++;
+}
 void led_setBlinkLed(const uint8_t ledNr, const uint8_t onOff) { (void)ledNr; (void)onOff; }
 void led_setValue(uint8_t val, uint8_t ledNr) { (void)val; (void)ledNr; }
 void led_updateSeqLeds(void) {}
@@ -141,7 +151,16 @@ void uart_sendMidi(MidiMsg msg) { (void)msg; }
 uint8_t usb_getMidi(MidiMsg *msg) { (void)msg; return 0; }
 void usb_sendMidi(MidiMsg msg) { (void)msg; }
 void voiceControl_noteOff(uint8_t voice) { (void)voice; }
-void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel) { (void)voice; (void)note; (void)vel; }
+void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
+{
+	(void)note; (void)vel;
+	if (noteOns < 64)
+	{
+		noteOnVoice[noteOns] = voice;
+		noteOnAt[noteOns] = hostNow;
+	}
+	noteOns++;
+}
 
 //------------------------------------------------------------------------------
 // Driving the sequencer
@@ -325,6 +344,69 @@ TEST(sequencer_probability_draw_takes_seq_random)
 	playAndStop(500);
 	seq_setMainStep(0, 0, 0, 0);
 	ASSERT_TRUE(seqTestRandomCalls > 0);
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT v0.2 (plan V6): a track at x3/4 through the glue. The start is applied
+// by the seq_tick() 1 ms after seq_setRunning(1); a step of the track is 166.667 ms.
+//------------------------------------------------------------------------------
+/** the ms after start + 1 of voice's Note Ons */
+static int voiceOns(uint8_t voice, seqc_time_t start, double *out, int max)
+{
+	int n = 0;
+	for (int i = 0; i < noteOns && i < 64; i++)
+		if (noteOnVoice[i] == voice && n < max)
+			out[n++] = (double)(noteOnAt[i] - start) / MS - 1.0;
+	return n;
+}
+
+TEST(sequencer_track_tempo_steps_and_chase_light)
+{
+	reset();
+	seq_patternSet.groove[0][1].tempo = -1;		/* x3/4 */
+	for (uint8_t s = 0; s < 3; s++)
+		seq_setMainStep(0, 1, s, 1);
+	frontParser_activeTrack = 1;
+	noteOns = chaseCalls = 0;
+	const seqc_time_t start = hostNow;
+	seq_setRunning(1);
+	run(250);
+	ASSERT_EQ(seq_getStepIndex(1), 1);		/* own step 1: 166.7 .. 333.3 ms */
+	ASSERT_EQ(seq_getStepIndex(0), 1);		/* master step 1: 125 .. 250 ms */
+	run(150);
+	double at[8];
+	ASSERT_EQ(voiceOns(1, start, at, 8), 3);
+	static const double want[3] = { 0.0, 166.667, 333.333 };
+	for (int k = 0; k < 3; k++)
+		ASSERT_TRUE(at[k] >= want[k] - 0.01 && at[k] < want[k] + 1.0);
+	/* the chase light follows the track's own steps: 0 at the master boundary 0, then
+	 * 1 and 2 at its own boundaries, none at the master boundaries 1 to 3 */
+	ASSERT_EQ(chaseCalls, 3);
+	for (int k = 0; k < 3; k++)
+		ASSERT_EQ(chaseStep[k], k);
+	seq_setRunning(0);
+	run(1);
+}
+
+TEST(sequencer_recording_quantizes_to_the_tracks_own_steps)
+{
+	reset();
+	seq_patternSet.groove[0][1].tempo = -1;		/* x3/4 */
+	seq_setMainStep(0, 1, 0, 1);
+	seq_setMainStep(0, 1, 1, 1);
+	seq_setRecordingMode(1);
+	noteOns = 0;
+	const seqc_time_t start = hostNow;
+	seq_setRunning(1);
+	run(278);		/* own step 1 began at 167.7 ms: its phase is 0.66 */
+	seq_addNote(1, 100, 64);
+	ASSERT_TRUE(seq_isMainStepActive(1, 2, 0));	/* own step 2, not master step 2 */
+	run(122);		/* step 2 at 334.3 ms is skipped once */
+	double at[8];
+	ASSERT_EQ(voiceOns(1, start, at, 8), 2);
+	seq_setRecordingMode(0);
+	seq_setRunning(0);
+	run(1);
 }
 
 TEST_MAIN()
