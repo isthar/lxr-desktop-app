@@ -1,0 +1,25 @@
+# G8_137: USB slave: the init card at --bpm mid, a USB clock at 137 BPM in 11.6 ms buffers, Start, Stop, a Song Position Pointer and Continue (spec 8.6, 4.3, N14, N21, Q17)
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card init --bpm mid --no-start --seconds 6
+#expect energy L1 -30 0.6s..2.9s
+#expect energy L1 -30 4.1s..6s
+#expect summary syncOverflows 0..0
+#expect summary seqc.dropouts 0..0
+#expect summary selected.sync 2..2
+#expect summary seqc.syncIgnored 0..2
+#expect summary seqc.intervalsExcluded 0..2
+#expect midi DIN 9n 75..79 0s..6s
+#broken --bpm 120
+# one transfer per 11.6 ms buffer (N21)
+100ms usb-clock 137 11.6
+500ms usb FA
+3s usb FC
+# SPP: bar 1, step 9
+3.5s usb F2 08 00
+4s usb FB

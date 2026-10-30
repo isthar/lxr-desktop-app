@@ -1330,5 +1330,166 @@ def M17_hang(t):
     print('exit 4 after %.1f s' % wall)
     no_copies_left()
 
+# --- M14: determinism, slicing and speed, on G1 (spec 8.4, 12.1) -------------------
+
+def golden_tool(t):
+    """tools/emu_golden.py of --root, imported"""
+    sys.path.insert(0, os.path.join(t.root, 'tools'))
+    import emu_golden
+    return emu_golden
+
+def same_outputs(eg, a, b, what):
+    """the WAV and the MIDI, clock and panel logs of two renders are byte-identical"""
+    for k in ('wav', 'midi', 'clock', 'panel'):
+        with open(os.path.join(a, eg.FILES[k]), 'rb') as fa, open(os.path.join(b, eg.FILES[k]), 'rb') as fb:
+            x, y = fa.read(), fb.read()
+        if x == y:
+            continue
+        i = next((i for i in range(min(len(x), len(y))) if x[i] != y[i]), None)
+        check(False, '%s: the %s outputs differ (%d and %d bytes, first at byte %s)' % (what, k, len(x), len(y), i))
+
+@case
+def M14_repeat(t):
+    eg = golden_tool(t)
+    g = eg.load('G1')
+    a = eg.render(g, t.path('a'), renderer=t.r)
+    b = eg.render(g, t.path('b'), renderer=t.r)
+    same_outputs(eg, a, b, 'G1 rendered twice')
+    no_copies_left()
+
+@case
+def M14_slices(t):
+    eg = golden_tool(t)
+    g = eg.load('G1')
+    a = eg.render(g, t.path('whole'), renderer=t.r)
+    b = eg.render(g, t.path('sliced'), renderer=t.rt, extra=['--test-slice'])
+    same_outputs(eg, a, b, 'G1 with and without --test-slice')
+    no_copies_left()
+
+@case
+def M14_broken(t):
+    selftest = os.path.join(t.root, 'emu', 'tests', 'golden_selftest.txt')
+    p = subprocess.run([sys.executable, os.path.join(t.root, 'tools', 'emu_golden.py'), 'check', '--golden-file',
+                        selftest, '--render', t.r, '--out', t.path('out')], capture_output=True, text=True, timeout=600)
+    want = 'golden_selftest: the broken variant (--seed 1) passes every expectation'
+    check(p.returncode == 1 and want in p.stdout.splitlines(), 'emu_golden.py check --golden-file %s: exit %d\n%s%s'
+          % (selftest, p.returncode, p.stdout, p.stderr))
+    no_copies_left()
+
+@case
+def M14_speed(t):
+    eg = golden_tool(t)
+    d = eg.render(eg.load('G1'), t.path('g1'), renderer=t.r)
+    with open(os.path.join(d, eg.FILES['summary'])) as f:
+        s = json.load(f)
+    check(s['speed'] >= 10, 'G1 renders at %.1fx real time, not 10x or more' % s['speed'])
+    print('G1: %.1fx real time (%.3f s of wall time)' % (s['speed'], s['wallSeconds']))
+    no_copies_left()
+
+# --- M14: emu_golden.py on outputs made here, without a render ----------------------
+
+def fake_outputs(d, channels, samples, midi=''):
+    """a folder of the outputs that emu_golden.Outputs reads: a canonical WAV of 16-bit
+    samples (interleaved, at the renderer's 44,140 Hz), the logs and a summary"""
+    os.makedirs(d)
+    data = struct.pack('<%dh' % len(samples), *samples)
+    with open(os.path.join(d, 'out.wav'), 'wb') as f:
+        f.write(b'RIFF' + struct.pack('<I', 36 + len(data)) + b'WAVEfmt ' +
+                struct.pack('<IHHIIHH', 16, 1, channels, 44140, 44140 * 2 * channels, 2 * channels, 16) +
+                b'data' + struct.pack('<I', len(data)) + data)
+    for name, text in (('midi.log', midi), ('clock.log', ''), ('panel.log', '')):
+        with open(os.path.join(d, name), 'w') as f:
+            f.write(text)
+    with open(os.path.join(d, 'summary.json'), 'w') as f:
+        f.write('{}\n')
+    return d
+
+@case
+def M14_diff(t):
+    """emu_golden.py diff on two WAVs that are equal up to the shorter one's end"""
+    eg = golden_tool(t)
+    a = [(i * 37) % 2000 - 1000 for i in range(4 * 100)]      # 100 frames, 4 channels
+    b = a + [5] * (4 * 10)                                     # the same and 10 frames more
+    c = list(b)
+    c[4 * 57 + 2] += 1                                         # frame 57, L2
+    here, there = eg.Outputs(fake_outputs(t.path('a'), 4, a)), eg.Outputs(fake_outputs(t.path('b'), 4, b))
+    for x, y, want in ((here, there, ['X: REV renders 110 frames, the working tree 100']),
+                       (there, here, ['X: REV renders 100 frames, the working tree 110']),
+                       (here, eg.Outputs(fake_outputs(t.path('same'), 4, a)), []),
+                       (here, eg.Outputs(fake_outputs(t.path('c'), 4, c)),
+                        ['X: the first differing frame is 57 (0.001291 s), channel L2: -489 at REV, '
+                         '-490 in the working tree'])):
+        got = eg.wav_differences('X', 'REV', x, y)
+        check(got == want, 'wav_differences on %d and %d frames: %r, not %r' % (x.frames, y.frames, got, want))
+        print('%d and %d frames: %r' % (x.frames, y.frames, got))
+
+@case
+def M14_windows(t):
+    """an expectation whose window ends after the render, or on a channel that the WAV
+    lacks, fails and says so; inside the render the same lines hold"""
+    eg = golden_tool(t)
+    o = eg.Outputs(fake_outputs(t.path('out'), 2, [0] * (2 * 44141)))    # 1 s (44,141 frames), L1 and R1
+
+    def ev(text):
+        return eg.Expect(1, '#expect ' + text, text, 'M14_windows').evaluate(o)
+
+    for x in ('silent L1 0s..1s', 'silent R1', 'midi DIN 9n 0..0 0s..1s', 'clock 0..0 0s..44141f'):
+        holds, detail = ev(x)
+        check(holds, '%s on 1 s of silence: %s' % (x, detail))
+    for x, want in (('silent L1 2s..3s', 'after the end of the render'),
+                    ('silent L1 0s..44142f', 'after the end of the render'),
+                    ('midi DIN 9n 0..0 2s..3s', 'after the end of the render'),
+                    ('clock 0..0 0s..1.1s', 'after the end of the render'),
+                    ('energy L1 -90 0.5s..2s', 'after the end of the render'),
+                    ('silent L2', 'the WAV has 2 channels, no L2'),
+                    ('silent R2 0s..1s', 'the WAV has 2 channels, no R2'),
+                    ('energy L2 -90', 'the WAV has 2 channels, no L2')):
+        holds, detail = ev(x)
+        check(not holds and want in detail, '%s on a render of 1 s and 2 channels: %s (%s), not a failure that '
+              'says %r' % (x, 'holds' if holds else 'fails', detail, want))
+        print('%s: fails (%s)' % (x, detail))
+
+@case
+def M14_inventory(t):
+    """every emu/tests/goldens/*.txt has its goldens.json entry and every entry its .txt:
+    CMake's glob drops the ctest id of a golden deleted or renamed by mistake"""
+    eg = golden_tool(t)
+    neg = t.path('neg')
+    os.makedirs(neg)
+    for x in ('A.txt', 'B.txt'):
+        open(os.path.join(neg, x), 'w').close()
+    with open(os.path.join(neg, 'goldens.json'), 'w') as f:
+        json.dump({'A': {}, 'C': {}}, f)
+    want = ['B.txt has no entry in goldens.json', 'goldens.json has an entry C without C.txt']
+    got = eg.inventory(neg)
+    check(got == want, 'inventory of A.txt, B.txt and the entries A, C: %r, not %r' % (got, want))
+    got = eg.inventory()
+    check(not got, 'emu/tests/goldens: %s' % '; '.join(got))
+    print('%d goldens, each with its entry in goldens.json, and no other entry' % len(eg.all_ids()))
+
+# --- M23: the card fixtures (spec 5.6) ----------------------------------------------
+
+@case
+def M23(t):
+    cards = os.path.join(t.root, 'emu', 'tests', 'cards')
+    scripts = sorted(x[:-4] for x in os.listdir(os.path.join(cards, 'scripts')) if x.endswith('.txt'))
+    committed = sorted(x for x in os.listdir(cards) if x != 'scripts' and os.path.isdir(os.path.join(cards, x)))
+    check(committed == scripts, 'the fixtures %r are not the scripts %r' % (committed, scripts))
+    out = t.path('cards')
+    p = subprocess.run(['/bin/bash', os.path.join(cards, 'make.sh'), t.r, out], capture_output=True, text=True,
+                       timeout=600)
+    check(p.returncode == 0, 'make.sh: exit %d\n%s%s' % (p.returncode, p.stdout, p.stderr))
+    made = sorted(os.listdir(out))
+    check(made == scripts, 'make.sh made %r, not %r' % (made, scripts))
+    for f in scripts:
+        a, b = tree(os.path.join(out, f)), tree(os.path.join(cards, f))
+        differ = sorted(k for k in set(a) | set(b) if k not in a or k not in b or a[k] != b[k])
+        check(not differ, 'make.sh gives fixture %s other than the committed one at %r' % (f, differ))
+        print('%s: %d files, %d bytes, as committed' % (f, sum(1 for v in a.values() if v),
+              sum(os.path.getsize(os.path.join(cards, f, k)) for k, v in a.items() if v)))
+    left = [x for x in os.listdir(t.tmp) if x.startswith('lichomat-cards-')]
+    check(not left, 'make.sh left %r in %s' % (left, t.tmp))
+    no_copies_left()
+
 if __name__ == '__main__':
     main()

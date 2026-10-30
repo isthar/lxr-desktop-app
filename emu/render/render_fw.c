@@ -33,7 +33,7 @@ void rfw_seedCard(void *res)
 	/* sd_formatRoutine() after f_mkfs() and f_mount(): the card is mounted at boot */
 	preset_createGlobals();
 	preset_init(0);
-	sprintf(savefileNames[0][PROJECT_NAMES], "Init");
+	snprintf(savefileNames[0][PROJECT_NAMES], sizeof savefileNames[0][PROJECT_NAMES], "Init");
 	*(int *)res = (int)preset_saveProject(0);
 }
 

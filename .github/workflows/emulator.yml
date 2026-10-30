@@ -1,0 +1,155 @@
+# CI of the LICHOMAT emulator (stage 1b spec 9.3): emu/'s host tests and goldens in a
+# Release build and in a sanitizer build, on macOS arm64 with the Command Line Tools.
+# It only builds and tests: nothing is pushed, tagged or released from here. It runs
+# on every push of the emulator branch (tracker Q19). tools/ci_dry_run.rb checks it
+# and runs its steps locally.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+
+name: emulator
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash  # an explicit bash runs with -o pipefail, which "| tee" needs
+
+env:
+  DEVELOPER_DIR: /Library/Developer/CommandLineTools
+  # the pins of tools/setup-toolchain.sh
+  CMAKE_PKG: cmake-3.31.12-macos-universal
+  CMAKE_SHA256: 799af7fd545db9bf1b9cfe72f8095880e727a2d4e0df0e3dffc3bc7b95c2d3b0
+  NINJA_SHA256: c99048673aa765960a99cf10c6ddb9f1fad506099ff0a0e137ad8960a88f321b
+
+jobs:
+  emu-release:
+    name: Emulator (Release)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Fetch CMake and Ninja
+        run: |
+          mkdir -p .toolchain/dl .toolchain/bin
+          curl -fL --retry 3 -o ".toolchain/dl/$CMAKE_PKG.tar.gz" \
+            "https://github.com/Kitware/CMake/releases/download/v3.31.12/$CMAKE_PKG.tar.gz"
+          echo "$CMAKE_SHA256  .toolchain/dl/$CMAKE_PKG.tar.gz" | shasum -a 256 -c -
+          tar -xzf ".toolchain/dl/$CMAKE_PKG.tar.gz" -C .toolchain
+          curl -fL --retry 3 -o .toolchain/dl/ninja-mac.zip \
+            "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-mac.zip"
+          echo "$NINJA_SHA256  .toolchain/dl/ninja-mac.zip" | shasum -a 256 -c -
+          unzip -o -q .toolchain/dl/ninja-mac.zip -d .toolchain/bin
+          echo "$GITHUB_WORKSPACE/.toolchain/$CMAKE_PKG/CMake.app/Contents/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/.toolchain/bin" >> "$GITHUB_PATH"
+      - name: Record the toolchain
+        run: |
+          {
+            echo "### Toolchain"; echo; echo '```'
+            clang --version | head -n 1
+            echo "SDK $(xcrun --show-sdk-version)"
+            cmake --version | head -n 1
+            echo "ninja $(ninja --version)"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Configure
+        run: cmake -S emu -B build/emu-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DLICHOMAT_EMU_SANITIZE=
+      - name: Build
+        run: cmake --build build/emu-release 2>&1 | tee build/emu-release/build.log
+      - name: Check for compiler warnings
+        run: |
+          n=$(grep -c "warning:" build/emu-release/build.log || true)
+          echo "compiler warnings: $n"
+          if [ "$n" -ne 0 ]; then grep "warning:" build/emu-release/build.log | sort -u; exit 1; fi
+      - name: Test
+        run: ctest --test-dir build/emu-release --output-on-failure
+      - name: Check the linked libraries
+        run: |
+          b=build/emu-release/lichomat-render
+          bad=$(otool -L "$b" | tail -n +2 | awk '{print $1}' | grep -v -E '^(/usr/lib/|/System/Library/)' || true)
+          if [ -n "$bad" ]; then echo "$b links: $bad"; exit 1; fi
+          echo "$b links only system libraries"
+      - name: Package lichomat-render
+        run: |
+          d="build/emu-release/package/lichomat-render-${GITHUB_SHA::12}"
+          rm -rf build/emu-release/package; mkdir -p "$d"
+          cp build/emu-release/lichomat-render LICENSE NOTICE.md "$d/"
+          cp emu/libm/LICENSE "$d/LICENSE.arm-optimized-routines"
+          head -n 18 Middlewares/Third_Party/FatFs/src/ff.h > "$d/LICENSE.fatfs"
+          codesign --force --sign - "$d/lichomat-render"
+          ditto -c -k --keepParent "$d" "$d.zip"
+      - name: Upload lichomat-render
+        uses: actions/upload-artifact@v7
+        with:
+          name: lichomat-render-${{ github.sha }}
+          path: build/emu-release/package/*.zip
+          if-no-files-found: error
+      - name: Upload the golden outputs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: goldens-release-${{ github.sha }}
+          path: build/emu-release/goldens-out
+          if-no-files-found: ignore
+
+  emu-sanitize:
+    name: Emulator (ASan and UBSan)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      # the next two steps are emu-release's, word for word (ci_dry_run.rb checks it)
+      - name: Fetch CMake and Ninja
+        run: |
+          mkdir -p .toolchain/dl .toolchain/bin
+          curl -fL --retry 3 -o ".toolchain/dl/$CMAKE_PKG.tar.gz" \
+            "https://github.com/Kitware/CMake/releases/download/v3.31.12/$CMAKE_PKG.tar.gz"
+          echo "$CMAKE_SHA256  .toolchain/dl/$CMAKE_PKG.tar.gz" | shasum -a 256 -c -
+          tar -xzf ".toolchain/dl/$CMAKE_PKG.tar.gz" -C .toolchain
+          curl -fL --retry 3 -o .toolchain/dl/ninja-mac.zip \
+            "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-mac.zip"
+          echo "$NINJA_SHA256  .toolchain/dl/ninja-mac.zip" | shasum -a 256 -c -
+          unzip -o -q .toolchain/dl/ninja-mac.zip -d .toolchain/bin
+          echo "$GITHUB_WORKSPACE/.toolchain/$CMAKE_PKG/CMake.app/Contents/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/.toolchain/bin" >> "$GITHUB_PATH"
+      - name: Record the toolchain
+        run: |
+          {
+            echo "### Toolchain"; echo; echo '```'
+            clang --version | head -n 1
+            echo "SDK $(xcrun --show-sdk-version)"
+            cmake --version | head -n 1
+            echo "ninja $(ninja --version)"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Configure
+        run: cmake -S emu -B build/emu-sanitize -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLICHOMAT_EMU_SANITIZE=address,undefined
+      - name: Build
+        run: cmake --build build/emu-sanitize 2>&1 | tee build/emu-sanitize/build.log
+      - name: Check for compiler warnings
+        run: |
+          n=$(grep -c "warning:" build/emu-sanitize/build.log || true)
+          echo "compiler warnings: $n"
+          if [ "$n" -ne 0 ]; then grep "warning:" build/emu-sanitize/build.log | sort -u; exit 1; fi
+      - name: Test
+        run: ctest --test-dir build/emu-sanitize --output-on-failure
+      - name: Upload the golden outputs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: goldens-sanitize-${{ github.sha }}
+          path: build/emu-sanitize/goldens-out
+          if-no-files-found: ignore

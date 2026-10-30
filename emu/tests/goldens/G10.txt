@@ -1,0 +1,16 @@
+# G10: step probability: the init card at 120 BPM, 4 bars, seed 1; at 1 s step 1 of the
+# active voice (voice 1) goes from 100 % to a probability of 30 (spec 8.6, 4.7)
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card init --bpm 120 --bars 4 --seed 1
+#expect midi DIN 9n 107..111 0s..8s
+#broken-drop param
+# 112 active steps at 100 % in 0s..8s (G1); seed 1 skips voice 1's step 1 at 2 s, 4 s and
+# 6 s (109, measured). menu_parseGlobalParam(): PAR_ACTIVE_STEP, then PAR_STEP_PROB
+1s param active_step=0
+1s param step_prob=30

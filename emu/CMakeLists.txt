@@ -242,6 +242,7 @@ emu_add_test(test_jacks IDS M12_clock_in M12_reset M12_clock_out_core M12_fw_clo
 emu_add_test(test_fwchanges IDS M15_f1_cc1 M15_f2_morph M15_f3_clear_pages M15_f9_band10
     M15_f11_knobs_at_boot M15_f12_euklid M15_f13_diode_table
     M15_f14_transient_shift)
+emu_add_test(test_pingpong IDS M16_pingpong)
 
 # M19: the firmware objects import no libm name but the vendored ones and fmod
 add_library(emu_libm_canary OBJECT tests/libm_canary.c)
@@ -304,6 +305,25 @@ emu_render_tests(M17_cli_usage M17_cli_info M17_card_errors M17_seed_card M17_t0
     M17_sync_fallback M17_save M17_fault M17_hang)
 emu_render_tests(V02_ui V02_tempo V02_groove V02_conditions V02_files V02_rotation)
 emu_render_tests(V03_rolls V03_slide V03_glide_through_ratchets V03_fill V03_scenes V03_scene_file)
+# M23: emu/tests/cards/make.sh gives the committed card fixtures (spec 5.6)
+emu_render_tests(M23)
+
+# the goldens (spec 8.6, 12.2): one ctest id per emu/tests/goldens/*.txt
+file(GLOB EMU_GOLDENS CONFIGURE_DEPENDS "${EMU_DIR}/tests/goldens/*.txt")
+foreach(g IN LISTS EMU_GOLDENS)
+    get_filename_component(id "${g}" NAME_WE)
+    add_test(NAME ${id} COMMAND ${Python3_EXECUTABLE} "${LXR_ROOT}/tools/emu_golden.py" check ${id}
+        --render $<TARGET_FILE:lichomat-render> --out "${CMAKE_BINARY_DIR}/goldens-out")
+    set_tests_properties(${id} PROPERTIES TIMEOUT 600)
+endforeach()
+# M14: determinism, slicing, the broken-variant check (spec 8.4, 12.1)
+emu_render_tests(M14_repeat M14_slices M14_broken)
+# M14: emu_golden.py's diff and windows on outputs made by the test, and the goldens
+# against goldens.json
+emu_render_tests(M14_diff M14_windows M14_inventory)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    emu_render_tests(M14_speed)	# spec 9.2: Release runs M14's speed check
+endif()
 
 # The temporary folders: every test above gets TMPDIR = a folder of this build,
 # which emu_tmp_setup empties first and emu_tmp_clean checks last. A test removes
