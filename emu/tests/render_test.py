@@ -1034,6 +1034,62 @@ def M17_hang(t):
     print('exit 4 after %.1f s' % wall)
     no_copies_left()
 
+# --- M14: determinism, slicing and speed, on G1 (spec 8.4, 12.1) -------------------
+
+def golden_tool(t):
+    """tools/emu_golden.py of --root, imported"""
+    sys.path.insert(0, os.path.join(t.root, 'tools'))
+    import emu_golden
+    return emu_golden
+
+def same_outputs(eg, a, b, what):
+    """the WAV and the MIDI, clock and panel logs of two renders are byte-identical"""
+    for k in ('wav', 'midi', 'clock', 'panel'):
+        with open(os.path.join(a, eg.FILES[k]), 'rb') as fa, open(os.path.join(b, eg.FILES[k]), 'rb') as fb:
+            x, y = fa.read(), fb.read()
+        if x == y:
+            continue
+        i = next((i for i in range(min(len(x), len(y))) if x[i] != y[i]), None)
+        check(False, '%s: the %s outputs differ (%d and %d bytes, first at byte %s)' % (what, k, len(x), len(y), i))
+
+@case
+def M14_repeat(t):
+    eg = golden_tool(t)
+    g = eg.load('G1')
+    a = eg.render(g, t.path('a'), renderer=t.r)
+    b = eg.render(g, t.path('b'), renderer=t.r)
+    same_outputs(eg, a, b, 'G1 rendered twice')
+    no_copies_left()
+
+@case
+def M14_slices(t):
+    eg = golden_tool(t)
+    g = eg.load('G1')
+    a = eg.render(g, t.path('whole'), renderer=t.r)
+    b = eg.render(g, t.path('sliced'), renderer=t.rt, extra=['--test-slice'])
+    same_outputs(eg, a, b, 'G1 with and without --test-slice')
+    no_copies_left()
+
+@case
+def M14_broken(t):
+    selftest = os.path.join(t.root, 'emu', 'tests', 'golden_selftest.txt')
+    p = subprocess.run([sys.executable, os.path.join(t.root, 'tools', 'emu_golden.py'), 'check', '--golden-file',
+                        selftest, '--render', t.r, '--out', t.path('out')], capture_output=True, text=True, timeout=600)
+    want = 'golden_selftest: the broken variant (--seed 1) passes every expectation'
+    check(p.returncode == 1 and want in p.stdout.splitlines(), 'emu_golden.py check --golden-file %s: exit %d\n%s%s'
+          % (selftest, p.returncode, p.stdout, p.stderr))
+    no_copies_left()
+
+@case
+def M14_speed(t):
+    eg = golden_tool(t)
+    d = eg.render(eg.load('G1'), t.path('g1'), renderer=t.r)
+    with open(os.path.join(d, eg.FILES['summary'])) as f:
+        s = json.load(f)
+    check(s['speed'] >= 10, 'G1 renders at %.1fx real time, not 10x or more' % s['speed'])
+    print('G1: %.1fx real time (%.3f s of wall time)' % (s['speed'], s['wallSeconds']))
+    no_copies_left()
+
 # --- M23: the card fixtures (spec 5.6) ----------------------------------------------
 
 @case

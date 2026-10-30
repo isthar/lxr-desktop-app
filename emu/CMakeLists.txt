@@ -304,6 +304,20 @@ emu_render_tests(M17_cli_usage M17_cli_info M17_card_errors M17_seed_card M17_t0
 # M23: emu/tests/cards/make.sh gives the committed card fixtures (spec 5.6)
 emu_render_tests(M23)
 
+# the goldens (spec 8.6, 12.2): one ctest id per emu/tests/goldens/*.txt
+file(GLOB EMU_GOLDENS CONFIGURE_DEPENDS "${EMU_DIR}/tests/goldens/*.txt")
+foreach(g IN LISTS EMU_GOLDENS)
+    get_filename_component(id "${g}" NAME_WE)
+    add_test(NAME ${id} COMMAND ${Python3_EXECUTABLE} "${LXR_ROOT}/tools/emu_golden.py" check ${id}
+        --render $<TARGET_FILE:lichomat-render> --out "${CMAKE_BINARY_DIR}/goldens-out")
+    set_tests_properties(${id} PROPERTIES TIMEOUT 600)
+endforeach()
+# M14: determinism, slicing, the broken-variant check (spec 8.4, 12.1)
+emu_render_tests(M14_repeat M14_slices M14_broken)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    emu_render_tests(M14_speed)	# spec 9.2: Release runs M14's speed check
+endif()
+
 # The temporary folders: every test above gets TMPDIR = a folder of this build,
 # which emu_tmp_setup empties first and emu_tmp_clean checks last. A test removes
 # what it makes there, also when it fails (emu_testTempDir() at exit, the

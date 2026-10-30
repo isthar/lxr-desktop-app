@@ -1,0 +1,14 @@
+# G1: the init card, pattern 0 at 120 BPM, 4 bars: boot, kit load, every voice (spec 8.6)
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card init --bpm 120 --bars 4
+#expect energy L1 -30
+#expect summary underrunsAfterT0 0..0
+#expect midi DIN 9n 112..112 0s..8s
+#broken --faders 0,0,0,0,0,0
+0ms mark start
