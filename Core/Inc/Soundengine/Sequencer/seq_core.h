@@ -94,8 +94,9 @@
  *   clock out pulses;
  * - on the free-running timeline (internal sync only): MIDI clocks and tempo
  *   steps.
- * At equal ticks the order is tempoStep(), the step boundary, noteOff(),
- * trigger(), clockOutPulse(), midiClockOut(). A due item is never dropped: after
+ * At equal ticks the order is tempoStep(), the step boundary, the boundaries of
+ * the tracks on their own grid (track order), noteOff(), trigger(),
+ * clockOutPulse(), midiClockOut(). A due item is never dropped: after
  * a jump in a slave mode, the late items are handled in chronological order.
  *
  * At the boundary of step n the core:
@@ -178,6 +179,31 @@
  *   while its note-off is still pending, the core calls noteOff() right before the
  *   new trigger(). Stopping, rewinding and a slave dropout (N17) send all
  *   pending note-offs at once.
+ *
+ * Per-track tempo (v0.2)
+ * ----------------------
+ * A track's TrackGroove.tempo gives its step length L = 96 * den / num ticks: x1/4 384,
+ * x1/3 288, x1/2 192, x2/3 144, x3/4 128, x1 96, x4/3 72, x3/2 64, x2 48, x3 32, x4 24.
+ * - Tracks at x1 step on the master grid, at the master boundaries, as above. A master
+ *   boundary reads their tempo after stepBoundary(): a track whose tempo is not x1
+ *   leaves the master grid there, its step at that boundary lasting L.
+ * - A track on its own grid has boundary items of its own on the transport timeline.
+ *   At each the index advances (it wraps at the track length), trackStep() is called, the
+ *   tempo is read (it sets the length of the step that begins), and its roll event, the
+ *   late part of the step and the early part of its next step are generated. A track
+ *   set back to x1 rejoins the master grid at the next master boundary.
+ * - In a step of L ticks a shift unit is L / 8 ticks, the swing is
+ *   round(shuffle * 64 * L / (127 * 96)) on the track's odd occurrences (its own count,
+ *   seqc_event_t.absStep), and ratchet hit j is at floor(j * L / k).
+ * - The pattern end follows the master track counted on the master grid (seqc_barStep()),
+ *   whatever its tempo. At a pattern change every track restarts at step 0; the step in
+ *   progress of a track on its own grid ends there. The early part of the new first step
+ *   is generated with the prediction one master step ahead, or at the track's last
+ *   boundary before the change when that is later; a hit before the boundary that
+ *   generates it is not played.
+ * - After a song position a track on its own grid continues on it from the start of the
+ *   run; its step in progress at the located step does not play.
+ * MIDI clock out, the clock out pulses, tempoStep() and stepBoundary() stay on the master grid.
  */
 
 //------------------------------------------------------------------------------
@@ -302,7 +328,7 @@ typedef enum
 typedef struct seqc_event
 {
 	seqc_tick_t	tick;		/**< when it fires, in ticks */
-	uint32_t	absStep;	/**< n, the absolute step it belongs to */
+	uint32_t	absStep;	/**< the track's occurrence count since the start (its own step count; at x1 the absolute step n) */
 	uint8_t		track;		/**< 0..6 */
 	uint8_t		pattern;	/**< pattern the step was read from */
 	uint8_t		step;		/**< track step s, 0..63 */
@@ -336,7 +362,7 @@ typedef struct seqc_stats
 } seqc_stats_t;
 
 /** The host: pattern data, pattern sequencing and outputs (N5). Every pointer
- * must be set. ctx is passed back to each callback unchanged. */
+ * but groove and trackStep must be set. ctx is passed back to each callback unchanged. */
 typedef struct seqc_host
 {
 	void *ctx;
@@ -430,6 +456,16 @@ typedef struct seqc_host
 	 * called once per generated step occurrence (track, absolute step) whose
 	 * main-step bit is set, and again only if that step changed (see Generation) */
 	uint32_t	(*random)(void *ctx);
+	/* -- v0.2; both may be NULL -- */
+	/** the track's settings in the pattern: tempo, humanize, delay (TrackGroove,
+	 * SeqStepTypes.h). Read at each step boundary of the track and for each step
+	 * occurrence. NULL: every track at x1, without humanize or delay */
+	TrackGroove	(*groove)(void *ctx, uint8_t pattern, uint8_t track);
+	/** a track on its own grid (its tempo is not x1) began its next step: its index
+	 * changed outside a master boundary. Called after the index advanced and before the
+	 * track's tempo is read and its step generated, as stepBoundary() is for the tracks
+	 * on the master grid. NULL: not called */
+	void		(*trackStep)(void *ctx, uint8_t track);
 } seqc_host_t;
 
 //------------------------------------------------------------------------------
@@ -713,6 +749,15 @@ int32_t seqc_absStep(void);
  * master track of the pattern that the song position activated. 0 after
  * seqc_init() and after a rewind, until the first boundary. */
 uint8_t seqc_masterTrack(void);
+//------------------------------------------------------------------------------
+/** v0.2: the master track's index on the master grid: the index it would have at x1,
+ * which the pattern end follows. SEQC_NO_STEP before the first step. With the master
+ * track at x1 it is seqc_trackStep(seqc_masterTrack()). */
+uint8_t seqc_barStep(void);
+//------------------------------------------------------------------------------
+/** v0.2: true if the track steps on the master grid (stepBoundary() is its step
+ * boundary), false if on its own (trackStep() is); true for track >= 7 */
+bool seqc_trackOnMasterGrid(uint8_t track);
 //------------------------------------------------------------------------------
 /** The musical position in ticks: its value at the core's current time, or,
  * inside a callback, the tick of the item being handled. At the start (before

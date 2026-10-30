@@ -81,6 +81,7 @@ typedef enum
 	FAKE_PATTERN_END,	/**< patternEnd(): value = seqc_pat_t, pattern = active pattern after it */
 	FAKE_PEEK,		/**< peekNextPattern(): pattern = *pattern, flag = result */
 	FAKE_SEEK,		/**< seekPosition(): arg = absStep, result = steps, pattern = active pattern after it */
+	FAKE_TRACK_STEP,	/**< trackStep(): track (v0.2) */
 	FAKE_NUM_KINDS
 } fake_kind_t;
 
@@ -96,6 +97,7 @@ typedef enum
 	FAKE_READ_ROLL_RATE,
 	FAKE_READ_ACTIVE_PATTERN,
 	FAKE_READ_RANDOM,
+	FAKE_READ_GROOVE,
 	FAKE_NUM_READS
 } fake_read_t;
 
@@ -136,6 +138,7 @@ typedef struct fake_host
 	uint8_t		shuffle;					/**< PAR_SHUFFLE 0..127 */
 	bool		muted[FAKE_NUM_TRACKS];
 	uint8_t		rollRate[FAKE_NUM_TRACKS];			/**< what rollRate() returns: 0, or 16/8/4/2/1 */
+	TrackGroove	groove[FAKE_NUM_PATTERNS][FAKE_NUM_TRACKS];	/**< v0.2; zero bytes are the defaults */
 
 	/* pattern sequencing (sequencer.c) */
 	uint8_t		activePattern;			/**< seq_activePattern */
@@ -153,6 +156,7 @@ typedef struct fake_host
 	uint8_t		activeTrack;			/**< frontParser_activeTrack: the track erase works on */
 	void		(*onStepBoundary)(struct fake_host *h, uint32_t absStep);	/**< test hook, after the erase */
 	void		(*onTrigger)(struct fake_host *h, const seqc_event_t *ev);	/**< test hook, after logging */
+	void		(*onTrackStep)(struct fake_host *h, uint8_t track);	/**< test hook, after logging */
 
 	/* random(): a 64-bit LCG, or a script that is played first */
 	uint64_t	rngState;
@@ -210,6 +214,10 @@ void fake_setTiming(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step
 void fake_setLength(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t rawLength);
 /** the effective length of a raw length: 0 is 16, above 64 is 64 */
 uint8_t fake_effectiveLength(uint8_t rawLength);
+/** v0.2: the track's tempo by its menu index 0..10 (5 is x1) */
+void fake_setTempo(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t index);
+/** v0.2: humanize time (ms), humanize volume (%) and delay (ms) */
+void fake_setGroove(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t humTime, uint8_t humVol, int8_t delay);
 /** the master track of a pattern: the largest raw length, lowest track on a tie */
 uint8_t fake_masterTrack(const fake_host_t *h, uint8_t pattern);
 

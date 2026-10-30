@@ -468,6 +468,27 @@ static uint32_t cb_random(void *ctx)
 	h->rngState = h->rngState * 6364136223846793005ull + 1442695040888963407ull;
 	return (uint32_t)(h->rngState >> 32);
 }
+//------------------------------------------------------------------------------
+static TrackGroove cb_groove(void *ctx, uint8_t pattern, uint8_t track)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_GROOVE]++;
+	if (!fake_validStep(h, "groove", pattern, track, 0))
+		return (TrackGroove){ 0, 0, 0, 0 };
+	return h->groove[pattern][track];
+}
+//------------------------------------------------------------------------------
+static void cb_trackStep(void *ctx, uint8_t track)
+{
+	fake_host_t *h = ctx;
+	if (!fake_validTrack(h, "trackStep", track))
+		return;
+	if (seqc_trackOnMasterGrid(track))
+		fake_error(h, "trackStep(%u) for a track on the master grid", track);
+	fake_log(h, FAKE_TRACK_STEP)->track = track;
+	if (h->onTrackStep)
+		h->onTrackStep(h, track);
+}
 
 //------------------------------------------------------------------------------
 // Setup
@@ -519,6 +540,8 @@ void fake_reset(fake_host_t *h)
 		.clockOutPulse = cb_clockOutPulse,
 		.transport = cb_transport,
 		.random = cb_random,
+		.groove = cb_groove,
+		.trackStep = cb_trackStep,
 	};
 }
 //------------------------------------------------------------------------------
@@ -599,6 +622,21 @@ void fake_setLength(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t rawL
 	if (!fake_validStep(h, "fake_setLength", pattern, track, 0))
 		return;
 	h->length[pattern][track] = rawLength;
+}
+//------------------------------------------------------------------------------
+void fake_setTempo(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t index)
+{
+	if (fake_validStep(h, "fake_setTempo", pattern, track, 0))
+		h->groove[pattern][track].tempo = (int8_t)(index - GROOVE_TEMPO_X1);
+}
+//------------------------------------------------------------------------------
+void fake_setGroove(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t humTime, uint8_t humVol, int8_t delay)
+{
+	if (!fake_validStep(h, "fake_setGroove", pattern, track, 0))
+		return;
+	h->groove[pattern][track].humTime = humTime;
+	h->groove[pattern][track].humVol = humVol;
+	h->groove[pattern][track].delay = delay;
 }
 
 //------------------------------------------------------------------------------
@@ -770,7 +808,7 @@ void fake_printLog(const fake_host_t *h, size_t from, size_t to)
 {
 	static const char *const names[FAKE_NUM_KINDS] = {
 		"trigger", "noteOff", "boundary", "tempoStep", "midiClock", "pulse",
-		"transport", "patternEnd", "peek", "seek" };
+		"transport", "patternEnd", "peek", "seek", "trackStep" };
 	if (to > h->logCount)
 		to = h->logCount;
 	for (size_t i = from; i < to; i++)
@@ -786,6 +824,9 @@ void fake_printLog(const fake_host_t *h, size_t from, size_t to)
 					r->ev.vel, r->ev.note, (r->ev.flags & SEQC_EVF_ROLL) ? " roll" : "");
 			break;
 		case FAKE_NOTE_OFF:
+			printf(" track %u", r->track);
+			break;
+		case FAKE_TRACK_STEP:
 			printf(" track %u", r->track);
 			break;
 		case FAKE_STEP_BOUNDARY:
