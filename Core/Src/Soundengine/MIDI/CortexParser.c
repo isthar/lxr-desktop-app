@@ -895,6 +895,7 @@ static void frontParser_handleSeqCC()
 
 //	case SEQ_EUKLID_ROTATION:
 		activeParameters[PAR_EUKLID_ROTATION] = euklid_getRotation(cortex_midiMsg.data2);// frontParser_midiMsg.data2;
+		seq_loadGrooveParams(cortex_midiMsg.data2, frontParser_shownPattern); //LICHOMAT v0.2: the track page's second screen
 		menu_repaint();
 
 /*

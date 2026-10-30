@@ -2386,3 +2386,30 @@ void seq_tick()
 
 	seq_inTick = 0;
 }
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.2: the track page's four parameters (Euklid page, second screen) from the
+ * track's settings in pattern */
+void seq_loadGrooveParams(uint8_t trackNr, uint8_t pattern)
+{
+	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return;
+	const TrackGroove g = trackGroove_checked(seq_patternSet.groove[pattern][trackNr]);
+	activeParameters[PAR_TRACK_TEMPO] = (uint8_t)(g.tempo + GROOVE_TEMPO_X1);
+	activeParameters[PAR_HUMAN_TIME] = g.humTime;
+	activeParameters[PAR_HUMAN_VOL] = g.humVol;
+	activeParameters[PAR_TRACK_DELAY] = (uint8_t)(g.delay - GROOVE_DELAY_MIN);
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.2: a track page parameter edited, as its menu value */
+void seq_setGrooveParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint8_t value)
+{
+	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return;
+	TrackGroove *g = &seq_patternSet.groove[pattern][trackNr];
+	switch(paramNr)
+	{
+	case PAR_TRACK_TEMPO:	g->tempo = (int8_t)(value < GROOVE_TEMPO_COUNT ? value - GROOVE_TEMPO_X1 : 0); break;
+	case PAR_HUMAN_TIME:	g->humTime = value <= GROOVE_HUM_TIME_MAX ? value : 0; break;
+	case PAR_HUMAN_VOL:	g->humVol = value <= GROOVE_HUM_VOL_MAX ? value : 0; break;
+	case PAR_TRACK_DELAY:	g->delay = (int8_t)(value <= GROOVE_DELAY_MAX - GROOVE_DELAY_MIN ? value + GROOVE_DELAY_MIN : 0); break;
+	default: break;
+	}
+}

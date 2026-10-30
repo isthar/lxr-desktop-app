@@ -251,6 +251,10 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_P4, CAT_FX, LONG_P4},/*TEXT_FX_P4*/
 		{SHORT_KCM, CAT_GLOBAL, LONG_PATTERN_MODE},/*TEXT_AUTO_SWITCH_KIT*/
 		{SHORT_EMPTY, CAT_GLOBAL, LONG_EMPTY},/*TEXT_CPU_METER: the page has its own layout*/
+		{SHORT_TRK_TEMPO, CAT_PATTERN, LONG_TRK_TEMPO},/*TEXT_TRACK_TEMPO, LICHOMAT v0.2*/
+		{SHORT_HUM_TIME, CAT_PATTERN, LONG_HUM_TIME},/*TEXT_HUMAN_TIME*/
+		{SHORT_HUM_VOL, CAT_PATTERN, LONG_HUM_VOL},/*TEXT_HUMAN_VOL*/
+		{SHORT_TRK_DELAY, CAT_PATTERN, LONG_TRK_DELAY},/*TEXT_TRACK_DELAY*/
 
 
 };
@@ -515,7 +519,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_MORPH*/ 			DTYPE_0B255,
 	    /*PAR_ACTIVE_STEP */ 	DTYPE_0B127,							//230
 	    /*PAR_STEP_VOLUME*/ 	DTYPE_0B127,
-	    /*PAR_STEP_PROB*/ 		DTYPE_0B100,
+	    /*PAR_STEP_PROB*/ 		DTYPE_MENU | (MENU_STEP_PROB<<8),	// LICHOMAT v0.2: 0..100, then the trig conditions
 	    /*PAR_STEP_NOTE*/ 		DTYPE_NOTE_NAME,
 	    /*PAR_EUKLID_LENGTH*/ 	DTYPE_1B16,
 	    /*PAR_EUKLID_STEPS*/ 	DTYPE_1B16,
@@ -526,13 +530,13 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_P1_VAL*/ 			DTYPE_0B127,							//240
 	    /*PAR_P2_VAL*/ 			DTYPE_0B127,
 	    /*PAR_SHUFFLE*/ 		DTYPE_0B127,
-	    /*PAR_UNUSED*/ 			DTYPE_0B127,
+	    /*PAR_TRACK_TEMPO*/ 	DTYPE_MENU | (MENU_TRK_TEMPO<<8),	// LICHOMAT v0.2
 	    /*PAR_PATTERN_NEXT*/ 	DTYPE_MENU | (MENU_NEXT_PATTERN<<8),
 	    /*PAR_TRACK_LENGTH*/ 	DTYPE_1B64,
 	    /*PAR_GLO_SAT*/			DTYPE_0B127,
-	    /*PAR_POS_Y*/ 			DTYPE_0B127,
-	    /*PAR_FLUX*/ 			DTYPE_0B127,
-	    /*PAR_SOM_FREQ*/ 		DTYPE_0B127,
+	    /*PAR_HUMAN_TIME*/ 		DTYPE_MENU | (MENU_HUM_TIME<<8),	// LICHOMAT v0.2
+	    /*PAR_HUMAN_VOL*/ 		DTYPE_MENU | (MENU_HUM_VOL<<8),
+	    /*PAR_TRACK_DELAY*/ 	DTYPE_MENU | (MENU_TRK_DELAY<<8),
 	    /*PAR_TRACK_ROTATION*/  DTYPE_1B16,  //**PATROT this is not shown in menu, but if it were it would really be 0 to 15
 		/*PAR_STEP_FLAM*/ 		DTYPE_MENU | (MENU_STEP_FLAM<<8),							//251
 		/*PAR_STEP_SHIFT*/		DTYPE_MENU | (MENU_STEP_SHIFT<<8),
@@ -2670,6 +2674,17 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 	case MENU_STEP_SHIFT:
 			return stepShiftNames[0][0];
 
+	case MENU_TRK_TEMPO:		// LICHOMAT v0.2
+		return trackTempoNames[0][0];
+	case MENU_HUM_TIME:
+		return GROOVE_HUM_TIME_MAX + 1;
+	case MENU_HUM_VOL:
+		return GROOVE_HUM_VOL_MAX + 1;
+	case MENU_TRK_DELAY:
+		return GROOVE_DELAY_MAX - GROOVE_DELAY_MIN + 1;
+	case MENU_STEP_PROB:
+		return STEP_PROB_CODES;
+
 	default:
 		return 0;
 	}
@@ -2776,6 +2791,26 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 
 	case MENU_STEP_SHIFT:
 		p=stepShiftNames[curParmVal+1];
+		break;
+
+	case MENU_TRK_TEMPO:		// LICHOMAT v0.2
+		p=trackTempoNames[curParmVal+1];
+		break;
+	case MENU_HUM_TIME:
+	case MENU_HUM_VOL:
+		numtostrpu(buf, curParmVal, ' ');
+		return;
+	case MENU_TRK_DELAY:
+		numtostrps(buf, (int8_t)(curParmVal + GROOVE_DELAY_MIN));
+		return;
+	case MENU_STEP_PROB:		// probability 0..100, then the trig conditions
+		if((curParmVal > 100) && (curParmVal <= STEP_COND_NOT_PRE))
+			p=stepCondNames[curParmVal - 100];
+		else
+		{
+			numtostrpu(buf, curParmVal, ' ');
+			return;
+		}
 		break;
 
 
@@ -3521,19 +3556,11 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 
 		break;
 
-	case PAR_POS_Y:
-		frontPanel_sendData(SEQ_CC,SEQ_SET_ACTIVE_TRACK,menu_getActiveVoice());
-		frontPanel_sendData(SEQ_CC,SEQ_POSY,value);
-		break;
-
-	case PAR_FLUX:
-		frontPanel_sendData(SEQ_CC,SEQ_SET_ACTIVE_TRACK,menu_getActiveVoice());
-		frontPanel_sendData(SEQ_CC,SEQ_FLUX,value);
-		break;
-
-	case PAR_SOM_FREQ:
-		frontPanel_sendData(SEQ_CC,SEQ_SET_ACTIVE_TRACK,menu_getActiveVoice());
-		frontPanel_sendData(SEQ_CC,SEQ_SOM_FREQ,value);
+	case PAR_TRACK_TEMPO:	// LICHOMAT v0.2: the selected track in the shown pattern
+	case PAR_HUMAN_TIME:
+	case PAR_HUMAN_VOL:
+	case PAR_TRACK_DELAY:
+		seq_setGrooveParam(menu_getActiveVoice(), menu_getViewedPattern(), paramNr, value);
 		break;
 
 	case PAR_TRACK_LENGTH:

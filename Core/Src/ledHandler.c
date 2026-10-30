@@ -415,6 +415,7 @@ void led_updateSeqLeds()
 
 		//a query seq track also updated track length, so do it here?
 		activeParameters[PAR_TRACK_LENGTH] = seq_getTrackLength(trackNr);
+		seq_loadGrooveParams(trackNr, patternNr); //LICHOMAT v0.2
 
 		//we also update the bar/page buttons here
 		led_updateBarLeds();

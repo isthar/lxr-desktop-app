@@ -43,6 +43,11 @@
 #define MENU_STEP_FLAM	 	24
 #define MENU_STEP_SHIFT	 	25
 #define MENU_AUDIO_OUT_FX	26
+#define MENU_TRK_TEMPO		27
+#define MENU_HUM_TIME		28
+#define MENU_HUM_VOL		29
+#define MENU_TRK_DELAY		30
+#define MENU_STEP_PROB		31
 
 //-----------------------------------------------------------------
 // Shared texts. Reduce mem usage by pooling common text
@@ -90,6 +95,21 @@ const char stepShiftNames[][4] =
 	{"+7"},
 	//{"+8"},
 
+};
+//-----------------------------------------------------------------
+// LICHOMAT v0.2: the tempo of a track (PAR_TRACK_TEMPO), index 0..10
+const char trackTempoNames[][4] =
+{
+	{11},		//number of entries
+	{"1/4"}, {"1/3"}, {"1/2"}, {"2/3"}, {"3/4"}, {" x1"}, {"4/3"}, {"3/2"}, {" x2"}, {" x3"}, {" x4"},
+};
+//-----------------------------------------------------------------
+// LICHOMAT v0.2: the trig conditions of PAR_STEP_PROB 101..115 (SeqStepTypes.h)
+const char stepCondNames[][4] =
+{
+	{15},		//number of entries
+	{"1:2"}, {"2:2"}, {"1:3"}, {"2:3"}, {"3:3"}, {"1:4"}, {"2:4"}, {"3:4"}, {"4:4"},
+	{"Fil"}, {"!Fl"}, {"1st"}, {"!1s"}, {"Pre"}, {"!Pr"},
 };
 //-----------------------------------------------------------------
 const char patModeNames[][4] =
@@ -480,6 +500,7 @@ const char shortNames[][4]  =
 	{"kcm"},
 	{"flm"},
 	{"shf"},
+	{"tmp"}, {"hmt"}, {"hmv"}, {"dly"},	// LICHOMAT v0.2
 
 };
 //-----------------------------------------------------------------
@@ -610,6 +631,7 @@ const char longNames[][16] =
 	{"KitChMde"},
 	{"Flam"},
 	{"Shift"},
+	{"TrkTempo"}, {"HumTime"}, {"HumVol"}, {"TrkDelay"},	// LICHOMAT v0.2
 };
 
 

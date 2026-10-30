@@ -74,7 +74,12 @@ enum
 	RFW_MENU_PAT_MODE = 23,
 	RFW_MENU_STEP_FLAM = 24,
 	RFW_MENU_STEP_SHIFT = 25,
-	RFW_MENU_AUDIO_OUT_FX = 26
+	RFW_MENU_AUDIO_OUT_FX = 26,
+	RFW_MENU_TRK_TEMPO = 27,
+	RFW_MENU_HUM_TIME = 28,
+	RFW_MENU_HUM_VOL = 29,
+	RFW_MENU_TRK_DELAY = 30,
+	RFW_MENU_STEP_PROB = 31
 };
 
 extern const char transientNames[][4], outputNames[][7], outputNamesFx[][7], filterTypes[][8],
@@ -82,7 +87,7 @@ extern const char transientNames[][4], outputNames[][7], outputNamesFx[][7], fil
 	midiModes[][4], nextPatternNames[][4], waveformNames[][4], rollRateNames[][4], midiRoutingNames[][6],
 	midiFilterNames[][16], ppqOutNames[][4], ppqInNames[][4], mixFmNames[][6], fxNames[][4], distNames[][4],
 	ratioNames[][4], delayNames[][4], reverbNames[][4], patModeNames[][4], stepFlamNames[][4],
-	stepShiftNames[][4];
+	stepShiftNames[][4], trackTempoNames[][4];
 extern uint8_t menu_numSamples;		/* menu.c: the samples on the card, after the waveforms */
 
 /* menu.c getMaxEntriesForMenu() (static there; M20 hashes the original) */
@@ -116,6 +121,11 @@ static uint8_t rfw_menuEntries(uint8_t menuId)
 	case RFW_MENU_PAT_MODE:		return patModeNames[0][0];
 	case RFW_MENU_STEP_FLAM:	return stepFlamNames[0][0];
 	case RFW_MENU_STEP_SHIFT:	return stepShiftNames[0][0];
+	case RFW_MENU_TRK_TEMPO:	return trackTempoNames[0][0];
+	case RFW_MENU_HUM_TIME:		return GROOVE_HUM_TIME_MAX + 1;
+	case RFW_MENU_HUM_VOL:		return GROOVE_HUM_VOL_MAX + 1;
+	case RFW_MENU_TRK_DELAY:	return GROOVE_DELAY_MAX - GROOVE_DELAY_MIN + 1;
+	case RFW_MENU_STEP_PROB:	return STEP_PROB_CODES;
 	default:					return 0;
 	}
 }

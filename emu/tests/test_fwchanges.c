@@ -393,7 +393,7 @@ TEST(M15_f12_euklid)
 	shiftPress(&t, 25);
 	emu_runUntil(t + 100u * MS);
 	emu_testLcdRow(0, row);
-	ASSERT_EQ(strcmp(row, "LEN stp rot mrp "), 0);
+	ASSERT_EQ(strcmp(row, "LEN stp rot mrp>"), 0);
 	emu_testLcdRow(1, row);
 	ASSERT_EQ(strcmp(row, " 11   3   5   0 "), 0);
 }

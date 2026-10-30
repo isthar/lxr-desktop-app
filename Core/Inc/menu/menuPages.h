@@ -459,11 +459,12 @@ const Page menuPages[NUM_PAGES][NUM_SUB_PAGES] =
 		}
 	},	
 	//---------------- Euklid pattern generator page ------------------------------
+	// LICHOMAT v0.2: the second screen holds the track's tempo, humanize and delay
 	/* shown when in 'mute mode' and the seq edit button is pressed. button toggles between modes*/
 	{
 		{
-			TEXT_PAT_LENGTH,	TEXT_NUM_STEPS,	TEXT_ROTATION,	TEXT_X_FADE,	TEXT_EMPTY,	TEXT_EMPTY,	TEXT_EMPTY,TEXT_EMPTY,
-			PAR_EUKLID_LENGTH,	PAR_EUKLID_STEPS,	PAR_EUKLID_ROTATION,	PAR_MORPH,		PAR_NONE, PAR_NONE,PAR_NONE,PAR_NONE
+			TEXT_PAT_LENGTH,	TEXT_NUM_STEPS,	TEXT_ROTATION,	TEXT_X_FADE,	TEXT_TRACK_TEMPO,	TEXT_HUMAN_TIME,	TEXT_HUMAN_VOL,	TEXT_TRACK_DELAY,
+			PAR_EUKLID_LENGTH,	PAR_EUKLID_STEPS,	PAR_EUKLID_ROTATION,	PAR_MORPH,		PAR_TRACK_TEMPO, PAR_HUMAN_TIME,	PAR_HUMAN_VOL,	PAR_TRACK_DELAY
 		}		
 	},
 	//---------------- pattern settings page ------------------------------

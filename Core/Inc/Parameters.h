@@ -360,15 +360,15 @@ enum ParamEnums
 	
 	PAR_SHUFFLE,
 
-	PAR_UNUSED,				// auto -> switch kits with pattern, off -> pattern change won't change kit
+	PAR_TRACK_TEMPO,			// LICHOMAT v0.2: the selected track's tempo (menu only, saved in the pattern)
 	PAR_PATTERN_NEXT,				//  - UNUSED
 	
 	PAR_TRACK_LENGTH,
 	
 	UNUSED_PAR_GLO_SAT,						//  - global saturation
-	PAR_POS_Y,						//  - UNUSED
-	PAR_FLUX,						//  - UNUSED
-	PAR_SOM_FREQ,					//  - UNUSED
+	PAR_HUMAN_TIME,					// LICHOMAT v0.2: the selected track's humanize time (menu only, saved in the pattern)
+	PAR_HUMAN_VOL,					// LICHOMAT v0.2: the selected track's humanize volume (menu only, saved in the pattern)
+	PAR_TRACK_DELAY,				// LICHOMAT v0.2: the selected track's delay (menu only, saved in the pattern)
 	PAR_TRACK_ROTATION,				// **PATROT
 
 	PAR_STEP_FLAM,

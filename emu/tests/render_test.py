@@ -971,6 +971,29 @@ def M17_save(t):
     check(p.stderr.startswith('lichomat-render: %s:1: ' % bad), 'save-kit 64: %r' % p.stderr)
     no_copies_left()
 
+# --- LICHOMAT v0.2 (plan V7-V9): through the panel and the edit path -------------------
+
+@case
+def V02_ui(t):
+    seed = t.seed()
+    log = t.path('p.log')
+    script = t.script('0ms press voice2\n+100ms param track_tempo=4\n+100ms down shift\n+20ms press mode2\n'
+                      '+100ms up shift\n+200ms mark euklid\n+100ms encoder +4\n+200ms mark track\n'
+                      '+100ms press voice1\n+300ms mark voice1\n+100ms press mode1\n+200ms press mode1\n'
+                      '+200ms param active_step=0\n+100ms param step_prob=101\n'
+                      # the edit path does not repaint; asking for the step's data again does
+                      # (FRONT_SEQ_REQUEST_STEP_PARAMS sends the stored 101 back, frontPanelParser.c SEQ_PROB)
+                      '+100ms param active_step=0\n+300ms mark prob\n')
+    t.render(seed, ['--no-start', '--seconds', '3', '--panel-log', log, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'LEN.stp.rot.mrp', rows['euklid'][0]), 'the Euklid page: %r' % rows['euklid'])
+    # the second screen: voice 2 at x3/4, no humanize, no delay
+    check(re.match(r'TMP.hmt.hmv.dly', rows['track'][0]) and re.match(r'3/4.  0.  0.  0', rows['track'][1]),
+          'the track settings of voice 2: %r' % rows['track'])
+    check(re.match(r' x1.  0.  0.  0', rows['voice1'][1]), 'the track settings of voice 1: %r' % rows['voice1'])
+    check('1:2' in rows['prob'][1], 'the step page shows %r, not the condition 1:2' % rows['prob'])
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists

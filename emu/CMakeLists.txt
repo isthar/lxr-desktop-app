@@ -301,6 +301,7 @@ emu_render_tests(M17_cli_usage M17_cli_info M17_card_errors M17_seed_card M17_t0
     M17_card_copy M17_out_errors M17_script_errors M17_events_din M17_events_usb M17_events_jacks M17_events_panel
     M17_stereo M17_pattern M17_song M17_bpm M17_param_engine M17_param_refused M17_param_table M17_bars
     M17_sync_fallback M17_save M17_fault M17_hang)
+emu_render_tests(V02_ui)
 
 # The temporary folders: every test above gets TMPDIR = a folder of this build,
 # which emu_tmp_setup empties first and emu_tmp_clean checks last. A test removes
