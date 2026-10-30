@@ -1,5 +1,6 @@
 # The fx fixture (stage 1b spec 5.6, plan P8): init's pattern 0; voices 1-4 sent
-# to the FX bus with the dry/wet at half, stored in kit 0.
+# to the FX bus with the dry/wet at half and the FX parameters P1-P4 at 64, so
+# that every FX type adds a wet signal of its own; stored in kit 0.
 #
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
@@ -46,12 +47,17 @@
 +100ms press step9
 +100ms press step13
 +100ms save-pattern 0
-# voices 1-4 to the FX bus (outputNames: 6 is FX), the dry/wet at half; kit 0
+# voices 1-4 to the FX bus (outputNames: 6 is FX), the dry/wet at half, P1-P4 at
+# 64 (at 0, drive, volume, time and feedback are 0: every type's wet is silent); kit 0
 +100ms param audio_out1=6
 +100ms param audio_out2=6
 +100ms param audio_out3=6
 +100ms param audio_out4=6
 +100ms param fx_dry_wet=64
++100ms param fx_p1=64
++100ms param fx_p2=64
++100ms param fx_p3=64
++100ms param fx_p4=64
 +200ms save-kit 0
 +100ms save-pattern 0
 +200ms save-project 0

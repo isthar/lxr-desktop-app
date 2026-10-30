@@ -11,6 +11,7 @@
 #expect energy L1 -30 0.6s..2.9s
 #expect energy L1 -30 5.1s..6.4s
 #expect midi DIN 9n 0..0 3s..5s
+#expect midi DIN 9n 56..56 0s..7s
 #broken --bpm 120
 0ms reset on
 10ms jack-clock 120 24

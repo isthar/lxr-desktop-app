@@ -14,6 +14,7 @@
 #expect summary selected.sync 2..2
 #expect summary seqc.syncIgnored 0..2
 #expect summary seqc.intervalsExcluded 0..2
+#expect midi DIN 9n 75..79 0s..6s
 #broken --bpm 120
 # one transfer per 11.6 ms buffer (N21)
 100ms usb-clock 137 11.6

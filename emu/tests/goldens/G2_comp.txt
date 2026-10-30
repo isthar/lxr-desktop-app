@@ -8,7 +8,7 @@
 # the repository.
 #! --card fx --bpm 120 --bars 2 --param fx_type=3
 #expect lcd fx cmp St1  64 1:1
-#expect energy L1 -30
+#expect energy L1 -25
 #broken --param fx_type=0
 # SHIFT + step 15 opens the FX page
 0ms down shift
