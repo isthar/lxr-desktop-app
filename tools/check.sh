@@ -1,9 +1,11 @@
 #!/bin/bash
 # One-shot verification used during development:
 #   1. host tests (tests/, built with the host compiler), if present
-#   2. firmware release build (build/release), with a memory summary
-#   3. update file check (tools/check_image.py: name, header, splash screen)
-#   4. compiler warning count (must stay 0)
+#   2. the emulator (emu/, build/emu: Debug with UBSan) and its ctest ids, on macOS
+#      on arm64 only
+#   3. firmware release build (build/release), with a memory summary
+#   4. update file check (tools/check_image.py: name, header, splash screen)
+#   5. compiler warning count (must stay 0; it covers the emulator's build too)
 # Exit code is non-zero if any step fails. The full log is in build/check.log.
 #
 #   tools/check.sh
@@ -35,6 +37,18 @@ if [ -f "$ROOT/tests/CMakeLists.txt" ]; then
   fi
 else
   echo "== host tests: tests/CMakeLists.txt not present"
+fi
+
+if [ "$(uname -s)-$(uname -m)" = "Darwin-arm64" ] && [ -f "$ROOT/emu/CMakeLists.txt" ]; then
+  echo "== emulator (emu/, Debug with UBSan)"
+  if cmake -S "$ROOT/emu" -B "$ROOT/build/emu" -G Ninja >>"$LOG" 2>&1 \
+     && cmake --build "$ROOT/build/emu" >>"$LOG" 2>&1; then
+    (cd "$ROOT/build/emu" && ctest --output-on-failure 2>&1) | tee -a "$LOG" | tail -n 25 || status=1
+  else
+    echo "emulator build FAILED"; grep -E "error|warning" "$LOG" | head -n 30; status=1
+  fi
+else
+  echo "== emulator: skipped (macOS on arm64 only)"
 fi
 
 echo "== firmware build (release)"
