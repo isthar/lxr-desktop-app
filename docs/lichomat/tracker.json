@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 07:50",
-    "phase": "Etap 2: v0.2 gotowe w kodzie (M10); plan v0.3 (występ i acid)",
-    "focus": "Plan v0.3: sceny mute, tryb fill, rolle, slide dla Drum 1–3.",
+    "updated": "2026-10-30 09:23",
+    "phase": "Etap 2: v0.3 w toku (P1–P6 i poprawki gotowe); przerwa",
+    "focus": "v0.3: P1–P6 gotowe; zostały P7 (zapis scen), P8 (wersja 0.3, demo), P9 (Twoje dokumenty).",
     "branch": "timing-core",
-    "head": "9540857",
-    "next": "Ja: plan v0.4, potem jego wykonanie; przerwa i podsumowanie ok. 10:17 albo przy 65% zużycia. Ty: odsłuch build/demo/v02-*.wav, testy v0.1 z odczytem CPU (Q6, H12), potem v0.2 (U4–U14).",
-    "updated_at": "2026-10-30T07:50:00+01:00",
-    "now": "Od 07:50 agent pisze plan v0.3 (docs/superpowers/plans/2026-10-30-v0.3-performance-acid.md)."
+    "head": "194c2f8",
+    "next": "Ja: dokończyć v0.3 przy wznowieniu (zużycie 55,2%, limit tygodnia 65%). Ty: odsłuch build/demo/v02-*.wav, testy v0.1 z odczytem CPU (Q6, H12), potem v0.2 (U4–U14).",
+    "updated_at": "2026-10-30T09:23:00+01:00",
+    "now": "Przerwa od 09:22 (idziesz do pracy). Nic nie działa. Przy wznowieniu: P7 z gałęzi wip/v0.3-p7, potem P8, P9, przegląd P5–P8, raport M11."
   },
   "epics": [
     {
@@ -2466,6 +2466,56 @@
       "n": 331,
       "at": "2026-10-30 07:50",
       "text": "Kolejność wydań zmieniona (Q24, moja rekomendacja): występ i acid (sceny mute, tryb fill, rolle, slide) wychodzą jako v0.3, atmosfera jako v0.4, bo czeka na odczyt CPU (H12). Gałąź v0.3 od v0.2 (4b63f2d), kopia robocza build/wt-v03. Jeden agent pisze plan v0.3, tym razem bez prototypu i z limitem ok. 60 kroków."
+    },
+    {
+      "n": 332,
+      "at": "2026-10-30 08:21",
+      "text": "Plan v0.3 gotowy (97707c7): 1297 linii, zadania P1–P9, bez prototypu (ok. 0,7 punktu zużycia). Rolle 1/32, triole i inne stawki dokładnie we własnym tempie ścieżki; slide dla Drum 1–3 jako flaga w bicie 7 bajtu prawdopodobieństwa (bit 7 nuty fw 1.7 dodaje do wysokości, więc odpada), czas slide'u per głos (slt) w nieużywanych bajtach kitu; fill: trzymany krok 8 w trybie wykonawczym; sceny mute: kroki 9–16 przywołują, COPY + krok zapisuje, zapis w prj.nfo za nazwą, którą czyta fw 1.7. Pamięć ok. +60 B."
+    },
+    {
+      "n": 333,
+      "at": "2026-10-30 08:21",
+      "text": "Start wykonania v0.3: agent robi P1 (rolle w rdzeniu) i P2 (flaga slide w rdzeniu), testy najpierw."
+    },
+    {
+      "n": 334,
+      "at": "2026-10-30 08:33",
+      "text": "P1 gotowe (8f2a7bd): rolle 1/3, 1/6, 1/12, 1/24, 1/32 dokładnie na kroku każdej ścieżki. Testy: 87 na hoście, 140 w emulatorze, 0 ostrzeżeń."
+    },
+    {
+      "n": 335,
+      "at": "2026-10-30 08:33",
+      "text": "P2 gotowe (267ad17): flaga slide w bicie 7 bajtu prawdopodobieństwa; rdzeń maskuje prawdopodobieństwo i oznacza slide tylko na pierwszym uderzeniu kroku, rolle nigdy nie slide'ują. Testy: 89 na hoście, 140 w emulatorze, 0 ostrzeżeń; pamięć bez zmian."
+    },
+    {
+      "n": 336,
+      "at": "2026-10-30 08:51",
+      "text": "P3 gotowe (3b5f5c3): glide w głosach Drum 1–3; czas slt na stronie oscylatora (0–127 co 4 ms, 0 = bez slide'u, 127 = 508 ms), zapisany w kicie w nieużywanych dotąd bajtach. Testy: 90 na hoście, 140 w emulatorze."
+    },
+    {
+      "n": 337,
+      "at": "2026-10-30 08:51",
+      "text": "P4 gotowe (807f4ed): na stronie kroku nowy slot sld (off/on) między prb a flm; slide sprawdzony na dźwięku w emulatorze (wysokość zaczyna płynąć 2,17 ms po nucie; slt 0 daje dźwięk identyczny jak bez slide'u). Testy: 90 na hoście, 141 w emulatorze, 0 ostrzeżeń; DTCM+RAM 393 896 B."
+    },
+    {
+      "n": 338,
+      "at": "2026-10-30 09:02",
+      "text": "Przegląd P1–P4 skończony: nic blokującego ani poważnego. Trzy drobne: (1) dwa testy test_sequencer przechodzą tylko w pełnym przebiegu, bo reset() nie ustawia jakiegoś stanu; (2) limit bufora zdarzeń jednej granicy nie liczy dwóch uderzeń rolla 1/32 (nic nie ginie, ale limit w kodzie jest nieprawdziwy); (3) ratchet albo roll na kroku ze slide'em przerywa glide. Moja decyzja do (3): glide trwa przez kolejne uderzenia tego samego kroku, bo przerwanie daje skok wysokości w środku kroku. Poprawki przed P7, z testami najpierw. Do notatek wydania: przy shuffle od ok. 95 roll 1/32 traci drugie uderzenie nieparzystych kroków, tak jak ratchety od v0.1."
+    },
+    {
+      "n": 339,
+      "at": "2026-10-30 09:03",
+      "text": "P5 gotowe (ecb14d9): fill = trzymany krok 8 w trybie wykonawczym (MODE2 bez SHIFT); dioda świeci, kroki FILL i !FILL działają od następnego kroku. Testy: 90 na hoście, 142 w emulatorze."
+    },
+    {
+      "n": 340,
+      "at": "2026-10-30 09:03",
+      "text": "P6 gotowe (0e6017d): sceny mute w trybie wykonawczym: COPY + krok 9–16 zapisuje scenę 1–8, krok 9–16 ją przywołuje (dioda miga do chwili wejścia); ustawienie scn (bar albo stp) na stronie wykonawczej, domyślnie na granicy taktu. Testy: 90 na hoście, 143 w emulatorze, 0 ostrzeżeń; DTCM+RAM 393 912 B."
+    },
+    {
+      "n": 341,
+      "at": "2026-10-30 09:23",
+      "text": "Poprawki z przeglądu P1–P4 gotowe i na forku: 2e7d202 (reset() testu sekwencera wypełnia bufor zapasowy jak przy starcie, więc testy przechodzą też pojedynczo), 22dda52 (bufor granicy mieści 2 uderzenia rolla 1/32, 119 zdarzeń), 194c2f8 (glide trwa przez kolejne uderzenia kroku ze slide'em). Zatrzymane o 09:22 na Twoją prośbę. P7 było w połowie: zapisane lokalnie na gałęzi wip/v0.3-p7 (457fc34), niesprawdzone."
     }
   ]
 }
