@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-30 23:56",
+    "updated": "2026-10-30 23:57",
     "phase": "Etap 2: v0.3 gotowe w kodzie (M11), emulator R3 gotowy (M12); v0.4 czeka na odczyt CPU (H12)",
     "focus": "v0.3 z nagraniami wzorcowymi i CI emulatora (gałąź v0.3 5a7008d); emulator R3 gotowy (gałąź emulator 56fe495).",
     "branch": "timing-core",
-    "head": "d3c818d",
-    "next": "Ja: przerwa i podsumowanie ok. 04:00 albo przy 73% (teraz ok. 57%). Ty: odsłuch build/demo/v02-*, v03-* i build/dlc/*, testy v0.1 z odczytem CPU (Q6, H12), potem U4–U19.",
-    "updated_at": "2026-10-30T23:56:00+01:00",
+    "head": "2876f89",
+    "next": "Ty: jedna sesja testowa na v0.3 według docs/lichomat/test-session-v0.3.md, najpierw H12 (odczyt CPU odblokowuje v0.4); odsłuch build/demo/v02-*, v03-* i build/dlc/*. Ja: przerwa i podsumowanie ok. 04:00 albo przy 73%.",
+    "updated_at": "2026-10-30T23:57:00+01:00",
     "now": "Od 23:56: podsumowanie nocy; potem przerwa (kofeina do ok. 04:04)."
   },
   "epics": [
@@ -2749,6 +2749,11 @@
       "n": 381,
       "at": "2026-10-30 23:56",
       "text": "23:56 CI w całości zielone na emulator (570090b) i v0.3 (a9865dc): Release i ASan+UBSan. Plik LXR_V2_LICHOMAT_0.3.img z CI dla a9865dc ma ten sam SHA-256 co dla 813aaf6 (d630eabc…), więc F14-F18 nie zmieniają ani bajtu firmware na LXR. Run sheet zaktualizowany."
+    },
+    {
+      "n": 382,
+      "at": "2026-10-30 23:57",
+      "text": "23:57 Propozycja jednej sesji testowej na v0.3 zamiast trzech (v0.1, v0.2, v0.3), z H12 (strona CPU) na początku, bo ten odczyt odblokowuje v0.4: docs/lichomat/test-session-v0.3.md."
     }
   ]
 }

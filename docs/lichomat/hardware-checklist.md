@@ -30,7 +30,8 @@ when CI builds it); H1 then shows `v0.3 unofficial`. Run U15–U19 on it (plan
 0.2 checks need not be repeated. 0.3 writes a 14-byte block with the mute scenes after the name in
 each project's `prj.nfo`, keeps the slide flag in bit 7 of a step's probability byte and the slide
 time in three kit bytes that 1.7 does not use; 1.7 and 0.2 ignore all three. Back up the card
-before you install 0.3, too.
+before you install 0.3, too. 0.3 holds all of 0.1 and 0.2, so one session on 0.3 can run every check;
+a proposed order, with H12 first, is in `docs/lichomat/test-session-v0.3.md` (Polish).
 
 **What you need**
 
