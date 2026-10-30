@@ -1,4 +1,4 @@
-# LICHOMAT 0.1: hardware checklist (H1–H13, U1–U3, X4, optional X1–X3)
+# LICHOMAT 0.1 and 0.2: hardware checklist (H1–H13, U1–U14, X4, optional X1–X3)
 
 These are the checks of spec §13.2, written out as procedures for the LXR-02. Only the owner can run
 them, on the real device; nothing here is ever marked as passed by an agent. Record every result in
@@ -10,14 +10,26 @@ against fw 1.7 is listed in section 2 of `docs/lichomat/reports/stage1-report.md
 
 ## Before you start
 
-**Back up the SD card.** Copy the whole card to the computer. LICHOMAT reads and writes the same
-files as 1.7 (no format changes), but it is unofficial firmware.
+**Back up the SD card.** Copy the whole card to the computer. LICHOMAT 0.1 reads and writes the
+same files as 1.7 (no format changes; 0.2 adds a block to the pattern files, see below), but it is
+unofficial firmware.
+
+**LICHOMAT 0.2.** For 0.2 install `LXR_V2_LICHOMAT_0.2.img` (its SHA-256 goes into the run sheet
+when CI builds it); H1 then shows `v0.2 unofficial`. Run U4–U14 on it; the 0.1 checks need not be
+repeated unless a check below says so (U7 repeats H1 and H2). U4–U9 are the device checks of the
+emulator spec (`docs/superpowers/specs/2026-10-27-emulator-design.md` §12.4) for its firmware
+changes F1–F12, which 0.2 ships; U10–U14 check the features of 0.2 (plan
+`docs/superpowers/plans/2026-10-29-v0.2-polyrhythm-groove.md`). 0.2 writes a 34-byte block with the
+track settings at the end of every pattern file (`.PAT` and `tmp.pat`); 1.7 and 0.1 ignore it.
+Back up the card before you install 0.2, too. U8 compares sounds with 0.1: record them on 0.1
+before you install 0.2.
 
 **What you need**
 
 - The LXR-02, its SD card and a card reader.
-- The two update files of the [run sheet](#run-sheet): `LXR_V2_LICHOMAT_0.1.img` (LICHOMAT) and
-  `LXR_V2_V1.7.img` (official 1.7, for H13 and for comparisons).
+- The update files of the [run sheet](#run-sheet): `LXR_V2_LICHOMAT_0.1.img` and
+  `LXR_V2_LICHOMAT_0.2.img` (LICHOMAT), and `LXR_V2_V1.7.img` (official 1.7, for H13, U12, U14 and
+  for comparisons).
 - A computer with a DAW that can record the LXR's audio output and send and receive MIDI over USB
   (and over DIN through a MIDI interface).
 - A MIDI monitor that shows time stamps, for example MIDI Monitor on macOS. Watch the LXR's MIDI
@@ -76,6 +88,18 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
   (H7 step 2 makes one with 64 steps). Unless a check says otherwise, all tracks are 16 steps long:
   SHIFT + step 14 twice shows `Last Step All`; with the first bar shown (both page LEDs off), step 16
   sets every track to 16 steps.
+- The track page (0.2): select a voice, hold SHIFT and press the second mode button. This opens the
+  Euklid page (the pattern generator), `LEN stp rot mrp>`. Turn the encoder four slots to the
+  right, past `mrp`, to its second screen, `tmp hmt hmv dly`: `tmp` the track tempo (`1/4`, `1/3`,
+  `1/2`, `2/3`, `3/4`, ` x1`, `4/3`, `3/2`, ` x2`, ` x3`, ` x4`), `hmt` the humanize time (0–8
+  ms), `hmv` the humanize volume (0–25 %), `dly` the track delay (−15 … +30 ms). The four knobs or
+  the encoder push edit them. They belong to the selected voice (a voice button on the page selects
+  another) in the shown pattern and are saved with it; like the pattern's other edits, a pattern
+  change discards them unless you save the pattern first. A new pattern has ` x1` and 0 everywhere.
+- Trig conditions (0.2): on the step page `prb` goes on past 100: 101–115 show `1:2 2:2 1:3 2:3
+  3:3 1:4 2:4 3:4 4:4 Fil !Fl 1st !1s Pre !Pr`.
+- Rotation (0.2): SHIFT + step 1 moves every step of the selected voice in the shown pattern one
+  step earlier, SHIFT + step 2 one step later, within the track's length.
 
 **Measuring times in a recording.** Record the LXR's main output at 48 kHz (H7 step 6 at 44.1
 kHz). Find a hit's onset by zooming in on the waveform (or with the DAW's transient detection), and
@@ -687,6 +711,175 @@ and at which switch; for 6, whether the hat played again after `frq` went back, 
 whether Drum 1 kept its tone at `slp` 127 and at `slp` 0 with `dec` 127; for 8 (or SKIPPED), what
 Drum 1 played with the values 6 and 127.
 
+## U4–U9: the firmware changes of the emulator work (F1–F12)
+
+Not in the spec's list: the device checks of the emulator spec's §12.4 for its firmware changes
+F1–F12 (§7 there describes each), which 0.2 ships (R6). They are copied here as they are. Run them
+on 0.2; U8 needs your recordings of 0.1 (see "Before you start").
+
+F5–F8, F6b, F10 and F11 have none: their images are byte-identical or equivalent, or, for F11, the
+value whose read moves is discarded (§7).
+
+| ID | Check |
+|---|---|
+| U4 | A kit with LFO and velocity modulation targets loads and modulates as in v0.1. CC 1 (the mod wheel) from a keyboard sounds as in v0.1 (F1) |
+| U5 | Boot without a card, then turn the morph knob: no noise and no crash (F2) |
+| U6 | The clear-automation pages show 'clear [autom. 1]' and 'clear [autom. 2]' as in v0.1 (F3) |
+| U7 | H1 and H2 again (F4) |
+| U8 | Listening check against v0.1 (F9). Voice 1 with a saw wavetable oscillator at its highest coarse pitch (note 127), pitch modulation amount 127, pitch EG decay 64 or more and pitch slope 64; then the same with the triangle; then a rect wavetable oscillator at coarse notes 97, 109 and 121 (about 2.2, 4.4 and 8.9 kHz, rows 7, 8 and 9) without pitch modulation. 16 hits of each sound as in v0.1; then a PWM oscillator with a nonzero PWM amount, at a low and a very high pitch (B13, B14) |
+| U9 | In the pattern generator (hold SHIFT and press the second mode button), press voice button 3 and give voice 3 a length, steps and rotation unlike voice 1's. Hold SHIFT and press step button 16, select another pattern with a step button, then open the pattern generator again: it shows voice 3's length, steps and rotation, and turning the length knob changes voice 3's steps, as in v0.1 (F12) |
+
+**Record:** for each, PASS or FAIL and anything that differed from v0.1; for U8, which sound
+differed and how.
+
+## U10: track tempo
+
+0.2's tempo per track (`tmp` on the track page). Use a project you can spare, or a new one in an
+`Empty` slot (as in U2 step 5); the check writes patterns A and B (the patterns of step buttons 1
+and 2) and the song.
+
+1. Internal sync, BPM 120, shuffle 0, voice mode, all tracks 16 steps long. Pattern A: voice 1
+   (kick) on steps 1, 5, 9 and 13; voice 2 on steps 1, 5, 9 and 13; voice 4 (snare) on step 1
+   only; voice 6 (closed hat) on all 16 steps.
+2. On the track page set `tmp` to `3/4` for voice 2 and for voice 4, and to ` x2` for voice 6. Save
+   A.
+3. Pattern B: voice 1 on steps 1, 5, 9 and 13, voice 4 on step 1 only with `tmp` `3/4`, nothing
+   else. Save B.
+4. Select A and press START. Record the main output for 12 s while A loops, with the MIDI monitor on
+   DIN out (with `mtx` passing R). Press voice button 2 and watch the step LEDs for a bar, then voice
+   button 1. Watch the start/stop LED.
+5. While A plays, select B; when B plays, select A again. Record.
+6. Press STOP. Make a song of four entries A, B, A, B (song page: SHIFT + step 10, then the step
+   buttons 1, 2, 1, 2, as in U3 step 3) and play it in song mode (hold SHIFT and press START). Record.
+
+**Expected:**
+- 4: voice 2's hits are 666.7 ms apart (±1.5 ms): three against voice 1's four in a bar, together
+  with voice 1 every 2 s. Voice 6 plays 1/32 notes, 62.5 ms apart. Voice 4 plays every 2.667 s (its
+  16 steps of 166.7 ms), with voice 1's hit only every 8 s. With voice 2 selected the step LEDs
+  chase at its own pace, 166.7 ms a step (with voice 1, 125 ms). MIDI clock out stays at 120 BPM:
+  F8 every 20.8 ms. The start/stop LED blinks on the master quarters, every 500 ms.
+- 5 and 6: at each pattern change every track starts again at its step 1: voice 4 plays with voice
+  1's first kick of the bar after each change (in 5; then it runs free again while the pattern
+  loops), and in the song, where each entry is one bar, with the first kick of every bar, every 2 s.
+
+**Record:** the smallest and largest interval of 8 hits of voice 2 and of voice 6; voice 4's
+intervals while A loops and across the pattern changes; the smallest and largest F8 interval;
+whether the step LEDs followed voice 2's own steps.
+
+## U11: humanize and delay
+
+0.2's `hmt`, `hmv` and `dly` (the track page). Use a pattern you can spare, every voice at ` x1`
+and 0 (a new pattern has these), all tracks 16 steps long. Every voice sends on its own MIDI
+channel, voice n on channel n, as in H8. A hit due before the start is not played (as in 0.1), so
+measure from the second bar on.
+
+1. Internal sync, BPM 120, shuffle 0. Voice 1 (kick) on steps 1, 5, 9 and 13; voice 6 (closed hat)
+   on all 16 steps. Voice 6: `hmt` 8. Press START and record 3 bars.
+2. Voice 6: `hmt` 0, `hmv` 25. Watch the velocities of voice 6's Note Ons (channel 6) in the MIDI
+   monitor for 2 bars, and listen.
+3. Voice 6: `hmv` 0, `dly` +4. Record 2 bars.
+4. Voice 6: `dly` 0. Voice 4 (snare) on steps 5 and 13, `dly` −15. Record 2 bars.
+5. BPM 255. Voice 4 on steps 1, 5, 9 and 13, each with shift `-7` (step page, second screen),
+   `tmp` ` x4`, `dly` −15. Count voice 4's Note Ons (channel 4) in the MIDI monitor over 4 bars,
+   from the second bar on.
+
+**Expected:**
+- 1: voice 6's hits move around their places on the 125 ms grid by up to about ±9 ms (±8 ms in
+  whole ticks of 1.30 ms, plus the audio block), differently in each bar; voice 1 stays straight.
+- 2: the hats vary in level, with velocities from 95 to 127 (127 − 25 %, at most 127); their timing
+  stays straight.
+- 3: each hit of voice 6 comes 3.9 ms (±1.5 ms) after its place, so on step 1 after voice 1's hit:
+  +4 ms is 3 whole ticks.
+- 4: voice 4 plays 15.6 ms (±1.5 ms) before voice 1's hits on steps 5 and 13 (12 ticks).
+- 5: 64 Note Ons in the 4 bars, 58.8 ms apart, none lost: at ×4 a step is 14.7 ms, and the whole
+  offset stops at 7/8 of it (12.9 ms early), the earliest shift `-7` alone reaches, so `dly` −15
+  adds nothing there.
+
+**Record:** for 1, the largest offset seen in 16 hits of voice 6; for 2, the smallest and largest
+velocity; for 3 and 4, the measured offsets; for 5, the count and the spacing.
+
+## U12: trig conditions
+
+0.2's conditions in the step probability (`prb` past 100 on the step page). Use a pattern you can
+spare, all tracks 16 steps long; each bar is one loop of the tracks. Count the bars from START (bar
+1).
+
+1. Internal sync, BPM 120. Voice 6 (closed hat) on step 1 (it marks each bar); voice 1 (kick) on
+   steps 1 and 3. Voice 1's step 1: `prb` `1:2`; its step 3: `prb` `!Pr`. Save the pattern. Press
+   START and listen for 8 bars.
+2. Voice 1's step 1: `3:4`. Listen for 8 bars.
+3. Step 1: `1st`. Save the pattern. Press STOP and START, 3 bars. Then, while it plays, select an
+   empty pattern, and when that one plays select this one again: 3 bars.
+4. Step 1: `Fil`, 4 bars; then `!Fl`, 4 bars.
+5. Step 1 `1:2` again, step 3 `!Pr`; save the pattern. Install `LXR_V2_V1.7.img` (H13 step 1),
+   select the pattern and play it for 4 bars without touching `prb` (1.7's editor sets it to 100
+   or less). Then install `LXR_V2_LICHOMAT_0.2.img` again, select the pattern, look at `prb` of
+   steps 1 and 3, and play 4 bars.
+
+**Expected:**
+- 1: step 1 plays in bars 1, 3, 5 and 7; step 3 plays in the bars where step 1 is silent (2, 4, 6,
+  8).
+- 2: step 1 in bars 3 and 7 only; step 3 in the other bars.
+- 3: step 1 only in the first bar after START and in the first bar after the pattern change; step 3
+  in every bar but those.
+- 4: with `Fil` step 1 never plays (fill mode comes in 0.4) and step 3 plays in every bar; with
+  `!Fl` step 1 plays in every bar and step 3 in none.
+- 5: under 1.7 steps 1 and 3 play in every bar (1.7 plays probabilities above 100 like 100). Back on
+  0.2, `prb` shows `1:2` and `!Pr`, and the steps alternate as in 1.
+
+**Record:** for 1–4, the bars in which steps 1 and 3 played; for 5, what played under 1.7 and what
+`prb` showed back on 0.2.
+
+## U13: rotation
+
+0.2's SHIFT + step 1 and SHIFT + step 2. Use a pattern you can spare.
+
+1. Internal sync, BPM 120, all tracks 16 steps long. Voice 1 (kick) on steps 1, 5, 9 and 13, with a
+   ratchet `x3` on step 1 (step page, second screen) and a parameter lock on step 5 that changes its
+   sound clearly (e.g. a much higher pitch). Press voice button 1 and START.
+2. Hold SHIFT, press step 2, release both. Watch the step LEDs and listen for 2 bars.
+3. Hold SHIFT and press step 1 twice. Watch and listen.
+4. Make track 1 five steps long (SHIFT + step 14: `Last Step Trk: 1`, then step 5, as in U1 step 6).
+   Hold SHIFT and press step 2 twice. Then make it 16 steps long again (SHIFT + step 14, step 16).
+
+**Expected:**
+- 2: voice 1 is on steps 2, 6, 10 and 14 (LEDs and sound), the ratchet on step 2, the lock on step
+  6.
+- 3: steps 16, 4, 8 and 12: the ratchet wrapped round to step 16, the lock is on step 4.
+- 4: within the length of 5, step 4 moves to 5 and then wraps round to 1, and steps 8, 12 and 16,
+  beyond the length, stay where they are. At 16 steps again: steps 1 (with the lock), 8, 12 and 16
+  (with the ratchet).
+- In 1.7 and 0.1 SHIFT + step 1 and SHIFT + step 2 do nothing.
+
+**Record:** the lit steps after 2, 3 and 4, and where the ratchet and the lock sounded.
+
+## U14: files
+
+0.2's block of track settings in the pattern files, and 1.7 with it. Use a project you can spare
+(slot P) and the card with your projects saved by 1.7 (H2).
+
+1. In project P, a pattern F: voice 1 (kick) on steps 1, 5, 9 and 13; voice 2 on steps 1, 5, 9 and
+   13 with `tmp` `3/4` and `hmv` 9. Save the pattern. Switch off and on, select F and open voice 2's
+   track page; play it.
+2. Save the project (SAVE, `Project`, slot P). Load another project, then P again; select F and look
+   at voice 2's track page.
+3. Set voice 2's `hmt` to 5 without saving the pattern. Press START and STOP, and wait 5 s (the LXR
+   writes the autosave `tmp.pat` about 2 s after a stop). Switch off and on, and look at voice 2's
+   track page.
+4. Load a project saved by 1.7, select a few of its patterns and look at the track page of every
+   voice (voice buttons 1–7 on the page).
+5. Install `LXR_V2_V1.7.img` (H13 step 1), load P, select F and play it; save F there. Install
+   `LXR_V2_LICHOMAT_0.2.img` again, load P, select F and look at voice 2's track page.
+
+**Expected:**
+- 1 and 2: voice 2 shows `tmp` `3/4` and `hmv` 9, and plays three against four as in U10.
+- 3: voice 2 shows `hmt` 5 as well.
+- 4: every voice shows ` x1`, `hmt` 0, `hmv` 0 and `dly` 0, and the patterns play as before.
+- 5: under 1.7, F loads without an error and voice 2 plays at ×1 with voice 1, without humanize.
+  Back on 0.2 voice 2 shows ` x1` and 0 everywhere: 1.7's save does not keep the block.
+
+**Record:** what the track page showed after each load in 1–5, and how F played under 1.7.
+
 ## X4: USB MIDI out
 
 Not in the spec's list: 1.7 defects of the USB MIDI out that LICHOMAT fixes (tracker E2.8).
@@ -793,6 +986,7 @@ Update files under test (filled in when the files were built):
 |---|---|---|---|
 | `LXR_V2_LICHOMAT_0.1.img` | `55091864fff78c641a681636f056449caa1fcb3cb68d09baa5cd3e9e6759a262` | `timing-core` at `3527cbc`, built by CI (`.github/workflows/build.yml`; later commits that change only documents build the same file) | the artifact `lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f` of CI run 40435442579 (300780 B) |
 | `LXR_V2_V1.7.img` | `cdb1ca371599149083bd0b61564d6864f031b599ccdcead2047a711e0b679db4` | `a43cd4f`, the official 1.7 sources | `build/official-1.7/src/build/release/` |
+| `LXR_V2_LICHOMAT_0.2.img` | filled in when CI builds it | branch `v0.2`, built by CI | the artifact `lichomat-firmware-<commit>` of that CI run |
 
 The LICHOMAT file is the one CI builds, the file the release attaches (spec §14). Download it with
 `gh run download 40435442579 --repo isthar/lxr-desktop-app -n lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f`
@@ -800,6 +994,8 @@ or from the run's page on GitHub (Actions); GitHub keeps the artifact until 2027
 run the workflow again. A local build in `build/release/` is a different file, `0f8621a3…`: the
 macOS toolchain links newlib's members in another order. Do not use it for these checks. The earlier
 file `9a7aff2a…` (CI run 40416804934) lacks the fixes of U3: do not test it any more.
+For 0.2 the same holds: test the file CI builds from branch `v0.2`, whose SHA-256 goes into its row
+above, not a local build.
 
 Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **Record**):
 
@@ -821,6 +1017,17 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | U1 | | | |
 | U2 | | | |
 | U3 | | | |
+| U4 | | | |
+| U5 | | | |
+| U6 | | | |
+| U7 | | | |
+| U8 | | | |
+| U9 | | | |
+| U10 | | | |
+| U11 | | | |
+| U12 | | | |
+| U13 | | | |
+| U14 | | | |
 | X1 | | | |
 | X2 | | | |
 | X3 | | | |

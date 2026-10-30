@@ -750,15 +750,18 @@ firmware thread.
 
 - On the device, `GetRngValue()` reads the hardware TRNG through `HAL_RNG_GetRandomNumber(&hrng)`. Its
   run-time consumers are the noise oscillators (`Oscillator.c:340` and its inlined copies), the LFO noise
-  (`lfo.c:76`) and the sequencer's probability draw (`seq_cbRandom()`, `sequencer.c:2115–2119`). Nothing
+  (`lfo.c:76`) and the sequencer's probability draw (`seq_cbRandom()`, `sequencer.c:2115–2119`), and,
+  from v0.2, the humanize draws (time and volume) of `seq_core`, through the same callback. Nothing
   calls `rand()`, and `dither_process()` and `calcNoise()` are dead code.
 - The emulator has two random streams:
   - `HAL_RNG_GetRandomNumber()` returns the DSP stream;
-  - the probability draw gets the sequencer stream, through a build hook in `seq_cbRandom()` (F5). The
-    device's binary is byte-identical with the hook.
+  - the probability draw and, from v0.2, the humanize draws (time and volume) of `seq_core` get the
+    sequencer stream, through a build hook in `seq_cbRandom()` (F5). The device's binary is
+    byte-identical with the hook.
 - **Why two** (map question B4): with one shared stream, a probability edit changes the noise of every
   later render. Every stage 2 feature that draws a number would then change every golden with noise in
-  it.
+  it. The same holds for the humanize draws: a humanize edit changes no noise, and `--seed` makes the
+  humanized renders repeatable (no new option, §5.1).
 - Each stream is xorshift32 with shifts 13, 17 and 5. The DSP stream starts from the low 32 bits of
   SplitMix64(seed), and the sequencer stream from those of SplitMix64(seed + 1); a start value of 0
   becomes 1.

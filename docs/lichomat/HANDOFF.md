@@ -17,7 +17,7 @@ Read this first when picking the project up in a new session.
 | Stage 1b plan, R2 and R3 (the renderer `lichomat-render`, the goldens, the emulator CI; R2.1–R2.6 done on `emulator`, 133 ctest ids, serial and `ctest -j8`; R3.1–R3.6 next) | `docs/superpowers/plans/2026-10-29-emulator-r2-r3-renderer-goldens.md` |
 | Milestone report of R2 | `docs/lichomat/reports/M9-emulator-R2.md` |
 | Stage 2 draft (accepted by the owner's rule of 2026-10-29) | `docs/superpowers/specs/2026-10-29-stage2-draft.md` |
-| Plan v0.2 (tasks V1–V11; branch `v0.2` from `emulator` at `1099778`, worktree `build/wt-v02`, nothing implemented yet) | `docs/superpowers/plans/2026-10-29-v0.2-polyrhythm-groove.md` |
+| Plan v0.2 (tasks V1–V11; V1–V10 on branch `v0.2` from `emulator` at `1099778`, worktree `build/wt-v02`, pushed to the fork: 79 host and 139 emulator ctest ids; V11, the owner's documents, on `timing-core`) | `docs/superpowers/plans/2026-10-29-v0.2-polyrhythm-groove.md` |
 | The plan writer's prototype of V1–V10 (git-ignored, on the owner's Mac; for cross-checking only, the tasks are done test-first from the plan) | `build/v0.2-prototype.diff` |
 | The night's scratch work of 2026-10-27 (the stage 1b host probe, the sweep's harnesses) | `build/night-2026-10-27/` (git-ignored, on the owner's Mac; its README lists the contents) |
 | Design decisions beyond the spec | `docs/superpowers/specs/2026-10-24-timing-core-implementation-notes.md` (N1–N21; they win over the spec) |
@@ -25,8 +25,10 @@ Read this first when picking the project up in a new session.
 | Sanitizer sweep of 2026-10-27 (fw 1.7 bugs B1–B19, with the status of each) | `docs/lichomat/reports/sanitizer-sweep-2026-10-27.md` |
 | Host tests (32 ctest ids) | `tests/`; `test_buttons`, `test_midicc`, `test_sequencer`, `test_presets`, `test_delay` and `test_dsp` compile fw 1.7's firmware files (the last four came with E4.6–E4.9) |
 | fw 1.7 timing replica | `tests/reference/fw17_replica.c` |
-| Hardware checklist for the owner (H1–H13, U1–U3, X1–X4) | `docs/lichomat/hardware-checklist.md` |
+| Hardware checklist for the owner (H1–H13, U1–U14, X1–X4; U4–U14 for v0.2) | `docs/lichomat/hardware-checklist.md` |
 | Release notes v0.1 (draft) | `docs/lichomat/release-notes-v0.1.md` |
+| Release notes v0.2 (draft, Polish) | `docs/lichomat/release-notes-v0.2.md` |
+| Demo renders of v0.2 (`tools/demo_v02.sh` on `v0.2`) | `build/demo/v02-*.wav` and `build/demo/README-v0.2.txt` (git-ignored, on the owner's Mac) |
 | Work branch | `timing-core`, pushed to the owner's fork: https://github.com/isthar/lxr-desktop-app/tree/timing-core |
 
 ## Toolchain
@@ -144,6 +146,6 @@ A workflow can only be resumed (`resumeFromRunId`) in the session that started i
 - Push the work branches (`timing-core`, `emulator` and later ones) only to `origin`, the owner's fork, as work lands; the owner allowed this for `timing-core` on 2026-10-24 (Q5) and for every branch on 2026-10-29 (Q19). Never push to `upstream` (Erica Synths), never touch `main`, never force-push.
 - Decision questions: since 2026-10-29 the owner wants my own recommendation taken as the answer. Record it in `questions` as closed, with the reasoning, and go on. Hardware checks stay the owner's.
 - Commits use the repo-local identity `Tomasz Krzywicki <tkrzywicki@gmail.com>`; the owner chose the private address. `backup/timing-core-before-reauthor` keeps the history as it was before the re-authoring; it is local only.
-- After each task run `tools/check.sh`. It must show zero warnings, ITCM must fit, and DTCM + RAM must stay within review row R6.2 of `docs/lichomat/reports/stage1-review.md` (at most 391824 B since E2.9; spec §10's about 7.5 KB is exceeded by design).
+- After each task run `tools/check.sh`. It must show zero warnings, ITCM must fit, and DTCM + RAM must stay within the v0.2 budget: at most 395,892 B, and DTCM at most 107,900 B (391,796 + 4,096 and 107,388 + 512, set by the owner for v0.2; `tools/check.sh` checks both on branch `v0.2` and later).
 - Decisions that belong to the owner go into `questions` in the tracker. Work continues with a reversible default.
-- Hardware checks (H1–H13 in the spec, U1 from E2.7, U2 from E4.5, U3 from E4.6–E4.9, X4 from E2.8 and the optional clock jack checks X1–X3, all in E4.2's checklist `docs/lichomat/hardware-checklist.md`) can only be done by the owner on the LXR-02. They are prepared but never claimed.
+- Hardware checks (H1–H13 in the spec, U1 from E2.7, U2 from E4.5, U3 from E4.6–E4.9, U4–U9 from the emulator spec's §12.4 (F1–F12), U10–U14 from plan v0.2, X4 from E2.8 and the optional clock jack checks X1–X3, all in E4.2's checklist `docs/lichomat/hardware-checklist.md`) can only be done by the owner on the LXR-02. They are prepared but never claimed.
