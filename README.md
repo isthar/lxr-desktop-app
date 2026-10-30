@@ -17,7 +17,10 @@ approved or supported by Erica Synths. It is based on the official firmware 1.7
 ([erica-synths/lxr-desktop-app](https://github.com/erica-synths/lxr-desktop-app) at commit `a43cd4f`)
 and is aimed at groove techno: rolling percussion, swung hats over a straight kick, polymetric loops.
 
-Version 0.1 gives the step sequencer a new timing core and fixes the timing and MIDI problems of 1.7:
+Version 0.2 adds groove per track: a tempo of its own for each track (polyrhythm), humanize and track
+delay, trig conditions and track rotation, together with the fixes F1–F12 of firmware 1.7 found while
+building the emulator. It keeps everything of 0.1, which gave the step sequencer a new timing core and
+fixed the timing and MIDI problems of 1.7:
 
 - Shuffle moves whole steps, ratchets and microshift included. MIDI clock out and the clock out jack
   stay straight.
@@ -31,9 +34,10 @@ Version 0.1 gives the step sequencer a new timing core and fixes the timing and 
   appears, right after the page with the clock in and clock out PPQ.
 
 Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged. The start-up
-screen shows `LICHOMAT` and `v0.2 unofficial`. The main changes are listed in the
+screen shows `LICHOMAT` and `v0.2 unofficial`. The main changes of 0.1 are listed in its
 [release notes](docs/lichomat/release-notes-v0.1.md), and every change against 1.7 in section 2 of the
-[stage 1 report](docs/lichomat/reports/stage1-report.md).
+[stage 1 report](docs/lichomat/reports/stage1-report.md). The release notes of 0.2 are
+`docs/lichomat/release-notes-v0.2.md` on branch `timing-core`.
 
 ### Installing LICHOMAT
 
@@ -64,8 +68,10 @@ The updater itself is never changed, so you can always go back:
 2. Delete `LXR_V2_LICHOMAT_*.img` from the SD card, copy `LXR_V2_V1.7.img` to its top folder and
    install it the same way. The start-up screen then shows `Sonic Potions` and `LXR2 Drums V 1.7`.
 
-Your kits, patterns, projects and songs stay on the card, and 1.7 loads them as before: LICHOMAT 0.1
-changes no file format.
+Your kits, patterns, projects and songs stay on the card, and 1.7 loads them as before: LICHOMAT 0.2
+only adds the track settings at the end of each pattern file, after the data 1.7 reads, so 1.7 plays
+such a pattern with every track at ×1, without humanize or delay, and a step with a trig condition
+always plays.
 
 ### Building LICHOMAT on a Mac
 
