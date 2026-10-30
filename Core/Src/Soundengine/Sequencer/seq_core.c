@@ -1297,15 +1297,25 @@ static void seqc_generateFirst(uint8_t t, uint32_t abs, seqc_tick_t minTick)
 //------------------------------------------------------------------------------
 /** v0.2: at a boundary of track t (own grid, or leaving the master grid) at now, the
  * early part of its next step, which begins at nextTick, or of the predicted restart's
- * first step if that comes first */
+ * first step if that comes first. If the prediction took this boundary for the track's
+ * last before the restart but the tempo read here puts another one before it, the
+ * predicted first step is removed, and the last boundary generates it again */
 static void seqc_trackEarly(uint8_t t, uint8_t pattern, seqc_tick_t nextTick, seqc_tick_t now)
 {
 	const uint32_t abs = (uint32_t)seqc_trk.abs[t] + 1u;
-	if (seqc_trk.restartAt != SEQC_NO_TICK && nextTick >= seqc_trk.restartAt)
+	if (seqc_trk.restartAt != SEQC_NO_TICK)
 	{
-		if (!(seqc_trk.restartDone & SEQC_BIT(t)))
-			seqc_generateFirst(t, abs, now);
-		return;
+		if (nextTick >= seqc_trk.restartAt)
+		{
+			if (!(seqc_trk.restartDone & SEQC_BIT(t)))
+				seqc_generateFirst(t, abs, now);
+			return;
+		}
+		if (seqc_trk.restartDone & SEQC_BIT(t))
+		{
+			seqc_queueRemoveLater(t);	/* the first step as occurrence abs */
+			seqc_trk.restartDone &= (uint8_t)~SEQC_BIT(t);
+		}
 	}
 	const uint8_t step = (uint8_t)seqc_nextIndex(seqc_trk.index[t], seqc_trackLength(pattern, t));
 	if (seqc_skipEarly(t, abs, pattern, step))
@@ -1323,7 +1333,8 @@ static void seqc_trackEarly(uint8_t t, uint8_t pattern, seqc_tick_t nextTick, se
  *   only a next step that begins before it;
  * - at a predicted restart, the first step of each other track on its own grid that has no
  *   boundary of its own before the restart, or one with a step of 96 ticks or more
- *   (that boundary skips it); the others generate it at their last boundary before
+ *   (that boundary skips it, unless the tempo it reads puts another one before the
+ *   restart); the others generate it at their last boundary before
  *   the restart (seqc_trackEarly()) */
 static void seqc_generateEarly(uint8_t pattern, uint8_t grid, seqc_tick_t tick)
 {

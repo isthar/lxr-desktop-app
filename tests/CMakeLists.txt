@@ -171,7 +171,7 @@ seqc_add_test(test_slave     IDS T16 T18 STRICT_CORE seq_core_strict)           
 seqc_add_test(test_transport IDS T17 STRICT_CORE seq_core_strict)                # E1.11 Start, Continue, Stop, SPP, song mode
 seqc_add_test(test_overflow  IDS T19 EXTRA queue_equiv.c CORE seq_core_small_queue STRICT_CORE seq_core_strict_small_queue)  # E1.12 queue overflow, stats
 seqc_add_test(test_fw17      IDS T20 EXTRA fw17_adapter.c STRICT_CORE seq_core_strict)  # E1.13 fw 1.7 replica (reference/)
-seqc_add_test(test_tempo     IDS TT1 TT2 TT3 TT4 TT5 TT6 STRICT_CORE seq_core_strict)    # v0.2 V2 per-track tempo
+seqc_add_test(test_tempo     IDS TT1 TT2 TT3 TT4 TT5 TT6 TT7 STRICT_CORE seq_core_strict)    # v0.2 V2 per-track tempo
 seqc_add_test(test_groove    IDS HD1 HD2 HD3 HD4 STRICT_CORE seq_core_strict)    # v0.2 V4 delay and humanize
 seqc_add_test(test_conditions IDS TC1 TC2 TC3 STRICT_CORE seq_core_strict)    # v0.2 V5 trig conditions
 seqc_add_test(test_queue     IDS queue EXTRA queue_equiv.c CORE seq_core_queue_test)  # E1.16, E1.18 queue order and real-time cost

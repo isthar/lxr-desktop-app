@@ -9,7 +9,8 @@
  * bar ends the pattern, a pattern change restarts every track; TT4: the early hits
  * of the first step after a restart; TT5: a song position, and the recording phase,
  * skip-once and step serial in the track's own steps; TT6: a track that leaves the
- * master grid at the boundary that predicts a pattern change or a song end.
+ * master grid at the boundary that predicts a pattern change or a song end; TT7: a
+ * tempo edit at the boundary that the restart prediction took for the last one.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -518,6 +519,52 @@ TEST(TT6_leaving_the_grid_before_a_song_end)
 	ASSERT_TRUE(r != NULL);
 	ASSERT_EQ(r->ev.step, 0);
 	ASSERT_EQ(r->ev.absStep, 16);
+	ASSERT_EQ(h->errors, 0);
+}
+
+/* track 1 of pattern 0 goes to x3/4 at the master boundary at 1344, so its own boundary
+ * at 1472 lies strictly inside the predicting master step [1440, 1536) */
+static void toX34At14(fake_host_t *h, uint32_t absStep)
+{
+	askPattern1(h, absStep);
+	if (absStep == 14)
+		fake_setTempo(h, 0, 1, 4);
+}
+/* trackStep() hook: and to x4 at that boundary */
+static void toX4At1472(fake_host_t *h, uint8_t track)
+{
+	if (track == 1 && seqc_position() == 1472.0)
+		fake_setTempo(h, 0, 1, 10);
+}
+
+TEST(TT7_tempo_edit_after_the_restart_prediction)
+{
+	/* at 1440 track 1 (x3/4) has one boundary of its own before the change at 1536,
+	 * 1472, and a step of 128 ticks there: the prediction takes the first step of
+	 * pattern 1 for occurrence abs + 2. The tempo read at 1472 is x4 (24 ticks, 3-tick
+	 * units, -3: -9), which puts own steps at 1472, 1496 and 1520 before the change:
+	 * pattern 0 plays 1487 and 1511, and pattern 1's first step (x4) is occurrence 18
+	 * at 1527, generated at 1520 */
+	fake_host_t *h = fake_init();
+	shiftedTrack1(h, -3);
+	fake_setTempo(h, 1, 1, 10);
+	changeAt = 10;
+	h->onStepBoundary = toX34At14;
+	h->onTrackStep = toX4At1472;
+	play(h, 2300.0);
+	static const seqc_tick_t old[2] = { 1487, 1511 };
+	for (uint32_t k = 0; k < 2; k++)
+	{
+		const fake_rec_t *r = hitAt(h, 1, old[k]);
+		ASSERT_TRUE(r != NULL);
+		ASSERT_EQ(r->ev.pattern, 0);
+		ASSERT_EQ(r->ev.absStep, 16 + k);
+	}
+	const fake_rec_t *f = firstOf(h, 1, 1);
+	ASSERT_TRUE(f != NULL);
+	ASSERT_EQ(f->ev.step, 0);
+	ASSERT_EQ(f->ev.tick, 1527);
+	ASSERT_EQ(f->ev.absStep, 18);
 	ASSERT_EQ(h->errors, 0);
 }
 
