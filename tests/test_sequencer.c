@@ -532,4 +532,60 @@ TEST(sequencer_slide_step_arms_the_drum_voice_before_its_note)
 	*s3 = old3;
 }
 
+//------------------------------------------------------------------------------
+// LICHOMAT v0.3 (plan P6): mute scenes
+//------------------------------------------------------------------------------
+TEST(sequencer_mute_scene_store_and_recall_at_the_bar)
+{
+	uint8_t m;
+	seq_clearMuteScenes();
+	seq_setMuteSceneQuant(0);
+	seq_setMute(7, 0);			/* unmute all */
+	seq_setMute(1, 1);
+	seq_setMute(4, 1);
+	seq_storeMuteScene(2);
+	ASSERT_EQ(seq_muteScenes[2], 0x92);	/* stored, tracks 1 and 4 */
+	seq_setMute(7, 0);
+	const uint8_t serial0 = seq_appliedMuteScene(&m);
+	ASSERT_EQ(seq_recallMuteSceneAt(2, 1), 1);
+	ASSERT_EQ(seq_isTrackMuted(1), 0);
+	seq_muteSceneBoundary(5);
+	seq_muteSceneBoundary(255);		/* SEQC_NO_STEP */
+	ASSERT_EQ(seq_isTrackMuted(1), 0);
+	seq_muteSceneBoundary(32);
+	ASSERT_EQ(seq_isTrackMuted(1), 1);
+	ASSERT_EQ(seq_isTrackMuted(4), 1);
+	ASSERT_EQ(seq_isTrackMuted(0), 0);
+	ASSERT_EQ((uint8_t)(seq_appliedMuteScene(&m) - serial0), 1);
+	ASSERT_EQ(m, 0x12);
+	seq_muteSceneBoundary(48);		/* nothing waits */
+	ASSERT_EQ((uint8_t)(seq_appliedMuteScene(&m) - serial0), 1);
+	seq_setMute(7, 0);
+}
+
+TEST(sequencer_mute_scene_empty_step_stopped_and_latest)
+{
+	seq_clearMuteScenes();
+	seq_setMute(7, 0);
+	ASSERT_EQ(seq_recallMuteSceneAt(0, 1), 0);	/* empty: nothing */
+	seq_setMute(6, 1);
+	seq_storeMuteScene(0);
+	seq_setMute(7, 0);
+	seq_storeMuteScene(1);				/* nothing muted, but stored */
+	ASSERT_EQ(seq_muteScenes[1], 0x80);
+	seq_storeMuteScene(8);				/* ignored */
+	seq_setMuteSceneQuant(1);
+	ASSERT_EQ(seq_recallMuteSceneAt(0, 1), 1);
+	seq_muteSceneBoundary(5);			/* any master step */
+	ASSERT_EQ(seq_isTrackMuted(6), 1);
+	ASSERT_EQ(seq_recallMuteSceneAt(1, 0), 1);	/* stopped: at once */
+	ASSERT_EQ(seq_isTrackMuted(6), 0);
+	seq_setMuteSceneQuant(0);
+	seq_recallMuteSceneAt(1, 1);
+	seq_recallMuteSceneAt(0, 1);			/* the latest recall wins */
+	seq_muteSceneBoundary(0);
+	ASSERT_EQ(seq_isTrackMuted(6), 1);
+	seq_setMute(7, 0);
+}
+
 TEST_MAIN()

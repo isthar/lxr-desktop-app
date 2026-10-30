@@ -1095,7 +1095,7 @@ void preset_loadDefaultGlobals()
 	activeParameters[PAR_MIDI_NOTE7] = 48;
 
 
-	activeParameters[PAR_FETCH] = 0;
+	activeParameters[PAR_SCENE_QUANT] = 0;
 	activeParameters[PAR_FOLLOW] = 0;
 
 	activeParameters[PAR_QUANTISATION] = 0;

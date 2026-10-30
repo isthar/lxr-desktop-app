@@ -48,6 +48,7 @@
 #define MENU_HUM_VOL		29
 #define MENU_TRK_DELAY		30
 #define MENU_STEP_PROB		31
+#define MENU_SCENE_QUANT	32	// LICHOMAT v0.3
 
 //-----------------------------------------------------------------
 // Shared texts. Reduce mem usage by pooling common text
@@ -102,6 +103,13 @@ const char trackTempoNames[][4] =
 {
 	{11},		//number of entries
 	{"1/4"}, {"1/3"}, {"1/2"}, {"2/3"}, {"3/4"}, {" x1"}, {"4/3"}, {"3/2"}, {" x2"}, {" x3"}, {" x4"},
+};
+//-----------------------------------------------------------------
+// LICHOMAT v0.3: mute scenes at the bar or the step (PAR_SCENE_QUANT, plan D19)
+const char sceneQuantNames[][4] =
+{
+	{2},		//number of entries
+	{"bar"}, {"stp"},
 };
 //-----------------------------------------------------------------
 // LICHOMAT v0.2: the trig conditions of PAR_STEP_PROB 101..115 (SeqStepTypes.h)
@@ -498,7 +506,7 @@ const char shortNames[][4]  =
 	{"flm"},
 	{"shf"},
 	{"tmp"}, {"hmt"}, {"hmv"}, {"dly"},	// LICHOMAT v0.2
-	{"slt"}, {"sld"},	// LICHOMAT v0.3
+	{"slt"}, {"sld"}, {"scn"},	// LICHOMAT v0.3
 
 };
 //-----------------------------------------------------------------
@@ -630,7 +638,7 @@ const char longNames[][16] =
 	{"Flam"},
 	{"Shift"},
 	{"TrkTempo"}, {"HumTime"}, {"HumVol"}, {"TrkDelay"},	// LICHOMAT v0.2
-	{"Slide time"}, {"Slide"},	// LICHOMAT v0.3
+	{"Slide time"}, {"Slide"}, {"Scene change"},	// LICHOMAT v0.3
 };
 
 

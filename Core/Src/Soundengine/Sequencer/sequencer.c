@@ -966,6 +966,80 @@ uint8_t seq_isTrackMuted(uint8_t trackNr)
 	return 0;
 }
 //------------------------------------------------------------------------------
+// LICHOMAT v0.3: mute scenes (plan D17-D20). The panel stores and recalls; the sequencer applies
+// a recall at its master boundary and counts the applied scenes for the panel's LEDs
+uint8_t seq_muteScenes[MUTE_SCENES];
+static uint8_t seq_sceneWanted;			/**< bit 7: a recall waits; bits 0..6: its mutes */
+static uint8_t seq_sceneQuant;			/**< 0: at the bar, 1: at the step (PAR_SCENE_QUANT) */
+static volatile uint8_t seq_sceneSerial;	/**< counts the applied scenes */
+static volatile uint8_t seq_sceneMutes;		/**< the mutes of the latest */
+
+void seq_clearMuteScenes(void)
+{
+	memset(seq_muteScenes, 0, sizeof seq_muteScenes);
+	seq_sceneWanted = 0;
+}
+
+void seq_storeMuteScene(uint8_t scene)
+{
+	if(scene >= MUTE_SCENES) return;
+	seq_muteScenes[scene] = (uint8_t)(MUTE_SCENE_STORED | (seq_mutedTracks & MUTE_SCENE_TRACKS));
+}
+
+/** the mutes in one store, the notes of newly muted tracks off (as seq_setMute()) */
+static void seq_applyMutes(uint8_t mutes)
+{
+	const uint8_t newly = (uint8_t)(mutes & ~seq_mutedTracks);
+	seq_mutedTracks = mutes;
+	for(uint8_t t = 0; t < NUM_TRACKS; t++)
+		if(newly & (1u << t))
+			voiceControl_noteOff(t);
+	seq_sceneMutes = mutes;
+	seq_sceneSerial = (uint8_t)(seq_sceneSerial + 1u);
+}
+
+uint8_t seq_recallMuteSceneAt(uint8_t scene, uint8_t running)
+{
+	if((scene >= MUTE_SCENES) || !(seq_muteScenes[scene] & MUTE_SCENE_STORED)) return 0;
+	const uint8_t mutes = (uint8_t)(seq_muteScenes[scene] & MUTE_SCENE_TRACKS);
+	if(running)
+		seq_sceneWanted = (uint8_t)(MUTE_SCENE_STORED | mutes);
+	else
+	{
+		seq_sceneWanted = 0;
+		seq_applyMutes(mutes);
+	}
+	return 1;
+}
+
+uint8_t seq_recallMuteScene(uint8_t scene)
+{
+	return seq_recallMuteSceneAt(scene, seq_isRunning());
+}
+
+/** at each master boundary (seq_cbStepBoundary()) with seqc_barStep() */
+void seq_muteSceneBoundary(uint8_t barStep)
+{
+	if(!(seq_sceneWanted & MUTE_SCENE_STORED)) return;
+	if(!seq_sceneQuant && (barStep % 16u) != 0) return;
+	const uint8_t mutes = (uint8_t)(seq_sceneWanted & MUTE_SCENE_TRACKS);
+	seq_sceneWanted = 0;
+	seq_applyMutes(mutes);
+}
+
+/** the count of applied scenes and, in mutes, the latest's mutes; the panel compares counts */
+uint8_t seq_appliedMuteScene(uint8_t *mutes)
+{
+	const uint8_t serial = seq_sceneSerial;
+	*mutes = seq_sceneMutes;
+	return serial;
+}
+
+void seq_setMuteSceneQuant(uint8_t step)
+{
+	seq_sceneQuant = step ? 1 : 0;
+}
+//------------------------------------------------------------------------------
 // given a pattern and a track:
 // this sends the main step info (which main steps are on/off) in addition
 // to the length of the track
@@ -1971,6 +2045,7 @@ static void seq_cbStepBoundary(void *ctx, uint32_t absStep)
 
 	//---------- now check if the master track is at a full beat position to flash the start/stop button --------
 	const uint8_t masterStepPos = seqc_barStep();   //LICHOMAT v0.2: the master bar
+	seq_muteSceneBoundary(masterStepPos);   //LICHOMAT v0.3: a recalled mute scene (plan D18)
 	if((masterStepPos&3) == 0)
 	{
 		//a quarter beat occured (multiple of 4 steps in the 16 step pattern)

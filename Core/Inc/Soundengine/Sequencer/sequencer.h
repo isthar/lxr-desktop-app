@@ -244,6 +244,28 @@ void seq_setMute(uint8_t trackNr, uint8_t isMuted);
 //------------------------------------------------------------------------------
 uint8_t seq_isTrackMuted(uint8_t trackNr);
 //------------------------------------------------------------------------------
+//LICHOMAT v0.3: mute scenes (plan D17-D20)
+#define MUTE_SCENES		8
+#define MUTE_SCENE_STORED	0x80	/**< bit 7 of a scene: stored */
+#define MUTE_SCENE_TRACKS	0x7F	/**< bits 0..6: the muted tracks */
+extern uint8_t seq_muteScenes[MUTE_SCENES];
+/** all scenes empty, no recall waits */
+void seq_clearMuteScenes(void);
+/** the current mutes as scene 0..7 (stored); other numbers are ignored */
+void seq_storeMuteScene(uint8_t scene);
+/** recall a stored scene: while running at the next master boundary at the bar (seqc_barStep()
+ * a multiple of 16) or at the step (seq_setMuteSceneQuant()), stopped at once. The latest recall
+ * wins. Returns 0 for an empty scene (nothing happens), else 1 */
+uint8_t seq_recallMuteSceneAt(uint8_t scene, uint8_t running);
+/** seq_recallMuteSceneAt() with the sequencer's run state */
+uint8_t seq_recallMuteScene(uint8_t scene);
+/** at each master boundary with seqc_barStep(): applies a waiting recall */
+void seq_muteSceneBoundary(uint8_t barStep);
+/** the count of applied scenes (it wraps) and, in mutes, the latest's mutes */
+uint8_t seq_appliedMuteScene(uint8_t *mutes);
+/** 0: recalls apply at the bar, 1: at the step (PAR_SCENE_QUANT) */
+void seq_setMuteSceneQuant(uint8_t step);
+//------------------------------------------------------------------------------
 /** send step data to front panel. the whole step struct for one step is transmitted*/
 void seq_sendStepInfoToFront(uint16_t stepNr);
 //------------------------------------------------------------------------------

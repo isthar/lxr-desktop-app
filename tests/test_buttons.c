@@ -472,4 +472,31 @@ TEST(buttons_voice_mode_step8_is_no_fill)
 	ASSERT_EQ(fillCalls, 0);
 }
 
+TEST(buttons_perf_steps_9_to_16_recall_and_copy_stores)
+{
+	enterPerf();
+	press(BUT_SEQ9);
+	ASSERT_EQ(recallCalls, 1);
+	ASSERT_EQ(recallScene, 0);
+	press(BUT_SEQ16);
+	ASSERT_EQ(recallCalls, 2);
+	ASSERT_EQ(recallScene, 7);
+	pressWith(BUT_COPY, BUT_SEQ11);
+	ASSERT_EQ(storeCalls, 1);
+	ASSERT_EQ(storeScene, 2);
+	ASSERT_EQ(recallCalls, 2);
+	ASSERT_EQ(copyClear_Mode, MODE_NONE);
+	press(BUT_SEQ8);				/* fill, not a scene */
+	ASSERT_EQ(recallCalls, 2);
+	ASSERT_EQ(storeCalls, 1);
+}
+
+TEST(buttons_voice_mode_steps_do_not_recall_scenes)
+{
+	enterPerf();
+	press(BUT_MODE1);
+	press(BUT_SEQ9);
+	ASSERT_EQ(recallCalls, 0);
+}
+
 TEST_MAIN()

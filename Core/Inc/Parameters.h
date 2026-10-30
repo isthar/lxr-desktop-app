@@ -392,7 +392,7 @@ enum ParamEnums
 	PAR_MIDI_CHAN_5,
 	PAR_MIDI_CHAN_6,
 
-	PAR_FETCH,							// bool - UNUSED
+	PAR_SCENE_QUANT,					// LICHOMAT v0.3: mute scenes at the bar (0) or the step (1), saved in glo.cfg (plan D19)
 	PAR_FOLLOW,							// bool
 	
 	

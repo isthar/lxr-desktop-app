@@ -56,6 +56,9 @@ volatile struct {
 static uint8_t buttonHandler_mutedVoices = 0;
 //LICHOMAT v0.3: step 8 is held as fill in the performance mode (plan D16)
 static uint8_t buttonHandler_fillHeld = 0;
+//LICHOMAT v0.3: the step LED of a recalled mute scene that waits, and the applied scenes seen (plan D17)
+static uint8_t buttonHandler_sceneLed = 0;
+static uint8_t buttonHandler_sceneSerial = 0;
 volatile static int8_t buttonHandler_armedAutomationStep = NO_STEP_SELECTED;
 
 #define ARM_AUTOMATION		0x40
@@ -321,6 +324,18 @@ void buttonHandler_tick() {
 			//reset
 			buttonHandler_buttonTimerStepNr = TIMER_ACTION_OCCURED; //NO_STEP_SELECTED;
 		}
+	}
+
+	//LICHOMAT v0.3: show the mutes of a mute scene the sequencer applied
+	uint8_t sceneMutes;
+	const uint8_t sceneSerial = seq_appliedMuteScene(&sceneMutes);
+	if(sceneSerial != buttonHandler_sceneSerial)
+	{
+		buttonHandler_sceneSerial = sceneSerial;
+		buttonHandler_mutedVoices = sceneMutes;
+		if(menu_muteModeActive) led_setActiveVoiceLeds((uint8_t)~sceneMutes);
+		if(buttonHandler_sceneLed) led_setBlinkLed(buttonHandler_sceneLed, 0);
+		buttonHandler_sceneLed = 0;
 	}
 }
 
@@ -1241,19 +1256,17 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				buttonHandler_fillHeld = 1;
 				seq_setFill(1);
 				led_setValue(1, ledNr);
-			} else {
-				/*
-				 //moved pattern select to select buttons
-				 //pattern
-
-				 //tell sequencer to change pattern
-				 frontPanel_sendData(SEQ_CC,SEQ_CHANGE_PAT,seqButtonPressed-8);
-				 //flash corresponding LED until ACK (SEQ_CHANGE_PAT) received
-				 led_setBlinkLed(ledNr,1);
-
-				 //request the pattern info for the selected pattern (bar cnt, next...)
-				 frontPanel_sendData(SEQ_CC,SEQ_REQUEST_PATTERN_PARAMS,seqButtonPressed-8);
-				 */
+			} else if (buttonHandler_getCopy()) {
+				//LICHOMAT v0.3: COPY + step 9-16 stores the mutes as scene 1-8 (plan D17)
+				seq_storeMuteScene((uint8_t)(seqButtonPressed - 8));
+				copyClear_Mode = MODE_NONE;
+				led_setBlinkLed(LED_COPY, 0);
+				buttonHandler_showMuteLEDs();
+			} else if (seq_recallMuteScene((uint8_t)(seqButtonPressed - 8))) {
+				//LICHOMAT v0.3: step 9-16 recalls scene 1-8; its LED blinks until it applies
+				if (buttonHandler_sceneLed) led_setBlinkLed(buttonHandler_sceneLed, 0);
+				buttonHandler_sceneLed = ledNr;
+				led_setBlinkLed(ledNr, 1);
 			}
 			break;
 

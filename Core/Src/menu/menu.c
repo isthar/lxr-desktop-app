@@ -257,6 +257,7 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_TRK_DELAY, CAT_PATTERN, LONG_TRK_DELAY},/*TEXT_TRACK_DELAY*/
 		{SHORT_SLIDE_TIME, CAT_OSC, LONG_SLIDE_TIME},/*TEXT_SLIDE_TIME, LICHOMAT v0.3*/
 		{SHORT_STEP_SLIDE, CAT_STEP, LONG_STEP_SLIDE},/*TEXT_STEP_SLIDE*/
+		{SHORT_SCENE_QUANT, CAT_PATTERN, LONG_SCENE_QUANT},/*TEXT_SCENE_QUANT*/
 
 
 };
@@ -549,7 +550,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_MIDI_CHAN_4*/ 	DTYPE_1B16,
 	    /*PAR_MIDI_CHAN_5*/ 	DTYPE_1B16,
 	    /*PAR_MIDI_CHAN_6*/ 	DTYPE_1B16,
-	    /*PAR_FETCH*/ 			DTYPE_ON_OFF,
+	    /*PAR_SCENE_QUANT*/ 	DTYPE_MENU | (MENU_SCENE_QUANT<<8),	// LICHOMAT v0.3: bar/stp (plan D19)
 	    /*PAR_FOLLOW*/ 			DTYPE_ON_OFF,//DTYPE_MENU | (MENU_FOLLOW<<8),
 	    /*PAR_QUANTISATION*/ 	DTYPE_MENU | (MENU_SEQ_QUANT<<8),
 	    /*PAR_SCREENSAVER_ON_OFF*/ DTYPE_ON_OFF,						//261
@@ -2686,6 +2687,8 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 		return GROOVE_DELAY_MAX - GROOVE_DELAY_MIN + 1;
 	case MENU_STEP_PROB:
 		return STEP_PROB_CODES;
+	case MENU_SCENE_QUANT:		// LICHOMAT v0.3
+		return sceneQuantNames[0][0];
 
 	default:
 		return 0;
@@ -2746,6 +2749,9 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 		break;
 	case MENU_ROLL_RATES:
 		p=rollRateNames[curParmVal+1];
+		break;
+	case MENU_SCENE_QUANT:		// LICHOMAT v0.3: any value but 0 from glo.cfg is stp, as seq_setMuteSceneQuant()
+		p=sceneQuantNames[(curParmVal ? 1 : 0) + 1];
 		break;
 	case MENU_MIDI_ROUTING:
 		p=midiRoutingNames[curParmVal+1];
@@ -3619,8 +3625,8 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	}
 	break;
 
-	case PAR_FETCH:
-
+	case PAR_SCENE_QUANT:	// LICHOMAT v0.3: mute scenes at the bar or the step (plan D19)
+		seq_setMuteSceneQuant(value);
 		break;
 
 

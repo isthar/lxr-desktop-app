@@ -1195,6 +1195,31 @@ def V03_fill(t):
     check(len(din_notes(log, '90')) == 4, 'voice 1 played %d times' % len(din_notes(log, '90')))
     no_copies_left()
 
+@case
+def V03_scenes(t):
+    # voices 1 and 2 on the quarters; scene 1 = voice 2 muted, stored while stopped in the
+    # performance mode; recalled 2.55 s after start: at the bar it applies at 4.0 s, at the step
+    # at 2.625 s
+    seed = t.seed()
+    def run(quant):
+        log = t.path('s%d.log' % quant)
+        script = t.script(press_steps(1, (1, 5, 9, 13)) + press_steps(2, (1, 5, 9, 13))
+                          + '+100ms param scene_quant=%d\n+100ms press 25\n+100ms press voice2\n'
+                          '+100ms down copy\n+50ms press step9\n+100ms up copy\n+100ms press voice2\n'
+                          '+100ms press start\n+2550ms press step9\n' % quant)
+        t.render(seed, ['--no-start', '--seconds', '7.5', '--param', 'midi_chan_2=2', '--midi-log', log,
+                        '--events', script])
+        ref = din_notes(log, '90')[0][0]
+        return ms_after(din_notes(log, '90'), ref), ms_after(din_notes(log, '91'), ref)
+    v1, v2 = run(0)
+    near(v1, [500.0 * k for k in range(11)], 2.0, 'voice 1 plays on')
+    near(v2, [500.0 * k for k in range(8)], 2.0, 'voice 2 until the bar')
+    check(len(v2) == 8, 'voice 2 after the bar: %r' % [round(x) for x in v2[8:]])
+    v1, v2 = run(1)
+    near(v2, [500.0 * k for k in range(6)], 2.0, 'voice 2 until the step')
+    check(len(v2) == 6, 'voice 2 after the step: %r' % [round(x) for x in v2[6:]])
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists
