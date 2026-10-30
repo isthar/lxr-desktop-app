@@ -40,6 +40,7 @@
 #include "Soundengine/DSPAudio/CymbalVoice.h"
 #include "Soundengine/DSPAudio/transientGenerator.h"
 #include "Soundengine/DSPAudio/transientTables.h"
+#include "Soundengine/FxBus.h"
 #include "Soundengine/DSPAudio/HiHat.h"
 #include "Soundengine/DSPAudio/Snare.h"
 #include "Soundengine/DSPAudio/modulationNode.h"
@@ -480,6 +481,59 @@ TEST(M15_f16_full_phase)
 	ASSERT_EQ(voiceArray[0].lfo.phaseOffset, UINT32_MAX);
 	ASSERT_EQ(voiceArray[0].osc.startPhase, UINT32_MAX);
 	ASSERT_EQ(voiceArray[0].modOsc.startPhase, UINT32_MAX);
+}
+
+/* --- F17 -------------------------------------------------------------------------- */
+
+/* osc_calcWavetableFreq() picks the band-limited table with freqToMidiNote(), which
+ * converts f / 440 to uint32. With a pitch modulation below zero the frequency is
+ * negative and the conversion is out of range (UBSan; the random sweep found it). The
+ * M7 gives 0 there, and so does F17's f2u32_sat(): log2 of 0 is then 255 as on the
+ * device (CLZ(0) is 32), which selects table 4, the one every frequency below 440 Hz
+ * gets. */
+void osc_calcWavetableFreq(OscInfo *osc);	/* Oscillator.c, in no header */
+
+TEST(M15_f17_negative_frequency)
+{
+	OscInfo osc;
+	memset(&osc, 0, sizeof osc);
+	osc.freq = 440.f;
+	osc.pitchMod = -1.72f;
+	osc.modNodeValue = 1.f;
+	osc_calcWavetableFreq(&osc);
+	ASSERT_EQ(osc.phaseInc, 0u);
+	ASSERT_EQ(osc.tableOffset, 4);
+	osc.pitchMod = 0.5f;			/* 220 Hz: the same table */
+	osc_calcWavetableFreq(&osc);
+	ASSERT_EQ(osc.tableOffset, 4);
+}
+
+/* --- F18 -------------------------------------------------------------------------- */
+
+/* With the FX bus routed to one output (mono), FxBus_process() hands the delay the
+ * right-hand sample of a stereo pair, &output[pos + 1], 2 bytes off a 4-byte boundary.
+ * Delay_process() and Delay_processPingPong() read it as an int32 (misaligned: UBSan)
+ * and store only its low half. The M7 loads unaligned words in hardware; F18 reads them
+ * with memcpy(), which the device compiles to the same LDR. */
+static int16_t f18Fx[16], f18Out[18], f18Out2[18];
+
+static void monoDelays(void *arg)
+{
+	(void)arg;
+	Delay_process(&fxBus.delay, f18Fx, &f18Out[1], &f18Out2[1], 8, 1, 0.5f);
+	Delay_processPingPong(&fxBus.delay, f18Fx, &f18Out[1], &f18Out2[1], 8, 1, 0.5f);
+}
+
+TEST(M15_f18_mono_delay)
+{
+	bootNoCard();
+	for (int k = 0; k < 16; k++)
+		f18Fx[k] = (int16_t)(1000 * (k + 1));
+	for (int k = 0; k < 18; k++)
+		f18Out[k] = f18Out2[k] = (int16_t)(-k);
+	emu_directCall(monoDelays, NULL);
+	for (int k = 0; k < 18; k += 2)		/* the left-hand samples stay */
+		ASSERT_EQ(f18Out[k], -k);
 }
 
 TEST_MAIN()

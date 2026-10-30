@@ -34,7 +34,8 @@ static __inline uint8_t fast_log2 (const uint32_t val)
 //-----------------------------------------------------------
 static __inline int freqToMidiNote(const float f)
 {
-	return (12*fast_log2((uint32_t)(f/440.f)))+70;
+	//LICHOMAT: a negative frequency (pitch modulation below 0) gives 0 as on the device (F17)
+	return (12*fast_log2(f2u32_sat(f/440.f)))+70;
 }
 //-----------------------------------------------------------
 static __inline uint8_t freqToTableIndex(const float f)
