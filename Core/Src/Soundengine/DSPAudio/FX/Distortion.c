@@ -139,6 +139,8 @@ float diode(float in)
 	//float index = (in+4.2f) * 30.47f; // [0:256]
 
 	uint16_t itg = (int16_t) index;
+	//LICHOMAT: at +1 the index is 256, the table's last entry; fw 1.7 read one float past the end (F13)
+	if(itg >= 256) return table_1n914[256];
 	float frac = index - itg;
 	return lerp(table_1n914[itg], table_1n914[itg+1], frac);
 

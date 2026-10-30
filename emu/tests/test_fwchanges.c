@@ -398,4 +398,27 @@ TEST(M15_f12_euklid)
 	ASSERT_EQ(strcmp(row, " 11   3   5   0 "), 0);
 }
 
+/* --- F13 -------------------------------------------------------------------------- */
+
+/* diode() (Distortion.c), the clp distortion's diode curve, clamps its input to +-1
+ * and interpolates table_1n914[itg] and [itg + 1]. At +1 the index is 256, the
+ * table's last entry, and fw 1.7 read [257], one float past the end (UBSan: index
+ * 257 out of bounds; the FX card with clp and fx_p1-fx_p4 at 64 reaches it). F13
+ * returns the last entry there, which is what fw 1.7 gave whenever the float past
+ * the table was finite. */
+extern const float table_1n914[257];
+float diode(float in);
+
+TEST(M15_f13_diode_table)
+{
+	ASSERT_TRUE(diode(1.0f) == table_1n914[256]);
+	ASSERT_TRUE(diode(4.0f) == table_1n914[256]);
+	ASSERT_TRUE(diode(-1.0f) == table_1n914[0]);
+	ASSERT_TRUE(diode(-4.0f) == table_1n914[0]);
+	ASSERT_TRUE(diode(0.0f) == table_1n914[128]);
+	ASSERT_TRUE(diode(0.5f) == table_1n914[192]);	/* below +1 as in fw 1.7 */
+	const float below = diode(0.999f);		/* index 255.87; the table ends flat */
+	ASSERT_TRUE(below >= table_1n914[255] && below <= table_1n914[256]);
+}
+
 TEST_MAIN()
