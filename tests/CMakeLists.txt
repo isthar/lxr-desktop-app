@@ -297,7 +297,7 @@ endif()
 # The float-to-uint32 conversion of the oscillators (stage 1b F6): test_f2u32
 # checks f2u32_sat() (Core/Inc/Soundengine/DSPAudio/f2u32.h) at its edge values,
 # and against arm64's FCVTZU on an arm64 host.
-seqc_add_test(test_f2u32     IDS f2u32)  # stage 1b F6  saturating float-to-uint32
+seqc_add_test(test_f2u32     IDS f2u32 f2i16_wrap f2i32_sat)  # stage 1b F6  saturating float-to-uint32; LICHOMAT F15  float-to-int16 as stored
 
 # The codec's DMA buffers (stage 1b F7): test_dmabuf includes the firmware's
 # AudioCodecManager.c itself, because the alignment of a definition is visible

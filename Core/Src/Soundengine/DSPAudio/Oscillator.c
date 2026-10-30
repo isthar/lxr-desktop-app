@@ -194,7 +194,8 @@ void calcPwmFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size
 		const uint32_t oscPhase = osc->phase;
 		int16_t oscOut ;
 		const uint32_t index =  oscPhase + ((f2u32_sat(modBuffer[i]*osc->fmMod))<<19);
-		const uint32_t index2 = index + pwm * (UINT32_MAX/2);
+		//LICHOMAT: saturates at UINT32_MAX as on the device (F15)
+		const uint32_t index2 = f2u32_sat(index + pwm * (UINT32_MAX/2));
 
 		 uint32_t  itg	 = index>>22;
 		 uint32_t  itg2 = index2>>22;
@@ -672,7 +673,7 @@ IN_ITCM_RAM void calcPwmBlock(OscInfo* osc, int16_t* buf, uint8_t size ,const fl
 	for(i=0;i<size;i++)
 	{
 		const uint32_t oscPhase = osc->phase;
-		const uint32_t oscPhase2 = osc->phase + pwm * (UINT32_MAX/2);
+		const uint32_t oscPhase2 = f2u32_sat(osc->phase + pwm * (UINT32_MAX/2));	//LICHOMAT: F15
 		int16_t oscOut ;
 		uint32_t  itg	= oscPhase>>22;
 		uint32_t  itg2	= oscPhase2>>22;
