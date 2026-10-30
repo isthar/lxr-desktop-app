@@ -979,6 +979,9 @@ def V02_ui(t):
     log = t.path('p.log')
     script = t.script('0ms press voice2\n+100ms param track_tempo=4\n+100ms down shift\n+20ms press mode2\n'
                       '+100ms up shift\n+200ms mark euklid\n+100ms encoder +4\n+200ms mark track\n'
+                      # NRPN 134 (PAR_TRACK_TEMPO - 128) = 50 on DIN: the front's NRPN parser sets the
+                      # shown value to 50, past the 11 tempo names (display only, as in fw 1.7)
+                      '+100ms din B0 63 01 B0 62 06 B0 06 32\n+300ms mark nrpn\n'
                       '+100ms press voice1\n+300ms mark voice1\n+100ms press mode1\n+200ms press mode1\n'
                       '+200ms param active_step=0\n+100ms param step_prob=101\n'
                       # the edit path does not repaint; asking for the step's data again does
@@ -990,6 +993,7 @@ def V02_ui(t):
     # the second screen: voice 2 at x3/4, no humanize, no delay
     check(re.match(r'TMP.hmt.hmv.dly', rows['track'][0]) and re.match(r'3/4.  0.  0.  0', rows['track'][1]),
           'the track settings of voice 2: %r' % rows['track'])
+    check(re.match(r' x4.  0.  0.  0', rows['nrpn'][1]), 'tmp 50 by NRPN, not shown as the last name: %r' % rows['nrpn'])
     check(re.match(r' x1.  0.  0.  0', rows['voice1'][1]), 'the track settings of voice 1: %r' % rows['voice1'])
     check('1:2' in rows['prob'][1], 'the step page shows %r, not the condition 1:2' % rows['prob'])
     no_copies_left()

@@ -2793,9 +2793,12 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 		p=stepShiftNames[curParmVal+1];
 		break;
 
-	case MENU_TRK_TEMPO:		// LICHOMAT v0.2
-		p=trackTempoNames[curParmVal+1];
+	case MENU_TRK_TEMPO:		// LICHOMAT v0.2: clamped to the names, NRPN 134 can set any 0..127
+	{
+		const uint8_t last = (uint8_t)(trackTempoNames[0][0] - 1);
+		p=trackTempoNames[(curParmVal < last ? curParmVal : last) + 1];
 		break;
+	}
 	case MENU_HUM_TIME:
 	case MENU_HUM_VOL:
 		numtostrpu(buf, curParmVal, ' ');
