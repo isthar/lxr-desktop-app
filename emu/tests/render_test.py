@@ -1034,5 +1034,29 @@ def M17_hang(t):
     print('exit 4 after %.1f s' % wall)
     no_copies_left()
 
+# --- M23: the card fixtures (spec 5.6) ----------------------------------------------
+
+@case
+def M23(t):
+    cards = os.path.join(t.root, 'emu', 'tests', 'cards')
+    scripts = sorted(x[:-4] for x in os.listdir(os.path.join(cards, 'scripts')) if x.endswith('.txt'))
+    committed = sorted(x for x in os.listdir(cards) if x != 'scripts' and os.path.isdir(os.path.join(cards, x)))
+    check(committed == scripts, 'the fixtures %r are not the scripts %r' % (committed, scripts))
+    out = t.path('cards')
+    p = subprocess.run(['/bin/bash', os.path.join(cards, 'make.sh'), t.r, out], capture_output=True, text=True,
+                       timeout=600)
+    check(p.returncode == 0, 'make.sh: exit %d\n%s%s' % (p.returncode, p.stdout, p.stderr))
+    made = sorted(os.listdir(out))
+    check(made == scripts, 'make.sh made %r, not %r' % (made, scripts))
+    for f in scripts:
+        a, b = tree(os.path.join(out, f)), tree(os.path.join(cards, f))
+        differ = sorted(k for k in set(a) | set(b) if k not in a or k not in b or a[k] != b[k])
+        check(not differ, 'make.sh gives fixture %s other than the committed one at %r' % (f, differ))
+        print('%s: %d files, %d bytes, as committed' % (f, sum(1 for v in a.values() if v),
+              sum(os.path.getsize(os.path.join(cards, f, k)) for k, v in a.items() if v)))
+    left = [x for x in os.listdir(t.tmp) if x.startswith('lichomat-cards-')]
+    check(not left, 'make.sh left %r in %s' % (left, t.tmp))
+    no_copies_left()
+
 if __name__ == '__main__':
     main()
