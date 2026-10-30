@@ -12,6 +12,7 @@
  */
 
 
+#include "Soundengine/DSPAudio/f2u32.h"	//LICHOMAT: f2u32_sat() (F16)
 #include "Soundengine/DSPAudio/DrumVoice.h"
 #include "Soundengine/DSPAudio/Oscillator.h"
 #include "Soundengine/DSPAudio/random.h"
@@ -53,7 +54,7 @@ IN_ITCM_RAM void setPan(const uint8_t voiceNr, const uint8_t pan)
 //---------------------------------------------------
 void drum_setPhase(const uint8_t phase, const uint8_t voiceNr)
 {
-	const uint32_t startPhase = (phase/127.f)*0xffffffff;
+	const uint32_t startPhase = f2u32_sat((phase/127.f)*0xffffffff);	//LICHOMAT: 127 saturates as on the device (F16)
 	voiceArray[voiceNr].osc.startPhase = startPhase;
 	voiceArray[voiceNr].modOsc.startPhase = startPhase;
 }
