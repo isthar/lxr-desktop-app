@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 07:48",
-    "phase": "Etap 2: v0.2 gotowe w kodzie (M10); v0.3 czeka na odczyt CPU (H12)",
-    "focus": "v0.2 gotowe w kodzie; następny plan v0.4 (sceny mute, fill, rolle, slide).",
+    "updated": "2026-10-30 07:50",
+    "phase": "Etap 2: v0.2 gotowe w kodzie (M10); plan v0.3 (występ i acid)",
+    "focus": "Plan v0.3: sceny mute, tryb fill, rolle, slide dla Drum 1–3.",
     "branch": "timing-core",
-    "head": "4b63f2d",
+    "head": "9540857",
     "next": "Ja: plan v0.4, potem jego wykonanie; przerwa i podsumowanie ok. 10:17 albo przy 65% zużycia. Ty: odsłuch build/demo/v02-*.wav, testy v0.1 z odczytem CPU (Q6, H12), potem v0.2 (U4–U14).",
-    "updated_at": "2026-10-30T07:48:00+01:00",
-    "now": "Od 07:48: zapisuję M10 i piszę plan v0.4 (bez prototypu)."
+    "updated_at": "2026-10-30T07:50:00+01:00",
+    "now": "Od 07:50 agent pisze plan v0.3 (docs/superpowers/plans/2026-10-30-v0.3-performance-acid.md)."
   },
   "epics": [
     {
@@ -513,15 +513,15 @@
       "id": "E6.8",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Tryb fill, sceny mute, roll 1/32 i triole (v0.4)",
-      "updated": "2026-10-29"
+      "title": "Tryb fill, sceny mute, roll 1/32 i triole (v0.3)",
+      "updated": "2026-10-30"
     },
     {
       "id": "E6.9",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Filtr DJ na masterze (v0.3)",
-      "updated": "2026-10-29"
+      "title": "Filtr DJ na masterze (v0.4)",
+      "updated": "2026-10-30"
     },
     {
       "id": "E6.10",
@@ -534,8 +534,8 @@
       "id": "E6.11",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Slide dla Drum 1–3 (acid), flaga w wolnym bicie nuty kroku (v0.4)",
-      "updated": "2026-10-29"
+      "title": "Slide dla Drum 1–3 (acid), flaga w wolnym bicie nuty kroku (v0.3)",
+      "updated": "2026-10-30"
     },
     {
       "id": "E7.1",
@@ -548,36 +548,36 @@
       "id": "E7.2",
       "epic": "E7",
       "status": "w toku",
-      "title": "Specyfikacja atmosfery: połączona ze szkicem etapu 2 (v0.3)",
-      "updated": "2026-10-29"
+      "title": "Specyfikacja atmosfery: połączona ze szkicem etapu 2 (v0.4)",
+      "updated": "2026-10-30"
     },
     {
       "id": "E7.3",
       "epic": "E7",
       "status": "do zrobienia",
-      "title": "Pogłos jako osobny efekt obok delaya, z własnym buforem w RAM, na bazie wyłączonego „Plt” z fw 1.7 (v0.3)",
-      "updated": "2026-10-29"
+      "title": "Pogłos jako osobny efekt obok delaya, z własnym buforem w RAM, na bazie wyłączonego „Plt” z fw 1.7 (v0.4)",
+      "updated": "2026-10-30"
     },
     {
       "id": "E7.4",
       "epic": "E7",
       "status": "do zrobienia",
-      "title": "Delay zsynchronizowany z tempem (v0.3)",
-      "updated": "2026-10-29"
+      "title": "Delay zsynchronizowany z tempem (v0.4)",
+      "updated": "2026-10-30"
     },
     {
       "id": "E7.5",
       "epic": "E7",
       "status": "do zrobienia",
-      "title": "Freeze: zamrożony, falujący ogon pogłosu, baza washy (v0.3)",
-      "updated": "2026-10-29"
+      "title": "Freeze: zamrożony, falujący ogon pogłosu, baza washy (v0.4)",
+      "updated": "2026-10-30"
     },
     {
       "id": "E7.6",
       "epic": "E7",
       "status": "do zrobienia",
-      "title": "Rumble: pogłos stopy z duckingiem (v0.3)",
-      "updated": "2026-10-29"
+      "title": "Rumble: pogłos stopy z duckingiem (v0.4)",
+      "updated": "2026-10-30"
     }
   ],
   "milestones": [
@@ -802,6 +802,13 @@
       "question": "Trzeci błąd fw 1.7 znaleziony przez emulator (§7): przy wyborze wzorca przyciskami kroków firmware przekazuje menu_activePage (wartość 16) jako numer ścieżki do euklid_getLength/Steps/Rotation, które indeksują tablice 7-elementowe. Czytanie poza tablicą; na urządzeniu czyta sąsiednie bajty. Czy dodać poprawkę F12 w v0.2: przekazywać aktywny głos?",
       "assumption": "Na razie bez zmian w firmware: plan R2+R3 wyłącza sprawdzanie zakresu (UBSan, ASan) tylko w tych trzech funkcjach (emu/sanitize/euklid_ignorelist.txt), jak przy B13/B14. Nazwy poprawek: Q21 → F11, Q23 → F12, Q22 → rozszerzenie F6.",
       "answer": "Twoja decyzja z 29.10, 05:19 („użyj własnych rekomendacji”): tak, poprawka F12 (aktywny głos zamiast menu_activePage), z testem; lista wyłączeń euklid_ignorelist.txt z planu R2.5 nie jest już potrzebna."
+    },
+    {
+      "id": "Q24",
+      "status": "zamknięte",
+      "question": "Atmosfera (pogłos, freeze, rumble, delay z tempem, filtr DJ) czeka na odczyt strony CPU (H12), a występ i acid (sceny mute, tryb fill, rolle, slide) nie zależą od pomiarów. Którą paczkę robić jako następną i jak numerować wydania?",
+      "assumption": "Występ i acid jako następne wydanie v0.3, atmosfera jako v0.4.",
+      "answer": "Moja rekomendacja według Twojej reguły z 29.10, 05:19 („użyj własnych rekomendacji”), 30.10, 07:49: występ i acid wychodzą jako v0.3 na gałęzi od v0.2, a atmosfera jako v0.4, gdy będzie odczyt CPU (H12). Numery wydań idą po kolei, więc na urządzeniu nie będzie przeskoku. Jeśli odczytasz CPU wcześniej, atmosfera może wejść przed v0.3 bez straty pracy."
     }
   ],
   "log": [
@@ -2454,6 +2461,11 @@
       "n": 330,
       "at": "2026-10-30 07:48",
       "text": "Poprawki z drugiego przeglądu gotowe: b473e9e (ścieżka w innym tempie nie gra już uderzenia kroku za końcem songu, jak ścieżka ×1) i 4b63f2d (tmp nie pokazuje śmieci po NRPN spoza zakresu). 83 testy na hoście, 139 w emulatorze, 0 ostrzeżeń; obraz 312 600 B. Kamień milowy M10: v0.2 gotowe w kodzie, raport docs/lichomat/reports/M10-v0.2.md."
+    },
+    {
+      "n": 331,
+      "at": "2026-10-30 07:50",
+      "text": "Kolejność wydań zmieniona (Q24, moja rekomendacja): występ i acid (sceny mute, tryb fill, rolle, slide) wychodzą jako v0.3, atmosfera jako v0.4, bo czeka na odczyt CPU (H12). Gałąź v0.3 od v0.2 (4b63f2d), kopia robocza build/wt-v03. Jeden agent pisze plan v0.3, tym razem bez prototypu i z limitem ok. 60 kroków."
     }
   ]
 }

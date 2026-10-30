@@ -5,6 +5,7 @@
 | Data | 2026-10-29 |
 | Status | Szkic do Twoich poprawek. Według reguły z 29.10 idę dalej z tymi rekomendacjami, dopóki ich nie zmienisz. |
 | Podstawa | `timing-core` (v0.1) i `emulator` (F1–F12, F6b) |
+| Zmiana z 30.10 | Kolejność wydań (Q24): występ i acid (§6) wychodzą jako **v0.3**, atmosfera (§5) jako **v0.4**, bo czeka na odczyt CPU (H12). Numery w §5 i §6 poniżej są pierwotne |
 | Zastępuje | Listę etapu 2 i 3 z `2026-10-23-timing-core-design.md` §1 oraz zadania E6.x i E7.x w trackerze, tam gdzie się różni |
 
 ## 1. Dla kogo i po co
