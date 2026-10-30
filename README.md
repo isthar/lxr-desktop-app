@@ -31,7 +31,7 @@ Version 0.1 gives the step sequencer a new timing core and fixes the timing and 
   appears, right after the page with the clock in and clock out PPQ.
 
 Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged. The start-up
-screen shows `LICHOMAT` and `v0.1 unofficial`. The main changes are listed in the
+screen shows `LICHOMAT` and `v0.2 unofficial`. The main changes are listed in the
 [release notes](docs/lichomat/release-notes-v0.1.md), and every change against 1.7 in section 2 of the
 [stage 1 report](docs/lichomat/reports/stage1-report.md).
 
@@ -40,7 +40,7 @@ screen shows `LICHOMAT` and `v0.1 unofficial`. The main changes are listed in th
 Install `LXR_V2_LICHOMAT_<version>.img` like any other update, see
 [Installing the update](#installing-the-update). First delete every other `LXR*.img` file from the SD
 card: the updater installs the first one it finds. After the update the start-up screen shows
-`LICHOMAT` and `v0.1 unofficial`.
+`LICHOMAT` and `v0.2 unofficial`.
 
 ### Going back to the official firmware
 
@@ -137,7 +137,7 @@ When the build has finished it shows where the update file is and how to install
 ```
 ======================================================================
   Firmware update file:
-    .../lxr-desktop-app/build/release/LXR_V2_LICHOMAT_0.1.img
+    .../lxr-desktop-app/build/release/LXR_V2_LICHOMAT_0.2.img
   ...
 ```
 

@@ -57,7 +57,7 @@ typedef struct ImageFileHeaderStruct
 #define FIRMWARE_NAME "LICHOMAT"
 #endif
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "0.1"
+#define FIRMWARE_VERSION "0.2"
 #endif
 
 /* CubeMX handles that main.c defines and main.h does not declare */
