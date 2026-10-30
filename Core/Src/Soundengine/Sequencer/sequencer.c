@@ -2413,3 +2413,46 @@ void seq_setGrooveParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 	default: break;
 	}
 }
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.2: move every step of the track in pattern one step later (dir +1) or
+ * earlier (-1) within the track length: the step data (volume, probability or condition,
+ * note, p-locks), the step timing (flam, shift) and the main-step bit move together, the
+ * step at one end wraps to the other, and the steps past the length stay */
+void seq_rotateTrack(uint8_t trackNr, uint8_t pattern, int8_t dir)
+{
+	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN) || ((dir != 1) && (dir != -1))) return;
+	uint8_t len = seq_patternSet.length[pattern][trackNr];
+	if(len == 0) len = 16;
+	else if(len > NUM_STEPS) len = NUM_STEPS;
+	if(len < 2) return;
+	Step *s = seq_patternSet.seq_subStepPattern[pattern][trackNr];
+	StepTiming *tm = seq_patternSet.seq_stepTiming[pattern][trackNr];
+	const uint8_t wrap = (dir > 0) ? (uint8_t)(len - 1) : 0;
+	const Step keep = s[wrap];
+	const StepTiming keepTiming = tm[wrap];
+	const uint8_t keepOn = seq_intIsMainStepActive(trackNr, wrap, pattern);
+	if(dir > 0)
+	{
+		for(uint8_t i = (uint8_t)(len - 1); i > 0; i--)
+		{
+			s[i] = s[i-1];
+			tm[i] = tm[i-1];
+			seq_setMainStep(pattern, trackNr, i, seq_intIsMainStepActive(trackNr, (uint8_t)(i-1), pattern));
+		}
+		s[0] = keep;
+		tm[0] = keepTiming;
+		seq_setMainStep(pattern, trackNr, 0, keepOn);
+	}
+	else
+	{
+		for(uint8_t i = 0; i + 1 < len; i++)
+		{
+			s[i] = s[i+1];
+			tm[i] = tm[i+1];
+			seq_setMainStep(pattern, trackNr, i, seq_intIsMainStepActive(trackNr, (uint8_t)(i+1), pattern));
+		}
+		s[len-1] = keep;
+		tm[len-1] = keepTiming;
+		seq_setMainStep(pattern, trackNr, (uint8_t)(len - 1), keepOn);
+	}
+}

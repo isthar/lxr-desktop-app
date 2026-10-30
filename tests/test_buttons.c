@@ -395,4 +395,37 @@ TEST(buttons_automation_step_past_63_is_not_armed)
 	ASSERT_EQ(armCalls, 0);
 }
 
+//------------------------------------------------------------------------------
+// LICHOMAT v0.2 (plan V9): SHIFT + step 1 and 2 rotate the selected track
+//------------------------------------------------------------------------------
+static int rotateCalls;
+static uint8_t rotateTrack, rotatePattern;
+static int8_t rotateDir;
+void seq_rotateTrack(uint8_t trackNr, uint8_t pattern, int8_t dir)
+{
+	rotateCalls++;
+	rotateTrack = trackNr;
+	rotatePattern = pattern;
+	rotateDir = dir;
+}
+
+TEST(buttons_shift_step1_and_step2_rotate_the_active_track)
+{
+	reset();
+	rotateCalls = 0;
+	menu_activeVoice = 3;
+	pressWith(BUT_SHIFT, BUT_SEQ1);
+	ASSERT_EQ(rotateCalls, 1);
+	ASSERT_EQ(rotateTrack, 3);
+	ASSERT_EQ(rotatePattern, 0);
+	ASSERT_EQ(rotateDir, -1);
+	pressWith(BUT_SHIFT, BUT_SEQ2);
+	ASSERT_EQ(rotateCalls, 2);
+	ASSERT_EQ(rotateDir, 1);
+	ASSERT_EQ(toggleMainStepCalls, 0);	/* no step changed */
+	ASSERT_TRUE(updateSeqLedsCalls >= 2);	/* the step LEDs show the result */
+	press(BUT_SEQ1);			/* without SHIFT: a step, no rotation */
+	ASSERT_EQ(rotateCalls, 2);
+}
+
 TEST_MAIN()

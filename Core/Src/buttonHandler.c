@@ -838,7 +838,15 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 		{
 
 		case SEQ_DRUM1:
+			//LICHOMAT v0.2: SHIFT + step 1 moves the selected track's steps one step earlier
+			seq_rotateTrack(menu_getActiveVoice(), menu_getViewedPattern(), -1);
+			led_updateSeqLeds();
+			break;
 		case SEQ_DRUM2:
+			//LICHOMAT v0.2: SHIFT + step 2 one step later (both within the track length)
+			seq_rotateTrack(menu_getActiveVoice(), menu_getViewedPattern(), 1);
+			led_updateSeqLeds();
+			break;
 		case SEQ_DRUM3:
 		case SEQ_SNARE:
 		case SEQ_CLP:

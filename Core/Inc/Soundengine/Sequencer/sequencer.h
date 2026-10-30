@@ -187,6 +187,7 @@ void seq_init();
 float seq_getElapsedStepTimePercent(uint8_t trackNr);
 void seq_loadGrooveParams(uint8_t trackNr, uint8_t pattern);	//LICHOMAT v0.2: the track page's second screen
 void seq_setGrooveParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint8_t value);
+void seq_rotateTrack(uint8_t trackNr, uint8_t pattern, int8_t dir);	//LICHOMAT v0.2: SHIFT + step 1/2
 //------------------------------------------------------------------------------
 /** call periodically to check if the next step has to be processed */
 void seq_tick();

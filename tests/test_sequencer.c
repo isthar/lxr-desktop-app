@@ -409,4 +409,50 @@ TEST(sequencer_recording_quantizes_to_the_tracks_own_steps)
 	run(1);
 }
 
+//------------------------------------------------------------------------------
+// LICHOMAT v0.2 (plan V9): rotation within the track length
+//------------------------------------------------------------------------------
+TEST(sequencer_rotate_moves_steps_within_the_length)
+{
+	reset();
+	const uint8_t p = 4, t = 2;
+	seq_patternSet.length[p][t] = 5;
+	for (uint8_t s = 0; s < NUM_STEPS; s++)
+	{
+		seq_patternSet.seq_subStepPattern[p][t][s] = (Step){ .volume = (uint8_t)(0x80 | s), .prob = (uint8_t)(101 + s % 15),
+			.note = (uint8_t)(30 + s), .param1Nr = s, .param1Val = (uint8_t)(2 * s), .param2Nr = (uint8_t)(s + 1),
+			.param2Val = (uint8_t)(3 * s) };
+		seq_patternSet.seq_stepTiming[p][t][s] = (StepTiming){ .flam = (uint8_t)(s % 6), .shift = (uint8_t)(s % 15) };
+		seq_setMainStep(p, t, s, (uint8_t)(s % 3 == 0));
+	}
+	static Step steps[NUM_STEPS];
+	static StepTiming timing[NUM_STEPS];
+	uint8_t on[NUM_STEPS];
+	memcpy(steps, seq_patternSet.seq_subStepPattern[p][t], sizeof steps);
+	memcpy(timing, seq_patternSet.seq_stepTiming[p][t], sizeof timing);
+	for (uint8_t s = 0; s < NUM_STEPS; s++)
+		on[s] = seq_isMainStepActive(t, s, p);
+	seq_rotateTrack(t, p, 1);		/* later: step s takes step s - 1, step 0 takes step 4 */
+	for (uint8_t s = 0; s < NUM_STEPS; s++)
+	{
+		const uint8_t from = s < 5 ? (uint8_t)((s + 4) % 5) : s;
+		ASSERT_EQ(memcmp(&seq_patternSet.seq_subStepPattern[p][t][s], &steps[from], sizeof(Step)), 0);
+		ASSERT_EQ(memcmp(&seq_patternSet.seq_stepTiming[p][t][s], &timing[from], 1), 0);
+		ASSERT_EQ(seq_isMainStepActive(t, s, p), on[from]);
+	}
+	seq_rotateTrack(t, p, -1);		/* back */
+	ASSERT_EQ(memcmp(seq_patternSet.seq_subStepPattern[p][t], steps, sizeof steps), 0);
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepTiming[p][t], timing, sizeof timing), 0);
+	/* raw length 0 is 16 steps; length 1 has nothing to rotate; the next track is untouched */
+	seq_patternSet.length[p][t] = 0;
+	seq_rotateTrack(t, p, -1);
+	ASSERT_EQ(memcmp(&seq_patternSet.seq_subStepPattern[p][t][15], &steps[0], sizeof(Step)), 0);
+	ASSERT_EQ(memcmp(&seq_patternSet.seq_subStepPattern[p][t][0], &steps[1], sizeof(Step)), 0);
+	ASSERT_EQ(memcmp(&seq_patternSet.seq_subStepPattern[p][t][16], &steps[16], sizeof(Step)), 0);
+	seq_patternSet.length[p][3] = 1;
+	const Step s3 = seq_patternSet.seq_subStepPattern[p][3][0];
+	seq_rotateTrack(3, p, 1);
+	ASSERT_EQ(memcmp(&seq_patternSet.seq_subStepPattern[p][3][0], &s3, sizeof s3), 0);
+}
+
 TEST_MAIN()

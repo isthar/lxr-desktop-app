@@ -1089,6 +1089,19 @@ def V02_files(t):
     near(ms_after(v2, v2[0][0]), [0, 666.667, 1333.333, 2000], 2.0, 'voice 2 after the reload')
     no_copies_left()
 
+@case
+def V02_rotation(t):
+    # voice 2 step 1 is the reference; voice 1's steps 1, 5, 9, 13 rotated one step later
+    seed = t.seed()
+    log = t.path('r.log')
+    script = t.script(press_steps(2, (1,)) + press_steps(1, (1, 5, 9, 13))
+                      + '+100ms down shift\n+20ms press step2\n+100ms up shift\n+100ms press start\n')
+    t.render(seed, ['--no-start', '--seconds', '3.5', '--param', 'midi_chan_2=2', '--midi-log', log,
+                    '--events', script])
+    ref = din_notes(log, '91')[0][0]
+    near(ms_after(din_notes(log, '90'), ref), [125, 625, 1125, 1625], 2.0, 'voice 1 rotated later')
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists
