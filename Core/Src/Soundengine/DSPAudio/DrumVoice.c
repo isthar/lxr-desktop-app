@@ -23,10 +23,24 @@
 #include "Soundengine/TriggerOut.h"
 #include "Soundengine/MIDI/MidiVoiceControl.h"
 #include "IO/adcPots.h"
+#include "Soundengine/DSPAudio/slide.h"
+#include "menu/menu.h"
 
 INDTCM static float ampSmoothValue = 0.1f;
 //---------------------------------------------------
 INDTCMZ DrumVoice voiceArray[NUM_DRUM_VOICES];
+//---------------------------------------------------
+//LICHOMAT v0.3: slide of Drum 1-3 (plan D24)
+_Static_assert(SLIDE_BLOCK == OUTPUT_DMA_SIZE, "the slide counts audio blocks");
+static slide_t drum_slide[3];
+static uint8_t drum_slideNext;	//bit v: the next trigger of voice v slides
+
+void Drum_setSlide(const uint8_t voiceNr, const uint8_t on)
+{
+	if(voiceNr >= 3) return;
+	if(on) drum_slideNext |= (uint8_t)(1u << voiceNr);
+	else drum_slideNext &= (uint8_t)~(1u << voiceNr);
+}
 //---------------------------------------------------
 IN_ITCM_RAM void setPan(const uint8_t voiceNr, const uint8_t pan)
 {
@@ -91,6 +105,7 @@ void initDrumVoice()
 		voiceArray[i].osc.waveform = TRI+i; //for testing init to tri,saw,rec
 		voiceArray[i].osc.fmMod = 0;
 		voiceArray[i].osc.midiFreq = 70<<8 | 64;
+		voiceArray[i].osc.baseNote = SEQ_DEFAULT_NOTE;	//LICHOMAT v0.3: the first slide of a voice starts from the default note
 
 		DecayEg_init(&voiceArray[i].oscPitchEg);
 		voiceArray[i].egPitchModAmount = 0.5f;
@@ -161,6 +176,16 @@ void Drum_trigger(const uint8_t voiceNr, const uint8_t vol, const uint8_t note)
 
 	}
 
+	//LICHOMAT v0.3: a slide step starts at the previous note and any glide still in progress
+	if(drum_slideNext & (1u << voiceNr))
+	{
+		drum_slideNext &= (uint8_t)~(1u << voiceNr);
+		const float from = (float)((int)voiceArray[voiceNr].osc.baseNote - (int)note) + slide_offset(&drum_slide[voiceNr]);
+		slide_start(&drum_slide[voiceNr], from, slide_blocks(activeParameters[PAR_SLIDE_TIME1 + voiceNr]));
+	}
+	else
+		slide_stop(&drum_slide[voiceNr]);
+
 	osc_setBaseNote(&voiceArray[voiceNr].osc,note);
 	osc_setBaseNote(&voiceArray[voiceNr].modOsc,note);
 
@@ -195,6 +220,11 @@ IN_ITCM_RAM void calcDrumVoiceAsync(const uint8_t voiceNr)
 		const float snapVal = SnapEg_calc(&voiceArray[voiceNr].snapEg, voiceArray[voiceNr].transGen.pitch);
 		voiceArray[voiceNr].osc.pitchMod += snapVal*voiceArray[voiceNr].transGen.volume;
 	}
+
+	//LICHOMAT v0.3: the slide factor of this block (1 without a slide)
+	const float glide = slide_next(&drum_slide[voiceNr]);
+	voiceArray[voiceNr].osc.pitchMod *= glide;
+	voiceArray[voiceNr].modOsc.pitchMod = glide;
 
 	// fm amount with pitch eg
 	voiceArray[voiceNr].osc.fmMod = voiceArray[voiceNr].fmModAmount * egPitchVal;

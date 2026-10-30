@@ -345,9 +345,10 @@ uint8_t parameterOrder[END_OF_SOUND_PARAMETERS] = {
 	PAR_AUDIO_OUT6,						/*220*/
 
 //ATTENTION these were MIDI_NOTE_x and still appear as dummies in the mod target array!
-	PAR_UNUSED_1,
-	PAR_UNUSED_2,
-	PAR_UNUSED_3,
+// LICHOMAT v0.3: Drum 1-3 slide time, 0..127 x 4 ms (plan D25)
+	PAR_SLIDE_TIME1,
+	PAR_SLIDE_TIME2,
+	PAR_SLIDE_TIME3,
 	PAR_UNUSED_4,
 	PAR_UNUSED_5,
 	PAR_UNUSED_6,

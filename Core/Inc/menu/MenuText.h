@@ -498,6 +498,7 @@ const char shortNames[][4]  =
 	{"flm"},
 	{"shf"},
 	{"tmp"}, {"hmt"}, {"hmv"}, {"dly"},	// LICHOMAT v0.2
+	{"slt"},	// LICHOMAT v0.3
 
 };
 //-----------------------------------------------------------------
@@ -629,6 +630,7 @@ const char longNames[][16] =
 	{"Flam"},
 	{"Shift"},
 	{"TrkTempo"}, {"HumTime"}, {"HumVol"}, {"TrkDelay"},	// LICHOMAT v0.2
+	{"Slide time"},	// LICHOMAT v0.3
 };
 
 

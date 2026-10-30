@@ -105,6 +105,9 @@ void initDrumVoice();
 
 void Drum_trigger(const uint8_t voiceNr, const uint8_t vol, const uint8_t note);
 
+//LICHOMAT v0.3: the next trigger of Drum voice voiceNr (0-2) slides when on (plan D24)
+void Drum_setSlide(const uint8_t voiceNr, const uint8_t on);
+
 void Drum_updatePan(const uint8_t voiceNr);
 
 /** block based calculation*/
