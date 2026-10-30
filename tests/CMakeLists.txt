@@ -261,6 +261,27 @@ if(TARGET test_delay)
     set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/Delay.c PROPERTIES COMPILE_OPTIONS -w)
 endif()
 
+# LICHOMAT v0.4 (plan A2): the files that define TiltEq_*, setOnePoleCoef and calcOnePole,
+# which the reverb calls (real functions, not header-inline)
+set(ATMO_DSP_SOURCES
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/TiltEq.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/1PoleLp.c)
+# LICHOMAT v0.4 (plan A2): the reverb and its tools with the stand-ins of test_delay. As
+# with Delay.c, the firmware files build without warnings here (fw 1.7 has unused
+# parameters and functions); test_atmo.c keeps -Wall -Wextra -Werror.
+set(ATMO_REVERB_SOURCES
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/Reverb.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/VerbTools/AllpassDelay.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/VerbTools/VerbDelay.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/VerbTools/VerbModDelay.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/VerbTools/sinCos.c)
+seqc_add_test(test_atmo      IDS RV1 EXTRA ${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES})  # v0.4 A2  every unit of the reverb carries signal
+if(TARGET test_atmo)
+    target_include_directories(test_atmo BEFORE PRIVATE stubs)
+    target_include_directories(test_atmo SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+    set_source_files_properties(${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
+endif()
+
 # The sound engine's broken states (E4.9): test_dsp compiles the firmware's DSP
 # files with the stand-in headers in stubs/ at -O3, as the device build has them.
 # ResonantFilter.c, Oscillator.c and wavetable.c get the firmware's floating-point

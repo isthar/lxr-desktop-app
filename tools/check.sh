@@ -59,12 +59,13 @@ if cmake --preset release -DARM_TOOLCHAIN_DIR="$ARM_TOOLCHAIN_DIR" -S "$ROOT" >>
     $1==".itcm_text"{itcm=$2} $1==".dtcm"||$1==".dtcmz"{dtcm+=$2} $1==".data"||$1==".bss"||$1=="._user_heap"{ram+=$2}
     END{printf "memory: ITCM %d/16384 B (%.1f%%, free %d)  DTCM %d/131072 B (%.1f%%, rest is stack)  RAM %d/393216 B (%.1f%%, free %d)  image %d/1015808 B (%.1f%%)\n",
         itcm,itcm/163.84,16384-itcm, dtcm,dtcm/1310.72, ram,ram/3932.16,393216-ram, bin,bin/10158.08}'
-  # LICHOMAT v0.2 memory budget (HANDOFF.md): DTCM + RAM at most 391796 + 4096 B and DTCM
-  # at most 107388 + 512 B (DTCM also holds the stack); the v0.2 arrays belong in RAM
-  arm-none-eabi-size -A "$B/LXR_V2_STM32F765.elf" | awk -v maxsum=395892 -v maxdtcm=107900 '
+  # LICHOMAT v0.4 memory budget (plan D30): DTCM + RAM at most 394104 + 57344 + 4096 B (v0.3,
+  # the reverb's own buffer, state); DTCM at most 107388 + 512 B (DTCM also holds the stack);
+  # RAM at most 393216 - 4096 B (the vector table's stack pointer is the end of RAM)
+  arm-none-eabi-size -A "$B/LXR_V2_STM32F765.elf" | awk -v maxsum=455544 -v maxdtcm=107900 -v maxram=389120 '
     $1==".dtcm"||$1==".dtcmz"{dtcm+=$2} $1==".data"||$1==".bss"||$1=="._user_heap"{ram+=$2}
-    END{ok = (dtcm+ram <= maxsum && dtcm <= maxdtcm)
-        printf "budget: DTCM+RAM %d/%d B, DTCM %d/%d B %s\n", dtcm+ram, maxsum, dtcm, maxdtcm, ok ? "OK" : "OVER"
+    END{ok = (dtcm+ram <= maxsum && dtcm <= maxdtcm && ram <= maxram)
+        printf "budget: DTCM+RAM %d/%d B, DTCM %d/%d B, RAM %d/%d B %s\n", dtcm+ram, maxsum, dtcm, maxdtcm, ram, maxram, ok ? "OK" : "OVER"
         exit !ok}' | tee -a "$LOG" || status=1
   python3 "$ROOT/tools/check_image.py" "$B" 2>&1 | tee -a "$LOG" || status=1
 else

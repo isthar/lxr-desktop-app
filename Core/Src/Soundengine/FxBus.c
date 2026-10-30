@@ -16,6 +16,7 @@
 #include "Soundengine/FxBus.h"
 #include "Soundengine/DSPAudio/BufferTools.h"
 #include "Soundengine/DSPAudio/mixer.h"
+#include "Soundengine/DSPAudio/FX/atmo.h"	//LICHOMAT v0.4: the reverb stage (plan D32)
 INDTCMZ FxBus fxBus;
 
 void FxBus_init()
@@ -30,6 +31,7 @@ void FxBus_init()
 	Ringmod_init(&fxBus.ringmod);
 	Compressor_init(&fxBus.compressor);
 	Delay_init(&fxBus.delay);
+	atmo_init();	//LICHOMAT v0.4: the reverb stage (plan D32)
 
 
 

@@ -28,6 +28,10 @@
 #include "Soundengine/DSPAudio/TiltEq.h"
 //#include "shaper.h"
 
+//LICHOMAT v0.4: the reverb's own buffer, 14 units in RAM, so the delay keeps FX_BUFFER (plan D31)
+#define REVERB_UNITS 14
+extern __fp16 REVERB_RAM[REVERB_UNITS * MAX_ALLPASS_SIZE];
+
 
 #define MAX_DELAY_SIZE MAX_ALLPASS_SIZE//(0x800)
 #define EARLY_TAPS 4

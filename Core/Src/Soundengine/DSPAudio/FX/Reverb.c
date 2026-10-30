@@ -33,7 +33,7 @@ void Reverb_init(Reverb *r)
 	TiltEq_init(&r->eqFb);
 
 	SineCosine_init(&r->lfo);
-	r->reverbBufferSram = (__fp16*)FX_BUFFER;
+	r->reverbBufferSram = REVERB_RAM;	//LICHOMAT v0.4: own buffer (plan D31)
 
 	r->earlyVolume = 1.0f;
 
@@ -372,7 +372,7 @@ void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, u
 
 		    tmp *= r->feedback;
 
-		    tmp = AllpassDelay_process(&r->apDelay[1], (tmp));
+		    tmp = AllpassDelay_process(&r->apDelay[0], (tmp));	//LICHOMAT v0.4: loop 1's own allpass; fw 1.7 used apDelay[1], loop 2's (plan AF1)
 		    tmp = VerbDelay_process(&r->delay[1], tmp);
 
 		     r->lastOut = calcOnePole(&r->lpFeedback, tmp*r->feedback);

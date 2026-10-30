@@ -80,6 +80,7 @@ set(LXR_SOURCES_DSP
     Src/Soundengine/DSPAudio/FX/Distortion.c
     Src/Soundengine/DSPAudio/FX/FxRamBuffer.c
     Src/Soundengine/DSPAudio/FX/Reverb.c
+    Src/Soundengine/DSPAudio/FX/atmo.c
     Src/Soundengine/DSPAudio/FX/Ringmod.c
     Src/Soundengine/DSPAudio/FX/VerbTools/AllpassDelay.c
     Src/Soundengine/DSPAudio/FX/VerbTools/sinCos.c

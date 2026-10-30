@@ -3,9 +3,10 @@
 #
 #   cmake -DLXR_ROOT=<repository root> -DMODE=<mode> -DWORK=<dir> -P check_sources.cmake
 #
-# MODE real checks Core/sources.cmake and expects 70 compiled files. MODE extra
-# adds a header to a list, and MODE stale drops Src/lcd.c from its list: both
-# must fail, and ctest matches the message of each failure.
+# MODE real checks Core/sources.cmake and expects 71 compiled files (70 before
+# LICHOMAT v0.4's atmo.c, plan A2). MODE extra adds a header to a list, and MODE
+# stale drops Src/lcd.c from its list: both must fail, and ctest matches the
+# message of each failure.
 #
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
@@ -39,7 +40,7 @@ endforeach()
 if(errors)
     message(FATAL_ERROR "M22: ${MODE}: the source lists do not match the emulator's build")
 endif()
-if(NOT n EQUAL 70)
-    message(FATAL_ERROR "M22: ${n} compiled files; expected 69 of Core/Src and appMain.c")
+if(NOT n EQUAL 71)
+    message(FATAL_ERROR "M22: ${n} compiled files; expected 70 of Core/Src and appMain.c")
 endif()
 message(STATUS "M22: ${n} files compiled, ${MODE} lists consistent")
