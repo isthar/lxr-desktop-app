@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-30 21:53",
-    "phase": "Etap 2: v0.3 gotowe w kodzie (M11); v0.4 czeka na odczyt CPU (H12)",
-    "focus": "v0.3 gotowe (gałąź v0.3 72f20c6). Następne: emulator R3 (karty testowe, nagrania wzorcowe, CI z ASan).",
+    "updated": "2026-10-30 23:07",
+    "phase": "Etap 2: v0.3 gotowe w kodzie (M11), emulator R3 gotowy (M12); v0.4 czeka na odczyt CPU (H12)",
+    "focus": "v0.3 z nagraniami wzorcowymi i CI emulatora (gałąź v0.3 5a7008d); emulator R3 gotowy (gałąź emulator 56fe495).",
     "branch": "timing-core",
-    "head": "df34208",
-    "next": "Ja: emulator R3 (zużycie ok. 54%, limit 75%). Ty: odsłuch build/demo/v02-*.wav i v03-*.wav, testy v0.1 z odczytem CPU (Q6, H12), potem U4–U19.",
-    "updated_at": "2026-10-30T21:53:00+01:00",
-    "now": "Od ok. 21:50 (zaraz po R3.4): agent w tle robi R3.5 i R3.6 (G9, G10, ping-pong, CI emulatora z ASan). Potem F13 na gałąź emulator i lekki przegląd R3."
+    "head": "a414137",
+    "next": "Ja: przerwa i podsumowanie ok. 04:00 albo przy 73% (teraz ok. 57%). Ty: odsłuch build/demo/v02-*, v03-* i build/dlc/*, testy v0.1 z odczytem CPU (Q6, H12), potem U4–U19.",
+    "updated_at": "2026-10-30T23:07:00+01:00",
+    "now": "Od 23:06: pierwsze CI na v0.3 po scaleniu; raport M12."
   },
   "epics": [
     {
@@ -435,9 +435,9 @@
     {
       "id": "E5.4",
       "epic": "E5",
-      "status": "do zrobienia",
-      "title": "Testy porównujące nagrania (goldens) i CI emulatora (R3): odłożone na koniec, po etapie 2 (Twoja decyzja z 29.10)",
-      "updated": "2026-10-29"
+      "status": "zrobione",
+      "title": "Testy porównujące nagrania (goldens G1–G10, 18 renderów) i CI emulatora z ASan (R3): gotowe 30.10 (M12), scalone też do v0.3; wcześniej niż w Twojej decyzji z 29.10, bo v0.4 czeka na H12 (Q27)",
+      "updated": "2026-10-30"
     },
     {
       "id": "E5.5",
@@ -646,6 +646,12 @@
       "date": "2026-10-30",
       "title": "v0.3: tryb fill, sceny mute, rolle 1/32 i triole, slide dla Drum 1–3 (E6.8, E6.11)",
       "summary": "Fill na trzymanym kroku 8 w trybie wykonawczym; 8 scen mute na krokach 9–16 (COPY + krok zapisuje), wejście na takcie albo kroku, zapis w prj.nfo za nazwą projektu; 11 temp rolla od 1/1 do 1/32 z triolami, dokładnie we własnym tempie ścieżki; slide dla Drum 1–3 (sld na kroku, slt w kicie). fw 1.7 wczytuje wszystko bez zmian. 90 testów na hoście, 145 w emulatorze, 0 ostrzeżeń; DTCM+RAM 394 104 z 395 892 B. Dwa lekkie przeglądy: 1 ważna i 8 drobnych usterek, poprawione z testami. Rendery do odsłuchu w build/demo/v03-*.wav. Raport: docs/lichomat/reports/M11-v0.3.md"
+    },
+    {
+      "id": "M12",
+      "date": "2026-10-30",
+      "title": "Emulator R3: nagrania wzorcowe G1–G10, CI z ASan, poprawki F13–F15 (E5.4, E5.7)",
+      "summary": "18 nagrań wzorcowych (dźwięk, MIDI, zegar, panel) z warunkami i wariantami zepsutymi; karty testowe zapisane przez firmware; tools/emu_golden.py; CI emulatora na macOS (Release i Debug z ASan i UBSan) zielone, pierwszy pełny przebieg ASan bez błędów pamięci. Błędy fw 1.7 znalezione przez emulator i Twoją paczkę DLC: F13 (tabela diody), F14 i F15 (konwersje niezdefiniowane w C, obraz bez zmian). Przegląd: 1 ważna i 4 drobne usterki poprawione. R3 scalone też do v0.3. Raport: docs/lichomat/reports/M12-emulator-R3.md"
     }
   ],
   "questions": [
@@ -822,6 +828,20 @@
       "question": "Emulator (R3.3) znalazł błąd fw 1.7 w Distortion.c: krzywa diody efektu clp przy sygnale +1 czyta jeden element za końcem tabeli (table_1n914[257]). Poprawić w firmware?",
       "assumption": "Poprawić jako F13, z testem.",
       "answer": "Moja rekomendacja według Twojej reguły z 29.10, 05:19, 30.10, 21:53: poprawione jako F13 (813aaf6 na v0.3, potem także na gałęzi emulator). Przy +1 funkcja zwraca ostatni element tabeli, czyli to samo, co fw 1.7 dawał, gdy liczba za tabelą była skończona; poniżej +1 nic się nie zmienia. Na LXR każda dodatnio obcięta próbka clp czytała przypadkową pamięć za tabelą."
+    },
+    {
+      "id": "Q26",
+      "status": "zamknięte",
+      "question": "Paczka kitów DLC od Ciebie (16 kitów z wzorcami demo, tylko na Twoim Macu) zatrzymała emulator pod UBSan na konwersjach niezdefiniowanych w C: przesunięcie ujemnej próbki transjentu (transientGenerator.c), próbka werbla poza int16 (Snare.c), druga faza PWM ponad 2^32 (Oscillator.c), wyjście filtra poza int32 (ResonantFilter.c). Poprawić w firmware?",
+      "assumption": "Tak, tak, żeby LXR grał dokładnie jak dotąd.",
+      "answer": "Moja rekomendacja według Twojej reguły z 29.10, 05:19, 30.10, 22:13: F14 (2606cd5) i F15 (c805783) na v0.3. Każda konwersja robi teraz w C to samo, co procesor LXR (M7) robi sprzętowo; obraz firmware jest bajt w bajt ten sam przed i po, więc brzmienie się nie zmienia. Po poprawkach wszystkie 16 wzorców demo gra pod UBSan bez błędu. Do rozważenia później (zmiana brzmienia, więc tylko za Twoją zgodą): w 1.7 druga faza PWM nasyca się zamiast zawijać, a za głośny werbel zawija się zamiast nasycać."
+    },
+    {
+      "id": "Q27",
+      "status": "zamknięte",
+      "question": "Etap 2 stoi: v0.4 (atmosfera) czeka na odczyt CPU (H12). R3 emulatora (nagrania wzorcowe, CI z ASan) było odłożone na koniec etapu 2. Robić R3 teraz?",
+      "assumption": "Tak: R3 nie zależy od sprzętu, a chroni każdą kolejną wersję.",
+      "answer": "Moja rekomendacja, zapowiedziana 30.10 o 20:37 bez sprzeciwu, zapisana 23:07: R3 zrobione teraz i scalone do v0.3. Aplikacja emulatora (E5.5, R4–R5) zostaje odłożona na koniec etapu 2, jak zdecydowałeś 29.10."
     }
   ],
   "log": [
@@ -2609,6 +2629,81 @@
       "n": 357,
       "at": "2026-10-30 21:53",
       "text": "Poprawka linii Teraz: agent R3.5-R3.6 działa od ok. 21:50, zaraz po R3.4."
+    },
+    {
+      "n": 358,
+      "at": "2026-10-30 21:55",
+      "text": "21:55 Lista sprawdzeń: w run sheet są już SHA-256 plików z CI do testów na LXR: 0.2 (f99cb713…, commit 4b63f2d) i 0.3 (d630eabc…, commit 813aaf6, z F13), z poleceniami gh run download."
+    },
+    {
+      "n": 359,
+      "at": "2026-10-30 22:00",
+      "text": "22:00 R3.5 gotowe (bfc492b, wypchnięte): nagrania wzorcowe G9 i G10 oraz scenariusz ping-pong (M16). Agent robi teraz R3.6, CI emulatora z ASan."
+    },
+    {
+      "n": 360,
+      "at": "2026-10-30 22:13",
+      "text": "22:13 Twój prezent, paczka DLC Hrtl (16 kitów z wzorcami demo, zostaje tylko na Twoim Macu, poza repo): (1) wszystkie 128 plików kitów ma 0 w bajtach slt, więc ryzyko D25 tu nie występuje; (2) przegląd w emulatorze pod UBSan znalazł 4 rodzaje niezdefiniowanych konwersji w silniku dźwięku fw 1.7, poprawione jako F14 (2606cd5) i F15 (c805783) bez zmiany obrazu firmware; teraz wszystkie 16 wzorców gra czysto; (3) rendery 16 wzorców do odsłuchu w build/dlc/sweep (opis w README.txt)."
+    },
+    {
+      "n": 361,
+      "at": "2026-10-30 22:13",
+      "text": "22:13 R3.6 gotowe (d097100, wypchnięte): emulator.yml, CI emulatora (Release i Debug z ASan+UBSan na macOS), próba na sucho i krok emulatora w check.sh. Pierwszy przebieg na GitHubie trwa."
+    },
+    {
+      "n": 362,
+      "at": "2026-10-30 22:17",
+      "text": "22:17 Pierwszy przebieg CI emulatora: Release zielone (wszystkie nagrania wzorcowe zgodne na runnerze GitHuba), ASan padło przy kompilacji: sprintf w render_fw.c jest przestarzałe w SDK macOS, gdy ASan wyłącza _FORTIFY_SOURCE. Poprawione (9ecd920, snprintf), razem z F13-F15 przeniesionymi z v0.3 na gałąź emulator. Lokalnie: emulator 158/159, host 57, 0 ostrzeżeń. Drugi przebieg CI trwa."
+    },
+    {
+      "n": 363,
+      "at": "2026-10-30 22:26",
+      "text": "22:26 Rendery funkcji LICHOMAT na kitach DLC do odsłuchu (tylko u Ciebie): build/dlc/demo/ (sceny mute na Nanobyte, rolle 1/32 i triole na Mist, hihat w x3/2 na Kronky, acid ze slide i bez na kicie Lambo), opis w README.txt. Sprawdzone po logach MIDI."
+    },
+    {
+      "n": 364,
+      "at": "2026-10-30 22:33",
+      "text": "22:33 Drugi przebieg CI emulatora anulowany bez startu: GitHub nie przydzielił runnera macOS arm64 (brak mocy po ich stronie). Puszczony ponownie (próba 2)."
+    },
+    {
+      "n": 365,
+      "at": "2026-10-30 22:36",
+      "text": "22:36 Lekki przegląd R3: 1 ważna uwaga i 4 drobne. Ważna: przy parametrach FX karty fx tor efektów nic nie daje, więc 5 nagrań G2 jest identycznych i nie wyłapałoby regresji w algorytmach FX (przyczyna: zerowe parametry FX karty; przy 64 algorytmy się różnią, a F13 usunął błąd, który to blokował). Drobne: diff w emu_golden.py wysypuje się przy różnej długości renderów; silent i 0..0 przechodzą poza końcem renderu; G9_ppq24 i G8_137 nie sprawdzają PPQ i tempa; CI nie wyłapie zgubionego pliku nagrania. Agent w tle poprawia wszystkie 5."
+    },
+    {
+      "n": 366,
+      "at": "2026-10-30 22:42",
+      "text": "22:42 Poprawka ważnej uwagi z przeglądu R3 (69aaa12): karta fx ma parametry FX na 64, więc 7 nagrań G2 jest teraz parami różnych (tube, fold, clp, delay, ping-pong, ring mod, kompresor) i żadne nie jest równe FX wyłączonemu. G9_ppq24 i G8_137 sprawdzają teraz liczbę nut (PPQ 24 i tempo 137). Agent kończy poprawki narzędzi."
+    },
+    {
+      "n": 367,
+      "at": "2026-10-30 22:49",
+      "text": "22:49 Poprawki narzędzi z przeglądu R3 (11bc93c, wypchnięte): diff przy renderach różnej długości, okna poza końcem renderu teraz padają, nowy test pilnuje zgodności plików nagrań z goldens.json. Emulator: 161 identyfikatorów w Debug, 162 w Release. CI emulatora ruszyło (Release w toku, ASan w kolejce)."
+    },
+    {
+      "n": 368,
+      "at": "2026-10-30 22:49",
+      "text": "22:49 Start scalenia R3 do v0.3 w tle (agent): nagrania wzorcowe i CI emulatora na v0.3; karty testowe odtworzone przez firmware v0.3 i każda różnica w nagraniach wyjaśniona przed ponownym zatwierdzeniem."
+    },
+    {
+      "n": 369,
+      "at": "2026-10-30 22:59",
+      "text": "22:59 Pierwszy pełny przebieg CI emulatora z ASan: 160 z 161 testów przechodzi, ASan nie zgłosił żadnego błędu pamięci w firmware ani w emulatorze. Padł tylko test bramki licencji (M21_negative): pod ASan napisy siedzą w innej sekcji pliku obiektowego. Bramka działała dobrze, poprawiony był test (56fe495, wypchnięte)."
+    },
+    {
+      "n": 370,
+      "at": "2026-10-30 23:02",
+      "text": "23:02 CI emulatora w całości zielone (56fe495): Release i Debug z ASan i UBSan, 161 z 161 testów. Pierwszy pełny przebieg ASan bez żadnego błędu pamięci, także w teście zapisu poza bufor FX (M16)."
+    },
+    {
+      "n": 371,
+      "at": "2026-10-30 23:06",
+      "text": "23:06 R3 scalone do v0.3 (7ee96d5, c1c041e, 7a6a0a3, 5a7008d; wypchnięte): v0.3 ma teraz nagrania wzorcowe i CI emulatora. Karty testowe odtworzone przez firmware v0.3 różnią się tylko oczekiwanymi blokami (.PAT +34 B, prj.nfo +14 B). Z 19 nagrań zmieniło się tylko G4, i tylko w logu panelu: strona Drum 1 pokazuje strzałkę > drugiego ekranu z slt. Dźwięk, MIDI i zegar wszystkich nagrań bez zmian. Testy: host 92, emulator 173 (Debug) i 174 (Release); budżet pamięci OK. CI na v0.3 ruszyło."
+    },
+    {
+      "n": 372,
+      "at": "2026-10-30 23:07",
+      "text": "23:07 Raport M12 (emulator R3) gotowy: docs/lichomat/reports/M12-emulator-R3.md. E5.4 zrobione; Q27 zapisuje, że R3 poszło przed końcem etapu 2, bo v0.4 czeka na H12."
     }
   ]
 }
