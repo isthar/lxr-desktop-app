@@ -1,0 +1,26 @@
+# G3: song mode over three patterns, with the kit autoload: the song card, song 0
+# (patterns 0, 1, 2) at 120 BPM, 4 bars, the song page shown (spec 8.6)
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card song --song 0 --bpm 120 --bars 4
+#expect lcd b1 >[000] | p00
+#expect lcd b2 >[001] | p01
+#expect lcd b3 >[002] | p02
+#expect lcd b4 >[002] | p02
+#broken --pattern 0
+# SHIFT + step 10 shows the song page; no step press there, which would append to the song.
+# Not at 0 ms: SHIFT held at t0 would turn the renderer's START into SHIFT + START, which
+# enables song mode (buttonHandler.c, case BUT_START_STOP) also for --pattern 0
+100ms down shift
++20ms press step10
++100ms up shift
+# the song page's position 100 ms into each 2 s bar (the first at 300 ms, after the SHIFT release)
+300ms mark b1
+2.1s mark b2
+4.1s mark b3
+6.1s mark b4
