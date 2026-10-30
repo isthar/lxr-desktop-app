@@ -155,6 +155,8 @@ typedef struct
 	uint8_t		hits;		/**< the ratchet hits it read */
 	int16_t		offset;		/**< the swing + shift it read, ticks after absStep * 96 */
 	uint16_t	len;		/**< v0.2: the track step length the early part read */
+	int8_t		jitter;		/**< v0.2: the humanize time draw, ticks */
+	int8_t		velPct;		/**< v0.2: the humanize volume draw, percent */
 } seqc_draw_t;
 
 //------------------------------------------------------------------------------
@@ -1015,15 +1017,34 @@ static seqc_draw_t *seqc_slot(uint8_t track, uint32_t absStep, uint8_t pattern, 
 	}
 	return d;
 }
-/** the draws of the occurrence in slot d, made once (N3): r for the probability (V4 adds humanize) */
+//------------------------------------------------------------------------------
+/** v0.2: ms at the current tempo in whole ticks, rounded half away from zero */
+static int seqc_msTicks(int ms)
+{
+	const double bpm = seqc.mode == SEQC_SYNC_INTERNAL ? seqc.masterBpm : seqc_sl.bpm;
+	const double t = (double)ms * bpm * ((double)SEQC_TICKS_PER_BEAT / 60000.0);
+	return t >= 0.0 ? (int)(t + 0.5) : -(int)(0.5 - t);
+}
+//------------------------------------------------------------------------------
+/** the draws of the occurrence in slot d, made once (N3): r for the probability; then,
+ * v0.2, the humanize time (ticks, uniform in +-T) if humTime > 0 and the humanize volume
+ * (percent, uniform in +-humVol) if humVol > 0 */
 static void seqc_draw(seqc_draw_t *d, const TrackGroove *g)
 {
-	(void)g;
 	if (d->drawn)
 		return;
 	d->r = (uint8_t)(1u + seqc.host.random(seqc.host.ctx) % 100u);
+	if (g->humTime > 0)
+	{
+		const int span = seqc_msTicks(g->humTime);
+		const uint32_t v = seqc.host.random(seqc.host.ctx);
+		d->jitter = (int8_t)(span > 0 ? (int)(v % (uint32_t)(2 * span + 1)) - span : 0);
+	}
+	if (g->humVol > 0)
+		d->velPct = (int8_t)((int)(seqc.host.random(seqc.host.ctx) % (2u * g->humVol + 1u)) - (int)g->humVol);
 	d->drawn = true;
 }
+//------------------------------------------------------------------------------
 /** whether an occurrence with Step.prob plays (V5 adds the trig conditions) */
 static bool seqc_plays(seqc_draw_t *d, uint8_t prob, const seqc_place_t *pl)
 {
@@ -1035,20 +1056,28 @@ static void seqc_noTrig(seqc_draw_t *d)
 {
 	(void)d;
 }
-/** the first hit's offset from the grid tick: swing on an odd occurrence and shift (V4
- * adds delay and humanize) */
+//------------------------------------------------------------------------------
+/** the first hit's offset from the grid tick: swing on an odd occurrence, shift, and
+ * v0.2's delay + humanize time, at most one track step later; the sum at least 7/8 of a
+ * track step earlier (-84 at x1), so the lookahead holds at every tempo */
 static int seqc_offset(const seqc_draw_t *d, const TrackGroove *g, StepTiming timing, uint32_t absStep,
 		const seqc_place_t *pl)
 {
-	(void)d;
-	(void)g;
-	return ((absStep & 1u) ? (int)pl->swing : 0) + seqc_shiftFor(timing.shift, pl->len);
+	int groove = seqc_msTicks(g->delay) + d->jitter;
+	if (groove > (int)pl->len)
+		groove = (int)pl->len;
+	const int offset = ((absStep & 1u) ? (int)pl->swing : 0) + seqc_shiftFor(timing.shift, pl->len) + groove;
+	const int earliest = -(int)(pl->len - pl->len / 8u);
+	return offset < earliest ? earliest : offset;
 }
-/** the velocity of the occurrence's hits (V4 adds humanize) */
+//------------------------------------------------------------------------------
+/** the velocity of the occurrence's hits: v0.2's humanize volume, rounded, at most 127 */
 static uint8_t seqc_humanVel(uint8_t vel, const seqc_draw_t *d)
 {
-	(void)d;
-	return vel;
+	if (d->velPct == 0)
+		return vel;
+	const int v = ((int)vel * (100 + d->velPct) + 50) / 100;
+	return (uint8_t)(v > 127 ? 127 : v);
 }
 
 //------------------------------------------------------------------------------

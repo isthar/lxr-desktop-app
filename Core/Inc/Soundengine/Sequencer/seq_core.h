@@ -204,6 +204,16 @@
  * - After a song position a track on its own grid continues on it from the start of the
  *   run; its step in progress at the located step does not play.
  * MIDI clock out, the clock out pulses, tempoStep() and stepBoundary() stay on the master grid.
+ *
+ * Delay and humanize (v0.2)
+ * -------------------------
+ * TrackGroove.delay (-15..+30 ms) and the humanize time (+-humTime ms, a uniform draw)
+ * move a step occurrence's hits by whole ticks at the current tempo (rounded half away
+ * from zero), together with the swing and the shift; delay + humanize at most one track
+ * step later, and the whole offset at most 7/8 of a track step earlier, the earliest a
+ * shift alone reaches. The humanize volume (+-humVol %) scales the hits' velocity,
+ * rounded, at most 127. The draws are made once per occurrence with its main step on,
+ * after r: the time if humTime > 0, then the volume if humVol > 0. Roll events get none.
  */
 
 //------------------------------------------------------------------------------
@@ -454,7 +464,9 @@ typedef struct seqc_host
 	void		(*transport)(void *ctx, seqc_transport_t change);
 	/** A random number for the probability draw, 1 + random() % 100. It is
 	 * called once per generated step occurrence (track, absolute step) whose
-	 * main-step bit is set, and again only if that step changed (see Generation) */
+	 * main-step bit is set, and again only if that step changed (see Generation);
+	 * v0.2: once or twice more for an occurrence of a track with humanize on (see
+	 * Delay and humanize) */
 	uint32_t	(*random)(void *ctx);
 	/* -- v0.2; both may be NULL -- */
 	/** the track's settings in the pattern: tempo, humanize, delay (TrackGroove,
