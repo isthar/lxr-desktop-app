@@ -28,7 +28,8 @@
 #define VSCHED_RING		4	/**< records per voice (S16) */
 #define VSCHED_BLOCK_CYCLES	313181u	/**< 64 frames: 64 x 552,960 / 113 = 313,180.9 cycles */
 #ifndef VSCHED_SPLIT_CAP
-#define VSCHED_SPLIT_CAP	6	/**< S20: voices that may split in one block; 6 = no cap, 3 = the fix-up */
+#define VSCHED_SPLIT_CAP	6	/**< S20: voices whose records may split in one block (a phase does not
+					 * count); 6 = no cap, 3 = the fix-up */
 #endif
 
 /* vsched_rec_t.flags */
@@ -58,7 +59,7 @@ typedef struct
 	uint32_t overflow;	/**< records dropped by a full ring, the oldest (S16) */
 	uint32_t splits;	/**< record splits */
 	uint32_t phaseSplits;	/**< phase splits: a voice's control step at its phase, one per voice and block (S13) */
-	uint32_t capFallbacks;	/**< blocks that needed more than VSCHED_SPLIT_CAP splits (S20) */
+	uint32_t capFallbacks;	/**< blocks that needed more than VSCHED_SPLIT_CAP record splits (S20) */
 	uint32_t offTick;	/**< posts outside seq_tick(), dropped (S17, P9) */
 } vsched_stats_t;
 
@@ -109,8 +110,10 @@ void vsched_post(const vsched_rec_t *r);
 /* The phase (S13, amended after Task 11's kick measurement: the persistent note phase). A note
  * that starts at offset k keeps its control grid: each of its control steps comes at k of a
  * block and lasts 64 samples, its two parts in two blocks, until the voice's next record. A
- * record at k' sets the phase k'; a record at offset 0, the cap's fallback (S20), a voice that
- * the mixer finds silent and a trigger outside the records (trg blk) set it to 0, the block grid */
+ * record at k' sets the phase k'; a record at offset 0, also one that the cap's fallback (S20) puts
+ * there, a voice that the mixer finds silent and a trigger outside the records (trg blk) set it to
+ * 0, the block grid. The cap counts the records due at an offset, not the phases: its fallback
+ * leaves the phases of the voices without a record in the block */
 
 /** the mixer, once per block in this order: drop the phase of each voice whose bit is set in
  * silent (its amp EG ended, its step's gain 0); read the window and plan every voice (its

@@ -6,8 +6,9 @@
  * The persistent note phase (the amendment of S13, after the kick measurement of Task 11): a
  * voice keeps its note's control grid, the phase phi, until its next record; each block its
  * control step comes at phi (vsched_phaseStep()), unless a record at k <= phi cuts that step.
- * A record at offset 0, the cap's fallback, a silent voice and a trigger outside the records
- * (trg blk) put the voice back on the block grid.
+ * A record at offset 0 (also one that the cap's fallback puts there), a silent voice and a
+ * trigger outside the records (trg blk) put the voice back on the block grid. The cap counts
+ * the records due at an offset in the block, not the phases (review of v0.5).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -565,62 +566,118 @@ TEST(vsched_cap)
 	}
 	if (VSCHED_SPLIT_CAP < VSCHED_VOICES)
 	{
-		reset();					/* a pending phase counts, and the fallback clears it */
+		reset();					/* a record at offset 0 is no split: it does not count */
+		windowAt(77777u);
+		for (uint8_t v = 0; v < VSCHED_SPLIT_CAP; v++)
+			postTimed(v, 77777u + L0 / 4u, 1);
+		vsched_post(&(vsched_rec_t){ .track = VSCHED_SPLIT_CAP, .note = 2, .vel = 100 });
+		vsched_beginBlock(0);
+		vsched_stats(&st);
+		ASSERT_EQ(st.capFallbacks, 0);
+		ASSERT_EQ(vsched_split(0), 16);
+		vsched_applyPhase0();
+		ASSERT_EQ(triggers(), 1);
+	}
+	/* a phase does not count (review of v0.5): it only moves its note's control step, about half
+	 * a split (spec 6.1). CAP records beside it split; with CAP + 1 the block falls back, those
+	 * records start at offset 0 (their voices' phase 0), and the phase keeps its step */
+	for (unsigned extra = 0; extra <= 1 && VSCHED_SPLIT_CAP + extra < VSCHED_VOICES; extra++)
+	{
+		const unsigned voices = VSCHED_SPLIT_CAP + extra;
+		reset();
 		windowAt(77777u);
 		postTimed(0, 77777u + L0 / 4u, 1);
 		block();
 		ASSERT_EQ(vsched_phase(0), 16);
 		vsched_blockDone(77777u + 2u * L0);
-		for (uint8_t v = 1; v <= VSCHED_SPLIT_CAP; v++)
+		for (uint8_t v = 1; v <= voices; v++)
 			postTimed(v, 77777u + L0 + L0 / 2u, 1);
 		vsched_beginBlock(0);
-		ASSERT_EQ(vsched_phase(0), 0);
-		ASSERT_EQ(vsched_split(1), 0);
 		vsched_stats(&st);
-		ASSERT_EQ(st.capFallbacks, 1);
+		ASSERT_EQ(st.capFallbacks, extra);
+		ASSERT_EQ(vsched_phase(0), 16);
+		for (uint8_t v = 1; v <= voices; v++)
+			ASSERT_EQ(vsched_split(v), extra ? 0 : 32);
+		vsched_applyPhase0();
+		ASSERT_EQ(triggers(), 1 + (extra ? (int)voices : 0));
+		ASSERT_EQ(vsched_phaseStep(0), 16);
+		for (uint8_t v = 1; v <= voices; v++)
+		{
+			ASSERT_EQ(vsched_phaseStep(v), 0);
+			vsched_applySplit(v);
+			ASSERT_EQ(vsched_phase(v), extra ? 0 : 32);
+		}
+		ASSERT_EQ(triggers(), 1 + (int)voices);
+		ASSERT_EQ(vsched_phase(0), 16);
 	}
 }
 
 TEST(vsched_cap_phases)
 {
-	/* the persistent note phase under the cap: CAP voices keep their phases block after block (no
-	 * fallback); a record of one more voice makes CAP + 1 and the block falls back, every phase
-	 * cleared, and the voices stay on the block grid afterwards. A voice found silent drops its
-	 * phase before the count */
+	/* the persistent note phase under the cap (S20, review of v0.5): only a record due at an
+	 * offset in the block counts, a phase does not. All six voices keep their phases block after
+	 * block (records three at a time set them); CAP records over the six phases split, each after
+	 * its voice's step (k > phi); CAP + 1 make the block fall back: their records start at offset
+	 * 0 (phase 0), and the other voices keep their phases and their steps, also afterwards */
 	vsched_stats_t st;
-	for (int silentOne = 0; silentOne < 2; silentOne++)
+	reset();
+	windowAt(77777u);
+	for (uint8_t v = 0; v < 3u; v++)
+		postTimed(v, 77777u + (uint32_t)(2u * v + 10u) * L0 / 64u, 1);
+	block();
+	vsched_blockDone(77777u + 2u * L0);
+	for (uint8_t v = 3; v < VSCHED_VOICES; v++)
+		postTimed(v, 77777u + L0 + (uint32_t)(2u * v + 10u) * L0 / 64u, 1);
+	block();
+	for (uint32_t b = 3; b < 7u; b++)
 	{
-		reset();
-		windowAt(77777u);
-		for (uint8_t v = 0; v < VSCHED_SPLIT_CAP; v++)
-			postTimed(v, 77777u + (uint32_t)(2u * v + 10u) * L0 / 64u, 1);
+		vsched_blockDone(77777u + b * L0);
 		block();
-		for (uint32_t b = 2; b < 6u; b++)
-		{
-			vsched_blockDone(77777u + b * L0);
-			block();
-		}
-		for (uint8_t v = 0; v < VSCHED_SPLIT_CAP; v++)
-			ASSERT_EQ(vsched_phase(v), 2u * v + 10u);
-		vsched_stats(&st);
-		ASSERT_EQ(st.capFallbacks, 0);
-		ASSERT_EQ(st.phaseSplits, 4u * VSCHED_SPLIT_CAP);
-		if (VSCHED_SPLIT_CAP == VSCHED_VOICES)
-			continue;
-		vsched_blockDone(77777u + 6u * L0);
-		postTimed(VSCHED_SPLIT_CAP, 77777u + 5u * L0 + L0 / 2u, 2);
-		blockSilent((uint8_t)(silentOne ? 1u : 0u));
-		vsched_stats(&st);
-		ASSERT_EQ(st.capFallbacks, silentOne ? 0 : 1);
-		ASSERT_EQ(vsched_phase(0), 0);
-		for (uint8_t v = 1; v < VSCHED_SPLIT_CAP; v++)
-			ASSERT_EQ(vsched_phase(v), silentOne ? 2u * v + 10u : 0u);
-		ASSERT_EQ(vsched_phase(VSCHED_SPLIT_CAP), silentOne ? 32 : 0);
-		vsched_blockDone(77777u + 7u * L0);
-		block();
-		ASSERT_EQ(vsched_phase(VSCHED_SPLIT_CAP), silentOne ? 32 : 0);
-		ASSERT_EQ(vsched_phase(1), silentOne ? 12 : 0);
 	}
+	for (uint8_t v = 0; v < VSCHED_VOICES; v++)
+		ASSERT_EQ(vsched_phase(v), 2u * v + 10u);
+	vsched_stats(&st);
+	ASSERT_EQ(st.capFallbacks, 0);
+	ASSERT_EQ(st.splits, VSCHED_VOICES);
+	ASSERT_EQ(st.phaseSplits, 3u + 4u * VSCHED_VOICES);	/* voices 0-2 in block 2, then all six */
+
+	const unsigned n = VSCHED_SPLIT_CAP < VSCHED_VOICES ? VSCHED_SPLIT_CAP : VSCHED_VOICES;
+	vsched_blockDone(77777u + 7u * L0);
+	for (uint8_t v = 0; v < n; v++)
+		postTimed(v, 77777u + 6u * L0 + 40u * L0 / 64u, 2);
+	block();
+	vsched_stats(&st);
+	ASSERT_EQ(st.capFallbacks, 0);
+	ASSERT_EQ(st.splits, VSCHED_VOICES + n);
+	ASSERT_EQ(st.phaseSplits, 3u + 5u * VSCHED_VOICES);
+	for (uint8_t v = 0; v < VSCHED_VOICES; v++)
+		ASSERT_EQ(vsched_phase(v), v < n ? 40u : 2u * v + 10u);
+	if (VSCHED_SPLIT_CAP >= VSCHED_VOICES)
+		return;
+
+	vsched_blockDone(77777u + 8u * L0);
+	for (uint8_t v = 0; v <= VSCHED_SPLIT_CAP; v++)
+		postTimed(v, 77777u + 7u * L0 + 50u * L0 / 64u, 3);
+	vsched_beginBlock(0);
+	vsched_stats(&st);
+	ASSERT_EQ(st.capFallbacks, 1);
+	for (uint8_t v = 0; v <= VSCHED_SPLIT_CAP; v++)
+		ASSERT_EQ(vsched_split(v), 0);
+	vsched_applyPhase0();
+	ASSERT_EQ(triggers(), (int)(VSCHED_VOICES + n + VSCHED_SPLIT_CAP + 1u));
+	for (uint8_t v = 0; v < VSCHED_VOICES; v++)
+	{
+		ASSERT_EQ(vsched_phase(v), v <= VSCHED_SPLIT_CAP ? 0u : 2u * v + 10u);
+		ASSERT_EQ(vsched_phaseStep(v), v <= VSCHED_SPLIT_CAP ? 0u : 2u * v + 10u);
+	}
+	vsched_blockDone(77777u + 9u * L0);
+	block();
+	for (uint8_t v = 0; v < VSCHED_VOICES; v++)
+		ASSERT_EQ(vsched_phase(v), v <= VSCHED_SPLIT_CAP ? 0u : 2u * v + 10u);
+	vsched_stats(&st);
+	ASSERT_EQ(st.capFallbacks, 1);
+	ASSERT_EQ(st.splits, VSCHED_VOICES + n);
+	ASSERT_EQ(st.phaseSplits, 3u + 5u * VSCHED_VOICES + 2u * (VSCHED_VOICES - VSCHED_SPLIT_CAP - 1u));
 }
 
 TEST(vsched_stamps)

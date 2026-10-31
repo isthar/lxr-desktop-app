@@ -131,13 +131,15 @@ void vsched_beginBlock(uint8_t silent)
 			if (k > vs_k[v])
 				vs_k[v] = k;			/* S2: all at the last offset (P3) */
 		}
-		if (vs_k[v] || vs_phase[v])
-			splitting++;
+		if (vs_k[v])
+			splitting++;			/* S20: a record split; a phase only moves its note's step */
 	}
 	if (splitting > VSCHED_SPLIT_CAP)
 	{
-		memset(vs_k, 0, sizeof vs_k);		/* S20: the block falls back to block timing */
-		memset(vs_phase, 0, sizeof vs_phase);
+		/* S20: the block's records fall back to block timing, at offset 0 (their voices' phase 0
+		 * in vsched_applyPhase0()); every other voice keeps its phase and its step at it (review
+		 * of v0.5: clearing them moved the sounding notes back to the block grid) */
+		memset(vs_k, 0, sizeof vs_k);
 		vs_stats.capFallbacks++;
 	}
 }
