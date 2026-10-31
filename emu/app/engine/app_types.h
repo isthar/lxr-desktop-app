@@ -62,6 +62,7 @@ typedef struct app_diagnostics
 	double leadMin, leadMax;		/**< s: drained events since the output opened */
 	double inLatMin, inLatMax;		/**< s: the last finished 2-s window */
 	int dAuto, extSync, outputRunning;
+	int realtime;					/**< 1 if the firmware thread has the time-constraint policy (E29) */
 	uint64_t outUnderruns, callbacks, overloads, mapJumps, midiStale, midiInDropped, midiOutDropped,
 		midiUnsent, panelDropped, snapDropped, ackDropped, dinOrphans, warnings;
 	app_outputInfo_t output;

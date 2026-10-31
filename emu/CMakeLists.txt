@@ -268,8 +268,8 @@ add_test(NAME M20 COMMAND ${Python3_EXECUTABLE} "${EMU_DIR}/tests/drift.py" chec
 # lichomat-render with its --version notices. It runs
 # ninja -t deps, so ctest needs ninja on PATH (source tools/env.sh).
 set(EMU_GATE ${Python3_EXECUTABLE} "${EMU_DIR}/tests/licence_gate.py")
-add_test(NAME M21 COMMAND ${EMU_GATE} "${LXR_ROOT}" "${CMAKE_BINARY_DIR}"
-    $<TARGET_FILE:test_boot> $<TARGET_FILE:test_hook> $<TARGET_FILE:lichomat-render>)
+set(EMU_GATE_BINARIES $<TARGET_FILE:test_boot> $<TARGET_FILE:test_hook> $<TARGET_FILE:lichomat-render>)
+# add_test(NAME M21 ...) follows the app section below, which adds its binaries to the list
 add_test(NAME M21_rejects COMMAND ${EMU_GATE} --extra Core/Inc/lcd.h --extra Core/Inc/main.h
     "${LXR_ROOT}" "${CMAKE_BINARY_DIR}" $<TARGET_FILE:test_boot>)
 # exactly these two errors, in this order, and no other
@@ -390,6 +390,35 @@ emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R
     R4_engine_wall R4_engine_card R4_engine_generator)
 emu_add_app_test(test_app_m18 ENGINE IDS M18_midi_out_step M18_slave_90 M18_slave_128 M18_slave_174 M18_din_128
     M18_zero_d)
+
+if(LICHOMAT_EMU_APP)
+    set(EMU_APP_MAC_SOURCES "${EMU_APP_DIR}/mac/app_mach.c" "${EMU_APP_DIR}/mac/app_shell.c")
+    add_library(emu_app_mac OBJECT ${EMU_APP_MAC_SOURCES})
+    target_include_directories(emu_app_mac PUBLIC "${EMU_APP_DIR}/mac" "${EMU_APP_DIR}/engine" "${EMU_DIR}/core"
+        "${EMU_DIR}/common")
+    target_compile_options(emu_app_mac PRIVATE ${EMU_APP_FLAGS})
+    set(EMU_APP_FRAMEWORKS "-framework CoreFoundation")
+    set(EMU_APP_OBJECTS $<TARGET_OBJECTS:emu_app_mac> $<TARGET_OBJECTS:emu_app_units> $<TARGET_OBJECTS:emu_app_engine>
+        $<TARGET_OBJECTS:emu_app_fw> ${EMU_DEVICE_OBJECTS})
+    add_executable(lichomat-emu-dev "${EMU_APP_DIR}/dev/dev_main.c" ${EMU_APP_OBJECTS})
+    target_include_directories(lichomat-emu-dev PRIVATE "${EMU_APP_DIR}/mac" "${EMU_APP_DIR}/engine" "${EMU_DIR}/core"
+        "${EMU_DIR}/common")
+    target_compile_options(lichomat-emu-dev PRIVATE ${EMU_APP_FLAGS})
+    target_link_libraries(lichomat-emu-dev PRIVATE ${EMU_APP_FRAMEWORKS})
+    set(EMU_APP_TEST ${Python3_EXECUTABLE} "${EMU_DIR}/tests/app_test.py" --dev $<TARGET_FILE:lichomat-emu-dev>
+        --render $<TARGET_FILE:lichomat-render> --root "${LXR_ROOT}" --work "${CMAKE_BINARY_DIR}/app-test")
+    function(emu_app_tests)
+        foreach(id IN LISTS ARGN)
+            add_test(NAME ${id} COMMAND ${EMU_APP_TEST} ${id})
+            set_tests_properties(${id} PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77)
+        endforeach()
+    endfunction()
+    emu_app_tests(R4_dev_headless)
+    list(APPEND EMU_GATE_BINARIES $<TARGET_FILE:lichomat-emu-dev>)
+endif()
+
+# M21 (see above): the gate over what the binaries were built from, the app's harness included
+add_test(NAME M21 COMMAND ${EMU_GATE} "${LXR_ROOT}" "${CMAKE_BINARY_DIR}" ${EMU_GATE_BINARIES})
 
 # The temporary folders: every test above gets TMPDIR = a folder of this build,
 # which emu_tmp_setup empties first and emu_tmp_clean checks last. A test removes

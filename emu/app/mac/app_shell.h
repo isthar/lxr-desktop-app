@@ -1,0 +1,52 @@
+/*
+ * app_shell.h
+ *
+ * LICHOMAT Emu without its face: start-up, the threads, the per-frame work of
+ * the main thread. lichomat-emu-dev (E1) and the GUI (Task 12) both drive it,
+ * through this header only.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#ifndef APP_SHELL_H_
+#define APP_SHELL_H_
+
+#include <stddef.h>
+
+#include "app_types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct app_shell app_shell_t;
+
+typedef struct app_shellOptions
+{
+	const char *cardDir;	/**< the card folder; Task 9: NULL is the app folder's Card */
+	int noAudio, noMidi;
+	void (*message)(void *ctx, const char *text);	/**< warnings, notices, errors; main thread */
+	void *ctx;
+} app_shellOptions_t;
+
+app_shell_t *app_shellNew(void);	/**< calloc'd; one per process */
+int app_shellStart(app_shell_t *s, const app_shellOptions_t *o, char *err, size_t n);
+int app_shellFrame(app_shell_t *s);	/**< main thread: snapshot, messages; 1 if a new snapshot came */
+const app_snapshot_t *app_shellSnapshot(const app_shell_t *s);	/**< the newest; NULL before the first */
+int app_shellPanel(app_shell_t *s, const app_panelEvent_t *ev);
+int app_shellCommand(app_shell_t *s, const app_cmd_t *c);
+int app_shellHung(const app_shell_t *s);
+int app_shellWarnings(const app_shell_t *s);				/**< the warnings kept, at most the last 64 (spec 11) */
+const char *app_shellWarning(const app_shell_t *s, int i);	/**< oldest first */
+void app_shellTestFault(app_shell_t *s);	/**< harness only (Task 10): SIGSEGV on the firmware thread */
+void app_shellStop(app_shell_t *s);		/**< APP_CMD_STOP; joins the firmware thread for up to 2 s */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* APP_SHELL_H_ */
