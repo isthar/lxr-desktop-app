@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 02:26",
+    "updated": "2026-10-31 02:53",
     "phase": "Etap 2: v0.4 (atmosfera) w toku; A1-A6 gotowe, A7-A9 czekają na H12",
     "focus": "v0.4 A1-A6 gotowe na gałęzi v0.4 (36245bf): delay z tempem, filtr DJ, bufor i parametry pogłosu. Pogłos, freeze i rumble (A7-A9) po Twoim odczycie CPU (H12).",
     "branch": "timing-core",
-    "head": "3c6ed72",
-    "next": "Ty: jedna sesja testowa na v0.3 według docs/lichomat/test-session-v0.3.md, najpierw H12 (odczyt CPU odblokowuje pogłos w v0.4: pełna częstotliwość, jeśli pk ≤ 46,2%, połowiczna, jeśli ≤ 63,3%); odsłuch build/demo/* i build/dlc/*. Ja: przerwa od ok. 02:30; po H12 v0.4 A7-A11.",
-    "updated_at": "2026-10-31T02:26:00+01:00",
-    "now": "Od 02:26: czekam na przebieg CI dla ea464cc (v0.4, poprawka M_PI); poza tym przerwa."
+    "head": "dec5835",
+    "next": "Ty: jedna sesja testowa na v0.3 (docs/lichomat/test-session-v0.3.md), najpierw H12. Ja: do ok. 04:00 części v0.4 bez H12, potem przerwa; po H12 v0.4 A7-A11.",
+    "updated_at": "2026-10-31T02:53:00+01:00",
+    "now": "Od 02:53: porządki; CI dla v0.4 czeka na runner GitHuba."
   },
   "epics": [
     {
@@ -849,6 +849,13 @@
       "question": "Plan v0.4 (atmosfera) jest gotowy (c45f5cd). Zadania A1–A6 (oszacowanie kosztu pogłosu, budżet i bufor, parametry, menu, delay z tempem, filtr DJ) nie zależą od odczytu CPU; A7–A9 (pogłos, freeze, rumble) zależą. Zaczynać A1–A6 przed H12?",
       "assumption": "Tak, w ramach limitu 75%; A7–A9 czekają na H12.",
       "answer": "Moja rekomendacja według Twojej reguły z 29.10, 05:19, 31.10, 00:31: A1–A6 ruszają teraz na gałęzi v0.4 od v0.3; A7–A9 dopiero po Twoim odczycie H12, według reguły D41 z planu. To doprecyzowuje Q24 (tam: cała atmosfera po H12), bo pomiar dotyczy tylko pogłosu."
+    },
+    {
+      "id": "Q29",
+      "status": "zamknięte",
+      "question": "Filtr DJ, rezonans, poziom pogłosu, freeze i decay nie są na liście celów modulacji (LFO, velocity), choć plan v0.4 (D33) tak zakładał. Dopisać je do listy?",
+      "assumption": "Tylko jeśli fw 1.7 bezpiecznie pomija albo przycina wskaźnik celu spoza swojej listy.",
+      "answer": "Moja rekomendacja według Twojej reguły z 29.10, 05:19, 31.10, 02:53: sprawdzę to w A7 (jak kit zapisuje cel modulacji i co 1.7 robi z wskaźnikiem spoza listy). Jeśli 1.7 to bezpiecznie pomija, dopiszę pięć celów na końcu listy; jeśli nie, zostaje menu i NRPN, a dokumenty powiedzą to wprost. Do tego czasu: menu i NRPN 96-99 i 116."
     }
   ],
   "log": [
@@ -2836,6 +2843,16 @@
       "n": 397,
       "at": "2026-10-31 02:26",
       "text": "02:26 CI na v0.4: zadanie Host tests w build.yml padło na Linuksie (M_PI w sinCos.c i TiltEq.c, glibc w trybie strict C11; na macOS przechodziło). Poprawione (ea464cc, _DEFAULT_SOURCE jak dla test_dsp), wypchnięte. GitHub od 00:11 UTC nie utworzył nowych przebiegów (status: operational), monitor czeka na przebieg dla ea464cc."
+    },
+    {
+      "n": 398,
+      "at": "2026-10-31 02:39",
+      "text": "02:39 Wznowienie po przerwie: Twój odczyt 57% (mój estymator mówił 61,5%; dopisany). Kofeina do ok. 04:08, koniec bloku 8 h. Agent w tle robi części v0.4 niezależne od H12: kroki na LXR U23-U25 (delay z tempem, filtr DJ, zgodność z fw 1.7), regułę budżetu w HANDOFF i tools/demo_v04.sh (delay 1/8 z kropką, przejazd filtrem DJ)."
+    },
+    {
+      "n": 399,
+      "at": "2026-10-31 02:53",
+      "text": "02:53 v0.4 bez H12 (dec5835 na timing-core, 4caa0fc na v0.4; wypchnięte): kroki na LXR U23 (delay z tempem), U24 (filtr DJ), U25 (zgodność z fw 1.7), reguła budżetu v0.4 w HANDOFF, tools/demo_v04.sh: echa co 360,07 ms przy 1/8 z kropką i 125 BPM; przejazd filtrem DJ przesuwa widmo (rendery w build/demo/v04-*). Zgłoszone przez agenta braki Note On po starcie: fałszywy alarm, Note On i Note Off zgadzają się co do sztuki. Q29: filtr DJ nie jest celem LFO; decyzja przy A7. Plan v0.4 ma sekcję poprawek po A1-A6."
     }
   ]
 }
