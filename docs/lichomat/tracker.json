@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 16:40",
-    "phase": "Etap 2: v0.4 gotowe w kodzie (M13); częstotliwość pogłosu czeka na H12",
-    "focus": "E6.10: wyzwalanie z dokładnością do próbki (v0.5)",
+    "updated": "2026-10-31 21:53",
+    "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
+    "focus": "Przerwa: v0.5 zamknięte w kodzie (M16)",
     "branch": "timing-core",
-    "head": "d251cf6",
-    "next": "Twoje H12 (pogłos v0.4), A1–A12 w aplikacji, sesja testowa na LXR",
-    "updated_at": "2026-10-31T16:40:00+01:00",
-    "now": "Przegląd planu v0.5"
+    "head": "c7c6b33",
+    "next": "Twoje H12 (pogłos v0.4), U27–U32 dla v0.5, A1–A12 w aplikacji, sesja testowa na LXR; potem kity",
+    "updated_at": "2026-10-31T21:53:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -527,7 +527,7 @@
       "id": "E6.10",
       "epic": "E6",
       "status": "w toku",
-      "title": "Wyzwalanie z dokładnością do próbki (dziś start głosu kwantowany do bloku 1,45 ms): projekt i koszt CPU od 31.10, potem v0.5",
+      "title": "Wyzwalanie z dokładnością do próbki: zrobione na gałęzi v0.5 (M16, c7c6b33); wydanie po v0.4 i U27–U32",
       "updated": "2026-10-31"
     },
     {
@@ -670,6 +670,12 @@
       "date": "2026-10-31",
       "title": "Jacki zegara jako audio w aplikacji (emulator R5, E5.5)",
       "summary": "CLK OUT na wybranym kanale wyjścia audio (impulsy w swoich ramkach, dźwięk opóźniony o jeden blok), CLK i RST IN z wejścia audio z progiem i histerezą, D z opóźnieniem wejścia, zgoda na mikrofon tylko po włączeniu opcji. Emulator ma całą specyfikację etapu 1b (R1–R5). 288 testów emulatora (v0.3: 300, v0.4: 308), obrazy firmware bez zmian. Przegląd: 1 blokująca, 1 ważna i 6 drobnych usterek poprawionych; wyjaśniony niestabilny test (pierwsze takty MIDI clock po starcie). Nowe sprawdzenie A12 (kabel). Raport: docs/lichomat/reports/M15-emulator-R5-clock-audio.md"
+    },
+    {
+      "id": "M16",
+      "date": "2026-10-31",
+      "title": "v0.5: wyzwalanie z dokładnością do próbki (E6.10)",
+      "summary": "Każdy głos startuje w próbce swojego zdarzenia, stale 2,9 ms po nim (sekwencer, MIDI z DIN i USB, slave na zegarze); trg smp/blk w menu globalnym, blk = v0.4 bit w bit. W emulatorze onsety ±1 próbka (G16–G19), stopa 4/4 identyczna przy każdym uderzeniu (stała faza nuty), logi MIDI/zegara/panelu identyczne z v0.4, głośność wobec v0.4 w 46 z 48 kanałów < 0,1 dB. 114 testów hosta, 329 emulatora, fuzz 2400 renderów bez znalezisk. CPU: średnio ok. 1,24% przy 6 brzmiących głosach, najgorszy blok 3,64% (4,64% z LFO). Dwa przeglądy kodu i pomiar stopy: wszystkie uwagi poprawione. Czeka na H12 i U27–U32. Raport: docs/lichomat/reports/M16-v0.5-sample-accurate.md"
     }
   ],
   "questions": [
@@ -3065,6 +3071,146 @@
       "n": 435,
       "at": "2026-10-31 16:40",
       "text": "Plan v0.5 (E6.10) gotowy: docs/superpowers/plans/2026-10-31-v0.5-sample-accurate.md (d251cf6), 12 zadań, decyzje P1–P27. Kod planu skompilowany na brudno z flagami wydania bez ostrzeżeń; testy hosta przechodzą z UBSan, podział głosu daje 0 LSB różnicy. Plan poprawia kilka miejsc specyfikacji: id testu voice_split, znacznik DIN, rampa i/63 jak w fw 1.7, ratchet ×8 co 15,6 ms, funkcja okna w flash zamiast ITCM, re-bless na tymczasowej częstotliwości pogłosu v0.4. Dalej: przegląd planu, potem zadania 1–2."
+    },
+    {
+      "n": 436,
+      "at": "2026-10-31 16:41",
+      "text": "v0.5: implementacja według planu, po trzy zadania na wykonawcę (1+2+3, 4+5, 6+7 z przeglądem, 8+9, 10+11 z przeglądem, 12). Osobnego przeglądu planu nie robię: jego kod został skompilowany i przetestowany na hoście, a przegląd po zadaniu 7 obejmuje projekt mieszacza i okna. Oszczędzam limit (ok. 70%, przerwa przy 78%)."
+    },
+    {
+      "n": 437,
+      "at": "2026-10-31 17:09",
+      "text": "v0.5 zadania 1–3 gotowe i wypchnięte (d0f6d91, bc3adaf, 08eef1c): wersja 0.5, seqc_itemTime() (+8 B RAM, jak w planie), moduł vsched z 6 nowymi testami hosta (112 testów hosta, 308 emulatora, wszystko przechodzi, 0 ostrzeżeń). Odstępstwo: trzy małe funkcje z zadań 6 i 10 doszły już teraz, bo linker macOS emulatora nie usuwa nieużywanego kodu; obraz bez zmian (EQUIVALENT). Dalej zadania 4–5: znacznik okna bloku i znaczniki przyjścia MIDI."
+    },
+    {
+      "n": 438,
+      "at": "2026-10-31 17:31",
+      "text": "v0.5 zadania 4–5 gotowe i wypchnięte (c7eaf94, e6024de): koniec każdego bloku DMA zapisuje okno czasu bloku, render bierze oczekujący blok przed seq_tick(); bajty DIN i wiadomości USB niosą czas przyjścia do parsera MIDI. 112 testów hosta, 311 emulatora, 10 PASS w fw_checks (nowe E6.10), 23 nagrania wzorcowe bez zmian. RAM 345 920 B (dokładnie jak w planie), ITCM +24 B (plan: ok. 8 B; weneer linkera). Poprawka w kodzie planu: awk gubił ukośniki w sprawdzeniu E6.10. Dalej zadania 6–7: podział głosu i mieszacz, potem przegląd."
+    },
+    {
+      "n": 439,
+      "at": "2026-10-31 17:59",
+      "text": "v0.5 zadania 6–7 gotowe i wypchnięte (fb8b8b8, 427068c): głosy renderują się w częściach wokół próbki zdarzenia, mieszacz jedną ścieżką dla całych bloków i podziałów. Podzielony blok = niepodzielony co do bitu (0 LSB, wszystkie głosy, każde parzyste k). Bez wyzwoleń mieszacz liczy dokładnie to co v0.4: 23 nagrania wzorcowe bez zmian. 114 testów hosta, 311 emulatora. RAM 346 288 B (+13 B ponad plan), ITCM 13 536 B (−504 B; plan liczył na więcej, weneery do vsched w flash). Teraz równolegle: przegląd kodu zadań 1–7 i zadania 8–9 (ustawienie trg smp/blk, dziennik wyzwoleń, narzędzie do onsetów)."
+    },
+    {
+      "n": 440,
+      "at": "2026-10-31 18:19",
+      "text": "v0.5 zadania 8–9 gotowe i wypchnięte (cb2cf14, e962539): ustawienie trg smp/blk w glo.cfg (bajt 9, dawne PAR_QUANTISATION), pięć nagrań wzorcowych _blk skopiowanych z v0.4 (bless ich odmawia), --trig-log, liczniki vsched, narzędzie emu_onsets.py i karta onset (klik 2,9 ms przy velod1=0; plan zakładał velod1=10, ale wtedy uderzenia się zlewały). 114 testów hosta, 318 emulatora, 23 + 5 nagrań przechodzi. Czekam na przegląd zadań 1–7, potem zadania 10–11 (podpięcie sekwencera i ponowne zapisanie nagrań)."
+    },
+    {
+      "n": 441,
+      "at": "2026-10-31 18:21",
+      "text": "Przegląd kodu zadań 1–7 v0.5: nic krytycznego. Okno bloku, znaczniki DIN/USB, mieszacz bez wyzwoleń i rampa sprawdzone jako poprawne. 1 ważna uwaga: żaden test nie przechodzi przez prawdziwą ścieżkę podziału w mieszaczu (pan na segment, kolejność LFO, strażnicy fazy), a G16–G19 będą zapisane z tego kodu. 4 drobne: okno po spóźnionym znaczniku DMA (>0,72 ms) przyjmowane, choć zawyżone; zagnieżdżone soundengine_process() przy autoload kitu włącza TIM2 w środku zewnętrznego wywołania (było w v0.4, w v0.5 może psuć kolejki); rekordy z offsetem 0 stosowane głos po głosie zamiast w kolejności wysłania; kilka luk w testach. Poprawiam wszystko przed zadaniem 10."
+    },
+    {
+      "n": 442,
+      "at": "2026-10-31 19:03",
+      "text": "Poprawka po przeglądzie (7819708): nowy test emulatora M25_mixer_split puszcza prawdziwy mieszacz firmware z wyzwoleniem w środku bloku (offset k) i porównuje z tym samym uderzeniem na granicy bloku."
+    },
+    {
+      "n": 443,
+      "at": "2026-10-31 19:10",
+      "text": "Poprawka po przeglądzie (bc7e215): zagnieżdżone soundengine_process() przy autoload kitu zostawia przerwanie TIM2 tak, jak je zastało (wcześniej włączało je w środku zewnętrznego renderu; błąd z v0.4)."
+    },
+    {
+      "n": 444,
+      "at": "2026-10-31 19:19",
+      "text": "Poprawka po przeglądzie (529277e): okno bloku zakończone ponownym ustawieniem po spóźnionym znaczniku DMA nie jest oknem, więc wyzwolenia z niego grają jak w v0.4; kolejność rekordów z offsetem 0 opisana w kodzie; brakujące testy. Wypchnięte. Przepraszam za godzinną ciszę w dzienniku: wykonawca robił commity, a ja ich nie logowałem. Od teraz pilnuje tego monitor commitów."
+    },
+    {
+      "n": 445,
+      "at": "2026-10-31 19:21",
+      "text": "Poprawki po przeglądzie 1–7 zamknięte: test M25_mixer_split wywraca się na każdej z trzech mutacji ścieżki podziału z przeglądu (31/31 offsetów), okno po spóźnionym znaczniku DMA puste (test vsched_window_late), zagnieżdżony render nie włącza TIM2 (M3_fw_nested_kit_load: przed poprawką 57 wywołań TIM2 w 3 ms, po niej 0). Kolejność p-locków z offsetem 0 między głosami zostaje (w jednym kroku i tak jak v0.4), opisana w kodzie. Znalezione: §4.5 specyfikacji nie zachodzi dla LFO na cutoff filtra stopy (poprawię w dokumentach). 114 testów hosta, 320 emulatora, 28 nagrań przechodzi, RAM bez zmian. Startuje wykonawca zadań 10–11: podpięcie sekwencera i MIDI, G16–G19, ponowne zapisanie nagrań."
+    },
+    {
+      "n": 446,
+      "at": "2026-10-31 19:23",
+      "text": "Specyfikacja E6.10 §4.5 uzupełniona (3788112): równość pierwszego bloku nuty z v0.4 dotyczy celów czytanych w kroku sterowania; LFO na cutoff filtra stopy, wyzwalane nutą, przesuwa się do 62 próbek względem onsetu, jak późniejsze kroki sterowania. Wykonawca zadań 10–11 pracuje."
+    },
+    {
+      "n": 447,
+      "at": "2026-10-31 19:36",
+      "text": "v0.5 zadanie 10, commit lokalny 7da0ccf (bez wypychania, idzie razem z zadaniem 11): w trybie smp wyzwolenie głosu z sekwencera to rekord w czasie zdarzenia (seqc_itemTime), nuta MIDI w czasie przyjścia; w blk wszystko od razu, jak v0.4. MIDI out, LED-y i nagrywanie dalej w chwili odpalenia. Zgodnie z planem 22 z 23 starych nagrań wzorcowych teraz się różni (zmienia się sam dźwięk), zapisze je zadanie 11. 114 testów hosta, fw_checks 10 PASS, RAM bez zmian."
+    },
+    {
+      "n": 448,
+      "at": "2026-10-31 19:45",
+      "text": "v0.5 zadanie 10, drugi commit lokalny 06565b6: nagrania G16–G19 z pomiarem onsetów. G16 (ratchety, shuffle, delay, humanize, roll 1/32 i triola): 164 onsety, w smp każdy w ±1 próbce od zdarzenie + 128 (rozrzut 1,99 próbki); w blk ten sam groove ma rozrzut 64 próbki (±0,73 ms). G17 (40 nut MIDI z DIN i USB): rozrzut 1,84 próbki; G18 (slave na zegarze DIN 128 BPM): 1,97; G19 (zapis projektu w trakcie grania): 1,98, bez spóźnionych rekordów i bez przerw w dźwięku. 22 stare nagrania różnią się tylko dźwiękiem, logi MIDI, zegara i panelu bez zmian. Dalej zadanie 11: ponowne zapisanie."
+    },
+    {
+      "n": 449,
+      "at": "2026-10-31 19:48",
+      "text": "v0.5 zadanie 11, commit lokalny 6ffb119: ponowne zapisanie 22 nagrań wzorcowych (G11_dsync bez zmian, jego jedyne uderzenie wypada na granicy bloku). Logi MIDI, zegara i panelu wszystkich 23 identyczne z rendererem v0.4 co do bajtu; zmienia się tylko dźwięk. Znalezisko: poziom miksu zmienia się do +1,1 dB (G15_rumble), pojedynczy głos o −0,03 do −0,49 dB. Przyczyna: drugi krok sterowania nuty jest krótszy o k, więc szybkie obwiednie wysokości (pitch EG stopy) biegną do 1,4 ms wcześniej, a sumy głosów składają się w innej fazie niż na siatce bloku v0.4. Specyfikacja przewidywała to jako ryzyko (U31), ale nie w tej skali. Zanim przekażę to do odsłuchu, zmierzę w emulatorze różnice między kolejnymi uderzeniami stopy w smp i blk."
+    },
+    {
+      "n": 450,
+      "at": "2026-10-31 19:50",
+      "text": "Start pomiaru: czy prosta stopa 4/4 w smp brzmi tak samo przy każdym uderzeniu (test zerowy każdego uderzenia względem mediany, 120/125/130 BPM, smp i blk, kontrola z wyłączonym pitch EG; para WAV do odsłuchu). Osobny agent na kopii źródeł, równolegle z końcówką zadania 11."
+    },
+    {
+      "n": 451,
+      "at": "2026-10-31 19:57",
+      "text": "Pomiar spójności stopy (init kit, 36 uderzeń, 120/125/130 BPM): w blk każde uderzenie identyczne co do bitu; w smp poziom stały (rozrzut 0,03 dB), ale korpus stopy (49 Hz) przesuwa się w fazie o ok. 2,76·k próbki, do 171 próbek = 3,9 ms (68°) przy k = 62. Test zerowy względem mediany: −11 dB (mediana), dla 90% uderzeń powyżej −20 dB. Z wyłączonym pitch EG: ≤ −43 dB. Czyli w smp korpus stopy pływa względem siatki o 3,9 ms, a w blk całe uderzenie o 1,45 ms: dla korpusu smp jest gorsze od v0.4. Przyczyna: skrócony drugi krok sterowania (S13), pitch EG biegnie o k próbek wcześniej. Decyzja: nuta trzyma własną siatkę kroków sterowania do następnego wyzwolenia (faza nie jest zerowana po pierwszym kroku), żeby każde uderzenie było takie samo niezależnie od k. Koszt CPU: stały, ok. 0,2% bloku na brzmiący głos (do ok. 1,2%). Pliki do odsłuchu: scratchpad/kick-v05/kick-125-smp.wav i kick-125-blk.wav."
+    },
+    {
+      "n": 452,
+      "at": "2026-10-31 20:00",
+      "text": "v0.5 zadanie 11, commit 3b48417: opis v0.5 w README, dema w smp i blk (26 WAV w build/demo-v05), emu_fuzz --trig-timing: 1800 losowych renderów w smp i blk pod UBSan, 0 znalezisk. 114 testów hosta, 328 emulatora, wszystko przechodzi."
+    },
+    {
+      "n": 453,
+      "at": "2026-10-31 20:02",
+      "text": "Zadania 10–11 wypchnięte razem (529277e..3b48417). Startuje poprawka „stała faza nuty”: głos trzyma siatkę kroków sterowania swojej nuty aż do następnego wyzwolenia, więc każde uderzenie ma być takie samo jak uderzenie z k = 0, tylko przesunięte o k. Warunki odbioru: test na prawdziwym mieszaczu (cała nuta = uderzenie z k = 0 przesunięte o k), pomiar stopy ≤ −40 dB między uderzeniami przy 120/125/130 BPM, _blk bez zmian, drugie ponowne zapisanie nagrań, nowe dema, szacunek CPU."
+    },
+    {
+      "n": 454,
+      "at": "2026-10-31 20:41",
+      "text": "Stała faza nuty, commit 83a9021: nuta trzyma swoją siatkę kroków sterowania aż do następnego wyzwolenia; ponowne wyzwolenie przed/po/na fazie obsłużone; faza wraca na siatkę bloku przy rekordzie z offsetem 0, przy awaryjnym limicie, gdy głos ucichnie (obwiednia amp skończona) i przy wyzwoleniu w trybie blk. Test na prawdziwym mieszaczu: uderzenie z k = cała nuta uderzenia z k = 0 przesunięta o k, bit w bit (32/32 offsetów; przed poprawką 1/32). Nowe testy hosta przed poprawką: 5 z 11 padało. _blk bez zmian. 26 nagrań czeka na ponowne zapisanie. Dalej: pomiar stopy, re-bless, dema."
+    },
+    {
+      "n": 455,
+      "at": "2026-10-31 20:50",
+      "text": "Pomiar stopy po poprawce fazy (83a9021, ten sam skrypt i kit): w smp przy 120, 125 i 130 BPM każde z 36 uderzeń jest identyczne z medianą co do bitu (test zerowy −inf dB, okna 150 ms i 20 ms); wcześniej mediana −11 dB, najgorzej −4,8 dB. blk dalej identyczne. Czyli w smp każda stopa jest teraz taka sama jak w v0.4, tylko startuje w swojej próbce. Para do odsłuchu: scratchpad/kick-v05b/kick-125-smp.wav i kick-125-blk.wav. Wykonawca robi ponowne zapisanie nagrań i dema."
+    },
+    {
+      "n": 456,
+      "at": "2026-10-31 20:57",
+      "text": "Drugie ponowne zapisanie nagrań (20e0079), po poprawce fazy: 26 nagrań (22 stare z uderzeniem w głębi bloku i G16–G19), tylko dźwięk; logi MIDI, zegara i panelu 69/69 identyczne z v0.4. Zmiany głośności względem v0.4: z 48 kanałów tylko 2 o ≥ 0,1 dB (G2_ringmod −0,11 dB: nośna ring modulatora spotyka uderzenie w jego prawdziwej próbce); poprzednio 32 kanały, do +1,12 dB. G1 bez zmian (−15,64 dB). Onsety G16–G19 jak wcześniej (±1 próbka). 114 testów hosta, 328 emulatora, 32 nagrania przechodzą. ITCM 13 728 B, RAM bez zmian."
+    },
+    {
+      "n": 457,
+      "at": "2026-10-31 21:01",
+      "text": "Poprawka fazy wypchnięta (83a9021, 20e0079). Szacunek CPU po zmianie (metoda §6, współczynnik 1,5): średnio ok. 1,24% bloku, gdy wszystkie 6 głosów brzmi poza siatką (sama stopa ok. 0,11%); najgorszy blok ok. 3,64% (było 2,45), z 6 LFO 4,64%; z limitem 3 ok. 2,50%. Granica pk 89,6 < 95. Fuzz 600 renderów, 0 znalezisk; dema w smp i blk nagrane od nowa. Teraz równolegle: końcowy przegląd kodu (zadania 10–11 i poprawka fazy) oraz dokumenty dla właściciela: U27–U32, szkic notatek v0.5, przepis na klik, poprawki specyfikacji i planu."
+    },
+    {
+      "n": 458,
+      "at": "2026-10-31 21:18",
+      "text": "Końcowy przegląd v0.5 (zadania 10–11 i poprawka fazy): nic krytycznego; gotowe do sprawdzeń na LXR w zwykłym buildzie. Potwierdzone jako poprawne: MIDI out, LED-y, nagrywanie, mute i slide w chwili odpalenia; trg blk = v0.4 na każdej ścieżce; trzy przypadki k/φ; detekcja ciszy zachowawcza; re-blessy dotykają tylko pola wav. 1 ważna uwaga: w awaryjnym buildzie z limitem 3 limit liczy też głosy z samą fazą, więc w zwykłym groovie (symulacja 125 BPM) 29 przejść awaryjnych i 97/393 uderzeń na siatce bloku zamiast 10. 4 drobne: brak testów dla resetu fazy przy przełączeniu na blk, dla chwili zastosowania p-locków i dla ciszy głosów 2–6; przełączenie smp→blk w trakcie grania. Poprawiam wszystko; dokumenty powstają równolegle."
+    },
+    {
+      "n": 459,
+      "at": "2026-10-31 21:21",
+      "text": "Dokumenty v0.5 na timing-core (ebbd255, e334960): sprawdzenia U27–U32 na LXR w hardware-checklist.md (z wierszami w arkuszu), szkic notatek do wydania release-notes-v0.5.md, przepis na klik do pomiaru onsetów kit-recipes-v0.5.md, HANDOFF; specyfikacja i plan poprawione według tego, co zbudowano (stała faza nuty, nowy koszt CPU, progi U30: pk najwyżej ok. 3,7 punktu nad blk, 4,7 z LFO; zasada limitu awaryjnego; sekcja „Changes during execution” w planie)."
+    },
+    {
+      "n": 460,
+      "at": "2026-10-31 21:35",
+      "text": "Poprawka po końcowym przeglądzie (486485b): limit podziałów w buildzie awaryjnym liczy tylko głosy z nowym uderzeniem w bloku, a przy przejściu awaryjnym pozostałe głosy zachowują fazę. Symulacja 125 BPM: 0 przejść awaryjnych, 10/393 uderzeń na siatce bloku (przed poprawką 29 i 97), tyle samo co bez limitu. Najgorszy blok z limitem 3: ok. 2,54% (3,54% z 6 LFO). Zwykły build bez zmian."
+    },
+    {
+      "n": 461,
+      "at": "2026-10-31 21:36",
+      "text": "Dokumenty v0.5 (f77affc): koszt buildu awaryjnego z limitem 3 wpisany według wyniku poprawki: ok. 2,54% (3,54% z 6 LFO) w specyfikacji, planie i szkicu notatek. Czekam na pozostałe poprawki testów po końcowym przeglądzie."
+    },
+    {
+      "n": 462,
+      "at": "2026-10-31 21:50",
+      "text": "Poprawki testów po końcowym przeglądzie (c7c6b33, wypchnięte): M25 sprawdza reset fazy przy wyzwoleniu w trybie blk (bez wywołania vsched_triggerNow() test pada), ciszę wszystkich sześciu głosów (faza 0 najpóźniej 2 bloki po końcu obwiedni), nowy test V05_plocks: p-lock działa od próbki podziału, stary ogon zostaje ze starą wartością; łapie wszystkie 3 mutacje z przeglądu (p-locki w chwili odpalenia, roll bez p-locków, zły drugi p-lock). README: przełączenie smp→blk w trakcie grania."
+    },
+    {
+      "n": 463,
+      "at": "2026-10-31 21:53",
+      "text": "Milestone M16: v0.5 zamknięte w kodzie (gałąź v0.5, c7c6b33). Raport: docs/lichomat/reports/M16-v0.5-sample-accurate.md. Aplikacja emulatora z v0.5 i kopią karty DLC gotowa w scratchpad/emu-show/v05 (trg przełączasz na żywo w menu globalnym). Czeka na H12 i U27–U32. Przerwa."
     }
   ]
 }
