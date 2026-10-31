@@ -332,7 +332,8 @@ option(LICHOMAT_EMU_APP "Build LICHOMAT Emu.app, its device glue and the dev har
 set(EMU_APP_DIR "${EMU_DIR}/app")
 set(EMU_APP_FLAGS ${EMU_SAN_FLAGS} -Wall -Wextra -Werror "SHELL:-ivfsoverlay ${EMU_OVERLAY}")
 set(EMU_APP_UNIT_SOURCES "${EMU_APP_DIR}/engine/app_ring.c"
-    "${EMU_APP_DIR}/engine/app_timemap.c")
+    "${EMU_APP_DIR}/engine/app_timemap.c" "${EMU_APP_DIR}/engine/app_midi.c"
+    "${EMU_APP_DIR}/engine/app_midilist.c")
 add_library(emu_app_units OBJECT ${EMU_APP_UNIT_SOURCES})
 target_include_directories(emu_app_units PUBLIC "${EMU_APP_DIR}/engine" "${EMU_DIR}/core" "${EMU_DIR}/common")
 target_compile_options(emu_app_units PRIVATE ${EMU_APP_FLAGS})
@@ -374,6 +375,8 @@ endfunction()
 emu_add_app_test(test_app_ring IDS M18_ring_fill_drop M18_ring_wrap M18_ring_threads)
 emu_add_app_test(test_app_timemap IDS M18_map_wall M18_map_drift M18_map_jump M18_latency_table M18_entry_rule
     M18_reanchor_order)
+emu_add_app_test(test_app_midi FRAMEWORKS CoreMIDI CoreFoundation IDS M18_midi_split M18_midi_usb_cin
+    M18_midi_usb_transfer M18_midi_bytes M18_midi_din_asm M18_midi_usb_out M18_eventlist)
 
 # The temporary folders: every test above gets TMPDIR = a folder of this build,
 # which emu_tmp_setup empties first and emu_tmp_clean checks last. A test removes
