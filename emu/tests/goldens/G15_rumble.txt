@@ -1,0 +1,16 @@
+# G15_rumble: the fx card for 2 bars with the reverb at level 120, tone 20, decay 80, ducked
+# by dr1 (voice 0) at depth 110, then stopped; the window from 4.8 s carries only the
+# reverb's tail. The digest locks the ducked sound of the 2 bars, DK1 tests the ducking
+# itself (plan D40, A9)
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card fx --bpm 120 --no-start --seconds 6 --param rev_level=120 --param rev_tone=20 --param rev_decay=80 --param rev_duck_src=1 --param rev_duck_depth=110
+#expect energy L1 -55 4.8s..5.8s
+#broken --param rev_level=0
+0ms press start
++4000ms press start

@@ -55,6 +55,13 @@ static float atmo_gain;
 static uint8_t atmo_awake;
 static uint8_t atmo_cleared;
 
+/* plan D40: rumble. The source 0 (off) or 1..6 (voice 0..5), the depth 0..1, the peak follower of
+ * that voice's block (the audio interrupt's), and the duck gain the last block ended on */
+static uint8_t atmo_duckSrc;
+static float atmo_duckDepth;
+static float atmo_env;
+static float atmo_duckLast = 1.f;
+
 /* a parameter 0..1 as 0..127 */
 static uint8_t atmo_u7(float v)
 {
@@ -70,6 +77,7 @@ void atmo_init(void)
 	atmo_gain = 0.f;
 	atmo_awake = 0;
 	atmo_cleared = 0;
+	atmo_duckLast = 1.f;
 	/* plan D33: the live DJ filter starts flat, before the first kit load keeps it */
 	activeParameters[PAR_DJ_FILTER] = ATMO_DJ_FLAT;
 	atmo_setParam(PAR_DJ_FILTER, ATMO_DJ_FLAT / 127.f);
@@ -88,6 +96,34 @@ static void atmo_setReverb(void (*set)(Reverb *, float), float v)
 	__set_PRIMASK(primask);
 }
 
+//LICHOMAT v0.4: the peak follower of the voice that ducks the reverb (plan D40); mixer_decimateBlock()
+//calls it for each voice's block, before FxBus_process() in the same audio block
+void atmo_duckSense(uint8_t voiceNr, const int16_t *block)
+{
+	if((atmo_duckSrc == 0) || (voiceNr != atmo_duckSrc - 1))
+		return;
+	int32_t peak = 0;
+	for(uint32_t i = 0; i < OUTPUT_DMA_SIZE; i++)
+	{
+		const int32_t a = (block[i] < 0) ? -block[i] : block[i];
+		if(a > peak)
+			peak = a;
+	}
+	const float p = (float)peak / 32768.f;
+	atmo_env = (p > atmo_env) ? p : atmo_env * 0.982f;	/* 0.982 per block: an 80 ms release */
+}
+
+float atmo_duckGain(void)
+{
+	const float e = 2.f * atmo_env;
+	return 1.f - atmo_duckDepth * ((e < 1.f) ? e : 1.f);
+}
+
+float atmo_duckEnv(void)
+{
+	return atmo_env;
+}
+
 uint8_t atmo_active(void)
 {
 	return (atmo_target > 0.f) || atmo_awake;
@@ -96,6 +132,9 @@ uint8_t atmo_active(void)
 void atmo_process(int16_t *bus, uint32_t frames)
 {
 	const float target = atmo_target;
+	const float duck = atmo_duckGain();	/* plan D40: 1 with the source off */
+	const float duckLast = atmo_duckLast;
+	atmo_duckLast = duck;
 	if(!atmo_awake)
 	{	/* waking: clear the old tail first, the gain held at 0 */
 		atmo_awake = 1;
@@ -115,9 +154,10 @@ void atmo_process(int16_t *bus, uint32_t frames)
 	if(frames > OUTPUT_DMA_SIZE)
 		frames = OUTPUT_DMA_SIZE;
 	Reverb_processWet(&atmo_reverb, bus, wetL, wetR, (uint16_t)frames);
-	/* the gain ramps linearly across the block; the float limit keeps the conversion defined */
-	const float g0 = atmo_gain * 32768.f;
-	const float dg = (target - atmo_gain) * 32768.f / (float)frames;
+	/* the gain (level x duck, plan D40) ramps linearly across the block; the float limit keeps the
+	 * conversion defined */
+	const float g0 = atmo_gain * duckLast * 32768.f;
+	const float dg = (target * duck - atmo_gain * duckLast) * 32768.f / (float)frames;
 	for(uint32_t i = 0; i < frames; i++)
 	{
 		const float g = g0 + dg * (float)(i + 1);
@@ -169,6 +209,15 @@ void atmo_setParam(uint16_t paramNr, float v)
 	case PAR_REV_DUCK_DEPTH:
 	case PAR_FX_DELAY_SYNC:
 		atmo_par[ATMO_BLOCK + (paramNr - PAR_REV_SIZE)] = v;
+		if(paramNr == PAR_REV_DUCK_SRC)
+		{	/* plan D40: off dr1 dr2 dr3 snr cym hat; off resets the follower */
+			const uint8_t src = atmo_u7(v);
+			atmo_duckSrc = (src > 6) ? 6 : src;
+			if(atmo_duckSrc == 0)
+				atmo_env = 0.f;
+		}
+		else if(paramNr == PAR_REV_DUCK_DEPTH)
+			atmo_duckDepth = atmo_u7(v) / 127.f;
 		/* plan D36: size, tone, predelay and modulation reach the reverb */
 		if(paramNr == PAR_REV_SIZE)
 			atmo_setReverb(Reverb_setSize, v);

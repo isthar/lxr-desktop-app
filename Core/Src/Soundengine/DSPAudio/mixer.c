@@ -25,6 +25,7 @@
 #include "menu/menu.h"
 #include "Soundengine/FxBus.h"
 #include "Soundengine/DSPAudio/FX/djfilter.h"	//LICHOMAT v0.4: the DJ filter (plan D39)
+#include "Soundengine/DSPAudio/FX/atmo.h"	//LICHOMAT v0.4: rumble's follower (plan D40)
 
 	uint8_t r2_Available;
 	uint8_t l1_Available;
@@ -73,6 +74,7 @@ IN_ITCM_RAM void mixer_decimateBlock(const uint8_t voiceNr, int16_t* buffer)
 		}
 		buffer[i] = mixer_voice_samples[voiceNr];
 	}
+	atmo_duckSense(voiceNr, buffer);	//LICHOMAT v0.4: rumble's follower (plan D40)
 }
 //#pragma GCC push_options
 //#pragma GCC optimize ("O0")

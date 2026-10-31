@@ -37,6 +37,12 @@ uint8_t atmo_active(void);
 /** plan D32: adds the reverb's wet L/R x gain to the stereo bus of the slot effect, frames <= 64 */
 void atmo_process(int16_t *bus, uint32_t frames);
 
+/** plan D40, rumble: the peak follower of voice voiceNr's block of OUTPUT_DMA_SIZE samples (only the
+ * chosen source's counts), the wet gain 1 - depth min(1, 2 env), and the follower's value */
+void atmo_duckSense(uint8_t voiceNr, const int16_t *block);
+float atmo_duckGain(void);
+float atmo_duckEnv(void);
+
 /** LICHOMAT v0.4: a parameter of the reverb stage, the delay sync or the DJ filter, 0..1 (plan D33, D34) */
 void atmo_setParam(uint16_t paramNr, float v);
 /** plan A8, D37: flips activeParameters[PAR_REV_FREEZE] 0/1 and applies it (SHIFT + step 3 in the

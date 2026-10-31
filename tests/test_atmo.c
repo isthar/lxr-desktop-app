@@ -395,4 +395,86 @@ TEST(RV4_corners_stay_bounded)
 	ASSERT_TRUE(top < 4.f);
 }
 
+TEST(DK1_follower_and_gain)
+{
+	/* plan D40: env = max(peak, env * 0.982) on the chosen voice's block, g = 1 - depth min(1, 2 env) */
+	int16_t blk[64];
+	atmo_setParam(PAR_REV_DUCK_SRC, 0.f);	/* off: the follower at 0 */
+	atmo_setParam(PAR_REV_DUCK_SRC, 1 / 127.f);	/* dr1 = voice 0 */
+	atmo_setParam(PAR_REV_DUCK_DEPTH, 1.f);
+	memset(blk, 0, sizeof blk);
+	blk[10] = -26214;	/* peak 0.8 */
+	atmo_duckSense(1, blk);	/* another voice: no change */
+	ASSERT_EQ(atmo_duckEnv() == 0.f, 1);
+	atmo_duckSense(0, blk);
+	ASSERT_EQ(fabsf(atmo_duckEnv() - 0.8f) < 0.001f, 1);
+	ASSERT_EQ(atmo_duckGain() == 0.f, 1);	/* 1 - 1 * min(1, 1.6) */
+	memset(blk, 0, sizeof blk);
+	for(int b = 0; b < 55; b++) atmo_duckSense(0, blk);	/* 80 ms */
+	ASSERT_EQ((atmo_duckEnv() > 0.28f) && (atmo_duckEnv() < 0.31f), 1);
+	ASSERT_EQ(fabsf(atmo_duckGain() - (1.f - 2.f * atmo_duckEnv())) < 0.001f, 1);
+	/* the hat (6) is voice 5; source 0 resets the follower */
+	atmo_setParam(PAR_REV_DUCK_SRC, 6 / 127.f);
+	blk[3] = 32767;
+	atmo_duckSense(4, blk);
+	ASSERT_TRUE(atmo_duckEnv() < 0.31f);
+	atmo_duckSense(5, blk);
+	ASSERT_TRUE(atmo_duckEnv() > 0.99f);
+	atmo_setParam(PAR_REV_DUCK_SRC, 0.f);
+	ASSERT_EQ(atmo_duckEnv() == 0.f, 1);
+	ASSERT_EQ(atmo_duckGain() == 1.f, 1);
+}
+
+TEST(DK1_ducks_the_wet_across_a_block)
+{
+	/* plan D40: atmo_process() ramps the wet gain linearly from the last block's duck gain to the
+	 * new one; depth 1 and a held peak duck the wet to 0 from the block after the ramp */
+	int16_t bus[128], dry[128], blk[64];
+	uint32_t seed = 16021u;
+	atmo_init();
+	atmo_setParam(PAR_REV_DUCK_SRC, 1 / 127.f);
+	atmo_setParam(PAR_REV_DUCK_DEPTH, 1.f);
+	atmo_setParam(PAR_REV_LEVEL, 1.f);
+	for(int b = 0; b < 300; b++)	/* the wake-up, then noise: a tail */
+	{
+		for(int i = 0; i < 128; i++)
+		{
+			seed = seed * 1664525u + 1013904223u;
+			bus[i] = (int16_t)(((int32_t)(seed >> 16) - 32768) / 4);
+		}
+		atmo_process(bus, 64);
+	}
+	memset(blk, 0, sizeof blk);
+	blk[0] = 16384;	/* peak 0.5: g = 0 */
+	int wet[3] = {0};
+	for(int b = 0; b < 3; b++)
+	{
+		if(b == 0)
+			atmo_duckSense(0, blk);
+		memset(bus, 0, sizeof bus);
+		memset(dry, 0, sizeof dry);
+		atmo_process(bus, 64);
+		for(int i = 0; i < 128; i++)
+			wet[b] += abs(bus[i] - dry[i]);
+	}
+	printf("DK1: the tail's |wet| per block while ducked: %d (ramp), %d, %d\n", wet[0], wet[1], wet[2]);
+	ASSERT_TRUE(wet[0] > 0);
+	ASSERT_EQ(wet[1], 0);
+	ASSERT_EQ(wet[2], 0);
+	atmo_setParam(PAR_REV_DUCK_DEPTH, 0.f);	/* depth 0: the tail again */
+	int back = 0;
+	for(int b = 0; b < 2; b++)
+	{
+		memset(bus, 0, sizeof bus);
+		atmo_process(bus, 64);
+		for(int i = 0; i < 128; i++)
+			back += abs(bus[i]);
+	}
+	ASSERT_TRUE(back > wet[0]);
+	atmo_setParam(PAR_REV_DUCK_SRC, 0.f);
+	atmo_setParam(PAR_REV_LEVEL, 0.f);
+	memset(bus, 0, sizeof bus);
+	atmo_process(bus, 64);
+}
+
 TEST_MAIN()
