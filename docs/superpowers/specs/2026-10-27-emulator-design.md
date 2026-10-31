@@ -909,7 +909,14 @@ its two outputs, so a saturating sum would add a distortion the device does not 
   name without `PAR_`, in any case, from a table in `emu/render/` written as `{ "shuffle", PAR_SHUFFLE }`
   pairs, so its values come from `Parameters.h`; a parameter number also works. The parameters for which
   `menu_encoderChangeParameter()` has a special case (the LFO voices and the modulation targets) are
-  refused with exit code 1. These options skip the menu walk because a walk to an arbitrary menu item
+  refused with exit code 1. *Amended 2026-10-31 (branch `kits`, `2938dbf`):* they are no longer refused.
+  `rfw_edit()` repeats the menu's special cases for a value set at once:
+  - a target is limited to its voice's range and is sent as `CC_LFO_TARGET` or `CC_VELO_TARGET`;
+  - a change of an LFO's voice moves its target to the same kind of target on the new voice. The renderer
+    takes that kind from this LFO's current target, where the menu takes it from the last target edit, so
+    a script sets an LFO's voice before its target.
+
+  M20 still hashes the menu function, and `M17_param_targets` tests the path. These options skip the menu walk because a walk to an arbitrary menu item
   would break with every menu change; stage 2's groove settings need the same path for A/B renders.
 
 **Where the renderer calls the firmware directly.** Everywhere else it presses buttons, turns knobs and
