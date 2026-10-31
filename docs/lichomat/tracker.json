@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 02:24",
+    "updated": "2026-10-31 02:26",
     "phase": "Etap 2: v0.4 (atmosfera) w toku; A1-A6 gotowe, A7-A9 czekają na H12",
     "focus": "v0.4 A1-A6 gotowe na gałęzi v0.4 (36245bf): delay z tempem, filtr DJ, bufor i parametry pogłosu. Pogłos, freeze i rumble (A7-A9) po Twoim odczycie CPU (H12).",
     "branch": "timing-core",
-    "head": "47927a5",
+    "head": "3c6ed72",
     "next": "Ty: jedna sesja testowa na v0.3 według docs/lichomat/test-session-v0.3.md, najpierw H12 (odczyt CPU odblokowuje pogłos w v0.4: pełna częstotliwość, jeśli pk ≤ 46,2%, połowiczna, jeśli ≤ 63,3%); odsłuch build/demo/* i build/dlc/*. Ja: przerwa od ok. 02:30; po H12 v0.4 A7-A11.",
-    "updated_at": "2026-10-31T02:24:00+01:00",
-    "now": "Przerwa od 02:24. Nic nie działa. Czekam na Twój odczyt H12 (strona CPU), który odblokowuje pogłos, freeze i rumble w v0.4 (A7-A9)."
+    "updated_at": "2026-10-31T02:26:00+01:00",
+    "now": "Od 02:26: czekam na przebieg CI dla ea464cc (v0.4, poprawka M_PI); poza tym przerwa."
   },
   "epics": [
     {
@@ -2831,6 +2831,11 @@
       "n": 396,
       "at": "2026-10-31 02:24",
       "text": "02:24 Przerwa po nocnym bloku (zużycie ok. 61%, limit 75%). Nic mojego nie działa; moja kofeina wyłączona. Przy wznowieniu: wyniki CI na v0.4, a po Twoim H12 v0.4 A7-A11."
+    },
+    {
+      "n": 397,
+      "at": "2026-10-31 02:26",
+      "text": "02:26 CI na v0.4: zadanie Host tests w build.yml padło na Linuksie (M_PI w sinCos.c i TiltEq.c, glibc w trybie strict C11; na macOS przechodziło). Poprawione (ea464cc, _DEFAULT_SOURCE jak dla test_dsp), wypchnięte. GitHub od 00:11 UTC nie utworzył nowych przebiegów (status: operational), monitor czeka na przebieg dla ea464cc."
     }
   ]
 }
