@@ -1,0 +1,111 @@
+# The onset fixture (plan v0.5 Task 9, spec 9.2): a click on Drum 1 alone on out 1 (pan left),
+# every other voice on out 2. Pattern 0, Drum 1 on 32 steps: step 1; steps 3, 5, ..., 31 with the
+# shifts -7..+7; ratchets x2, x3, x4, x6, x8 on steps 20, 22, 24, 26, 28; shuffle 40, delay +3 ms,
+# humanize 4 ms. Drum 2 on steps 1, 5, 9 and 13 at x3/4. Kit 0, pattern 0, project 0.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --no-start --seconds 16
+#keep PROJ00/PRJ.NFO PROJ00/GLO.CFG PROJ00/00-*.PAT PROJ00/00-*.SND
+0ms press voice1
++100ms param track_length=32
++100ms press step1
++100ms press step3
++100ms press step5
++100ms press step7
++100ms press step9
++100ms press step11
++100ms press step13
++100ms press step15
++100ms press bar+
+# bar 2: steps 17, 19, ..., 31, and 20, 22, ..., 28 (the ratchets)
++100ms press step1
++100ms press step3
++100ms press step5
++100ms press step7
++100ms press step9
++100ms press step11
++100ms press step13
++100ms press step15
++100ms press step4
++100ms press step6
++100ms press step8
++100ms press step10
++100ms press step12
+# the shifts -7..+7 on steps 3..31 (step_shift 0..14; active_step counts from 0)
++100ms param active_step=2
++100ms param step_shift=0
++100ms param active_step=4
++100ms param step_shift=1
++100ms param active_step=6
++100ms param step_shift=2
++100ms param active_step=8
++100ms param step_shift=3
++100ms param active_step=10
++100ms param step_shift=4
++100ms param active_step=12
++100ms param step_shift=5
++100ms param active_step=14
++100ms param step_shift=6
++100ms param active_step=16
++100ms param step_shift=7
++100ms param active_step=18
++100ms param step_shift=8
++100ms param active_step=20
++100ms param step_shift=9
++100ms param active_step=22
++100ms param step_shift=10
++100ms param active_step=24
++100ms param step_shift=11
++100ms param active_step=26
++100ms param step_shift=12
++100ms param active_step=28
++100ms param step_shift=13
++100ms param active_step=30
++100ms param step_shift=14
+# the ratchets (step_flam 1..5 = x2 x3 x4 x6 x8)
++100ms param active_step=19
++100ms param step_flam=1
++100ms param active_step=21
++100ms param step_flam=2
++100ms param active_step=23
++100ms param step_flam=3
++100ms param active_step=25
++100ms param step_flam=4
++100ms param active_step=27
++100ms param step_flam=5
++100ms param shuffle=40
++100ms param track_delay=18
++100ms param human_time=4
+# the click: a sine at its peak, attack 0, decay 0 (127 frames from the onset to the last |x| >= 64;
+# decay 1 gives 702 frames and 2 gives 1,197, which run the hits of x6 and x8 together), the Clk
+# transient at full volume, no filter, full volume, hard left
++100ms param osc_wave_drum1=0
++100ms param veloa1=0
++100ms param velod1=0
++100ms param trans1_wave=2
++100ms param trans1_vol=127
++100ms param filter_type_1=7
++100ms param vol1=127
++100ms param pan1=0
++100ms param audio_out2=1
++100ms param audio_out3=1
++100ms param audio_out4=1
++100ms param audio_out5=1
++100ms param audio_out6=1
+# Drum 2 at x3/4
++100ms press voice2
++100ms press bar-
++100ms press step1
++100ms press step5
++100ms press step9
++100ms press step13
++100ms param track_tempo=4
++200ms save-kit 0
++100ms save-pattern 0
++200ms save-project 0
++100ms mark saved

@@ -27,6 +27,7 @@
 #include "Soundengine/Sequencer/seq_core.h"
 #include "Soundengine/Sequencer/seq_platform.h"
 #include "Soundengine/USB/usb_manager.h"
+#include "Soundengine/vsched.h"
 
 void rfw_seedCard(void *res)
 {
@@ -322,4 +323,25 @@ void rfw_counters(render_fwCounters_t *out)
 	out->tempoRestarts = st.tempoRestarts;
 	out->syncOverflows = seqp_syncOverflows();
 	out->usbTxDropped = usb_midiTxDropped();
+	vsched_stats_t vs;	/* LICHOMAT v0.5 (plan Task 9) */
+	vsched_stats(&vs);
+	out->vschedLate = vs.late;
+	out->vschedOverflow = vs.overflow;
+	out->vschedSplits = vs.splits;
+	out->vschedPhaseSplits = vs.phaseSplits;
+	out->vschedCapFallbacks = vs.capFallbacks;
+	out->vschedOffTick = vs.offTick;
+}
+
+static rfw_trigFn rfw_trigSink;
+static void rfw_trace(const vsched_rec_t *r, uint32_t serial, uint8_t k, uint8_t late)
+{
+	if (rfw_trigSink)
+		rfw_trigSink(r->time, vsched_voiceOf(r->track), (uint8_t)((r->flags & VS_SRC_MASK) >> 4), serial, k, late);
+}
+
+void rfw_trigLog(rfw_trigFn fn)
+{
+	rfw_trigSink = fn;
+	vsched_setTrace(fn ? rfw_trace : NULL);
 }

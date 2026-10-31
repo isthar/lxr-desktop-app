@@ -406,6 +406,17 @@ static void render_clock(void *ctx, uint64_t t, int level)
 		render_outClock(&R.out, t - R.t0, level);
 }
 
+/* --trig-log (plan v0.5 Task 9): a record applied during [t0, tEnd); its event time is the low 32
+ * bits of the clock, less than 2^32 cycles before now */
+static void render_trig(uint32_t time, uint8_t voice, uint8_t src, uint32_t serial, uint8_t k, uint8_t late)
+{
+	const uint64_t now = emu_now();
+	if (!render_kept(now))
+		return;
+	const uint64_t t = now - (uint32_t)((uint32_t)now - time);
+	render_outTrig(&R.out, (int64_t)(t - R.t0), voice, src, serial, k, late);
+}
+
 /* --- the script's timed inputs (P3 step 6, P4) ------------------------------------ */
 
 #define CLOCK_DIN 540000000000ull	/* 24 PPQ: cycles per minute x 1000 / 24 */
@@ -701,6 +712,8 @@ static void render_finish(uint64_t now)
 	s.blocks = R.blocks;
 	emu_getCounters(&s.counters);
 	rfw_counters(&s.fw);	/* pure getters, the one firmware read from the hook (plan P3 step 8) */
+	if (s.fw.vschedOffTick)
+		render_fault("the voice scheduler took records outside seq_tick() (plan v0.5 P9, S17)");
 	s.bootEnd = s.counters.bootEnd;
 	s.codecStart = s.counters.codecStart;
 	s.preludeEnd = R.preludeEnd;
@@ -986,6 +999,8 @@ static void render_run(const render_opts_t *o)
 	cfg.fault = render_onFault;
 	cfg.warn = render_onWarn;
 	emu_powerOn(&cfg);
+	if (o->trigLog)
+		rfw_trigLog(render_trig);	/* LICHOMAT v0.5 (plan Task 9): sets a pointer only */
 	render_startWatchdog();
 	emu_runUntil(1u);	/* the boot */
 	R.preludeEnd = emu_now();

@@ -216,7 +216,7 @@ int render_optsParse(int argc, char **argv, render_opts_t *o, char *err, size_t 
 		static const char *const withValue[] = {
 			"--card", "--out", "--seed-card", "--project", "--pattern", "--song", "--bpm", "--param",
 			"--seconds", "--bars", "--events", "--faders", "--jacks", "--seed", "--wav-rate", "--stereo",
-			"--midi-log", "--clock-log", "--panel-log", "--summary", "--keep-card",
+			"--midi-log", "--clock-log", "--panel-log", "--trig-log", "--summary", "--keep-card",
 #if EMU_RENDER_TEST_HOOKS
 			"--test-fault",
 #endif
@@ -349,6 +349,8 @@ int render_optsParse(int argc, char **argv, render_opts_t *o, char *err, size_t 
 			o->clockLog = v;
 		else if (strcmp(opt, "--panel-log") == 0)
 			o->panelLog = v;
+		else if (strcmp(opt, "--trig-log") == 0)
+			o->trigLog = v;
 		else if (strcmp(opt, "--summary") == 0)
 			o->summary = v;
 		else if (strcmp(opt, "--keep-card") == 0)
@@ -455,6 +457,7 @@ void render_optsHelp(void)
 		"  --midi-log FILE         MIDI-out log",
 		"  --clock-log FILE        clock-out log",
 		"  --panel-log FILE        LCD and LED snapshots at the script's marks",
+		"  --trig-log FILE         the voice scheduler's applied triggers (LICHOMAT v0.5)",
 		"  --summary FILE          counters and times, in JSON",
 		"  --keep-card DIR         keep the card copy's final state in DIR",
 		"  --seed-card DIR         write an init card into DIR, a missing or empty folder, and exit",

@@ -19,7 +19,7 @@ Licensed under the GNU General Public License version 3, with the additional
 permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
 the repository.
 """
-import argparse, array, fractions, glob, hashlib, json, math, os, re, shutil, struct, subprocess, sys, time, wave
+import argparse, array, fractions, glob, hashlib, json, math, os, re, shlex, shutil, struct, subprocess, sys, time, wave
 
 CASES = {}
 def case(fn):
@@ -133,8 +133,8 @@ def main():
 # the options of spec 5.1 that --help names, and the test-only ones (spec 5.3)
 OPTIONS = ['--card', '--out', '--seed-card', '--project', '--pattern', '--song', '--bpm', '--param',
            '--seconds', '--bars', '--events', '--no-start', '--faders', '--jacks', '--seed', '--as-booted',
-           '--wav-rate', '--stereo', '--midi-log', '--clock-log', '--panel-log', '--summary', '--keep-card',
-           '--version', '--help']
+           '--wav-rate', '--stereo', '--midi-log', '--clock-log', '--panel-log', '--trig-log', '--summary',
+           '--keep-card', '--version', '--help']
 TEST_OPTIONS = ['--test-fault', '--test-hang', '--test-slice', '--test-prelude-reload']
 
 def usage_error(t, args, name):
@@ -1332,6 +1332,47 @@ def V05_trig_setting(t):
     glo = one_file(keep, 'GLO.CFG')
     check(len(glo) == 30 and glo[9] == 1, 'GLO.CFG: %d bytes, byte 9 %r' % (len(glo), glo[9:10]))
     no_copies_left()
+
+def onsets(t, *args):
+    """emu_onsets.py's exit code, spread and output"""
+    p = subprocess.run([sys.executable, os.path.join(t.root, 'tools', 'emu_onsets.py')] + [str(a) for a in args],
+                       capture_output=True, text=True)
+    m = re.search(r'spread ([0-9.]+) frames', p.stdout)
+    return p.returncode, (float(m.group(1)) if m else None), p.stdout + p.stderr
+
+def click_wav(path, frames, total):
+    """a 4-channel WAV with a decaying click on L1 at each frame of frames"""
+    x = array.array('h', [0] * (total * 4))
+    for f in frames:
+        for i in range(200):
+            x[(f + i) * 4] = int(20000 * math.exp(-i / 20.0) * math.cos(i * 0.3))
+    with wave.open(path, 'wb') as w:
+        w.setnchannels(4)
+        w.setsampwidth(2)
+        w.setframerate(44141)
+        w.writeframes(x.tobytes())
+
+@case
+def V05_onsets_tool(t):
+    # tools/emu_onsets.py on made-up renders (plan v0.5 Task 9): the trigger log (two records in
+    # one block start at the later; another voice and a one-shot are left out), the tick grid,
+    # and another render; a hit 7k mod 64 frames off shows a spread of 63
+    fpt = 353125 / 8 * 60 / (120 * 384)
+    ticks = [0, 29, 61, 100, 133, 170, 205, 260, 299, 340]
+    cyc = [int(k * fpt * 552960 / 113) + 1000000 for k in ticks]
+    exp = [c * 113 / 552960 + 128 for c in cyc]
+    log, wav, off = t.path('t.log'), t.path('a.wav'), t.path('b.wav')
+    click_wav(wav, [round(e) for e in exp], 40000)
+    click_wav(off, [round(e) + (i * 7) % 64 for i, e in enumerate(exp)], 40000)
+    with open(log, 'w') as f:
+        for i, c in enumerate(cyc):
+            f.write('%d 0 seq %d 0 0\n%d 0 seq %d 32 0\n%d 3 seq %d 10 0\n' % (c - 5000, 100 + i, c, 100 + i, c + 7, 100 + i))
+        f.write('-99999 0 oneshot 999 0 0\n')
+    for args, ok in (([wav, '--log', log, '--limit', 1], True), ([wav, '--grid', 120, '--limit', 1], True),
+                     ([off, '--against', wav, '--min', 32], True), ([off, '--log', log, '--limit', 2], False)):
+        code, spread, out = onsets(t, *args)
+        check((code == 0) == ok, '%r: exit %d\n%s' % (args, code, out))
+    check(onsets(t, off, '--against', wav)[1] == 63.0, 'the spread against the shifted render')
 
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in

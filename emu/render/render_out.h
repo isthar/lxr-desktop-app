@@ -26,8 +26,8 @@
 
 typedef struct render_out
 {
-	FILE *wav, *midi, *clock, *panel;
-	const char *wavPath, *midiPath, *clockPath, *panelPath;
+	FILE *wav, *midi, *clock, *panel, *trig;
+	const char *wavPath, *midiPath, *clockPath, *panelPath, *trigPath;
 	int stereo;					/**< RENDER_STEREO_* */
 	uint64_t frames;			/**< frames written */
 	int writeError;				/**< 0, or the errno of the first failed write */
@@ -82,6 +82,8 @@ void render_outUsb(render_out_t *o, uint64_t t, const uint8_t *data, unsigned le
 void render_outClock(render_out_t *o, uint64_t t, int level);
 /** a panel-log line: the LCD and emu_ledSnapshot()'s mask */
 void render_outMark(render_out_t *o, uint64_t t, const char *name, const emu_lcdSnapshot_t *lcd, uint64_t leds);
+/** a trig-log line (LICHOMAT v0.5, plan Task 9, P12): t is signed, cycles from t0 */
+void render_outTrig(render_out_t *o, int64_t t, uint8_t voice, uint8_t src, uint32_t serial, uint8_t k, uint8_t late);
 
 /** Write the WAV header's sizes and close every output. Returns 0, or 5 with
  * "FILE: strerror" in err after a failed write or close. */

@@ -66,7 +66,7 @@ typedef struct render_opts
 	int asBooted;
 	unsigned wavRate;			/**< 44141 or 44100 */
 	int stereo;					/**< RENDER_STEREO_* */
-	const char *midiLog, *clockLog, *panelLog, *summary, *keepCard;
+	const char *midiLog, *clockLog, *panelLog, *trigLog, *summary, *keepCard;
 	int version, help;
 	/* test builds only (EMU_RENDER_TEST_HOOKS) */
 	int testFault;				/**< RENDER_FAULT_* */

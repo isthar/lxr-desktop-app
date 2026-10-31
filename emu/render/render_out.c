@@ -86,6 +86,7 @@ int render_outOpen(render_out_t *o, const render_opts_t *opts, char *err, size_t
 		{ opts->midiLog, &o->midi, &o->midiPath },
 		{ opts->clockLog, &o->clock, &o->clockPath },
 		{ opts->panelLog, &o->panel, &o->panelPath },
+		{ opts->trigLog, &o->trig, &o->trigPath },
 	};
 	for (size_t i = 0; i < sizeof logs / sizeof logs[0]; i++)
 	{
@@ -247,6 +248,16 @@ void render_outMark(render_out_t *o, uint64_t t, const char *name, const emu_lcd
 	noteError(o, f, o->panelPath);
 }
 
+/* LICHOMAT v0.5 (plan Task 9, P12): <cycles from t0, signed> <voice> <src> <serial> <k> <late> */
+void render_outTrig(render_out_t *o, int64_t t, uint8_t voice, uint8_t src, uint32_t serial, uint8_t k, uint8_t late)
+{
+	static const char *const srcs[] = { "seq", "midi", "oneshot", "?" };
+	if (!o->trig)
+		return;
+	fprintf(o->trig, "%lld %u %s %u %u %u\n", (long long)t, voice, srcs[src & 3u], serial, k, late);
+	noteError(o, o->trig, o->trigPath);
+}
+
 static int closeOne(render_out_t *o, FILE **f, const char *path)
 {
 	if (!*f)
@@ -274,6 +285,7 @@ int render_outClose(render_out_t *o, unsigned wavRate, char *err, size_t n)
 	closeOne(o, &o->midi, o->midiPath);
 	closeOne(o, &o->clock, o->clockPath);
 	closeOne(o, &o->panel, o->panelPath);
+	closeOne(o, &o->trig, o->trigPath);
 	if (o->writeError)
 		return outFail(err, n, o->errorPath, o->writeError);
 	return 0;
@@ -422,6 +434,13 @@ int render_summaryWrite(const char *path, const render_summary_t *s, char *err, 
 	jsonU(f, "dropouts", q->dropouts, 1);
 	jsonU(f, "reentries", q->reentries, 1);
 	jsonU(f, "tempoRestarts", q->tempoRestarts, 0);
+	fputs("},\n \"vsched\": {", f);		/* LICHOMAT v0.5 (plan Task 9) */
+	jsonU(f, "late", q->vschedLate, 1);
+	jsonU(f, "overflow", q->vschedOverflow, 1);
+	jsonU(f, "splits", q->vschedSplits, 1);
+	jsonU(f, "phaseSplits", q->vschedPhaseSplits, 1);
+	jsonU(f, "capFallbacks", q->vschedCapFallbacks, 1);
+	jsonU(f, "offTick", q->vschedOffTick, 0);
 	const emu_counters_t *c = &s->counters;
 	fputs("},\n \"counters\": {", f);
 	jsonU(f, "bootEnd", c->bootEnd, 1);

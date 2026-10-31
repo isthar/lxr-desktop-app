@@ -92,11 +92,18 @@ typedef struct render_fwCounters
 	uint32_t queueDepth, queueMax, queueOverflow, chokeDrops, muteDrops, skipDrops, syncIgnored,
 		intervalsExcluded, dropouts, reentries, tempoRestarts;
 	uint32_t syncOverflows, usbTxDropped;
+	uint32_t vschedLate, vschedOverflow, vschedSplits, vschedPhaseSplits, vschedCapFallbacks, vschedOffTick;	/* LICHOMAT v0.5: vsched_stats_t */
 } render_fwCounters_t;
 
 /** Copy the three counter getters' values. They only copy counters, so the end
  * of the render reads them from the tier hook (stage 1b plan R2.3, spec 5.3
  * step 7): the one firmware read that is not a direct call. */
 void rfw_counters(render_fwCounters_t *out);
+
+/** --trig-log (plan v0.5 Task 9): fn receives each record the voice scheduler applies: its event
+ * time (DWT cycles, low 32 bits), voice 0-5, producer (0 seq, 1 midi, 2 oneshot), the window's
+ * serial, its offset k and whether it was late; NULL turns it off. Sets a pointer only */
+typedef void (*rfw_trigFn)(uint32_t time, uint8_t voice, uint8_t src, uint32_t serial, uint8_t k, uint8_t late);
+void rfw_trigLog(rfw_trigFn fn);
 
 #endif /* RENDER_FW_H_ */
