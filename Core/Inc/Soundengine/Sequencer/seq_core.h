@@ -801,6 +801,17 @@ bool seqc_trackOnMasterGrid(uint8_t track);
  * here. */
 double seqc_position(void);
 //------------------------------------------------------------------------------
+/** v0.5 (spec S7): inside a callback, the time at which the item being handled was
+ * due; outside one, the core's current time. At most the time of the call, never
+ * decreasing within a call.
+ * - Internal sync: seqc_internalTime() of the item's tick, rounded down (N10).
+ * - Slave modes, an item reached by the interpolation: the last clock's stamp plus the
+ *   ticks since its position at the estimated tempo, at most the time of the call or
+ *   the dropout limit (N15).
+ * - Slave modes, an item that a clock's jump passes: that clock's stamp.
+ * The voice scheduler (vsched.h) starts a voice at this time. */
+seqc_time_t seqc_itemTime(void);
+//------------------------------------------------------------------------------
 /** Recording phase, 0..1, of the current step n at the current position.
  * seq_getElapsedStepTimePercent() returns it x 100, and seq_addNote() moves a
  * note to the next step at 0.5 or more (spec 6.7).

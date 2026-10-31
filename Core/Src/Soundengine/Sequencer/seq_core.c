@@ -118,6 +118,7 @@ typedef struct
 	double		pos;		/**< the position handled so far, ticks */
 	int32_t		absStep;	/**< n of the current step, -1 before the first */
 	seqc_stats_t	stats;
+	seqc_time_t	itemTime;	/**< v0.5: the due time of the item being handled */
 } seqc_core_t;
 
 //------------------------------------------------------------------------------
@@ -2470,8 +2471,32 @@ static inline double seqc_dueLimit(double target)
 	return target + 1e-12 * (1.0 + (target > 0.0 ? target : -target));
 }
 //------------------------------------------------------------------------------
-/** handle every item due at or before target, earliest first (spec 6.3) */
-static void seqc_runTo(double target)
+/** v0.5: how seqc_runTo() times its items for seqc_itemTime() (spec S7) */
+typedef enum
+{
+	SEQC_TIMING_INTERNAL = 0,	/**< the internal timeline: seqc_internalTime(tick) */
+	SEQC_TIMING_SLAVE,		/**< the interpolation from the last clock */
+	SEQC_TIMING_CLOCK,		/**< a clock's jump: the clock's stamp */
+} seqc_timing_t;
+
+/** the time an item at tick was due, at most limit (the call's time, the dropout limit,
+ * or the stamp of the clock that jumps past it) */
+static seqc_time_t seqc_dueTime(seqc_timing_t how, seqc_tick_t tick, seqc_time_t limit)
+{
+	seqc_time_t t = limit;
+	if (how == SEQC_TIMING_INTERNAL)
+		t = seqc_internalTime(tick);
+	else if (how == SEQC_TIMING_SLAVE)
+	{
+		const double cycles = ((double)tick - seqc_sl.lastClockPos) * seqc_sl.cyclesPerTick;
+		t = seqc_sl.lastClockTime + (cycles > 0.0 ? (seqc_time_t)cycles : 0u);
+	}
+	return t < limit ? t : limit;
+}
+//------------------------------------------------------------------------------
+/** handle every item due at or before target, earliest first (spec 6.3); v0.5: each
+ * item's due time for seqc_itemTime(), as how says, at most limit */
+static void seqc_runTo(double target, seqc_timing_t how, seqc_time_t limit)
 {
 	for (;;)
 	{
@@ -2480,6 +2505,7 @@ static void seqc_runTo(double target)
 		const seqc_item_t item = seqc_nextItem(&tick, &track);
 		if (item == SEQC_ITEM_NONE || (double)tick > seqc_dueLimit(target))
 			break;
+		seqc.itemTime = seqc_dueTime(how, tick, limit);
 		switch (item)
 		{
 		case SEQC_ITEM_TEMPO_STEP:
@@ -2534,7 +2560,7 @@ static void seqc_runInternal(void)
 		seqc_out.nextTempoStep = 0;
 		seqc_out.nextPulse = 0;
 	}
-	seqc_runTo(seqc_internalTick(seqc.now));
+	seqc_runTo(seqc_internalTick(seqc.now), SEQC_TIMING_INTERNAL, seqc.now);
 }
 //------------------------------------------------------------------------------
 /** slave modes: while running, the position follows the interpolation (N9).
@@ -2547,14 +2573,14 @@ static void seqc_runSlave(void)
 	const seqc_time_t limit = seqc_sl.lastClockTime + seqc_dropoutCycles();
 	if (!seqc_sl.droppedOut && seqc.now > limit)
 	{
-		seqc_runTo(seqc_slaveTarget(limit));
+		seqc_runTo(seqc_slaveTarget(limit), SEQC_TIMING_SLAVE, limit);
 		seqc_sl.droppedOut = true;
 		seqc_clearEstimate();
 		seqc.stats.dropouts++;
 		seqc_flushNoteOffs();
 		return;
 	}
-	seqc_runTo(seqc_slaveTarget(seqc.now));
+	seqc_runTo(seqc_slaveTarget(seqc.now), SEQC_TIMING_SLAVE, seqc.now);
 }
 //------------------------------------------------------------------------------
 /** move the core's time to t (never back) and handle everything due up to it */
@@ -2570,6 +2596,7 @@ static void seqc_advance(seqc_time_t t)
 	}
 	else if (t > seqc.now)
 		seqc.now = t;
+	seqc.itemTime = seqc.now;	/* v0.5: a callback before the first item */
 	if (seqc.mode == SEQC_SYNC_INTERNAL)
 		seqc_runInternal();
 	else
@@ -2649,7 +2676,7 @@ static void seqc_slaveClock(seqc_time_t stamp)
 		/* the position jumps to the clock, and everything due on the way is handled */
 		seqc_sl.lastClockPos += seqc_ticksPerClock();
 		seqc_sl.lastClockTime = stamp;
-		seqc_runTo(seqc_sl.lastClockPos);
+		seqc_runTo(seqc_sl.lastClockPos, SEQC_TIMING_CLOCK, stamp);
 	}
 }
 //------------------------------------------------------------------------------
@@ -2990,6 +3017,11 @@ uint8_t seqc_barStep(void)
 bool seqc_trackOnMasterGrid(uint8_t track)
 {
 	return track >= SEQC_NUM_TRACKS || (seqc_trk.own & SEQC_BIT(track)) == 0;
+}
+//------------------------------------------------------------------------------
+seqc_time_t seqc_itemTime(void)
+{
+	return seqc.busy ? seqc.itemTime : seqc.now;
 }
 //------------------------------------------------------------------------------
 double seqc_position(void)
