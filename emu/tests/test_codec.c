@@ -19,6 +19,7 @@
  */
 #include "stm32f7xx_hal.h"
 #include "emu_test.h"
+#include "Soundengine/vsched.h"
 
 void codec_initCsCodec(uint32_t Addr1, uint32_t Size1, uint32_t Addr2, uint32_t Size2);
 extern TIM_HandleTypeDef htim2;
@@ -177,6 +178,33 @@ TEST(M3_paced_by_ring)
 	ASSERT_EQ(emu_watchdogPoll(&emu_tier.dog, emu_tier.wall + 1.0), 0);		/* sees the last progress */
 	ASSERT_EQ(emu_watchdogPoll(&emu_tier.dog, emu_tier.wall + 10.0), 0);	/* 9 s without progress */
 	ASSERT_EQ(emu_watchdogPoll(&emu_tier.dog, emu_tier.wall + 11.5), 1);	/* 10.5 s outside a wait: a hang */
+}
+
+/* LICHOMAT v0.5 (plan Task 4, S5): each block request stamps the voice scheduler's window,
+ * as the SPI3 branch of HAL_I2S_TxCpltCallback() does: after request k it is
+ * [request k - 1, request k), to the cycle; after the first there is none yet */
+TEST(M5_window)
+{
+	setup(NULL);
+	HAL_Delay(10);
+	codec_initCsCodec(0, 128, 0, 128);	/* at 2,160,000 */
+	valid = 0xFFu;
+	for (unsigned k = 1; k <= 40; k++)
+	{
+		const uint64_t tk = 2160000u + emu_framesToCycles(64u * k);
+		emu_threadAdvance(tk + 1u - emu_now());
+		render();
+		uint32_t w0, len;
+		if (k == 1)
+		{
+			ASSERT_FALSE(vsched_window(&w0, &len));
+			continue;
+		}
+		const uint64_t prev = 2160000u + emu_framesToCycles(64u * (k - 1));
+		ASSERT_TRUE(vsched_window(&w0, &len));
+		ASSERT_EQ(w0, (uint32_t)prev);
+		ASSERT_EQ(len, (uint32_t)(tk - prev));
+	}
 }
 
 TEST_MAIN()

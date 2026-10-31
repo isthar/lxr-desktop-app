@@ -13,6 +13,7 @@
 #include "Soundengine/cs4344_cs5343.h"
 #include "Soundengine/globals.h"
 #include "main.h"
+#include "Soundengine/vsched.h"	//LICHOMAT v0.5: vsched_blockDone() (plan v0.5)
 
 DMA_InitTypeDef DMA_InitStructure;
 DMA_InitTypeDef DMA_InitStructure2;
@@ -127,6 +128,9 @@ IN_ITCM_RAM void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
 	}
 	else if(hi2s->Instance == SPI3)
 	{
+		//LICHOMAT v0.5: the block window of sample-accurate triggering, stamped before the DMA
+		//restart (plan v0.5 P1, S5)
+		vsched_blockDone(DWT->CYCCNT);
 		//Out 2
 		dmaPtr++;
 		HAL_I2S_Transmit_DMA(&hi2s3, (uint16_t*)&dma_buffer[(OUTPUT_DMA_SIZE*2)*(dmaPtr&0x1)], OUTPUT_DMA_SIZE*2);

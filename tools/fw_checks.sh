@@ -1,5 +1,5 @@
 #!/bin/bash
-# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.8, E3.3 and E4.9),
+# Static checks of the stage 1 firmware integration (tasks E2.2 to E2.8, E3.3, E4.9 and E6.10),
 # on the release build and on the sources: symbols that must or must not be linked,
 # calls that a function must or must not make, what sits in ITCM, and source patterns.
 # They stand in for unit tests where the code needs the hardware.
@@ -347,7 +347,25 @@ check_E4_9() {
 	fi
 }
 
-check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8 E3.3 E4.9"
+# ---- E6.10: sample-accurate triggering (plan v0.5) ----------------------------------
+check_E6_10() {
+	# S5: the SPI3 completion stamps the block window, before its DMA restart
+	must_call HAL_I2S_TxCpltCallback vsched_blockDone
+	awk '{sub(/\r$/, "")} /hi2s->Instance == SPI3/{s=1} s&&/vsched_blockDone\(DWT->CYCCNT\);/{b=1}
+		s&&/HAL_I2S_Transmit_DMA\(&hi2s3/{ok=b; exit} END{exit !ok}' Core/Src/Soundengine/cs4344_cs5343.c \
+		|| fail "the SPI3 branch does not stamp the window before the DMA restart"
+	# S6: both render paths read the pending block before seq_tick() and render after it
+	local f
+	# (the headers' parentheses as bracket expressions: awk -v drops the backslash of "\(")
+	for f in "Core/Src/Soundengine/Soundengine.c:^void soundengine_process[(][)]" "Core/Src/stm32f7xx_it.c:^void TIM2_IRQHandler[(]void[)]"; do
+		awk -v h="${f#*:}" '{sub(/\r$/, "")} $0 ~ h {f=1} f&&!p&&/soundengine_blockPending\(\)/{p=NR}
+			f&&!t&&/seq_tick\(\);/{t=NR} f&&!c&&/soundengine_calcNextSampleBlock\(\)/{c=NR} f&&/^}/{exit}
+			END{exit !(p && t && c && p < t && t < c)}' "${f%%:*}" \
+			|| fail "${f%%:*}: the pending block is not read before seq_tick() (S6)"
+	done
+}
+
+check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8 E3.3 E4.9 E6.10"
 
 if [ $# -gt 0 ]; then check_tasks="$*"; fi
 for task in $check_tasks; do

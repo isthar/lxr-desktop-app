@@ -57,8 +57,9 @@ static void emu_fwTim14(void)
 static void emu_fwTim2(void)
 {
 	soundengine_cpuBegin();
+	const uint8_t pending = soundengine_blockPending();	/* LICHOMAT v0.5: before seq_tick() (plan Task 4, S6) */
 	seq_tick();
-	const uint8_t blockRendered = soundengine_calcNextSampleBlock();
+	const uint8_t blockRendered = pending ? soundengine_calcNextSampleBlock() : 0;
 	soundengine_cpuEnd(blockRendered);
 }
 

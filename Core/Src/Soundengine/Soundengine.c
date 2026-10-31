@@ -37,6 +37,12 @@ uint8_t soundengine_calcNextSampleBlock()
 	return 0;
 }
 
+//LICHOMAT v0.5 (plan v0.5, S6)
+uint8_t soundengine_blockPending(void)
+{
+	return bCurrentSampleValid != SAMPLE_VALID;
+}
+
 void soundengine_init()
 {
 	mixer_init();
@@ -82,8 +88,12 @@ void soundengine_process()
 	__HAL_TIM_DISABLE_IT(&htim2, TIM_IT_UPDATE);
 	//HAL_TIM_Base_Stop_IT(&htim2);
 	soundengine_cpuBegin();
+	//LICHOMAT v0.5: the block pending before seq_tick() is rendered after it; one that comes
+	//during seq_tick() waits for the next call, so that every event of its window has fired
+	//before its render (plan v0.5, S6)
+	const uint8_t pending = soundengine_blockPending();
 	seq_tick();
-	soundengine_cpuEnd(soundengine_calcNextSampleBlock());
+	soundengine_cpuEnd(pending ? soundengine_calcNextSampleBlock() : 0);
 	__HAL_TIM_SetCounter(&htim2, 1950);
 	//HAL_TIM_Base_Start_IT(&htim2);
 	__HAL_TIM_ENABLE_IT(&htim2, TIM_IT_UPDATE);

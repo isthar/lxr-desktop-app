@@ -17,6 +17,7 @@
  */
 #include "stm32f7xx_hal.h"
 #include "emu_internal.h"
+#include "Soundengine/vsched.h"
 
 #define EMU_SAMPLE_VALID 0xFFu		/* SAMPLE_VALID of globals.h */
 #define EMU_HALF_SAMPLES 128u		/* 64 stereo frames of int16 */
@@ -34,6 +35,7 @@ static void emu_blockFire(void)
 static void emu_blockBody(void)
 {
 	emu_count.blocks++;
+	vsched_blockDone(DWT->CYCCNT);	/* LICHOMAT v0.5: as the SPI3 branch (plan Task 4) */
 	if (emu_fw.sampleValid && *emu_fw.sampleValid != EMU_SAMPLE_VALID)
 		emu_count.underruns++;
 	emu_dmaPointer++;

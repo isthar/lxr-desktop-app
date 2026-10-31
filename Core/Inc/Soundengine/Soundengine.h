@@ -33,6 +33,8 @@
 void soundengine_init();
 void soundengine_process();
 uint8_t soundengine_calcNextSampleBlock();
+//LICHOMAT v0.5: 1 if a block waits for its render; read before seq_tick() (plan v0.5, S6)
+uint8_t soundengine_blockPending(void);
 /** LICHOMAT CPU meter (cpuMeter.h): call around the audio work, in TIM2_IRQHandler()
  * and in soundengine_process(); blockRendered is what soundengine_calcNextSampleBlock()
  * returned */
