@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 02:55",
+    "updated": "2026-10-31 03:05",
     "phase": "Etap 2: v0.4 (atmosfera) w toku; A1-A6 gotowe, A7-A9 czekają na H12",
     "focus": "v0.4 A1-A6 gotowe na gałęzi v0.4 (36245bf): delay z tempem, filtr DJ, bufor i parametry pogłosu. Pogłos, freeze i rumble (A7-A9) po Twoim odczycie CPU (H12).",
     "branch": "timing-core",
-    "head": "0ae45f7",
+    "head": "7b7417c",
     "next": "Ty: jedna sesja testowa na v0.3 (docs/lichomat/test-session-v0.3.md), najpierw H12. Ja: do ok. 04:00 części v0.4 bez H12, potem przerwa; po H12 v0.4 A7-A11.",
-    "updated_at": "2026-10-31T02:55:00+01:00",
-    "now": "Od 02:53: porządki; CI dla v0.4 czeka na runner GitHuba."
+    "updated_at": "2026-10-31T03:05:00+01:00",
+    "now": "Od 03:05: czekam na CI GitHuba; koniec bloku ok. 04:08."
   },
   "epics": [
     {
@@ -2858,6 +2858,11 @@
       "n": 400,
       "at": "2026-10-31 02:55",
       "text": "02:55 Q29 rozstrzygnięte: filtr DJ i pozostałe cztery parametry atmosfery bez LFO i velocity w v0.4 (cele modulacji fw 1.7 to zakresy na głos, a te parametry należą do mastera; dopisanie zepsułoby zgodność kitów z 1.7). Sterowanie: menu i NRPN 96-99, 116."
+    },
+    {
+      "n": 401,
+      "at": "2026-10-31 03:05",
+      "text": "03:05 Fuzzing v0.4 (36245bf + ea464cc): brzmienia 600, MIDI 400, sekwencer 400 renderów pod UBSan; zero znalezisk. GitHub od 00:11 UTC nie uruchamia nowych przebiegów CI w repozytorium (dla ea464cc status pending, 0 sprawdzeń); monitor czeka."
     }
   ]
 }
