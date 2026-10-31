@@ -478,14 +478,31 @@ int app_ciProbe(const char *uid, app_outputInfo_t *info)
 	return app_ciDescribe(uid, &dev, &follow, info);
 }
 
+UInt32 app_ciSliceFrames(const AudioValueRange *range, UInt32 current)
+{
+	UInt32 n = 4096u;	/* the range is not known: what the first version assumed */
+	if (range && range->mMaximum >= 1.0 && range->mMaximum >= range->mMinimum)
+		n = range->mMaximum >= (double)APP_CI_SLICE_MAX ? APP_CI_SLICE_MAX : (UInt32)range->mMaximum;
+	if (current > n)
+		n = current > APP_CI_SLICE_MAX ? APP_CI_SLICE_MAX : current;
+	return n;
+}
+
 OSStatus app_ciInput(void *ref, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *ts, UInt32 bus, UInt32 frames,
 	AudioBufferList *io)
 {
 	(void)io;	/* NULL for an input callback: the frames are pulled */
 	const uint64_t entry = mach_absolute_time();
 	app_ci_t *ci = ref;
-	if (frames == 0u || frames > ci->maxFrames || !(ts->mFlags & kAudioTimeStampHostTimeValid))
-		return noErr;	/* no room, or no time to put the edges at */
+	atomic_fetch_add_explicit(&ci->entries, 1u, memory_order_relaxed);
+	if (frames == 0u)
+		return noErr;	/* nothing to serve */
+	if (frames > ci->maxFrames || !(ts->mFlags & kAudioTimeStampHostTimeValid))
+	{
+		/* no room, or no time to put the edges at: counted, or a dead input looks like a running one in the diagnostics */
+		atomic_fetch_add_explicit(&ci->in->skipped, 1u, memory_order_relaxed);
+		return noErr;
+	}
 	ci->abl.mNumberBuffers = 1u;
 	ci->abl.mBuffers[0].mNumberChannels = ci->channels;
 	ci->abl.mBuffers[0].mDataByteSize = frames * ci->channels * (UInt32)sizeof(float);
@@ -494,12 +511,34 @@ OSStatus app_ciInput(void *ref, AudioUnitRenderActionFlags *flags, const AudioTi
 	if (st == noErr)	/* spec 6.8: mHostTime, the frame's offset, the latency */
 		app_jackInRender(ci->in, ts->mHostTime, entry, (ts->mFlags & kAudioTimeStampRateScalarValid) ? ts->mRateScalar : 1.0,
 			ci->buf, frames);
+	else
+		atomic_fetch_add_explicit(&ci->in->skipped, 1u, memory_order_relaxed);
 	return st;
+}
+
+unsigned app_ciWatch(app_ci_t *ci)
+{
+	const struct { AudioObjectPropertySelector sel; AudioObjectPropertyScope scope; } device[] = {
+		{ kAudioDevicePropertyDeviceIsAlive, APP_CA_GLOBAL },
+		{ kAudioDevicePropertyNominalSampleRate, APP_CA_GLOBAL },
+		{ kAudioDevicePropertyStreamConfiguration, APP_CA_INPUT },
+		/* a device that the output shares gets a new buffer when the Audio window says so: the lead that was measured at the
+		 * old one is wrong, and the slice may be too (the HAL keeps the size in either scope) */
+		{ kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeWildcard },
+	};
+	unsigned n = 0;
+	for (unsigned i = 0; i < sizeof device / sizeof device[0]; i++)
+		ci->listen[n++] = (app_caListen_t){ ci->device, app_caAddr(device[i].sel, device[i].scope) };
+	if (ci->followDefault)
+		ci->listen[n++] = (app_caListen_t){ kAudioObjectSystemObject,
+			app_caAddr(kAudioHardwarePropertyDefaultInputDevice, APP_CA_GLOBAL) };
+	return n;
 }
 
 void app_ciClose(app_ci_t *ci)
 {
-	if (ci->started)
+	const int ran = ci->started;
+	if (ran)
 		AudioOutputUnitStop(ci->unit);	/* the callback has returned when this does */
 	for (unsigned i = 0; i < ci->nListen; i++)
 		(void)AudioObjectRemovePropertyListenerBlock(ci->listen[i].obj, &ci->listen[i].addr, ci->queue, ci->listener);
@@ -519,6 +558,10 @@ void app_ciClose(app_ci_t *ci)
 	memset(ci, 0, sizeof *ci);
 	ci->in = in;
 	ci->device = kAudioObjectUnknown;
+	/* the callback has returned for good, so this thread may push the release of a high reset (F11). Whoever closes does this:
+	 * the shell, and the open that failed after the unit had started */
+	if (ran)
+		app_jackInStop(in, mach_absolute_time());
 }
 
 static int app_ciOpenUnit(app_ci_t *ci, const app_clockInOptions_t *o, double ticksPerSec, char *err, size_t n)
@@ -561,12 +604,22 @@ static int app_ciOpenUnit(app_ci_t *ci, const app_clockInOptions_t *o, double ti
 	const AURenderCallbackStruct cb = { app_ciInput, ci };
 	APP_CI_TRY("AudioUnitSetProperty(SetInputCallback)", AudioUnitSetProperty(ci->unit,
 		kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, &cb, sizeof cb));
+	/* the most frames one callback can bring: the device's largest buffer, set as the unit's slice before it initialises and
+	 * made room for in buf. AUHAL's own slice follows the device's buffer, which a device that the output shares has raised
+	 * (512, 1024, 2048) while this runs; a snapshot of it at the open left every later callback too big, and the input dead */
+	AudioValueRange range = { 0.0, 0.0 };
+	if (app_caGet(ci->device, kAudioDevicePropertyBufferFrameSizeRange, APP_CA_INPUT, &range, sizeof range) != noErr)
+		(void)app_caGet(ci->device, kAudioDevicePropertyBufferFrameSizeRange, APP_CA_GLOBAL, &range, sizeof range);
+	ci->maxFrames = app_ciSliceFrames(&range, ci->info.bufferFrames);
+	UInt32 slice = ci->maxFrames;
+	(void)AudioUnitSetProperty(ci->unit, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &slice,
+		sizeof slice);	/* a unit that refuses keeps its own, which the read below finds */
 	APP_CI_TRY("AudioUnitInitialize(input)", AudioUnitInitialize(ci->unit));
 	ci->initialized = 1;
-	UInt32 size = sizeof ci->maxFrames;	/* the most frames one callback brings */
-	if (AudioUnitGetProperty(ci->unit, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0,
-			&ci->maxFrames, &size) != noErr || ci->maxFrames == 0u)
-		ci->maxFrames = 4096u;
+	UInt32 size = sizeof slice;
+	if (AudioUnitGetProperty(ci->unit, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &slice, &size)
+			== noErr && slice > ci->maxFrames)
+		ci->maxFrames = slice > APP_CI_SLICE_MAX ? APP_CI_SLICE_MAX : slice;	/* it brings no more than this, buf holds it */
 	if ((ci->buf = calloc((size_t)ci->maxFrames * ci->channels, sizeof(float))) == NULL)
 	{
 		snprintf(err, n, "out of memory for the input buffer");
@@ -576,11 +629,9 @@ static int app_ciOpenUnit(app_ci_t *ci, const app_clockInOptions_t *o, double ti
 		ci->channels, (unsigned)o->clockChannel - 1u, o->resetChannel > 0 ? (unsigned)o->resetChannel - 1u : UINT_MAX,
 		(float)o->clockThreshold, (float)o->resetThreshold };
 	app_jackInStart(ci->in, &jc);	/* before the first callback (F5-F7) */
-	APP_CI_TRY("AudioOutputUnitStart(input)", AudioOutputUnitStart(ci->unit));
-	ci->started = 1;
 	snprintf(ci->info.format, sizeof ci->info.format, "input float32 %u ch %.0f Hz; latency %u + %u frames", ci->channels,
 		ci->info.deviceRate, ci->info.deviceLatency, ci->info.streamLatency);
-	/* the listeners: the device gone, its rate or its inputs changed, the default input moved (F9) */
+	/* the listeners: the device gone, its rate, inputs or buffer changed, the default input moved (F9) */
 	if ((ci->queue = dispatch_queue_create("lichomat-emu.input", DISPATCH_QUEUE_SERIAL)) == NULL)
 	{
 		snprintf(err, n, "dispatch_queue_create failed");
@@ -592,21 +643,22 @@ static int app_ciOpenUnit(app_ci_t *ci, const app_clockInOptions_t *o, double ti
 		(void)addr;
 		atomic_store(&self->changed, 1);
 	});
-	const AudioObjectPropertySelector sel[3] = { kAudioDevicePropertyDeviceIsAlive, kAudioDevicePropertyNominalSampleRate,
-		kAudioDevicePropertyStreamConfiguration };
-	const AudioObjectPropertyScope scope[3] = { APP_CA_GLOBAL, APP_CA_GLOBAL, APP_CA_INPUT };
-	unsigned want = 0;
-	for (unsigned i = 0; i < 3u; i++)
-		ci->listen[want++] = (app_caListen_t){ ci->device, app_caAddr(sel[i], scope[i]) };
-	if (ci->followDefault)
-		ci->listen[want++] = (app_caListen_t){ kAudioObjectSystemObject,
-			app_caAddr(kAudioHardwarePropertyDefaultInputDevice, APP_CA_GLOBAL) };
-	for (unsigned i = 0; ci->listener && i < want; i++)
+	if (!ci->listener)
+	{
+		snprintf(err, n, "Block_copy failed");
+		return -1;
+	}
+	const unsigned want = app_ciWatch(ci);
+	for (unsigned i = 0; i < want; i++)
 	{
 		APP_CI_TRY("AudioObjectAddPropertyListenerBlock(input)",
 			AudioObjectAddPropertyListenerBlock(ci->listen[i].obj, &ci->listen[i].addr, ci->queue, ci->listener));
 		ci->nListen = i + 1u;
 	}
+	/* last: from the start on a callback can come at any moment, and a failure up to here has only what app_ciClose() undoes.
+	 * started is set first, so that a start that fails halfway is stopped, and a reset that it left high is let go */
+	ci->started = 1;
+	APP_CI_TRY("AudioOutputUnitStart(input)", AudioOutputUnitStart(ci->unit));
 	return 0;
 }
 
@@ -615,8 +667,13 @@ int app_ciOpen(app_ci_t *ci, app_jackIn_t *in, const app_clockInOptions_t *o, do
 	memset(ci, 0, sizeof *ci);
 	ci->in = in;
 	err[0] = '\0';
+	if (o->resetChannel > 0 && o->resetChannel == o->clockChannel)	/* one channel cannot be both: said before a device is touched */
+	{
+		snprintf(err, n, "clock and reset are both on input channel %d", o->clockChannel);
+		return -1;
+	}
 	if (app_ciOpenUnit(ci, o, ticksPerSec, err, n) == 0)
 		return 0;
-	app_ciClose(ci);
+	app_ciClose(ci);	/* of a unit that had started it lets a high reset go (F11) */
 	return -1;
 }

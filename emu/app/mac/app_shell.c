@@ -38,6 +38,7 @@
 #define APP_SHELL_SAVE_SEC 0.5	/**< a changed setting is saved this long after the first change: a slider's drag is one save */
 #define APP_SHELL_POWER_SEC 2.0	/**< a power cycle waits this long for 'card out applied' */
 #define APP_SHELL_STOP_SEC 1.0	/**< what app_shellStop() waits beyond the engine's longest wait: the first callback and the open */
+#define APP_SHELL_INPUT_SETTLE_SEC 0.25	/**< the input waits this long after a change of its device before it reopens */
 #define APP_SHELL_HANG "hang: no progress for 10 s; the audio is stopped. Restart LICHOMAT Emu."
 
 struct app_shell
@@ -56,6 +57,7 @@ struct app_shell
 	app_ci_t ci;					/**< the input of clock and reset in from audio (F9); the main thread owns it */
 	int haveInput, inputAllowed;	/**< the input unit is open; the option is on and the microphone was granted */
 	double inputRetryAt;			/**< app_wallSeconds() of the next try while the input should run and is closed */
+	unsigned inputTries;			/**< the opens of the input tried so far, those that failed too (a test's) */
 	char inputErr[256];				/**< the last open failure said */
 	app_cm_t cm;
 	pthread_t midiOut;
@@ -334,14 +336,13 @@ static void app_shellNoteCommand(app_shell_t *s, const app_cmd_t *c)
 	app_shellChanged(s);
 }
 
-/* closes the input: the callback has returned for good then, so this thread may push the release of a high reset (F11) */
+/* closes the input: the callback has returned for good then, and app_ciClose() has pushed the release of a high reset (F11) */
 static void app_shellInputClose(app_shell_t *s)
 {
 	if (!s->haveInput)
 		return;
 	app_ciClose(&s->ci);
 	s->haveInput = 0;
-	app_jackInStop(&s->engine.jackIn, mach_absolute_time());
 }
 
 static int app_shellInputOpen(app_shell_t *s)
@@ -356,6 +357,7 @@ static int app_shellInputOpen(app_shell_t *s)
 	o.resetChannel = t->resetChannel;
 	o.clockThreshold = t->clockInThreshold;
 	o.resetThreshold = t->resetThreshold;
+	s->inputTries++;
 	if (app_ciOpen(&s->ci, &s->engine.jackIn, &o, s->mach.ticksPerSec, err, sizeof err) == 0)
 	{
 		s->haveInput = 1;
@@ -788,7 +790,13 @@ int app_shellFrame(app_shell_t *s)
 		app_shellRestart(s);	/* no answer in 2 s: the power goes off all the same (spec 6.9) */
 	}
 	if (s->haveInput && atomic_exchange(&s->ci.changed, 0))
-		app_shellInputClose(s);	/* the device went, or its rate or inputs changed: a new try below (F9) */
+	{
+		/* the device went, or its rate, inputs or buffer changed: a new try below (F9), after a moment for a burst of such
+		 * changes (a device that goes comes with several) to settle, and so that no notification that an open causes itself
+		 * can turn into an open at every frame */
+		app_shellInputClose(s);
+		s->inputRetryAt = wall + APP_SHELL_INPUT_SETTLE_SEC;
+	}
 	if (s->set.clockInAudio && s->inputAllowed && !s->haveInput && wall >= s->inputRetryAt)
 		(void)app_shellInputOpen(s);
 	if (s->setDirty && wall >= s->setSaveAt)
@@ -911,6 +919,11 @@ const char *app_shellWarning(const app_shell_t *s, int i)
 void app_shellTestFault(app_shell_t *s)
 {
 	atomic_store(&s->testFault, 1);
+}
+
+unsigned app_shellTestInputTries(const app_shell_t *s)
+{
+	return s->inputTries;
 }
 
 void app_shellTestStall(app_shell_t *s, int ms)

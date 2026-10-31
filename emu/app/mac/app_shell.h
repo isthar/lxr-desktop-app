@@ -80,6 +80,9 @@ void app_shellTestFault(app_shell_t *s);	/**< harness only: SIGSEGV on the firmw
 /** tests only: the firmware thread sleeps ms milliseconds before its next slice, as if it were held up in a wait of the
  * engine, where it takes no command (a silent open, a slow close). Any thread */
 void app_shellTestStall(app_shell_t *s, int ms);
+/** tests only: how many times the shell has tried to open the input (the first, the retries every 2 s, the reopens), those
+ * that failed too. Main thread */
+unsigned app_shellTestInputTries(const app_shell_t *s);
 /** tests only: the main thread handles an acknowledgement of kind app_ackKind_t and number seq as if the engine had sent it
  * (a late 'card out applied' of an operation that has timed out, say). Main thread */
 void app_shellTestAck(app_shell_t *s, int kind, int32_t seq);

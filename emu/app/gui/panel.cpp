@@ -638,7 +638,7 @@ void diagnostics(panel_t *p, app_shell_t *s, const app_snapshot_t *snap)
 		}
 		else
 			kv("clock and reset in", "%s", set->clockInAudio ? (inErr[0] ? inErr : "not running yet") : "off");
-		kv("audio edges dropped", "%llu", U64(g.jackInDropped));
+		kv("audio edges dropped, input callbacks skipped", "%llu, %llu", U64(g.jackInDropped), U64(g.jackInSkipped));
 		section("counters (spec 5.5)");
 		kv("blocks, underruns, passes", "%llu, %llu, %llu", U64(c.blocks), U64(c.underruns), U64(c.passes));
 		kv("DIN in, lost, out", "%llu, %llu, %llu", U64(c.dinIn), U64(c.dinLost), U64(c.dinOut));
@@ -686,8 +686,9 @@ void sendClockOut(app_shell_t *s, int channel)
 	(void)app_shellCommand(s, &c);
 }
 
-/* a combo of the numbers lo to hi (lo 0 reads 'none'); the current one is shown even where it is above hi. True if picked */
-bool channelCombo(const char *label, int *value, int lo, int hi)
+/* a combo of the numbers lo to hi (lo 0 reads 'none'); the current one is shown even where it is above hi, and the number
+ * skip is left out of the list (the clock's channel is not the reset's). True if picked */
+bool channelCombo(const char *label, int *value, int lo, int hi, int skip = -1)
 {
 	char cur[16];
 	if (*value == 0)
@@ -701,6 +702,8 @@ bool channelCombo(const char *label, int *value, int lo, int hi)
 		for (int n = lo; n <= hi; n++)
 		{
 			char item[24];
+			if (n == skip)
+				continue;
 			if (n == 0)
 				snprintf(item, sizeof item, "none##0");
 			else
@@ -797,7 +800,7 @@ void clockJacks(panel_t *p, app_shell_t *s, const app_snapshot_t *snap, double n
 		ImGui::EndCombo();
 	}
 	inChanged |= channelCombo("clock channel", &p->clockIn.clockChannel, 1, nIn);
-	inChanged |= channelCombo("reset channel", &p->clockIn.resetChannel, 0, nIn);
+	inChanged |= channelCombo("reset channel", &p->clockIn.resetChannel, 0, nIn, p->clockIn.clockChannel);	/* not the clock's */
 	float pct = (float)(p->clockIn.clockThreshold * 100.0);
 	if (ImGui::SliderFloat("clock threshold", &pct, 5.0f, 95.0f, "%.0f %% of full scale", ImGuiSliderFlags_AlwaysClamp))
 		p->clockIn.clockThreshold = (double)pct / 100.0;

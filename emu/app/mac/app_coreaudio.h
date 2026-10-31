@@ -47,21 +47,26 @@ int app_caOpen(app_ca_t *ca, app_audio_t *a, const app_outputRequest_t *req, app
 void app_caClose(app_ca_t *ca);	/**< stops the unit and the listeners; the callback has returned for good when it returns */
 /** AUHAL input of o (plan R5 F9): the clock jacks as audio. One unit at the device's own rate and all its inputs up to 64,
  * float32 interleaved; the input callback runs app_jackInRender() on in */
+#define APP_CI_LISTEN 5u			/**< the input's listeners: four on the device, one on the system object */
+#define APP_CI_SLICE_MAX 32768u		/**< the most frames of one callback that the input makes room for */
+
 typedef struct app_ci
 {
 	AudioUnit unit;
 	AudioObjectID device;
 	int followDefault, initialized, started;
 	unsigned channels;		/**< the client's interleaved channels: the device's inputs, at most 64 */
-	UInt32 maxFrames;
+	UInt32 maxFrames;		/**< the frames buf holds and the unit's slice is set to: the device's largest buffer, which a
+							 * device that is shared with the output can be set to while this runs */
 	float *buf;
 	AudioBufferList abl;	/**< the callback's: one interleaved buffer over buf */
 	app_jackIn_t *in;
 	dispatch_queue_t queue;
 	AudioObjectPropertyListenerBlock listener;
-	app_caListen_t listen[4];
+	app_caListen_t listen[APP_CI_LISTEN];
 	unsigned nListen;
 	_Atomic int changed;	/**< a listener saw the device change; the main thread reopens (F9) */
+	_Atomic uint64_t entries;	/**< input callbacks entered, those that were skipped too (a test's); in->skipped counts those */
 	app_outputInfo_t info;	/**< the input's name, rate, latencies, buffer, channels */
 } app_ci_t;
 
@@ -69,8 +74,17 @@ int app_caInputs(app_outputDevice_t *out, int max);	/**< the devices with input 
 /** AUHAL input of o (F9); app_jackInStart(in) is called before the start. 0, or -1 with the reason in err and nothing left
  * open. Main thread; only with the microphone permission (F10) */
 int app_ciOpen(app_ci_t *ci, app_jackIn_t *in, const app_clockInOptions_t *o, double ticksPerSec, char *err, size_t n);
-void app_ciClose(app_ci_t *ci);	/**< the callback has returned for good when it returns */
+/** the callback has returned for good when it returns; of a unit that had started it then lets a high reset go
+ * (app_jackInStop(), F11), whether the input ran or its open failed after the start */
+void app_ciClose(app_ci_t *ci);
 int app_ciProbe(const char *uid, app_outputInfo_t *info);	/**< the input's properties without IO (no permission needed); -1: no device */
+/** the frames to make room for per callback: the device's largest buffer (range->mMaximum, 4096 if it is not known), at least
+ * current, at most APP_CI_SLICE_MAX. Not the buffer of the day: a device that the output shares goes from 512 to 2048 when
+ * the Audio window says so, and every callback that exceeded a snapshot of it was lost. Here for a test to call */
+UInt32 app_ciSliceFrames(const AudioValueRange *range, UInt32 current);
+/** fills ci->listen with the properties whose change makes the main thread reopen the input (the device gone, its rate, its
+ * inputs or its buffer size changed, the default input moved): their number. Here for a test to call */
+unsigned app_ciWatch(app_ci_t *ci);
 /** the input unit's callback (ref is the app_ci_t), here for a test to call */
 OSStatus app_ciInput(void *ref, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *ts, UInt32 bus, UInt32 frames,
 	AudioBufferList *io);

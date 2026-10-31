@@ -759,6 +759,7 @@ static void app_engineSnap(app_engine_t *e, uint64_t now)
 	e->diag.dinOrphans = e->din.orphans;
 	e->diag.inputLead = e->inLead;
 	e->diag.jackInDropped = app_ringDropped(&e->jackIn.edges);
+	e->diag.jackInSkipped = atomic_load_explicit(&e->jackIn.skipped, memory_order_relaxed);
 	e->diag.core = c;
 	s.diag = e->diag;
 	(void)app_ringPush(&e->snap, &s);	/* a full ring drops it (E15) */

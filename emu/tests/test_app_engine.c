@@ -856,4 +856,16 @@ TEST(R5_engine_clocknone)
 		ASSERT_FALSE(a.kind == APP_MSG_NOTICE);
 }
 
+/* review of 876c9f6: the input callbacks that brought no samples (a buffer larger than the unit's, no host time, a render that
+ * failed) are counted by the input and reach the diagnostics, next to the edges that found the ring full */
+TEST(R5_engine_inskipped)
+{
+	boot(1);
+	runTo(1.5);
+	ASSERT_EQ(last.diag.jackInSkipped, 0);
+	atomic_store(&E.jackIn.skipped, 7u);
+	runTo(2.5);
+	ASSERT_EQ(last.diag.jackInSkipped, 7);
+}
+
 TEST_MAIN()

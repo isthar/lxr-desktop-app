@@ -65,6 +65,9 @@ typedef struct app_jackIn
 	app_ring_t edges;	/**< app_panelEvent_t: input callback -> firmware thread (F8) */
 	_Atomic float clockThreshold, resetThreshold;	/**< the main thread may move them while the input runs */
 	_Atomic uint64_t callbacks, lead;	/**< lead: host ticks (F7), fixed after APP_IN_WARMUP callbacks; 0 while none */
+	/** input callbacks that brought no samples to the detector: more frames than the buffer holds, no host time, a render
+	 * that failed. Written by the callback, counted over the app's whole run (app_jackInStart() leaves it) */
+	_Atomic uint64_t skipped;
 	app_jackInConfig_t cfg;	/**< from here on the callback's, set by app_jackInStart() while none runs */
 	app_edgeDet_t clock, reset;
 	int64_t warmMax;

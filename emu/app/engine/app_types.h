@@ -79,7 +79,7 @@ typedef struct app_diagnostics
 	int dAuto, extSync, outputRunning;
 	int realtime;					/**< 1 if the firmware thread has the time-constraint policy (E29) */
 	uint64_t outUnderruns, callbacks, overloads, mapJumps, midiStale, midiInDropped, midiOutDropped,
-		midiUnsent, panelDropped, snapDropped, ackDropped, dinOrphans, warnings, jackInDropped;
+		midiUnsent, panelDropped, snapDropped, ackDropped, dinOrphans, warnings, jackInDropped, jackInSkipped;
 	app_outputInfo_t output;
 	emu_counters_t core;
 	app_fwCounters_t fw;

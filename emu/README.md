@@ -88,12 +88,14 @@ Two options in the Audio window, both off until you turn them on:
   one of the stereo pair. The audio then runs one block (1.45 ms) later, and D grows by the same. If the
   output has fewer channels than N, the app says so and the clock is not heard.
 - **Clock and reset in from an input.** One input channel carries the clock (a rise above its threshold
-  is a pulse); another, if you pick one, the reset (above its threshold is reset on). macOS asks for the
+  is a pulse); another, if you pick one (never the same), the reset (above its threshold is reset on). macOS asks for the
   microphone permission when you turn this on; nothing is recorded. macOS knows this ad hoc signed app by
   its code hash, so it asks again after each new release. D grows by the input's own latency and one
   input buffer, which the Diagnostics window shows: about 12 ms for an audio interface at 512 frames,
   much more for a built-in microphone. Most audio inputs are AC-coupled and let a held level fall back
-  within a fraction of a second: clock pulses pass on any input, a held reset needs a DC-coupled one.
+  within a fraction of a second: clock pulses pass on any input, a held reset needs a DC-coupled one. When
+  the device's buffer changes (the Audio window raises it for an interface that the output shares), the
+  input reopens for a moment and measures its lead again.
 
 ## Licence and source
 

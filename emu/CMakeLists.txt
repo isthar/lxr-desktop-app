@@ -408,7 +408,8 @@ emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R
     R4_engine_silent_open R4_engine_close_inflight R4_engine_late_point R4_engine_max_request R4_engine_cmd_delay
     R4_engine_power_dneg R4_engine_power_dnan R4_engine_power_dbig R4_engine_cmd_generator R4_engine_cmd_text
     R4_engine_cardswitch R4_engine_clockled R4_engine_snapshot_latch R4_engine_leadcarry
-    R5_render_clock R5_engine_holdback R5_engine_clockout R5_engine_clockdown R5_engine_clocknone)
+    R5_render_clock R5_engine_holdback R5_engine_clockout R5_engine_clockdown R5_engine_clocknone
+    R5_engine_inskipped)
 # the splash test expects the firmware's own version (appMain.c: "v" FIRMWARE_VERSION " unofficial"), not a fixed one
 target_compile_definitions(test_app_engine PRIVATE "EMU_TEST_FW_VERSION=\"${EMU_FIRMWARE_VERSION}\"")
 emu_add_app_test(test_app_m18 ENGINE IDS M18_midi_out_step M18_slave_90 M18_slave_128 M18_slave_174 M18_din_128
@@ -447,7 +448,8 @@ if(LICHOMAT_EMU_APP)
     endfunction()
     emu_app_tests(R4_dev_headless R4_dev_import R4_dev_crash R4_dev_power R4_dev_afterpid R4_gui_version R4_gui_clash)
     emu_add_app_test(test_app_devices ENGINE MAC FRAMEWORKS AudioToolbox CoreAudio CoreMIDI CoreFoundation
-        IDS R4_dev_coreaudio R4_dev_spread R4_dev_render_short R4_dev_coremidi R4_dev_midiout R4_dev_cardop R4_dev_relaunch R4_dev_stopwait R4_dev_period R5_dev_input R5_shell_clockin)
+        IDS R4_dev_coreaudio R4_dev_spread R4_dev_render_short R4_dev_coremidi R4_dev_midiout R4_dev_cardop R4_dev_relaunch R4_dev_stopwait R4_dev_period R5_dev_input R5_dev_input_verdict R5_ci_slice R5_ci_watch R5_ci_oversize
+        R5_ci_samechannel R5_ci_release R5_shell_clockin)
     list(APPEND EMU_GATE_BINARIES $<TARGET_FILE:lichomat-emu-dev>)
 
     # --- the GUI: Dear ImGui on its Cocoa and Metal backends, the panel, the bundle (spec 6.6, 9.2; plan Task 12) ---

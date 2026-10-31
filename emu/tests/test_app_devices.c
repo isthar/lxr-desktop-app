@@ -175,6 +175,25 @@ static int coreaudioChild(void)
 
 TEST(R4_dev_coreaudio) { PROBE(coreaudioChild, "R4_dev_coreaudio", 10); }
 
+/* the verdict of R5_dev_input on what its input did in 6 s: 0 pass, 1 fail, 77 skip. Callbacks that arrive and never reach
+ * app_jackInRender() are a fault, not a missing permission: the input would be dead while the diagnostics call it running
+ * (review of 876c9f6: a device buffer larger than the unit's slice) */
+static int inputVerdict(uint64_t entries, uint64_t skipped, uint64_t callbacks, double lead)
+{
+	if (entries > 0u && callbacks == 0u)
+	{
+		printf("FAIL R5_dev_input: %llu input callbacks entered, none reached app_jackInRender (%llu skipped)\n",
+			(unsigned long long)entries, (unsigned long long)skipped);
+		return 1;
+	}
+	if (callbacks < APP_IN_WARMUP + 8u)
+	{
+		printf("SKIP R5_dev_input: no input callbacks in 6 s (permission pending?)\n");
+		return 77;
+	}
+	return lead > 0.0 && lead < 0.5 ? 0 : 1;
+}
+
 /* R5 (F13): the input's properties need no permission; the open starts input IO, which prompts the terminal for the
  * microphone, so it runs only with LICHOMAT_EMU_INPUT_TEST=1. No input device, no permission and no callbacks are a skip */
 static int inputChild(void)
@@ -211,18 +230,154 @@ static int inputChild(void)
 	const double t0 = app_wallSeconds();
 	while (atomic_load(&in.callbacks) < APP_IN_WARMUP + 8u && app_wallSeconds() - t0 < 6.0)
 		nanosleep(&(const struct timespec){ 0, 5000000L }, NULL);
+	const uint64_t entries = atomic_load(&ci.entries);	/* app_ciClose() clears the input's counters */
 	app_ciClose(&ci);
 	const double lead = (double)atomic_load(&in.lead) / tps;
-	printf("%llu input callbacks, lead %.2f ms\n", (unsigned long long)atomic_load(&in.callbacks), lead * 1e3);
-	if (atomic_load(&in.callbacks) < APP_IN_WARMUP + 8u)
-	{
-		printf("SKIP R5_dev_input: no input callbacks in 6 s (permission pending?)\n");
-		return 77;
-	}
-	return lead > 0.0 && lead < 0.5 ? 0 : 1;
+	printf("%llu input callbacks of %llu entered (%llu skipped), lead %.2f ms\n", (unsigned long long)atomic_load(&in.callbacks),
+		(unsigned long long)entries, (unsigned long long)atomic_load(&in.skipped), lead * 1e3);
+	return inputVerdict(entries, atomic_load(&in.skipped), atomic_load(&in.callbacks), lead);
 }
 
 TEST(R5_dev_input) { PROBE(inputChild, "R5_dev_input", 12); }
+
+TEST(R5_dev_input_verdict)
+{
+	ASSERT_EQ(inputVerdict(0u, 0u, 0u, 0.0), 77);		/* nothing arrived: the permission may be pending */
+	ASSERT_EQ(inputVerdict(120u, 120u, 0u, 0.0), 1);	/* callbacks arrive and none reaches the detector: a fault */
+	ASSERT_EQ(inputVerdict(40u, 0u, 0u, 0.0), 1);
+	ASSERT_EQ(inputVerdict(12u, 0u, 12u, 0.0), 77);		/* too slow to judge */
+	ASSERT_EQ(inputVerdict(400u, 0u, 400u, 0.012), 0);
+	ASSERT_EQ(inputVerdict(400u, 3u, 397u, 0.012), 0);
+	ASSERT_EQ(inputVerdict(400u, 0u, 400u, 0.0), 1);	/* no lead */
+	ASSERT_EQ(inputVerdict(400u, 0u, 400u, 0.6), 1);	/* a lead of more than half a second */
+}
+
+/* --- R5, review of 876c9f6: the input follows the device's buffer. No device or IO is needed in any of these ------------ */
+
+/* the unit's slice and the callback's buffer hold the device's largest buffer, not the buffer of the day: AUHAL's own
+ * slice followed the device (512, then 1024 and 2048 when the Audio window raised it) and a snapshot at the open went stale */
+TEST(R5_ci_slice)
+{
+	const AudioValueRange built = { 14.0, 4096.0 }, big = { 64.0, 16384.0 }, none = { 0.0, 0.0 }, silly = { 1.0, 4e9 };
+	ASSERT_EQ(app_ciSliceFrames(&built, 512u), 4096);
+	ASSERT_EQ(app_ciSliceFrames(&built, 2048u), 4096);
+	ASSERT_EQ(app_ciSliceFrames(&big, 512u), 16384);
+	ASSERT_EQ(app_ciSliceFrames(&none, 512u), 4096);	/* no range known: what the first version assumed */
+	ASSERT_EQ(app_ciSliceFrames(NULL, 512u), 4096);
+	ASSERT_EQ(app_ciSliceFrames(&none, 8192u), 8192);	/* a buffer beyond it is held all the same */
+	ASSERT_EQ(app_ciSliceFrames(&built, 6000u), 6000);
+	ASSERT_EQ(app_ciSliceFrames(&silly, 512u), APP_CI_SLICE_MAX);
+	ASSERT_EQ(app_ciSliceFrames(&built, 1u << 24), APP_CI_SLICE_MAX);
+}
+
+/* a change of the device's buffer reopens the input (app_shellFrame() polls the flag), or it measures its lead at the old one */
+TEST(R5_ci_watch)
+{
+	app_ci_t ci;
+	memset(&ci, 0, sizeof ci);
+	ci.device = 77u;
+	unsigned n = app_ciWatch(&ci);
+	ASSERT_EQ(n, 4);
+	unsigned alive = 0, rate = 0, config = 0, buffer = 0;
+	for (unsigned i = 0; i < n; i++)
+	{
+		const AudioObjectPropertyAddress *a = &ci.listen[i].addr;
+		ASSERT_EQ(ci.listen[i].obj, 77);
+		alive += a->mSelector == kAudioDevicePropertyDeviceIsAlive;
+		rate += a->mSelector == kAudioDevicePropertyNominalSampleRate;
+		config += a->mSelector == kAudioDevicePropertyStreamConfiguration;
+		if (a->mSelector == kAudioDevicePropertyBufferFrameSize)
+		{
+			buffer++;
+			ASSERT_EQ(a->mScope, kAudioObjectPropertyScopeWildcard);	/* the HAL keeps it in either scope */
+		}
+	}
+	ASSERT_TRUE(alive == 1u && rate == 1u && config == 1u && buffer == 1u);
+	ci.followDefault = 1;
+	n = app_ciWatch(&ci);
+	ASSERT_EQ(n, 5);
+	ASSERT_TRUE(n <= APP_CI_LISTEN);
+	ASSERT_EQ(ci.listen[4].obj, kAudioObjectSystemObject);
+	ASSERT_EQ(ci.listen[4].addr.mSelector, kAudioHardwarePropertyDefaultInputDevice);
+}
+
+/* a callback that cannot be served is counted, not dropped in silence: it is what a dead input looks like from outside */
+TEST(R5_ci_oversize)
+{
+	static app_jackIn_t in;
+	static app_ci_t ci;
+	const app_jackInConfig_t cfg = { 24e6, 48000.0, 40u, 2u, 0u, 1u, 0.5f, 0.5f };
+	app_jackInStart(&in, &cfg);
+	ci.in = &in;
+	ci.channels = 2u;
+	ci.maxFrames = 256u;
+	AudioTimeStamp ts;
+	memset(&ts, 0, sizeof ts);
+	ts.mFlags = kAudioTimeStampHostTimeValid;
+	ts.mHostTime = 1000u;
+	AudioUnitRenderActionFlags flags = 0;
+	ASSERT_EQ(app_ciInput(&ci, &flags, &ts, 1u, 512u, NULL), noErr);	/* more frames than the buffer holds */
+	ASSERT_EQ(atomic_load(&ci.entries), 1);
+	ASSERT_EQ(atomic_load(&in.skipped), 1);
+	ASSERT_EQ(atomic_load(&in.callbacks), 0);
+	ts.mFlags = 0;	/* no host time to put the edges at */
+	ASSERT_EQ(app_ciInput(&ci, &flags, &ts, 1u, 128u, NULL), noErr);
+	ASSERT_EQ(atomic_load(&ci.entries), 2);
+	ASSERT_EQ(atomic_load(&in.skipped), 2);
+	ASSERT_EQ(app_ciInput(&ci, &flags, &ts, 1u, 0u, NULL), noErr);	/* nothing to serve: entered, not a loss */
+	ASSERT_EQ(atomic_load(&ci.entries), 3);
+	ASSERT_EQ(atomic_load(&in.skipped), 2);
+	ASSERT_EQ(atomic_load(&in.callbacks), 0);
+}
+
+/* one channel cannot be the clock and the reset: said, before any device is touched */
+TEST(R5_ci_samechannel)
+{
+	static app_jackIn_t in;
+	static app_ci_t ci;
+	char err[256] = "";
+	const app_clockInOptions_t o = { 1, "", 3, 3, 0.5, 0.5 };
+	ASSERT_EQ(app_ciOpen(&ci, &in, &o, 24e6, err, sizeof err), -1);
+	ASSERT_TRUE(strstr(err, "both on input channel 3") != NULL);
+	ASSERT_EQ(ci.started, 0);
+	ASSERT_EQ(ci.unit == NULL, 1);
+}
+
+/* a unit that had started when the open failed (or any started unit that is closed) lets a high reset go: its callback has
+ * returned for good, so this thread may push the release (F11) */
+static int ciReleaseChild(void)
+{
+	const AudioComponentDescription desc = { kAudioUnitType_Output, kAudioUnitSubType_HALOutput,
+		kAudioUnitManufacturer_Apple, 0, 0 };
+	AudioComponent comp = AudioComponentFindNext(NULL, &desc);
+	static app_jackIn_t in;
+	static app_ci_t ci;
+	const app_jackInConfig_t cfg = { 24e6, 48000.0, 40u, 2u, 0u, 1u, 0.5f, 0.5f };
+	if (!comp || app_ringInit(&in.edges, sizeof(app_panelEvent_t), 16u) != 0)
+	{
+		printf("SKIP R5_ci_release: no HAL unit\n");
+		return 77;
+	}
+	app_jackInStart(&in, &cfg);
+	memset(&ci, 0, sizeof ci);
+	ci.in = &in;
+	if (AudioComponentInstanceNew(comp, &ci.unit) != noErr)
+	{
+		printf("SKIP R5_ci_release: no HAL unit\n");
+		return 77;
+	}
+	ci.started = 1;		/* the unit never runs here (no IO, no permission); close treats it as one that did */
+	in.reset.high = 1;	/* and the jack was high when it stopped */
+	app_ciClose(&ci);
+	const app_panelEvent_t *e = app_ringPeek(&in.edges, 0u);
+	const int ok = e != NULL && app_ringCount(&in.edges) == 1u && e->kind == APP_P_RESET && e->value == 0 && !in.reset.high
+		&& atomic_load(&in.lead) == 0u;
+	if (!ok)
+		printf("the release of the high reset is missing: %u events in the ring\n", (unsigned)app_ringCount(&in.edges));
+	return ok ? 0 : 1;
+}
+
+TEST(R5_ci_release) { PROBE(ciReleaseChild, "R5_ci_release", 5); }
 
 /* spec 6.2: the render callback never leaves a buffer as it found it. A buffer that is not the interleaved one the format
  * promised gets silence, not whatever it held (it would play as noise). No device is needed. */
@@ -799,6 +954,18 @@ static void frames(app_shell_t *s, double sec)
 	}
 }
 
+/* frames until the shell has tried to open the input want times, at most sec seconds */
+static unsigned framesUntilTries(app_shell_t *s, unsigned want, double sec)
+{
+	const double t0 = app_wallSeconds();
+	while (app_shellTestInputTries(s) < want && app_wallSeconds() - t0 < sec)
+	{
+		(void)app_shellFrame(s);
+		nanosleep(&(const struct timespec){ 0, 5000000L }, NULL);
+	}
+	return app_shellTestInputTries(s);
+}
+
 #define CK(c) do { if (!(c)) { printf("check failed, line %d: %s\n", __LINE__, #c); ok = 0; } } while (0)
 
 static int clockinChild(void)
@@ -868,13 +1035,18 @@ static int clockinChild(void)
 	CK(app_shellClockIn(s, &x) == -1 && set->clockInAudio == 1 && set->clockInChannel == 64 && set->resetChannel == 0);
 	CK(!app_shellInputInfo(s, &info, &why) && why[0] != '\0');
 	CK(atomic_load(&gClkSaid) == 1u && !strncmp(gClkSays[0], "notice: clock in from audio: ", 29));
-	frames(s, 2.4);	/* the 2-s retry fails the same way: the same text is not said again */
+	CK(app_shellTestInputTries(s) == 1u);
+	/* the retry every 2 s is counted: the same text is not said again, so the message cannot tell that it ran */
+	CK(framesUntilTries(s, 2u, 4.0) == 2u);
+	frames(s, 0.5);	/* and the next one is 2 s after that, not at every frame */
+	CK(app_shellTestInputTries(s) == 2u);
 	CK(atomic_load(&gClkSaid) == 1u && !app_shellInputInfo(s, &info, &why) && why[0] != '\0');
 	printf("said: %s\n", gClkSays[0]);
 	x.on = 0;
 	CK(app_shellClockIn(s, &x) == 0 && set->clockInAudio == 0 && !app_shellInputInfo(s, &info, &why) && why[0] == '\0');
 	frames(s, 2.4);
-	CK(atomic_load(&gClkSaid) == 1u);	/* off: no retry */
+	CK(atomic_load(&gClkSaid) == 1u);
+	CK(app_shellTestInputTries(s) == 2u);	/* off: no retry */
 	app_shellStop(s);
 	return ok ? 0 : 1;
 }
