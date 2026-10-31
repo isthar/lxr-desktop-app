@@ -410,14 +410,16 @@ static void app_sinkAudio(void *ctx, uint64_t t, const int16_t *out1, const int1
 {
 	app_engine_t *e = ctx;
 	(void)t;
-	if (!e->outputRunning)
-	{
-		e->held = 0;
-		return;	/* the next open's frameBase keeps the frames counted */
-	}
 	emu_counters_t c;
 	emu_getCounters(&c);
 	const uint64_t first = (uint64_t)EMU_BLOCK_FRAMES * c.blocks;	/* request k plays 64k to 64k + 63 */
+	if (!e->outputRunning)
+	{
+		int16_t scratch[EMU_BLOCK_FRAMES];
+		e->held = 0;
+		app_clkRender(&e->clkOut, first, EMU_BLOCK_FRAMES, scratch);	/* the edges still go by: a full queue would lose the newest */
+		return;	/* the next open's frameBase keeps the frames counted */
+	}
 	if (e->held)	/* the last request's block: every edge of its time is known now (F2) */
 	{
 		app_enginePush(e, e->hold[0], e->hold[1], e->holdFirst);

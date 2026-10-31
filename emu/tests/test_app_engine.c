@@ -782,4 +782,55 @@ TEST(R5_engine_clockout)	/* spec 6.8: the firmware's own clock out at 120 BPM, a
 	ASSERT_EQ(E.clkOut.dropped, 0);
 }
 
+static unsigned highFrames, framesSeen;
+
+static void clockHighCount(const float *buf, unsigned frames, unsigned channels)	/* the clock on channel 2 */
+{
+	for (unsigned i = 0; i < frames; i++, framesSeen++)
+		highFrames += buf[(size_t)i * channels + 1u] != 0.0f;
+}
+
+/* F1: the clock-out edges are drained while the output is down, or the queue of 32 fills in a few seconds and the clock
+ * level is wrong for a pulse period after the reopen (here: for good, the sequencer being stopped) */
+TEST(R5_engine_clockdown)
+{
+	boot(1);
+	runTo(1.5);
+	const app_cmd_t c = { .kind = APP_CMD_CLOCK_OUT, .a = 2 };
+	command(&c);
+	app_panelEvent_t b = { .kind = APP_P_BUTTON, .index = 33, .value = 1 };	/* START */
+	ASSERT_EQ(app_enginePanel(&E, &b), 0);
+	runTo(1.6);
+	b.value = 0;
+	ASSERT_EQ(app_enginePanel(&E, &b), 0);
+	runTo(2.5);
+	ASSERT_TRUE(E.clkOut.n < 3u);
+	hang();	/* the output goes, and no open succeeds */
+	const app_cmd_t o = { .kind = APP_CMD_OUTPUT };
+	command(&o);
+	ASSERT_FALSE(E.outputRunning);
+	runTo(8.0);	/* 5.5 s of pulses: 22 or so */
+	emu_counters_t c0;
+	emu_getCounters(&c0);
+	ASSERT_TRUE(c0.clockEdges > 40u);
+	ASSERT_EQ(E.clkOut.dropped, 0);
+	ASSERT_TRUE(E.clkOut.n < 3u);
+	b.value = 1;	/* STOP, with the jack low from here on */
+	ASSERT_EQ(app_enginePanel(&E, &b), 0);
+	runTo(8.1);
+	b.value = 0;
+	ASSERT_EQ(app_enginePanel(&E, &b), 0);
+	runTo(10.0);
+	ASSERT_EQ(E.clkOut.dropped, 0);
+	ASSERT_FALSE(E.clockLevel);
+	fk.device = 1;	/* the device is back: the engine's next try opens it */
+	runTo(13.0);
+	ASSERT_EQ(fk.opens, 2);
+	highFrames = framesSeen = 0;
+	fk.rendered = clockHighCount;
+	runTo(14.0);
+	ASSERT_TRUE(framesSeen > 40000u);
+	ASSERT_EQ(highFrames, 0);	/* the jack is low: no stale edge of the seconds without output */
+}
+
 TEST_MAIN()
