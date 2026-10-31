@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 06:11",
+    "updated": "2026-10-31 07:20",
     "phase": "Etap 2: v0.4 gotowe w kodzie (M13); częstotliwość pogłosu czeka na H12",
-    "focus": "v0.4 gotowe w kodzie (gałąź v0.4 28abb29): pogłos, freeze, rumble, delay z tempem, filtr DJ. Wydanie po Twoim H12 (ustala częstotliwość pogłosu) i U20.",
+    "focus": "E5.5: aplikacja LICHOMAT Emu (R4)",
     "branch": "timing-core",
-    "head": "28abb29",
-    "next": "Ty: H12 (strona CPU, jedna liczba pk) na v0.3 albo v0.4, potem jedna sesja testowa (docs/lichomat/test-session-v0.3.md, a dla 0.4 U20-U26); odsłuch build/demo/v02-*, v03-*, v04-* i build/dlc/*. Ja: po H12 ustawić częstotliwość pogłosu i dokończyć wydanie v0.4; CI, gdy GitHub ruszy.",
-    "updated_at": "2026-10-31T06:11:00+01:00",
-    "now": "Od 06:11: raport M13 i podsumowanie."
+    "head": "94f2982",
+    "next": "Twoje H12 ustala częstotliwość pogłosu v0.4",
+    "updated_at": "2026-10-31T07:20:00+01:00",
+    "now": "Przegląd planu R4 przed wykonaniem"
   },
   "epics": [
     {
@@ -2933,6 +2933,26 @@
       "n": 411,
       "at": "2026-10-31 06:11",
       "text": "06:11 v0.4 A10 i A11 gotowe (28abb29 na v0.4, dbeb84b na timing-core; wypchnięte): wersja 0.4, README, pełny fuzzing (3x300 renderów, zero znalezisk), 7 nowych renderów demo (pogłos, freeze, rumble, 4 przepisy), kroki na LXR U20-U22 i U26, notatki do wydania v0.4, przepisy na kity. Raport M13: v0.4 gotowe w kodzie; częstotliwość pogłosu tymczasowa do Twojego H12."
+    },
+    {
+      "n": 412,
+      "at": "2026-10-31 06:17",
+      "text": "GitHub Actions nie dostaje pushy od 31.10, 00:11 UTC: na nowych commitach jest tylko check suite aplikacji claude, a przebieg build dla e45fab7 wisi w kolejce bez zadań i nie daje się anulować (API odpowiada, że jest zakończony). githubstatus.com: wszystko działa, więc to stan tego repozytorium po stronie GitHuba. Lokalnie tools/check.sh przechodzi na v0.4."
+    },
+    {
+      "n": 413,
+      "at": "2026-10-31 06:17",
+      "text": "Kod etapu 2 gotowy (v0.4 czeka na H12). Według decyzji z 29.10 teraz aplikacja emulatora (E5.5, R4): piszę plan od specyfikacji §6. Panel zostaje na koniec, bo potrzebuje Dear ImGui (v1.92.9b, 15 plików, 3,3 MB z github.com/ocornut/imgui), a na to pobranie czekam na Twoją zgodę."
+    },
+    {
+      "n": 414,
+      "at": "2026-10-31 06:54",
+      "text": "Twoja zgoda (06:51): pobieram Dear ImGui v1.92.9b (15 plików, 3 303 558 B, github.com/ocornut/imgui, MIT) do emu/third_party/imgui/ z sumami SHA-256. Panel aplikacji nie musi już czekać na koniec R4."
+    },
+    {
+      "n": 415,
+      "at": "2026-10-31 07:20",
+      "text": "Plan R4 gotowy (94f2982): 13 zadań, decyzje E1–E31, 4421 linii. Najpierw logika bez sprzętu i bez ImGui (pierścienie, mapa czasu, D, MIDI, karta, ustawienia, crash), testowana deterministycznie na fałszywym urządzeniu audio i fałszywym DAW; potem CoreAudio, CoreMIDI, ImGui, panel i bundle. Trwa lekki przegląd planu."
     }
   ]
 }
