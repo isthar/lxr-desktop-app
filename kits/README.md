@@ -27,6 +27,15 @@ Ustawienia każdego kitu, z komentarzami, są w `wir.txt`, `mgla.txt`, `rdza.txt
 `tools/kit_build.py` buduje pliki. Nazwy parametrów to nazwy z `emu/render/render_params.h`, wartości
 takie, jakie trzyma menu (listy liczone od 0).
 
+Każdy kit ma też trochę ruchu: jedno LFO zsynchronizowane z tempem, a WIR i MGLA także velocity na
+poziom jednego głosu. Cel LFO (`target_lfoN`) i velocity (`vel_dest_N`) to numer na liście celów menu
+(`modTargets` w `Core/Src/menu/Cc2Text.c`, 0 to `off`), np. 196 to wybrzmienie zamkniętego hihatu.
+`voice_lfoN` stoi przed `target_lfoN`, bo zmiana głosu przestawia cel na ten sam rodzaj w nowym
+głosie, tak jak w menu. LFO chodzą swobodnie (`retrigger` `off`), więc faza względem taktu zależy od
+chwili włączenia. Głębokość działa w obie strony wokół ustawionej wartości. Velocity w tych kitach nie
+zmienia samej głośności (`volume_mod_on_off` 0, jak w kicie startowym), więc kroki grają równo, poza
+głosami, gdzie velocity ma cel `vol`.
+
 ## Demo
 
 Każde demo to ten sam wzorzec (16 kroków, 8 taktów, 128 BPM, `trg smp`, wyjście 1 stereo):
@@ -56,6 +65,10 @@ perkusjonalia, które grają w krótkim, ciemnym pokoju. Stopa dominuje, reszta 
 - **Hihat:** prostokąty w FM, HP 106; zamknięty krótki (`velod6_closed` 6), otwarty dłuższy (28).
 - **FX:** slot `off`; pogłos `lvl` 55, `siz` 70, `dec` 40 (ok. 1,1 s), `ton` 35, `pre` 8, `mod` 30 dla
   Drum 2 i Drum 3. Stopa, klaps i hihat na sucho (`St1`).
+- **Ruch:** LFO 6 (`sin`, `syn` `4/1`, głębokość 3) na wybrzmieniu zamkniętego hihatu: `velod6_closed`
+  chodzi między 3 a 9, cykl trwa 4 takty, więc hihat co chwilę się lekko otwiera i znowu zamyka.
+  Velocity 6 na `vol6` (`velo_mod_amt_6` 20, `vol6` 33): akcenty (80) głośniej, przednutki (55) ciszej,
+  otwarte (100, 90) najgłośniej; między krokami hihatu jest teraz ok. 2,8 dB różnicy.
 
 ## MGLA: dub techno
 
@@ -73,6 +86,10 @@ w delay na kropkowaną ósemkę i w długi, ciemny pogłos, który stopa przycis
 - **FX:** slot `del`, `typ` `Del`, `syn` `8d` (352 ms przy 128 BPM), `fbk` 84, `ton` 48, `d/w` 58. Pogłos
   `lvl` 104, `siz` 112, `dec` 86 (ok. 5 s), `ton` 28, `pre` 14, `mod` 60. Rumble: `dck` `dr1`, `ddp` 70:
   ogon chowa się pod stopą.
+- **Ruch:** LFO 3 (`tri`, `syn` `4/1`, głębokość 40) na indeksie FM stabu (`fmamnt3` 62, czyli 22–102):
+  w jednych taktach akord jest jaśniejszy, w innych bardziej okrągły. Nie filtr: LP 78 jest ponad
+  stabem, a dopiero głębokie zejście w dół go dosięga i wtedy dusi stab. Velocity 3 na `vol3`
+  (`velo_mod_amt_3` 16, `vol3` 45): stab na 100 jest ok. 1,1 dB głośniejszy niż wypełnienie na 70.
 
 ## RDZA: surowe / industrialne
 
@@ -90,6 +107,8 @@ szumowy przesterowany werbel, ostre hihaty i metal.
   `mod` 40. Rumble: `dck` `dr1`, `ddp` 112: ogon puchnie między stopami i chowa się pod każdą.
 - Przester głosów działa za `vol`, więc głośność werbla i hihatów ustawiają bardziej `snare_distortion`
   i `hat_distortion` niż `vol`.
+- **Ruch:** LFO 6 (`tri`, `syn` `2/1`, głębokość 16) na HP hihatu (`filter_freq_6` 110, czyli 94–126):
+  co 2 takty hihaty chudną i wracają, przester zostaje.
 
 ## IGLA: minimal / FM
 
@@ -105,6 +124,8 @@ tykające hihaty; trochę delaya na Drum 3.
 - **Hihat:** sinusy w FM, HP 114; zamknięty bardzo krótki (`velod6_closed` 3), otwarty 12.
 - **FX:** slot `del`, `typ` `Pp`, `syn` `16d` (176 ms przy 128 BPM: echa padają między krokami),
   `fbk` 60, `d/w` 50. Mały pokój: `lvl` 50, `siz` 50, `dec` 30 (ok. 0,8 s), `ton` 45.
+- **Ruch:** LFO 2 (`tri`, `syn` `4/1`, głębokość 40) na indeksie FM klocka na Drum 2 (`fmamnt2` 58,
+  czyli 18–98): szesnastki przechodzą w 4 taktach od drewna do szkła i z powrotem.
 
 ## Pomiary
 
@@ -114,14 +135,31 @@ od szczytu (głos sam, bez slotu i pogłosu; „>” to do następnego uderzenia
 
 | Zestaw | Szczyt | RMS | Stopa | Drum 1 | Drum 2 | Drum 3 | Snare | Cymbal | Hihat zamkn. / otw. |
 |---|---|---|---|---|---|---|---|---|---|
-| WIR | −1,4 dBFS | −11,4 dBFS | 49,6 Hz | 450 ms | 98 ms | 102 ms | 174 ms | 90 ms | 62 / >348 ms |
-| MGLA | −1,3 dBFS | −11,9 dBFS | 49,0 Hz | >458 ms | 44 ms | 372 ms | 218 ms | 64 ms | 34 / >344 ms |
+| WIR | −1,4 dBFS | −11,4 dBFS | 49,6 Hz | 450 ms | 98 ms | 102 ms | 174 ms | 90 ms | 32* / >348 ms |
+| MGLA | −1,5 dBFS | −11,8 dBFS | 49,0 Hz | >458 ms | 44 ms | 368 ms | 218 ms | 64 ms | 34 / >344 ms |
 | RDZA | −1,3 dBFS | −9,8 dBFS | 54,6 Hz | 450 ms | 40 ms | 98 ms | 198 ms | 12 ms | 74 / >348 ms |
 | IGLA | −1,6 dBFS | −12,6 dBFS | 55,0 Hz | 272 ms | 72 ms | 56 ms | 92 ms | 16 ms | 32 / 132 ms |
 
 Żadne demo nie przekracza −1 dBFS. RMS jest w granicach ±3 dB od poziomu odniesienia: mediana RMS
 16 wzorców Twojej karty DLC w emulatorze to ok. −9,7 dBFS (tylko pomiar głośności; nic z tej karty
 nie jest tu użyte). Wzorce DLC dochodzą do 0 dBFS, te kity mają ok. 1,3 dB zapasu.
+
+\* Pierwszy zamknięty hihat dema; LFO zmienia to wybrzmienie w cyklu 4 taktów (bez LFO 62 ms).
+
+**Ruch:** każdy głos z modulacją sam (suwaki reszty na 0), 8 taktów dema, takt po takcie, w porównaniu
+z tym samym kitem bez modulacji: rozrzut (największa minus najmniejsza różnica w takcie) RMS albo
+jasności. Jasność to RMS pierwszej różnicy sygnału względem jego RMS, rośnie ze średnią
+częstotliwością. Cel: ruch wyraźny w pomiarze, ale mały, od 1 do 6 dB (bez odsłuchu).
+
+| Zestaw | Co się rusza | Miara | Rozrzut w 8 taktach |
+|---|---|---|---|
+| WIR | wybrzmienie zamkniętego hihatu | RMS zamkniętych uderzeń, na sucho | 2,8 dB |
+| MGLA | indeks FM stabu | jasność stabu, na sucho (z delayem i pogłosem) | 1,1 dB (0,6 dB) |
+| RDZA | HP hihatu | RMS hihatu | 1,9 dB |
+| IGLA | indeks FM Drum 2 | jasność Drum 2 | 1,2 dB |
+
+Szczyt i RMS całych dem zmieniły się najwyżej o 0,2 dB. Z `trg blk` zamiast `trg smp` szczyt dem
+jest od −2,1 do −1,3 dBFS, a RMS różni się najwyżej o 0,1 dB.
 
 ## Instalacja
 

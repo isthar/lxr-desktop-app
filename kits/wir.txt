@@ -117,7 +117,7 @@ reso_6 = 20
 velod6_closed = 6
 velod6_open = 28
 hat_distortion = 70
-vol6 = 36
+vol6 = 33             # velocity 6 moves it (below): 30-38 on the closed hats
 pan6 = 70
 
 # FX: the slot off; the reverb a short dark room for Drum 2 and Drum 3
@@ -128,3 +128,21 @@ rev_decay = 40        # about 1.1 s
 rev_tone = 35
 rev_predelay = 8
 rev_mod = 30
+
+# Modulation. A target is an index into the menu's target list (Core/Src/menu/
+# Cc2Text.c modTargets, 0 off), here 196 the hihat's closed decay and 221 its
+# volume. An LFO's voice goes before its target: a new voice moves the target to the
+# same kind on that voice. Sync 1 is 4/1 (one cycle in 4 bars), 2 2/1; wave 0 sin,
+# 1 tri; retrigger off, so the LFO runs free. The depth swings both ways around the
+# set value, depth/127 of the range: 3 is +-3 on velod6_closed 6.
+# LFO 6: the closed hat opens a little and closes again over 4 bars
+voice_lfo6 = 6
+target_lfo6 = 196     # velod6_closed
+wave_lfo6 = 0         # sin
+sync_lfo6 = 1         # 4/1
+amount_lfo6 = 3       # decay 3-9
+# Velocity 6: the hat's level follows the step's volume around vol6 (velocity 64 is
+# vol6 itself): the accents (80) louder, the ghosts (55) softer. The velocity's own
+# level switch is off (volume_mod_on_off6 0): without this every hat plays at one level.
+vel_dest_6 = 221      # vol6
+velo_mod_amt_6 = 20   # +5 on vol6 at 80, -3 at 55, +11 on the open hat at 100

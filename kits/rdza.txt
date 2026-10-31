@@ -131,3 +131,12 @@ rev_predelay = 6
 rev_mod = 40
 rev_duck_src = 1      # dr1
 rev_duck_depth = 112
+
+# Modulation (a target is an index into the menu's target list; see wir.txt)
+# LFO 6: the hat's high-pass rises and falls, one cycle in 2 bars: the hats thin out
+# and come back, the grind stays
+voice_lfo6 = 6
+target_lfo6 = 211     # filter_freq_6
+wave_lfo6 = 1         # tri
+sync_lfo6 = 2         # 2/1
+amount_lfo6 = 16      # HP 94-126 around 110

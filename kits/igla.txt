@@ -120,3 +120,12 @@ rev_decay = 30        # about 0.8 s
 rev_tone = 45
 rev_predelay = 4
 rev_mod = 20
+
+# Modulation (a target is an index into the menu's target list; see wir.txt)
+# LFO 2: the FM index of the Drum 2 block rises and falls over 4 bars: the 16ths go
+# from wood to glass and back
+voice_lfo2 = 2
+target_lfo2 = 53      # fmamnt2
+wave_lfo2 = 1         # tri
+sync_lfo2 = 1         # 4/1
+amount_lfo2 = 40      # FM 18-98 around 58

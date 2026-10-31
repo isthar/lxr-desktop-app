@@ -70,7 +70,7 @@ filter_type_3 = 0     # LP
 filter_freq_3 = 78
 reso_3 = 48
 pan3 = 70
-vol3 = 52
+vol3 = 45             # velocity 3 adds to it (below): about 52 at 90
 audio_out3 = 6        # FX
 
 # Snare: a soft clap with a short body, dry
@@ -123,3 +123,16 @@ rev_predelay = 14
 rev_mod = 60
 rev_duck_src = 1      # dr1
 rev_duck_depth = 70
+
+# Modulation (a target is an index into the menu's target list; see wir.txt)
+# LFO 3: the stab's FM index swells and sinks over 4 bars, so the chord is brighter
+# in some bars and rounder in others. Not the low-pass: at 78 it is above the stab,
+# and only a deep swing down reaches it, and then it chokes the stab.
+voice_lfo3 = 3
+target_lfo3 = 91      # fmamnt3
+wave_lfo3 = 1         # tri
+sync_lfo3 = 1         # 4/1
+amount_lfo3 = 40      # FM 22-102 around 62
+# Velocity 3: the stab's level follows the step (100 and 90, the 4:4 fill 70)
+vel_dest_3 = 108      # vol3
+velo_mod_amt_3 = 16   # +9 on vol3 at 100, +7 at 90, +2 at 70
