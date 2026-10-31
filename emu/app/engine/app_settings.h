@@ -29,13 +29,17 @@ typedef struct app_settings
 	int dAuto;
 	double dMs;
 	int window[4];
+	int clockOutAudio, clockOutChannel;		/**< spec 6.8: the clock-out jack on output channel 1-64 (default 2), off */
+	int clockInAudio, clockInChannel, resetChannel;	/**< clock and reset in from audio: input channel 1-64 (default 1), reset 0 none */
+	char clockInDevice[128];	/**< the input's UID, "" the default input */
+	double clockInThreshold, resetThreshold;	/**< 0.05-0.95 of full scale */
 	double genBpm;
 	int genPpq;
 	char crashShown[64];
 	char extra[4096];			/**< other keys' lines, kept as read */
 } app_settings_t;
 
-void app_settingsDefaults(app_settings_t *s);	/**< zeroes, then mix sum, dAuto 1, window 100 100 1100 760, 120 BPM, 24 PPQ */
+void app_settingsDefaults(app_settings_t *s);	/**< zeroes, then mix sum, dAuto 1, window 100 100 1100 760, 120 BPM, 24 PPQ, the audio options off (channels 2 and 1, thresholds 0.5) */
 int app_settingsLoad(app_settings_t *s, const char *path);	/**< 0, 1 no file, -1 unreadable */
 int app_settingsSave(const app_settings_t *s, const char *path);	/**< PATH.tmp, fsync, rename; 0 or -1 */
 

@@ -32,8 +32,9 @@ extern "C" {
 #define PANEL_ENDPOINTS 64
 #define PANEL_TEXT 8192u	/**< a crash note, as far as it is shown */
 
-/** what the panel asks the Cocoa side to do, which needs a folder from the user (panel_request) */
-enum { PANEL_REQ_NONE, PANEL_REQ_IMPORT, PANEL_REQ_EXPORT, PANEL_REQ_PROJECT, PANEL_REQ_REPLACE };
+/** what the panel asks the Cocoa side to do, which needs a folder from the user, or the microphone permission (R5, F10)
+ * (panel_request) */
+enum { PANEL_REQ_NONE, PANEL_REQ_IMPORT, PANEL_REQ_EXPORT, PANEL_REQ_PROJECT, PANEL_REQ_REPLACE, PANEL_REQ_CLOCKIN };
 
 typedef struct panel
 {
@@ -73,6 +74,15 @@ typedef struct panel
 	int nDev, nSrc, nDst;
 	double devAt, epAt;
 
+	/* clock and reset in from audio (spec 6.8, plan R5): the options as the window shows them, which the Cocoa side asks
+	 * the microphone for before the shell gets them (F10) */
+	app_clockInOptions_t clockIn;
+	int micDenied;					/**< macOS has said no to the microphone: the option stays off, with a message */
+	int audioReset;					/**< the reset comes from the input now: the panel's switch is disabled (F11) */
+	app_outputDevice_t inDev[PANEL_DEVICES];
+	int nInDev;
+	double inDevAt;
+
 	/* for the Cocoa side: a card operation that needs a folder (PANEL_REQ_*), and the project it is for */
 	int request, requestProject;
 } panel_t;
@@ -84,6 +94,8 @@ void panel_message(panel_t *p, const char *text);
 /** One frame of ImGui, between NewFrame() and Render(): from the shell's newest snapshot, panel events and commands out.
  * Nothing but the menu bar and the popups before the first snapshot. */
 void panel_frame(panel_t *p, app_shell_t *s);
+/** copies the six clockin.* and reset.* settings into p->clockIn (the shell never opens the input by itself, F10) */
+void panel_loadClockIn(panel_t *p, const app_settings_t *set);
 /** the request of the last frame, once (PANEL_REQ_NONE if there is none); *project is the project of PANEL_REQ_PROJECT */
 int panel_request(panel_t *p, int *project);
 

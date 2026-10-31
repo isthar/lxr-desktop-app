@@ -385,4 +385,68 @@ TEST(M18_out_jump)
 		ASSERT_TRUE(out.f8Stamp[i] >= out.f8Stamp[i - 1u]);
 }
 
+/* R5 (spec 6.8, F5-F8). A fake input like the output: 48 kHz, 512-frame buffers, mHostTime (512 + 48) frames before
+ * the callback, 40 frames of latency. Channel 1 is the clock: 5 ms pulses at 4 PPQ and 120 BPM, 3.6-9 s. Channel 2 is
+ * the reset: high 3.0-3.5 s and 6.55-7.55 s. The init card runs in EXT; each release arms a start at the next pulse */
+#define IN_LEAD 280000u
+#define IN_LATENCY 40u
+#define HOST_MS(ms) (1000u + (uint64_t)(ms) * 24000u)
+static float inBuf[512 * 2];
+
+static int resetHigh(uint64_t h) { return (h >= HOST_MS(3000) && h < HOST_MS(3500)) || (h >= HOST_MS(6550) && h < HOST_MS(7550)); }
+static int pulseHigh(uint64_t h) { return h >= HOST_MS(3600) && h < HOST_MS(9000) && (h - HOST_MS(3600)) % 3000000u < 120000u; }
+
+static void inputEvent(fake_t *f)
+{
+	const uint64_t entry = f->nextEvent, host = entry - IN_LEAD;
+	for (unsigned i = 0; i < 512u; i++)
+	{
+		const uint64_t jack = host + 500u * i - 500u * IN_LATENCY;	/* frame i at the jack: 500 ticks a frame */
+		inBuf[2u * i] = pulseHigh(jack) ? 0.8f : 0.0f;
+		inBuf[2u * i + 1u] = resetHigh(jack) ? 0.8f : 0.0f;
+	}
+	app_jackInRender(&E.jackIn, host, entry, 1.0, inBuf, 512u);
+	f->nextEvent = entry + FAKE_PERIOD;
+}
+
+TEST(R5_jack_slave)
+{
+	app_host_t h;
+	fakeHost(&h, 1);
+	if (app_engineInit(&E, &h) != 0)
+		exit(2);
+	static char card[1024];
+	fakeCard(card, sizeof card, 0u);	/* EXT: sync mode 1 */
+	const app_engineConfig_t c = { .cardDir = card, .seed = 1u, .dAuto = 1, .mix = APP_MIX_SUM };
+	app_enginePowerOn(&E, &c);
+	memset(&notes, 0, sizeof notes);
+	const app_jackInConfig_t jc = { FAKE_TPS, 48000.0, IN_LATENCY, 2u, 0u, 1u, 0.5f, 0.5f };
+	app_jackInStart(&E.jackIn, &jc);	/* as app_ciOpen() before the unit starts */
+	fk.event = inputEvent;
+	fk.nextEvent = HOST_MS(2500);
+	const app_midiOutSink_t sink = { NULL, recordNotes };
+	while (fk.now < HOST_MS(9500))
+	{
+		app_engineSlice(&E);
+		(void)app_midiOutStep(&E, UINT64_MAX, &sink);
+		(void)app_engineSnapshot(&E, &snap);
+	}
+	const double D = (double)E.dCycles / EMU_CPU_HZ;
+	ASSERT_NEAR(E.L * 1e3, 57.0 + 12.5, 0.1);	/* the input's lead, (512 + 48 + 40) frames (F7) */
+	ASSERT_NEAR(D, E.L + APP_D_MARGIN, 1e-6);
+	/* steps 1, 5, 9, 13; none in the gate. The last pulse is 43: "between clocks the position advances at the estimated
+	 * tempo, clamped to the next target" (seq_core.h), so step 13 of the second round plays at the place of pulse 44 */
+	static const unsigned pulse[10] = { 0, 4, 8, 12, 16, 20, 32, 36, 40, 44 };
+	ASSERT_EQ(notes.n, 10);
+	for (unsigned n = 0; n < 10u; n++)
+	{
+		const double lat = ((double)notes.t[n] - (double)(HOST_MS(3600) + 3000000u * pulse[n])) / FAKE_TPS;
+		ASSERT_TRUE(lat >= D - 0.0001 && lat <= D + 0.00145);
+	}
+	ASSERT_NEAR(snap.diag.inLatMin, D, 0.0002);	/* every edge entered at map + D */
+	ASSERT_NEAR(snap.diag.inLatMax, D, 0.0002);
+	ASSERT_EQ(app_ringDropped(&E.jackIn.edges), 0);
+	ASSERT_EQ(snap.diag.midiStale, 0);
+}
+
 TEST_MAIN()

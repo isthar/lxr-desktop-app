@@ -11,6 +11,9 @@ licence_gate.py's own functions:
    to clean ones: exactly those four errors, in any order.
 2. check_overlay() on a compile_commands.json of two commands, one with the
    main.h overlay and one without: exactly one error, for the second.
+3. strings() on a Mach-O file made here, whose sections all hold the bytes 'LxR':
+   the tables that describe code (__unwind_info, __eh_frame, __gcc_except_tab)
+   are not read, a __const section is.
 
     licence_gate_neg.py <repository root> <build dir> <name canary object>
 
@@ -24,6 +27,7 @@ the repository.
 import json
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -72,16 +76,48 @@ def overlay(root):
     return [] if errors == want else ['the overlay check gave %r, not %r' % (errors, want)]
 
 
+def macho(sections):
+    """a minimal 64-bit Mach-O file of one segment: the header, the segment command with a section_64 for each of the
+    (segment, section, bytes) in sections, then their contents in order"""
+    cmdsize = 72 + 80 * len(sections)
+    at = 32 + cmdsize
+    heads = body = b''
+    for seg, sect, payload in sections:
+        heads += struct.pack('<16s16sQQIIIIIIII', sect.encode(), seg.encode(), 0, len(payload), at + len(body), 0, 0, 0, 0, 0, 0, 0)
+        body += payload
+    segment = struct.pack('<II16sQQQQiiII', licence_gate.LC_SEGMENT_64, cmdsize, b'__TEXT', 0, 0, at, len(body), 7, 7,
+                          len(sections), 0)
+    return struct.pack('<IiiIIIII', licence_gate.MH_MAGIC_64, 0x0100000c, 0, 1, 1, cmdsize, 0, 0) + segment + heads + body
+
+
+def tables():
+    """offsets and encodings can spell a name by chance (R5: 0x52784c is 'LxR' + NUL), so the tables that describe code
+    are not read; a data section with the same bytes is, or the scan would read nothing"""
+    spelled = b'\0LxR\0'
+    unread = [('__TEXT', '__unwind_info'), ('__TEXT', '__eh_frame'), ('__TEXT', '__gcc_except_tab')]
+    tmp = tempfile.mkdtemp(prefix='lichomat-m21-')
+    try:
+        path = os.path.join(tmp, 'macho')
+        with open(path, 'wb') as f:
+            f.write(macho([(seg, sect, spelled) for seg, sect in unread] + [('__TEXT', '__const', spelled)]))
+        errors = []
+        found = list(licence_gate.strings(path, errors))
+    finally:
+        shutil.rmtree(tmp)
+    want = [('__TEXT', '__const', 'LxR')]
+    return [] if not errors and found == want else ['the scan of the made file gave %r (%r), not %r' % (found, errors, want)]
+
+
 def main():
     if len(sys.argv) != 4:
         raise SystemExit(__doc__)
     root, build, canary = sys.argv[1:]
-    failures = names(root, build, canary) + overlay(root)
+    failures = names(root, build, canary) + overlay(root) + tables()
     for f in failures:
         print('M21_negative: ' + f)
     if failures:
         sys.exit(1)
-    print('M21_negative: the name scan and the overlay check reject what they must')
+    print('M21_negative: the name scan and the overlay check reject what they must, the code tables are not scanned')
 
 
 if __name__ == '__main__':

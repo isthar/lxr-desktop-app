@@ -497,13 +497,24 @@ void jackStrip(panel_t *p, app_shell_t *s, const app_snapshot_t *snap, double no
 		p->clockOutAt = now;
 	dl->AddCircleFilled(P(416.0f, cy + 13.0f), S(7.0f), now - p->clockOutAt < 0.08 ? kLedOn : kLedOff, 16);
 
-	/* reset in, the card switch */
-	jackLabel(480.0f, "rst in");
+	/* reset in: the panel's switch, unless the reset comes from audio (R5, F11); the card switch */
+	const app_settings_t *set = app_shellSettings(s);
+	app_outputInfo_t inInfo;
+	const char *inErr;
+	const int audioReset = set->clockInAudio && set->resetChannel > 0 && app_shellInputInfo(s, &inInfo, &inErr);
+	if (audioReset && !p->audioReset && p->resetSent && post(s, APP_P_RESET, 0u, 0, 0.0, mach_absolute_time()) == 0)
+		p->resetSent = 0;	/* the jack starts low: the input's level rules from now */
+	if (!audioReset && p->audioReset)
+		p->resetSent = 0;	/* the shell has let the reset go: the switch is sent again as it stands */
+	p->audioReset = audioReset;
+	jackLabel(480.0f, audioReset ? "rst in (audio)" : "rst in");
 	ImGui::SetCursorScreenPos(P(484.0f, cy));
+	ImGui::BeginDisabled(audioReset != 0);
 	bool reset = p->resetOn != 0u;
 	if (ImGui::Checkbox("##rst", &reset))
 		p->resetOn = reset ? 1u : 0u;
-	if (p->resetOn != p->resetSent && post(s, APP_P_RESET, 0u, p->resetOn, 0.0, mach_absolute_time()) == 0)
+	ImGui::EndDisabled();
+	if (!audioReset && p->resetOn != p->resetSent && post(s, APP_P_RESET, 0u, p->resetOn, 0.0, mach_absolute_time()) == 0)
 		p->resetSent = p->resetOn;
 	jackLabel(560.0f, "sd card");
 	ImGui::SetCursorScreenPos(P(566.0f, cy));
@@ -586,7 +597,8 @@ void diagnostics(panel_t *p, app_shell_t *s, const app_snapshot_t *snap)
 		kv("device", "%s", g.outputRunning && g.output.name[0] ? g.output.name : "none");
 		kv("formats and converter", "%s", g.output.format[0] ? g.output.format : "-");
 		kv("rate (device, client)", "%.1f Hz, %.1f Hz", g.output.deviceRate, g.output.clientRate);
-		kv("buffer, channels", "%u frames, %u", g.output.bufferFrames, g.output.channels);
+		kv("buffer, channels (open, device)", "%u frames, %u of %u", g.output.bufferFrames, g.output.channels,
+			g.output.deviceChannels);
 		kv("latency (device, stream, safety)", "%u, %u, %u frames", g.output.deviceLatency, g.output.streamLatency,
 			g.output.safetyOffset);
 		kv("firmware thread", "%s", g.realtime ? "time-constraint policy" : "default priority (the system refused the policy)");
@@ -607,6 +619,26 @@ void diagnostics(panel_t *p, app_shell_t *s, const app_snapshot_t *snap)
 			kv("input latency (last 2 s)", "%.2f to %.2f ms", g.inLatMin * 1e3, g.inLatMax * 1e3);
 		else
 			kv("input latency (last 2 s)", "no input");
+		section("clock jacks as audio (spec 6.8)");
+		const app_settings_t *set = app_shellSettings(s);
+		if (!set->clockOutAudio)
+			kv("clock out", "off");
+		else if (g.outputRunning && g.output.deviceChannels > 0u && (unsigned)set->clockOutChannel > g.output.deviceChannels)
+			kv("clock out", "output channel %d: not on the device (%u channels), not heard", set->clockOutChannel,
+				g.output.deviceChannels);
+		else
+			kv("clock out", "output channel %d", set->clockOutChannel);
+		app_outputInfo_t in;
+		const char *inErr = "";
+		if (app_shellInputInfo(s, &in, &inErr))
+		{
+			kv("clock and reset in", "%s, %.0f Hz, %u channels", in.name, in.deviceRate, in.channels);
+			kv("input latency, buffer", "%u + %u frames, %u frames", in.deviceLatency, in.streamLatency, in.bufferFrames);
+			kv("input lead held by L", "%.2f ms", g.inputLead * 1e3);
+		}
+		else
+			kv("clock and reset in", "%s", set->clockInAudio ? (inErr[0] ? inErr : "not running yet") : "off");
+		kv("audio edges dropped, input callbacks skipped", "%llu, %llu", U64(g.jackInDropped), U64(g.jackInSkipped));
 		section("counters (spec 5.5)");
 		kv("blocks, underruns, passes", "%llu, %llu, %llu", U64(c.blocks), U64(c.underruns), U64(c.passes));
 		kv("DIN in, lost, out", "%llu, %llu, %llu", U64(c.dinIn), U64(c.dinLost), U64(c.dinOut));
@@ -645,9 +677,164 @@ void sendOutput(app_shell_t *s, const char *uid, int frames)
 	(void)app_shellCommand(s, &c);
 }
 
+void sendClockOut(app_shell_t *s, int channel)
+{
+	app_cmd_t c;
+	memset(&c, 0, sizeof c);
+	c.kind = APP_CMD_CLOCK_OUT;
+	c.a = channel;	/* 1-64, 0 off */
+	(void)app_shellCommand(s, &c);
+}
+
+/* a combo of the numbers lo to hi (lo 0 reads 'none'); the current one is shown even where it is above hi, and the number
+ * skip is left out of the list (the clock's channel is not the reset's). True if picked */
+bool channelCombo(const char *label, int *value, int lo, int hi, int skip = -1)
+{
+	char cur[16];
+	if (*value == 0)
+		snprintf(cur, sizeof cur, "none");
+	else
+		snprintf(cur, sizeof cur, "%d", *value);
+	bool picked = false;
+	ImGui::SetNextItemWidth(80.0f);
+	if (ImGui::BeginCombo(label, cur))
+	{
+		for (int n = lo; n <= hi; n++)
+		{
+			char item[24];
+			if (n == skip)
+				continue;
+			if (n == 0)
+				snprintf(item, sizeof item, "none##0");
+			else
+				snprintf(item, sizeof item, "%d##%d", n, n);
+			if (ImGui::Selectable(item, n == *value) && n != *value)
+			{
+				*value = n;
+				picked = true;
+			}
+		}
+		ImGui::EndCombo();
+	}
+	return picked;
+}
+
+void wrappedDim(const char *text)
+{
+	ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+	ImGui::TextWrapped("%s", text);
+	ImGui::PopStyleColor();
+}
+
+/* the two options of spec 6.8, both off by default: the clock-out jack on an output channel, and the clock and reset in
+ * from an input. The clock-in options go to the Cocoa side (PANEL_REQ_CLOCKIN), which asks for the microphone first (F10) */
+void clockJacks(panel_t *p, app_shell_t *s, const app_snapshot_t *snap, double now)
+{
+	const app_settings_t *set = app_shellSettings(s);
+	ImGui::SeparatorText("Clock jacks as audio");
+	/* clock out: a channel of the open unit's device */
+	const bool running = snap && snap->diag.outputRunning;
+	const int devCh = running && snap->diag.output.deviceChannels > 0u ? (int)snap->diag.output.deviceChannels : 2;
+	bool outOn = set->clockOutAudio != 0;
+	int outCh = set->clockOutChannel;
+	bool outChanged = ImGui::Checkbox("clock out on output channel", &outOn);
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!outOn);
+	outChanged |= channelCombo("##clkoutch", &outCh, 1, devCh < (int)APP_CLOCK_CHANNELS ? devCh : (int)APP_CLOCK_CHANNELS);
+	ImGui::EndDisabled();
+	if (outChanged)
+		sendClockOut(s, outOn ? outCh : 0);
+	wrappedDim("The channel carries the clock alone; the mix plays on the others, in mono when it shares the pair; the audio "
+		"runs one block (1.45 ms) later.");
+	if (outOn && running && outCh > devCh)
+		ImGui::TextColored(ImVec4(1.0f, 0.69f, 0.0f, 1.0f), "channel %d is not on %s (%u channels): it is not heard", outCh,
+			snap->diag.output.name, snap->diag.output.deviceChannels);
+	ImGui::Spacing();
+	/* clock and reset in: an input device, two channels, two thresholds */
+	bool inChanged = false;
+	bool inOn = p->clockIn.on != 0;
+	if (ImGui::Checkbox("clock and reset in from an input", &inOn))
+	{
+		p->clockIn.on = inOn ? 1 : 0;
+		inChanged = true;
+	}
+	if (now - p->inDevAt > 2.0)
+	{
+		p->nInDev = app_shellInputs(s, p->inDev, PANEL_DEVICES);
+		p->inDevAt = now;
+	}
+	app_outputInfo_t ii;
+	const char *ierr = "";
+	const int inRunning = app_shellInputInfo(s, &ii, &ierr);
+	int curIn = -1;
+	for (int i = 0; i < p->nInDev; i++)
+		if (p->clockIn.uid[0] != '\0' && strcmp(p->clockIn.uid, p->inDev[i].uid) == 0)
+			curIn = i;
+	int nIn = inRunning ? (int)ii.channels : curIn >= 0 ? (int)p->inDev[curIn].channels : p->nInDev > 0 ? (int)p->inDev[0].channels : 2;
+	nIn = nIn < 1 ? 1 : nIn > (int)APP_CLOCK_CHANNELS ? (int)APP_CLOCK_CHANNELS : nIn;
+	ImGui::BeginDisabled(!p->clockIn.on);
+	char shown[300];
+	if (p->clockIn.uid[0] == '\0')
+		snprintf(shown, sizeof shown, "system default input");
+	else if (curIn >= 0)
+		snprintf(shown, sizeof shown, "%s (%u in)", p->inDev[curIn].name, p->inDev[curIn].channels);
+	else
+		snprintf(shown, sizeof shown, "%s (not available)", p->clockIn.uid);
+	if (ImGui::BeginCombo("input device", shown))
+	{
+		if (ImGui::Selectable("system default input", p->clockIn.uid[0] == '\0') && p->clockIn.uid[0] != '\0')
+		{
+			p->clockIn.uid[0] = '\0';
+			inChanged = true;
+		}
+		for (int i = 0; i < p->nInDev; i++)
+		{
+			char item[300];
+			snprintf(item, sizeof item, "%s (%u in)##in%d", p->inDev[i].name, p->inDev[i].channels, i);
+			if (ImGui::Selectable(item, i == curIn) && i != curIn)
+			{
+				snprintf(p->clockIn.uid, sizeof p->clockIn.uid, "%s", p->inDev[i].uid);
+				inChanged = true;
+			}
+		}
+		ImGui::EndCombo();
+	}
+	inChanged |= channelCombo("clock channel", &p->clockIn.clockChannel, 1, nIn);
+	inChanged |= channelCombo("reset channel", &p->clockIn.resetChannel, 0, nIn, p->clockIn.clockChannel);	/* not the clock's */
+	float pct = (float)(p->clockIn.clockThreshold * 100.0);
+	if (ImGui::SliderFloat("clock threshold", &pct, 5.0f, 95.0f, "%.0f %% of full scale", ImGuiSliderFlags_AlwaysClamp))
+		p->clockIn.clockThreshold = (double)pct / 100.0;
+	if (ImGui::IsItemDeactivatedAfterEdit())
+		inChanged = true;	/* sent when the slider is let go */
+	pct = (float)(p->clockIn.resetThreshold * 100.0);
+	if (ImGui::SliderFloat("reset threshold", &pct, 5.0f, 95.0f, "%.0f %% of full scale", ImGuiSliderFlags_AlwaysClamp))
+		p->clockIn.resetThreshold = (double)pct / 100.0;
+	if (ImGui::IsItemDeactivatedAfterEdit())
+		inChanged = true;
+	ImGui::EndDisabled();
+	if (inChanged)
+	{
+		/* F11: the reset goes off before the request leaves, so before the input can run. The engine drains the panel's ring
+		 * before the input's, so a RESET 0 posted after the first callback could undo the reset of a jack that is held high.
+		 * Sent first, the input's level rules from its first sample. A post that fails is sent once the input runs, below */
+		if (p->clockIn.on && p->clockIn.resetChannel > 0 && p->resetSent
+			&& post(s, APP_P_RESET, 0u, 0, 0.0, mach_absolute_time()) == 0)
+			p->resetSent = 0;
+		p->request = PANEL_REQ_CLOCKIN;
+	}
+	if (inRunning)
+		ImGui::TextWrapped("Input: %s, %.0f Hz, %u frames. D holds %.1f ms more for it.", ii.name, ii.deviceRate,
+			ii.bufferFrames, snap ? snap->diag.inputLead * 1e3 : 0.0);
+	else if (p->micDenied)
+		ImGui::TextWrapped("Microphone access is off for LICHOMAT Emu: System Settings > Privacy & Security > Microphone.");
+	else
+		ImGui::TextWrapped("Not running: %s", !p->clockIn.on ? "off" : ierr[0] ? ierr : "waiting for the microphone or the device");
+	wrappedDim("A held reset needs a DC-coupled input.");
+}
+
 void audioWindow(panel_t *p, app_shell_t *s, const app_snapshot_t *snap, double now)
 {
-	if (!windowBegin("Audio", &p->showAudio, ImVec2(470.0f, 250.0f), ImVec2(30.0f, 60.0f)))
+	if (!windowBegin("Audio", &p->showAudio, ImVec2(470.0f, 520.0f), ImVec2(30.0f, 60.0f)))
 		return;
 	const app_settings_t *set = app_shellSettings(s);
 	if (now - p->devAt > 2.0)
@@ -716,6 +903,7 @@ void audioWindow(panel_t *p, app_shell_t *s, const app_snapshot_t *snap, double 
 			c.a = k;
 			(void)app_shellCommand(s, &c);
 		}
+	clockJacks(p, s, snap, now);
 	ImGui::Separator();
 	if (snap && snap->diag.outputRunning)
 		ImGui::TextWrapped("Running on %s: %.0f Hz, %u frames per buffer.", snap->diag.output.name,
@@ -1094,6 +1282,16 @@ void panel_init(panel_t *p)
 	p->genBpm = 120.0f;
 	p->genPpq = 24;
 	p->projectNumber = 0;
+}
+
+void panel_loadClockIn(panel_t *p, const app_settings_t *set)
+{
+	p->clockIn.on = set->clockInAudio;
+	snprintf(p->clockIn.uid, sizeof p->clockIn.uid, "%s", set->clockInDevice);
+	p->clockIn.clockChannel = set->clockInChannel;
+	p->clockIn.resetChannel = set->resetChannel;
+	p->clockIn.clockThreshold = set->clockInThreshold;
+	p->clockIn.resetThreshold = set->resetThreshold;
 }
 
 void panel_message(panel_t *p, const char *text)

@@ -72,7 +72,7 @@ TEST(R4_settings_roundtrip)
 	for (int c; (c = fgetc(f)) != EOF;)
 		lines += c == '\n';
 	fclose(f);
-	ASSERT_EQ(lines, 1u + 18u);	/* the comment and the 18 keys */
+	ASSERT_EQ(lines, 1u + 26u);	/* the comment and the 26 keys: the 18 of R4 and the 8 of R5 (F12) */
 
 	/* an over-long line ends at its line feed: its rest is not the next line */
 	f = fopen(path, "w");
@@ -99,7 +99,7 @@ TEST(R4_settings_keep)
 {
 	char dir[512], path[1024];
 	emu_testTempDir(dir, sizeof dir);
-	const char *text = "# a comment\noutput.mix = four\nclockout.audio = 1\noutput.buffer = banana\nclockin.ppq = 7\ndin.source.uid = 4294967296\nusb.source.uid = -2147483648\nusb.destination.uid = -5\nwindow.width = -300\n";
+	const char *text = "# a comment\noutput.mix = four\nfuture.option = 1\noutput.buffer = banana\nclockin.ppq = 7\ndin.source.uid = 4294967296\nusb.source.uid = -2147483648\nusb.destination.uid = -5\nwindow.width = -300\n";
 	emu_testWrite(dir, "settings.txt", text, strlen(text));
 	snprintf(path, sizeof path, "%s/settings.txt", dir);
 	app_settings_t s;
@@ -112,11 +112,45 @@ TEST(R4_settings_keep)
 	ASSERT_EQ(s.usbSrcUid, INT32_MIN);	/* the extreme that fits */
 	ASSERT_EQ(s.usbDstUid, -5);		/* a negative ID is a valid one */
 	ASSERT_EQ(s.window[2], 1100);	/* below its range: kept */
-	ASSERT_TRUE(strstr(s.extra, "clockout.audio = 1\n") != NULL);	/* R5's key (E19) */
+	ASSERT_TRUE(strstr(s.extra, "future.option = 1\n") != NULL);	/* a key of a later version (E19, R5 F12) */
 	ASSERT_EQ(app_settingsSave(&s, path), 0);
 	app_settingsDefaults(&s);
 	ASSERT_EQ(app_settingsLoad(&s, path), 0);
-	ASSERT_TRUE(strstr(s.extra, "clockout.audio = 1\n") != NULL);
+	ASSERT_TRUE(strstr(s.extra, "future.option = 1\n") != NULL);
+}
+
+TEST(R5_settings_clock)
+{
+	char dir[512], path[1024];
+	emu_testTempDir(dir, sizeof dir);
+	snprintf(path, sizeof path, "%s/settings.txt", dir);
+	app_settings_t s, t;
+	app_settingsDefaults(&s);
+	ASSERT_EQ(s.clockOutAudio + s.clockInAudio, 0);	/* both off by default (spec 6.8) */
+	ASSERT_EQ(s.clockOutChannel, 2);
+	ASSERT_EQ(s.clockInChannel, 1);
+	ASSERT_EQ(s.resetChannel, 0);
+	ASSERT_EQ_DBL(s.clockInThreshold, 0.5);
+	ASSERT_EQ_DBL(s.resetThreshold, 0.5);
+	const char *text = "clockout.audio = 1\nclockout.channel = 4\nclockin.audio = 1\nclockin.device = Interface:x\\s\n"
+		"clockin.channel = 65\nclockin.threshold = 0.3\nreset.channel = 2\nreset.threshold = 0.99\n";
+	emu_testWrite(dir, "settings.txt", text, strlen(text));
+	ASSERT_EQ(app_settingsLoad(&s, path), 0);
+	ASSERT_EQ(s.clockOutAudio, 1);
+	ASSERT_EQ(s.clockOutChannel, 4);
+	ASSERT_EQ(s.clockInAudio, 1);
+	ASSERT_EQ(strcmp(s.clockInDevice, "Interface:x "), 0);
+	ASSERT_EQ(s.clockInChannel, 1);			/* 65: out of range, the default stays */
+	ASSERT_EQ_DBL(s.clockInThreshold, 0.3);
+	ASSERT_EQ(s.resetChannel, 2);
+	ASSERT_EQ_DBL(s.resetThreshold, 0.5);	/* above 95 % */
+	ASSERT_TRUE(strstr(s.extra, "clock") == NULL);
+	ASSERT_EQ(app_settingsSave(&s, path), 0);
+	app_settingsDefaults(&t);
+	ASSERT_EQ(app_settingsLoad(&t, path), 0);
+	ASSERT_EQ(t.clockOutChannel, 4);
+	ASSERT_EQ(strcmp(t.clockInDevice, s.clockInDevice), 0);
+	ASSERT_EQ_DBL(t.clockInThreshold, 0.3);
 }
 
 static uint64_t noteNow(void) { return 123456789u; }

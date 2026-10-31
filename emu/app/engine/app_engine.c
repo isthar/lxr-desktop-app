@@ -14,6 +14,7 @@
  */
 #include "app_engine.h"
 
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -49,10 +50,13 @@ void app_audioRender(app_audio_t *a, const app_audioTime_t *ts, unsigned frames,
 	const int mix = atomic_load_explicit(&a->mix, memory_order_relaxed);
 	const int mute = atomic_load_explicit(&a->mute, memory_order_relaxed);
 	const unsigned used = mix == APP_MIX_FOUR && channels >= 4u ? 4u : 2u;
+	const int clk = atomic_load_explicit(&a->clockChannel, memory_order_relaxed);
+	const unsigned cc = clk > 0 && (unsigned)clk <= channels ? (unsigned)clk - 1u : UINT_MAX;	/* F3: none if not there */
+	const int mono = used == 2u && cc < 2u;	/* F4: the clock takes one of the pair */
 	for (unsigned i = 0; i < n; i++)
 	{
-		const int16_t *f = app_ringPeek(&a->frames, i);
-		int32_t v[4] = { f[0], f[1], f[2], f[3] };
+		const app_frame_t *f = app_ringPeek(&a->frames, i);
+		int32_t v[4] = { f->s[0], f->s[1], f->s[2], f->s[3] };
 		if (mix == APP_MIX_SUM || (mix == APP_MIX_FOUR && used == 2u))
 		{
 			v[0] = (v[0] + v[2]) >> 1;	/* (out 1 + out 2) / 2 in int32, as --stereo sum */
@@ -63,9 +67,13 @@ void app_audioRender(app_audio_t *a, const app_audioTime_t *ts, unsigned frames,
 			v[0] = v[2];
 			v[1] = v[3];
 		}
+		if (mono)
+			v[1u - cc] = (v[0] + v[1]) >> 1;	/* (left + right) / 2 in int32, as the sum */
 		float *o = out + (size_t)i * channels;
 		for (unsigned c = 0; c < channels; c++)
 			o[c] = mute || c >= used ? 0.0f : (float)v[c] / 32768.0f;
+		if (cc != UINT_MAX)
+			o[cc] = !mute && f->clock ? 1.0f : 0.0f;	/* the clock alone, +1.0 while PC13 is high (spec 6.8) */
 	}
 	for (size_t i = (size_t)n * channels; i < (size_t)frames * channels; i++)
 		out[i] = 0.0f;
@@ -82,7 +90,7 @@ void app_audioRender(app_audio_t *a, const app_audioTime_t *ts, unsigned frames,
 
 static void app_engineSetL(app_engine_t *e)
 {
-	const app_latencyIn_t in = { e->lLead, e->out.deviceRate, e->out.deviceLatency, e->out.streamLatency, e->lReq, 0 };
+	const app_latencyIn_t in = { e->lLead, e->out.deviceRate, e->out.deviceLatency, e->out.streamLatency, e->lReq, e->clockOutAudio, e->inLead };
 	e->L = app_latencyL(&in);
 	if (e->dAuto)
 		e->dCycles = (uint64_t)llround((e->L + APP_D_MARGIN) * EMU_CPU_HZ);
@@ -138,13 +146,20 @@ static void app_minMax(double *lo, double *hi, double v)
 	*hi = v > *hi ? v : *hi;
 }
 
-/* the entry time of an event on a port (spec 6.4), 0 if it is stale (E9) */
-static int app_engineEntry(app_engine_t *e, unsigned port, uint64_t stamp, uint64_t now, uint64_t *t)
+/* the entry time of an event on a port (spec 6.4). A stale event (E9) is dropped and counted: 0. A level that is not
+ * a pulse (keepLevel: the reset jack) enters at now instead, in order; dropped, the reset stays where it was */
+static int app_engineEntry(app_engine_t *e, unsigned port, uint64_t stamp, uint64_t now, uint64_t *t, int keepLevel)
 {
 	if (e->staleFrom && stamp + app_ticks(e, APP_STALE_SEC) < e->staleFrom)
 	{
-		e->diag.midiStale++;
-		return 0;
+		if (!keepLevel)
+		{
+			e->diag.midiStale++;
+			return 0;
+		}
+		*t = app_entryTime(0.0, 0u, now, e->prev[port]);
+		e->prev[port] = *t;
+		return 1;
 	}
 	const uint64_t d = e->extSync ? e->dCycles : 0u;	/* D only in sync modes 1 and 2 (E12) */
 	*t = app_entryTime(app_tmVirtual(&e->map, stamp), d, now, e->prev[port]);
@@ -157,6 +172,13 @@ static int app_engineEntry(app_engine_t *e, unsigned port, uint64_t stamp, uint6
 
 static void app_engineSnap(app_engine_t *e, uint64_t now);
 
+static unsigned app_engineChannels(app_engine_t *e)	/* F3: the mix's 2 or 4, or the clock's channel */
+{
+	const unsigned mix = atomic_load(&e->audio.mix) == APP_MIX_FOUR ? 4u : 2u;
+	const unsigned clk = (unsigned)atomic_load(&e->audio.clockChannel);
+	return clk > mix ? clk : mix;
+}
+
 /* the output is not running, and neither is its callback: a fresh ring and a fresh warm-up (spec 6.2, 6.4) */
 static void app_engineOpen(app_engine_t *e)
 {
@@ -164,13 +186,14 @@ static void app_engineOpen(app_engine_t *e)
 	emu_getCounters(&c);
 	app_ringReset(&e->audio.frames);
 	app_ringReset(&e->audio.points);
+	e->held = 0;	/* a held block of the last open is dropped (F2) */
 	e->frameBase = (uint64_t)EMU_BLOCK_FRAMES * (c.blocks + 1u);	/* the next block request's first frame */
 	e->warm = e->lReq = 0u;
 	e->lLead = 0.0;
 	e->cbSeen = 0;
 	e->diag.leadMin = 1e9;
 	e->diag.leadMax = -1e9;
-	e->req.channels = atomic_load(&e->audio.mix) == APP_MIX_FOUR ? 4u : 2u;
+	e->req.channels = app_engineChannels(e);
 	memset(&e->out, 0, sizeof e->out);
 	atomic_store(&e->audio.maxRequest, 0u);	/* no callback runs between two opens */
 	emu_waitBegin();	/* a slow open is a wait, not a hang (spec 4.2) */
@@ -181,7 +204,19 @@ static void app_engineOpen(app_engine_t *e)
 	if (!e->map.valid)
 		app_tmWall(&e->map, 0.0, opened + e->wallLead);
 	if (e->outputRunning)
+	{
 		app_maxRequest(&e->audio, (uint32_t)ceil((double)e->out.bufferFrames * APP_FS / e->out.deviceRate));	/* E6 */
+		const int clk = atomic_load(&e->audio.clockChannel);
+		if (clk > 0 && e->out.deviceChannels > 0u && (unsigned)clk > e->out.deviceChannels)	/* spec 6.8: not heard, so said */
+		{
+			app_ack_t a;
+			memset(&a, 0, sizeof a);
+			a.kind = APP_MSG_NOTICE;
+			snprintf(a.text, sizeof a.text, "clock out as audio: channel %d is not on %s (%u channels): it is not heard", clk,
+				e->out.name[0] ? e->out.name : "the output", e->out.deviceChannels);
+			(void)app_ringPush(&e->ack, &a);
+		}
+	}
 	else
 		e->retryAt = opened + app_ticks(e, APP_RETRY_SEC);
 }
@@ -289,11 +324,11 @@ static void app_enginePanelEvent(app_engine_t *e, const app_panelEvent_t *p, uin
 			emu_inCard(now, p->value);
 		break;
 	case APP_P_CLOCK:	/* the jack input takes the entry rule on its own port (E13) */
-		if (app_engineEntry(e, APP_PORT_JACK, p->host, now, &t))
+		if (app_engineEntry(e, APP_PORT_JACK, p->host, now, &t, 0))
 			emu_inClockPulse(t);
 		break;
 	case APP_P_RESET:
-		if (app_engineEntry(e, APP_PORT_JACK, p->host, now, &t))
+		if (app_engineEntry(e, APP_PORT_JACK, p->host, now, &t, 1))
 			emu_inReset(t, p->value);
 		break;
 	default:
@@ -314,7 +349,7 @@ static void app_engineMidiInputs(app_engine_t *e, uint64_t now)
 	{
 		uint8_t b[64];
 		const unsigned n = app_umpToBytes(m->words, m->nwords, b, sizeof b);
-		if (app_engineEntry(e, APP_PORT_DIN, m->stamp, now, &t) && n)
+		if (app_engineEntry(e, APP_PORT_DIN, m->stamp, now, &t, 0) && n)
 			emu_inDin(t, b, n);	/* the wire model spaces the bytes from t (spec 4.3) */
 		app_ringPop(&e->midiIn[APP_PORT_DIN], 1u);
 	}
@@ -324,7 +359,7 @@ static void app_engineMidiInputs(app_engine_t *e, uint64_t now)
 		unsigned len;
 		const uint64_t stamp = m->stamp;
 		const unsigned taken = app_usbTransfer(app_peekUsb, e, &e->usbPend, data, &len);
-		if (app_engineEntry(e, APP_PORT_USB, stamp, now, &t) && len)
+		if (app_engineEntry(e, APP_PORT_USB, stamp, now, &t, 0) && len)
 			(void)emu_inUsb(t, data, len);	/* one transfer; the core paces 16 packets per 1 ms */
 		if (!taken)
 			e->diag.midiUnsent++;	/* E10: it fits no transfer; counted, not dropped silently */
@@ -339,6 +374,12 @@ static void app_engineInputs(app_engine_t *e, uint64_t now)
 	{
 		const app_panelEvent_t ev = *p;
 		app_ringPop(&e->panel, 1u);
+		app_enginePanelEvent(e, &ev, now);
+	}
+	while ((p = app_ringPeek(&e->jackIn.edges, 0u)) != NULL)	/* audio edges, after the panel's (F8) */
+	{
+		const app_panelEvent_t ev = *p;
+		app_ringPop(&e->jackIn.edges, 1u);
 		app_enginePanelEvent(e, &ev, now);
 	}
 	app_engineMidiInputs(e, now);
@@ -372,26 +413,46 @@ static void app_hook(void *ctx, uint64_t now, emu_hookReason_t why)
 		app_enginePaceWall(e, now);
 }
 
+static void app_enginePush(app_engine_t *e, const int16_t *out1, const int16_t *out2, uint64_t first)	/* E5, F1 */
+{
+	int16_t level[EMU_BLOCK_FRAMES];
+	app_clkRender(&e->clkOut, first, EMU_BLOCK_FRAMES, level);
+	uint32_t n = 0;
+	for (app_frame_t *f; n < EMU_BLOCK_FRAMES && (f = app_ringSlot(&e->audio.frames, n)) != NULL; n++)
+		*f = (app_frame_t){ { out1[2u * n], out1[2u * n + 1u], out2[2u * n], out2[2u * n + 1u] }, level[n] };
+	if (n < EMU_BLOCK_FRAMES)
+		atomic_fetch_add_explicit(&e->audio.frames.dropped, EMU_BLOCK_FRAMES - n, memory_order_relaxed);
+	app_ringCommit(&e->audio.frames, n);
+}
+
 static void app_sinkAudio(void *ctx, uint64_t t, const int16_t *out1, const int16_t *out2)
 {
 	app_engine_t *e = ctx;
 	(void)t;
+	emu_counters_t c;
+	emu_getCounters(&c);
+	const uint64_t first = (uint64_t)EMU_BLOCK_FRAMES * c.blocks;	/* request k plays 64k to 64k + 63 */
 	if (!e->outputRunning)
-		return;	/* the next open's frameBase keeps the frames counted */
-	uint32_t n = 0;
-	for (; n < EMU_BLOCK_FRAMES; n++)
 	{
-		int16_t *f = app_ringSlot(&e->audio.frames, n);
-		if (!f)
-			break;
-		f[0] = out1[2u * n];
-		f[1] = out1[2u * n + 1u];
-		f[2] = out2[2u * n];
-		f[3] = out2[2u * n + 1u];
+		int16_t scratch[EMU_BLOCK_FRAMES];
+		e->held = 0;
+		app_clkRender(&e->clkOut, first, EMU_BLOCK_FRAMES, scratch);	/* the edges still go by: a full queue would lose the newest */
+		return;	/* the next open's frameBase keeps the frames counted */
 	}
-	if (n < EMU_BLOCK_FRAMES)
-		atomic_fetch_add_explicit(&e->audio.frames.dropped, EMU_BLOCK_FRAMES - n, memory_order_relaxed);
-	app_ringCommit(&e->audio.frames, n);
+	if (e->held)	/* the last request's block: every edge of its time is known now (F2) */
+	{
+		app_enginePush(e, e->hold[0], e->hold[1], e->holdFirst);
+		e->held = 0;
+	}
+	if (!e->clockOutAudio)
+	{
+		app_enginePush(e, out1, out2, first);
+		return;
+	}
+	memcpy(e->hold[0], out1, sizeof e->hold[0]);
+	memcpy(e->hold[1], out2, sizeof e->hold[1]);
+	e->holdFirst = first;
+	e->held = 1;
 }
 
 /* a message of the DIN or USB out sink goes to its port's MIDI-out ring at its presentation time (spec 6.5). A port's
@@ -444,10 +505,13 @@ static void app_sinkUsb(void *ctx, uint64_t t, const uint8_t *data, uint16_t len
 static void app_sinkClock(void *ctx, uint64_t t, int level)
 {
 	app_engine_t *e = ctx;
-	(void)t;
 	e->clockLevel = level;
 	if (level)
 		e->clockSeen = 1;	/* the latch of spec 6.8 */
+	emu_counters_t c;
+	emu_getCounters(&c);
+	if (c.codecStart != EMU_NEVER)
+		app_clkEdge(&e->clkOut, app_clkFrame(c.codecStart, t), level);	/* F1 */
 }
 
 static void app_engineFault(void *ctx, const char *what)
@@ -503,9 +567,23 @@ static int app_engineCommands(app_engine_t *e)
 			break;
 		case APP_CMD_MIX:
 		{
-			const int old = atomic_exchange(&e->audio.mix, c.a);
-			if ((old == APP_MIX_FOUR) != (c.a == APP_MIX_FOUR))
-				app_engineReopen(e);	/* only the 4-channel mode reopens the unit (E5) */
+			atomic_store(&e->audio.mix, c.a);
+			if (app_engineChannels(e) != e->req.channels)
+				app_engineReopen(e);	/* only a change of the unit's channel count reopens it (E5, F3) */
+			break;
+		}
+		case APP_CMD_CLOCK_OUT:
+		{
+			const int ch = c.a >= 1 && c.a <= (int)APP_CLOCK_CHANNELS ? c.a : 0;
+			atomic_store(&e->audio.clockChannel, ch);
+			if ((ch != 0) != e->clockOutAudio)
+			{
+				e->clockOutAudio = ch != 0;	/* the next request holds a block, or lets it go (F2) */
+				if (e->warm >= APP_WARMUP)
+					app_engineSetL(e);	/* one block more or less (spec 6.4) */
+			}
+			if (app_engineChannels(e) != e->req.channels)
+				app_engineReopen(e);	/* F3 */
 			break;
 		}
 		case APP_CMD_GENERATOR:
@@ -545,8 +623,9 @@ int app_engineInit(app_engine_t *e, const app_host_t *host)
 	e->winInMin = 1e9;
 	e->winInMax = -1e9;
 	const struct { app_ring_t *r; size_t size; uint32_t n; } rings[] = {
-		{ &e->audio.frames, 8u, APP_AUDIO_FRAMES },
+		{ &e->audio.frames, sizeof(app_frame_t), APP_AUDIO_FRAMES },
 		{ &e->audio.points, sizeof(app_point_t), 1024u },
+		{ &e->jackIn.edges, sizeof(app_panelEvent_t), 256u },
 		{ &e->panel, sizeof(app_panelEvent_t), 256u },
 		{ &e->cmd, sizeof(app_cmd_t), 64u },
 		{ &e->snap, sizeof(app_snapshot_t), 16u },
@@ -576,6 +655,9 @@ void app_enginePowerOn(app_engine_t *e, const app_engineConfig_t *cfg)
 	e->dAuto = cfg->dAuto;
 	e->dCycles = app_dCycles(cfg->dSec);
 	atomic_store(&e->audio.mix, (int)cfg->mix);
+	const int ch = cfg->clockOutChannel >= 1 && cfg->clockOutChannel <= (int)APP_CLOCK_CHANNELS ? cfg->clockOutChannel : 0;
+	atomic_store(&e->audio.clockChannel, ch);
+	e->clockOutAudio = ch != 0;
 	e->winHost = e->host.now(e->host.ctx);	/* the first diagnostics window starts here */
 	emu_config_t c;
 	emu_configDefaults(&c);
@@ -605,6 +687,13 @@ int app_engineSlice(app_engine_t *e)
 		else if (*note == APP_NOTE_DEVICE)
 			reopen = 1;
 		app_ringPop(&e->notes, 1u);
+	}
+	const double inLead = (double)atomic_load_explicit(&e->jackIn.lead, memory_order_relaxed) / e->host.ticksPerSec;
+	if (inLead != e->inLead)	/* F7: the input callback fixes it after its warm-up; 0 while no input runs */
+	{
+		e->inLead = inLead;
+		if (e->warm >= APP_WARMUP)
+			app_engineSetL(e);
 	}
 	if (reopen)
 		app_engineReopen(e);
@@ -675,6 +764,9 @@ static void app_engineSnap(app_engine_t *e, uint64_t now)
 	e->diag.snapDropped = app_ringDropped(&e->snap);
 	e->diag.ackDropped = app_ringDropped(&e->ack);
 	e->diag.dinOrphans = e->din.orphans;
+	e->diag.inputLead = e->inLead;
+	e->diag.jackInDropped = app_ringDropped(&e->jackIn.edges);
+	e->diag.jackInSkipped = atomic_load_explicit(&e->jackIn.skipped, memory_order_relaxed);
 	e->diag.core = c;
 	s.diag = e->diag;
 	(void)app_ringPush(&e->snap, &s);	/* a full ring drops it (E15) */

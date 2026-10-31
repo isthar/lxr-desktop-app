@@ -60,10 +60,12 @@ typedef struct app_latencyIn
 	uint32_t streamLatency;
 	uint32_t maxRequest;		/**< largest callback request, in 44,140.625 Hz frames */
 	int clockOutAudio;			/**< R5's clock-out-as-audio: one block more */
+	double inputLead;			/**< s: the input's lead while clock and reset come in from audio (F7); 0 off */
 } app_latencyIn_t;
 
 /** L in seconds: the presentation offset of a callback's first frame plus
- * (2 x the largest request + 5 blocks) / 44,140.625 Hz (spec 6.4) */
+ * (2 x the largest request + 5 blocks) / 44,140.625 Hz (spec 6.4); one block more with clock out as audio, plus the
+ * input's lead */
 double app_latencyL(const app_latencyIn_t *in);
 
 /** the entry time max(mapped + d, now, prev) of an event (spec 6.4) */

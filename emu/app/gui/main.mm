@@ -12,6 +12,7 @@
  * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
  * the repository.
  */
+#import <AVFoundation/AVFoundation.h>
 #import <Cocoa/Cocoa.h>
 #import <CoreText/CoreText.h>
 #import <Metal/Metal.h>
@@ -163,6 +164,43 @@ static double emu_uptime(void)
 
 static double gLastDraw;	/* emu_uptime() of the last drawn frame; the main thread */
 
+/* R5 F10: the microphone first, then the shell; the answer comes on a queue of its own, the shell runs on the main thread */
+static void emu_clockInApply(BOOL granted)
+{
+	app_clockInOptions_t o = gPanel.clockIn;
+	gPanel.micDenied = !granted;
+	if (!granted)
+	{
+		gPanel.clockIn.on = o.on = 0;
+		panel_message(&gPanel, "notice: clock and reset in from audio stay off: LICHOMAT Emu may not use the microphone "
+			"(System Settings > Privacy & Security > Microphone)");
+	}
+	(void)app_shellClockIn(gShell, &o);
+}
+
+static void emu_clockIn(void)
+{
+	if (!gPanel.clockIn.on)
+	{
+		(void)app_shellClockIn(gShell, &gPanel.clockIn);
+		return;
+	}
+	switch ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio])
+	{
+	case AVAuthorizationStatusAuthorized:
+		emu_clockInApply(YES);
+		break;
+	case AVAuthorizationStatusNotDetermined:	/* macOS asks once per code hash: after every ad hoc signed release */
+		[AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
+			dispatch_async(dispatch_get_main_queue(), ^{ emu_clockInApply(granted); });
+		}];
+		break;
+	default:	/* denied, or restricted by a profile */
+		emu_clockInApply(NO);
+		break;
+	}
+}
+
 @interface EmuDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, MTKViewDelegate>
 @property (nonatomic, strong) NSWindow *window;
 @property (nonatomic, strong) MTKView *view;
@@ -271,6 +309,9 @@ static double gLastDraw;	/* emu_uptime() of the last drawn frame; the main threa
 		[NSApp terminate:nil];
 		return;
 	}
+	panel_loadClockIn(&gPanel, app_shellSettings(gShell));
+	if (gPanel.clockIn.on)
+		emu_clockIn();	/* the stored option: the permission first (F10) */
 
 	int f[4];
 	app_shellWindow(gShell, f);
@@ -431,6 +472,8 @@ static double gLastDraw;	/* emu_uptime() of the last drawn frame; the main threa
 		if (app_shellCardOp(gShell, APP_OP_PROJECT, gLastPath, gLastProject, 1) != 0 && !app_shellRelaunching(gShell))
 			panel_message(&gPanel, "error: a card operation or a power cycle is running; try again in a moment");
 	}
+	else if (request == PANEL_REQ_CLOCKIN)
+		emu_clockIn();
 	else if (request != PANEL_REQ_NONE)
 		[self chooseFolderFor:request project:project];
 }

@@ -78,6 +78,25 @@ The app delays MIDI and clock input by D, which its MIDI window shows: about 58 
 output's 512-frame buffer, about 34 ms at 128 frames. Set your DAW's MIDI clock sync delay to D, or
 lower D at the cost of an uneven latency.
 
+## The clock jacks as audio
+
+Two options in the Audio window, both off until you turn them on:
+
+- **Clock out on output channel N.** That channel carries the clock alone, at full scale while the
+  clock-out jack is high: one pulse as wide as one tick of the firmware's 96 PPQN clock, 5.21 ms at
+  120 BPM, as on the device's jack. The mix plays on the other channels, in mono when the clock takes
+  one of the stereo pair. The audio then runs one block (1.45 ms) later, and D grows by the same. If the
+  output has fewer channels than N, the app says so and the clock is not heard.
+- **Clock and reset in from an input.** One input channel carries the clock (a rise above its threshold
+  is a pulse); another, if you pick one (never the same), the reset (above its threshold is reset on). macOS asks for the
+  microphone permission when you turn this on; nothing is recorded. macOS knows this ad hoc signed app by
+  its code hash, so it asks again after each new release. D grows by the input's own latency and one
+  input buffer, which the Diagnostics window shows: about 12 ms for an audio interface at 512 frames,
+  much more for a built-in microphone. Most audio inputs are AC-coupled and let a held level fall back
+  within a fraction of a second: clock pulses pass on any input, a held reset needs a DC-coupled one. When
+  the device's buffer changes (the Audio window raises it for an interface that the output shares), the
+  input reopens for a moment and measures its lead again.
+
 ## Licence and source
 
 GPL-3.0-only, with the additional permission and terms in NOTICE.md. The source is

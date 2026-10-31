@@ -65,6 +65,14 @@ int app_shellCardOp(app_shell_t *s, int op, const char *path, int project, int r
 int app_shellEndpoints(app_shell_t *s, int sources, app_endpoint_t *out, int max);
 /** stores the DIN binding (source 1: the DIN input, 0: the output) and binds it; uid 0 and "" unbinds. Main thread */
 void app_shellBind(app_shell_t *s, int source, int32_t uid, const char *name);
+/** Clock and reset in from audio (spec 6.8): stores o in the settings, then opens, reopens or closes the input; a threshold
+ * alone reopens nothing. The GUI calls it with on = 1 only once the microphone is granted (F10); the shell never opens the
+ * input by itself at start. 0, or -1 with the reason said once as 'notice: clock in from audio: ...'; while on and closed,
+ * app_shellFrame() retries every 2 s. A closed input lets a high reset go (F11). Main thread */
+int app_shellClockIn(app_shell_t *s, const app_clockInOptions_t *o);
+int app_shellInputs(app_shell_t *s, app_outputDevice_t *out, int max);	/**< the devices with inputs; main thread */
+/** 1 if the input runs, with its device, rate, latencies and channels in *out; *err the last failure ("" if none) */
+int app_shellInputInfo(const app_shell_t *s, app_outputInfo_t *out, const char **err);
 int app_shellHung(const app_shell_t *s);
 int app_shellWarnings(const app_shell_t *s);				/**< the warnings kept, at most the last 64 (spec 11) */
 const char *app_shellWarning(const app_shell_t *s, int i);	/**< oldest first */
@@ -72,6 +80,9 @@ void app_shellTestFault(app_shell_t *s);	/**< harness only: SIGSEGV on the firmw
 /** tests only: the firmware thread sleeps ms milliseconds before its next slice, as if it were held up in a wait of the
  * engine, where it takes no command (a silent open, a slow close). Any thread */
 void app_shellTestStall(app_shell_t *s, int ms);
+/** tests only: how many times the shell has tried to open the input (the first, the retries every 2 s, the reopens), those
+ * that failed too. Main thread */
+unsigned app_shellTestInputTries(const app_shell_t *s);
 /** tests only: the main thread handles an acknowledgement of kind app_ackKind_t and number seq as if the engine had sent it
  * (a late 'card out applied' of an operation that has timed out, say). Main thread */
 void app_shellTestAck(app_shell_t *s, int kind, int32_t seq);
