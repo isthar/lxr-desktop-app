@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 04:04",
+    "updated": "2026-10-31 04:34",
     "phase": "Etap 2: v0.4 (atmosfera) w toku; A1-A6 gotowe, A7-A9 czekają na H12",
     "focus": "v0.4 A1-A6 gotowe na gałęzi v0.4 (36245bf): delay z tempem, filtr DJ, bufor i parametry pogłosu. Pogłos, freeze i rumble (A7-A9) po Twoim odczycie CPU (H12).",
     "branch": "timing-core",
-    "head": "6d1befe",
+    "head": "a80140f",
     "next": "Ty: jedna sesja testowa na v0.3 (docs/lichomat/test-session-v0.3.md), najpierw H12; odsłuch build/demo/v02-*, v03-*, v04-* i build/dlc/*. Ja przy wznowieniu: CI dla v0.4, potem po H12 v0.4 A7-A11.",
-    "updated_at": "2026-10-31T04:04:00+01:00",
-    "now": "Od 04:04: agent w tle robi v0.4 A7 (pogłos: stopień po delayu, parametry, stereo, obie częstotliwości, G13)."
+    "updated_at": "2026-10-31T04:34:00+01:00",
+    "now": "Od 04:34: agent w tle robi v0.4 A8, A9 i Q31."
   },
   "epics": [
     {
@@ -554,8 +554,8 @@
     {
       "id": "E7.3",
       "epic": "E7",
-      "status": "do zrobienia",
-      "title": "Pogłos jako osobny efekt obok delaya: bufor 56 KB w RAM, budżet i poprawka Reverb.c:375 gotowe (v0.4 A2); sam efekt (A7) czeka na H12",
+      "status": "w toku",
+      "title": "Pogłos jako osobny efekt obok delaya: zrobiony na gałęzi v0.4 (A7, c1dab2f; stereo, rozmiar, decay, barwa, predelay, modulacja; częstotliwość tymczasowo połowiczna, Q30), czeka na H12 i wydanie v0.4",
       "updated": "2026-10-31"
     },
     {
@@ -863,6 +863,13 @@
       "question": "Pogłos, freeze i rumble (v0.4 A7-A9) czekają na Twój odczyt H12. Robić je wcześniej?",
       "assumption": "Tak, z tymczasową połowiczną częstotliwością pogłosu; H12 ustala ostateczną przed wydaniem.",
       "answer": "Moja rekomendacja według Twojej reguły z 29.10, 05:19, 31.10, 04:04 (po Twoim „leć dalej”): A7-A9 powstają teraz, z obiema częstotliwościami przetestowanymi i tymczasowo połowiczną (ok. 18% bloku, bezpieczniejsza). Twój odczyt H12 ustawia ostateczną według D41 (pełna, jeśli pk ≤ 46,2%; połowiczna, jeśli ≤ 63,3%; inaczej wariant oszczędny) i dopiero wtedy wersja 0.4 (A10) może iść do wydania, po sprawdzeniu U20 na LXR."
+    },
+    {
+      "id": "Q31",
+      "status": "zamknięte",
+      "question": "Gałka barwy pogłosu (ton) według fw 1.7 jest prawie cicha na końcach (1 = ciemny low-pass ok. 930 Hz, 127 = high-pass przy 20 kHz). Przemapować?",
+      "assumption": "Tak, na muzyczny zakres, 64 bez zmian.",
+      "answer": "Moja decyzja według Twojej reguły z 29.10, 05:19, 31.10, 04:34: ton przemapowany tak, żeby każda pozycja była słyszalna: od ciemnego low-passa ok. 1,5 kHz przy 0, przez płaską środkową 64 (bit w bit jak teraz), do łagodnego high-passa ok. 400 Hz przy 127; test pilnuje głośności na końcach."
     }
   ],
   "log": [
@@ -2880,6 +2887,16 @@
       "n": 403,
       "at": "2026-10-31 04:04",
       "text": "04:04 Wznowienie (Twoja kofeina, zużycie w normie). CI: GitHub od 00:11 UTC nie tworzy przebiegów dla pushy (brak zestawów sprawdzeń Actions dla nowych commitów; ponowne uruchomienie starego przebiegu działa), więc to po stronie GitHuba. Q30: start v0.4 A7 (pogłos) z tymczasową połowiczną częstotliwością; H12 ustali ostateczną przed wydaniem."
+    },
+    {
+      "n": 404,
+      "at": "2026-10-31 04:34",
+      "text": "04:34 v0.4 A7 gotowe (c1dab2f, wypchnięte): pogłos po efekcie slotu (więc echa delaya też dostają pogłos), stereo, rozmiar, decay, barwa, predelay, modulacja; obie częstotliwości przetestowane (RT60 1,90 s pełna i 2,30 s połowiczna przy 2,0 s), tymczasowo połowiczna. Przy poziomie 0 stara ścieżka bez zmian. Nagranie wzorcowe G13; fuzzing czysty. Poprawione dwa błędy wyłączonego pogłosu fw 1.7 (allpassy z modulacją stały w miejscu, LFO 64x za wolne). Host 101, emulator 181; ITCM 13 888 z 16 384 B."
+    },
+    {
+      "n": 405,
+      "at": "2026-10-31 04:34",
+      "text": "04:34 Start v0.4 A8 (freeze, SHIFT + krok 3), A9 (rumble: ducking pogłosu przez wybrany głos) i Q31 (muzyczny zakres gałki barwy) w tle."
     }
   ]
 }
