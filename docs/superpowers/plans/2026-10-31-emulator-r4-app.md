@@ -25,7 +25,7 @@ The spec is `docs/superpowers/specs/2026-10-27-emulator-design.md`. A `§` is a 
 | E7 | L is fixed after the first 32 callbacks of an open, from their largest request and largest `mHostTime` lead; a later, larger request counts as a buffer change and recomputes L (and D, if D is automatic) | §6.4: D then stays fixed and the shown D is constant |
 | E8 | A packet timestamp of 0 becomes the host time of that read-proc call, one value per call | Equal stamps then still share a transfer (§6.4), and the entry rule needs a time |
 | E9 | The 100 ms drop of §4.3 applies to events stamped more than 100 ms before the last re-anchor or reopen | Applied always, it would drop every event at buffers of about 2,048 frames and more, where the render lead exceeds 100 ms |
-| E10 | A MIDI ring entry holds at most 12 UMP words, split at message boundaries with the same stamp | 12 words always fit one 16-packet USB transfer, SysEx included, so a transfer never splits an entry |
+| E10 | A MIDI ring entry is cut, at message boundaries and with the same stamp, at 16 USB-MIDI packets' worth: 1 per MT 1 or MT 2 message, 3 per SysEx packet of up to 6 bytes (so at most 16 words). An entry that still does not fit an empty transfer (a malformed SysEx) is counted in `midiUnsent`, never dropped silently | A transfer then carries up to 16 packets, as §4.3 says, and never splits an entry |
 | E11 | The MIDI-out thread hands DIN messages to CoreMIDI as soon as they reach the ring's head, stamped with their presentation time; USB waits until its presentation time | §6.5: CoreMIDI schedules DIN by the stamp; receivers of the virtual source may ignore stamps |
 | E12 | D's sync condition reads `seq_getExtSync()` once per slice by a direct call (`app_fw.c`, the app's only file with firmware headers) | The hook never calls the firmware (§3.3) |
 | E13 | The clock-in button and the reset switch carry the click's host time and take the entry rule on a third port, `APP_PORT_JACK`; the pulse generator runs in virtual time from its command's slice | §6.4 applies D to jack input; a generator needs no map |
@@ -48,6 +48,8 @@ The spec is `docs/superpowers/specs/2026-10-27-emulator-design.md`. A `§` is a 
 | E30 | The bundle's version is the firmware version that the splash shows (`EMU_FIRMWARE_VERSION`, 0.1) | The release tag is `emu-v0.1` (§10.3) |
 | E31 | The GUI tasks (11–13) stay last, although the owner has approved the download | Tasks 1–10 must build and pass without Dear ImGui; the order needs no permission any more, so Task 11 may also run earlier, alone |
 
+Note to E26: §10.1's wording "LICHOMAT 0.1 with the emulator changes F1–F12 and F6b" is superseded by "F1-F18 and F6b" in both binaries.
+
 ## Rules for every task
 
 - **Where.** Work in `/Users/tk/Code/lxr/build/wt-emulator`, branch `emulator`, head `570090b` at the start. Every Bash call starts in a new shell: begin with `cd /Users/tk/Code/lxr/build/wt-emulator &&`, and add `source tools/env.sh >/dev/null &&` where `cmake`, `ctest` or `ninja` is needed.
@@ -66,7 +68,7 @@ The spec is `docs/superpowers/specs/2026-10-27-emulator-design.md`. A `§` is a 
 **EMU-CHECK**, the command every task runs:
 
 ```bash
-cd /Users/tk/Code/lxr/build/wt-emulator && source tools/env.sh >/dev/null && cmake -S emu -B build/emu -G Ninja > build/emu.log 2>&1 && cmake --build build/emu >> build/emu.log 2>&1; echo "== emu build: $?"; echo "== emu warnings: $(grep -c 'warning:' build/emu.log)"; ctest --test-dir build/emu -j8 2>&1 | tail -n 4
+cd /Users/tk/Code/lxr/build/wt-emulator && source tools/env.sh >/dev/null && cmake -S emu -B build/emu -G Ninja > build/emu.log 2>&1 && cmake --build build/emu >> build/emu.log 2>&1; echo "== emu build: $?"; echo "== emu warnings: $(grep -c 'warning:' build/emu.log)"; ctest --test-dir build/emu -j8 2>&1 | grep -E 'tests passed|tests failed'
 ```
 
 Expected: `== emu build: 0`, `== emu warnings: 0`, `100% tests passed, 0 tests failed out of N` with the task's N (device tests count as passed when skipped; ctest lists them as "Not Run").
@@ -662,7 +664,8 @@ double app_frameCycles(uint64_t codecStart, double frame)
 
 int app_tmPoint(app_timemap_t *m, double c, uint64_t h)
 {
-	const int off = m->valid && fabs(c - app_tmVirtual(m, h)) > APP_TM_JUMP;
+	/* a jump only on a line of audio points: the first one after a wall anchor is not a jump */
+	const int off = m->valid && m->audio && fabs(c - app_tmVirtual(m, h)) > APP_TM_JUMP;
 	if (!m->valid || off || !m->audio)
 	{
 		/* a new line: the first point, a jump, or the end of the wall clock's pacing */
@@ -777,20 +780,36 @@ TEST(M18_midi_split)
 	for (unsigned i = 0; i < 30u; i++)
 		words[i] = 0x10F80000u;
 	list_t l = { .n = 0 };
-	ASSERT_EQ(app_midiSplit(42u, APP_PORT_USB, words, 30u, listPush, &l), 3);	/* E10: 12 + 12 + 6 */
-	ASSERT_EQ(l.e[0].nwords, 12);
-	ASSERT_EQ(l.e[2].nwords, 6);
-	ASSERT_EQ(l.e[2].stamp, 42);
-	for (unsigned i = 0; i < 11u; i++)
+	ASSERT_EQ(app_midiSplit(42u, APP_PORT_USB, words, 30u, listPush, &l), 2);	/* E10: 16 + 14 */
+	ASSERT_EQ(l.e[0].nwords, 16);
+	ASSERT_EQ(l.e[1].nwords, 14);
+	ASSERT_EQ(l.e[1].stamp, 42);
+	for (unsigned i = 0; i < 14u; i++)
 		words[i] = 0x20903C64u;
-	words[11] = 0x30047E7Fu;	/* a complete SysEx of 4 bytes: 7E 7F 06 01 */
-	words[12] = 0x06010000u;
+	words[14] = 0x30047E7Fu;	/* a complete SysEx of 4 bytes: 7E 7F 06 01, worth 3 packets */
+	words[15] = 0x06010000u;
 	l.n = 0;
-	ASSERT_EQ(app_midiSplit(7u, APP_PORT_DIN, words, 13u, listPush, &l), 2);	/* it does not fit: whole into the next */
-	ASSERT_EQ(l.e[0].nwords, 11);
+	ASSERT_EQ(app_midiSplit(7u, APP_PORT_DIN, words, 16u, listPush, &l), 2);	/* 14 + 3 > 16: whole into the next */
+	ASSERT_EQ(l.e[0].nwords, 14);
 	ASSERT_EQ(l.e[1].nwords, 2);
 	ASSERT_EQ(l.e[1].words[0], 0x30047E7Fu);
 	ASSERT_EQ(l.e[1].port, APP_PORT_DIN);
+	uint32_t sx[12];	/* six SysEx packets of 6 bytes: 18 packets' worth, cut at 5 (15) */
+	for (unsigned i = 0; i < 12u; i += 2u)
+	{
+		sx[i] = (i == 0u ? 0x30160000u : i == 10u ? 0x30360000u : 0x30260000u) | 0x0102u;
+		sx[i + 1u] = 0x03040506u;
+	}
+	l.n = 0;
+	ASSERT_EQ(app_midiSplit(9u, APP_PORT_USB, sx, 12u, listPush, &l), 2);
+	ASSERT_EQ(l.e[0].nwords, 10);
+	app_usbPend_t p = { .n = 0 };
+	uint8_t data[64];
+	unsigned len;
+	ASSERT_EQ(app_usbTransfer(listPeek, &l, &p, data, &len), 2);	/* F0 + 36 bytes + F7: 13 packets, one transfer */
+	ASSERT_EQ(len, 52);
+	ASSERT_EQ(data[48], 0x06);	/* the end: CIN 0x6, the last data byte and F7 */
+	ASSERT_EQ(data[50], 0xF7);
 }
 
 TEST(M18_midi_usb_cin)
@@ -933,7 +952,8 @@ TEST_MAIN()
 
 enum { APP_PORT_USB, APP_PORT_DIN, APP_PORT_JACK };
 
-#define APP_MIDI_WORDS 12u	/**< UMP words per ring entry (E10) */
+#define APP_MIDI_WORDS 16u		/**< UMP words per ring entry (E10) */
+#define APP_MIDI_PACKETS 16u	/**< USB-MIDI packets' worth per ring entry: 1 per MT 1 or 2, 3 per MT 3 (E10) */
 
 /** one entry of a MIDI-in ring (stamp: host time) or of the MIDI-out ring
  * (stamp: presentation host time) */
@@ -951,7 +971,7 @@ typedef void (*app_umpEmit_t)(void *ctx, uint64_t t, const uint32_t *w, unsigned
 
 /** the words of the UMP message that starts with w0 */
 unsigned app_umpLength(uint32_t w0);
-/** one event packet into entries of at most 12 words, cut at message boundaries; returns the entries */
+/** one event packet into entries of at most APP_MIDI_PACKETS packets' worth, cut at message boundaries; returns the entries */
 unsigned app_midiSplit(uint64_t stamp, uint8_t port, const uint32_t *words, unsigned n, app_midiPush_t push, void *ctx);
 
 /** SysEx bytes between F0 and F7 into MT 3 packets of up to 6 bytes */
@@ -1046,20 +1066,23 @@ unsigned app_midiSplit(uint64_t stamp, uint8_t port, const uint32_t *words, unsi
 	memset(&e, 0, sizeof e);
 	e.stamp = stamp;
 	e.port = port;
-	unsigned entries = 0;
+	unsigned entries = 0, packets = 0;
 	for (unsigned i = 0; i < n;)
 	{
 		const unsigned len = app_umpLength(words[i]);
+		const unsigned cost = words[i] >> 28 == 0x3u ? 3u : 1u;	/* a SysEx packet: up to 8 bytes with F0 and F7 */
 		if (len > n - i)
 			break;	/* a cut message */
-		if (e.nwords + len > APP_MIDI_WORDS)
+		if (e.nwords + len > APP_MIDI_WORDS || packets + cost > APP_MIDI_PACKETS)
 		{
 			(void)push(ctx, &e);	/* a full ring counts the drop */
 			entries++;
 			e.nwords = 0;
+			packets = 0;
 		}
 		memcpy(&e.words[e.nwords], &words[i], len * sizeof *words);
 		e.nwords = (uint8_t)(e.nwords + len);
+		packets += cost;
 		i += len;
 	}
 	if (e.nwords)
@@ -1196,7 +1219,7 @@ unsigned app_usbTransfer(app_midiPeek_t peek, void *ctx, app_usbPend_t *pend, ui
 		app_usbPend_t p = *pend;	/* committed only if the entry fits */
 		const int got = app_umpToUsb(e->words, e->nwords, &p, out + *len, 64u - *len);
 		if (got < 0)
-			break;	/* the next transfer takes it; an entry always fits an empty one (E10) */
+			break;	/* the next transfer takes it; a well-formed entry fits an empty one (E10) */
 		*len += (unsigned)got;
 		*pend = p;
 	}
@@ -1437,10 +1460,15 @@ static void boot(int device)
 	app_enginePowerOn(&E, &c);
 }
 
+static app_snapshot_t last;	/* the newest snapshot: runTo() empties the ring at every slice */
+
 static void runTo(double sec)
 {
 	while ((double)fk.now < 1000.0 + sec * FAKE_TPS)
+	{
 		app_engineSlice(&E);
+		(void)app_engineSnapshot(&E, &last);	/* the ring drops new entries when full (E15) */
+	}
 }
 
 static int lcdHas(const app_snapshot_t *s, const char *text)
@@ -1555,10 +1583,8 @@ TEST(R4_engine_wall)
 	boot(0);	/* no output device, as on the CI runner */
 	runTo(5.0);
 	ASSERT_NEAR((double)emu_now() / EMU_CPU_HZ, (double)(fk.now - 1000u) / FAKE_TPS, 0.002);
-	app_snapshot_t s;
-	ASSERT_TRUE(app_engineSnapshot(&E, &s));
-	ASSERT_EQ(s.diag.outputRunning, 0);
-	ASSERT_NEAR(s.diag.blockRate, 689.7, 0.5);	/* the window [2 s, 4 s) */
+	ASSERT_EQ(last.diag.outputRunning, 0);
+	ASSERT_NEAR(last.diag.blockRate, 689.7, 0.5);	/* the window [2 s, 4 s) */
 }
 
 TEST(R4_engine_card)
@@ -1661,7 +1687,7 @@ typedef struct app_diagnostics
 	double inLatMin, inLatMax;		/**< s: the last finished 2-s window */
 	int dAuto, extSync, outputRunning;
 	uint64_t outUnderruns, callbacks, overloads, mapJumps, midiStale, midiInDropped, midiOutDropped,
-		panelDropped, dinOrphans;
+		midiUnsent, panelDropped, snapDropped, ackDropped, dinOrphans, warnings;
 	app_outputInfo_t output;
 	emu_counters_t core;
 	app_fwCounters_t fw;
@@ -1939,7 +1965,7 @@ static void app_enginePoints(app_engine_t *e)
 				* e->host.ticksPerSec * p->rateScalar;
 			if (app_tmPoint(&e->map, app_frameCycles(c.codecStart, (double)(e->frameBase + p->frame)),
 					p->hostTime + (uint64_t)llround(lat)))
-				e->staleFrom = e->map.jumpHost;
+				e->staleFrom = e->host.now(e->host.ctx);	/* host time now, not the presentation time (E9) */
 		}
 		app_ringPop(&e->audio.points, 1u);
 	}
@@ -1973,7 +1999,7 @@ static int app_engineEntry(app_engine_t *e, unsigned port, uint64_t stamp, uint6
 The glue, each function exactly as stated:
 
 - `app_engineOpen(e)` (the callback is not running): reset `audio.frames` and `audio.points`; `frameBase = 64 × (blocks + 1)` from `emu_getCounters()`, the next block request's first frame; `warm = lReq = 0`, `lLead = 0`, `diag.leadMin = 1e9`, `diag.leadMax = −1e9`; if the map is not valid yet, `app_tmWall(&map, 0, now)` (power-on); `req.channels` = 4 for `APP_MIX_FOUR`, else 2; `outputRunning = (outputOpen(…) == 0)`; `lastCallback = now`; if running, `maxRequest = ⌈bufferFrames × APP_FS / deviceRate⌉` (E6), else `retryAt = now + APP_RETRY_SEC`.
-- `app_engineClose(e)`: `outputClose()` if running; `outputRunning = 0`; `retryAt = 0`; `app_tmWall(&map, emu_now(), hostNow)`; `staleFrom = map.jumpHost` (E9). A reopen (device change, `APP_CMD_OUTPUT`, a mix to or from four channels, a stall) is Close then Open, so the wall clock paces until new callback points re-anchor the map; a retry without a device keeps the wall anchor.
+- `app_engineClose(e)`: `outputClose()` if running; `outputRunning = 0`; `retryAt = 0`; `app_tmWall(&map, emu_now(), hostNow)`; `staleFrom = hostNow` (E9). A reopen (device change, `APP_CMD_OUTPUT`, a mix to or from four channels, a stall) is Close then Open, so the wall clock paces until new callback points re-anchor the map; a retry without a device keeps the wall anchor.
 - `app_engineWaitRing(e)` (spec 6.2): while `app_ringCount(frames) ≥ maxRequest + APP_RING_SLACK`: if `hostNow > lastCallback + APP_STALL_SEC`, `app_engineClose()` and stop (a stall); else `waitAudio(hostNow + 0.1 s)`, then `app_enginePoints()`. The whole wait sits inside one `emu_waitBegin()`/`emu_waitEnd()` (spec 4.2), and its host time goes into `waitTicks`.
 - `app_enginePaceWall(e, now)`: `until = app_tmHost(&map, now)`; if the host is more than 100 ms past `until`, `app_tmWall(&map, now, hostNow)` and `staleFrom = hostNow` (no catching up); else, if `until` is ahead, `sleepUntil(until)` inside `emu_waitBegin()`/`emu_waitEnd()`, its time into `waitTicks`.
 - `app_enginePanelEvent(e, p, now)`: BUTTON `emu_inButton(now, index, value)`, ENCODER `emu_inEncoder(now, value)`, PUSH `emu_inPush(now, value)`, KNOB `emu_inKnob(now, index, value)`, FADER `emu_inFader(now, index, level)`, JACKS `emu_inJacks(now, value)`, CARD `emu_inCard(now, value)`; CLOCK and RESET take `app_engineEntry(e, APP_PORT_JACK, p->host, now, &t)`, then `emu_inClockPulse(t)` or `emu_inReset(t, value)` (E13).
@@ -1985,8 +2011,8 @@ The glue, each function exactly as stated:
 
 - `static void app_engineMidiInputs(app_engine_t *e, uint64_t now)`: `(void)e; (void)now;` until Task 5.
 - `app_engineInit()`: `memset(e, 0, sizeof *e)`, copies the host, `app_tmInit(&e->map, host->ticksPerSec)`, `cardAck = -1`, `dAuto = 1`, `winInMin = 1e9`, `winInMax = -1e9`, and initialises the rings, returning -1 if one fails: `audio.frames` 8 B × `APP_AUDIO_FRAMES`; `audio.points` `sizeof(app_point_t)` × 1,024; `panel` 256; `cmd` 64; `snap` 16; `ack` 64; `notes` 1 B × 64; `midiIn[0]` and `midiIn[1]` 2,048 each; `midiOut` 4,096. `audio.wake` stays NULL; the shell sets it (Task 6).
-- `app_enginePowerOn()`: copies `cfg` to `e->cfg` and `cfg->output` to `e->req`; `dAuto`, `dCycles = llround(dSec × EMU_CPU_HZ)` and the mix; then `emu_configDefaults()`, `cardDir`, `cardIn = cardDir != NULL`, `seed`, sinks `{ e, app_sinkAudio, NULL, NULL, app_sinkClock }` (Task 5 fills DIN and USB), `hook = app_hook`, `hookCtx = e`, `fault = cfg->fault ? app_engineFault : NULL` (`app_engineFault` calls `e->cfg.fault(e->cfg.faultCtx, what)`; `msgCtx` is shared with `warn`), `warn = app_engineWarn` (pushes `APP_MSG_WARNING` with the text cut to 254 characters), `msgCtx = e`; `emu_powerOn()`; `app_engineOpen()`.
-- `app_engineSnap(e, now)` (declare it before `app_hook`): fills an `app_snapshot_t` with `emu_lcdSnapshot()`, `emu_ledSnapshot()`, `clockOut = clockSeen || clockLevel` (then `clockSeen = 0`), `vt = now` and the diagnostics, pushes it (a full ring drops it), sets `lastSnap`. The diagnostics: when `host.now() − winHost ≥ 2 s`, `blockRate = (core.blocks − winBlocks) / dt`, `load = 1 − (waitTicks − winWait) / dtTicks`, `inLatMin`/`inLatMax` = the window's values (unchanged when the window had no event), then a new window (`winHost`, `winBlocks`, `winWait`, `winInMin = 1e9`, `winInMax = −1e9`); always `L`, `D = dCycles / EMU_CPU_HZ`, `Deff = extSync ? D : 0`, `dAuto`, `extSync`, `outputRunning`, `output = out`, the callback's `underruns` and `callbacks`, `mapJumps = map.jumps`, `midiInDropped` (both rings' drops), `midiOutDropped`, `panelDropped`, `dinOrphans = din.orphans`, `core` from `emu_getCounters()`.
+- `app_enginePowerOn()`: copies `cfg` to `e->cfg` and `cfg->output` to `e->req`; `dAuto`, `dCycles = llround(dSec × EMU_CPU_HZ)` and the mix; then `emu_configDefaults()`, `cardDir`, `cardIn = cardDir != NULL`, `seed`, sinks `{ e, app_sinkAudio, NULL, NULL, app_sinkClock }` (Task 5 fills DIN and USB), `hook = app_hook`, `hookCtx = e`, `fault = cfg->fault ? app_engineFault : NULL` (`app_engineFault` calls `e->cfg.fault(e->cfg.faultCtx, what)`; `msgCtx` is shared with `warn`), `warn = app_engineWarn` (pushes `APP_MSG_WARNING` with the text cut to 254 characters, and counts `diag.warnings` also when the ring is full), `msgCtx = e`; `emu_powerOn()`; `app_engineOpen()`.
+- `app_engineSnap(e, now)` (declare it before `app_hook`): fills an `app_snapshot_t` with `emu_lcdSnapshot()`, `emu_ledSnapshot()`, `clockOut = clockSeen || clockLevel` (then `clockSeen = 0`), `vt = now` and the diagnostics, pushes it (a full ring drops it), sets `lastSnap`. The diagnostics: when `host.now() − winHost ≥ 2 s`, `blockRate = (core.blocks − winBlocks) / dt`, `load = 1 − (waitTicks − winWait) / dtTicks`, `inLatMin`/`inLatMax` = the window's values (unchanged when the window had no event), then a new window (`winHost`, `winBlocks`, `winWait`, `winInMin = 1e9`, `winInMax = −1e9`); always `L`, `D = dCycles / EMU_CPU_HZ`, `Deff = extSync ? D : 0`, `dAuto`, `extSync`, `outputRunning`, `output = out`, the callback's `underruns` and `callbacks`, `mapJumps = map.jumps`, `midiInDropped` (both rings' drops), `midiOutDropped`, `panelDropped`, `dinOrphans = din.orphans`, `midiUnsent`, `snapDropped` and `ackDropped` = `app_ringDropped()` of those two rings (the firmware thread is their producer, §11), `warnings`, `core` from `emu_getCounters()`.
 - `app_enginePanel`, `app_engineCommand`, `app_engineNote`: `app_ringPush()` into `panel`, `cmd`, `notes`. `app_engineMidiPush(ctx, m)`: `app_ringPush(&e->midiIn[m->port == APP_PORT_DIN], m)`.
 - `app_engineSnapshot(e, out)`: while more than one entry is pending, pop; copy and pop the last; 1, or 0 if none. `app_engineAck`: copy and pop one; 1, or 0.
 
@@ -2013,6 +2039,7 @@ static app_engine_t E;
 static struct { uint64_t t0, start, k, stamps[MAXK]; double per; int started; uint8_t port; } daw;
 static struct { uint64_t t[256]; unsigned n; } notes;	/* the first USB Note On of each step, presented */
 static struct { uint64_t when[8]; uint8_t port[8]; unsigned n; } sent;
+static app_snapshot_t snap;	/* the newest snapshot: slave() empties the ring at every slice */
 
 static uint64_t dawClock(uint64_t k)
 {
@@ -2076,6 +2103,7 @@ static void slave(double bpm, int dAuto, uint8_t port)
 	{
 		app_engineSlice(&E);
 		(void)app_midiOutStep(&E, UINT64_MAX, &sink);
+		(void)app_engineSnapshot(&E, &snap);	/* the ring drops new entries when full (E15) */
 	}
 }
 
@@ -2094,12 +2122,11 @@ static void constant(double bpm, uint8_t port)
 	ASSERT_TRUE(notes.n >= 8u);
 	for (unsigned n = 0; n < notes.n && 48u + 24u * n < daw.k; n++)
 		ASSERT_TRUE(latency(n) >= D - 0.0001 && latency(n) <= D + 0.00145);	/* D + 0-1.45 ms */
-	app_snapshot_t s;
-	ASSERT_TRUE(app_engineSnapshot(&E, &s));
-	ASSERT_TRUE(s.diag.leadMax <= E.L);	/* L is at least every measured lead */
-	ASSERT_NEAR(s.diag.inLatMin, D, 0.0002);	/* with D at least L, the input latency is D (spec 6.9) */
-	ASSERT_NEAR(s.diag.inLatMax, D, 0.0002);
-	ASSERT_EQ(s.diag.midiStale, 0);
+	/* L is at least every measured lead; 0.05 ms covers the points' rounding (about 11 us) */
+	ASSERT_TRUE(snap.diag.leadMax <= E.L + 0.00005);
+	ASSERT_NEAR(snap.diag.inLatMin, D, 0.0002);	/* with D at least L, the input latency is D (spec 6.9) */
+	ASSERT_NEAR(snap.diag.inLatMax, D, 0.0002);
+	ASSERT_EQ(snap.diag.midiStale, 0);
 }
 
 TEST(M18_slave_90) { constant(90.0, APP_PORT_USB); }
@@ -2113,9 +2140,7 @@ TEST(M18_zero_d)
 	ASSERT_TRUE(notes.n >= 8u);
 	for (unsigned n = 0; n < notes.n && 48u + 24u * n < daw.k; n++)
 		ASSERT_TRUE(latency(n) >= 0.0 && latency(n) <= E.L + 0.00145);
-	app_snapshot_t s;
-	ASSERT_TRUE(app_engineSnapshot(&E, &s));
-	ASSERT_TRUE(s.diag.inLatMax - s.diag.inLatMin >= 0.010);	/* D = 0: the arrival phase shows (spec 12.1 M18) */
+	ASSERT_TRUE(snap.diag.inLatMax - snap.diag.inLatMin >= 0.010);	/* D = 0: the arrival phase shows (spec 12.1 M18) */
 }
 
 TEST(M18_midi_out_step)
@@ -2171,6 +2196,8 @@ static void app_engineMidiInputs(app_engine_t *e, uint64_t now)
 		const unsigned taken = app_usbTransfer(app_peekUsb, e, &e->usbPend, data, &len);
 		if (app_engineEntry(e, APP_PORT_USB, stamp, now, &t) && len)
 			(void)emu_inUsb(t, data, len);	/* one transfer; the core paces 16 packets per 1 ms */
+		if (!taken)
+			e->diag.midiUnsent++;	/* E10: it fits no transfer; counted, not dropped silently */
 		app_ringPop(&e->midiIn[APP_PORT_USB], taken ? taken : 1u);
 	}
 }
@@ -2322,6 +2349,8 @@ const app_snapshot_t *app_shellSnapshot(const app_shell_t *s);	/**< the newest; 
 int app_shellPanel(app_shell_t *s, const app_panelEvent_t *ev);
 int app_shellCommand(app_shell_t *s, const app_cmd_t *c);
 int app_shellHung(const app_shell_t *s);
+int app_shellWarnings(const app_shell_t *s);				/**< the warnings kept, at most the last 64 (spec 11) */
+const char *app_shellWarning(const app_shell_t *s, int i);	/**< oldest first */
 void app_shellTestFault(app_shell_t *s);	/**< harness only (Task 10): SIGSEGV on the firmware thread */
 void app_shellStop(app_shell_t *s);		/**< APP_CMD_STOP; joins the firmware thread for up to 2 s */
 
@@ -2334,13 +2363,13 @@ void app_shellStop(app_shell_t *s);		/**< APP_CMD_STOP; joins the firmware threa
 
   In `app_shell.c`: `struct app_shell { app_shellOptions_t o; app_engine_t engine; app_mach_t mach; app_engineConfig_t cfg; pthread_t firmware, watchdog; _Atomic int stopped, testFault; int hungShown, haveSnap; app_snapshot_t snap; };`
 
-- [ ] **Step 4: `app_shell.c`.** The firmware thread: `mach.realtime = app_threadRealtime(mach.period) == 0` (E29); `app_enginePowerOn()`; `while (!app_engineSlice())`, and between slices `raise(SIGSEGV)` when `testFault` is set (Task 10's crash check, on this thread); then `stopped = 1`. The watchdog thread: every 100 ms (`nanosleep`), until `stopped`, `emu_watchdogPoll(&w, app_wallSeconds())`; when it returns 1 (10 s without progress, the hook's waits not counted, spec 4.2), `audio.mute = 1` (the audio stops, spec 6.9), `engine.hung = 1`, and the thread ends. `app_shellStart()`: copies the options; `app_machInit(&s->mach, &s->engine)`, `app_machHost(&s->mach, &host)`, `app_engineInit(&s->engine, &host)` (it zeroes the engine), then `s->engine.audio.wake = app_machWake` and `wakeCtx = &s->mach`; `cfg = { cardDir, app_seedNow(), dAuto 1, dSec 0, APP_MIX_SUM, output { "", 0, 2 }, fault = the shell's fault handler (Task 10; until then NULL) }`; `pthread_create()` for the firmware thread and the watchdog; on any failure "app: …" into `err` and −1. `app_shellFrame()`: every acknowledgement — `APP_MSG_WARNING` as `warning: TEXT`, `APP_MSG_NOTICE` as `notice: TEXT` — goes to `o.message`; `app_engineSnapshot()` into `s->snap`; when `engine.hung` is first seen, the message `hang: no progress for 10 s; the audio is stopped. Restart LICHOMAT Emu.` (§11). `app_shellPanel` and `app_shellCommand` push and turn a full ring into −1; `app_shellHung()` reads `engine.hung`; `app_shellTestFault()` sets `testFault`.
+- [ ] **Step 4: `app_shell.c`.** The firmware thread: `mach.realtime = app_threadRealtime(mach.period) == 0` (E29); `app_enginePowerOn()`; `while (!app_engineSlice())`, and between slices `raise(SIGSEGV)` when `testFault` is set (Task 10's crash check, on this thread); then `stopped = 1`. The watchdog thread: every 100 ms (`nanosleep`), until `stopped`, `emu_watchdogPoll(&w, app_wallSeconds())`; when it returns 1 (10 s without progress, the hook's waits not counted, spec 4.2), `audio.mute = 1` (the audio stops, spec 6.9), `engine.hung = 1`, and the thread ends. `app_shellStart()`: copies the options; `app_machInit(&s->mach, &s->engine)`, `app_machHost(&s->mach, &host)`, `app_engineInit(&s->engine, &host)` (it zeroes the engine), then `s->engine.audio.wake = app_machWake` and `wakeCtx = &s->mach`; `cfg = { cardDir, app_seedNow(), dAuto 1, dSec 0, APP_MIX_SUM, output { "", 0, 2 }, fault = the shell's fault handler (Task 10; until then NULL) }`; `pthread_create()` for the firmware thread and the watchdog; on any failure "app: …" into `err` and −1. `app_shellFrame()`: every acknowledgement — `APP_MSG_WARNING` as `warning: TEXT`, `APP_MSG_NOTICE` as `notice: TEXT` — goes to `o.message`, and each warning also into a list of the last 64 that `app_shellWarnings()` and `app_shellWarning()` hand to the diagnostics (§11: a skipped non-8.3 name or a duplicate slot shows there, not only as a message); `app_engineSnapshot()` into `s->snap`; when `engine.hung` is first seen, the message `hang: no progress for 10 s; the audio is stopped. Restart LICHOMAT Emu.` (§11). `app_shellPanel` and `app_shellCommand` push and turn a full ring into −1; `app_shellHung()` reads `engine.hung`; `app_shellTestFault()` sets `testFault`.
 
-- [ ] **Step 5: `lichomat-emu-dev`** (`emu/app/dev/dev_main.c`). Options: `--card DIR` (Task 9 adds `--home`, `--render`), `--no-audio`, `--no-midi`, `--seconds S` (end after S s of wall time), `--script FILE` (lines `SECONDS COMMAND`, run at that wall time from the start), `--print-diag` (a `diag` line at the end), `--print-leds`. The main thread loops: `poll()` on stdin with a 20 ms timeout, one command per line; the due script lines; `app_shellFrame()`; prints. Output lines, one per event, wall time from the start with 3 decimals:
+- [ ] **Step 5: `lichomat-emu-dev`** (`emu/app/dev/dev_main.c`). Options: `--card DIR` (Task 9 adds `--home`, `--render`), `--no-audio`, `--no-midi`, `--seconds S` (end after S s of wall time), `--script FILE` (lines `SECONDS COMMAND`, run at that wall time from the start), `--print-diag` (a `diag` line at the end), `--print-leds`. At start, `setvbuf(stdout, NULL, _IOLBF, 0)`: the tests read stdout through a pipe, which is block-buffered, and Task 9's `execv()` would drop buffered lines. The main thread loops: `poll()` on stdin with a 20 ms timeout, one command per line; the due script lines; `app_shellFrame()`; prints. At the end of stdin (`read()` returns 0, or `POLLHUP`), it stops polling stdin and keeps running without spinning (`nanosleep()` of 20 ms per turn): `--seconds` or `quit` ends the run, and without `--seconds` a signal does. Output lines, one per event, wall time from the start with 3 decimals:
   - `lcd T |ROW0|ROW1|` when the newest snapshot's rows differ from the last printed, 16 characters each, a code outside 0x20–0x7E as `?`;
   - `led T HEX` when the LED mask changes (with `--print-leds`);
   - `warning: …`, `notice: …`, `hang: …` from the shell;
-  - `diag blockRate=%.2f load=%.3f L=%.2fms D=%.2fms Deff=%.2fms lead=%.2f..%.2fms inLat=%.2f..%.2fms outUnderruns=%llu fwUnderruns=%llu output=%s realtime=%d` for `diag` and at the end with `--print-diag` (`output` is the device name or `none`).
+  - `diag blockRate=%.2f load=%.3f L=%.2fms D=%.2fms Deff=%.2fms lead=%.2f..%.2fms inLat=%.2f..%.2fms outUnderruns=%llu fwUnderruns=%llu output=%s realtime=%d vt=%.3f wall=%.3f` for `diag` and at the end with `--print-diag` (`output` is the device name or `none`; `vt` is the newest snapshot's virtual time in s, `wall` the wall time since power-on at which that snapshot was read).
 
   Commands (each line is one; unknown ones print `error: …`):
 
@@ -2385,7 +2414,7 @@ if(LICHOMAT_EMU_APP)
 endif()
 ```
 
-Later tasks append to `EMU_APP_MAC_SOURCES` and `EMU_APP_FRAMEWORKS` (before `add_library`). M21 moves: its `add_test` (the gate over `test_boot`, `test_hook` and `lichomat-render`) goes after this `if` block, still before the temporary-folder block, with its binaries in a list `EMU_GATE_BINARIES`, to which the block appends `$<TARGET_FILE:lichomat-emu-dev>`.
+Later tasks append to `EMU_APP_MAC_SOURCES` and, with `list(APPEND EMU_APP_FRAMEWORKS "-framework X")`, one quoted item per framework, to `EMU_APP_FRAMEWORKS`, both before `add_library`. M21 moves: its `add_test` (the gate over `test_boot`, `test_hook` and `lichomat-render`) goes after this `if` block, still before the temporary-folder block, with its binaries in a list `EMU_GATE_BINARIES`, to which the block appends `$<TARGET_FILE:lichomat-emu-dev>`.
 
 - [ ] **Step 7: The driver** `emu/tests/app_test.py`, with its first case:
 
@@ -2432,7 +2461,8 @@ class Case:
 
     def dev(self, args, timeout=60):
         env = dict(os.environ, LICHOMAT_EMU_HOME=self.home)
-        return subprocess.run([self.a.dev] + args, capture_output=True, text=True, timeout=timeout, env=env)
+        return subprocess.run([self.a.dev] + args, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                              timeout=timeout, env=env)
 
 
 def lcd_lines(out):
@@ -2453,8 +2483,13 @@ def R4_dev_headless(t):
     check(lcd and lcd[0][0] < 0.3 and splash(lcd[0]), 'the splash is not first: %r' % lcd[:1])
     after = [l for l in lcd if not splash(l)]
     check(after and after[0][0] >= 0.95, 'the splash did not show for 1 s of wall time (spec 10.2): %r' % after[:1])
-    m = re.search(r'^diag blockRate=(\S+)', r.stdout, re.M)
-    check(m and abs(float(m.group(1)) - 689.7) <= 1.0, 'block rate %s, not 689.7 +- 1' % (m and m.group(1)))
+    # Wall pacing (spec 4.10): virtual time never runs more than one slice and one snapshot (13 ms) ahead
+    # of the wall clock, and falls behind only where a slow VM makes it re-anchor, by at most 100 ms each
+    # time; 250 ms allows two. The tight 689.7 +- 0.1 blocks per second stays the owner's A11.
+    m = re.search(r'^diag .* vt=(\S+) wall=(\S+)$', r.stdout, re.M)
+    check(m, 'no diag line: ' + r.stdout)
+    drift = float(m.group(2)) - float(m.group(1))
+    check(-0.013 <= drift <= 0.25, 'virtual time is %.3f s behind the wall clock' % drift)
     check('warning:' not in r.stdout and 'hang:' not in r.stdout, r.stdout)
 
 
@@ -2487,7 +2522,7 @@ Later tasks add their cases to `CASES`.
 
 **Files:**
 - Create: `emu/app/mac/app_coreaudio.{h,c}`, `emu/tests/test_app_devices.c`
-- Modify: `emu/app/mac/app_shell.{h,c}`, `emu/app/dev/dev_main.c`, `emu/CMakeLists.txt` (`app_coreaudio.c` into `EMU_APP_MAC_SOURCES`; `-framework AudioToolbox -framework CoreAudio` into `EMU_APP_FRAMEWORKS`; `emu_add_app_test(test_app_devices ENGINE MAC FRAMEWORKS AudioToolbox CoreAudio CoreMIDI CoreFoundation IDS R4_dev_coreaudio)` inside `if(LICHOMAT_EMU_APP)`)
+- Modify: `emu/app/mac/app_shell.{h,c}`, `emu/app/dev/dev_main.c`, `emu/CMakeLists.txt` (`app_coreaudio.c` into `EMU_APP_MAC_SOURCES`; `list(APPEND EMU_APP_FRAMEWORKS "-framework AudioToolbox" "-framework CoreAudio")`; `emu_add_app_test(test_app_devices ENGINE MAC FRAMEWORKS AudioToolbox CoreAudio CoreMIDI CoreFoundation IDS R4_dev_coreaudio)` inside `if(LICHOMAT_EMU_APP)`)
 
 - [ ] **Step 1: The test** `emu/tests/test_app_devices.c` (Task 8 adds `R4_dev_coremidi`):
 
@@ -2591,7 +2626,7 @@ typedef struct app_ca
 	app_audio_t *audio;
 	app_engine_t *engine;		/**< for app_engineNote() */
 	dispatch_queue_t queue;		/**< the listeners' serial queue: one producer (spec 6.1) */
-	AudioObjectPropertyListenerBlock listener;
+	AudioObjectPropertyListenerBlock listener;	/**< Block_copy()'d: Add and Remove need the same pointer */
 } app_ca_t;
 
 int app_caList(app_outputDevice_t *out, int max);	/**< the output devices (app_types.h) */
@@ -2609,7 +2644,7 @@ void app_caClose(app_ca_t *ca);
   5. `kAudioUnitProperty_SampleRateConverterComplexity` = `kAudioUnitSampleRateConverterComplexity_Normal` and `kAudioUnitProperty_RenderQuality` = `kRenderQuality_Max` (both scope global, spec 6.2).
   6. `kAudioUnitProperty_SetRenderCallback` (scope input, element 0) with `{ app_caRender, ca }`; `AudioUnitInitialize()`; `AudioOutputUnitStart()`.
   7. the info: the client rate read back from step 4's property; `kAudioDevicePropertyNominalSampleRate`; `kAudioDevicePropertyLatency` and `kAudioDevicePropertySafetyOffset` (scope output); the first `AudioStreamID` of `kAudioDevicePropertyStreams` (scope output) and its `kAudioStreamPropertyLatency`; `kAudioDevicePropertyBufferFrameSize`; the name from `kAudioObjectPropertyName` with `CFStringGetCString()`; `format` = `client float32 N ch 44140.625 Hz; device R Hz; converter Normal, quality Max`.
-  8. the listeners: `dispatch_queue_create("lichomat-emu.audio", DISPATCH_QUEUE_SERIAL)` and one block, registered with `AudioObjectAddPropertyListenerBlock(obj, &addr, queue, listener)` on the device for `kAudioDevicePropertyDeviceIsAlive`, `kAudioDeviceProcessorOverload`, `kAudioDevicePropertyNominalSampleRate`, `kAudioDevicePropertyBufferFrameSize` and `kAudioDevicePropertyStreamConfiguration`, and, with `followDefault`, on the system object for `kAudioHardwarePropertyDefaultOutputDevice`. The block pushes `APP_NOTE_OVERLOAD` for the overload address and `APP_NOTE_DEVICE` for every other, then calls `audio->wake()`. `app_caClose()`: `AudioOutputUnitStop()`, `AudioObjectRemovePropertyListenerBlock()` for each, `AudioUnitUninitialize()`, `AudioComponentInstanceDispose()`, `dispatch_release()`.
+  8. the listeners: `dispatch_queue_create("lichomat-emu.audio", DISPATCH_QUEUE_SERIAL)` and one block, `ca->listener = Block_copy(^(UInt32 n, const AudioObjectPropertyAddress *addr) { … })` (`<Block.h>`: in C without ARC a block literal lives on the stack, and Remove would never match it), registered with `AudioObjectAddPropertyListenerBlock(obj, &addr, queue, ca->listener)` on the device for `kAudioDevicePropertyDeviceIsAlive`, `kAudioDeviceProcessorOverload`, `kAudioDevicePropertyNominalSampleRate`, `kAudioDevicePropertyBufferFrameSize` and `kAudioDevicePropertyStreamConfiguration`, and, with `followDefault`, on the system object for `kAudioHardwarePropertyDefaultOutputDevice`. The block pushes `APP_NOTE_OVERLOAD` for the overload address and `APP_NOTE_DEVICE` for every other, then calls `audio->wake()`. `app_caClose()`: `AudioOutputUnitStop()`, `AudioObjectRemovePropertyListenerBlock(obj, &addr, queue, ca->listener)` for each address, `AudioUnitUninitialize()`, `AudioComponentInstanceDispose()`, `Block_release(ca->listener)`, `dispatch_release()`.
 
   The render callback, complete:
 
@@ -2645,7 +2680,7 @@ static OSStatus app_caRender(void *ref, AudioUnitRenderActionFlags *flags, const
 
 **Files:**
 - Create: `emu/app/engine/app_bind.{h,c}`, `emu/app/mac/app_coremidi.{h,c}`, `emu/tests/test_app_bind.c`
-- Modify: `emu/tests/test_app_devices.c`, `emu/app/mac/app_shell.{h,c}`, `emu/app/dev/dev_main.c`, `emu/CMakeLists.txt` (`app_bind.c` into the units, `app_coremidi.c` into the mac sources, `-framework CoreMIDI`; `emu_add_app_test(test_app_bind IDS R4_bind)`; `R4_dev_coremidi` added to `test_app_devices`)
+- Modify: `emu/tests/test_app_devices.c`, `emu/app/mac/app_shell.{h,c}`, `emu/app/dev/dev_main.c`, `emu/CMakeLists.txt` (`app_bind.c` into the units, `app_coremidi.c` into the mac sources, `list(APPEND EMU_APP_FRAMEWORKS "-framework CoreMIDI")`; `emu_add_app_test(test_app_bind IDS R4_bind)`; `R4_dev_coremidi` added to `test_app_devices`)
 
 - [ ] **Step 1: The tests.** `emu/tests/test_app_bind.c`:
 
@@ -3483,7 +3518,7 @@ int app_cardExportProject(const app_paths_t *p, int project, const char *dst, in
 
   The rest, exactly: `app_pathsInit()` builds the four paths (`Card`, `Card backups`, `settings.txt`), makes `home` and `backups` if missing, and returns −1 without `$HOME` or on a `mkdir()` failure. `app_cardState()` and `app_cardNonDot()` read the folder with `opendir()` and skip names starting with `.` (as `render_cardEmpty()`); a missing folder has no entries. `app_cardSeed()`: `posix_spawn(&pid, render, NULL, NULL, {"lichomat-render", "--seed-card", card, NULL}, environ)` (`extern char **environ;`), `waitpid()`, 0 only for exit status 0, else "lichomat-render --seed-card exited with N" in `err`. `app_cardCheck()`: `emu_hostList()` of the card; the project is `PROJ.IDX`'s byte when it is below 64, else 0; then `PROJnn` and its `PRJ.NFO` by 8.3 name (as `render_cardPrepare()` does).
 
-- [ ] **Step 6: The shell and the harness.** `app_shellOptions_t` gains `const char *home` (NULL: `app_pathsInit()`), `const char *render` and `int (*relaunch)(void *ctx)`; `struct app_shell` gains `app_paths_t paths` and the card operation's state (`op`, `opPath`, `opProject`, `opReplace`, `opDeadline`). `app_shellStart()`: `app_timeZoneRefresh()`; the paths; with `cardDir` NULL, `app_cardState(paths.card)`: 1 → `app_cardSeed()` (a failure is an error), −1 → "error: the card folder cannot be read" and −1 (the GUI offers a new seeded card, Task 12); `app_cardCheck()` 0 → the notice `project N has no PRJ.NFO: the device boots with an empty project` (§11). `int app_shellCardOp(app_shell_t *s, int op, const char *path, int project, int replace)` (in `app_shell.h`, with `enum { APP_OP_IMPORT, APP_OP_EXPORT, APP_OP_PROJECT }`) posts `APP_CMD_CARD_OUT` and remembers the operation; `app_shellFrame()`, on `APP_ACK_CARD_OUT`, runs it on the main thread with `app_localSeconds()`: import → `app_cardImport()` then `relaunch` (§6.7 step 4); export → `app_cardExport()` then `APP_CMD_CARD_IN`; project → `app_cardExportProject()`, whose 2 becomes the message `ask: … (repeat with replace)`, then `APP_CMD_CARD_IN`. Without the acknowledgement within 5 s: `error: the card did not come out; nothing was copied` and `APP_CMD_CARD_IN`. Every result is a message. The harness: `--home`, `--render` (default: `lichomat-render` next to `argv[0]`), the app folder's card when `--card` is missing, the commands `import DIR`, `export DIR`, `export-project N DIR [replace]`, and a `relaunch` that `execv()`s itself with the same arguments minus `--script FILE`, plus `--relaunched` (so a script runs once).
+- [ ] **Step 6: The shell and the harness.** `app_shellOptions_t` gains `const char *home` (NULL: `app_pathsInit()`), `const char *render` and `int (*relaunch)(void *ctx)`; `struct app_shell` gains `app_paths_t paths` and the card operation's state (`op`, `opPath`, `opProject`, `opReplace`, `opDeadline`). `app_shellStart()`: `app_timeZoneRefresh()`; the paths; with `cardDir` NULL, `app_cardState(paths.card)`: 1 → `app_cardSeed()` (a failure is an error), −1 → "error: the card folder cannot be read" and −1 (the GUI offers a new seeded card, Task 12); `app_cardCheck()` 0 → the notice `project N has no PRJ.NFO: the device boots with an empty project` (§11). `int app_shellCardOp(app_shell_t *s, int op, const char *path, int project, int replace)` (in `app_shell.h`, with `enum { APP_OP_IMPORT, APP_OP_EXPORT, APP_OP_PROJECT }`) posts `APP_CMD_CARD_OUT` and remembers the operation; `app_shellFrame()`, on `APP_ACK_CARD_OUT`, runs it on the main thread with `app_localSeconds()`: import → `app_cardImport()` then `relaunch` (§6.7 step 4; from Task 10 `app_shellRestart()`); export → `app_cardExport()` then `APP_CMD_CARD_IN`; project → `app_cardExportProject()`, whose 2 becomes the message `ask: … (repeat with replace)`, then `APP_CMD_CARD_IN`. Without the acknowledgement within 5 s: `error: the card did not come out; nothing was copied` and `APP_CMD_CARD_IN`. Every result is a message. The harness: `--home`, `--render` (default: `lichomat-render` next to `argv[0]`), the app folder's card when `--card` is missing, the commands `import DIR`, `export DIR`, `export-project N DIR [replace]`, and a `relaunch` that calls `fflush(NULL)` and then `execv()`s itself with the same arguments minus `--script FILE`, plus `--relaunched` (so a script runs once).
 
 - [ ] **Step 7: The harness case** in `app_test.py`, added to `CASES`:
 
@@ -3498,9 +3533,9 @@ def R4_dev_import(t):
     check(len(backups) == 1 and re.match(r'^\d{8}-\d{6}$', backups[0]), 'backups: %r' % backups)
     seeded = os.listdir(os.path.join(t.home, 'Card backups', backups[0], 'PROJ00'))
     check(len(seeded) == 194, 'the seeded card had %d files in PROJ00, not 194' % len(seeded))
-    with open(os.path.join(t.home, 'Card', 'PROJ00', 'PRJ.NFO'), 'rb') as f, \
-            open(os.path.join(src, 'PROJ00', 'PRJ.NFO'), 'rb') as g:
-        check(f.read() == g.read(), 'the card is not the imported one')
+    # both PRJ.NFO hold 'Init'; the file lists tell the fx fixture (4 files) from the seeded card (194)
+    card = sorted(os.listdir(os.path.join(t.home, 'Card', 'PROJ00')))
+    check(card == sorted(os.listdir(os.path.join(src, 'PROJ00'))) and len(card) == 4, 'PROJ00 holds %r' % card)
     check(sum(1 for l in lcd_lines(r.stdout) if splash(l)) >= 2, 'no second boot after the import')
 ```
 
@@ -3707,20 +3742,31 @@ static void app_setField(app_settings_t *s, const app_field_t *f, const char *v)
 		return;
 	}
 	errno = 0;
-	const double x = f->type == T_DBL ? strtod(v, &end) : (double)strtoll(v, &end, 10);
-	if (errno || end == v || *end || x < f->lo || x > f->hi)
-		return;	/* a bad value keeps the default */
-	const uint32_t u = (uint32_t)x;
-	const int32_t i = (int32_t)x;
-	const int n = (int)x;
 	if (f->type == T_DBL)
-		memcpy(p, &x, sizeof x);
-	else if (f->type == T_U32)
+	{
+		const double x = strtod(v, &end);
+		if (!errno && end != v && !*end && x >= f->lo && x <= f->hi)
+			memcpy(p, &x, sizeof x);
+		return;	/* a bad value keeps the default */
+	}
+	const int64_t x = strtoll(v, &end, 10);	/* integers never go through a double */
+	if (errno || end == v || *end || x < (int64_t)f->lo || x > (int64_t)f->hi)
+		return;
+	if (f->type == T_U32)	/* each conversion only in its own branch, on a value in range */
+	{
+		const uint32_t u = (uint32_t)x;
 		memcpy(p, &u, sizeof u);
+	}
 	else if (f->type == T_I32)
+	{
+		const int32_t i = (int32_t)x;
 		memcpy(p, &i, sizeof i);
+	}
 	else
+	{
+		const int n = (int)x;
 		memcpy(p, &n, sizeof n);
+	}
 }
 
 int app_settingsLoad(app_settings_t *s, const char *path)
@@ -3929,10 +3975,10 @@ int app_crashLatest(const char *dir, const char *shown, char *name, size_t n)
 ```
 
 - [ ] **Step 6: The shell, the Mach host and the harness.**
-  - `app_mach.c` gains `int app_waitPid(pid_t pid, double sec)`: `kqueue()`, `EV_SET(&ev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL)`; `kevent()` to add it (`ESRCH`: already gone, 0); `kevent()` with a `timespec` of `sec` for the exit; 0 or −1.
-  - `app_shellStart()`: with `afterPid` (a new option) `app_waitPid(afterPid, 5.0)` before CoreMIDI (E18); `app_settingsLoad(paths.settings)`, whose values become the output request, the mix, D, the generator, the endpoint IDs and the DIN bindings (options given on the command line win); `app_crashInit(paths.home, emu_now, emu_trailWrite)` (the trail writer is the core's, async-signal-safe), `app_crashThread()` and `app_crashSignals()` on the main thread, and `app_crashThread()` again first thing on the firmware thread; `cfg.fault` = a handler that calls `app_crashWrite(what)` then `abort()`; after `app_cmInit()`, the actual unique IDs go into the settings (spec 6.9) and are saved; `app_crashLatest(paths.home, settings.crashShown)` → the message `crash note: NAME` followed by the note's first 3 lines, then `crashShown` = NAME, saved.
+  - `app_mach.c` gains `int app_waitPid(int pid, double sec)`, declared in `app_shell.h` (which the Objective-C++ `main()` can include; `app_mach.h` cannot, it pulls in `_Atomic`): `kqueue()`, `EV_SET(&ev, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL)`; `kevent()` to add it (`ESRCH`: already gone, 0); `kevent()` with a `timespec` of `sec` for the exit; 0 or −1.
+  - `app_shellStart()` does not wait for an old process: the GUI's `main()` calls `app_waitPid()` before `NSApplicationMain()` (Task 12), never on the main run loop, and the harness keeps its PID across `execv()`; `app_settingsLoad(paths.settings)`, whose values become the output request, the mix, D, the generator, the endpoint IDs and the DIN bindings (options given on the command line win); `app_crashInit(paths.home, emu_now, emu_trailWrite)` (the trail writer is the core's, async-signal-safe), `app_crashThread()` and `app_crashSignals()` on the main thread, and `app_crashThread()` again first thing on the firmware thread; `cfg.fault` = a handler that calls `app_crashWrite(what)` then `abort()`; after `app_cmInit()`, the actual unique IDs go into the settings (spec 6.9) and are saved; `app_crashLatest(paths.home, settings.crashShown)` → the message `crash note: NAME` followed by the note's first 3 lines, then `crashShown` = NAME, saved.
   - `app_shellFrame()`: `app_timeZoneRefresh()` once a minute; a changed setting (D, mix, output, bindings, generator, window) is saved within 1 s.
-  - `void app_shellPowerCycle(app_shell_t *s)` (in `app_shell.h`): `APP_CMD_CARD_OUT`; on its acknowledgement, or after 2 s: `app_settingsSave()`, `app_cmDispose()`, `o.relaunch(o.ctx)` (E18). Import's step 4 uses it, without a second card out.
+  - `void app_shellPowerCycle(app_shell_t *s)` (in `app_shell.h`): `APP_CMD_CARD_OUT`; on its acknowledgement, or after 2 s: `app_shellRestart()`. `void app_shellRestart(app_shell_t *s)` (in `app_shell.h`, also the hang's **Restart**): `app_settingsSave()` and `app_cmDispose()`, which need no firmware thread, then `o.relaunch(o.ctx)` (E18): the old process frees the stored unique IDs before the new one asks for them (A10). Import's step 4 uses `app_shellRestart()`, the card being out already.
   - The harness: `power` (`app_shellPowerCycle()`), `test-fault` (`testFault = 1`; the harness is not shipped), `--after-pid N`, and the `diag` line of Task 6 now from the snapshot's diagnostics with the counters of §5.5 (`core`, `fw`) on a second line `counters …`.
   - Cases in `app_test.py`, added to `CASES`:
 
@@ -4215,15 +4261,15 @@ static void panel_knob(panel_t *p, app_shell_t *s, unsigned k)
 }
 ```
 
-  The encoder: a wheel notch is one detent; a vertical drag gives one detent per 12 points (the rest kept); a click without drag sends `APP_P_PUSH` of 50 ms; every detent goes out (`APP_P_ENCODER`, §4.6). A fader: `ImGui::VSliderFloat` 0–1, `APP_P_FADER` on change, a double click returns it to 1.0. At power-on (§6.6): faders full, all jacks plugged, the card in, the knobs at 0°. The windows from the menu bar: **Diagnostics** (every field of `app_diagnostics_t`: formats and converter, block rate against 689.7, output underruns, effective D, L, the lead range, the input-latency range of the last 2 s, the load, the counters of §5.5; and `realtime`, E29), **Audio** (device from `app_shellDevices()`, buffer 64–2048, mix; `APP_CMD_OUTPUT`, `APP_CMD_MIX`), **MIDI** (DIN source and destination from `app_shellEndpoints()` and `app_shellBind()`, shown 'not connected' when unbound; D: automatic, or 0–200 ms, with the effective D in ms, §6.4), **About** (below), and the card and device menus (import, export card, export project; power cycle).
+  The encoder: a wheel notch is one detent; a vertical drag gives one detent per 12 points (the rest kept); a click without drag sends `APP_P_PUSH` of 50 ms; every detent goes out (`APP_P_ENCODER`, §4.6). A fader: `ImGui::VSliderFloat` 0–1, `APP_P_FADER` on change, a double click returns it to 1.0. At power-on (§6.6): faders full, all jacks plugged, the card in, the knobs at 0°. The windows from the menu bar: **Diagnostics** (every field of `app_diagnostics_t`: formats and converter, block rate against 689.7, output underruns, effective D, L, the lead range, the input-latency range of the last 2 s, the load, the counters of §5.5, the drops of every ring (`midiInDropped`, `midiOutDropped`, `midiUnsent`, `panelDropped`, `snapDropped`, `ackDropped`), the card warnings from `app_shellWarning()` (§11); and `realtime`, E29), **Audio** (device from `app_shellDevices()`, buffer 64–2048, mix; `APP_CMD_OUTPUT`, `APP_CMD_MIX`), **MIDI** (DIN source and destination from `app_shellEndpoints()` and `app_shellBind()`, shown 'not connected' when unbound; D: automatic, or 0–200 ms, with the effective D in ms, §6.4), **About** (below), and the card and device menus (import, export card, export project; power cycle).
 
 - [ ] **Step 5: About (§10.1).** An ImGui window with, one `TextUnformatted()` each: `LICHOMAT Emu EMU_RENDER_VERSION`; `EMU_TAGLINE`; `Runs LICHOMAT %s with the emulator changes F1-F18 and F6b. Built from commit %s.` (`render_build.h`); the `emu_legal` lines; `Dear ImGui: ` and the copyright line of `emu/third_party/imgui/LICENSE.txt`, then `MIT licence.`; `The emulator sounds very close to the device, not identical.` (risk 7).
 
 - [ ] **Step 6: `main.mm`** (Objective-C++, ARC):
-  - `main()`: `NSApplication sharedApplication`, `setActivationPolicy:NSApplicationActivationPolicyRegular`, a delegate, a menu bar with the app menu (About LICHOMAT Emu, Quit with ⌘Q), `[NSApp run]`.
-  - `applicationDidFinishLaunching:`: `--after-pid` from `NSProcessInfo.arguments`; `self.activity = [[NSProcessInfo processInfo] beginActivityWithOptions:NSActivityUserInitiated | NSActivityLatencyCritical reason:@"real-time emulation"]` (§6.1, App Nap); `app_shellStart()` with `render` = `[[NSBundle mainBundle] pathForAuxiliaryExecutable:@"lichomat-render"]`, `relaunch` below, `message` collecting lines for an ImGui message list; on −1 with an unreadable card, an `NSAlert` offering "Make a new seeded card" (the old folder goes to `Card backups` first, §11).
+  - `main()`: `--after-pid N` from `argv` and `app_waitPid(N, 5.0)` first, before any Cocoa or CoreMIDI call (E18; never in `applicationDidFinishLaunching:`, which runs on the main run loop); then `NSApplication sharedApplication`, `setActivationPolicy:NSApplicationActivationPolicyRegular`, a delegate, a menu bar with the app menu (About LICHOMAT Emu, Quit with ⌘Q), `[NSApp run]`.
+  - `applicationDidFinishLaunching:`: `self.activity = [[NSProcessInfo processInfo] beginActivityWithOptions:NSActivityUserInitiated | NSActivityLatencyCritical reason:@"real-time emulation"]` (§6.1, App Nap); `app_shellStart()` with `render` = `[[NSBundle mainBundle] pathForAuxiliaryExecutable:@"lichomat-render"]`, `relaunch` below, `message` collecting lines for an ImGui message list; on −1 with an unreadable card, an `NSAlert` offering "Make a new seeded card" (the old folder goes to `Card backups` first, §11).
   - The window: `NSWindow` from the settings' frame, style titled, closable, miniaturizable, resizable, title `LICHOMAT Emu (unofficial)` (§10.2); content `MTKView` with `MTLCreateSystemDefaultDevice()`, `preferredFramesPerSecond = 60`, `clearColor` our background; `ImGui::CreateContext()`, `ImGui_ImplMetal_Init(device)`, `ImGui_ImplOSX_Init(view)`; the font (E23): `CTFontCreateWithName(CFSTR("Menlo-Regular"), 14.0, NULL)`, `CTFontCopyAttribute(font, kCTFontURLAttribute)`, `CFURLGetFileSystemRepresentation()`, `io.Fonts->AddFontFromFileTTF(path, 15.0f)` (`ImFontConfig.FontNo = 0` for the `.ttc`); without a font, an `NSAlert` and exit.
-  - `drawInMTKView:`: `[queue commandBuffer]`; `view.currentRenderPassDescriptor` (nil: commit and return); `ImGui_ImplMetal_NewFrame(rp)`, `ImGui_ImplOSX_NewFrame(view)`, `ImGui::NewFrame()`; `app_shellFrame()`, `panel_frame()`; modal popups for the crash note (its text read from the file), for `hang:` with a **Restart** button (relaunch without a card out: the firmware thread is stuck), and for the export-project question; `ImGui::Render()`; `renderCommandEncoderWithDescriptor:`, `ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), cb, enc)`, `endEncoding`, `presentDrawable:`, `commit`.
+  - `drawInMTKView:`: `[queue commandBuffer]`; `view.currentRenderPassDescriptor` (nil: commit and return); `ImGui_ImplMetal_NewFrame(rp)`, `ImGui_ImplOSX_NewFrame(view)`, `ImGui::NewFrame()`; `app_shellFrame()`, `panel_frame()`; modal popups for the crash note (its text read from the file), for `hang:` with a **Restart** button (`app_shellRestart()`: settings saved and MIDI disposed, no card out, since the firmware thread is stuck), and for the export-project question; `ImGui::Render()`; `renderCommandEncoderWithDescriptor:`, `ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), cb, enc)`, `endEncoding`, `presentDrawable:`, `commit`.
   - Folders: `NSOpenPanel` with `canChooseDirectories = YES`, `canChooseFiles = NO`, `canCreateDirectories = YES` for exports; then `app_shellCardOp()`.
   - `relaunch` (E18), complete:
 
@@ -4261,7 +4307,7 @@ static int emu_relaunch(void *ctx)
     set(CMAKE_OBJCXX_STANDARD 17)
     add_library(emu_imgui OBJECT "${EMU_IMGUI}/imgui.cpp" "${EMU_IMGUI}/imgui_draw.cpp" "${EMU_IMGUI}/imgui_tables.cpp"
         "${EMU_IMGUI}/imgui_widgets.cpp" "${EMU_IMGUI}/backends/imgui_impl_metal.mm" "${EMU_IMGUI}/backends/imgui_impl_osx.mm")
-    target_include_directories(emu_imgui PUBLIC "${EMU_IMGUI}" "${EMU_IMGUI}/backends")
+    target_include_directories(emu_imgui SYSTEM PUBLIC "${EMU_IMGUI}" "${EMU_IMGUI}/backends")	# -Werror stays ours
     target_compile_definitions(emu_imgui PUBLIC IMGUI_DISABLE_DEFAULT_FONT)	# E23
     target_compile_options(emu_imgui PRIVATE -w ${EMU_SAN_FLAGS} "SHELL:-ivfsoverlay ${EMU_OVERLAY}"
         $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
@@ -4269,17 +4315,26 @@ static int emu_relaunch(void *ctx)
     add_executable(lichomat-emu MACOSX_BUNDLE "${EMU_APP_DIR}/gui/main.mm" "${EMU_APP_DIR}/gui/panel.cpp"
         "${EMU_APP_DIR}/gui/panel_font.c" $<TARGET_OBJECTS:emu_imgui> ${EMU_APP_OBJECTS})
     target_include_directories(lichomat-emu PRIVATE "${EMU_APP_DIR}/gui" "${EMU_APP_DIR}/mac" "${EMU_APP_DIR}/engine"
-        "${EMU_DIR}/core" "${EMU_DIR}/common" "${EMU_IMGUI}" "${EMU_IMGUI}/backends" "${CMAKE_BINARY_DIR}")
+        "${EMU_DIR}/core" "${EMU_DIR}/common" "${CMAKE_BINARY_DIR}")
+    target_include_directories(lichomat-emu SYSTEM PRIVATE "${EMU_IMGUI}" "${EMU_IMGUI}/backends")	# panel.cpp, main.mm: -Werror
     target_compile_definitions(lichomat-emu PRIVATE IMGUI_DISABLE_DEFAULT_FONT)
     target_compile_options(lichomat-emu PRIVATE ${EMU_APP_FLAGS} $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
     set_target_properties(lichomat-emu PROPERTIES OUTPUT_NAME "LICHOMAT Emu"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_BINARY_DIR}/Info.plist")
     target_link_libraries(lichomat-emu PRIVATE ${EMU_APP_FRAMEWORKS} "-framework Cocoa" "-framework Metal"
         "-framework MetalKit" "-framework QuartzCore" "-framework GameController" "-framework CoreText")
-    add_dependencies(lichomat-emu emu_render_build lichomat-render)
-    add_custom_command(TARGET lichomat-emu POST_BUILD	# first run needs the renderer (spec 6.7, 9.2)
-        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lichomat-render> "$<TARGET_BUNDLE_CONTENT_DIR:lichomat-emu>/MacOS/"
+    add_dependencies(lichomat-emu emu_render_build)
+    # The nested renderer and the signatures (spec 6.7, 9.2) as a command of their own, so that a change
+    # of lichomat-render alone copies and signs again: a POST_BUILD of the app would not run then.
+    set(B "$<TARGET_BUNDLE_CONTENT_DIR:lichomat-emu>")
+    add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/app-bundle.stamp"
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lichomat-render> "${B}/MacOS/lichomat-render"
+        COMMAND codesign --force --sign - "${B}/MacOS/lichomat-render"	# the nested renderer first (spec 9.2)
+        COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:lichomat-emu>"
+        COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/app-bundle.stamp"
+        DEPENDS lichomat-emu lichomat-render	# targets: rerun when either binary is relinked
         VERBATIM)
+    add_custom_target(emu_app_bundle ALL DEPENDS "${CMAKE_BINARY_DIR}/app-bundle.stamp")
 ```
 
   If the link reports a symbol of another system framework, add that framework (system frameworks only; Task 13's `otool` check holds it to them).
@@ -4293,19 +4348,80 @@ static int emu_relaunch(void *ctx)
 ### Task 13: Bundle, signing, the licence gate, `check.sh` and CI (§9.2, §9.3, §10)
 
 **Files:**
+- Create: `emu/README.md`
 - Modify: `emu/CMakeLists.txt`, `emu/tests/app_test.py`, `emu/tests/name_allow.txt` (only if Step 3 says so), `tools/check.sh`, `.github/workflows/emulator.yml`, `tools/ci_dry_run.rb`
 
-- [ ] **Step 1: The bundle's resources and signatures.** Extend the `POST_BUILD` of Task 12 after the copy (`B` = `$<TARGET_BUNDLE_CONTENT_DIR:lichomat-emu>`):
+- [ ] **Step 1: The README** that §10.3 and §14 (risks 7, 15 and 16) ask for, `emu/README.md`: an HTML comment with the GPL-3.0-only header lines, then this text. Apart from the tagline it names neither the maker nor the device (§10.2).
+
+```markdown
+# LICHOMAT Emu
+
+emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02
+
+LICHOMAT Emu runs the whole LICHOMAT firmware on a Mac with Apple silicon and macOS 13 or later: the
+menu, the sequencer, MIDI sync and the sound engine, with a virtual panel, CoreAudio and CoreMIDI.
+`lichomat-render` renders the same firmware into WAV files. Both are unofficial, and not affiliated
+with the maker of the device.
+
+## Opening a downloaded copy
+
+The app and the renderer are signed ad hoc, not notarised, so macOS refuses their first start. Open
+System Settings > Privacy & Security and choose Open Anyway, or remove the quarantine attribute:
+
+    xattr -dr com.apple.quarantine "LICHOMAT Emu.app"
+
+Building from source avoids the step.
+
+## Building from source
+
+With the Command Line Tools (`xcode-select --install`), CMake 3.21 or later and Ninja:
+
+    cmake -S emu -B build/emu -G Ninja -DCMAKE_BUILD_TYPE=Release
+    cmake --build build/emu
+    open "build/emu/LICHOMAT Emu.app"
+
+## The card folder
+
+The app works on its own folder, `~/Library/Application Support/LICHOMAT Emu/Card`, never on your
+card. Import copies a card or a folder in, Export card and Export project write out, and every folder
+they replace goes to `Card backups` first.
+
+## How close it is
+
+The emulator sounds very close to the device, not identical. Renders are bit-identical between builds
+on a Mac, never with the device: floating point, the math library and the conversion to your audio
+device's rate differ. The display is instant (the device needs about 51 ms for a full repaint), and
+the CPU and the SD card take no time.
+
+These parts are models, not measurements of the device: the display's font (a generic 5x8 font), the
+knobs' wipers (about 134 steps per turn, 22 on a list), the order of the faders, the true sample rate
+(44,140.625 Hz from the clock tree), flush-to-zero in the sound engine, the main loop's rate (a pass
+every 250 us) and the timer during saves.
+
+## Latency as a MIDI clock slave
+
+The app delays MIDI and clock input by D, which its MIDI window shows: about 58 ms at the built-in
+output's 512-frame buffer, about 34 ms at 128 frames. Set your DAW's MIDI clock sync delay to D, or
+lower D at the cost of an uneven latency.
+
+## Licence and source
+
+GPL-3.0-only, with the additional permission and terms in NOTICE.md. The source is
+https://github.com/isthar/lxr-desktop-app at the commit that About and `lichomat-render --version`
+name. Third-party code: Dear ImGui (MIT), Arm Optimized Routines (MIT), FatFs `ff.h` (ChaN's licence).
+```
+
+- [ ] **Step 1b: The bundle's resources.** In the `app-bundle.stamp` command of Task 12, before the two `codesign` lines, and with the copied files added to its `DEPENDS`:
 
 ```cmake
         COMMAND ${CMAKE_COMMAND} -E make_directory "${B}/Resources"
-        COMMAND ${CMAKE_COMMAND} -E copy "${LXR_ROOT}/LICENSE" "${LXR_ROOT}/NOTICE.md" "${B}/Resources/"
+        COMMAND ${CMAKE_COMMAND} -E copy "${LXR_ROOT}/LICENSE" "${LXR_ROOT}/NOTICE.md" "${EMU_DIR}/README.md" "${B}/Resources/"
         COMMAND ${CMAKE_COMMAND} -E copy "${EMU_DIR}/libm/LICENSE" "${B}/Resources/LICENSE.arm-optimized-routines"
         COMMAND ${CMAKE_COMMAND} -E copy "${EMU_IMGUI}/LICENSE.txt" "${B}/Resources/LICENSE.dear-imgui"
         COMMAND /bin/sh -c "head -n 18 '${LXR_ROOT}/Middlewares/Third_Party/FatFs/src/ff.h' > '${B}/Resources/LICENSE.fatfs'"
-        COMMAND codesign --force --sign - "${B}/MacOS/lichomat-render"	# the nested renderer first (spec 9.2)
-        COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:lichomat-emu>"
 ```
+
+  `R4_bundle` runs after `emu_app_bundle` (`ALL`), so its check sees the signed bundle.
 
 - [ ] **Step 2: The bundle check** in `app_test.py` (a new option `--sanitized`, as `render_test.py`'s; registered inside `if(LICHOMAT_EMU_APP)` with `--app "$<TARGET_BUNDLE_DIR:lichomat-emu>" --sanitized ${emu_render_ubsan}`):
 
@@ -4321,7 +4437,8 @@ def R4_bundle(t):
                       ('CFBundleName', 'LICHOMAT Emu'), ('LSMinimumSystemVersion', '13.0')):
         got = subprocess.run(['plutil', '-extract', key, 'raw', plist], capture_output=True, text=True).stdout.strip()
         check(got == want, '%s is %r, not %r' % (key, got, want))
-    for name in ('LICENSE', 'NOTICE.md', 'LICENSE.arm-optimized-routines', 'LICENSE.dear-imgui', 'LICENSE.fatfs'):
+    for name in ('LICENSE', 'NOTICE.md', 'README.md', 'LICENSE.arm-optimized-routines', 'LICENSE.dear-imgui',
+                 'LICENSE.fatfs'):
         check(os.path.isfile(os.path.join(contents, 'Resources', name)), 'Resources lacks ' + name)
     for b in (exe, render):
         archs = subprocess.run(['lipo', '-archs', b], capture_output=True, text=True).stdout.split()
