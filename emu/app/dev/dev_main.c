@@ -14,6 +14,8 @@
  * the repository.
  */
 #include <errno.h>
+#include <limits.h>
+#include <mach-o/dyld.h>
 #include <mach/mach_time.h>
 #include <poll.h>
 #include <signal.h>
@@ -27,7 +29,8 @@
 #include "app_shell.h"
 
 #define DEV_DUE_MAX 256u
-#define DEV_LINE 256u
+#define DEV_LINE 1100u
+#define DEV_ARGS_MAX 64
 #define DEV_ENDPOINTS 64
 
 typedef struct due { double at; char line[DEV_LINE]; } due_t;
@@ -44,6 +47,9 @@ static struct
 	uint64_t leds;
 } D;
 static volatile sig_atomic_t gSignal;
+static char gSelf[PATH_MAX];	/* this executable, for the relaunch and the default lichomat-render */
+static char **gArgv;
+static int gArgc;
 
 static double wallNow(void)
 {
@@ -58,8 +64,9 @@ static void onSignal(int sig)
 
 static void usage(void)
 {
-	fputs("usage: lichomat-emu-dev [--card DIR] [--no-audio] [--no-midi] [--device UID] [--buffer N]\n"
-		"                        [--seconds S] [--script FILE] [--print-diag] [--print-leds]\n", stderr);
+	fputs("usage: lichomat-emu-dev [--card DIR] [--home DIR] [--render PATH] [--no-audio] [--no-midi]\n"
+		"                        [--device UID] [--buffer N] [--seconds S] [--script FILE] [--print-diag]\n"
+		"                        [--print-leds]\n", stderr);
 }
 
 static void message(void *ctx, const char *text)
@@ -208,10 +215,50 @@ static int parseNum(const char *s, double lo, double hi, double *out)
 	return 0;
 }
 
+/* the rest of the line after its first `skip` words, without the blanks at both ends: a path may hold spaces */
+static void restOf(const char *raw, unsigned skip, char *out, size_t n)
+{
+	const char *p = raw;
+	for (unsigned i = 0; i < skip; i++)
+	{
+		p += strspn(p, " \t");
+		p += strcspn(p, " \t");
+	}
+	p += strspn(p, " \t");
+	snprintf(out, n, "%s", p);
+	size_t len = strlen(out);
+	while (len && (out[len - 1] == ' ' || out[len - 1] == '\t'))
+		out[--len] = '\0';
+}
+
+/* spec 6.7 step 4, E18: after an import the shell has stopped and nothing writes. The same executable with the same
+ * arguments, but not the script (it runs once), and --relaunched. The output is flushed first, or what is buffered
+ * would be lost with the old image. */
+static int relaunch(void *ctx)
+{
+	(void)ctx;
+	char *args[DEV_ARGS_MAX];
+	int k = 0;
+	for (int i = 0; i < gArgc && k < DEV_ARGS_MAX - 2; i++)
+	{
+		if (!strcmp(gArgv[i], "--script") && i + 1 < gArgc)
+			i++;
+		else if (strcmp(gArgv[i], "--relaunched") != 0)
+			args[k++] = gArgv[i];
+	}
+	args[k++] = "--relaunched";
+	args[k] = NULL;
+	fflush(NULL);
+	execv(gSelf, args);
+	return -1;
+}
+
 /* one command line; the words are split in place */
 static void command(char *line)
 {
+	char raw[DEV_LINE];
 	char *w[4] = { NULL, NULL, NULL, NULL };
+	snprintf(raw, sizeof raw, "%s", line);
 	unsigned n = 0;
 	char *save = NULL;
 	for (char *t = strtok_r(line, " \t", &save); t && n < 4u; t = strtok_r(NULL, " \t", &save))
@@ -435,6 +482,33 @@ static void command(char *line)
 			printf("din %s %s (%d)\n", source ? "source" : "destination", ep[a].name, (int)ep[a].uid);
 		}
 	}
+	else if (!strcmp(c, "import") || !strcmp(c, "export"))
+	{
+		char path[DEV_LINE];
+		restOf(raw, 1, path, sizeof path);
+		if (!path[0])
+			printf("error: %s DIR\n", c);
+		else if (app_shellCardOp(D.shell, c[0] == 'i' ? APP_OP_IMPORT : APP_OP_EXPORT, path, 0, 0) != 0)
+			printf("error: a card operation is running, or the command ring is full\n");
+	}
+	else if (!strcmp(c, "export-project"))
+	{
+		char rest[DEV_LINE];
+		restOf(raw, 2, rest, sizeof rest);
+		size_t len = strlen(rest);
+		int replace = 0;
+		if (len >= 7u && !strcmp(rest + len - 7u, "replace") && (len == 7u || rest[len - 8u] == ' ' || rest[len - 8u] == '\t'))
+		{
+			replace = 1;
+			for (len -= 7u; len && (rest[len - 1u] == ' ' || rest[len - 1u] == '\t'); len--)
+				;
+			rest[len] = '\0';
+		}
+		if (parseInt(w[1], 0, 63, &a) != 0 || !rest[0])
+			printf("error: export-project N DIR [replace]: N 0-63\n");
+		else if (app_shellCardOp(D.shell, APP_OP_PROJECT, rest, (int)a, replace) != 0)
+			printf("error: a card operation is running, or the command ring is full\n");
+	}
 	else if (!strcmp(c, "diag"))
 		printDiag();
 	else if (!strcmp(c, "quit"))
@@ -508,8 +582,15 @@ int main(int argc, char **argv)
 	app_shellOptions_t o;
 	const char *script = NULL;
 	int printDiagAtEnd = 0;
+	char render[PATH_MAX];
 	memset(&o, 0, sizeof o);
 	o.message = message;
+	o.relaunch = relaunch;
+	gArgc = argc;
+	gArgv = argv;
+	uint32_t selfSize = sizeof gSelf;
+	if (_NSGetExecutablePath(gSelf, &selfSize) != 0)
+		snprintf(gSelf, sizeof gSelf, "%s", argv[0]);
 	D.seconds = -1.0;
 	D.stdinOpen = 1;
 	setvbuf(stdout, NULL, _IOLBF, 0);	/* tests read a pipe; line by line */
@@ -548,6 +629,12 @@ int main(int argc, char **argv)
 			printDiagAtEnd = 1;
 		else if (!strcmp(a, "--print-leds"))
 			D.printLeds = 1;
+		else if (!strcmp(a, "--home") && i + 1 < argc)
+			o.home = argv[++i];
+		else if (!strcmp(a, "--render") && i + 1 < argc)
+			o.render = argv[++i];
+		else if (!strcmp(a, "--relaunched"))
+			;	/* the relaunch adds it; the script was dropped, so it runs once */
 		else
 		{
 			usage();
@@ -556,6 +643,12 @@ int main(int argc, char **argv)
 	}
 	if (script && loadScript(script) != 0)
 		return 1;
+	if (!o.render)	/* next to this executable */
+	{
+		const char *slash = strrchr(gSelf, '/');
+		snprintf(render, sizeof render, "%.*s/lichomat-render", slash ? (int)(slash - gSelf) : 1, slash ? gSelf : ".");
+		o.render = render;
+	}
 	struct sigaction sa;
 	memset(&sa, 0, sizeof sa);
 	sa.sa_handler = onSignal;

@@ -79,7 +79,23 @@ def R4_dev_headless(t):
     check('warning:' not in r.stdout and 'hang:' not in r.stdout, r.stdout)
 
 
-CASES = {f.__name__: f for f in [R4_dev_headless]}
+def R4_dev_import(t):
+    """a first run seeds the app's card; an import backs it up, copies and power-cycles (spec 6.7)"""
+    src = t.card('fx')
+    r = t.dev(['--render', t.a.render, '--no-audio', '--no-midi', '--seconds', '6',
+               '--script', t.script(['1.5 import ' + src])])
+    check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr))
+    backups = os.listdir(os.path.join(t.home, 'Card backups'))
+    check(len(backups) == 1 and re.match(r'^\d{8}-\d{6}$', backups[0]), 'backups: %r' % backups)
+    seeded = os.listdir(os.path.join(t.home, 'Card backups', backups[0], 'PROJ00'))
+    check(len(seeded) == 194, 'the seeded card had %d files in PROJ00, not 194' % len(seeded))
+    # both PRJ.NFO hold 'Init'; the file lists tell the fx fixture (4 files) from the seeded card (194)
+    card = sorted(os.listdir(os.path.join(t.home, 'Card', 'PROJ00')))
+    check(card == sorted(os.listdir(os.path.join(src, 'PROJ00'))) and len(card) == 4, 'PROJ00 holds %r' % card)
+    check(sum(1 for l in lcd_lines(r.stdout) if splash(l)) >= 2, 'no second boot after the import')
+
+
+CASES = {f.__name__: f for f in [R4_dev_headless, R4_dev_import]}
 
 
 def main():

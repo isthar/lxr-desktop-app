@@ -333,7 +333,8 @@ set(EMU_APP_DIR "${EMU_DIR}/app")
 set(EMU_APP_FLAGS ${EMU_SAN_FLAGS} -Wall -Wextra -Werror "SHELL:-ivfsoverlay ${EMU_OVERLAY}")
 set(EMU_APP_UNIT_SOURCES "${EMU_APP_DIR}/engine/app_ring.c"
     "${EMU_APP_DIR}/engine/app_timemap.c" "${EMU_APP_DIR}/engine/app_midi.c"
-    "${EMU_APP_DIR}/engine/app_midilist.c" "${EMU_APP_DIR}/engine/app_bind.c")
+    "${EMU_APP_DIR}/engine/app_midilist.c" "${EMU_APP_DIR}/engine/app_bind.c"
+    "${EMU_APP_DIR}/engine/app_time.c" "${EMU_APP_DIR}/engine/app_card.c")
 add_library(emu_app_units OBJECT ${EMU_APP_UNIT_SOURCES})
 target_include_directories(emu_app_units PUBLIC "${EMU_APP_DIR}/engine" "${EMU_DIR}/core" "${EMU_DIR}/common")
 target_compile_options(emu_app_units PRIVATE ${EMU_APP_FLAGS})
@@ -382,6 +383,10 @@ function(emu_add_app_test name)
 endfunction()
 
 emu_add_app_test(test_app_bind IDS R4_bind)
+emu_add_app_test(test_app_card IDS R4_card_order R4_card_stamp R4_card_state R4_card_import R4_card_export
+    R4_card_project R4_card_seed R4_card_rollback R4_card_own R4_card_paths)
+target_compile_definitions(test_app_card PRIVATE "EMU_TEST_RENDER=\"$<TARGET_FILE:lichomat-render>\"")
+add_dependencies(test_app_card lichomat-render)
 emu_add_app_test(test_app_ring IDS M18_ring_fill_drop M18_ring_wrap M18_ring_threads)
 emu_add_app_test(test_app_timemap IDS M18_map_wall M18_map_drift M18_map_rate M18_map_jump M18_latency_table M18_entry_rule
     M18_reanchor_order)
@@ -418,7 +423,7 @@ if(LICHOMAT_EMU_APP)
             set_tests_properties(${id} PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77)
         endforeach()
     endfunction()
-    emu_app_tests(R4_dev_headless)
+    emu_app_tests(R4_dev_headless R4_dev_import)
     emu_add_app_test(test_app_devices ENGINE MAC FRAMEWORKS AudioToolbox CoreAudio CoreMIDI CoreFoundation
         IDS R4_dev_coreaudio R4_dev_coremidi R4_dev_midiout)
     list(APPEND EMU_GATE_BINARIES $<TARGET_FILE:lichomat-emu-dev>)

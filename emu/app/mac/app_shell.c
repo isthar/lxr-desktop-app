@@ -24,9 +24,11 @@
 #include <string.h>
 #include <time.h>
 
+#include "app_card.h"
 #include "app_coreaudio.h"
 #include "app_coremidi.h"
 #include "app_mach.h"
+#include "app_time.h"
 
 #define APP_SHELL_WARNINGS 64u
 #define APP_SHELL_STACK ((size_t)8 << 20)	/* the main thread's size: the firmware's frames are deep */
@@ -52,6 +54,11 @@ struct app_shell
 	char dinName[2][128];
 	int dinTold[2];					/**< 'not connected' has been said for the binding as it is now */
 	double nextBind;				/**< app_wallSeconds() of the next check (E28) */
+	app_paths_t paths;				/**< paths.card is the folder that the engine runs on */
+	int havePaths;
+	int opActive, op, opProject, opReplace;	/**< a card operation waits for 'card out applied' */
+	char opPath[PATH_MAX];
+	double opDeadline, nextZone;	/**< app_wallSeconds() */
 	char outputErr[256];		/**< the last open failure told to the main thread; firmware thread */
 	char card[PATH_MAX];
 	char warnings[APP_SHELL_WARNINGS][255];
@@ -182,6 +189,107 @@ static void app_shellBindNow(app_shell_t *s, int source)
 	}
 }
 
+/* a card or engine warning: kept for the diagnostics (spec 11) and said */
+static void app_shellKeepWarning(app_shell_t *s, const char *text)
+{
+	char line[300];
+	snprintf(s->warnings[s->warningsTotal++ % APP_SHELL_WARNINGS], sizeof s->warnings[0], "%s", text);
+	snprintf(line, sizeof line, "warning: %s", text);
+	app_shellSay(s, line);
+}
+
+static void app_shellCopyWarn(void *ctx, const char *what)
+{
+	app_shellKeepWarning(ctx, what);
+}
+
+static void app_shellSayf(app_shell_t *s, const char *kind, const char *what, const char *a, const char *b)
+{
+	char line[PATH_MAX * 2 + 300];
+	snprintf(line, sizeof line, "%s: %s%s%s", kind, what, a ? a : "", b ? b : "");
+	app_shellSay(s, line);
+}
+
+static void app_shellCardIn(app_shell_t *s)
+{
+	app_cmd_t c;
+	memset(&c, 0, sizeof c);
+	c.kind = APP_CMD_CARD_IN;
+	(void)app_engineCommand(&s->engine, &c);
+}
+
+/* 'card out applied': the operation of app_shellCardOp(), on the main thread (spec 6.7) */
+static void app_shellRunOp(app_shell_t *s)
+{
+	char backup[PATH_MAX], err[PATH_MAX + 100];
+	const int64_t now = app_localSeconds();
+	int restart = 0;
+	err[0] = '\0';
+	s->opActive = 0;
+	if (s->op == APP_OP_IMPORT)
+	{
+		if (app_cardImport(&s->paths, s->opPath, now, backup, sizeof backup, app_shellCopyWarn, s) != 0)
+			app_shellSayf(s, "error", "the import from ", s->opPath, " failed; the card is as it was");
+		else
+		{
+			char line[PATH_MAX * 2 + 100];
+			snprintf(line, sizeof line, "notice: imported %s%s%s", s->opPath, backup[0] ? "; the card before is in " : "",
+				backup);
+			app_shellSay(s, line);
+			restart = 1;
+		}
+	}
+	else if (s->op == APP_OP_EXPORT)
+	{
+		const int rc = app_cardExport(s->paths.card, s->opPath, err, sizeof err, app_shellCopyWarn, s);
+		if (rc == -2)
+			app_shellSayf(s, "error", s->opPath, " is not empty, nothing was copied: ", err);
+		else if (rc != 0)
+			app_shellSayf(s, "error", "the export into ", s->opPath, " failed");
+		else
+			app_shellSayf(s, "notice", "exported the card into ", s->opPath, NULL);
+	}
+	else
+	{
+		const int rc = app_cardExportProject(&s->paths, s->opProject, s->opPath, s->opReplace, now, err, sizeof err,
+			app_shellCopyWarn, s);
+		if (rc == 2)
+			app_shellSayf(s, "ask", err, " (repeat with replace)", NULL);
+		else if (rc != 0)
+			app_shellSayf(s, "error", err, NULL, NULL);
+		else
+			app_shellSayf(s, "notice", "exported the project into ", s->opPath, NULL);
+	}
+	if (!restart || !s->o.relaunch)
+	{
+		if (restart)
+			app_shellSay(s, "notice: no restart from here; power cycle to load the imported card");
+		app_shellCardIn(s);	/* the firmware remounts it as after a card swap */
+		return;
+	}
+	app_shellStop(s);	/* the card is out and nothing writes: the threads stop, the MIDI endpoints go (E18) */
+	if (s->o.relaunch(s->o.ctx) != 0)
+		app_shellSay(s, "error: the app could not start itself again; start it by hand");
+}
+
+int app_shellCardOp(app_shell_t *s, int op, const char *path, int project, int replace)
+{
+	app_cmd_t c;
+	if (!s->havePaths || s->opActive || !path || !path[0]
+		|| snprintf(s->opPath, sizeof s->opPath, "%s", path) >= (int)sizeof s->opPath)
+		return -1;
+	memset(&c, 0, sizeof c);
+	c.kind = APP_CMD_CARD_OUT;
+	if (app_engineCommand(&s->engine, &c) != 0)
+		return -1;
+	s->op = op;
+	s->opProject = project;
+	s->opReplace = replace;
+	s->opActive = 1;
+	s->opDeadline = app_wallSeconds() + 5.0;
+	return 0;
+}
+
 static int app_shellFail(char *err, size_t n, const char *what, int code)
 {
 	if (err && n)
@@ -199,6 +307,42 @@ int app_shellStart(app_shell_t *s, const app_shellOptions_t *o, char *err, size_
 			return app_shellFail(err, n, "the card folder's path is too long", 0);
 		s->o.cardDir = s->card;
 	}
+	app_timeZoneRefresh();
+	s->havePaths = (o->home ? app_pathsAt(&s->paths, o->home) : app_pathsInit(&s->paths)) == 0;
+	if (o->cardDir)
+	{
+		if (s->havePaths)
+			snprintf(s->paths.card, sizeof s->paths.card, "%s", s->o.cardDir);	/* the card operations work on it */
+	}
+	else
+	{
+		char why[300];
+		if (!s->havePaths)
+			return app_shellFail(err, n, "the app folder cannot be made", 0);
+		const int state = app_cardState(s->paths.card);
+		if (state < 0)
+		{
+			app_shellSay(s, "error: the card folder cannot be read");
+			return app_shellFail(err, n, "the card folder cannot be read", 0);
+		}
+		if (state == 1)	/* the first run: an init card from the firmware's own code (spec 6.7) */
+		{
+			if (!o->render)
+				return app_shellFail(err, n, "no lichomat-render to make the first card", 0);
+			if (app_cardSeed(o->render, s->paths.card, why, sizeof why) != 0)
+				return app_shellFail(err, n, why, 0);
+		}
+		snprintf(s->card, sizeof s->card, "%s", s->paths.card);
+		s->o.cardDir = s->card;
+	}
+	int project = 0;
+	if (app_cardCheck(s->o.cardDir, &project) == 0)
+	{
+		char line[120];
+		snprintf(line, sizeof line, "notice: project %d has no PRJ.NFO: the device boots with an empty project", project);
+		app_shellSay(s, line);	/* spec 11 */
+	}
+	s->nextZone = app_wallSeconds() + 60.0;
 	if (app_machInit(&s->mach, &s->engine) != 0)
 		return app_shellFail(err, n, "the Mach host did not start", 0);
 	s->mach.owner = s;
@@ -274,16 +418,29 @@ int app_shellFrame(app_shell_t *s)
 	while (app_engineAck(&s->engine, &a))
 	{
 		if (a.kind == APP_MSG_WARNING)
+			app_shellKeepWarning(s, a.text);
+		else if (a.kind == APP_ACK_CARD_OUT)
 		{
-			snprintf(s->warnings[s->warningsTotal++ % APP_SHELL_WARNINGS], sizeof s->warnings[0], "%s", a.text);
-			snprintf(line, sizeof line, "warning: %s", a.text);
-			app_shellSay(s, line);
+			if (s->opActive)
+				app_shellRunOp(s);
 		}
 		else if (a.kind == APP_MSG_NOTICE)
 		{
 			snprintf(line, sizeof line, "notice: %s", a.text);
 			app_shellSay(s, line);
 		}
+	}
+	const double wall = app_wallSeconds();
+	if (s->opActive && wall > s->opDeadline)
+	{
+		s->opActive = 0;
+		app_shellSay(s, "error: the card did not come out; nothing was copied");
+		app_shellCardIn(s);
+	}
+	if (wall >= s->nextZone)
+	{
+		s->nextZone = wall + 60.0;
+		app_timeZoneRefresh();	/* the offset that backup names use changes with the clocks (E20) */
 	}
 	if (s->haveMidi && app_wallSeconds() >= s->nextBind)
 	{

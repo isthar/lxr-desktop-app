@@ -188,7 +188,7 @@ TEST(R4_dev_coremidi) { PROBE(coremidiChild, "R4_dev_coremidi"); }
  * on the virtual source at their presentation times, and Note Ons on a DIN destination that the test binds; the
  * endpoints are gone when app_shellStop() returns. */
 #define MO_MAX 1024u
-static char gCard[1024];
+static char gCard[1024], gHome[1024];
 static char gWhy[256];
 static _Atomic int gNoMidi;
 static _Atomic unsigned gClocks, gDinNotes, gDinOther;
@@ -218,6 +218,7 @@ static int midioutChild(void)
 	char err[256] = "";
 	memset(&o, 0, sizeof o);
 	o.cardDir = gCard;
+	o.home = gHome;
 	o.noAudio = 1;
 	o.message = midioutMessage;
 	o.usbSrcUid = uid;
@@ -343,6 +344,7 @@ static int midioutChild(void)
 TEST(R4_dev_midiout)
 {
 	emu_testTempDir(gCard, sizeof gCard);
+	emu_testTempDir(gHome, sizeof gHome);
 	ASSERT_EQ(emu_hostCopyCard(EMU_TEST_CARDS "/init", gCard, 0), 0);
 	PROBE(midioutChild, "R4_dev_midiout");
 }

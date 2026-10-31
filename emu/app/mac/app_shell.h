@@ -29,7 +29,13 @@ typedef struct app_shell app_shell_t;
 
 typedef struct app_shellOptions
 {
-	const char *cardDir;	/**< the card folder; Task 9: NULL is the app folder's Card */
+	const char *cardDir;	/**< the card folder; NULL: the app folder's Card, seeded at the first run (spec 6.7). Card operations
+							 * work on this folder, whichever it is */
+	const char *home;		/**< the app folder; NULL: $LICHOMAT_EMU_HOME, else Application Support/LICHOMAT Emu (E21) */
+	const char *render;		/**< lichomat-render, which seeds the first card; NULL: no seeding */
+	/** starts the app again after an import (spec 6.7 step 4); called on the main thread with the shell stopped.
+	 * 0 if a new process is on its way (it may not return), else -1. NULL: the card is put back in without a restart */
+	int (*relaunch)(void *ctx);
 	int noAudio, noMidi;
 	const char *deviceUid;	/**< the output device's UID; NULL or "" the system's default */
 	uint32_t bufferFrames;	/**< the output buffer in device frames; 0 the device's own */
@@ -47,6 +53,13 @@ const app_snapshot_t *app_shellSnapshot(const app_shell_t *s);	/**< the newest; 
 int app_shellPanel(app_shell_t *s, const app_panelEvent_t *ev);
 int app_shellCommand(app_shell_t *s, const app_cmd_t *c);
 int app_shellDevices(app_shell_t *s, app_outputDevice_t *out, int max);	/**< the output devices, for the GUI and `devices`; main thread */
+enum { APP_OP_IMPORT, APP_OP_EXPORT, APP_OP_PROJECT };
+/** Import from the folder path, export the card into it, or export project into it (replace 1: a PROJnn there goes
+ * into Card backups). It posts 'card out'; app_shellFrame() does the work when 'card out applied' comes, puts the card
+ * back (an import restarts the app instead) and says every result as a message: 'notice: ...', 'error: ...', or
+ * 'ask: ... (repeat with replace)' where a project is in the way. No answer in 5 s: 'error: the card did not come out;
+ * nothing was copied'. 0 posted, -1 not (one operation at a time). Main thread */
+int app_shellCardOp(app_shell_t *s, int op, const char *path, int project, int replace);
 /** the system's MIDI endpoints (not ours), sources or destinations, for the DIN bindings; main thread. 0 without MIDI */
 int app_shellEndpoints(app_shell_t *s, int sources, app_endpoint_t *out, int max);
 /** stores the DIN binding (source 1: the DIN input, 0: the output) and binds it; uid 0 and "" unbinds. Main thread */
