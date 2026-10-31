@@ -1,5 +1,8 @@
 # CI of the LICHOMAT emulator (stage 1b spec 9.3): emu/'s host tests and goldens in a
-# Release build and in a sanitizer build, on macOS arm64 with the Command Line Tools.
+# Release build with LICHOMAT Emu.app and in a sanitizer build without the app, on macOS
+# arm64 with the Command Line Tools. The runners have no display and no audio or MIDI
+# device: the app is built, signed, checked and uploaded but never opened, and the
+# tests that need a window or a device skip with exit 77 (plan R4, E22).
 # It only builds and tests: nothing is pushed, tagged or released from here. It runs
 # on every push of the emulator branch (tracker Q19). tools/ci_dry_run.rb checks it
 # and runs its steps locally.
@@ -78,10 +81,12 @@ jobs:
         run: ctest --test-dir build/emu-release --output-on-failure
       - name: Check the linked libraries
         run: |
-          b=build/emu-release/lichomat-render
-          bad=$(otool -L "$b" | tail -n +2 | awk '{print $1}' | grep -v -E '^(/usr/lib/|/System/Library/)' || true)
-          if [ -n "$bad" ]; then echo "$b links: $bad"; exit 1; fi
-          echo "$b links only system libraries"
+          for b in build/emu-release/lichomat-render "build/emu-release/LICHOMAT Emu.app/Contents/MacOS/LICHOMAT Emu" \
+                   "build/emu-release/LICHOMAT Emu.app/Contents/MacOS/lichomat-render"; do
+            bad=$(otool -L "$b" | tail -n +2 | awk '{print $1}' | grep -v -E '^(/usr/lib/|/System/Library/)' || true)
+            if [ -n "$bad" ]; then echo "$b links: $bad"; exit 1; fi
+            echo "$b links only system libraries"
+          done
       - name: Package lichomat-render
         run: |
           d="build/emu-release/package/lichomat-render-${GITHUB_SHA::12}"
@@ -96,6 +101,23 @@ jobs:
         with:
           name: lichomat-render-${{ github.sha }}
           path: build/emu-release/package/*.zip
+          if-no-files-found: error
+      - name: Package LICHOMAT Emu
+        run: |
+          d=build/emu-release/package-app
+          rm -rf "$d"; mkdir -p "$d"
+          codesign --verify --deep --strict "build/emu-release/LICHOMAT Emu.app"
+          ditto -c -k --keepParent "build/emu-release/LICHOMAT Emu.app" "$d/LICHOMAT-Emu-${GITHUB_SHA::12}.zip"
+          # the signature must survive the zip: unpack a copy and verify that
+          x=$(mktemp -d)
+          ditto -x -k "$d/LICHOMAT-Emu-${GITHUB_SHA::12}.zip" "$x"
+          codesign --verify --deep --strict "$x/LICHOMAT Emu.app"
+          rm -rf "$x"
+      - name: Upload LICHOMAT Emu
+        uses: actions/upload-artifact@v7
+        with:
+          name: lichomat-emu-${{ github.sha }}
+          path: build/emu-release/package-app/*.zip
           if-no-files-found: error
       - name: Upload the golden outputs
         if: failure()
@@ -136,7 +158,7 @@ jobs:
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Configure
-        run: cmake -S emu -B build/emu-sanitize -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLICHOMAT_EMU_SANITIZE=address,undefined
+        run: cmake -S emu -B build/emu-sanitize -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLICHOMAT_EMU_SANITIZE=address,undefined -DLICHOMAT_EMU_APP=OFF
       - name: Build
         run: cmake --build build/emu-sanitize 2>&1 | tee build/emu-sanitize/build.log
       - name: Check for compiler warnings

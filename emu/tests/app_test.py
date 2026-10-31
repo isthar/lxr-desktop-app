@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+"""The app's tests that run lichomat-emu-dev, the Dear ImGui pin and the bundle
+(stage 1b plan R4). Each case is a ctest id:
+
+    app_test.py --dev DEV --render RENDER --root ROOT --work WORK --fwversion VERSION [--app APP] [--sanitized 0|1] ID
+
+--app is the executable for R4_gui_version and R4_gui_clash, and the bundle (LICHOMAT Emu.app)
+for R4_bundle. --sanitized 1 says that the build links a sanitizer runtime, as render_test.py's.
+
+Copyright (C) 2026 Tomasz Krzywicki
+SPDX-License-Identifier: GPL-3.0-only
+
+Licensed under the GNU General Public License version 3, with the additional
+permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+the repository.
+"""
+import argparse
+import hashlib
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+
+def check(ok, msg):
+    if not ok:
+        print('FAIL: ' + msg)
+        sys.exit(1)
+
+
+class Case:
+    def __init__(self, a):
+        self.a = a
+        self.work = os.path.join(a.work, a.id)
+        shutil.rmtree(self.work, ignore_errors=True)
+        os.makedirs(self.work)
+        self.home = os.path.join(self.work, 'home')
+
+    def card(self, name='init'):
+        dst = os.path.join(self.work, 'card-' + name)
+        shutil.copytree(os.path.join(self.a.root, 'emu', 'tests', 'cards', name), dst)
+        return dst
+
+    def script(self, lines):
+        path = os.path.join(self.work, 'script.txt')
+        with open(path, 'w') as f:
+            f.write('\n'.join(lines) + '\n')
+        return path
+
+    def dev(self, args, timeout=60):
+        env = dict(os.environ, LICHOMAT_EMU_HOME=self.home)
+        return subprocess.run([self.a.dev] + args, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                              timeout=timeout, env=env)
+
+
+def lcd_lines(out):
+    """(wall seconds, row 0, row 1) of every lcd line"""
+    return [(float(m.group(1)), m.group(2), m.group(3))
+            for m in re.finditer(r'^lcd (\S+) \|(.{16})\|(.{16})\|$', out, re.M)]
+
+
+FW_VERSION = None  # the firmware's own version, from main()'s --fwversion (emu/CMakeLists.txt reads it from CMakeLists.txt)
+
+
+def splash(line):
+    return 'LICHOMAT' in line[1] and ('v%s unofficial' % FW_VERSION) in line[2]
+
+
+def R4_dev_headless(t):
+    r = t.dev(['--card', t.card(), '--no-audio', '--no-midi', '--seconds', '5', '--print-diag',
+               '--script', t.script(['2.0 press 33'])])
+    check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr))
+    lcd = lcd_lines(r.stdout)
+    check(lcd and lcd[0][0] < 0.3 and splash(lcd[0]), 'the splash is not first: %r' % lcd[:1])
+    after = [l for l in lcd if not splash(l)]
+    check(after and after[0][0] >= 0.95, 'the splash did not show for 1 s of wall time (spec 10.2): %r' % after[:1])
+    # Wall pacing (spec 4.10): virtual time never runs more than one slice and one snapshot (13 ms) ahead
+    # of the wall clock, and falls behind only where a slow VM makes it re-anchor, by at most 100 ms each
+    # time; 250 ms allows two. The tight 689.7 +- 0.1 blocks per second stays the owner's A11.
+    m = re.search(r'^diag .* vt=(\S+) wall=(\S+)$', r.stdout, re.M)
+    check(m, 'no diag line: ' + r.stdout)
+    drift = float(m.group(2)) - float(m.group(1))
+    check(-0.013 <= drift <= 0.25, 'virtual time is %.3f s behind the wall clock' % drift)
+    check('warning:' not in r.stdout and 'hang:' not in r.stdout, r.stdout)
+    # the diagnostics (spec 6.9): the counters of spec 5.5 follow the diag line
+    check(re.search(r'^counters blocks=\d+ underruns=\d+ passes=\d+ .*queueOverflow=\d+ .*usbTxDropped=\d+$', r.stdout, re.M),
+          'no counters line: ' + r.stdout)
+
+
+def R4_dev_import(t):
+    """a first run seeds the app's card; an import backs it up, copies and power-cycles (spec 6.7)"""
+    src = t.card('fx')
+    r = t.dev(['--render', t.a.render, '--no-audio', '--no-midi', '--seconds', '6',
+               '--script', t.script(['1.5 import ' + src])])
+    check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr))
+    backups = os.listdir(os.path.join(t.home, 'Card backups'))
+    check(len(backups) == 1 and re.match(r'^\d{8}-\d{6}$', backups[0]), 'backups: %r' % backups)
+    seeded = os.listdir(os.path.join(t.home, 'Card backups', backups[0], 'PROJ00'))
+    check(len(seeded) == 194, 'the seeded card had %d files in PROJ00, not 194' % len(seeded))
+    # both PRJ.NFO hold 'Init'; the file lists tell the fx fixture (4 files) from the seeded card (194)
+    card = sorted(os.listdir(os.path.join(t.home, 'Card', 'PROJ00')))
+    check(card == sorted(os.listdir(os.path.join(src, 'PROJ00'))) and len(card) == 4, 'PROJ00 holds %r' % card)
+    check(sum(1 for l in lcd_lines(r.stdout) if splash(l)) >= 2, 'no second boot after the import')
+
+
+def R4_dev_crash(t):
+    """a fault on the firmware thread leaves crash-*.txt; the next launch shows it once (spec 6.9)"""
+    card = t.card()
+    r = t.dev(['--card', card, '--no-audio', '--no-midi', '--seconds', '4', '--script', t.script(['1.5 test-fault'])])
+    check(r.returncode < 0, 'the harness did not end by the signal: %d' % r.returncode)
+    notes = [n for n in os.listdir(t.home) if re.match(r'^crash-\d{8}-\d{6}\.txt$', n)]
+    check(len(notes) == 1, 'crash notes: %r' % os.listdir(t.home))
+    with open(os.path.join(t.home, notes[0])) as f:
+        text = f.read()
+    check(text.startswith('LICHOMAT Emu crash: SIGSEGV\nvirtual time: ') and text.count('\n') >= 10, text)
+    check('\nthread: firmware\n' in text, 'the fault was on the firmware thread: ' + text)
+    r = t.dev(['--card', card, '--no-audio', '--no-midi', '--seconds', '2'])
+    check('crash note: ' + notes[0] in r.stdout, 'the next launch did not show the note: ' + r.stdout)
+    check('LICHOMAT Emu crash: SIGSEGV' in r.stdout, 'the note\'s first lines are not shown: ' + r.stdout)
+    r = t.dev(['--card', card, '--no-audio', '--no-midi', '--seconds', '2'])
+    check('crash note:' not in r.stdout, 'the note was shown twice')
+
+
+def R4_dev_power(t):
+    """a power cycle boots again, and the settings survive it (spec 6.9)"""
+    r = t.dev(['--card', t.card(), '--no-audio', '--no-midi', '--seconds', '4', '--print-diag',
+               '--script', t.script(['0.5 delay 12.5', '1.5 power'])])
+    check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr))
+    check(sum(1 for l in lcd_lines(r.stdout) if splash(l)) >= 2, 'no second boot')
+    with open(os.path.join(t.home, 'settings.txt')) as f:
+        text = f.read()
+    check('slave.delay.auto = 0\n' in text and 'slave.delay.ms = 12.5\n' in text, text)
+    # the diag line at the end is the second process's: it started with the stored D
+    check('D=12.50ms' in r.stdout, 'the new process did not start with the stored D: ' + r.stdout)
+
+
+def R4_dev_afterpid(t):
+    """--after-pid N waits for that process to end, but for at most 5 s (plan E18)"""
+    args = ['--card', t.card(), '--no-audio', '--no-midi', '--seconds', '0.3']
+    for bad in ('2147483648', '4294967295', '99999999999999999999', '0', '-5', '12abc', ''):
+        r = t.dev(args + ['--after-pid', bad])	# a pid is 1..INT_MAX; (int)4294967295.0 was undefined behaviour
+        check(r.returncode == 1 and 'usage' in r.stderr, '--after-pid %r was accepted: exit %d' % (bad, r.returncode))
+    r = t.dev(args + ['--after-pid', '2147483647'])	# the largest pid: no such process, so nothing to wait for
+    check(r.returncode == 0, '--after-pid 2147483647: exit %d: %s' % (r.returncode, r.stderr))
+    done = subprocess.Popen(['/usr/bin/true'])
+    done.wait()
+    t0 = time.monotonic()
+    r = t.dev(args + ['--after-pid', str(done.pid)])
+    check(r.returncode == 0 and time.monotonic() - t0 < 5.0, 'an ended process was waited for: exit %d' % r.returncode)
+    child = subprocess.Popen(['/bin/sleep', '1.5'])
+    try:
+        t0 = time.monotonic()
+        r = t.dev(args + ['--after-pid', str(child.pid)])
+        took = time.monotonic() - t0
+        check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr))
+        check(1.7 <= took < 5.0, 'it did not wait for the process to end, and no longer: %.2f s' % took)
+        child.kill()
+        child.wait()
+        child = subprocess.Popen(['/bin/sleep', '60'])
+        t0 = time.monotonic()
+        r = t.dev(args + ['--after-pid', str(child.pid)])
+        took = time.monotonic() - t0
+        check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr))
+        check(5.0 <= took < 20.0, 'it did not give up after 5 s: %.2f s' % took)
+    finally:
+        child.kill()
+        child.wait()
+
+
+IMGUI = ['LICENSE.txt', 'imconfig.h', 'imgui.cpp', 'imgui.h', 'imgui_draw.cpp', 'imgui_internal.h', 'imgui_tables.cpp',
+         'imgui_widgets.cpp', 'imstb_rectpack.h', 'imstb_textedit.h', 'imstb_truetype.h', 'backends/imgui_impl_metal.h',
+         'backends/imgui_impl_metal.mm', 'backends/imgui_impl_osx.h', 'backends/imgui_impl_osx.mm']
+
+
+def R4_imgui_pin(t):
+    """the vendored Dear ImGui is the 15 files of v1.92.9b, byte for byte as pinned in its README"""
+    base = os.path.join(t.a.root, 'emu', 'third_party', 'imgui')
+    with open(os.path.join(base, 'README.md')) as f:
+        readme = f.read()
+    check('tag `v1.92.9b`' in readme, 'the README does not name tag v1.92.9b')
+    rows = {m.group(1): (int(m.group(2)), m.group(3))
+            for m in re.finditer(r'^\| `([^`]+)` \| (\d+) \| `([0-9a-f]{64})` \|$', readme, re.M)}
+    check(sorted(rows) == sorted(IMGUI), 'the README lists %r' % sorted(rows))
+    found = sorted(os.path.relpath(os.path.join(d, n), base)
+                   for d, _, names in os.walk(base) for n in names if not n.startswith('.'))
+    check(found == sorted(IMGUI + ['README.md']), 'the folder holds %r' % found)
+    for name, (size, sha) in rows.items():
+        with open(os.path.join(base, name), 'rb') as f:
+            data = f.read()
+        check(len(data) == size and hashlib.sha256(data).hexdigest() == sha, name + ' differs from its pin')
+    check(sum(size for size, _ in rows.values()) == 3303558, 'the pinned files do not hold 3,303,558 bytes')
+
+
+def R4_gui_version(t):
+    """LICHOMAT Emu --version needs no window and prints the notices of spec 10.1: the renderer's lines, which come from
+    the same emu_notices.h (plan E26), under its own first line"""
+    r = subprocess.run([t.a.app, '--version'], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+    check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr))
+    ref = subprocess.run([t.a.render, '--version'], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+    check(ref.returncode == 0, 'lichomat-render --version exits %d' % ref.returncode)
+    got, want = r.stdout.splitlines(), ref.stdout.splitlines()
+    check(len(got) == len(want) and len(got) == 13, 'the notices are %d lines, not %d: %r' % (len(got), len(want), r.stdout))
+    check(re.fullmatch(r'LICHOMAT Emu [0-9]+\.[0-9]+', got[0]), 'the first line is %r' % got[0])
+    check(got[1:] == want[1:], 'the notices differ from the renderer\'s:\n%s' % r.stdout)
+    check('F1-F18 and F6b' in got[2], 'the firmware changes are not F1-F18 and F6b: %r' % got[2])
+    check(r.stdout.count('Not affiliated with ') == 1 and 'ABSOLUTELY NO WARRANTY' in r.stdout, r.stdout)
+
+
+def nm(objects, *flags):
+    """the symbols that `nm` prints for the object files, names only (a leading underscore kept)"""
+    out = subprocess.run(['nm'] + list(flags) + objects, capture_output=True, text=True)
+    check(out.returncode == 0, 'nm failed: ' + out.stderr)
+    return {l.split()[-1] for l in out.stdout.splitlines() if l.strip() and not l.rstrip().endswith(':')}
+
+
+def R4_gui_clash(t):
+    """No object of the app that is not the firmware's, or app_fw.c's, refers to a name that the firmware defines. All of
+    them share one namespace in the executable. graphic.c's `float time` is what a call of libc's time() binds to there,
+    and the call jumps into data: Dear ImGui's session date found it, as a SIGBUS at start. The build renames that symbol
+    for graphic.c alone (the firmware image stays as it is); this checks the rename and any other name like it."""
+    def listed(path):
+        with open(path) as f:
+            return [l.strip() for l in f if l.strip()]
+    firmware, rest = listed(t.a.firmware), listed(t.a.objects)
+    check(len(firmware) >= 50 and len(rest) >= 20, 'the object lists are short: %d firmware, %d others' % (len(firmware), len(rest)))
+    defined = nm(firmware, '-g', '-U')
+    check('_lxr_graphic_time' in defined, 'the firmware does not define _lxr_graphic_time: the rename of graphic.c\'s time is gone')
+    check('_time' not in defined, 'the firmware defines _time, which libc\'s time() would bind to')
+    clash = sorted(nm(rest, '-u') & defined)
+    check(not clash, 'the app refers to names that the firmware defines: ' + ', '.join(clash))
+
+
+def R4_bundle(t):
+    """The bundle that CI uploads (spec 9.2, 10.1, 10.3): the nested renderer and the bundle both verify, the plist names
+    the app, the licence files and the README are in Resources, both binaries are arm64 and link only system libraries,
+    and the README says what the owner decided (E33, A4) without naming the maker outside the tagline."""
+    contents = os.path.join(t.a.app, 'Contents')
+    exe, render = (os.path.join(contents, 'MacOS', n) for n in ('LICHOMAT Emu', 'lichomat-render'))
+    # the nested renderer is signed first, then the bundle, which --deep checks over again (a file added after
+    # the bundle was signed, or a renderer signed after it, fails here)
+    for args in (['--strict', render], ['--deep', '--strict', t.a.app]):
+        r = subprocess.run(['codesign', '--verify', '--verbose=2'] + args, capture_output=True, text=True)
+        check(r.returncode == 0, 'codesign --verify %s: %s' % (' '.join(args), r.stderr))
+    plist = os.path.join(contents, 'Info.plist')
+    for key, want in (('CFBundleIdentifier', 'io.github.isthar.lichomat-emu'), ('CFBundleExecutable', 'LICHOMAT Emu'),
+                      ('CFBundleName', 'LICHOMAT Emu'), ('LSMinimumSystemVersion', '13.0')):
+        got = subprocess.run(['plutil', '-extract', key, 'raw', plist], capture_output=True, text=True).stdout.strip()
+        check(got == want, '%s is %r, not %r' % (key, got, want))
+    res = os.path.join(contents, 'Resources')
+    for name in ('LICENSE', 'NOTICE.md', 'README.md', 'LICENSE.arm-optimized-routines', 'LICENSE.dear-imgui',
+                 'LICENSE.fatfs'):
+        check(os.path.isfile(os.path.join(res, name)), 'Resources lacks ' + name)
+
+    def read(*parts):
+        with open(os.path.join(*parts), 'rb') as f:
+            return f.read()
+    for name, src in (('LICENSE', ('LICENSE',)), ('NOTICE.md', ('NOTICE.md',)), ('README.md', ('emu', 'README.md')),
+                      ('LICENSE.arm-optimized-routines', ('emu', 'libm', 'LICENSE')),
+                      ('LICENSE.dear-imgui', ('emu', 'third_party', 'imgui', 'LICENSE.txt'))):
+        check(read(res, name) == read(t.a.root, *src), 'Resources/%s is not %s of the tree' % (name, '/'.join(src)))
+    fatfs = read(res, 'LICENSE.fatfs').decode('utf-8')
+    ff_h = read(t.a.root, 'Middlewares', 'Third_Party', 'FatFs', 'src', 'ff.h').decode('utf-8').splitlines(True)[:18]
+    check(fatfs == ''.join(ff_h) and 'ChaN' in fatfs and 'DISCLAIMED' in fatfs, 'LICENSE.fatfs is not the notice of ff.h')
+    for b in (exe, render):
+        archs = subprocess.run(['lipo', '-archs', b], capture_output=True, text=True).stdout.split()
+        check(archs == ['arm64'], '%s is %r' % (b, archs))
+        if t.a.sanitized != '1':  # a sanitizer build links the toolchain's runtime (spec 9.3)
+            libs = subprocess.run(['otool', '-L', b], capture_output=True, text=True).stdout.splitlines()[1:]
+            bad = [l.split()[0] for l in libs if not l.split()[0].startswith(('/usr/lib/', '/System/Library/'))]
+            check(not bad, '%s links %r' % (b, bad))
+    out = subprocess.run([render, '--version'], capture_output=True, text=True).stdout
+    check('with the emulator changes F1-F18 and F6b.' in out, out)
+
+    # the README (spec 10.2, 10.3, 12.3)
+    readme = read(res, 'README.md').decode('utf-8')
+    tagline = 'emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02'
+    check(tagline in readme.splitlines(), 'the tagline is not a line of the README')
+    for n, line in enumerate(readme.splitlines(), 1):
+        # the tagline and the repository's address (the source, as GPL asks) may name them; no other line
+        left = line.replace(tagline, '').replace('https://github.com/isthar/lxr-desktop-app', '')
+        check(not re.search(r'lxr|erica|sonic\s*potions', left, re.I), 'README line %d names the maker or the device: %r' % (n, line))
+    flat = ' '.join(readme.split())  # a phrase may wrap over two lines
+    check('Open Anyway' in flat and 'xattr -dr com.apple.quarantine "LICHOMAT Emu.app"' in flat,
+          'the README does not say how to open a downloaded copy')
+    check('faceplate' not in flat.lower(), "the README speaks of a faceplate: the panel rule is E33's")
+    check('roughly like' in flat and 'muscle memory' in flat and 'wordmark' in flat and "Mac's own volume" in flat,
+          'the README does not state the panel rule of E33 and the missing VOLUME fader')
+    # A4: the one F8 interval that contains Start
+    check('exactly 1 ms after' in flat and '0 to 20.8 ms' in flat,
+          'the README does not say that the F8 interval that contains Start is anywhere from 0 to 20.8 ms')
+
+
+CASES = {f.__name__: f for f in [R4_dev_headless, R4_dev_import, R4_dev_crash, R4_dev_power, R4_dev_afterpid,
+                                 R4_imgui_pin, R4_gui_version, R4_gui_clash, R4_bundle]}
+
+
+def main():
+    p = argparse.ArgumentParser()
+    for o in ('--dev', '--render', '--root', '--work', '--app', '--firmware', '--objects', '--fwversion'):
+        p.add_argument(o)
+    p.add_argument('--sanitized', choices=('0', '1'), default='0')
+    p.add_argument('id')
+    a = p.parse_args()
+    check(a.id in CASES, 'no case ' + a.id)
+    global FW_VERSION
+    FW_VERSION = a.fwversion
+    CASES[a.id](Case(a))
+    print('PASS ' + a.id)
+
+
+if __name__ == '__main__':
+    main()
