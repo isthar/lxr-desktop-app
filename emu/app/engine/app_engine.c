@@ -254,10 +254,35 @@ static void app_enginePanelEvent(app_engine_t *e, const app_panelEvent_t *p, uin
 	}
 }
 
+static const app_midiEntry_t *app_peekUsb(void *ctx, unsigned i)
+{
+	return app_ringPeek(&((app_engine_t *)ctx)->midiIn[APP_PORT_USB], i);
+}
+
 static void app_engineMidiInputs(app_engine_t *e, uint64_t now)
 {
-	(void)e;
-	(void)now;
+	const app_midiEntry_t *m;
+	uint64_t t;
+	while ((m = app_ringPeek(&e->midiIn[APP_PORT_DIN], 0u)) != NULL)
+	{
+		uint8_t b[64];
+		const unsigned n = app_umpToBytes(m->words, m->nwords, b, sizeof b);
+		if (app_engineEntry(e, APP_PORT_DIN, m->stamp, now, &t) && n)
+			emu_inDin(t, b, n);	/* the wire model spaces the bytes from t (spec 4.3) */
+		app_ringPop(&e->midiIn[APP_PORT_DIN], 1u);
+	}
+	while ((m = app_ringPeek(&e->midiIn[APP_PORT_USB], 0u)) != NULL)
+	{
+		uint8_t data[64];
+		unsigned len;
+		const uint64_t stamp = m->stamp;
+		const unsigned taken = app_usbTransfer(app_peekUsb, e, &e->usbPend, data, &len);
+		if (app_engineEntry(e, APP_PORT_USB, stamp, now, &t) && len)
+			(void)emu_inUsb(t, data, len);	/* one transfer; the core paces 16 packets per 1 ms */
+		if (!taken)
+			e->diag.midiUnsent++;	/* E10: it fits no transfer; counted, not dropped silently */
+		app_ringPop(&e->midiIn[APP_PORT_USB], taken ? taken : 1u);
+	}
 }
 
 static void app_engineInputs(app_engine_t *e, uint64_t now)
@@ -320,6 +345,46 @@ static void app_sinkAudio(void *ctx, uint64_t t, const int16_t *out1, const int1
 	if (n < EMU_BLOCK_FRAMES)
 		atomic_fetch_add_explicit(&e->audio.frames.dropped, EMU_BLOCK_FRAMES - n, memory_order_relaxed);
 	app_ringCommit(&e->audio.frames, n);
+}
+
+/* a message of the DIN or USB out sink goes to the MIDI-out ring at its presentation time (spec 6.5) */
+static int app_pushOut(void *ctx, const app_midiEntry_t *m)
+{
+	app_engine_t *e = ctx;
+	const int r = app_ringPush(&e->midiOut, m);	/* a full ring counts the drop */
+	e->host.midiOutWake(e->host.ctx);
+	return r;
+}
+
+static void app_emitDin(void *ctx, uint64_t t, const uint32_t *w, unsigned n)
+{
+	app_engine_t *e = ctx;
+	(void)app_midiSplit(app_tmHost(&e->map, (double)t), APP_PORT_DIN, w, n, app_pushOut, e);
+}
+
+static void app_sinkDin(void *ctx, uint64_t t, uint8_t byte)
+{
+	app_engine_t *e = ctx;
+	app_dinByte(&e->din, t, byte, app_emitDin, e);	/* each complete message at the time of its first byte */
+}
+
+typedef struct app_usbWords { uint32_t w[64]; unsigned n; } app_usbWords_t;
+
+static void app_collectUsb(void *ctx, uint64_t t, const uint32_t *w, unsigned n)
+{
+	app_usbWords_t *c = ctx;
+	(void)t;
+	for (unsigned i = 0; i < n && c->n < sizeof c->w / sizeof c->w[0]; i++)
+		c->w[c->n++] = w[i];
+}
+
+static void app_sinkUsb(void *ctx, uint64_t t, const uint8_t *data, uint16_t length)
+{
+	app_engine_t *e = ctx;
+	app_usbWords_t c = { { 0 }, 0u };
+	app_usbToUmp(t, data, length, &e->usbOutSx, app_collectUsb, &c);
+	if (c.n)	/* one event packet per transfer, at its presentation time */
+		(void)app_midiSplit(app_tmHost(&e->map, (double)t), APP_PORT_USB, c.w, c.n, app_pushOut, e);
 }
 
 static void app_sinkClock(void *ctx, uint64_t t, int level)
@@ -449,7 +514,7 @@ void app_enginePowerOn(app_engine_t *e, const app_engineConfig_t *cfg)
 	c.cardDir = cfg->cardDir;
 	c.cardIn = cfg->cardDir != NULL;
 	c.seed = cfg->seed;
-	c.sinks = (emu_sinks_t){ e, app_sinkAudio, NULL, NULL, app_sinkClock };	/* Task 5 fills DIN and USB */
+	c.sinks = (emu_sinks_t){ e, app_sinkAudio, app_sinkDin, app_sinkUsb, app_sinkClock };
 	c.hook = app_hook;
 	c.hookCtx = e;
 	c.fault = cfg->fault ? app_engineFault : NULL;
@@ -584,4 +649,17 @@ int app_engineAck(app_engine_t *e, app_ack_t *out)
 	*out = *a;
 	app_ringPop(&e->ack, 1u);
 	return 1;
+}
+
+uint64_t app_midiOutStep(app_engine_t *e, uint64_t now, const app_midiOutSink_t *sink)
+{
+	const app_midiEntry_t *m;
+	while ((m = app_ringPeek(&e->midiOut, 0u)) != NULL)
+	{
+		if (m->port == APP_PORT_USB && m->stamp > now)
+			return m->stamp;
+		sink->send(sink->ctx, m->port, m->stamp, m->words, m->nwords);
+		app_ringPop(&e->midiOut, 1u);
+	}
+	return 0;
 }
