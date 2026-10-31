@@ -1,4 +1,4 @@
-# LICHOMAT 0.1, 0.2, 0.3 and 0.4: hardware checklist (H1–H13, U1–U19, U23–U25, X4, optional X1–X3)
+# LICHOMAT 0.1, 0.2, 0.3 and 0.4: hardware checklist (H1–H13, U1–U26, X4, optional X1–X3)
 
 These are the checks of spec §13.2, written out as procedures for the LXR-02. Only the owner can run
 them, on the real device; nothing here is ever marked as passed by an agent. Record every result in
@@ -33,16 +33,20 @@ time in three kit bytes that 1.7 does not use; 1.7 and 0.2 ignore all three. Bac
 before you install 0.3, too. 0.3 holds all of 0.1 and 0.2, so one session on 0.3 can run every check;
 a proposed order, with H12 first, is in `docs/lichomat/test-session-v0.3.md` (Polish).
 
-**LICHOMAT 0.4 (first half).** 0.4 is not released yet: there is no `LXR_V2_LICHOMAT_0.4.img` to
-install, and its SHA-256 goes into the run sheet when CI builds it; H1 will then show
-`v0.4 unofficial`. U23–U25 are written for the parts of 0.4 that are done (plan
-`docs/superpowers/plans/2026-10-31-v0.4-atmosphere.md`, branch `v0.4`): the tempo-synced delay, the
-DJ filter, and a 13-byte block after the parameters of every kit file (`.SND` 255 → 268 B, and
-`tmp.snd`) that holds the new kit settings; 1.7 ignores the block, and a kit saved by 1.7 loses it
-(U25). U20–U22 (CPU with the reverb, reverb and freeze, rumble) and U26 (version and kit recipes)
-come with the reverb, which waits for H12's CPU reading: run H12 on 0.3 first. 0.4 keeps everything
-of 0.3. Back up the card before you install 0.4, too. `tools/demo_v04.sh` on branch `v0.4` renders
-the synced delay and a DJ filter sweep in the emulator, to compare by ear.
+**LICHOMAT 0.4.** The whole of 0.4 is built (plan
+`docs/superpowers/plans/2026-10-31-v0.4-atmosphere.md`, branch `v0.4`): a reverb after the FX slot with freeze, rumble (the reverb ducked by a chosen
+voice), the tempo-synced delay and the DJ filter, and a 13-byte block after the parameters of every
+kit file (`.SND` 255 → 268 B, and `tmp.snd`) that holds the new kit settings; 1.7 ignores the block,
+and a kit saved by 1.7 loses it (U25). 0.4 is not released yet: there is no
+`LXR_V2_LICHOMAT_0.4.img` to install, and its SHA-256 goes into the run sheet when CI builds the
+release commit; H1 will then show `v0.4 unofficial`. **The reverb's rate is provisional:** the build
+runs it at half rate until the CPU readings fix it (plan D41). Run H12 on 0.3 first: its step 3
+`pk` picks the rate, and U20 then checks the CPU load with the reverb on, on the file CI builds from
+`v0.4` at that rate.
+Test 0.4 (U21–U26) only on the build whose rate H12 and U20 have fixed. 0.4 keeps everything of
+0.3. Back up the card before you install 0.4, too. `tools/demo_v04.sh` on branch `v0.4` renders the
+synced delay, DJ filter sweeps, the reverb, freeze, rumble and the four kit recipes in the emulator
+(`build/demo/v04-*.wav`), to compare by ear.
 
 **What you need**
 
@@ -1060,6 +1064,96 @@ played and sent in 6.
 
 **Record:** the start-up screen, and `slt` of voices 1–3 for each kit.
 
+## U20: CPU with the reverb
+
+0.4's CPU load with the reverb on (plan v0.4 D41). Run H12 on 0.3 first. Its step 3 `pk` (the
+highest of the 30 s, the heavy pattern with the delay on) is P, and P picks the reverb's rate:
+
+- **full rate if P ≤ 46.24;**
+- **half rate if P ≤ 63.28;**
+- **else half rate and lean** (no early reflections, and the wet right channel is the left).
+
+These limits are 85 % less the reverb's estimated cost (35.07 % at full rate, 18.03 % at half rate)
+and the DJ filter's (3.69 %), `docs/lichomat/reports/v0.4-reverb-cost.md`. The build on `v0.4`
+runs at half rate provisionally (tracker Q30), so a P that picks the full rate or lean means a build
+at that rate first; run U20 on it. Use H12 step 3's kit, pattern and BPM (140), on 0.4.
+
+1. Open the FX page (SHIFT + step 15), then SHIFT + step 15 again for the reverb sub-page (first
+   screen `lvl siz dec ton`, second screen `pre mod frz syn`): `lvl` 100, `siz` 127, `dec` 127.
+   Keep the delay on in the slot as in H12. Press START, open the CPU page (SHIFT + step 12, as in
+   H12 step 1) and read the values for 30 s.
+2. The same with the DJ filter at 30: the performance mode (the second mode button), second screen,
+   `djf` (knob 3) 30; then the CPU page again for 30 s.
+3. The same with freeze on: in the performance mode SHIFT + step 3 (step 3's LED lights while SHIFT
+   is held); then the CPU page again for 30 s.
+4. Freeze off (SHIFT + step 3 again), `djf` 64, and `lvl` 0 on the reverb sub-page. Read the CPU
+   page for 30 s.
+
+**Expected:** `pk` below 95 and `ovf` 0 in steps 1–3, and no dropouts or clicks. In step 4 the
+values match H12 step 3 within 2 points: at `lvl` 0 the reverb is not computed, nor the DJ filter at
+64. If `pk` reaches 95 in steps 1–3, the next mode down (full rate → half rate → lean) is a fix-up
+before the release, and U20 runs again on that build.
+
+**Record:** `CPU` and `pk` for each step, `Qmax` and `ovf`, the BPM, H12 step 3's `pk` (P), and the
+rate of the build (the release notes name it; the build on `v0.4` now: half rate).
+
+## U21: reverb and freeze
+
+0.4's reverb and freeze (plan v0.4 D36, D37). Use a pattern and a kit you can spare. Leave `syn`
+`off`.
+
+1. Internal sync, BPM 125, voice mode. Voice 4 (snare) on steps 5 and 13; voice 4's MIX sub-page
+   (select button 8), second screen, `out` `FX`. On the FX page knob 1 (`typ`) `off`, `out` `St1`.
+   On the reverb sub-page: `lvl` 100, `siz` 100, `dec` 90, `ton` 64, `pre` 10, `mod` 40. Press START
+   and listen for 2 bars. Then turn `ton` slowly to 0, to 127 and back to 64, and `siz` and `pre`
+   over their range.
+2. While a tail rings, in the performance mode SHIFT + step 3. Keep SHIFT held for a moment and look
+   at step 3's LED. Press STOP, then wait 60 s. Press START for 2 bars, then STOP.
+3. SHIFT + step 3 again.
+4. On the reverb sub-page, second screen: `frz` (knob 3) `on`, wait 10 s, then `off`.
+5. From a controller or SendMIDI (as in U24 step 4: `ch` 1, `mrx` `all`): NRPN 99 = 127, wait 10 s,
+   then NRPN 99 = 0. Then NRPN 98 = 40 and 100 (the level), and NRPN 116 = 20 and 110 (the decay),
+   about 2 bars apart. A controller sends CC 99 = 0, CC 98 = the number, then CC 6 = the value,
+   without CC 38.
+6. Freeze on (SHIFT + step 3). Load another kit, look at `frz` on the reverb sub-page, then thaw.
+
+**Expected:**
+- 1: each hit leaves a stereo tail that dies away over about 6 s at `dec` 90. `ton` 0 is dark (a
+  low-pass of about 1.5 kHz), 64 flat, 127 thin (a gentle high-pass of about 400 Hz); turning it
+  gives no click, and the level stays about the same.
+- 2: the tail holds with slow movement, with no growth, noise or clicks, for the whole 60 s (it
+  loses about 0.3 dB a minute, too little to hear). Hits played while frozen are heard dry and do
+  not enter the tail. With SHIFT held, step 3's LED is on while frozen.
+- 3: the tail decays as set in 1; with SHIFT held, step 3's LED is off.
+- 4: `frz` freezes and thaws as SHIFT + step 3 does, and SHIFT + step 3's LED follows it.
+- 5: NRPN 99 = 127 freezes, 0 thaws; NRPN 98 sets `lvl` and NRPN 116 sets `dec`, and the display
+  follows each.
+- 6: `frz` stays `on` through the load (a live control, plan v0.4 D33). If that kit's `lvl` is 0,
+  the tail goes silent: level 0 turns the reverb off.
+
+**Record:** what was heard in 1–4, the LED in 2–4, the controller or command used in 5, and `frz`
+after the load in 6.
+
+## U22: rumble
+
+0.4's rumble, the reverb ducked by a chosen voice (plan v0.4 D40). Use a pattern and a kit you can
+spare.
+
+1. Internal sync, BPM 125, voice mode. Voice 1 (kick) on steps 1, 5, 9 and 13, the other voices
+   off; voice 1's MIX sub-page, second screen, `out` `FX`. On the FX page `typ` `off` (no delay).
+   On the reverb sub-page: `lvl` 120, `siz` 110, `dec` 80, `ton` 20. SHIFT + step 15 once more for
+   the next sub-page: `dck` (knob 1) `dr1`, `ddp` (knob 2) 110. Press START for 4 bars.
+2. `ddp` 0 for 2 bars, then 127 for 2 bars, then 110.
+3. BPM 140 for 4 bars.
+4. `dck` `snr` (the snare is not playing) for 2 bars, then `off`.
+
+**Expected:**
+- 1 and 3: the tail swells between the kicks and ducks under each kick; no click where it ducks.
+- 2: at `ddp` 0 a steady wash without ducking; at 127 the deepest ducking.
+- 4: with `snr` (silent) and with `off` the tail does not duck.
+
+**Record:** by ear, at 125 and at 140 BPM; compare with `build/demo/v04-7-rumble-stopa.wav`.
+
 ## U23: synced delay
 
 0.4's tempo-synced delay (plan v0.4 D38). Use a pattern and a kit you can spare, all tracks 16
@@ -1154,6 +1248,24 @@ spare, and copy the project's folder (`PROJnn`) to the computer first.
 
 **Record:** the file sizes (`.SND` after the 0.4 save and after the 1.7 save, `GLO.CFG`), what 1.7
 played, and the values shown back on 0.4.
+
+## U26: version and kit recipes
+
+1. Switch the LXR on with 0.4 installed and look at the start-up screen. Check the update file's
+   name on the card.
+2. Build each of the four recipes of `docs/lichomat/kit-recipes-v0.4.md` (branch `timing-core`)
+   from the text alone, play it and save it in a kit slot you can spare. Compare each with its
+   render: `build/demo/v04-8-przepis-noise-wash.wav`, `v04-9-przepis-fm-drone.wav`,
+   `v04-10-przepis-rumble-kick.wav` and `v04-11-przepis-dub-stab.wav`.
+
+**Expected:**
+- 1: `LICHOMAT` and `v0.4 unofficial`; the file is `LXR_V2_LICHOMAT_0.4.img`.
+- 2: each recipe can be built with the names the display shows, and sounds like its render. The
+  renders step the recipes' LFOs every 80 ms (the emulator's renderer cannot set an LFO target), so
+  on the device the sweeps are smoother.
+
+**Record:** the start-up screen, and a short note per recipe: how it sounded, and any name or value
+in the text that did not match the device.
 
 ## X4: USB MIDI out
 
@@ -1263,6 +1375,7 @@ Update files under test (filled in when the files were built):
 | `LXR_V2_V1.7.img` | `cdb1ca371599149083bd0b61564d6864f031b599ccdcead2047a711e0b679db4` | `a43cd4f`, the official 1.7 sources | `build/official-1.7/src/build/release/` |
 | `LXR_V2_LICHOMAT_0.2.img` | `f99cb713d7f92cbc13d54084cd9603ee71e8bfcb81fa20594a55991ecda5ad7f` | `v0.2` at `4b63f2d`, built by CI | the artifact `lichomat-firmware-4b63f2db6e15e5845599bf554598e6611377d14f` of CI run 41016102539 (kept until 2027-01-28) |
 | `LXR_V2_LICHOMAT_0.3.img` | `d630eabc990fe19a6dca1d620162f3f4af5efde970e975ccaff914574604aee9` | `v0.3` at `813aaf6`, built by CI; `a9865dc` (F14–F18 and the emulator's goldens) builds the same file, CI run 41140852554 (a later firmware change on `v0.3` replaces this row) | the artifact `lichomat-firmware-813aaf665353f9c7c2004f803cf7e08a4273049e` of CI run 41126736959 (kept until 2027-01-28) |
+| `LXR_V2_LICHOMAT_0.4.img` | filled in when CI builds the release commit | `v0.4`, the release commit, built by CI, once H12 and U20 have fixed the reverb's rate | the artifact of that CI run (filled in then) |
 
 The LICHOMAT file is the one CI builds, the file the release attaches (spec §14). Download it with
 `gh run download 40435442579 --repo isthar/lxr-desktop-app -n lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f`
@@ -1313,9 +1426,13 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | U17 | | | |
 | U18 | | | |
 | U19 | | | |
+| U20 | | | |
+| U21 | | | |
+| U22 | | | |
 | U23 | | | |
 | U24 | | | |
 | U25 | | | |
+| U26 | | | |
 | X1 | | | |
 | X2 | | | |
 | X3 | | | |
