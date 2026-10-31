@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 
 def check(ok, msg):
@@ -77,6 +78,9 @@ def R4_dev_headless(t):
     drift = float(m.group(2)) - float(m.group(1))
     check(-0.013 <= drift <= 0.25, 'virtual time is %.3f s behind the wall clock' % drift)
     check('warning:' not in r.stdout and 'hang:' not in r.stdout, r.stdout)
+    # the diagnostics (spec 6.9): the counters of spec 5.5 follow the diag line
+    check(re.search(r'^counters blocks=\d+ underruns=\d+ passes=\d+ .*queueOverflow=\d+ .*usbTxDropped=\d+$', r.stdout, re.M),
+          'no counters line: ' + r.stdout)
 
 
 def R4_dev_import(t):
@@ -95,7 +99,65 @@ def R4_dev_import(t):
     check(sum(1 for l in lcd_lines(r.stdout) if splash(l)) >= 2, 'no second boot after the import')
 
 
-CASES = {f.__name__: f for f in [R4_dev_headless, R4_dev_import]}
+def R4_dev_crash(t):
+    """a fault on the firmware thread leaves crash-*.txt; the next launch shows it once (spec 6.9)"""
+    card = t.card()
+    r = t.dev(['--card', card, '--no-audio', '--no-midi', '--seconds', '4', '--script', t.script(['1.5 test-fault'])])
+    check(r.returncode < 0, 'the harness did not end by the signal: %d' % r.returncode)
+    notes = [n for n in os.listdir(t.home) if re.match(r'^crash-\d{8}-\d{6}\.txt$', n)]
+    check(len(notes) == 1, 'crash notes: %r' % os.listdir(t.home))
+    with open(os.path.join(t.home, notes[0])) as f:
+        text = f.read()
+    check(text.startswith('LICHOMAT Emu crash: SIGSEGV\nvirtual time: ') and text.count('\n') >= 10, text)
+    r = t.dev(['--card', card, '--no-audio', '--no-midi', '--seconds', '2'])
+    check('crash note: ' + notes[0] in r.stdout, 'the next launch did not show the note: ' + r.stdout)
+    check('LICHOMAT Emu crash: SIGSEGV' in r.stdout, 'the note\'s first lines are not shown: ' + r.stdout)
+    r = t.dev(['--card', card, '--no-audio', '--no-midi', '--seconds', '2'])
+    check('crash note:' not in r.stdout, 'the note was shown twice')
+
+
+def R4_dev_power(t):
+    """a power cycle boots again, and the settings survive it (spec 6.9)"""
+    r = t.dev(['--card', t.card(), '--no-audio', '--no-midi', '--seconds', '4', '--print-diag',
+               '--script', t.script(['0.5 delay 12.5', '1.5 power'])])
+    check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr))
+    check(sum(1 for l in lcd_lines(r.stdout) if splash(l)) >= 2, 'no second boot')
+    with open(os.path.join(t.home, 'settings.txt')) as f:
+        text = f.read()
+    check('slave.delay.auto = 0\n' in text and 'slave.delay.ms = 12.5\n' in text, text)
+    # the diag line at the end is the second process's: it started with the stored D
+    check('D=12.50ms' in r.stdout, 'the new process did not start with the stored D: ' + r.stdout)
+
+
+def R4_dev_afterpid(t):
+    """--after-pid N waits for that process to end, but for at most 5 s (plan E18)"""
+    args = ['--card', t.card(), '--no-audio', '--no-midi', '--seconds', '0.3']
+    done = subprocess.Popen(['/usr/bin/true'])
+    done.wait()
+    t0 = time.monotonic()
+    r = t.dev(args + ['--after-pid', str(done.pid)])
+    check(r.returncode == 0 and time.monotonic() - t0 < 5.0, 'an ended process was waited for: exit %d' % r.returncode)
+    child = subprocess.Popen(['/bin/sleep', '1.5'])
+    try:
+        t0 = time.monotonic()
+        r = t.dev(args + ['--after-pid', str(child.pid)])
+        took = time.monotonic() - t0
+        check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr))
+        check(1.7 <= took < 5.0, 'it did not wait for the process to end, and no longer: %.2f s' % took)
+        child.kill()
+        child.wait()
+        child = subprocess.Popen(['/bin/sleep', '60'])
+        t0 = time.monotonic()
+        r = t.dev(args + ['--after-pid', str(child.pid)])
+        took = time.monotonic() - t0
+        check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr))
+        check(5.0 <= took < 20.0, 'it did not give up after 5 s: %.2f s' % took)
+    finally:
+        child.kill()
+        child.wait()
+
+
+CASES = {f.__name__: f for f in [R4_dev_headless, R4_dev_import, R4_dev_crash, R4_dev_power, R4_dev_afterpid]}
 
 
 def main():

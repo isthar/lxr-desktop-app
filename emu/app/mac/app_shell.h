@@ -67,7 +67,24 @@ void app_shellBind(app_shell_t *s, int source, int32_t uid, const char *name);
 int app_shellHung(const app_shell_t *s);
 int app_shellWarnings(const app_shell_t *s);				/**< the warnings kept, at most the last 64 (spec 11) */
 const char *app_shellWarning(const app_shell_t *s, int i);	/**< oldest first */
-void app_shellTestFault(app_shell_t *s);	/**< harness only (Task 10): SIGSEGV on the firmware thread */
+void app_shellTestFault(app_shell_t *s);	/**< harness only: SIGSEGV on the firmware thread (the crash note, spec 6.9) */
+/** The settings of spec 6.9 (the app folder's settings.txt) are loaded by app_shellStart(), kept as the app runs and
+ * saved within a second of a change. The window frame x, y, width, height is the GUI's to read at start and to set as
+ * it moves; main thread */
+void app_shellWindow(const app_shell_t *s, int out[4]);
+void app_shellSetWindow(app_shell_t *s, const int frame[4]);
+const char *app_shellHome(const app_shell_t *s);	/**< the app folder, where the crash notes are; "" if there is none */
+/** Power cycle (spec 6.9): 'card out', and on its acknowledgement (or after 2 s) app_shellRestart(). The harness's
+ * `power` and the GUI's menu. Main thread */
+void app_shellPowerCycle(app_shell_t *s);
+/** Saves the settings, stops the MIDI-out thread and disposes of the MIDI endpoints, so that their unique IDs are
+ * free for the new process (spec 6.9, E18), then calls the relaunch of the options. It needs no firmware thread, so it
+ * is also the hang's Restart; it puts no card out. A failure is said as a message. Main thread; it may not return */
+void app_shellRestart(app_shell_t *s);
+/** Waits up to sec seconds for the process pid to end (kqueue, EVFILT_PROC): 0 if it has ended or is gone, -1 if it
+ * is still running, pid is invalid or the wait failed. The GUI's main() and the harness call it before
+ * app_shellStart() when they are given --after-pid N (E18); never on the main run loop */
+int app_waitPid(int pid, double sec);
 /** APP_CMD_STOP; joins the firmware thread for up to 2 s; then stops and joins the MIDI-out thread and disposes of the
  * MIDI endpoints, so that their unique IDs are free again (spec 6.9) */
 void app_shellStop(app_shell_t *s);

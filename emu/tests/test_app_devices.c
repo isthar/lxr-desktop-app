@@ -336,6 +336,19 @@ static int midioutChild(void)
 	ok &= atomic_load(&gDinNotes) >= 4u;
 	ok &= MIDIObjectFindByUniqueID(uid, &obj, &type) != noErr;	/* disposed by app_shellStop() */
 	ok &= MIDIObjectFindByUniqueID(uid + 1, &obj, &type) != noErr;
+	/* spec 6.9: the unique IDs that the endpoints have are stored, to be asked for again at the next start */
+	char path[1100], text[4096] = "", want[64];
+	snprintf(path, sizeof path, "%s/settings.txt", gHome);
+	FILE *f = fopen(path, "r");
+	if (f)
+	{
+		text[fread(text, 1, sizeof text - 1u, f)] = '\0';
+		fclose(f);
+	}
+	snprintf(want, sizeof want, "usb.source.uid = %d\n", (int)uid);
+	ok &= strstr(text, want) != NULL;
+	snprintf(want, sizeof want, "usb.destination.uid = %d\n", (int)uid + 1);
+	ok &= strstr(text, want) != NULL;
 	MIDIEndpointDispose(dst);
 	MIDIClientDispose(client);
 	return ok ? 0 : 1;

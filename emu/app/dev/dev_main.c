@@ -66,7 +66,7 @@ static void usage(void)
 {
 	fputs("usage: lichomat-emu-dev [--card DIR] [--home DIR] [--render PATH] [--no-audio] [--no-midi]\n"
 		"                        [--device UID] [--buffer N] [--seconds S] [--script FILE] [--print-diag]\n"
-		"                        [--print-leds]\n", stderr);
+		"                        [--print-leds] [--after-pid N]\n", stderr);
 }
 
 static void message(void *ctx, const char *text)
@@ -128,12 +128,23 @@ static void printDiag(void)
 	}
 	const app_diagnostics_t *g = &s->diag;
 	const int lead = g->leadMin <= g->leadMax;
+	const emu_counters_t *c = &g->core;
+	const app_fwCounters_t *w = &g->fw;
 	printf("diag blockRate=%.2f load=%.3f L=%.2fms D=%.2fms Deff=%.2fms lead=%.2f..%.2fms inLat=%.2f..%.2fms "
 		"outUnderruns=%llu fwUnderruns=%llu output=%s realtime=%d vt=%.3f wall=%.3f\n",
 		g->blockRate, g->load, g->L * 1e3, g->D * 1e3, g->Deff * 1e3, lead ? g->leadMin * 1e3 : 0.0,
 		lead ? g->leadMax * 1e3 : 0.0, g->inLatMin * 1e3, g->inLatMax * 1e3, (unsigned long long)g->outUnderruns,
 		(unsigned long long)g->core.underruns, g->outputRunning && g->output.name[0] ? g->output.name : "none",
 		g->realtime, (double)s->vt / EMU_CPU_HZ, D.snapWall);
+	printf("counters blocks=%llu underruns=%llu passes=%llu dinIn=%llu dinLost=%llu dinOut=%llu usbIn=%llu "
+		"usbInDropped=%llu usbOut=%llu clockEdges=%llu late=%llu tickCalls=%llu queueOverflow=%u dropouts=%u "
+		"syncIgnored=%u intervalsExcluded=%u tempoRestarts=%u syncOverflows=%u usbTxDropped=%u\n",
+		(unsigned long long)c->blocks, (unsigned long long)c->underruns, (unsigned long long)c->passes,
+		(unsigned long long)c->dinIn, (unsigned long long)c->dinLost, (unsigned long long)c->dinOut,
+		(unsigned long long)c->usbIn, (unsigned long long)c->usbInDropped, (unsigned long long)c->usbOut,
+		(unsigned long long)c->clockEdges, (unsigned long long)c->late, (unsigned long long)c->tickCalls,
+		w->queueOverflow, w->dropouts, w->syncIgnored, w->intervalsExcluded, w->tempoRestarts, w->syncOverflows,
+		w->usbTxDropped);
 }
 
 /* the newest snapshot: the LCD when its rows changed, the LEDs when their mask did */
@@ -509,6 +520,10 @@ static void command(char *line)
 		else if (app_shellCardOp(D.shell, APP_OP_PROJECT, rest, (int)a, replace) != 0)
 			printf("error: a card operation is running, or the command ring is full\n");
 	}
+	else if (!strcmp(c, "power"))
+		app_shellPowerCycle(D.shell);	/* spec 6.9: card out, then the process starts again (relaunch) */
+	else if (!strcmp(c, "test-fault"))
+		app_shellTestFault(D.shell);	/* the crash note's check: a SIGSEGV on the firmware thread */
 	else if (!strcmp(c, "diag"))
 		printDiag();
 	else if (!strcmp(c, "quit"))
@@ -581,7 +596,7 @@ int main(int argc, char **argv)
 {
 	app_shellOptions_t o;
 	const char *script = NULL;
-	int printDiagAtEnd = 0;
+	int printDiagAtEnd = 0, afterPid = 0;
 	char render[PATH_MAX];
 	memset(&o, 0, sizeof o);
 	o.message = message;
@@ -633,6 +648,16 @@ int main(int argc, char **argv)
 			o.home = argv[++i];
 		else if (!strcmp(a, "--render") && i + 1 < argc)
 			o.render = argv[++i];
+		else if (!strcmp(a, "--after-pid") && i + 1 < argc)
+		{
+			double pid;
+			if (parseNum(argv[++i], 1.0, 4294967295.0, &pid) != 0)
+			{
+				usage();
+				return 1;
+			}
+			afterPid = (int)pid;
+		}
 		else if (!strcmp(a, "--relaunched"))
 			;	/* the relaunch adds it; the script was dropped, so it runs once */
 		else
@@ -654,6 +679,8 @@ int main(int argc, char **argv)
 	sa.sa_handler = onSignal;
 	sigaction(SIGINT, &sa, NULL);
 	sigaction(SIGTERM, &sa, NULL);
+	if (afterPid && app_waitPid(afterPid, 5.0) != 0)	/* E18: the old process holds the endpoints' IDs until it ends */
+		fprintf(stderr, "lichomat-emu-dev: process %d is still running after 5 s\n", afterPid);
 	D.shell = app_shellNew();
 	char err[256] = "";
 	D.t0 = app_wallSeconds();

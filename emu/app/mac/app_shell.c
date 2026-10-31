@@ -16,6 +16,7 @@
 
 #include <limits.h>
 #include <mach/mach_time.h>
+#include <math.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
@@ -27,11 +28,15 @@
 #include "app_card.h"
 #include "app_coreaudio.h"
 #include "app_coremidi.h"
+#include "app_crash.h"
 #include "app_mach.h"
+#include "app_settings.h"
 #include "app_time.h"
 
 #define APP_SHELL_WARNINGS 64u
 #define APP_SHELL_STACK ((size_t)8 << 20)	/* the main thread's size: the firmware's frames are deep */
+#define APP_SHELL_SAVE_SEC 0.5	/**< a changed setting is saved this long after the first change: a slider's drag is one save */
+#define APP_SHELL_POWER_SEC 2.0	/**< a power cycle waits this long for 'card out applied' */
 #define APP_SHELL_HANG "hang: no progress for 10 s; the audio is stopped. Restart LICHOMAT Emu."
 
 struct app_shell
@@ -59,6 +64,11 @@ struct app_shell
 	int opActive, op, opProject, opReplace;	/**< a card operation waits for 'card out applied' */
 	char opPath[PATH_MAX];
 	double opDeadline, nextZone;	/**< app_wallSeconds() */
+	app_settings_t set;				/**< what the app runs with now (spec 6.9); saved to paths.settings */
+	int setDirty, setSaveFailed;	/**< a change is waiting to be saved; the failure has been said */
+	double setSaveAt;				/**< app_wallSeconds() */
+	int powerActive;				/**< a power cycle waits for 'card out applied' */
+	double powerDeadline;
 	char outputErr[256];		/**< the last open failure told to the main thread; firmware thread */
 	char card[PATH_MAX];
 	char warnings[APP_SHELL_WARNINGS][255];
@@ -108,12 +118,13 @@ static void app_shellOutputClose(void *ctx)
 static void *app_shellFirmware(void *arg)
 {
 	app_shell_t *s = arg;
+	app_crashThread();	/* its own alternate stack, for a fault signal on this thread (spec 6.9) */
 	s->mach.realtime = app_threadRealtime(s->mach.period) == 0;	/* E29: a refusal is not an error */
 	s->engine.diag.realtime = s->mach.realtime;
 	app_enginePowerOn(&s->engine, &s->cfg);
 	while (!app_engineSlice(&s->engine))
 		if (atomic_load(&s->testFault))
-			raise(SIGSEGV);	/* Task 10's crash check, on this thread */
+			raise(SIGSEGV);	/* the crash check, on this thread */
 	if (s->engine.outputRunning)
 		app_shellOutputClose(&s->mach);	/* the unit stops before the thread does */
 	atomic_store(&s->stopped, 1);
@@ -210,6 +221,91 @@ static void app_shellSayf(app_shell_t *s, const char *kind, const char *what, co
 	app_shellSay(s, line);
 }
 
+/* the MIDI-out thread, then the endpoints: after this their unique IDs are free (E18) */
+static void app_shellMidiStop(app_shell_t *s)
+{
+	if (s->haveMidiThread)
+	{
+		atomic_store(&s->midiStop, 1);
+		(void)semaphore_signal(s->mach.midiWake);
+		(void)pthread_join(s->midiOut, NULL);	/* it looks at the flag every 20 ms */
+		s->haveMidiThread = 0;
+	}
+	if (s->haveMidi)
+	{
+		app_cmDispose(&s->cm);
+		s->haveMidi = 0;
+	}
+}
+
+/* a model check of the firmware (spec 11): the crash note, then the end of the app, as for a fault signal */
+static void app_shellFault(void *ctx, const char *what)
+{
+	(void)ctx;
+	fprintf(stderr, "LICHOMAT Emu: %s\n", what);	/* the terminal of the harness, if there is one */
+	(void)app_crashWrite(what);
+	abort();
+}
+
+static void app_shellSave(app_shell_t *s)
+{
+	s->setDirty = 0;
+	if (!s->havePaths)
+		return;
+	if (app_settingsSave(&s->set, s->paths.settings) != 0)
+	{
+		if (!s->setSaveFailed)	/* once, not at every try */
+			app_shellSay(s, "error: the settings could not be saved");
+		s->setSaveFailed = 1;
+	}
+	else
+		s->setSaveFailed = 0;
+}
+
+/* a setting has changed: it is saved shortly, and a burst of changes is one save */
+static void app_shellChanged(app_shell_t *s)
+{
+	if (!s->setDirty)
+	{
+		s->setDirty = 1;
+		s->setSaveAt = app_wallSeconds() + APP_SHELL_SAVE_SEC;
+	}
+}
+
+static const char *const app_shellMixNames[] = { "sum", "out1", "out2", "four" };
+
+/* the settings that a command to the firmware thread changes (spec 6.9). Values the file would refuse are not stored. */
+static void app_shellNoteCommand(app_shell_t *s, const app_cmd_t *c)
+{
+	app_settings_t *t = &s->set;
+	switch (c->kind)
+	{
+	case APP_CMD_DELAY:
+		t->dAuto = c->a != 0;
+		if (!t->dAuto && c->x >= 0.0)	/* the file holds 0-500 ms; to the microsecond, as a person enters it */
+			t->dMs = round(fmin(c->x, 0.5) * 1e6) / 1e3;
+		break;
+	case APP_CMD_MIX:
+		if (c->a >= 0 && c->a < 4)
+			snprintf(t->mix, sizeof t->mix, "%s", app_shellMixNames[c->a]);
+		break;
+	case APP_CMD_GENERATOR:
+		if (c->a && c->x >= 1.0 && c->x <= APP_GEN_BPM_MAX && (c->b == 4 || c->b == 24))
+		{
+			t->genBpm = c->x;
+			t->genPpq = c->b;
+		}
+		break;
+	case APP_CMD_OUTPUT:
+		snprintf(t->outputUid, sizeof t->outputUid, "%s", c->text);
+		t->bufferFrames = c->a > 0 && c->a <= 4096 ? (uint32_t)c->a : 0u;
+		break;
+	default:
+		return;
+	}
+	app_shellChanged(s);
+}
+
 static void app_shellCardIn(app_shell_t *s)
 {
 	app_cmd_t c;
@@ -267,15 +363,50 @@ static void app_shellRunOp(app_shell_t *s)
 		app_shellCardIn(s);	/* the firmware remounts it as after a card swap */
 		return;
 	}
-	app_shellStop(s);	/* the card is out and nothing writes: the threads stop, the MIDI endpoints go (E18) */
+	app_shellRestart(s);	/* the card is out and nothing writes (E18) */
+}
+
+void app_shellRestart(app_shell_t *s)
+{
+	if (!s->o.relaunch)
+	{
+		app_shellSay(s, "notice: no restart from here");
+		return;
+	}
+	app_shellSave(s);	/* the settings, with the endpoints' IDs, are what the new process starts from */
+	app_shellMidiStop(s);	/* their unique IDs are free before the new process asks for them (E18, A10) */
 	if (s->o.relaunch(s->o.ctx) != 0)
 		app_shellSay(s, "error: the app could not start itself again; start it by hand");
+}
+
+void app_shellPowerCycle(app_shell_t *s)
+{
+	app_cmd_t c;
+	if (s->opActive || s->powerActive)
+	{
+		app_shellSay(s, "error: a card operation or a power cycle is running");
+		return;
+	}
+	if (!s->o.relaunch)
+	{
+		app_shellSay(s, "notice: no power cycle from here");
+		return;
+	}
+	memset(&c, 0, sizeof c);
+	c.kind = APP_CMD_CARD_OUT;
+	if (app_engineCommand(&s->engine, &c) != 0)
+	{
+		app_shellSay(s, "error: the command ring is full; no power cycle");
+		return;
+	}
+	s->powerActive = 1;
+	s->powerDeadline = app_wallSeconds() + APP_SHELL_POWER_SEC;
 }
 
 int app_shellCardOp(app_shell_t *s, int op, const char *path, int project, int replace)
 {
 	app_cmd_t c;
-	if (!s->havePaths || s->opActive || !path || !path[0]
+	if (!s->havePaths || s->opActive || s->powerActive || !path || !path[0]
 		|| snprintf(s->opPath, sizeof s->opPath, "%s", path) >= (int)sizeof s->opPath)
 		return -1;
 	memset(&c, 0, sizeof c);
@@ -309,6 +440,15 @@ int app_shellStart(app_shell_t *s, const app_shellOptions_t *o, char *err, size_
 	}
 	app_timeZoneRefresh();
 	s->havePaths = (o->home ? app_pathsAt(&s->paths, o->home) : app_pathsInit(&s->paths)) == 0;
+	app_settingsDefaults(&s->set);
+	if (s->havePaths)
+	{
+		if (app_settingsLoad(&s->set, s->paths.settings) < 0)
+			app_shellSay(s, "notice: settings.txt could not be read; the defaults are used");
+		app_crashInit(s->paths.home, emu_now, emu_trailWrite);	/* the trail writer is the core's, async-signal-safe */
+		app_crashThread();
+		app_crashSignals();
+	}
 	if (o->cardDir)
 	{
 		if (s->havePaths)
@@ -358,10 +498,33 @@ int app_shellStart(app_shell_t *s, const app_shellOptions_t *o, char *err, size_
 		return app_shellFail(err, n, "out of memory for the rings", 0);
 	s->engine.audio.wake = app_machWake;
 	s->engine.audio.wakeCtx = &s->mach;
-	s->cfg = (app_engineConfig_t){ .cardDir = s->o.cardDir, .seed = app_seedNow(), .dAuto = 1, .dSec = 0.0,
-		.mix = APP_MIX_SUM, .output = { "", o->bufferFrames, 2u }, .fault = NULL, .faultCtx = NULL };
-	if (o->deviceUid)
-		snprintf(s->cfg.output.uid, sizeof s->cfg.output.uid, "%s", o->deviceUid);
+	/* the options given on the command line win over the settings; what runs is then what the settings hold */
+	if (o->deviceUid && o->deviceUid[0])
+		snprintf(s->set.outputUid, sizeof s->set.outputUid, "%s", o->deviceUid);
+	if (o->bufferFrames)
+		s->set.bufferFrames = o->bufferFrames;
+	if (o->usbSrcUid)
+		s->set.usbSrcUid = o->usbSrcUid;
+	if (o->usbDstUid)
+		s->set.usbDstUid = o->usbDstUid;
+	if (o->dinSrcUid || (o->dinSrcName && o->dinSrcName[0]))
+	{
+		s->set.dinSrcUid = o->dinSrcUid;
+		snprintf(s->set.dinSrcName, sizeof s->set.dinSrcName, "%s", o->dinSrcName ? o->dinSrcName : "");
+	}
+	if (o->dinDstUid || (o->dinDstName && o->dinDstName[0]))
+	{
+		s->set.dinDstUid = o->dinDstUid;
+		snprintf(s->set.dinDstName, sizeof s->set.dinDstName, "%s", o->dinDstName ? o->dinDstName : "");
+	}
+	app_mix_t mix = APP_MIX_SUM;
+	for (int k = 0; k < 4; k++)
+		if (!strcmp(s->set.mix, app_shellMixNames[k]))
+			mix = (app_mix_t)k;
+	s->cfg = (app_engineConfig_t){ .cardDir = s->o.cardDir, .seed = app_seedNow(), .dAuto = s->set.dAuto,
+		.dSec = s->set.dMs / 1e3, .mix = mix, .output = { "", s->set.bufferFrames, 2u }, .fault = app_shellFault,
+		.faultCtx = s };
+	snprintf(s->cfg.output.uid, sizeof s->cfg.output.uid, "%s", s->set.outputUid);
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	pthread_attr_setstacksize(&attr, APP_SHELL_STACK);
@@ -380,14 +543,14 @@ int app_shellStart(app_shell_t *s, const app_shellOptions_t *o, char *err, size_
 		return app_shellFail(err, n, "the watchdog thread did not start", e);
 	}
 	s->haveWatchdog = 1;
-	s->dinUid[1] = o->dinSrcUid;
-	s->dinUid[0] = o->dinDstUid;
-	snprintf(s->dinName[1], sizeof s->dinName[1], "%s", o->dinSrcName ? o->dinSrcName : "");
-	snprintf(s->dinName[0], sizeof s->dinName[0], "%s", o->dinDstName ? o->dinDstName : "");
+	s->dinUid[1] = s->set.dinSrcUid;
+	s->dinUid[0] = s->set.dinDstUid;
+	snprintf(s->dinName[1], sizeof s->dinName[1], "%s", s->set.dinSrcName);
+	snprintf(s->dinName[0], sizeof s->dinName[0], "%s", s->set.dinDstName);
 	if (!o->noMidi)
 	{
 		char merr[256];
-		if (app_cmInit(&s->cm, &s->engine, o->usbSrcUid, o->usbDstUid, merr, sizeof merr) != 0)
+		if (app_cmInit(&s->cm, &s->engine, s->set.usbSrcUid, s->set.usbDstUid, merr, sizeof merr) != 0)
 		{
 			char line[300];
 			snprintf(line, sizeof line, "notice: MIDI is off: %s", merr);	/* the app runs on without it */
@@ -396,6 +559,8 @@ int app_shellStart(app_shell_t *s, const app_shellOptions_t *o, char *err, size_
 		else
 		{
 			s->haveMidi = 1;
+			s->set.usbSrcUid = s->cm.usbSrcUid;	/* the IDs they have now are asked for again at the next start (spec 6.9) */
+			s->set.usbDstUid = s->cm.usbDstUid;
 			e = pthread_create(&s->midiOut, NULL, app_shellMidiOut, s);
 			if (e != 0)
 			{
@@ -408,6 +573,26 @@ int app_shellStart(app_shell_t *s, const app_shellOptions_t *o, char *err, size_
 			s->nextBind = app_wallSeconds() + 1.0;
 		}
 	}
+	char note[64];
+	if (s->havePaths && app_crashLatest(s->paths.home, s->set.crashShown, note, sizeof note))
+	{
+		/* a note from an earlier run (spec 6.9): its name and its first 3 lines, said once */
+		char path[PATH_MAX + 80], text[400];
+		size_t k = (size_t)snprintf(text, sizeof text, "crash note: %s", note);
+		snprintf(path, sizeof path, "%s/%s", s->paths.home, note);
+		FILE *f = fopen(path, "r");
+		char row[200];
+		for (int i = 0; f && i < 3 && fgets(row, sizeof row, f) && k + 1u < sizeof text; i++)
+		{
+			row[strcspn(row, "\r\n")] = '\0';
+			k += (size_t)snprintf(text + k, sizeof text - k, "\n%s", row);
+		}
+		if (f)
+			fclose(f);
+		app_shellSay(s, text);
+		snprintf(s->set.crashShown, sizeof s->set.crashShown, "%s", note);
+	}
+	app_shellSave(s);	/* the first run's file, the endpoints' IDs, the note that has been shown */
 	return 0;
 }
 
@@ -423,6 +608,11 @@ int app_shellFrame(app_shell_t *s)
 		{
 			if (s->opActive)
 				app_shellRunOp(s);
+			else if (s->powerActive)
+			{
+				s->powerActive = 0;
+				app_shellRestart(s);	/* the card is out and nothing writes (E18) */
+			}
 		}
 		else if (a.kind == APP_MSG_NOTICE)
 		{
@@ -437,6 +627,13 @@ int app_shellFrame(app_shell_t *s)
 		app_shellSay(s, "error: the card did not come out; nothing was copied");
 		app_shellCardIn(s);
 	}
+	if (s->powerActive && wall > s->powerDeadline)
+	{
+		s->powerActive = 0;
+		app_shellRestart(s);	/* no answer in 2 s: the power goes off all the same (spec 6.9) */
+	}
+	if (s->setDirty && wall >= s->setSaveAt)
+		app_shellSave(s);
 	if (wall >= s->nextZone)
 	{
 		s->nextZone = wall + 60.0;
@@ -471,7 +668,10 @@ int app_shellPanel(app_shell_t *s, const app_panelEvent_t *ev)
 
 int app_shellCommand(app_shell_t *s, const app_cmd_t *c)
 {
-	return app_engineCommand(&s->engine, c) == 0 ? 0 : -1;
+	if (app_engineCommand(&s->engine, c) != 0)
+		return -1;
+	app_shellNoteCommand(s, c);
+	return 0;
 }
 
 int app_shellDevices(app_shell_t *s, app_outputDevice_t *out, int max)
@@ -492,6 +692,38 @@ void app_shellBind(app_shell_t *s, int source, int32_t uid, const char *name)
 	snprintf(s->dinName[source], sizeof s->dinName[source], "%s", name ? name : "");
 	s->dinTold[source] = 0;
 	app_shellBindNow(s, source);
+	if (source)
+	{
+		s->set.dinSrcUid = s->dinUid[1];
+		snprintf(s->set.dinSrcName, sizeof s->set.dinSrcName, "%s", s->dinName[1]);
+	}
+	else
+	{
+		s->set.dinDstUid = s->dinUid[0];
+		snprintf(s->set.dinDstName, sizeof s->set.dinDstName, "%s", s->dinName[0]);
+	}
+	app_shellChanged(s);
+}
+
+void app_shellWindow(const app_shell_t *s, int out[4])
+{
+	memcpy(out, s->set.window, sizeof s->set.window);
+}
+
+void app_shellSetWindow(app_shell_t *s, const int frame[4])
+{
+	if (memcmp(frame, s->set.window, sizeof s->set.window) == 0)
+		return;
+	for (int i = 0; i < 4; i++)	/* the file would refuse these at the next start */
+		if (frame[i] < (i < 2 ? -100000 : 200) || frame[i] > 100000)
+			return;
+	memcpy(s->set.window, frame, sizeof s->set.window);
+	app_shellChanged(s);
+}
+
+const char *app_shellHome(const app_shell_t *s)
+{
+	return s->havePaths ? s->paths.home : "";
 }
 
 int app_shellHung(const app_shell_t *s)
@@ -515,23 +747,6 @@ const char *app_shellWarning(const app_shell_t *s, int i)
 void app_shellTestFault(app_shell_t *s)
 {
 	atomic_store(&s->testFault, 1);
-}
-
-/* the MIDI-out thread, then the endpoints: after this their unique IDs are free (E18) */
-static void app_shellMidiStop(app_shell_t *s)
-{
-	if (s->haveMidiThread)
-	{
-		atomic_store(&s->midiStop, 1);
-		(void)semaphore_signal(s->mach.midiWake);
-		(void)pthread_join(s->midiOut, NULL);	/* it looks at the flag every 20 ms */
-		s->haveMidiThread = 0;
-	}
-	if (s->haveMidi)
-	{
-		app_cmDispose(&s->cm);
-		s->haveMidi = 0;
-	}
 }
 
 void app_shellStop(app_shell_t *s)
@@ -563,4 +778,6 @@ void app_shellStop(app_shell_t *s)
 		}
 	}
 	app_shellMidiStop(s);
+	if (s->setDirty)
+		app_shellSave(s);	/* a change of the last half second */
 }

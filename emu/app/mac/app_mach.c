@@ -13,11 +13,16 @@
  */
 #include "app_mach.h"
 
+#include <errno.h>
 #include <mach/mach_time.h>
 #include <math.h>
 #include <pthread.h>
 #include <string.h>
+#include <sys/event.h>
 #include <time.h>
+#include <unistd.h>
+
+#include "app_shell.h"	/* app_waitPid() is declared there: app_mach.h cannot be included from C++ (_Atomic) */
 
 int app_machInit(app_mach_t *m, app_engine_t *e)
 {
@@ -123,4 +128,30 @@ uint64_t app_seedNow(void)	/* E27: never time() */
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
 	return ((uint64_t)ts.tv_sec << 30) ^ (uint64_t)ts.tv_nsec ^ mach_absolute_time();
+}
+
+int app_waitPid(int pid, double sec)
+{
+	if (pid <= 0)
+		return -1;
+	const int kq = kqueue();
+	if (kq < 0)
+		return -1;
+	struct kevent ev;
+	EV_SET(&ev, (uintptr_t)pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
+	int rc;
+	if (kevent(kq, &ev, 1, NULL, 0, NULL) < 0)
+		rc = errno == ESRCH ? 0 : -1;	/* ESRCH: it has already gone */
+	else
+	{
+		if (!(sec > 0.0))
+			sec = 0.0;
+		if (sec > 3600.0)
+			sec = 3600.0;
+		const struct timespec ts = { (time_t)sec, (long)((sec - floor(sec)) * 1e9) };
+		struct kevent out;
+		rc = kevent(kq, NULL, 0, &out, 1, &ts) > 0 ? 0 : -1;
+	}
+	close(kq);
+	return rc;
 }
