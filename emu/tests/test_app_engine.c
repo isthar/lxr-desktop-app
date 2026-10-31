@@ -135,7 +135,7 @@ TEST(R4_engine_splash)
 	for (unsigned i = 0; i < app_ringCount(&E.snap); i++)
 	{
 		const app_snapshot_t *s = app_ringPeek(&E.snap, i);
-		seen |= lcdHas(s, "LICHOMAT") && lcdHas(s, "v0.1 unofficial");
+		seen |= lcdHas(s, "LICHOMAT") && lcdHas(s, "v" EMU_TEST_FW_VERSION " unofficial");
 	}
 	ASSERT_TRUE(seen);
 	emu_counters_t c;

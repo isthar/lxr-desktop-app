@@ -406,6 +406,8 @@ emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R
     R4_engine_silent_open R4_engine_close_inflight R4_engine_late_point R4_engine_max_request R4_engine_cmd_delay
     R4_engine_power_dneg R4_engine_power_dnan R4_engine_power_dbig R4_engine_cmd_generator R4_engine_cmd_text
     R4_engine_cardswitch R4_engine_clockled R4_engine_snapshot_latch R4_engine_leadcarry)
+# the splash test expects the firmware's own version (appMain.c: "v" FIRMWARE_VERSION " unofficial"), not a fixed one
+target_compile_definitions(test_app_engine PRIVATE "EMU_TEST_FW_VERSION=\"${EMU_FIRMWARE_VERSION}\"")
 emu_add_app_test(test_app_m18 ENGINE IDS M18_midi_out_step M18_slave_90 M18_slave_128 M18_slave_174 M18_din_128
     M18_zero_d M18_out_start_phase M18_out_lead M18_out_stall M18_out_reopen M18_out_hang M18_out_jump)
 
@@ -432,7 +434,7 @@ if(LICHOMAT_EMU_APP)
     set(EMU_APP_TEST ${Python3_EXECUTABLE} "${EMU_DIR}/tests/app_test.py" --dev $<TARGET_FILE:lichomat-emu-dev>
         --app $<TARGET_FILE:lichomat-emu> --firmware "${CMAKE_BINARY_DIR}/m19/firmware.txt"
         --objects "${CMAKE_BINARY_DIR}/gui/objects.txt" --render $<TARGET_FILE:lichomat-render> --root "${LXR_ROOT}"
-        --work "${CMAKE_BINARY_DIR}/app-test")
+        --work "${CMAKE_BINARY_DIR}/app-test" --fwversion "${EMU_FIRMWARE_VERSION}")
     function(emu_app_tests)
         foreach(id IN LISTS ARGN)
             add_test(NAME ${id} COMMAND ${EMU_APP_TEST} ${id})

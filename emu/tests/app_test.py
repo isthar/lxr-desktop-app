@@ -2,7 +2,7 @@
 """The app's tests that run lichomat-emu-dev, the Dear ImGui pin and the bundle
 (stage 1b plan R4). Each case is a ctest id:
 
-    app_test.py --dev DEV --render RENDER --root ROOT --work WORK [--app APP] [--sanitized 0|1] ID
+    app_test.py --dev DEV --render RENDER --root ROOT --work WORK --fwversion VERSION [--app APP] [--sanitized 0|1] ID
 
 --app is the executable for R4_gui_version and R4_gui_clash, and the bundle (LICHOMAT Emu.app)
 for R4_bundle. --sanitized 1 says that the build links a sanitizer runtime, as render_test.py's.
@@ -61,8 +61,11 @@ def lcd_lines(out):
             for m in re.finditer(r'^lcd (\S+) \|(.{16})\|(.{16})\|$', out, re.M)]
 
 
+FW_VERSION = None  # the firmware's own version, from main()'s --fwversion (emu/CMakeLists.txt reads it from CMakeLists.txt)
+
+
 def splash(line):
-    return 'LICHOMAT' in line[1] and 'v0.1 unofficial' in line[2]
+    return 'LICHOMAT' in line[1] and ('v%s unofficial' % FW_VERSION) in line[2]
 
 
 def R4_dev_headless(t):
@@ -295,12 +298,14 @@ CASES = {f.__name__: f for f in [R4_dev_headless, R4_dev_import, R4_dev_crash, R
 
 def main():
     p = argparse.ArgumentParser()
-    for o in ('--dev', '--render', '--root', '--work', '--app', '--firmware', '--objects'):
+    for o in ('--dev', '--render', '--root', '--work', '--app', '--firmware', '--objects', '--fwversion'):
         p.add_argument(o)
     p.add_argument('--sanitized', choices=('0', '1'), default='0')
     p.add_argument('id')
     a = p.parse_args()
     check(a.id in CASES, 'no case ' + a.id)
+    global FW_VERSION
+    FW_VERSION = a.fwversion
     CASES[a.id](Case(a))
     print('PASS ' + a.id)
 
