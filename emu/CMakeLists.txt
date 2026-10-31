@@ -324,6 +324,54 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     emu_render_tests(M14_speed)	# spec 9.2: Release runs M14's speed check
 endif()
 
+# --- LICHOMAT Emu, tier 2 (spec 6, 9.2; plan R4) ---------------------------------------
+# The app's plain C units and the engine build in every configuration (plan E4): they
+# need no framework, so the sanitizer job tests them. LICHOMAT_EMU_APP adds the CoreAudio
+# and CoreMIDI glue, the dev harness, the GUI and the bundle.
+option(LICHOMAT_EMU_APP "Build LICHOMAT Emu.app, its device glue and the dev harness" ON)
+set(EMU_APP_DIR "${EMU_DIR}/app")
+set(EMU_APP_FLAGS ${EMU_SAN_FLAGS} -Wall -Wextra -Werror "SHELL:-ivfsoverlay ${EMU_OVERLAY}")
+set(EMU_APP_UNIT_SOURCES "${EMU_APP_DIR}/engine/app_ring.c")
+add_library(emu_app_units OBJECT ${EMU_APP_UNIT_SOURCES})
+target_include_directories(emu_app_units PUBLIC "${EMU_APP_DIR}/engine" "${EMU_DIR}/core" "${EMU_DIR}/common")
+target_compile_options(emu_app_units PRIVATE ${EMU_APP_FLAGS})
+
+# The options of the app's tests: no emu_fw_headers, whose section define must not reach
+# Apple's headers (spec 3.4)
+add_library(emu_app_test_options INTERFACE)
+target_include_directories(emu_app_test_options INTERFACE "${EMU_APP_DIR}/engine" "${EMU_APP_DIR}/mac"
+    "${EMU_DIR}/common" "${EMU_DIR}/core" "${EMU_DIR}/tests" "${LXR_ROOT}/tests" "${CMAKE_BINARY_DIR}")
+target_compile_options(emu_app_test_options INTERFACE ${EMU_APP_FLAGS})
+target_compile_definitions(emu_app_test_options INTERFACE "EMU_TEST_CARDS=\"${EMU_DIR}/tests/cards\"")
+
+# emu_add_app_test(<name> [ENGINE] [MAC] [FRAMEWORKS <f>...] IDS <id>...): emu/tests/<name>.c
+# with the app's units; ENGINE adds the engine and the whole virtual device; MAC the glue.
+# The targets named here appear in Tasks 4 and 6; a generator expression is only
+# resolved for a test that uses it.
+function(emu_add_app_test name)
+    cmake_parse_arguments(ARG "ENGINE;MAC" "" "IDS;FRAMEWORKS" ${ARGN})
+    set(objs $<TARGET_OBJECTS:emu_app_units>)
+    if(ARG_ENGINE)
+        list(APPEND objs $<TARGET_OBJECTS:emu_app_engine> $<TARGET_OBJECTS:emu_app_fw> ${EMU_DEVICE_OBJECTS})
+    else()
+        list(APPEND objs $<TARGET_OBJECTS:emu_hostfs>)
+    endif()
+    if(ARG_MAC)
+        list(APPEND objs $<TARGET_OBJECTS:emu_app_mac>)
+    endif()
+    add_executable(${name} tests/${name}.c ${objs})
+    target_link_libraries(${name} PRIVATE emu_app_test_options)
+    foreach(f IN LISTS ARG_FRAMEWORKS)
+        target_link_libraries(${name} PRIVATE "-framework ${f}")
+    endforeach()
+    foreach(id IN LISTS ARG_IDS)
+        add_test(NAME ${id} COMMAND ${name} ${id})
+        set_tests_properties(${id} PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77)
+    endforeach()
+endfunction()
+
+emu_add_app_test(test_app_ring IDS M18_ring_fill_drop M18_ring_wrap M18_ring_threads)
+
 # The temporary folders: every test above gets TMPDIR = a folder of this build,
 # which emu_tmp_setup empties first and emu_tmp_clean checks last. A test removes
 # what it makes there, also when it fails (emu_testTempDir() at exit, the
