@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-31 02:53",
+    "updated": "2026-10-31 02:55",
     "phase": "Etap 2: v0.4 (atmosfera) w toku; A1-A6 gotowe, A7-A9 czekają na H12",
     "focus": "v0.4 A1-A6 gotowe na gałęzi v0.4 (36245bf): delay z tempem, filtr DJ, bufor i parametry pogłosu. Pogłos, freeze i rumble (A7-A9) po Twoim odczycie CPU (H12).",
     "branch": "timing-core",
-    "head": "dec5835",
+    "head": "0ae45f7",
     "next": "Ty: jedna sesja testowa na v0.3 (docs/lichomat/test-session-v0.3.md), najpierw H12. Ja: do ok. 04:00 części v0.4 bez H12, potem przerwa; po H12 v0.4 A7-A11.",
-    "updated_at": "2026-10-31T02:53:00+01:00",
+    "updated_at": "2026-10-31T02:55:00+01:00",
     "now": "Od 02:53: porządki; CI dla v0.4 czeka na runner GitHuba."
   },
   "epics": [
@@ -855,7 +855,7 @@
       "status": "zamknięte",
       "question": "Filtr DJ, rezonans, poziom pogłosu, freeze i decay nie są na liście celów modulacji (LFO, velocity), choć plan v0.4 (D33) tak zakładał. Dopisać je do listy?",
       "assumption": "Tylko jeśli fw 1.7 bezpiecznie pomija albo przycina wskaźnik celu spoza swojej listy.",
-      "answer": "Moja rekomendacja według Twojej reguły z 29.10, 05:19, 31.10, 02:53: sprawdzę to w A7 (jak kit zapisuje cel modulacji i co 1.7 robi z wskaźnikiem spoza listy). Jeśli 1.7 to bezpiecznie pomija, dopiszę pięć celów na końcu listy; jeśli nie, zostaje menu i NRPN, a dokumenty powiedzą to wprost. Do tego czasu: menu i NRPN 96-99 i 116."
+      "answer": "Moja decyzja według Twojej reguły z 29.10, 05:19, 31.10, 02:55: w v0.4 filtr DJ, rezonans, poziom pogłosu, freeze i decay sterują menu i NRPN (96-99, 116), bez LFO i velocity. Powód z kodu: cele modulacji fw 1.7 to zakresy wskaźników przypisane do głosów (modTargetVoiceOffsets w Cc2Text.c), a te parametry należą do mastera, nie do głosu; dopisanie ich dałoby kity ze wskaźnikami celu, których fw 1.7 nie zna. Plan v0.4 i dokumenty mówią to wprost."
     }
   ],
   "log": [
@@ -2853,6 +2853,11 @@
       "n": 399,
       "at": "2026-10-31 02:53",
       "text": "02:53 v0.4 bez H12 (dec5835 na timing-core, 4caa0fc na v0.4; wypchnięte): kroki na LXR U23 (delay z tempem), U24 (filtr DJ), U25 (zgodność z fw 1.7), reguła budżetu v0.4 w HANDOFF, tools/demo_v04.sh: echa co 360,07 ms przy 1/8 z kropką i 125 BPM; przejazd filtrem DJ przesuwa widmo (rendery w build/demo/v04-*). Zgłoszone przez agenta braki Note On po starcie: fałszywy alarm, Note On i Note Off zgadzają się co do sztuki. Q29: filtr DJ nie jest celem LFO; decyzja przy A7. Plan v0.4 ma sekcję poprawek po A1-A6."
+    },
+    {
+      "n": 400,
+      "at": "2026-10-31 02:55",
+      "text": "02:55 Q29 rozstrzygnięte: filtr DJ i pozostałe cztery parametry atmosfery bez LFO i velocity w v0.4 (cele modulacji fw 1.7 to zakresy na głos, a te parametry należą do mastera; dopisanie zepsułoby zgodność kitów z 1.7). Sterowanie: menu i NRPN 96-99, 116."
     }
   ]
 }
