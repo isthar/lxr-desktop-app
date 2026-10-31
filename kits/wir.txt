@@ -1,0 +1,130 @@
+# WIR: hypnotic groove techno. A deep round kick with a short click, a tight clap,
+# a metallic closed hat, and two rolling percussion voices on Drum 2 and Drum 3
+# that sit in a short room.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#
+# Built by tools/kit_build.py: NAME = VALUE, the values as the menu stores them
+# (emu/render/render_params.h names them). Menus count from 0: osc wave 0 Sin 1 Tri
+# 2 Saw 3 Rec 4 Noi 5 PWM; filter 0 LP 1 HP 2 BP 3 UBP 4 Nch 5 Pek 6 LP2 7 off;
+# out 0 St1 ... 6 FX; transient 0 Snp 1 Ofs 2 Clk 3 Ck2 4 Tik 5 Kik 6 Rim 7 Drp
+# 8 Hat 9 Clp 10 Kk2 11 Snr 12 Tom 13 Sp2. Notes: coarse 31 is G1 (49 Hz), +12 an
+# octave; fine 64 is in tune.
+
+name = WIR
+slot = 60
+
+# Drum 1: the kick. A sine at G1 plus a little (about 50 Hz), a short pitch drop
+# from about 3.9x, a long round body and the Clk transient for the click
+osc_wave_drum1 = 0
+coarse1 = 31
+fine1 = 90            # a fifth of a semitone up: about 49.6 Hz
+modamnt1 = 38         # the pitch drop: about 3.9x at the hit
+mod_eg1 = 26          # a fast drop: the punch, not a zap
+pitch_slope1 = 30
+veloa1 = 0
+velod1 = 30           # the body
+vol_slope1 = 55
+trans1_wave = 2       # Clk
+trans1_vol = 55
+trans1_freq = 70
+filter_type_1 = 0     # LP, almost open: rounds the click a little
+filter_freq_1 = 115
+drive1 = 84           # warm saturation: it gives the body its level
+vol1 = 127
+
+# Drum 2: a low tom/bongo for the rolling 16ths, a touch of FM for wood
+osc_wave_drum2 = 1    # Tri
+coarse2 = 52          # E3
+modamnt2 = 22
+mod_eg2 = 12
+velod2 = 8
+vol_slope2 = 40
+fmamnt2 = 18
+fm_freq2 = 71
+mod_wave_drum2 = 0
+trans2_wave = 4       # Tik
+trans2_vol = 30
+filter_type_2 = 7     # off
+pan2 = 48
+vol2 = 22
+audio_out2 = 6        # FX: the short room
+
+# Drum 3: a higher metallic perc (FM sine), syncopated against Drum 2
+osc_wave_drum3 = 0
+coarse3 = 64          # E4
+modamnt3 = 14
+mod_eg3 = 8
+velod3 = 9
+fmamnt3 = 42
+fm_freq3 = 83         # an inharmonic ratio: metal
+mod_wave_drum3 = 0
+filter_type_3 = 7
+pan3 = 82
+vol3 = 20
+audio_out3 = 6
+
+# Snare: a tight clap, repeated bursts of band-passed noise
+osc_wave_snare = 1
+coarse4 = 50
+mix1 = 112            # mostly noise
+noise_freq1 = 100
+modamnt4 = 20
+mod_eg4 = 10
+velod4 = 14
+vol_slope4 = 30
+repeat4 = 3
+filter_type_4 = 2     # BP
+filter_freq_4 = 86
+reso_4 = 18
+snare_distortion = 70
+trans4_wave = 9       # Clp
+trans4_vol = 50
+vol4 = 59
+
+# Cymbal: a dry metallic ride on the off-beats
+wave1_cym = 0
+wave2_cym = 3
+wave3_cym = 3
+coarse5 = 86
+mod_osc_f1_cym = 92
+mod_osc_f2_cym = 110
+mod_osc_gain1_cym = 80
+mod_osc_gain2_cym = 70
+filter_type_5 = 1     # HP
+filter_freq_5 = 92
+velod5 = 96
+vol5 = 14
+pan5 = 84
+
+# Hihat: metallic, square waves in FM; closed short, open longer
+wave1_hh = 3
+wave2_hh = 3
+wave3_hh = 3
+coarse6 = 80
+mod_osc_f1 = 90
+mod_osc_f2 = 110
+mod_osc_gain1 = 127
+mod_osc_gain2 = 127
+filter_type_6 = 1     # HP
+filter_freq_6 = 106
+reso_6 = 20
+velod6_closed = 6
+velod6_open = 28
+hat_distortion = 70
+vol6 = 36
+pan6 = 70
+
+# FX: the slot off; the reverb a short dark room for Drum 2 and Drum 3
+fx_type = 0
+rev_level = 55
+rev_size = 70
+rev_decay = 40        # about 1.1 s
+rev_tone = 35
+rev_predelay = 8
+rev_mod = 30

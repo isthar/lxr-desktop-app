@@ -1,0 +1,125 @@
+# MGLA: dub techno. A soft long kick, a rim on the rolling 16ths, a chordy FM stab
+# on Drum 3 thrown into a delay of a dotted eighth, and a long dark reverb that the
+# kick ducks.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#
+# Built by tools/kit_build.py: NAME = VALUE, the values as the menu stores them
+# (emu/render/render_params.h names them). Menus count from 0: osc wave 0 Sin 1 Tri
+# 2 Saw 3 Rec 4 Noi 5 PWM; filter 0 LP 1 HP 2 BP 3 UBP 4 Nch 5 Pek 6 LP2 7 off;
+# out 0 St1 ... 6 FX; transient 0 Snp 1 Ofs 2 Clk 3 Ck2 4 Tik 5 Kik 6 Rim 7 Drp
+# 8 Hat 9 Clp 10 Kk2 11 Snr 12 Tom 13 Sp2. Notes: coarse 31 is G1 (49 Hz), +12 an
+# octave; fine 64 is in tune.
+
+name = MGLA
+slot = 61
+
+# Drum 1: the kick, soft and long: a gentle pitch drop, no click, a low-passed body
+osc_wave_drum1 = 0
+coarse1 = 31          # G1, about 49 Hz
+fine1 = 64
+modamnt1 = 28         # about 2.6x at the hit
+mod_eg1 = 24
+pitch_slope1 = 40
+velod1 = 44           # long
+vol_slope1 = 62
+trans1_wave = 0       # Snp, low: the pitch snap only
+trans1_vol = 12
+filter_type_1 = 0     # LP: soft
+filter_freq_1 = 72
+drive1 = 58
+vol1 = 118
+
+# Drum 2: a rim/snap, short and high, into the delay
+osc_wave_drum2 = 1
+coarse2 = 76          # E5
+modamnt2 = 10
+mod_eg2 = 4
+velod2 = 4
+fmamnt2 = 30
+fm_freq2 = 90
+trans2_wave = 6       # Rim
+trans2_vol = 90
+filter_type_2 = 2     # BP
+filter_freq_2 = 100
+reso_2 = 25
+pan2 = 44
+vol2 = 64
+audio_out2 = 6        # FX: delay and reverb
+
+# Drum 3: the chord stab. FM with the modulator a fifth above the carrier gives a
+# harmonic spectrum around a low root with its octaves, fifth and major third; the
+# FM index falls with the modulation EG (mod 0: no pitch drop), a resonant LP rounds it
+osc_wave_drum3 = 0
+coarse3 = 57          # A3
+modamnt3 = 0
+mod_eg3 = 40          # how fast the stab darkens
+fmamnt3 = 62
+fm_freq3 = 64         # E4: a fifth above
+mod_wave_drum3 = 0
+mix_mod_3 = 0         # FM
+veloa3 = 2
+velod3 = 26
+vol_slope3 = 50
+filter_type_3 = 0     # LP
+filter_freq_3 = 78
+reso_3 = 48
+pan3 = 70
+vol3 = 52
+audio_out3 = 6        # FX
+
+# Snare: a soft clap with a short body, dry
+osc_wave_snare = 1
+coarse4 = 48
+mix1 = 104
+noise_freq1 = 92
+velod4 = 18
+repeat4 = 2
+filter_type_4 = 2
+filter_freq_4 = 78
+reso_4 = 10
+snare_distortion = 50
+vol4 = 110
+
+# Cymbal: a soft shaker of filtered noise on the off-beats
+wave1_cym = 4         # Noi
+coarse5 = 100
+filter_type_5 = 1
+filter_freq_5 = 100
+velod5 = 70
+vol5 = 52
+pan5 = 36
+
+# Hihat: soft, bright, the open one long
+wave1_hh = 4          # Noi
+coarse6 = 90
+filter_type_6 = 1
+filter_freq_6 = 104
+velod6_closed = 5
+velod6_open = 36
+vol6 = 70
+pan6 = 74
+
+# FX: the slot is a delay synced to a dotted eighth, then a long dark reverb that
+# Drum 1 ducks, so the kick stays clear
+fx_type = 4           # del
+fx_delay_type = 0     # Del
+fx_delay_sync = 7     # 8d
+fx_p1 = 58            # tim and rng: the free time that fw 1.7 and v0.1-v0.3 play
+fx_p2 = 127           # (no syn there), about 349 ms, the 8d of 128 BPM; with syn they do nothing
+fx_p3 = 48            # the delay's tone: darker echoes
+fx_p4 = 84            # feedback
+fx_dry_wet = 58
+rev_level = 104
+rev_size = 112
+rev_decay = 86        # about 5 s
+rev_tone = 28
+rev_predelay = 14
+rev_mod = 60
+rev_duck_src = 1      # dr1
+rev_duck_depth = 70

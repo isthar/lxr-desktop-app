@@ -1,0 +1,122 @@
+# IGLA: minimal / FM. A short clicky kick, FM percussion on Drum 2, Drum 3 and the
+# cymbal voice, a dry snap and short ticky hats; a little delay on Drum 3.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#
+# Built by tools/kit_build.py: NAME = VALUE, the values as the menu stores them
+# (emu/render/render_params.h names them). Menus count from 0: osc wave 0 Sin 1 Tri
+# 2 Saw 3 Rec 4 Noi 5 PWM; filter 0 LP 1 HP 2 BP 3 UBP 4 Nch 5 Pek 6 LP2 7 off;
+# out 0 St1 ... 6 FX; transient 0 Snp 1 Ofs 2 Clk 3 Ck2 4 Tik 5 Kik 6 Rim 7 Drp
+# 8 Hat 9 Clp 10 Kk2 11 Snr 12 Tom 13 Sp2. Notes: coarse 31 is G1 (49 Hz), +12 an
+# octave; fine 64 is in tune.
+
+name = IGLA
+slot = 63
+
+# Drum 1: the kick, short and clicky: a fast pitch drop and the Tik transient
+osc_wave_drum1 = 0
+coarse1 = 33          # A1, 55 Hz
+fine1 = 64
+modamnt1 = 46         # about 5x at the hit
+mod_eg1 = 9           # very fast: the click
+pitch_slope1 = 20
+velod1 = 20           # short
+vol_slope1 = 40
+trans1_wave = 4       # Tik
+trans1_vol = 85
+trans1_freq = 80
+filter_type_1 = 7     # off
+drive1 = 66
+vol1 = 108
+
+# Drum 2: an FM wood block: the modulator an octave and a fifth above (3:1)
+osc_wave_drum2 = 0
+coarse2 = 69          # A4
+modamnt2 = 8
+mod_eg2 = 6
+velod2 = 6
+fmamnt2 = 58
+fm_freq2 = 88         # E6: 3:1
+filter_type_2 = 7
+pan2 = 40
+vol2 = 42
+
+# Drum 3: an FM blip with a short "pew", an inharmonic ratio, into the delay
+osc_wave_drum3 = 0
+coarse3 = 76          # E5
+modamnt3 = 16
+mod_eg3 = 4
+velod3 = 5
+fmamnt3 = 74
+fm_freq3 = 93         # +17 semitones: inharmonic
+filter_type_3 = 7
+pan3 = 88
+vol3 = 76
+audio_out3 = 6
+
+# Snare: a dry snap: a short tone, bright noise, the Rim transient
+osc_wave_snare = 0
+coarse4 = 60
+mix1 = 88
+noise_freq1 = 120
+modamnt4 = 24
+mod_eg4 = 6
+velod4 = 8
+repeat4 = 0
+filter_type_4 = 1     # HP
+filter_freq_4 = 58
+trans4_wave = 6       # Rim
+trans4_vol = 80
+vol4 = 34
+
+# Cymbal: FM sines, a short metallic tick on the off-beats
+wave1_cym = 0
+wave2_cym = 0
+wave3_cym = 0
+coarse5 = 95
+mod_osc_f1_cym = 100
+mod_osc_f2_cym = 70
+mod_osc_gain1_cym = 90
+mod_osc_gain2_cym = 90
+filter_type_5 = 2     # BP
+filter_freq_5 = 96
+velod5 = 30
+vol5 = 70
+pan5 = 64
+
+# Hihat: short ticks of FM sines, high-passed
+wave1_hh = 0
+wave2_hh = 0
+wave3_hh = 0
+coarse6 = 100
+mod_osc_f1 = 110
+mod_osc_f2 = 120
+mod_osc_gain1 = 127
+mod_osc_gain2 = 127
+filter_type_6 = 1
+filter_freq_6 = 114
+velod6_closed = 3
+velod6_open = 12
+vol6 = 80
+pan6 = 80
+
+# FX: a dotted-sixteenth delay on Drum 3 with little feedback, a small dry room
+fx_type = 4           # del
+fx_delay_type = 1     # Pp: the echoes left and right
+fx_delay_sync = 4     # 16d: the echoes fall between the steps
+fx_p1 = 59            # tim and rng: the free time that fw 1.7 and v0.1-v0.3 play
+fx_p2 = 127           # (no syn there), about 176 ms, the 16d of 128 BPM; with syn they do nothing
+fx_p3 = 64
+fx_p4 = 60
+fx_dry_wet = 50
+rev_level = 50
+rev_size = 50
+rev_decay = 30        # about 0.8 s
+rev_tone = 45
+rev_predelay = 4
+rev_mod = 20

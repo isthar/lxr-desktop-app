@@ -1,0 +1,133 @@
+# RDZA: raw / industrial. A distorted punchy kick that feeds a dark reverb which
+# the kick itself ducks (the rumble), a noisy driven snare, harsh hats and metal.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#
+# Built by tools/kit_build.py: NAME = VALUE, the values as the menu stores them
+# (emu/render/render_params.h names them). Menus count from 0: osc wave 0 Sin 1 Tri
+# 2 Saw 3 Rec 4 Noi 5 PWM; filter 0 LP 1 HP 2 BP 3 UBP 4 Nch 5 Pek 6 LP2 7 off;
+# out 0 St1 ... 6 FX; transient 0 Snp 1 Ofs 2 Clk 3 Ck2 4 Tik 5 Kik 6 Rim 7 Drp
+# 8 Hat 9 Clp 10 Kk2 11 Snr 12 Tom 13 Sp2. Notes: coarse 31 is G1 (49 Hz), +12 an
+# octave; fine 64 is in tune.
+
+name = RDZA
+slot = 62
+
+# Drum 1: the kick. A sine at A1 (55 Hz), a hard pitch drop, driven and a bit
+# decimated; sent to the FX bus, whose reverb makes the rumble
+osc_wave_drum1 = 0
+coarse1 = 33          # A1
+fine1 = 64
+modamnt1 = 52         # about 6x at the hit
+mod_eg1 = 16
+pitch_slope1 = 26
+velod1 = 30
+vol_slope1 = 50
+trans1_wave = 5       # Kik
+trans1_vol = 80
+filter_type_1 = 0
+filter_freq_1 = 100
+reso_1 = 20
+filter_drive_1 = 50
+drive1 = 108
+voice_decimation1 = 112
+vol1 = 110
+audio_out1 = 6        # FX: the rumble
+
+# Drum 2: a driven FM metal hit for the 16ths
+osc_wave_drum2 = 0
+coarse2 = 45          # A2
+modamnt2 = 18
+mod_eg2 = 8
+velod2 = 10
+fmamnt2 = 90
+fm_freq2 = 77
+drive2 = 90
+filter_type_2 = 1     # HP: keeps it out of the kick
+filter_freq_2 = 60
+pan2 = 40
+vol2 = 76
+
+# Drum 3: a clank: a square in hard FM, band-passed with resonance
+osc_wave_drum3 = 3    # Rec
+coarse3 = 62          # D4
+fmamnt3 = 100
+fm_freq3 = 71         # an inharmonic ratio
+modamnt3 = 0
+velod3 = 9
+filter_type_3 = 2     # BP
+filter_freq_3 = 92
+reso_3 = 60
+drive3 = 70
+pan3 = 88
+vol3 = 70
+
+# Snare: noisy and driven, the Snr transient on top
+osc_wave_snare = 1
+coarse4 = 46
+mix1 = 120
+noise_freq1 = 118
+modamnt4 = 30
+mod_eg4 = 12
+velod4 = 16
+vol_slope4 = 45
+filter_type_4 = 1     # HP
+filter_freq_4 = 44
+reso_4 = 30
+snare_distortion = 85
+voice_decimation4 = 100
+trans4_wave = 11      # Snr
+trans4_vol = 80
+vol4 = 22
+
+# Cymbal: a harsh short metal crash on the off-beats
+wave1_cym = 3
+wave2_cym = 3
+wave3_cym = 3
+coarse5 = 100
+mod_osc_f1_cym = 113
+mod_osc_f2_cym = 77
+mod_osc_gain1_cym = 127
+mod_osc_gain2_cym = 127
+filter_type_5 = 1
+filter_freq_5 = 96
+velod5 = 24
+cymbal_distortion = 90
+vol5 = 22
+pan5 = 76
+
+# Hihat: harsh, squares in FM, distorted and decimated
+wave1_hh = 3
+wave2_hh = 3
+wave3_hh = 3
+coarse6 = 90
+mod_osc_f1 = 101
+mod_osc_f2 = 118
+mod_osc_gain1 = 127
+mod_osc_gain2 = 127
+filter_type_6 = 1
+filter_freq_6 = 110
+reso_6 = 40
+velod6_closed = 7
+velod6_open = 30
+hat_distortion = 70
+voice_decimation6 = 90
+vol6 = 32
+pan6 = 54
+
+# FX: the slot off; a big dark reverb on the kick, ducked by Drum 1: the tail
+# swells between the kicks and ducks under each one
+fx_type = 0
+rev_level = 104
+rev_size = 110
+rev_decay = 76        # about 3.7 s
+rev_tone = 14         # dark
+rev_predelay = 6
+rev_mod = 40
+rev_duck_src = 1      # dr1
+rev_duck_depth = 112
