@@ -18,6 +18,8 @@
    the allow-listed texts of emu/tests/name_allow.txt (one per line). Code is
    left out: its bytes can spell 'lxr' by chance (R2.4 saw it in a Release
    build after an unrelated change), and no text the device shows lives there.
+   So are the tables that describe code (__TEXT,__unwind_info and __eh_frame:
+   function offsets and encodings; R5 saw the offset 0x52784c spell 'LxR').
    Paths of the repository and the build inside a string are left out first.
 
 The last line is 'licence gate: N errors' when the gate fails (exit 1).
@@ -120,6 +122,8 @@ LC_SEGMENT_64 = 0x19
 ZEROFILL = {0x01, 0x0c, 0x12}
 # S_ATTR_PURE_INSTRUCTIONS, S_ATTR_SOME_INSTRUCTIONS: the section holds code
 CODE_ATTRS = 0x80000000 | 0x00000400
+# the tables that describe code: offsets and encodings, no text (see the docstring)
+CODE_TABLES = {('__TEXT', '__unwind_info'), ('__TEXT', '__eh_frame')}
 # a printable run of 3 or more bytes, as strings -a -n 3 finds it
 RUN = re.compile(rb'[\t\x20-\x7e]{3,}')
 
@@ -129,7 +133,8 @@ def strings(binary, errors):
     section of a 64-bit Mach-O file: __cstring holds only the string literals,
     while a const char x[][16] lies in __TEXT,__const and a char x[] = "..." in
     __DATA,__data. Every other section is read too, except those that hold
-    instructions (S_ATTR_PURE_INSTRUCTIONS or S_ATTR_SOME_INSTRUCTIONS)."""
+    instructions (S_ATTR_PURE_INSTRUCTIONS or S_ATTR_SOME_INSTRUCTIONS) and the
+    unwind tables."""
     with open(binary, 'rb') as f:
         data = f.read()
     if len(data) < 32 or struct.unpack_from('<I', data)[0] != MH_MAGIC_64:
@@ -145,7 +150,7 @@ def strings(binary, errors):
                 s = at + 72 + 80 * i  # a section_64 after the segment_command_64
                 sect, seg = (n.rstrip(b'\0').decode() for n in struct.unpack_from('<16s16s', data, s))
                 _, size, offset, _, _, _, flags = struct.unpack_from('<QQIIIII', data, s + 32)
-                if flags & 0xff in ZEROFILL or offset == 0 or flags & CODE_ATTRS:
+                if flags & 0xff in ZEROFILL or offset == 0 or flags & CODE_ATTRS or (seg, sect) in CODE_TABLES:
                     continue
                 for m in RUN.finditer(data, offset, offset + size):
                     yield seg, sect, m.group().decode('ascii')
