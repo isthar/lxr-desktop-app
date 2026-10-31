@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-31 22:27",
+    "updated": "2026-10-31 22:31",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Przerwa: v0.5 (M16) i kity WIR/MGLA/RDZA/IGLA (gałąź kits) gotowe",
     "branch": "timing-core",
-    "head": "6a5a723",
+    "head": "65c43d2",
     "next": "Twój odsłuch kitów i dem v0.5; H12 (pogłos v0.4), U27–U32 dla v0.5, A1–A12 w aplikacji, sesja testowa na LXR",
-    "updated_at": "2026-10-31T22:27:00+01:00",
+    "updated_at": "2026-10-31T22:31:00+01:00",
     "now": ""
   },
   "epics": [
@@ -3226,6 +3226,11 @@
       "n": 466,
       "at": "2026-10-31 22:27",
       "text": "Kity: przy wgrywaniu najpierw usuń z folderu projektu stare pliki 60-…63-*.SND (firmware wczytuje pierwszy plik o danym numerze). Kity bez LFO (renderer nie ustawia celów LFO ani velocity). Dema 2,6 MB każde w gałęzi kits/demo. Przerwa: czekam na odsłuch i na odczyt usage."
+    },
+    {
+      "n": 467,
+      "at": "2026-10-31 22:31",
+      "text": "Odczyt właściciela: usage 74% (22:29); szacunek skalibrowany (1% ≈ 7,83 M jednostek). Dema kitów w obu trybach do porównania A/B na tym samym wzorcu (8 taktów, 128 BPM): build/wt-kits/build/demo-blk/{wir,mgla,rdza,igla}-{smp,blk}.wav; wersje smp są identyczne z demami w gałęzi kits. CI na GitHubie dalej stoi (build v0.4 w kolejce od 18 h). Przerwa: kolejne kroki czekają na odsłuch kitów i dem v0.5."
     }
   ]
 }
