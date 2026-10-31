@@ -4192,7 +4192,7 @@ void panel_glyph(uint8_t c, const uint8_t cgram[64], uint8_t rows[8])
 }
 ```
 
-- [ ] **Step 4: The panel**, `panel.h` (a C interface with a `panel_t` of the GUI's own state: `latched[41]`, `mouse[41]`, `down[41]`, `knobRest[4]`, `knobAngle[4]`, the encoder's rest, the fader levels, the jack strip, the open windows) and `panel.cpp` (ImGui, C++17). It includes only `app_types.h`, `app_bind.h`, `app_shell.h` and `panel_font.h`, all safe for C++ (no `_Atomic`). `panel_frame(panel_t *p, app_shell_t *s)` draws one frame from `app_shellSnapshot(s)` (nothing but the menu bar before the first) and posts through `app_shellPanel()` and `app_shellCommand()`. The rows, by function (§6.6; A1 has the owner confirm it is no copy of the faceplate), in our own colours (a dark slate background, a teal LCD, amber LEDs):
+- [ ] **Step 4: The panel**, `panel.h` (a C interface with a `panel_t` of the GUI's own state: `latched[41]`, `mouse[41]`, `down[41]`, `knobRest[4]`, `knobAngle[4]`, the encoder's rest, the fader levels, the jack strip, the open windows) and `panel.cpp` (ImGui, C++17). It includes only `app_types.h`, `app_bind.h`, `app_shell.h` and `panel_font.h`, all safe for C++ (no `_Atomic`). `panel_frame(panel_t *p, app_shell_t *s)` draws one frame from `app_shellSnapshot(s)` (nothing but the menu bar before the first) and posts through `app_shellPanel()` and `app_shellCommand()`. The rows, by function (§6.6; superseded during execution by E33, the device's control layout without its names, logos, printing, graphics or colours), in our own colours (a dark slate background, a teal LCD, amber LEDs):
   1. the LCD (16 × 2 cells of 5 × 8 dots from `panel_glyph()`, blank while `displayOn` is 0, the underline cursor at `cursorRow`/`cursorCol` while `cursorOn`, blinking at 2 Hz of wall time while `blinkOn`) and the encoder;
   2. knobs 1–4 under LCD columns 1–4 (16 characters / 4);
   3. faders 1–6, labelled `drum 1`, `drum 2`, `drum 3`, `snare`, `cymbal`, `hi-hats`;
@@ -4517,7 +4517,7 @@ Expected: `check.sh` with 57 host tests, 213 emulator ids, the image `OK`, 0 war
 
 | Check | The owner, by hand | Tests |
 |---|---|---|
-| A1 | Open Anyway; the splash for about 1 s; About's notices; the panel is no copy of the faceplate | `R4_engine_splash`, `R4_dev_headless` (1 s of wall time), `R4_bundle`, `M21` (names, licences), `R4_imgui_pin`, `R4_panel_font` |
+| A1 | Open Anyway; the splash for about 1 s; About's notices; the panel carries none of the faceplate's names, logos, printing, graphics or colours (E33) | `R4_engine_splash`, `R4_dev_headless` (1 s of wall time), `R4_bundle`, `M21` (names, licences), `R4_imgui_pin`, `R4_panel_font` |
 | A2 | An imported copy of the card plays its projects and sounds like the device | `R4_card_import`, `R4_dev_import`, `R4_card_order`, `M18_render_mix`; the goldens (tier 1) |
 | A3 | Steps per knob turn within 10 % of the device; fader order; encoder; a latched SHIFT | M8 (the core: 134 and 22 steps, faders); the panel's mapping by hand |
 | A4 | Master at 120 BPM: DAW 120.0 ± 0.1; F8 20.83 ± 1.5 ms; start and stop | `M18_midi_out_step`, `M18_midi_usb_out`, `R4_dev_coremidi`; G5 (F8 counts) |
