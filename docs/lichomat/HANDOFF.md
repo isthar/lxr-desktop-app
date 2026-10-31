@@ -17,6 +17,7 @@ Read this first when picking the project up in a new session.
 | Stage 1b plan, R2 and R3 (the renderer `lichomat-render`, the goldens, the emulator CI; R2.1–R2.6 and R3.1–R3.6 done on `emulator`, head `56fe495`: 161 ctest ids in Debug, 162 in Release, CI `emulator.yml` green with ASan and UBSan; also merged into `v0.3`) | `docs/superpowers/plans/2026-10-29-emulator-r2-r3-renderer-goldens.md` |
 | Milestone report of R2 | `docs/lichomat/reports/M9-emulator-R2.md` |
 | Milestone report of R3 (goldens, emulator CI, F13–F18, the random sweeps `tools/emu_fuzz.py`) | `docs/lichomat/reports/M12-emulator-R3.md` |
+| Plan v0.4, atmosphere (tasks A1–A11, D30–D44; branch `v0.4` from `v0.3` at `a9865dc`, worktree `build/wt-v04`, pushed). Done: A1–A6 (static reverb cost, budget and the reverb's own RAM buffer, the kit block, menus, tempo-synced delay, DJ filter) and the fixes of their review, head `36245bf`: 99 host ids, 180 emulator ids; budget DTCM+RAM 452,540 of 455,544 B. A7–A9 (reverb, freeze, rumble) wait for the owner's H12: full rate if pk ≤ 46.24, half rate if ≤ 63.28 (D41, `docs/lichomat/reports/v0.4-reverb-cost.md`) | `docs/superpowers/plans/2026-10-31-v0.4-atmosphere.md` |
 | The owner's proposed single test session on 0.3 (H12 first; Polish) | `docs/lichomat/test-session-v0.3.md` |
 | How the owner renders own projects in the emulator (Polish) | `docs/lichomat/emulator-jak-uzywac.md` |
 | Milestone report of v0.2 | `docs/lichomat/reports/M10-v0.2.md` |

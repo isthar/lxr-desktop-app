@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 00:49",
-    "phase": "Etap 2: v0.4 (atmosfera) w toku, część przed H12 (A1-A6)",
-    "focus": "v0.4: A1-A6 na gałęzi v0.4 od v0.3; pogłos, freeze i rumble (A7-A9) czekają na odczyt CPU (H12).",
+    "updated": "2026-10-31 02:23",
+    "phase": "Etap 2: v0.4 (atmosfera) w toku; A1-A6 gotowe, A7-A9 czekają na H12",
+    "focus": "v0.4 A1-A6 gotowe na gałęzi v0.4 (36245bf): delay z tempem, filtr DJ, bufor i parametry pogłosu. Pogłos, freeze i rumble (A7-A9) po Twoim odczycie CPU (H12).",
     "branch": "timing-core",
-    "head": "c6558fc",
-    "next": "Ty: jedna sesja testowa na v0.3 według docs/lichomat/test-session-v0.3.md, najpierw H12 (odczyt CPU odblokowuje v0.4); odsłuch build/demo/v02-*, v03-* i build/dlc/*. Ja: przerwa i podsumowanie ok. 04:00 albo przy 73%.",
-    "updated_at": "2026-10-31T00:49:00+01:00",
-    "now": "Od 00:49: agent w tle robi v0.4 A3 (parametry, blok w kicie) i A4 (menu)."
+    "head": "36245bf",
+    "next": "Ty: jedna sesja testowa na v0.3 według docs/lichomat/test-session-v0.3.md, najpierw H12 (odczyt CPU odblokowuje pogłos w v0.4: pełna częstotliwość, jeśli pk ≤ 46,2%, połowiczna, jeśli ≤ 63,3%); odsłuch build/demo/* i build/dlc/*. Ja: przerwa od ok. 02:30; po H12 v0.4 A7-A11.",
+    "updated_at": "2026-10-31T02:23:00+01:00",
+    "now": "Od 02:23: podsumowanie nocy; potem przerwa."
   },
   "epics": [
     {
@@ -519,9 +519,9 @@
     {
       "id": "E6.9",
       "epic": "E6",
-      "status": "do zrobienia",
-      "title": "Filtr DJ na masterze (v0.4)",
-      "updated": "2026-10-30"
+      "status": "w toku",
+      "title": "Filtr DJ na masterze: zrobiony na gałęzi v0.4 (A6, d4fe079; poprawki d2001f9), czeka na wydanie v0.4",
+      "updated": "2026-10-31"
     },
     {
       "id": "E6.10",
@@ -555,15 +555,15 @@
       "id": "E7.3",
       "epic": "E7",
       "status": "do zrobienia",
-      "title": "Pogłos jako osobny efekt obok delaya, z własnym buforem w RAM, na bazie wyłączonego „Plt” z fw 1.7 (v0.4)",
-      "updated": "2026-10-30"
+      "title": "Pogłos jako osobny efekt obok delaya: bufor 56 KB w RAM, budżet i poprawka Reverb.c:375 gotowe (v0.4 A2); sam efekt (A7) czeka na H12",
+      "updated": "2026-10-31"
     },
     {
       "id": "E7.4",
       "epic": "E7",
-      "status": "do zrobienia",
-      "title": "Delay zsynchronizowany z tempem (v0.4)",
-      "updated": "2026-10-30"
+      "status": "w toku",
+      "title": "Delay zsynchronizowany z tempem: zrobiony na gałęzi v0.4 (A5, 955930d; poprawki 75c49ba), czeka na wydanie v0.4",
+      "updated": "2026-10-31"
     },
     {
       "id": "E7.5",
@@ -2791,6 +2791,41 @@
       "n": 388,
       "at": "2026-10-31 00:49",
       "text": "00:49 Start v0.4 A3 i A4 w tle (agent): nowe parametry z blokiem za 255 bajtami kitu, menu FX i filtr DJ na stronie trybu wykonawczego."
+    },
+    {
+      "n": 389,
+      "at": "2026-10-31 01:11",
+      "text": "01:11 v0.4 A3 gotowe (e45fab7, wypchnięte): 12 nowych parametrów (filtr DJ, rezonans, poziom pogłosu, freeze, decay w wolnych bajtach kitu; rozmiar, tone, predelay, modulacja, źródło i głębokość duckingu, synchronizacja delaya w 13-bajtowym bloku za 255 bajtami kitu). fw 1.7 bloku nie czyta; kit bez bloku dostaje wartości domyślne. glo.cfg dalej 30 B. 6 nowych testów presetów i test emulatora V04_kit_file. Host 93, emulator 177; RAM +456 B."
+    },
+    {
+      "n": 390,
+      "at": "2026-10-31 01:18",
+      "text": "01:18 v0.4 A4 gotowe (872c746, wypchnięte): strona FX ma pod-strony pogłosu (lvl siz dec ton pre mod frz syn) i rumble (dck ddp djf djr), SHIFT + krok 15 przełącza efekt, pogłos i rumble; filtr DJ (djf djr) na stronie trybu wykonawczego. Sprawdzone odstępstwa A3: zgodne z decyzjami planu (żywy filtr DJ i freeze przechodzą przez wczytanie kitu; karty testowe z nowym blokiem; nagrania wzorcowe bez zmian). Błąd w planie: PAR_REV_DECAY to 244, nie 245."
+    },
+    {
+      "n": 391,
+      "at": "2026-10-31 01:18",
+      "text": "01:18 Start v0.4 A5 i A6 w tle (agent): delay z tempem (G11) i filtr DJ na masterze (G12), potem fuzzing brzmień i MIDI."
+    },
+    {
+      "n": 392,
+      "at": "2026-10-31 01:26",
+      "text": "01:26 v0.4 A5 gotowe (955930d, wypchnięte): delay z tempem 1/16-1/4, z kropką i triolowy (parametr syn); za długi czas dzieli się na pół, żeby trzymać siatkę. Test DY1 i nagranie wzorcowe G11 (echa co 0,25 s przy 1/8 i 120 BPM). Host 94, emulator 178; ITCM 13 552 z 16 384 B."
+    },
+    {
+      "n": 393,
+      "at": "2026-10-31 01:40",
+      "text": "01:40 v0.4 A6 gotowe (d4fe079, wypchnięte): filtr DJ na obu wyjściach stereo (LP ← środek → HP z rezonansem; w środku sygnał bit w bit bez zmian), testy DJ1 i DJ2, nagranie wzorcowe G12. Koszt filtra 3,69% bloku, więc reguła D41: pełna częstotliwość pogłosu, jeśli pk z H12 ≤ 46,2%, połowiczna, jeśli ≤ 63,3%. Fuzzing brzmień i MIDI na v0.4 (po 200 renderów): zero znalezisk. Host 96, emulator 179; budżet DTCM+RAM 452 540 z 455 544 B."
+    },
+    {
+      "n": 394,
+      "at": "2026-10-31 01:55",
+      "text": "01:55 Lekki przegląd v0.4 A1-A6: nic ważnego, 5 drobnych uwag. NRPN 174-180 zapisuje surowe wartości w nowe parametry 302-308; brak testu djFilter_process (wyjście 2, crossfade); żaden test nie wczytuje już kitu bez bloku i nie sprawdza bloku w tmp.snd i w zapisie morph; przeskok filtra DJ z LP na HP w jednym bloku może kliknąć; wyścig przerwania z pętlą główną przy synchronizacji delaya. Agent w tle poprawia wszystkie 5, testy najpierw."
+    },
+    {
+      "n": 395,
+      "at": "2026-10-31 02:23",
+      "text": "02:23 Poprawki z przeglądu v0.4 gotowe (75c49ba, d2001f9, 36245bf; wypchnięte). NRPN nie zapisuje już parametrów 302-308. Filtr DJ ma testy na obu wyjściach, a przeskok LP↔HP idzie przez środek bez kliku (krok 27 619 → 1 625 LSB). Testy bloku kitu w tmp.snd, w zapisie morph i dla kitu z fw 1.7 (w emulatorze bajt w bajt). Wyścig synchronizacji delaya usunięty przez krótkie maskowanie przerwań. Host 99, emulator 180; nagrania wzorcowe bez zmian; fuzzing czysty."
     }
   ]
 }
