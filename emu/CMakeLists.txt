@@ -401,6 +401,10 @@ emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R
 emu_add_app_test(test_app_m18 ENGINE IDS M18_midi_out_step M18_slave_90 M18_slave_128 M18_slave_174 M18_din_128
     M18_zero_d)
 
+# the vendored Dear ImGui is the 15 files of v1.92.9b, as its README pins them (plan Task 11)
+add_test(NAME R4_imgui_pin COMMAND ${Python3_EXECUTABLE} "${EMU_DIR}/tests/app_test.py" --root "${LXR_ROOT}"
+    --work "${CMAKE_BINARY_DIR}/app-test" R4_imgui_pin)
+
 if(LICHOMAT_EMU_APP)
     set(EMU_APP_MAC_SOURCES "${EMU_APP_DIR}/mac/app_mach.c" "${EMU_APP_DIR}/mac/app_shell.c"
         "${EMU_APP_DIR}/mac/app_coreaudio.c" "${EMU_APP_DIR}/mac/app_coremidi.c")

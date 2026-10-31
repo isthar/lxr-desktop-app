@@ -42,6 +42,7 @@ ALLOWED = [
     ('Middlewares/Third_Party/FatFs/src/ff.h', "ChaN's FatFs licence"),
     ('Middlewares/Third_Party/FatFs/src/integer.h', "ChaN's FatFs licence"),
     ('emu/libm/', 'Arm Optimized Routines, MIT'),
+    ('emu/third_party/imgui/', 'Dear ImGui, MIT'),
 ]
 NAMES = re.compile(r'lxr|erica|sonic\s*potions', re.IGNORECASE)
 

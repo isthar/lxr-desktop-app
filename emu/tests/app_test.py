@@ -157,7 +157,32 @@ def R4_dev_afterpid(t):
         child.wait()
 
 
-CASES = {f.__name__: f for f in [R4_dev_headless, R4_dev_import, R4_dev_crash, R4_dev_power, R4_dev_afterpid]}
+IMGUI = ['LICENSE.txt', 'imconfig.h', 'imgui.cpp', 'imgui.h', 'imgui_draw.cpp', 'imgui_internal.h', 'imgui_tables.cpp',
+         'imgui_widgets.cpp', 'imstb_rectpack.h', 'imstb_textedit.h', 'imstb_truetype.h', 'backends/imgui_impl_metal.h',
+         'backends/imgui_impl_metal.mm', 'backends/imgui_impl_osx.h', 'backends/imgui_impl_osx.mm']
+
+
+def R4_imgui_pin(t):
+    """the vendored Dear ImGui is the 15 files of v1.92.9b, byte for byte as pinned in its README"""
+    base = os.path.join(t.a.root, 'emu', 'third_party', 'imgui')
+    with open(os.path.join(base, 'README.md')) as f:
+        readme = f.read()
+    check('tag `v1.92.9b`' in readme, 'the README does not name tag v1.92.9b')
+    rows = {m.group(1): (int(m.group(2)), m.group(3))
+            for m in re.finditer(r'^\| `([^`]+)` \| (\d+) \| `([0-9a-f]{64})` \|$', readme, re.M)}
+    check(sorted(rows) == sorted(IMGUI), 'the README lists %r' % sorted(rows))
+    found = sorted(os.path.relpath(os.path.join(d, n), base)
+                   for d, _, names in os.walk(base) for n in names if not n.startswith('.'))
+    check(found == sorted(IMGUI + ['README.md']), 'the folder holds %r' % found)
+    for name, (size, sha) in rows.items():
+        with open(os.path.join(base, name), 'rb') as f:
+            data = f.read()
+        check(len(data) == size and hashlib.sha256(data).hexdigest() == sha, name + ' differs from its pin')
+    check(sum(size for size, _ in rows.values()) == 3303558, 'the pinned files do not hold 3,303,558 bytes')
+
+
+CASES = {f.__name__: f for f in [R4_dev_headless, R4_dev_import, R4_dev_crash, R4_dev_power, R4_dev_afterpid,
+                                 R4_imgui_pin]}
 
 
 def main():
