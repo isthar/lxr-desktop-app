@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Date | 2026-10-31 |
-| Status | Draft. Decisions S1–S22 were taken under the owner's delegation of 2026-10-29 ("use your own recommendations"); they are reversible until the plan is written |
+| Status | Draft. Decisions S1–S22 were taken under the owner's delegation of 2026-10-29 ("use your own recommendations"); they are reversible until the plan is written. Amended 2026-10-31 (as built, `v0.5` at `20e0079`): S13, S19, S20, §4.1, §4.2, §4.5, §6, §8, §9.1, §9.3, §10.1 (U30) and §11, each marked in place |
 | Base | `v0.4` at `91a61b5` (worktree `build/wt-v04`): v0.2–v0.4 and the emulator with the app (R1–R5) |
 | Branch | `v0.5`, from `v0.4` (created when the plan starts) |
 | Tracker | E6.10 |
@@ -189,14 +189,14 @@ release`) and its `arm-none-eabi-objdump -dr` listings.
 | S10 | **Untimed triggers** (the mailbox one-shot roll) start at offset 0 of the next render, as in v0.4. | A button press has no exact time worth keeping. |
 | S11 | **Late and early records.** A record due more than 2 frames before its window is late: it starts at offset 0 and is counted. A record due after the window waits for the next block. | It is never worse than v0.4, and the counter shows when it happens. |
 | S12 | **Records at offset 0 (and late ones) are applied before the block's control path** (the mod reset, LFOs, filters and `*_calcAsync()`). | It is v0.4's order of the triggers in `seq_tick()`, at no extra cost. |
-| S13 | **A new note's first control step lasts a full block.** At the split the voice computes step 1 and renders [k, 64). In the next block it keeps step 1 for [0, k), steps at k (a *phase split*) and then follows the block grid again. | Snap clicks and the first EG steps are one block long (SF5). A shortened first step would change the attack from hit to hit. |
+| S13 | **Every control step of a note lasts a full block** (the persistent note phase). *Amended 2026-10-31 (as built)* (`83a9021`); first written as "a new note's first control step lasts a full block", after which the voice went back to the block grid. A record split at k sets the voice's phase φ = k, and φ stays. Each block, the voice renders [0, φ) with its current step, runs its next control step at φ (a *phase split*, counted in `vsched.phaseSplits` once per voice and block) and renders [φ, 64). A new record at k over a phase φ: if k < φ, the voice renders [0, k) and splits there (the old step is cut short: the old note's tail); if k > φ, it renders [0, φ), runs the step at φ, renders [φ, k), then splits; if k = φ, there is one boundary. Then φ = k. φ returns to 0 on a record at offset 0 (also one that the cap's fallback puts there, S20), when the voice is silent (its amp EG has ended and its step's gain is 0), and on a direct trigger (`vsched_triggerNow()`, the `trg blk` path). | Snap clicks and the first EG steps are one block long (SF5). A shortened first step would change the attack from hit to hit. *As built:* the first design shortened step 2 by k, so a fast pitch EG ran up to 62 samples early. On the init card's 4/4 kick the null residual against the median hit was −11 dB (median) and −4.8 dB (worst), and the 49 Hz body lagged by up to 171 frames (3.9 ms) at k = 62. With the persistent phase, the 36 hits at each of 120, 125 and 130 BPM are bit-identical to each other and to the `blk` (v0.4) hit (`20e0079`). |
 | S14 | **The old tail keeps its own step:** the drum gain ramp stops at its value at k. The pan is applied per segment: the old latch before k, the new one from k. | The old note stays exact up to the onset. |
 | S15 | **LFOs that the voice retriggers are dispatched again at the split.** All other control-rate state (the mod-target reset, the velocity reassign, other LFOs, other voices) follows at the next block. | An LFO used as an envelope has to start with its note. The rest is already per block. |
 | S16 | **Records live in a ring of 4 per voice** (12 B each) in RAM. On overflow the oldest is dropped and counted. | With collapsing, two blocks need at most 4. DTCM has only 504 B left. |
 | S17 | **No locks on the rings.** The producers (the core's callbacks, the MIDI parser, the mailbox) and the consumer (the mixer) all run in the `seq_tick()` and render context. `vsched_post()` checks `seq_inTick`. | The main loop renders with TIM2 masked, and TIM2 renders only during card access, where it runs both (SF1). |
 | S18 | **The `trg` setting:** `smp` or `blk`, on the global settings page, sub-page 2, slot 4. It is stored in glo.cfg's `PAR_QUANTISATION` byte, renamed `PAR_TRIG_TIMING`: 0 = `smp` (the default), 1 = `blk`, any other value `smp`. `blk` runs v0.4's code path. | An A/B switch and a CPU fallback with no format change, as in v0.3's D19. It also makes bit-identity with v0.4 testable. |
-| S19 | **The CPU cost is not charged to D41's 85 %.** The worst case is 2.45 %, or 3.45 % with six retriggered LFOs. D41's reverb choice stands, and E6.10 uses the room between 85 and U20's 95. | The owner ranks atmosphere first, and D41's worst case plus E6.10 still stays below 95. |
-| S20 | **The cheaper variant is a compile-time split cap C:** 6 (no cap) by default, 3 as the fix-up (worst case 1.86 %). A block that needs more than C splits starts all its records at offset 0 and drops its phase splits. The fix-up applies only if U30 reads `pk` ≥ 95. | It bounds the cost and keeps simultaneous hits together. |
+| S19 | **The CPU cost is not charged to D41's 85 %.** *Amended 2026-10-31 (as built):* the worst case is about 3.64 %, or about 4.64 % with six retriggered LFOs (first estimated as 2.45 % and 3.45 %). The mean is about 1.2 % when all six voices sound off the block grid, since each sounding voice then runs a phase split in every block (S13); U30 measures it. D41's reverb choice stands, and E6.10 uses the room between 85 and U20's 95. | The owner ranks atmosphere first, and D41's worst case plus E6.10 still stays below 95 (85 + 4.64 = 89.64). |
+| S20 | **The cheaper variant is a compile-time split cap C:** 6 (no cap) by default, 3 as the fix-up. *Amended 2026-10-31 (as built):* only the voices with a record due in the block count toward C. A block in which more than C voices have one puts that block's records at offset 0 (so those voices' φ returns to 0) and keeps the other voices' phases. The cap-3 worst case is about 3 % (3 record splits plus 6 phase splits, with LFOs; first estimated as 1.86 %). The fix-up applies only if U30 fails (§10.1). | It bounds the cost and keeps simultaneous hits together. |
 | S21 | **Re-bless the goldens once** (§9.3). The 23 goldens are re-blessed in one commit after three checks pass: the logs are identical, the `_blk` copies are identical to v0.4, and the onset errors are ≤ 1 frame. New: G16_onsets, G17_midi_in, G18_slave_onsets, five `_blk` goldens, and the renderer's `--trig-log`. | The re-bless then proves that only the onset timing changed. |
 | S22 | **Rollout.** Branch `v0.5` from `v0.4` at `91a61b5`, version 0.5 (`LXR_V2_LICHOMAT_0.5.img`). v0.4's later commits (A7–A11) are merged in before the release. The owner's checks are U27–U32. | E6.10 builds without H12, but its CPU check needs the reverb at its chosen rate. |
 
@@ -207,11 +207,13 @@ release`) and its `arm-none-eabi-objdump -dr` listings.
 | Option | What it needs | Cost (worst block, D41 factor) | Verdict |
 |---|---|---|---|
 | (a) Split the whole engine at each distinct offset | The voices, the mixer, `FxBus_process()`, the reverb's per-block LFO, the DJ filter and the delay all render in segments, and their control steps (SF3 1–4) run per segment or stay per block | The whole chain's per-call overhead per distinct offset, about 0.8 % each × up to 7 offsets, plus the FX per-call parts. The FX would also change: their control rate would follow the triggers | Rejected |
-| (b) Per-voice split (S1) | The four voice renderers called twice with `buf + k` (SF4), a control step at k, and the pan and mix per segment | 2.45 %, 3.45 % with six retriggered LFOs (§6) | **Chosen** |
+| (b) Per-voice split (S1) | The four voice renderers called twice with `buf + k` (SF4), a control step at k, and the pan and mix per segment | 2.45 %, 3.45 % with six retriggered LFOs (§6); *as built (S13 amended): 3.64 % and 4.64 %* | **Chosen** |
 | (c) Per-voice delay lines | 64 int16 per voice; the voice renders block-aligned and its output is read d samples late, with d set at each trigger | About 0.6 % every block (6 × ~200 cycles), 768 B | Rejected. When d changes at a retrigger, the old tail is read with a jump of \|d_new − d_old\| samples: up to 63 samples skipped or played twice, a click on any ringing tail or long decay. LFO and cross-voice modulation would also be off by d |
 
 Option (b) keeps the old note exact up to the onset. A new note's first 64 samples equal v0.4's first
-block of that note (§4.5). It costs nothing in blocks without triggers.
+block of that note (§4.5). It costs nothing in blocks without triggers. *Amended 2026-10-31 (as
+built):* with the persistent phase (S13) the whole note equals v0.4's for control-step targets, and a
+note that sounds off the block grid costs one phase split in every block it sounds (§6).
 
 ### 4.2 The per-voice split
 
@@ -221,28 +223,47 @@ calls it. For each block:
 
 1. **The cap check (S20).** The mixer counts the voices that need a split: a record at k > 0, or a
    pending φ. If there are more than C, every record due in this block counts as due at offset 0, and
-   every φ is cleared. The block then plays as in v0.4.
+   every φ is cleared. The block then plays as in v0.4. *Amended 2026-10-31 (as built):* only the
+   voices with a record due in this block count. A fallback puts this block's records at offset 0,
+   so those voices' φ returns to 0, and keeps the other voices' phases. Before the plan,
+   `vsched_beginBlock()` drops the phases of the silent voices (the mask that `mixer_silentVoices()`
+   computes once per block).
 2. **Phase 0, before the control path (S12).** For each voice, every record due at offset 0 is applied
    in order: the late ones, the untimed ones, those whose rounded offset is 0, and, after a cap
    fallback, all of them. Records due later in the block are left in their rings; they are applied at
    their split in step 4.
 3. **The control path as today (SF3 1–4).** A voice with a pending phase φ (S13) skips its
-   `SVF_recalcFreq()` and its `*_calcAsync()` here, since its note's first control step carries on.
+   `SVF_recalcFreq()` and its `*_calcAsync()` here, since its note's current control step carries on
+   to φ (*Amended 2026-10-31 (as built)*; it read "first control step").
 4. **For each voice, in mixer order.**
-   - **A record split at k** (S2, S3). The voice renders [0, k) with the block's control values. For a
-     drum voice the gain ramp ends at the value it would reach at k (S14). Then it:
+   - **A record split at k** (S2, S3). The voice renders [0, k) with the block's control values (as
+     built, over a phase φ: see "A record at k over a phase φ" below). For a drum voice the gain ramp
+     ends at the value it would reach at k (S14). Then it:
      1. saves its pan latch;
      2. applies all its records of this block in order, as described in §5.5;
      3. re-dispatches the LFOs whose `retrigger` is this voice (S15);
      4. runs `SVF_recalcFreq()` and `*_calcAsync()`, which gives step 1;
      5. renders [k, 64) with the ramp ending at its value after 64 − k samples;
      6. sets φ = k.
-   - **A phase split at φ** (S13). The voice renders [0, φ) with step 1's values, which finishes step
-     1's 64 samples. Then it runs `SVF_recalcFreq()` and `*_calcAsync()` (step 2), renders [φ, 64), and
-     clears φ. Step 2 ends at the next block boundary, so it is shorter than a block by φ. After that
-     the voice follows the block grid.
-   - **Both in one block:** a new record at k′ replaces the phase split. The old note's step 1 runs on
-     to k′, at most 1.45 ms longer, and the new record's split sets φ = k′.
+   - **A phase split at φ** (S13). *Amended 2026-10-31 (as built)* (`83a9021`). The voice renders
+     [0, φ) with its current step's values, which finishes that step's 64 samples. Then it runs
+     `SVF_recalcFreq()` and `*_calcAsync()` (the next step, `vsched_phaseStep()`), renders [φ, 64),
+     and keeps φ. It does so in every block the note sounds, so every step of the note is 64 samples
+     long, its two parts in two blocks. `vsched.phaseSplits` counts one per voice and block. φ
+     returns to 0 (the block grid) on a record at offset 0 (also one that the cap's fallback puts
+     there), when the voice is silent (its amp EG has ended, stopped or in decay at 0, and its step's
+     gain is 0), and on a direct trigger (`vsched_triggerNow()` in `voiceControl_noteOn()`, the
+     `trg blk` path).
+     *Before the amendment:* φ was cleared here, step 2 ended at the block boundary, shorter than a
+     block by φ, and the voice then followed the block grid.
+   - **A record at k over a phase φ** (*Amended 2026-10-31 (as built)*; it was "both in one block": the
+     record replaced the phase split, and the old step ran on to k′):
+     - k < φ: the voice renders [0, k) and splits at k. The step that began at φ in the block before is
+       cut short there: it is the old note's tail.
+     - k > φ: it renders [0, φ), runs the step at φ, renders [φ, k), then splits at k.
+     - k = φ: one boundary, the split.
+
+     Then φ = k. A step is therefore never longer than 64 samples.
    - **Otherwise** the voice renders [0, 64) as today.
 
    After that come `mixer_decimateBlock()` over the whole 64 samples (the decimator's counter and the
@@ -318,10 +339,18 @@ and counted in `vsched.overflow` (S16). That case behaves as fw 1.7, where the l
   dispatched, such as the drum filter cutoff. The next block's dispatch then changes the sound from
   note frame 64 − k on. The emulator measured a difference at all 31 offsets k > 0. A retriggered
   LFO on such a target therefore moves by up to 62 samples relative to the onset, just like the
-  later control steps below. The goldens G16–G19 leave such an LFO out.
-- **Later control steps.** From step 2 on, a note's control steps come up to 62 samples earlier
-  relative to its onset than in v0.4, since step 2 is shortened by φ. This shift is smaller than the
-  control rate itself, and it applies to slow envelopes only.
+  later control steps below. The goldens G16–G19 leave such an LFO out. (*Amended 2026-10-31 (as
+  built)*: the later control steps no longer move, see the next item; the dispatch-applied targets
+  still do.)
+- **The whole note.** *Amended 2026-10-31 (as built)* (`83a9021`); this item was "Later control
+  steps": from step 2 on, a note's steps came up to 62 samples earlier relative to its onset than in
+  v0.4, since step 2 was shortened by φ. With the persistent phase (S13) every control step of a
+  note is 64 samples long and starts at the same note frame as in v0.4. For the targets that the
+  voice reads in its control step, the equality of the first block therefore holds for the whole
+  note. Measured on the init card's 4/4 kick, 36 hits at each of 120, 125 and 130 BPM (`20e0079`):
+  every `smp` hit is bit-identical to every other one and to the `blk` (v0.4) hit. Before the change
+  the null residual against the median hit was −11 dB (median) and −4.8 dB (worst), and the 49 Hz
+  body lagged by up to 171 frames (3.9 ms) at k = 62.
 - **The latency becomes constant.** The audio comes 128 frames (2.90 ms) after its event.
   - In v0.4 it came 64 to 128 frames after, 2.18 ms on average.
   - Against the MIDI out, the clock out jack and the clock-out channel of the emulator app, the sound
@@ -533,22 +562,34 @@ The percentages include D41's factor 1.5. The per-block fixed part, paid with or
 about 55 instructions (0.026 %): the window read, the filter in the interrupt, and six ring and phase
 tests.
 
+*Amended 2026-10-31 (as built):* recounted by the same method for the code of `83a9021`, the fixed
+part is about 0.065 % per block. A phase split costs what the table says, but with the persistent
+phase (S13) a sounding voice off the block grid has one in every block, and a record at k over a
+phase φ < k costs a phase split and a record split in the same block.
+
 ### 6.2 Cases
 
-| Case | Splits in the block | Raw | With 1.5 |
-|---|---|---:|---:|
-| **Worst:** all six voices retriggered in one block | 6 record splits | 1.64 % | **2.45 %** |
-| Worst, every voice also retriggering an LFO | 6 + 6 LFO dispatches | 2.30 % | **3.45 %** |
-| **Typical downbeat:** kick, clap, closed hat, perc (2 drums, cymbal, hi-hat) | 4 record splits | 1.13 % | **1.69 %** |
-| The block after it | 4 phase splits | 0.55 % | 0.83 % |
-| One off-grid hat (shuffle, humanize) | 1 record split, then 1 phase split | 0.27 % | 0.41 %, then 0.23 % |
-| Mean over time, 130 BPM 16ths, about 30 hits/s | ≈ 0.05 record + 0.05 phase splits per block | 0.02 % | 0.03 % |
-| H12 step 3 (7 tracks of 16ths with ×8 ratchets, 140 BPM) | the worst case in every ratchet block (13.4 ms apart) | | 2.45–3.45 % |
-| Fix-up cap C = 3 (S20), each split with an LFO | 3 | 1.24 % | 1.86 % |
+*Amended 2026-10-31 (as built):* the rows marked † are the first design's, before the persistent
+phase (S13); the column "As built" gives the recount for `83a9021` where one was made.
 
-The `CPU` figure (the mean) barely moves. `pk` (the worst block per second) moves by the worst case
-of the pattern played: about 1.7 points for a typical groove, and up to 2.45 or 3.45 points for H12's
-heavy pattern.
+| Case | Splits in the block | Raw | With 1.5 | As built (with 1.5) |
+|---|---|---:|---:|---:|
+| **Worst:** all six voices retriggered in one block | 6 record splits; as built each also after a phase split | 1.64 % | 2.45 % † | **≈ 3.64 %** |
+| Worst, every voice also retriggering an LFO | 6 + 6 LFO dispatches; as built + 6 phase splits | 2.30 % | 3.45 % † | **≈ 4.64 %** |
+| **Typical downbeat:** kick, clap, closed hat, perc (2 drums, cymbal, hi-hat) | 4 record splits | 1.13 % | **1.69 %** | plus a phase split for each voice whose φ is below its k |
+| The block after it | 4 phase splits | 0.55 % | 0.83 % | the same, in every block while the four sound off the grid |
+| One off-grid hat (shuffle, humanize) | 1 record split, then 1 phase split | 0.27 % | 0.41 %, then 0.23 % | then 0.23 % in every block while it sounds |
+| Mean over time, 130 BPM 16ths, about 30 hits/s | ≈ 0.05 record + 0.05 phase splits per block | 0.02 % | 0.03 % † | |
+| Mean, six voices sounding off the block grid | a phase split per sounding voice and block | | | **≈ 1.24 %** |
+| Mean, the init card's 4/4 kick alone | a phase split in 57 % of the blocks | | | ≈ 0.11 % |
+| H12 step 3 (7 tracks of 16ths with ×8 ratchets, 140 BPM) | the worst case in every ratchet block (13.4 ms apart) | | 2.45–3.45 % † | ≈ 3.64–4.64 % |
+| Fix-up cap C = 3 (S20), each split with an LFO | 3; as built, plus up to 6 phase splits | 1.24 % | 1.86 % † | ≈ 3 % |
+
+*Amended 2026-10-31 (as built); it read "the `CPU` figure barely moves":* the `CPU` figure (the mean)
+moves by up to about 1.2 points when all six voices sound off the block grid; U30 measures it. `pk`
+(the worst block per second) moves by the worst case of the pattern played: about 1.7 points or more
+for a typical groove, and up to about 3.64 or 4.64 points (first estimated as 2.45 or 3.45) for
+H12's heavy pattern.
 
 ### 6.3 D41
 
@@ -561,13 +602,19 @@ D41: full rate if P ≤ 46.24, half rate if P ≤ 63.28, otherwise lean, where P
 
   A P in (43.79, 46.24] would then drop the reverb from full to half rate, and a P in
   (60.83, 63.28] from half rate to lean.
+
+  *Amended 2026-10-31 (as built):* with the recounted worst cases (3.64 % and 4.64 %) these limits
+  would be 42.60 and 59.64 without LFO retriggers, and 41.60 and 58.64 with them.
 - **Decision S19: it is not charged.** The reverb's rate is chosen by v0.4's D41 alone (A7, after H12).
   Under that rule v0.4's `pk` stays ≤ 85, so v0.5's stays ≤ 85 + 3.45 = 88.45, below U20's 95, for
-  any P.
+  any P. *Amended 2026-10-31 (as built):* ≤ 85 + 4.64 = 89.64, still below 95.
 - E6.10 thus uses part of the 15 points that D41 kept for the main loop, missed peaks and estimate
-  error, and only in blocks with many simultaneous hits.
+  error, and only in blocks with many simultaneous hits. *Amended 2026-10-31 (as built):* the mean
+  also rises, by about 1.2 points when all six voices sound off the block grid (§6.2).
 - U30 reads it. If `pk` reaches 95 there, the fix-up is the cap C = 3 (S20), not the reverb's rate.
-  The owner's own fallback is `trg blk`.
+  The owner's own fallback is `trg blk`. *Amended 2026-10-31 (as built):* U30's thresholds are `pk`
+  at most about 3.7 points above `blk` (4.7 with six LFO retriggers), below 95, and `ovf` 0
+  (§10.1).
 
 ### 6.4 The cheaper variants
 
@@ -576,10 +623,10 @@ the one-split-per-voice limit (S2). Without it, a voice's records would add spli
 
 | Variant | Worst | What it costs musically | Status |
 |---|---:|---|---|
-| Base design, C = 6 | 2.45 % (3.45 % with LFOs) | nothing | default (S19) |
-| Cap C = 4, whole-block fallback | 2.47 % with LFOs | blocks with 5–6 starting voices fall back to block timing | not used |
-| **Cap C = 3**, whole-block fallback | **1.86 %** | blocks with ≥ 4 starting voices (dense downbeats, and the block after them) fall back to block timing; voices stay aligned with each other | **fix-up if U30 fails** (S20) |
-| No LFO re-dispatch | 2.45 % | a retriggered LFO's first value comes up to 64 − k samples late | rejected: an LFO used as an envelope would blip at the attack |
+| Base design, C = 6 | 2.45 % (3.45 % with LFOs); *as built ≈ 3.64 % (≈ 4.64 %)* | nothing | default (S19) |
+| Cap C = 4, whole-block fallback | 2.47 % with LFOs; *not recounted as built* | blocks with 5–6 starting voices fall back to block timing | not used |
+| **Cap C = 3**, whole-block fallback | 1.86 %; ***as built ≈ 3 %*** | blocks with ≥ 4 starting voices (dense downbeats, and the block after them) fall back to block timing; voices stay aligned with each other. *As built:* only voices with a record in the block count, the fallback starts that block's hits at offset 0, and the other voices keep their phases | **fix-up if U30 fails** (S20) |
+| No LFO re-dispatch | 2.45 %; *as built ≈ 3.64 %* | a retriggered LFO's first value comes up to 64 − k samples late | rejected: an LFO used as an envelope would blip at the attack |
 | No phase split (first control step shortened) | phase blocks cost 0 | the snap click and the first EG step change from hit to hit (SF5) | rejected |
 | Per-voice on/off mask | scales with the mask | the owner picks which voices are exact | not needed; `trg` switches all |
 
@@ -629,7 +676,10 @@ Against the v0.4 budget (`tools/check.sh`), with the numbers measured at `91a61b
     value other than 1 shows `smp`.
   - The renderer's name becomes `trig_timing` (`gen_params.py`, `render_params.h`).
   - A switch while playing takes effect at the next trigger. Records already posted are still applied,
-    and a pending φ finishes once.
+    and a pending φ finishes once. *Amended 2026-10-31 (as built):* a φ lasts until the voice's next
+    trigger (in `blk`, `vsched_triggerNow()` clears it) or its silence. For about 1.5 blocks after a
+    switch from `smp` to `blk`, a record posted in `smp` can retrigger a voice after a newer `blk` hit
+    of the same voice; this happens once, at the switch.
 - **`blk` is v0.4's code path** at the trigger, and the mixer computes the same values. In the
   emulator a `blk` render therefore equals v0.4's bit for bit (§9.3). On the device the snapshot (S6)
   can delay a render by one main-loop segment; the audio is the same.
@@ -642,10 +692,10 @@ Against the v0.4 budget (`tools/check.sh`), with the numbers measured at `91a61b
 |---|---|
 | `vsched_offsets` | Window [W0, W0 + L) with L = 313,181 ± 2,000. Times at W0, at each frame boundary ± 1 cycle, at W1 − 1, W1, and −L/32 ± 1: k is even, \|k·L/64 − d\| ≤ L/64, j = 32 waits and arrives at offset 0 uncounted, d < −L/32 counts as late, d ≥ L waits. W0 just below 2³²: the same results across the wrap |
 | `vsched_window` | `audio_blockDone()` with exact periods, one stamp 30 µs late (the estimate moves ≤ 1/8 of it and is back within 1 frame after 16 blocks), a persistent +4,893-cycle slip (followed to < 0.5 frame within 16 blocks), an early stamp (taken at once), 10⁶ periods of 313,180.885 (no drift past 1 cycle), a 10 ms stall (re-seeded). The two slots: a reader interleaved with a writer at every step never sees a torn window |
-| `vsched_rings` | Collapse: two records of a voice in one window are applied in order at the later k; a k = 0 and a k = 40 record of one voice both go to k = 40. Different voices stay independent. The fifth record drops the oldest and counts it. An untimed record goes to phase 0. The cap: C + 1 voices with records give a whole-block fallback (all at 0, φ cleared) and count it |
+| `vsched_rings` | Collapse: two records of a voice in one window are applied in order at the later k; a k = 0 and a k = 40 record of one voice both go to k = 40. Different voices stay independent. The fifth record drops the oldest and counts it. An untimed record goes to phase 0. The cap: C + 1 voices with records give a whole-block fallback (all at 0, φ cleared) and count it. *Amended 2026-10-31 (as built):* only the voices with records count, and the other voices keep their φ |
 | `vsched_stamps` | The 16-bit rebuild for ages 0 to 77.6 ms across the 2³² wrap: error < 256 cycles. An age past the range reads as younger and is never later than now |
 | `seqc_itemtime` (in the core suite, fake host) | Internal sync: for on-grid steps, shifts −7..+7, swing, ratchets ×2–×8, rolls 1/32 and triplets, the track delay and the per-track tempo, `seqc_itemTime()` inside `trigger()` equals `seqc_internalTime(ev->tick)`, is ≤ the process time and never decreases within a call, also across a tempo change (anchor move). Slave modes: items reached by the interpolation get `lastClockTime + Δtick·cyclesPerTick`; items passed by an early clock get its stamp; a dropout's items are ≤ the limit |
-| `dsp_split` (with `test_dsp`'s DSP sources and flags) | For each voice type and each even k: (1) a block rendered as [0, k) + [k, 64) without a trigger leaves the oscillator phases, the filter state and the RNG where one 64-sample call leaves them, and the output is bit-identical for the snare, cymbal and hi-hat (one gain per step) and within 1 LSB for the drums (the ramp is split, not changed); (2) a silent voice triggered at k gives zeros in [0, k) and its first 64 samples from k equal the k = 0 render's first 64 samples within 1 LSB (S13); (3) the snap at transient pitch 4 lasts 64 samples from k for every k |
+| `dsp_split` (with `test_dsp`'s DSP sources and flags) | For each voice type and each even k: (1) a block rendered as [0, k) + [k, 64) without a trigger leaves the oscillator phases, the filter state and the RNG where one 64-sample call leaves them, and the output is bit-identical for the snare, cymbal and hi-hat (one gain per step) and within 1 LSB for the drums (the ramp is split, not changed); (2) a silent voice triggered at k gives zeros in [0, k) and its first 64 samples from k equal the k = 0 render's first 64 samples within 1 LSB (S13); *Amended 2026-10-31 (as built)* (`voice_split_trigger_at_k`, `83a9021`): (2) compares the whole note from k (64 blocks, within which every note ends) with the k = 0 render, within 1 LSB (measured 0 LSB on Apple clang); (3) the snap at transient pitch 4 lasts 64 samples from k for every k |
 | `mixer_segments` | The pan per segment: the old latch before k, the new one from k, on every routing (DAC1/2 stereo and mono, FX bus) |
 
 Before pushing, each new host test is checked with `arm-none-eabi-gcc -std=c11` (CI builds with GCC on
@@ -707,6 +757,15 @@ checks pass, each in the commit message or in the milestone report:
 4. `emu_golden.py diff G1` puts the first differing frame at the first hit with k ≠ 0. The bless output
    shows each golden's old and new peak and RMS; the RMS is expected to move by less than 0.1 dB. A
    larger move is a finding to look at, not to bless.
+
+   *Amended 2026-10-31 (as built):* the 0.1 dB expectation holds except for the ring modulator. In
+   the second re-bless (`20e0079`, after the persistent phase) 2 of 48 sounding channels move by
+   0.1 dB or more against v0.4: G2_ringmod L1 and R1, −0.11 dB, because the ring modulator's carrier
+   on the FX bus runs free in sample time and meets each hit at its true onset (with `fx_type=0`
+   the move is +0.01 dB). All other channels move by 0.07 dB or less. The first re-bless (`6ffb119`,
+   with S13's first design) had 32 such channels, up to +1.12 dB (G15_rumble R2): the shortened
+   step 2 of the pitch EGs (§11). G11_dsync does not change at all: its one hit is at t0, offset 0,
+   so 22 of the 23 old goldens change, and 26 with G16–G19 in the second re-bless.
 5. `emu_golden.py bless` for the 23 ids. It refuses if an expectation fails or a broken variant
    passes.
 
@@ -812,6 +871,11 @@ delay in the slot.
 stays below 95 and `ovf` 0, with no dropouts or clicks. If `pk` reaches 95, the fix-up build caps the
 splits at 3 (S20) and U30 runs again on it.
 
+*Amended 2026-10-31 (as built):* `pk` in step 2 at most about 3.7 points above step 1, and in step 3
+at most about 4.7 above (§6.2); `pk` below 95 and `ovf` 0, with no dropouts or clicks. Otherwise the
+fix-up build (`-DVSCHED_SPLIT_CAP=3`, S20) and U30 again on it. `CPU` in step 2 may be up to about
+1.2 points above step 1 (S19); U30 records it.
+
 **Record:** `CPU` and `pk` for each step, and the reverb's rate.
 
 #### U31: sound
@@ -856,7 +920,13 @@ the save as in U27.
 - **The phase split's second step.** Step 2 is shortened by φ, so a fast pitch sweep after its first
   step runs up to 1.4 ms early. The body of a kick then differs from hit to hit in phase by up to tens
   of degrees, while its spectrum stays the same. `dsp_split` (2) pins the first block, and U31 listens
-  for the rest.
+  for the rest. *Amended 2026-10-31 (as built): resolved.* Task 11 found it larger than written (the
+  first re-bless's RMS moves, `6ffb119`, then a measurement of the init card's 4/4 kick, 36 hits at
+  each of 120, 125 and 130 BPM): the 49 Hz body lagged by up to 171 frames (3.9 ms) at k = 62,
+  and the null residual against the median hit was −11 dB (median) and −4.8 dB (worst). The
+  persistent phase (S13, `83a9021`) keeps every step 64 samples long: the 36 hits at each of 120,
+  125 and 130 BPM are now bit-identical to each other and to the `blk` hit (`20e0079`), and
+  `voice_split` (2) compares the whole note.
 - **Cross-voice modulation** follows the mixer order (§4.5). A kit that p-locks or modulates one
   voice's parameter from another voice's track gets that change up to one block after the onset, as
   in v0.4.
