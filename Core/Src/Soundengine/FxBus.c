@@ -178,8 +178,8 @@ IN_ITCM_RAM void FxBus_updateParameter()
 		break;
 
 	case FX_DELAY:
-		Delay_setRange(&fxBus.delay, fxBus.parameter[1]);
-		Delay_setDelayTime(&fxBus.delay, fxBus.parameter[0]);
+		//LICHOMAT v0.4: as one update with interrupts masked, as the audio interrupt sets the synced time (plan D38)
+		Delay_setRangeAndTime(&fxBus.delay, fxBus.parameter[1], fxBus.parameter[0]);
 		Delay_setFilter(&fxBus.delay, fxBus.parameter[2]);
 		Delay_setFeedback(&fxBus.delay, fxBus.parameter[3]);
 

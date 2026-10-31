@@ -253,7 +253,7 @@ endif()
 # stand-in headers in stubs/ (the HAL with the CMSIS intrinsics of the delay).
 # For this target FX_BUFFER is a pointer to an array of its size, which the test
 # points into a buffer with guard entries after the array.
-seqc_add_test(test_delay     IDS delay EXTRA ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/Delay.c)  # E4.8  delay type switch
+seqc_add_test(test_delay     IDS delay DY2 EXTRA ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/Delay.c)  # E4.8  delay type switch; v0.4 the knobs while synced
 if(TARGET test_delay)
     target_include_directories(test_delay BEFORE PRIVATE stubs)
     target_include_directories(test_delay SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)

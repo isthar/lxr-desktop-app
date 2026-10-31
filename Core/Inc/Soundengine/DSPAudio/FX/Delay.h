@@ -81,6 +81,8 @@ void Delay_setRange(Delay* d, float r);
 void Delay_setFilter(Delay* d, float f);
 //LICHOMAT v0.4: a synced time in samples, 0 = back to the free time (plan D38)
 void Delay_setSync(Delay* d, float samples);
+//LICHOMAT v0.4: Delay_setRange() and Delay_setDelayTime() with interrupts masked, for the main loop
+void Delay_setRangeAndTime(Delay* d, float r, float t);
 
 
 

@@ -159,6 +159,59 @@ TEST(delay_switch_back_and_forth_stays_in_the_buffer)
 	}
 }
 
+//------------------------------------------------------------------------------
+// LICHOMAT v0.4 (plan D38): the time and range knobs while the delay is synced. The audio
+// interrupt sets the synced time through Delay_setSync(), which calls Delay_setDelayTime();
+// the main loop sets the two knobs through Delay_setRangeAndTime(), with interrupts masked,
+// so that the two cannot interleave inside Delay_setDelayTime() (an interleave left the
+// main loop's offset, at the old tempo, under the new synced time). The race is the
+// device's; this is the deterministic part.
+//------------------------------------------------------------------------------
+float calcDelayTime(Delay *d, float timeCv);	/* Delay.c */
+
+/** blocks until the crossfade and any pending time are done */
+static void settle(void)
+{
+	for (int b = 0; b < 200 && (delay.interpValue > 0.f || delay.timePending); b++)
+		block(OUTPUT_DMA_SIZE);
+	ASSERT_TRUE(delay.interpValue <= 0.f && !delay.timePending);
+}
+
+/** the delay in effect is samples: whole samples from the read pointer to the write pointer.
+ * One more when the time came in pending (fw 1.7: Delay_process() applies it after the
+ * sample's read, so the read pointer is set one sample late) */
+static int delayInEffect(uint32_t samples)
+{
+	const uint32_t d = (delay.write - 1 - delay.oldRead) & FX_BUFFER_SIZE;
+	return (d == samples) || (d == samples + 1);
+}
+
+TEST(DY2_knobs_while_synced_keep_the_synced_time)
+{
+	reset();
+	settle();
+	Delay_setSync(&delay, 11035.f);		/* an eighth at 120 BPM */
+	settle();
+	ASSERT_TRUE(delayInEffect(11035));
+	/* the range and time knobs move: the synced time stays, the knobs are kept */
+	Delay_setRangeAndTime(&delay, 0.3f, 0.9f);
+	ASSERT_TRUE(delay.range == 0.3f);
+	settle();
+	ASSERT_TRUE(delayInEffect(11035));
+	ASSERT_TRUE(delay.delayTime == 0.9f);
+	/* a new synced time, and the knobs during its crossfade */
+	Delay_setSync(&delay, 7357.f);		/* an eighth triplet */
+	Delay_setRangeAndTime(&delay, 0.4f, 0.2f);
+	settle();
+	ASSERT_TRUE(delayInEffect(7357));
+	ASSERT_TRUE(delay.range == 0.4f && delay.delayTime == 0.2f);
+	/* sync off: the knobs' last time is in effect */
+	Delay_setSync(&delay, 0.f);
+	settle();
+	ASSERT_TRUE(delayInEffect((uint32_t)calcDelayTime(&delay, delay.delayTime * delay.range)));
+	ASSERT_TRUE(!delayInEffect(7357));
+}
+
 TEST_MAIN()
 
 //------------------------------------------------------------------------------

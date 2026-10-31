@@ -53,7 +53,9 @@ void frontParser_parseNrpn(uint8_t value)
 	// automation past them (the next track, or past the step array).
 	if(paramNr == PAR_ACTIVE_STEP && value >= NUM_STEPS) return;
 
-	if(paramNr < NUM_PARAMS) {
+	//LICHOMAT v0.4: not the kit block's parameters 302-308 (NRPN 174-180), which only the menu
+	//sets, checked, through atmo_setParam() (plan D34); NUM_PARAMS was END_OF_GLOBALS before v0.4
+	if(paramNr < END_OF_GLOBALS) {
 			activeParameters[paramNr] = value;
 	}
 	

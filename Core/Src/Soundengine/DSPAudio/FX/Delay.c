@@ -15,6 +15,7 @@
 
 #include "Soundengine/DSPAudio/FX/Delay.h"
 #include "Soundengine/DSPAudio/FX/fxsync.h"	//LICHOMAT v0.4: fxsync_moved() (plan D38)
+#include "stm32f7xx_hal.h"	//LICHOMAT v0.4: the interrupt mask of Delay_setRangeAndTime()
 
 //LICHOMAT: the word at p, which mono output puts 2 bytes off a 4-byte boundary
 //(&output[pos + 1]). The M7's LDR loads it unaligned, so the device keeps the plain
@@ -394,5 +395,20 @@ void Delay_setSync(Delay* d, float samples)
 		return;
 	d->syncSamples = samples;
 	Delay_setDelayTime(d, d->delayTime);
+}
+
+//LICHOMAT v0.4: the range and time knobs, from the main loop (FxBus_updateParameter()). The
+//audio interrupt calls Delay_setDelayTime() too (Delay_setSync(), a pending time), so the update
+//runs with interrupts masked: an interrupt inside the main loop's Delay_setDelayTime() had its
+//synced read pointers overwritten with the main loop's, at the old tempo (plan D38). The masked
+//part is two calls of Delay_setDelayTime(), a few dozen float operations. Any context: the mask
+//is restored as it was.
+void Delay_setRangeAndTime(Delay* d, float r, float t)
+{
+	const uint32_t primask = __get_PRIMASK();
+	__disable_irq();
+	Delay_setRange(d, r);
+	Delay_setDelayTime(d, t);
+	__set_PRIMASK(primask);
 }
 

@@ -756,6 +756,32 @@ TEST(presets_nrpn_121_past_the_64_steps_is_ignored)
 	}
 }
 
+TEST(presets_nrpn_to_the_kit_block_is_ignored)
+{
+	/* LICHOMAT v0.4: NRPN 174-180 would be the kit block's parameters 302-308 (plan D34),
+	 * which only the menu sets, checked, through atmo_setParam(); an NRPN to them changes
+	 * nothing, as before v0.4 (180 = 6 showed sync 4t with the delay free) */
+	static const uint8_t values[] = { 0, 6, 9, 10, 64, 127 };
+	uint8_t before[NUM_PARAMS];
+	for (uint16_t p = END_OF_GLOBALS; p < NUM_PARAMS; p++) {
+		for (unsigned k = 0; k < sizeof values; k++) {
+			reset();
+			memset(activeParameters, 0x3C, sizeof activeParameters);
+			memcpy(before, activeParameters, sizeof before);
+			nrpn((uint16_t)(p - 128), values[k]);
+			/* the three CCs set their own parameters, as in fw 1.7 */
+			before[NRPN_COARSE - 1] = (uint8_t)((p - 128) >> 7);
+			before[NRPN_FINE - 1] = (uint8_t)((p - 128) & 0x7f);
+			before[NRPN_DATA_ENTRY_COARSE - 1] = values[k];
+			ASSERT_EQ(memcmp(activeParameters, before, sizeof before), 0);
+		}
+	}
+	/* the last global, NRPN 173, is set as before */
+	reset();
+	nrpn(END_OF_GLOBALS - 1 - 128, 1);
+	ASSERT_EQ(activeParameters[END_OF_GLOBALS - 1], 1);
+}
+
 //------------------------------------------------------------------------------
 // The morph flag (stage 1b F10): preset_morphBusy() is 1 while
 // preset_morph_tick() still has sound parameters to send
