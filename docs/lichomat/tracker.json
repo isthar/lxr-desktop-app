@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 14:20",
+    "updated": "2026-10-31 16:40",
     "phase": "Etap 2: v0.4 gotowe w kodzie (M13); częstotliwość pogłosu czeka na H12",
-    "focus": "Wszystko z planu gotowe w kodzie; czekają sprawdzenia na sprzęcie",
+    "focus": "E6.10: wyzwalanie z dokładnością do próbki (v0.5)",
     "branch": "timing-core",
-    "head": "91a61b5",
+    "head": "d251cf6",
     "next": "Twoje H12 (pogłos v0.4), A1–A12 w aplikacji, sesja testowa na LXR",
-    "updated_at": "2026-10-31T14:20:00+01:00",
-    "now": "Czekam na Twoje wyniki (H12, A1–A12, sesja na LXR) albo wybór kolejnej pracy"
+    "updated_at": "2026-10-31T16:40:00+01:00",
+    "now": "Przegląd planu v0.5"
   },
   "epics": [
     {
@@ -526,9 +526,9 @@
     {
       "id": "E6.10",
       "epic": "E6",
-      "status": "do zrobienia",
-      "title": "Odłożone: wyzwalanie z dokładnością do próbki (dziś start głosu kwantowany do bloku 1,45 ms)",
-      "updated": "2026-10-29"
+      "status": "w toku",
+      "title": "Wyzwalanie z dokładnością do próbki (dziś start głosu kwantowany do bloku 1,45 ms): projekt i koszt CPU od 31.10, potem v0.5",
+      "updated": "2026-10-31"
     },
     {
       "id": "E6.11",
@@ -3050,6 +3050,21 @@
       "n": 432,
       "at": "2026-10-31 14:20",
       "text": "R5: poprawki po przeglądzie i niestabilnego testu (5a2e130, e861db9, 590e280, c70971f), 288 testów. Scalenie do v0.3 (321c2f7, 300 testów) i v0.4 (91a61b5, 308 testów), obrazy firmware bez zmian bajt w bajt. M15: emulator ma całą specyfikację etapu 1b (R1–R5). Twoje kopie aplikacji v0.1 i v0.4 w scratchpadzie odświeżone."
+    },
+    {
+      "n": 433,
+      "at": "2026-10-31 14:24",
+      "text": "Twoje „leć dalej” (14:23): biorę E6.10, wyzwalanie z dokładnością do próbki (dziś start głosu wyrównany do bloku 1,45 ms; dotyczy przesuniętych kroków, shuffle, humanize, ratchetów, rolli i MIDI in). Najpierw projekt z szacunkiem kosztu CPU i pamięci; jeśli koszt zmienia wybór pogłosu v0.4 (D41), zatrzymuję się przed kodem do H12. Gałąź v0.5 od v0.4."
+    },
+    {
+      "n": 434,
+      "at": "2026-10-31 15:10",
+      "text": "Projekt E6.10 gotowy (6405443, decyzje S1–S22): każdy wyzwolony głos renderuje stary ogon do próbki k, potem nową nutę (k parzyste); stałe opóźnienie 128 ramek (2,9 ms, dotychczasowy najgorszy przypadek). CPU: najgorszy przypadek 2,45% bloku (6 głosów naraz), typowy downbeat 1,69%, pojedyncze uderzenie 0,41%, średnio ok. 0,03%; pamięć +991 B RAM. Wybór pogłosu D41 bez zmian (S19), w razie potrzeby limit 3 podziałów na blok. Wszystkie 23 nagrania wzorcowe zmienią audio (logi MIDI bez zmian); ustawienie trg smp/blk, a blk gra dokładnie jak v0.4. Teraz plan v0.5."
+    },
+    {
+      "n": 435,
+      "at": "2026-10-31 16:40",
+      "text": "Plan v0.5 (E6.10) gotowy: docs/superpowers/plans/2026-10-31-v0.5-sample-accurate.md (d251cf6), 12 zadań, decyzje P1–P27. Kod planu skompilowany na brudno z flagami wydania bez ostrzeżeń; testy hosta przechodzą z UBSan, podział głosu daje 0 LSB różnicy. Plan poprawia kilka miejsc specyfikacji: id testu voice_split, znacznik DIN, rampa i/63 jak w fw 1.7, ratchet ×8 co 15,6 ms, funkcja okna w flash zamiast ITCM, re-bless na tymczasowej częstotliwości pogłosu v0.4. Dalej: przegląd planu, potem zadania 1–2."
     }
   ]
 }
