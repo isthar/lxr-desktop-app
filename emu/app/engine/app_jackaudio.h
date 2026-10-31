@@ -24,7 +24,7 @@
 #include "app_types.h"
 
 #define APP_JACK_THRESHOLD 0.5f	/**< the default: half of full scale (spec 6.8) */
-#define APP_JACK_HYST 0.05f		/**< a high input falls below the threshold minus this (F5) */
+#define APP_JACK_HYST 0.05f		/**< a high input falls below the threshold minus this, or half the threshold (F5) */
 #define APP_CLK_EDGES 32u		/**< clock-out edges waiting for their block */
 #define APP_IN_WARMUP 32u		/**< input callbacks before the input's lead is fixed (F7) */
 
@@ -46,7 +46,8 @@ void app_clkEdge(app_clkOut_t *c, uint64_t frame, int level);
 void app_clkRender(app_clkOut_t *c, uint64_t first, unsigned n, int16_t *level);
 
 typedef struct app_edgeDet { float threshold; int high; } app_edgeDet_t;
-/** 1 if v rose above the threshold, -1 if it fell below threshold - APP_JACK_HYST, else 0; NaN changes nothing (F5) */
+/** 1 if v rose above the threshold, -1 if it fell below threshold - hysteresis, else 0; NaN changes nothing (F5). The
+ * hysteresis is APP_JACK_HYST, or half the threshold where that is less (the settings allow 0.05) */
 int app_edgeStep(app_edgeDet_t *d, float v);
 /** mHostTime + (offset - latency) frames, in host ticks; 0 if before 0 (spec 6.8, F6) */
 uint64_t app_inHostTime(uint64_t hostTime, unsigned offset, uint32_t latency, double ticksPerFrame);

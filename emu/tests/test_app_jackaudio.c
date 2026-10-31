@@ -83,6 +83,16 @@ TEST(R5_edge_step)
 	d.threshold = 0.1f;
 	ASSERT_EQ(app_edgeStep(&d, 0.06f), 0);
 	ASSERT_EQ(app_edgeStep(&d, 0.04f), -1);
+	/* the lowest threshold the settings take, 0.05: the hysteresis is half of it, or the fall level is 0.0 and a signal that
+	 * returns to exactly 0 never falls (review of 876c9f6) */
+	d = (app_edgeDet_t){ 0.05f, 0 };
+	ASSERT_EQ(app_edgeStep(&d, 0.0f), 0);
+	ASSERT_EQ(app_edgeStep(&d, 0.06f), 1);
+	ASSERT_EQ(app_edgeStep(&d, 0.03f), 0);	/* within the hysteresis: 0.025 to 0.05 */
+	ASSERT_EQ(app_edgeStep(&d, 0.0f), -1);	/* the digital silence of a jack at rest */
+	ASSERT_EQ(app_edgeStep(&d, 0.0f), 0);
+	ASSERT_EQ(app_edgeStep(&d, 0.06f), 1);	/* and it rises again */
+	ASSERT_EQ(app_edgeStep(&d, 0.02f), -1);
 }
 
 TEST(R5_in_host_time)

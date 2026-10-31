@@ -146,13 +146,20 @@ static void app_minMax(double *lo, double *hi, double v)
 	*hi = v > *hi ? v : *hi;
 }
 
-/* the entry time of an event on a port (spec 6.4), 0 if it is stale (E9) */
-static int app_engineEntry(app_engine_t *e, unsigned port, uint64_t stamp, uint64_t now, uint64_t *t)
+/* the entry time of an event on a port (spec 6.4). A stale event (E9) is dropped and counted: 0. A level that is not
+ * a pulse (keepLevel: the reset jack) enters at now instead, in order; dropped, the reset stays where it was */
+static int app_engineEntry(app_engine_t *e, unsigned port, uint64_t stamp, uint64_t now, uint64_t *t, int keepLevel)
 {
 	if (e->staleFrom && stamp + app_ticks(e, APP_STALE_SEC) < e->staleFrom)
 	{
-		e->diag.midiStale++;
-		return 0;
+		if (!keepLevel)
+		{
+			e->diag.midiStale++;
+			return 0;
+		}
+		*t = app_entryTime(0.0, 0u, now, e->prev[port]);
+		e->prev[port] = *t;
+		return 1;
 	}
 	const uint64_t d = e->extSync ? e->dCycles : 0u;	/* D only in sync modes 1 and 2 (E12) */
 	*t = app_entryTime(app_tmVirtual(&e->map, stamp), d, now, e->prev[port]);
@@ -317,11 +324,11 @@ static void app_enginePanelEvent(app_engine_t *e, const app_panelEvent_t *p, uin
 			emu_inCard(now, p->value);
 		break;
 	case APP_P_CLOCK:	/* the jack input takes the entry rule on its own port (E13) */
-		if (app_engineEntry(e, APP_PORT_JACK, p->host, now, &t))
+		if (app_engineEntry(e, APP_PORT_JACK, p->host, now, &t, 0))
 			emu_inClockPulse(t);
 		break;
 	case APP_P_RESET:
-		if (app_engineEntry(e, APP_PORT_JACK, p->host, now, &t))
+		if (app_engineEntry(e, APP_PORT_JACK, p->host, now, &t, 1))
 			emu_inReset(t, p->value);
 		break;
 	default:
@@ -342,7 +349,7 @@ static void app_engineMidiInputs(app_engine_t *e, uint64_t now)
 	{
 		uint8_t b[64];
 		const unsigned n = app_umpToBytes(m->words, m->nwords, b, sizeof b);
-		if (app_engineEntry(e, APP_PORT_DIN, m->stamp, now, &t) && n)
+		if (app_engineEntry(e, APP_PORT_DIN, m->stamp, now, &t, 0) && n)
 			emu_inDin(t, b, n);	/* the wire model spaces the bytes from t (spec 4.3) */
 		app_ringPop(&e->midiIn[APP_PORT_DIN], 1u);
 	}
@@ -352,7 +359,7 @@ static void app_engineMidiInputs(app_engine_t *e, uint64_t now)
 		unsigned len;
 		const uint64_t stamp = m->stamp;
 		const unsigned taken = app_usbTransfer(app_peekUsb, e, &e->usbPend, data, &len);
-		if (app_engineEntry(e, APP_PORT_USB, stamp, now, &t) && len)
+		if (app_engineEntry(e, APP_PORT_USB, stamp, now, &t, 0) && len)
 			(void)emu_inUsb(t, data, len);	/* one transfer; the core paces 16 packets per 1 ms */
 		if (!taken)
 			e->diag.midiUnsent++;	/* E10: it fits no transfer; counted, not dropped silently */

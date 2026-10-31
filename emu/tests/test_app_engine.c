@@ -735,10 +735,30 @@ TEST(R5_engine_holdback)	/* F2: block k enters at request k + 1; L and D's defau
 	ASSERT_EQ(fk.channels, 2);
 }
 
-static struct { uint64_t frame, riseAt; unsigned rises, widthBad, other; int level; double energy; } clk;
+#define CLK_KEPT 16u
+/* ringAt: the ring frame of each rise as the callback rendered it; edgeT: the virtual time of each rise, as the core's
+ * clock-out sink was told */
+static struct
+{
+	uint64_t frame, riseAt, ringAt[CLK_KEPT], edgeT[CLK_KEPT];
+	unsigned rises, widthBad, other, edges;
+	int level;
+	double energy;
+} clk;
+
+static void (*realClockSink)(void *ctx, uint64_t t, int level);
+
+static void clockSinkSpy(void *ctx, uint64_t t, int level)
+{
+	if (level && clk.edges < CLK_KEPT)
+		clk.edgeT[clk.edges++] = t;
+	realClockSink(ctx, t, level);
+}
 
 static void clockRendered(const float *buf, unsigned frames, unsigned channels)	/* clock on 2, the mix in mono on 1 */
 {
+	/* the callback has taken these frames from the ring: the first is at popped - frames (no underrun, asserted below) */
+	const uint64_t ring0 = app_ringPopped(&E.audio.frames) - frames;
 	for (unsigned i = 0; i < frames; i++, clk.frame++)
 	{
 		const float m = buf[(size_t)i * channels], v = buf[(size_t)i * channels + 1u];
@@ -747,6 +767,8 @@ static void clockRendered(const float *buf, unsigned frames, unsigned channels)	
 		const int high = v == 1.0f;
 		if (high && !clk.level)
 		{
+			if (clk.rises < CLK_KEPT)
+				clk.ringAt[clk.rises] = ring0 + i;
 			clk.rises++;
 			clk.riseAt = clk.frame;
 		}
@@ -762,6 +784,9 @@ TEST(R5_engine_clockout)	/* spec 6.8: the firmware's own clock out at 120 BPM, a
 	runTo(1.5);
 	memset(&clk, 0, sizeof clk);
 	fk.rendered = clockRendered;
+	realClockSink = emu_cfg.sinks.clockOut;
+	emu_cfg.sinks.clockOut = clockSinkSpy;
+	const uint64_t underruns = atomic_load(&E.audio.underruns);
 	const app_cmd_t c = { .kind = APP_CMD_CLOCK_OUT, .a = 2 };
 	command(&c);
 	emu_counters_t c0, c1;
@@ -780,6 +805,12 @@ TEST(R5_engine_clockout)	/* spec 6.8: the firmware's own clock out at 120 BPM, a
 	ASSERT_EQ(clk.other, 0);
 	ASSERT_TRUE(clk.energy > 0.0);
 	ASSERT_EQ(E.clkOut.dropped, 0);
+	/* each rise lands on its own frame: the ring frame of the edge's virtual time (F1), whatever the block it fell in */
+	ASSERT_EQ(atomic_load(&E.audio.underruns), underruns);
+	ASSERT_TRUE(clk.edges >= 8u && clk.rises >= 8u);
+	for (unsigned k = 0; k < 8u; k++)
+		ASSERT_EQ(clk.ringAt[k], app_clkFrame(c1.codecStart, clk.edgeT[k]) - E.frameBase);
+	emu_cfg.sinks.clockOut = realClockSink;
 }
 
 static unsigned highFrames, framesSeen;
@@ -854,6 +885,63 @@ TEST(R5_engine_clocknone)
 	command(&two);
 	while (app_engineAck(&E, &a))
 		ASSERT_FALSE(a.kind == APP_MSG_NOTICE);
+}
+
+/* The reset in jack is PD5 of GPIOD, low while the reset is on (emu/stubs/stm32f7xx_hal.h: GPIO_TypeDef, whose first five
+ * registers are these; the tests of the app do not see the firmware's headers) */
+extern struct { volatile uint32_t MODER, OTYPER, OSPEEDR, PUPDR, IDR; } emu_gpioD;
+static int resetOn(void) { return (emu_gpioD.IDR & 0x20u) == 0u; }
+
+/* review of 876c9f6: the stale drop of 100 ms (E9) is for the pulses of a clock that has gone; a reset is a level, and
+ * dropping the edge of a held-high jack that waited out a reopen leaves the reset where it was. A stale reset enters at
+ * now; a stale clock pulse is dropped still */
+TEST(R5_engine_resetstale)
+{
+	boot(1);
+	runTo(2.0);
+	const app_cmd_t c = { .kind = APP_CMD_OUTPUT, .a = 256 };
+	command(&c);	/* a reopen: events older than 100 ms before it are stale */
+	ASSERT_EQ(fk.opens, 2);
+	ASSERT_FALSE(resetOn());
+	const uint64_t old = fk.now - (uint64_t)(0.5 * FAKE_TPS);
+	app_panelEvent_t ev = { .kind = APP_P_CLOCK, .value = 1, .host = old };
+	ASSERT_EQ(app_ringPush(&E.jackIn.edges, &ev), 0);
+	runTo(wallSec() + 0.05);
+	ASSERT_EQ(E.diag.midiStale, 1);	/* the pulse: dropped, as before */
+	ev = (app_panelEvent_t){ .kind = APP_P_RESET, .value = 1, .host = old };
+	ASSERT_EQ(app_ringPush(&E.jackIn.edges, &ev), 0);
+	runTo(wallSec() + 0.05);
+	ASSERT_EQ(E.diag.midiStale, 1);	/* a reset is not counted as dropped */
+	ASSERT_TRUE(resetOn());
+	ev.value = 0;
+	ev.host = old + 1u;
+	ASSERT_EQ(app_ringPush(&E.jackIn.edges, &ev), 0);
+	runTo(wallSec() + 0.05);
+	ASSERT_EQ(E.diag.midiStale, 1);
+	ASSERT_FALSE(resetOn());		/* and off again, in order */
+}
+
+/* review of 876c9f6 (F11): turning the input on sends reset off first, from the panel, before the request leaves. The
+ * engine drains the panel's ring before the input's, so that RESET 0 is applied before the edge of a jack that is high from
+ * its first sample, and the jack's level rules. (The panel posts it in clockJacks(); a window cannot run headless, so this
+ * pins the order that it relies on) */
+TEST(R5_engine_resetorder)
+{
+	boot(1);
+	runTo(2.0);
+	app_panelEvent_t sw = { .kind = APP_P_RESET, .value = 1, .host = fk.now };
+	ASSERT_EQ(app_enginePanel(&E, &sw), 0);	/* the switch is on */
+	runTo(wallSec() + 0.05);
+	ASSERT_TRUE(resetOn());
+	sw.value = 0;
+	sw.host = fk.now;
+	ASSERT_EQ(app_enginePanel(&E, &sw), 0);	/* the request: reset off ... */
+	const app_panelEvent_t jack = { .kind = APP_P_RESET, .value = 1, .host = fk.now + 1u };
+	ASSERT_EQ(app_ringPush(&E.jackIn.edges, &jack), 0);	/* ... and the input's first callback finds the jack high */
+	runTo(wallSec() + 0.05);
+	ASSERT_TRUE(resetOn());
+	ASSERT_EQ(app_ringDropped(&E.jackIn.edges), 0);
+	ASSERT_EQ(E.diag.midiStale, 0);
 }
 
 /* review of 876c9f6: the input callbacks that brought no samples (a buffer larger than the unit's, no host time, a render that

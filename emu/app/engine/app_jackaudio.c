@@ -57,7 +57,8 @@ int app_edgeStep(app_edgeDet_t *d, float v)
 		d->high = 1;
 		return 1;
 	}
-	if (d->high && v < d->threshold - APP_JACK_HYST)
+	/* half the threshold at most: at 0.05 a fall level of 0.0 would never be reached by a signal that returns to exactly 0 */
+	if (d->high && v < d->threshold - fminf(APP_JACK_HYST, d->threshold * 0.5f))
 	{
 		d->high = 0;
 		return -1;

@@ -813,7 +813,15 @@ void clockJacks(panel_t *p, app_shell_t *s, const app_snapshot_t *snap, double n
 		inChanged = true;
 	ImGui::EndDisabled();
 	if (inChanged)
+	{
+		/* F11: the reset goes off before the request leaves, so before the input can run. The engine drains the panel's ring
+		 * before the input's, so a RESET 0 posted after the first callback could undo the reset of a jack that is held high.
+		 * Sent first, the input's level rules from its first sample. A post that fails is sent once the input runs, below */
+		if (p->clockIn.on && p->clockIn.resetChannel > 0 && p->resetSent
+			&& post(s, APP_P_RESET, 0u, 0, 0.0, mach_absolute_time()) == 0)
+			p->resetSent = 0;
 		p->request = PANEL_REQ_CLOCKIN;
+	}
 	if (inRunning)
 		ImGui::TextWrapped("Input: %s, %.0f Hz, %u frames. D holds %.1f ms more for it.", ii.name, ii.deviceRate,
 			ii.bufferFrames, snap ? snap->diag.inputLead * 1e3 : 0.0);
