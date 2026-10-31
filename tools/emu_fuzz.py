@@ -5,6 +5,7 @@ sanitizer report or a crash in the firmware (stage 1b spec 8; the F16-F18 fixes 
 from these sweeps).
 
     emu_fuzz.py sound|midi|seq [--count N] [--seed S] [--render PATH] [--card DIR] [--out DIR]
+                [--trig-timing 0|1]
 
 sound: 40 random sound parameters per render (--param), 2 s of pattern 0 or 1.
 midi:  40-200 random DIN messages per render: CC, NRPN, notes, Program Change, pitch
@@ -19,6 +20,8 @@ Only parameters that the renderer edits through the menu are used: the LFO and
 velocity targets, which the renderer refuses (spec 5.3), are left out. The renders
 are thrown away; the findings go to OUT/found.json. Defaults: build/emu's renderer
 (Debug, UBSan), the card emu/tests/cards/init, OUT build/emu-fuzz/MODE.
+--trig-timing sets trg on every render (LICHOMAT v0.5, plan v0.5 P20): 0 smp, the
+default, or 1 blk, v0.4's timing.
 
 Copyright (C) 2026 Tomasz Krzywicki
 SPDX-License-Identifier: GPL-3.0-only
@@ -157,6 +160,7 @@ def main():
     ap.add_argument('--render', default=os.path.join(ROOT, 'build', 'emu', 'lichomat-render'))
     ap.add_argument('--card', default=os.path.join(ROOT, 'emu', 'tests', 'cards', 'init'))
     ap.add_argument('--out')
+    ap.add_argument('--trig-timing', type=int, choices=(0, 1), default=0)
     a = ap.parse_args()
     out = a.out or os.path.join(ROOT, 'build', 'emu-fuzz', a.mode)
     os.makedirs(out, exist_ok=True)
@@ -167,6 +171,7 @@ def main():
         seed = a.seed + k
         rnd = random.Random(seed)
         args, script = CASES[a.mode](rnd, names)
+        args += ['--param', 'trig_timing=%d' % a.trig_timing]
         cmd = [a.render, '--card', a.card, '--out', os.path.join(out, 'render.wav')] + args
         if script is not None:
             with open(os.path.join(out, 'script.txt'), 'w') as f:

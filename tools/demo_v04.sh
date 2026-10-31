@@ -9,6 +9,10 @@
 #   tools/demo_v04.sh [OUT_DIR]      default: build/demo (git-ignored); needs build/emu-release or
 #                                    build/emu (the Release renderer when both are there)
 #
+# LICHOMAT v0.5 (plan v0.5 Task 11, P21): LICHOMAT_DEMO_PREFIX replaces the files' "v04" prefix and
+# LICHOMAT_DEMO_PARAMS adds renderer options to every render (tools/demo_v05.sh renders the demos in
+# trg smp and blk with them); unset, the script renders what it did in v0.4.
+#
 # The reverb runs at the rate of this build (atmo.h ATMO_REVERB_DECIM; provisional until the owner's
 # CPU readings H12 and U20, plan D41). The renderer does not set LFO targets (stage 1b spec 5.3), so
 # the recipes' LFOs are played here as stepped parameter events, one every 80 ms.
@@ -31,9 +35,10 @@ mkdir -p "$OUT"
 CHANNELS="--param midi_chan_2=2 --param midi_chan_3=3 --param midi_chan_4=4 --param midi_chan_5=5 --param midi_chan_6=6 --param midi_chan_7=7"
 render() {                          # name, card, seconds, more options; the script on stdin
   local name=$1 card=$2 seconds=$3; shift 3
-  { echo "# options: --card $card --bpm 125 --no-start --seconds $seconds $*"; cat; } > "$OUT/v04-$name.txt"
-  "$R" --card "$CARDS/$card" --out "$OUT/v04-$name.wav" --stereo out1 --bpm 125 --no-start --seconds "$seconds" \
-    --midi-log "$OUT/v04-$name.midi.log" --events "$OUT/v04-$name.txt" $CHANNELS "$@"
+  local f="$OUT/${LICHOMAT_DEMO_PREFIX:-v04}-$name"
+  { echo "# options: --card $card --bpm 125 --no-start --seconds $seconds $*${LICHOMAT_DEMO_PARAMS:+ $LICHOMAT_DEMO_PARAMS}"; cat; } > "$f.txt"
+  "$R" --card "$CARDS/$card" --out "$f.wav" --stereo out1 --bpm 125 --no-start --seconds "$seconds" \
+    --midi-log "$f.midi.log" --events "$f.txt" $CHANNELS "$@" ${LICHOMAT_DEMO_PARAMS:-}
 }
 # The fx card: pattern 0 has voices 1-7 on steps 1, 5, 9 and 13, and voices 1-4 go to the FX bus
 # (dry/wet 64, P1-P4 64). fx_type 4 = del, fx_delay_type 0 = Del (not ping-pong), fx_p4 = feedback.
@@ -157,4 +162,4 @@ LFO zastępują kroki parametru co 80 ms (trójkąt); na urządzeniu przepis uż
 Pięciu parametrów z Q29 (filtr DJ, rezonans DJ, poziom pogłosu, freeze, decay pogłosu) nie
 moduluje tu żadne LFO.
 EOF
-ls -l "$OUT"/v04-*.wav
+ls -l "$OUT/${LICHOMAT_DEMO_PREFIX:-v04}"-*.wav

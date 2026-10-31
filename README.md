@@ -38,6 +38,15 @@ own FX slot; a synced delay plays its free time there. A kit re-saved with 1.7 l
 those defaults too. A saved kit always stores the DJ filter flat and freeze off. `glo.cfg` stays 30
 bytes.
 
+Version 0.5 starts each voice at the sample of its event. Up to 0.4 a voice started with the next
+audio block of 64 samples (1.45 ms), so a hit moved by up to a block against its time. Now the
+shifts, the swing, humanize, ratchets and rolls, each track's own tempo, the MIDI notes coming in
+over DIN and USB and the playing as a clock slave all land where they belong. From event to sound
+there is a constant 2.9 ms (128 samples), on average 0.73 ms later than 0.4 against the MIDI out and
+the clock out jack. The setting `trg` on the second sub-page of the global menu (hold SHIFT and
+press step button 12; after `cko`) chooses `smp`, the new timing, or `blk`, the timing of 0.4. It is
+saved in byte 9 of `glo.cfg`, which 1.7 ignores.
+
 It keeps everything of 0.3, which added tools for playing live and for acid lines. In the
 performance mode (the second mode button) holding step 8 turns the fill mode on, steps 9–16 recall
 eight mute scenes and COPY + a step stores one; the scenes are saved with the project. Rolls go from
