@@ -1356,6 +1356,29 @@ TEST(presets_glo_cfg_stays_30_bytes)
 	ASSERT_EQ(activeParameters[PAR_REV_SIZE], 0);
 }
 
+TEST(presets_glo_cfg_byte_9_is_the_trigger_timing)
+{
+	/* LICHOMAT v0.5 (plan Task 8, S18): glo.cfg's byte 9, fw 1.7's unused quantisation byte,
+	 * holds trg: 0 smp (fw 1.7 writes 0 there), 1 blk; the file stays 30 bytes */
+	reset();
+	ASSERT_EQ(f_chdir("/"), FR_OK);
+	ASSERT_EQ(PAR_TRIG_TIMING - PAR_BEGINNING_OF_GLOBALS, 9);
+	preset_loadDefaultGlobals();
+	ASSERT_EQ(activeParameters[PAR_TRIG_TIMING], 0);
+	activeParameters[PAR_TRIG_TIMING] = 1;
+	ASSERT_EQ(preset_saveGlobals(), FR_OK);
+	const int g = find("/glo.cfg");
+	ASSERT_TRUE(g >= 0);
+	ASSERT_EQ(card[g].len, 30);
+	ASSERT_EQ(card[g].data[9], 1);
+	activeParameters[PAR_TRIG_TIMING] = 0;
+	ASSERT_EQ(preset_loadGlobals(), 1);
+	ASSERT_EQ(activeParameters[PAR_TRIG_TIMING], 1);
+	card[g].data[9] = 0;					/* a glo.cfg of fw 1.7 */
+	ASSERT_EQ(preset_loadGlobals(), 1);
+	ASSERT_EQ(activeParameters[PAR_TRIG_TIMING], 0);
+}
+
 TEST_MAIN()
 
 //------------------------------------------------------------------------------

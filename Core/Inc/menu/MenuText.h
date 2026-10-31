@@ -51,6 +51,7 @@
 #define MENU_SCENE_QUANT	32	// LICHOMAT v0.3
 #define MENU_DUCK_SRC		33	// LICHOMAT v0.4 (plan D40)
 #define MENU_DELAY_SYNC		34	// LICHOMAT v0.4 (plan D38)
+#define MENU_TRIG_TIMING	35	// LICHOMAT v0.5
 
 //-----------------------------------------------------------------
 // Shared texts. Reduce mem usage by pooling common text
@@ -126,6 +127,13 @@ const char delaySyncNames[][4] =
 {
 	{10},		//number of entries
 	{"off"}, {"16t"}, {"16"}, {"8t"}, {"16d"}, {"8"}, {"4t"}, {"8d"}, {"4"}, {"4d"},
+};
+//-----------------------------------------------------------------
+// LICHOMAT v0.5: the trigger timing (PAR_TRIG_TIMING): at the sample, or at the block as v0.4
+const char trigTimingNames[][4] =
+{
+	{2},		//number of entries
+	{"smp"}, {"blk"},
 };
 //-----------------------------------------------------------------
 // LICHOMAT v0.2: the trig conditions of PAR_STEP_PROB 101..115 (SeqStepTypes.h)
@@ -524,6 +532,7 @@ const char shortNames[][4]  =
 	{"tmp"}, {"hmt"}, {"hmv"}, {"dly"},	// LICHOMAT v0.2
 	{"slt"}, {"sld"}, {"scn"},	// LICHOMAT v0.3
 	{"lvl"}, {"siz"}, {"mod"}, {"frz"}, {"syn"}, {"dck"}, {"ddp"}, {"djf"}, {"djr"},	// LICHOMAT v0.4
+	{"trg"},	// LICHOMAT v0.5
 
 };
 //-----------------------------------------------------------------
@@ -658,6 +667,7 @@ const char longNames[][16] =
 	{"Slide time"}, {"Slide"}, {"Scene change"},	// LICHOMAT v0.3
 	{"rev level"}, {"rev size"}, {"rev modul"}, {"rev freeze"}, {"delay sync"},	// LICHOMAT v0.4
 	{"duck src"}, {"duck depth"}, {"DJ filter"}, {"DJ reso"},
+	{"Trig timing"},	// LICHOMAT v0.5
 };
 
 

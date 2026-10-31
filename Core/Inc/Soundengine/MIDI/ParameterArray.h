@@ -356,7 +356,7 @@ enum ParamEnums
 	PAR_SCENE_QUANT,
 	PAR_FOLLOW,
 
-	PAR_QUANTISATION,
+	PAR_TRIG_TIMING,
 
 	// LICHOMAT v0.4: glo.cfg and menu_sendAllGlobals() end here, as in fw 1.7 (plan D34)
 	END_OF_GLOBALS,

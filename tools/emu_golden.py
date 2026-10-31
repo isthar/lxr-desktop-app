@@ -573,6 +573,10 @@ def cmd_check(a):
 
 
 def cmd_bless(a):
+    blk = [x for x in a.ids if x.endswith('_blk')]
+    if blk:
+        raise Usage('bless: %s hold the entries of v0.4 at 91a61b5 (plan v0.5 P17): copied, never blessed'
+                    % ', '.join(blk))
     goldens = [load(x) for x in a.ids]
     blessed = read_goldens()
     entries, ok = {}, True

@@ -1318,6 +1318,21 @@ def V04_kit_fw17(t):
     check(wavs['stale'] != wavs['default'], 'the stale slots with a block render as the defaults: the case cannot tell')
     no_copies_left()
 
+@case
+def V05_trig_setting(t):
+    # trg (PAR_TRIG_TIMING, plan v0.5 Task 8, S18): 0 smp and 1 blk; the menu's clamp makes 9 a 1
+    # (n - 1); a project save writes it as glo.cfg's byte 9, and glo.cfg stays 30 bytes
+    seed = t.seed()
+    for v, want in ((0, 0), (1, 1), (9, 1)):
+        s, _, _ = t.render(seed, ['--no-start', '--seconds', '0.2', '--param', 'trig_timing=%d' % v])
+        check(s['params'] == {'trig_timing': want}, 'trig_timing=%d: params %r' % (v, s['params']))
+    keep = t.path('K')
+    t.render(seed, ['--no-start', '--seconds', '1', '--param', 'trig_timing=1', '--keep-card', keep,
+                    '--events', t.script('+100ms save-project 0\n')])
+    glo = one_file(keep, 'GLO.CFG')
+    check(len(glo) == 30 and glo[9] == 1, 'GLO.CFG: %d bytes, byte 9 %r' % (len(glo), glo[9:10]))
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists

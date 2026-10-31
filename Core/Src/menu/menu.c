@@ -268,6 +268,7 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_DUCK_DEPTH, CAT_FX, LONG_DUCK_DEPTH},/*TEXT_DUCK_DEPTH*/
 		{SHORT_DJ_FILTER, CAT_FX, LONG_DJ_FILTER},/*TEXT_DJ_FILTER*/
 		{SHORT_DJ_RESO, CAT_FX, LONG_DJ_RESO},/*TEXT_DJ_RESO*/
+		{SHORT_TRIG_TIMING, CAT_SEQUENCER, LONG_TRIG_TIMING},/*TEXT_TRIG_TIMING, LICHOMAT v0.5*/
 
 
 };
@@ -562,7 +563,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_MIDI_CHAN_6*/ 	DTYPE_1B16,
 	    /*PAR_SCENE_QUANT*/ 	DTYPE_MENU | (MENU_SCENE_QUANT<<8),	// LICHOMAT v0.3: bar/stp (plan D19)
 	    /*PAR_FOLLOW*/ 			DTYPE_ON_OFF,//DTYPE_MENU | (MENU_FOLLOW<<8),
-	    /*PAR_QUANTISATION*/ 	DTYPE_MENU | (MENU_SEQ_QUANT<<8),
+	    /*PAR_TRIG_TIMING*/ 	DTYPE_MENU | (MENU_TRIG_TIMING<<8),	// LICHOMAT v0.5: smp/blk
 	    /*PAR_SCREENSAVER_ON_OFF*/ DTYPE_ON_OFF,						//261
 	    /*PAR_MIDI_MODE*/ 		DTYPE_MENU | (MENU_MIDI<<8),			  // This is now unused.
 	    /*PAR_MIDI_CHAN_7*/ 	DTYPE_1B16,
@@ -2711,6 +2712,7 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 		return duckSrcNames[0][0];
 	case MENU_DELAY_SYNC:		// LICHOMAT v0.4 (plan D38)
 		return delaySyncNames[0][0];
+	case MENU_TRIG_TIMING: return trigTimingNames[0][0];	// LICHOMAT v0.5
 
 	default:
 		return 0;
@@ -2780,6 +2782,9 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 		break;
 	case MENU_DELAY_SYNC:		// LICHOMAT v0.4: likewise
 		p=delaySyncNames[((curParmVal < delaySyncNames[0][0]) ? curParmVal : 0) + 1];
+		break;
+	case MENU_TRIG_TIMING:		// LICHOMAT v0.5: any value but 1 from glo.cfg is smp, as the trigger glue reads it
+		p=trigTimingNames[((curParmVal == 1) ? 1 : 0) + 1];
 		break;
 	case MENU_MIDI_ROUTING:
 		p=midiRoutingNames[curParmVal+1];
@@ -3633,11 +3638,8 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	case PAR_P2_VAL:
 		frontPanel_sendData(SET_P2_VAL,activeParameters[PAR_ACTIVE_STEP],value);
 		break;
-/*
-	case PAR_QUANTISATION:
-		frontPanel_sendData(SEQ_CC,SEQ_SET_QUANT,value);
+	case PAR_TRIG_TIMING:	// LICHOMAT v0.5: the trigger glue reads it at each trigger (plan v0.5)
 		break;
-		*/
 
 	case PAR_SCREENSAVER_ON_OFF:
 

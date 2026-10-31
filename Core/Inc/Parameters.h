@@ -397,7 +397,7 @@ enum ParamEnums
 	PAR_FOLLOW,							// bool
 	
 	
-	PAR_QUANTISATION,					// UNUSED
+	PAR_TRIG_TIMING,					// LICHOMAT v0.5: trg, smp (0) or blk (1), glo.cfg byte 9, fw 1.7's unused quantisation byte (plan v0.5)
 	
 	PAR_SCREENSAVER_ON_OFF,				// bool /*260*/
 	PAR_MIDI_MODE,						// unused now

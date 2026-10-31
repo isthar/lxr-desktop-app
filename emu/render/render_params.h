@@ -294,7 +294,7 @@ static const struct { const char *name; uint16_t par; } render_params[] = {
 	{ "midi_chan_6", PAR_MIDI_CHAN_6 },
 	{ "scene_quant", PAR_SCENE_QUANT },
 	{ "follow", PAR_FOLLOW },
-	{ "quantisation", PAR_QUANTISATION },
+	{ "trig_timing", PAR_TRIG_TIMING },
 	{ "screensaver_on_off", PAR_SCREENSAVER_ON_OFF },
 	{ "midi_mode", PAR_MIDI_MODE },
 	{ "midi_chan_7", PAR_MIDI_CHAN_7 },

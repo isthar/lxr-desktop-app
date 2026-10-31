@@ -1210,7 +1210,7 @@ void preset_loadDefaultGlobals()
 	activeParameters[PAR_SCENE_QUANT] = 0;
 	activeParameters[PAR_FOLLOW] = 0;
 
-	activeParameters[PAR_QUANTISATION] = 0;
+	activeParameters[PAR_TRIG_TIMING] = 0;	//LICHOMAT v0.5: smp
 
 	activeParameters[PAR_SCREENSAVER_ON_OFF] = 1;
 
