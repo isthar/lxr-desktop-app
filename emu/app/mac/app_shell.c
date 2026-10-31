@@ -721,6 +721,11 @@ void app_shellSetWindow(app_shell_t *s, const int frame[4])
 	app_shellChanged(s);
 }
 
+const app_settings_t *app_shellSettings(const app_shell_t *s)
+{
+	return &s->set;
+}
+
 const char *app_shellHome(const app_shell_t *s)
 {
 	return s->havePaths ? s->paths.home : "";

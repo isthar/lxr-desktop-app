@@ -181,13 +181,52 @@ def R4_imgui_pin(t):
     check(sum(size for size, _ in rows.values()) == 3303558, 'the pinned files do not hold 3,303,558 bytes')
 
 
+def R4_gui_version(t):
+    """LICHOMAT Emu --version needs no window and prints the notices of spec 10.1: the renderer's lines, which come from
+    the same emu_notices.h (plan E26), under its own first line"""
+    r = subprocess.run([t.a.app, '--version'], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+    check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr))
+    ref = subprocess.run([t.a.render, '--version'], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+    check(ref.returncode == 0, 'lichomat-render --version exits %d' % ref.returncode)
+    got, want = r.stdout.splitlines(), ref.stdout.splitlines()
+    check(len(got) == len(want) and len(got) == 13, 'the notices are %d lines, not %d: %r' % (len(got), len(want), r.stdout))
+    check(re.fullmatch(r'LICHOMAT Emu [0-9]+\.[0-9]+', got[0]), 'the first line is %r' % got[0])
+    check(got[1:] == want[1:], 'the notices differ from the renderer\'s:\n%s' % r.stdout)
+    check('F1-F18 and F6b' in got[2], 'the firmware changes are not F1-F18 and F6b: %r' % got[2])
+    check(r.stdout.count('Not affiliated with ') == 1 and 'ABSOLUTELY NO WARRANTY' in r.stdout, r.stdout)
+
+
+def nm(objects, *flags):
+    """the symbols that `nm` prints for the object files, names only (a leading underscore kept)"""
+    out = subprocess.run(['nm'] + list(flags) + objects, capture_output=True, text=True)
+    check(out.returncode == 0, 'nm failed: ' + out.stderr)
+    return {l.split()[-1] for l in out.stdout.splitlines() if l.strip() and not l.rstrip().endswith(':')}
+
+
+def R4_gui_clash(t):
+    """No object of the app that is not the firmware's, or app_fw.c's, refers to a name that the firmware defines. All of
+    them share one namespace in the executable. graphic.c's `float time` is what a call of libc's time() binds to there,
+    and the call jumps into data: Dear ImGui's session date found it, as a SIGBUS at start. The build renames that symbol
+    for graphic.c alone (the firmware image stays as it is); this checks the rename and any other name like it."""
+    def listed(path):
+        with open(path) as f:
+            return [l.strip() for l in f if l.strip()]
+    firmware, rest = listed(t.a.firmware), listed(t.a.objects)
+    check(len(firmware) >= 50 and len(rest) >= 20, 'the object lists are short: %d firmware, %d others' % (len(firmware), len(rest)))
+    defined = nm(firmware, '-g', '-U')
+    check('_lxr_graphic_time' in defined, 'the firmware does not define _lxr_graphic_time: the rename of graphic.c\'s time is gone')
+    check('_time' not in defined, 'the firmware defines _time, which libc\'s time() would bind to')
+    clash = sorted(nm(rest, '-u') & defined)
+    check(not clash, 'the app refers to names that the firmware defines: ' + ', '.join(clash))
+
+
 CASES = {f.__name__: f for f in [R4_dev_headless, R4_dev_import, R4_dev_crash, R4_dev_power, R4_dev_afterpid,
-                                 R4_imgui_pin]}
+                                 R4_imgui_pin, R4_gui_version, R4_gui_clash]}
 
 
 def main():
     p = argparse.ArgumentParser()
-    for o in ('--dev', '--render', '--root', '--work', '--app'):
+    for o in ('--dev', '--render', '--root', '--work', '--app', '--firmware', '--objects'):
         p.add_argument(o)
     p.add_argument('id')
     a = p.parse_args()

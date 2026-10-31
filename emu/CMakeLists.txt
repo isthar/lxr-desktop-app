@@ -118,6 +118,10 @@ set(EMU_SRC "${LXR_ROOT}/Core/Src")
 # the splash shows the firmware's own name and version (spec 9.1)
 set_source_files_properties("${EMU_SRC}/appMain.c" PROPERTIES COMPILE_DEFINITIONS
     "FIRMWARE_NAME=\"${EMU_FIRMWARE_NAME}\";FIRMWARE_VERSION=\"${EMU_FIRMWARE_VERSION}\"")
+# graphic.c's global `float time` would be what libc's time() binds to in an executable that has both; Dear ImGui calls it
+# at CreateContext(). The name is changed for this one file, as the firmware's other uses of `time` are its own locals
+# and parameters (R4_gui_clash). The image of the device is built from the file as it is.
+set_source_files_properties("${EMU_SRC}/graphic.c" PROPERTIES COMPILE_DEFINITIONS "time=lxr_graphic_time")
 # the probability draw takes the sequencer stream (spec 4.9, firmware change F5)
 set_source_files_properties("${EMU_SRC}/Soundengine/Sequencer/sequencer.c" PROPERTIES
     COMPILE_OPTIONS "-include;${EMU_DIR}/stubs/emu_seq_random.h")
@@ -178,7 +182,8 @@ function(emu_render_exe name hooks)
     target_compile_options(${name}_fw PRIVATE -Wall -Wextra -Werror)
     target_compile_definitions(${name}_fw PRIVATE EMU_RENDER_TEST_HOOKS=${hooks})
     add_executable(${name} ${EMU_RENDER_SOURCES} $<TARGET_OBJECTS:${name}_fw> ${EMU_DEVICE_OBJECTS})
-    target_include_directories(${name} PRIVATE "${EMU_DIR}/core" "${EMU_DIR}/render" "${CMAKE_BINARY_DIR}")
+    target_include_directories(${name} PRIVATE "${EMU_DIR}/core" "${EMU_DIR}/render" "${EMU_DIR}/common"
+        "${CMAKE_BINARY_DIR}")
     target_compile_options(${name} PRIVATE ${EMU_FP_FLAGS} ${EMU_SAN_FLAGS} -Wall -Wextra -Werror
         "SHELL:-ivfsoverlay ${EMU_OVERLAY}")
     target_compile_definitions(${name} PRIVATE EMU_RENDER_TEST_HOOKS=${hooks})
@@ -422,17 +427,74 @@ if(LICHOMAT_EMU_APP)
     target_compile_options(lichomat-emu-dev PRIVATE ${EMU_APP_FLAGS})
     target_link_libraries(lichomat-emu-dev PRIVATE ${EMU_APP_FRAMEWORKS})
     set(EMU_APP_TEST ${Python3_EXECUTABLE} "${EMU_DIR}/tests/app_test.py" --dev $<TARGET_FILE:lichomat-emu-dev>
-        --render $<TARGET_FILE:lichomat-render> --root "${LXR_ROOT}" --work "${CMAKE_BINARY_DIR}/app-test")
+        --app $<TARGET_FILE:lichomat-emu> --firmware "${CMAKE_BINARY_DIR}/m19/firmware.txt"
+        --objects "${CMAKE_BINARY_DIR}/gui/objects.txt" --render $<TARGET_FILE:lichomat-render> --root "${LXR_ROOT}"
+        --work "${CMAKE_BINARY_DIR}/app-test")
     function(emu_app_tests)
         foreach(id IN LISTS ARGN)
             add_test(NAME ${id} COMMAND ${EMU_APP_TEST} ${id})
             set_tests_properties(${id} PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77)
         endforeach()
     endfunction()
-    emu_app_tests(R4_dev_headless R4_dev_import R4_dev_crash R4_dev_power R4_dev_afterpid)
+    emu_app_tests(R4_dev_headless R4_dev_import R4_dev_crash R4_dev_power R4_dev_afterpid R4_gui_version R4_gui_clash)
     emu_add_app_test(test_app_devices ENGINE MAC FRAMEWORKS AudioToolbox CoreAudio CoreMIDI CoreFoundation
         IDS R4_dev_coreaudio R4_dev_coremidi R4_dev_midiout)
     list(APPEND EMU_GATE_BINARIES $<TARGET_FILE:lichomat-emu-dev>)
+
+    # --- the GUI: Dear ImGui on its Cocoa and Metal backends, the panel, the bundle (spec 6.6, 9.2; plan Task 12) ---
+    set(EMU_IMGUI "${EMU_DIR}/third_party/imgui")
+    if(NOT EXISTS "${EMU_IMGUI}/imgui.h")
+        message(FATAL_ERROR "LICHOMAT_EMU_APP needs Dear ImGui in emu/third_party/imgui (plan R4 Task 11); "
+            "configure with -DLICHOMAT_EMU_APP=OFF without it")
+    endif()
+    enable_language(CXX)
+    enable_language(OBJCXX)
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_OBJCXX_STANDARD 17)
+    set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")	# no IM_ASSERT in a release
+    set(CMAKE_OBJCXX_FLAGS_DEBUG "-O0 -g")
+    set(CMAKE_OBJCXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+    add_library(emu_imgui OBJECT "${EMU_IMGUI}/imgui.cpp" "${EMU_IMGUI}/imgui_draw.cpp" "${EMU_IMGUI}/imgui_tables.cpp"
+        "${EMU_IMGUI}/imgui_widgets.cpp" "${EMU_IMGUI}/backends/imgui_impl_metal.mm" "${EMU_IMGUI}/backends/imgui_impl_osx.mm")
+    target_include_directories(emu_imgui SYSTEM PUBLIC "${EMU_IMGUI}" "${EMU_IMGUI}/backends")	# -Werror stays ours
+    target_compile_definitions(emu_imgui PUBLIC IMGUI_DISABLE_DEFAULT_FONT)	# E23: Menlo is loaded at run time
+    target_compile_options(emu_imgui PRIVATE -w ${EMU_SAN_FLAGS} "SHELL:-ivfsoverlay ${EMU_OVERLAY}"
+        $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+    configure_file("${EMU_APP_DIR}/gui/Info.plist.in" "${CMAKE_BINARY_DIR}/Info.plist" @ONLY)
+    add_executable(lichomat-emu MACOSX_BUNDLE "${EMU_APP_DIR}/gui/main.mm" "${EMU_APP_DIR}/gui/panel.cpp"
+        "${EMU_APP_DIR}/gui/panel_font.c" "${EMU_APP_DIR}/gui/panel_layout.c" $<TARGET_OBJECTS:emu_imgui> ${EMU_APP_OBJECTS})
+    target_include_directories(lichomat-emu PRIVATE "${EMU_APP_DIR}/gui" "${EMU_APP_DIR}/mac" "${EMU_APP_DIR}/engine"
+        "${EMU_DIR}/core" "${EMU_DIR}/common" "${CMAKE_BINARY_DIR}")
+    target_include_directories(lichomat-emu SYSTEM PRIVATE "${EMU_IMGUI}" "${EMU_IMGUI}/backends")	# panel.cpp, main.mm: -Werror
+    target_compile_definitions(lichomat-emu PRIVATE IMGUI_DISABLE_DEFAULT_FONT)
+    target_compile_options(lichomat-emu PRIVATE ${EMU_APP_FLAGS} $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+    set_target_properties(lichomat-emu PROPERTIES OUTPUT_NAME "LICHOMAT Emu"
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_BINARY_DIR}/Info.plist")
+    target_link_libraries(lichomat-emu PRIVATE ${EMU_APP_FRAMEWORKS} "-framework Cocoa" "-framework Metal"
+        "-framework MetalKit" "-framework QuartzCore" "-framework GameController" "-framework CoreText")
+    add_dependencies(lichomat-emu emu_render_build)
+    # The nested renderer and the signatures (spec 6.7, 9.2) as a command of their own, so that a change
+    # of lichomat-render alone copies and signs again: a POST_BUILD of the app would not run then.
+    set(B "$<TARGET_BUNDLE_CONTENT_DIR:lichomat-emu>")
+    add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/app-bundle.stamp"
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lichomat-render> "${B}/MacOS/lichomat-render"
+        COMMAND codesign --force --sign - "${B}/MacOS/lichomat-render"	# the nested renderer first (spec 9.2)
+        COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:lichomat-emu>"
+        COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/app-bundle.stamp"
+        DEPENDS lichomat-emu lichomat-render	# targets: rerun when either binary is relinked
+        VERBATIM)
+    add_custom_target(emu_app_bundle ALL DEPENDS "${CMAKE_BINARY_DIR}/app-bundle.stamp")
+    # R4_gui_clash: every object of the app that is not the firmware's or app_fw.c, to be compared with the firmware's names
+    file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/gui/objects.txt" CONTENT
+        "$<JOIN:$<TARGET_OBJECTS:emu_imgui>,\n>\n$<JOIN:$<TARGET_OBJECTS:lichomat-emu>,\n>\n$<JOIN:$<TARGET_OBJECTS:emu_app_mac>,\n>\n$<JOIN:$<TARGET_OBJECTS:emu_app_units>,\n>\n$<JOIN:$<TARGET_OBJECTS:emu_app_engine>,\n>\n")
+
+    # the LCD's glyphs and the panel's layout tables are plain C: what the window shows is checked without one (E24)
+    emu_add_app_test(test_app_font IDS R4_panel_font R4_panel_layout)
+    target_sources(test_app_font PRIVATE "${EMU_APP_DIR}/gui/panel_font.c" "${EMU_APP_DIR}/gui/panel_layout.c")
+    target_include_directories(test_app_font PRIVATE "${EMU_APP_DIR}/gui")
 endif()
 
 # M21 (see above): the gate over what the binaries were built from, the app's harness included

@@ -14,6 +14,10 @@
 #define APP_SETTINGS_H_
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct app_settings
 {
 	char outputUid[128];		/**< "" follows the default output */
@@ -34,4 +38,9 @@ typedef struct app_settings
 void app_settingsDefaults(app_settings_t *s);	/**< zeroes, then mix sum, dAuto 1, window 100 100 1100 760, 120 BPM, 24 PPQ */
 int app_settingsLoad(app_settings_t *s, const char *path);	/**< 0, 1 no file, -1 unreadable */
 int app_settingsSave(const app_settings_t *s, const char *path);	/**< PATH.tmp, fsync, rename; 0 or -1 */
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

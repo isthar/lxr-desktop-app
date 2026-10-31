@@ -19,6 +19,7 @@
 #include <stdint.h>
 
 #include "app_bind.h"
+#include "app_settings.h"
 #include "app_types.h"
 
 #ifdef __cplusplus
@@ -73,6 +74,9 @@ void app_shellTestFault(app_shell_t *s);	/**< harness only: SIGSEGV on the firmw
  * it moves; main thread */
 void app_shellWindow(const app_shell_t *s, int out[4]);
 void app_shellSetWindow(app_shell_t *s, const int frame[4]);
+/** what the app runs with now: the settings file, the options and the changes since (spec 6.9). The GUI shows its Audio and
+ * MIDI windows from it; main thread */
+const app_settings_t *app_shellSettings(const app_shell_t *s);
 const char *app_shellHome(const app_shell_t *s);	/**< the app folder, where the crash notes are; "" if there is none */
 /** Power cycle (spec 6.9): 'card out', and on its acknowledgement (or after 2 s) app_shellRestart(). The harness's
  * `power` and the GUI's menu. Main thread */
