@@ -248,6 +248,8 @@ def R4_bundle(t):
                       ('CFBundleName', 'LICHOMAT Emu'), ('LSMinimumSystemVersion', '13.0')):
         got = subprocess.run(['plutil', '-extract', key, 'raw', plist], capture_output=True, text=True).stdout.strip()
         check(got == want, '%s is %r, not %r' % (key, got, want))
+    mic = subprocess.run(['plutil', '-extract', 'NSMicrophoneUsageDescription', 'raw', plist], capture_output=True, text=True)
+    check(mic.returncode == 0 and 'clock' in mic.stdout, 'Info.plist lacks NSMicrophoneUsageDescription (spec 6.8)')
     res = os.path.join(contents, 'Resources')
     for name in ('LICENSE', 'NOTICE.md', 'README.md', 'LICENSE.arm-optimized-routines', 'LICENSE.dear-imgui',
                  'LICENSE.fatfs'):
@@ -281,6 +283,7 @@ def R4_bundle(t):
         # the tagline and the repository's address (the source, as GPL asks) may name them; no other line
         left = line.replace(tagline, '').replace('https://github.com/isthar/lxr-desktop-app', '')
         check(not re.search(r'lxr|erica|sonic\s*potions', left, re.I), 'README line %d names the maker or the device: %r' % (n, line))
+    check('## The clock jacks as audio' in readme, 'the README lacks the clock jacks as audio')
     flat = ' '.join(readme.split())  # a phrase may wrap over two lines
     check('Open Anyway' in flat and 'xattr -dr com.apple.quarantine "LICHOMAT Emu.app"' in flat,
           'the README does not say how to open a downloaded copy')

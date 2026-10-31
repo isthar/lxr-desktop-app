@@ -2,7 +2,7 @@
  * app_settings.c
  *
  * settings.txt: read with a range for every key, written to a temporary file and renamed. Keys that are not
- * known are kept as read (plan E19), so that R5's options can be added without losing them.
+ * known are kept as read (plan E19), so that a later version's options are not lost.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -42,6 +42,14 @@ static const app_field_t app_fields[] = {
 	F("clockin.bpm", T_DBL, genBpm, 1, 300),
 	F("clockin.ppq", T_INT, genPpq, 4, 24),
 	F("crash.shown", T_STR, crashShown, 0, 0),
+	F("clockout.audio", T_INT, clockOutAudio, 0, 1),
+	F("clockout.channel", T_INT, clockOutChannel, 1, 64),
+	F("clockin.audio", T_INT, clockInAudio, 0, 1),
+	F("clockin.device", T_STR, clockInDevice, 0, 0),
+	F("clockin.channel", T_INT, clockInChannel, 1, 64),
+	F("clockin.threshold", T_DBL, clockInThreshold, 0.05, 0.95),
+	F("reset.channel", T_INT, resetChannel, 0, 64),
+	F("reset.threshold", T_DBL, resetThreshold, 0.05, 0.95),
 };
 #define NFIELDS (sizeof app_fields / sizeof app_fields[0])
 
@@ -56,6 +64,9 @@ void app_settingsDefaults(app_settings_t *s)
 	s->window[3] = 760;
 	s->genBpm = 120.0;
 	s->genPpq = 24;
+	s->clockOutChannel = 2;
+	s->clockInChannel = 1;
+	s->clockInThreshold = s->resetThreshold = 0.5;
 }
 
 static char *app_trim(char *s)

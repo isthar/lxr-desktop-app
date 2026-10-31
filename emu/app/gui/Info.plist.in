@@ -40,6 +40,8 @@ the repository.
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>LICHOMAT Emu reads the clock and reset jacks from an audio input when you turn on clock and reset in from audio. Nothing is recorded or kept.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright (C) 2026 Tomasz Krzywicki. Unofficial. GPL-3.0-only.</string>
 </dict>

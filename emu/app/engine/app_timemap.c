@@ -110,7 +110,7 @@ double app_latencyL(const app_latencyIn_t *in)
 {
 	const double offset = in->hostLead + (double)(in->deviceLatency + in->streamLatency) / in->deviceRate;
 	const double blocks = 5.0 + (in->clockOutAudio ? 1.0 : 0.0);
-	return offset + (2.0 * (double)in->maxRequest + blocks * EMU_BLOCK_FRAMES) / APP_FS;
+	return offset + (2.0 * (double)in->maxRequest + blocks * EMU_BLOCK_FRAMES) / APP_FS + in->inputLead;
 }
 
 uint64_t app_entryTime(double mapped, uint64_t d, uint64_t now, uint64_t prev)

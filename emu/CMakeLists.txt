@@ -342,7 +342,8 @@ set(EMU_APP_UNIT_SOURCES "${EMU_APP_DIR}/engine/app_ring.c"
     "${EMU_APP_DIR}/engine/app_timemap.c" "${EMU_APP_DIR}/engine/app_midi.c"
     "${EMU_APP_DIR}/engine/app_midilist.c" "${EMU_APP_DIR}/engine/app_bind.c"
     "${EMU_APP_DIR}/engine/app_time.c" "${EMU_APP_DIR}/engine/app_card.c"
-    "${EMU_APP_DIR}/engine/app_settings.c" "${EMU_APP_DIR}/engine/app_crash.c")
+    "${EMU_APP_DIR}/engine/app_settings.c" "${EMU_APP_DIR}/engine/app_crash.c"
+    "${EMU_APP_DIR}/engine/app_jackaudio.c")
 add_library(emu_app_units OBJECT ${EMU_APP_UNIT_SOURCES})
 target_include_directories(emu_app_units PUBLIC "${EMU_APP_DIR}/engine" "${EMU_DIR}/core" "${EMU_DIR}/common")
 target_compile_options(emu_app_units PRIVATE ${EMU_APP_FLAGS})
@@ -396,22 +397,26 @@ emu_add_app_test(test_app_card IDS R4_card_order R4_card_stamp R4_card_state R4_
     R4_card_projclean R4_card_projstale R4_card_projnobackup R4_card_noreturn R4_card_exportown)
 target_compile_definitions(test_app_card PRIVATE "EMU_TEST_RENDER=\"$<TARGET_FILE:lichomat-render>\"")
 add_dependencies(test_app_card lichomat-render)
-emu_add_app_test(test_app_settings IDS R4_settings_roundtrip R4_settings_keep R4_crash_note R4_crash_trap R4_crash_thread
-    R4_crash_once)
+emu_add_app_test(test_app_settings IDS R4_settings_roundtrip R4_settings_keep R5_settings_clock R4_crash_note R4_crash_trap
+    R4_crash_thread R4_crash_once)
 emu_add_app_test(test_app_ring IDS M18_ring_fill_drop M18_ring_wrap M18_ring_threads)
 emu_add_app_test(test_app_timemap IDS M18_map_wall M18_map_drift M18_map_rate M18_map_jump M18_latency_table M18_entry_rule
-    M18_reanchor_order)
+    M18_reanchor_order R5_latency_input)
+emu_add_app_test(test_app_jackaudio IDS R5_clk_frame R5_clk_render R5_edge_step R5_in_host_time R5_jackin_render)
 emu_add_app_test(test_app_midi FRAMEWORKS CoreMIDI CoreFoundation IDS M18_midi_split M18_midi_usb_cin
     M18_midi_usb_transfer M18_midi_bytes M18_midi_din_asm M18_midi_usb_out M18_eventlist)
 emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R4_engine_splash R4_engine_ring R4_engine_cardseq R4_engine_cardheld
     R4_engine_blockrate R4_engine_wall R4_engine_card R4_engine_generator R4_engine_open_bracket R4_engine_slow_first
     R4_engine_silent_open R4_engine_close_inflight R4_engine_late_point R4_engine_max_request R4_engine_cmd_delay
     R4_engine_power_dneg R4_engine_power_dnan R4_engine_power_dbig R4_engine_cmd_generator R4_engine_cmd_text
-    R4_engine_cardswitch R4_engine_clockled R4_engine_snapshot_latch R4_engine_leadcarry)
+    R4_engine_cardswitch R4_engine_clockled R4_engine_snapshot_latch R4_engine_leadcarry
+    R5_render_clock R5_engine_holdback R5_engine_clockout R5_engine_clockdown R5_engine_clocknone
+    R5_engine_resetstale R5_engine_resetorder R5_engine_inskipped)
 # the splash test expects the firmware's own version (appMain.c: "v" FIRMWARE_VERSION " unofficial"), not a fixed one
 target_compile_definitions(test_app_engine PRIVATE "EMU_TEST_FW_VERSION=\"${EMU_FIRMWARE_VERSION}\"")
 emu_add_app_test(test_app_m18 ENGINE IDS M18_midi_out_step M18_slave_90 M18_slave_128 M18_slave_174 M18_din_128
-    M18_zero_d M18_out_start_phase M18_out_lead M18_out_stall M18_out_reopen M18_out_hang M18_out_jump)
+    M18_zero_d M18_out_start_phase M18_out_lead M18_out_stall M18_out_reopen M18_out_hang M18_out_jump
+    R5_jack_slave)
 
 # the vendored Dear ImGui is the 15 files of v1.92.9b, as its README pins them (plan Task 11)
 add_test(NAME R4_imgui_pin COMMAND ${Python3_EXECUTABLE} "${EMU_DIR}/tests/app_test.py" --root "${LXR_ROOT}"
@@ -445,7 +450,8 @@ if(LICHOMAT_EMU_APP)
     endfunction()
     emu_app_tests(R4_dev_headless R4_dev_import R4_dev_crash R4_dev_power R4_dev_afterpid R4_gui_version R4_gui_clash)
     emu_add_app_test(test_app_devices ENGINE MAC FRAMEWORKS AudioToolbox CoreAudio CoreMIDI CoreFoundation
-        IDS R4_dev_coreaudio R4_dev_spread R4_dev_render_short R4_dev_coremidi R4_dev_midiout R4_dev_cardop R4_dev_relaunch R4_dev_stopwait R4_dev_period)
+        IDS R4_dev_coreaudio R4_dev_spread R4_dev_render_short R4_dev_coremidi R4_dev_midiout R4_dev_cardop R4_dev_relaunch R4_dev_stopwait R4_dev_period R5_dev_input R5_dev_input_verdict R5_ci_slice R5_ci_watch R5_ci_oversize
+        R5_ci_samechannel R5_ci_release R5_shell_clockin)
     list(APPEND EMU_GATE_BINARIES $<TARGET_FILE:lichomat-emu-dev>)
 
     # --- the GUI: Dear ImGui on its Cocoa and Metal backends, the panel, the bundle (spec 6.6, 9.2; plan Task 12) ---
@@ -481,7 +487,7 @@ if(LICHOMAT_EMU_APP)
     set_target_properties(lichomat-emu PROPERTIES OUTPUT_NAME "LICHOMAT Emu"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_BINARY_DIR}/Info.plist")
     target_link_libraries(lichomat-emu PRIVATE ${EMU_APP_FRAMEWORKS} "-framework Cocoa" "-framework Metal"
-        "-framework MetalKit" "-framework QuartzCore" "-framework GameController" "-framework CoreText")
+        "-framework MetalKit" "-framework QuartzCore" "-framework GameController" "-framework CoreText" "-framework AVFoundation")
     add_dependencies(lichomat-emu emu_render_build)
     # The nested renderer and the signatures (spec 6.7, 9.2) as a command of their own, so that a change
     # of lichomat-render alone copies and signs again: a POST_BUILD of the app would not run then.

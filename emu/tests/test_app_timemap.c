@@ -87,10 +87,10 @@ TEST(M18_map_rate)
 TEST(M18_latency_table)
 {
 	const app_latencyIn_t rows[4] = {
-		{ 0.01274, 48000.0, 60u, 690u, 471u, 0 },
-		{ 0.00476, 48000.0, 60u, 690u, 118u, 0 },
-		{ 0.01274, 48000.0, 60u, 0u, 471u, 0 },
-		{ 0.00476, 48000.0, 60u, 0u, 118u, 0 },
+		{ 0.01274, 48000.0, 60u, 690u, 471u, 0, 0.0 },
+		{ 0.00476, 48000.0, 60u, 690u, 118u, 0, 0.0 },
+		{ 0.01274, 48000.0, 60u, 0u, 471u, 0, 0.0 },
+		{ 0.00476, 48000.0, 60u, 0u, 118u, 0, 0.0 },
 	};
 	const double L[4] = { 57.0, 33.0, 42.6, 18.6 }, D[4] = { 58.0, 34.0, 44.0, 20.0 };
 	for (unsigned i = 0; i < 4u; i++)
@@ -102,6 +102,16 @@ TEST(M18_latency_table)
 	app_latencyIn_t clk = rows[0];
 	clk.clockOutAudio = 1;	/* R5's option holds each block back by one (spec 6.8) */
 	ASSERT_NEAR((app_latencyL(&clk) - app_latencyL(&rows[0])) * 1e3, 1.44991, 0.0001);
+}
+
+TEST(R5_latency_input)	/* F7: L holds the input's lead while clock and reset come in from audio */
+{
+	app_latencyIn_t in = { 0.01274, 48000.0, 60u, 690u, 471u, 0, 0.0 };
+	const double base = app_latencyL(&in);
+	in.inputLead = 0.0125;	/* (512 + 48 + 40) frames at 48 kHz */
+	ASSERT_NEAR((app_latencyL(&in) - base) * 1e3, 12.5, 1e-9);
+	in.clockOutAudio = 1;
+	ASSERT_NEAR((app_latencyL(&in) - base) * 1e3, 12.5 + 1.44991, 1e-4);
 }
 
 TEST(M18_entry_rule)
