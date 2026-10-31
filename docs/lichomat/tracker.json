@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 02:23",
+    "updated": "2026-10-31 02:24",
     "phase": "Etap 2: v0.4 (atmosfera) w toku; A1-A6 gotowe, A7-A9 czekają na H12",
     "focus": "v0.4 A1-A6 gotowe na gałęzi v0.4 (36245bf): delay z tempem, filtr DJ, bufor i parametry pogłosu. Pogłos, freeze i rumble (A7-A9) po Twoim odczycie CPU (H12).",
     "branch": "timing-core",
-    "head": "36245bf",
+    "head": "47927a5",
     "next": "Ty: jedna sesja testowa na v0.3 według docs/lichomat/test-session-v0.3.md, najpierw H12 (odczyt CPU odblokowuje pogłos w v0.4: pełna częstotliwość, jeśli pk ≤ 46,2%, połowiczna, jeśli ≤ 63,3%); odsłuch build/demo/* i build/dlc/*. Ja: przerwa od ok. 02:30; po H12 v0.4 A7-A11.",
-    "updated_at": "2026-10-31T02:23:00+01:00",
-    "now": "Od 02:23: podsumowanie nocy; potem przerwa."
+    "updated_at": "2026-10-31T02:24:00+01:00",
+    "now": "Przerwa od 02:24. Nic nie działa. Czekam na Twój odczyt H12 (strona CPU), który odblokowuje pogłos, freeze i rumble w v0.4 (A7-A9)."
   },
   "epics": [
     {
@@ -2826,6 +2826,11 @@
       "n": 395,
       "at": "2026-10-31 02:23",
       "text": "02:23 Poprawki z przeglądu v0.4 gotowe (75c49ba, d2001f9, 36245bf; wypchnięte). NRPN nie zapisuje już parametrów 302-308. Filtr DJ ma testy na obu wyjściach, a przeskok LP↔HP idzie przez środek bez kliku (krok 27 619 → 1 625 LSB). Testy bloku kitu w tmp.snd, w zapisie morph i dla kitu z fw 1.7 (w emulatorze bajt w bajt). Wyścig synchronizacji delaya usunięty przez krótkie maskowanie przerwań. Host 99, emulator 180; nagrania wzorcowe bez zmian; fuzzing czysty."
+    },
+    {
+      "n": 396,
+      "at": "2026-10-31 02:24",
+      "text": "02:24 Przerwa po nocnym bloku (zużycie ok. 61%, limit 75%). Nic mojego nie działa; moja kofeina wyłączona. Przy wznowieniu: wyniki CI na v0.4, a po Twoim H12 v0.4 A7-A11."
     }
   ]
 }
