@@ -16,6 +16,7 @@
 #include <stdint.h>
 void app_crashInit(const char *dir, uint64_t (*now)(void), void (*trail)(int fd, unsigned n));
 void app_crashThread(void);		/**< each thread that may fault: its own alternate signal stack */
+void app_crashSetFirmware(void);	/**< the calling thread is the firmware's: the note says "thread: firmware" for a fault on it */
 void app_crashSignals(void);	/**< SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGABRT, SIGTRAP */
 int app_crashWrite(const char *what);	/**< the note, once per process; 0 or -1 */
 int app_crashLatest(const char *dir, const char *shown, char *name, size_t n);	/**< 1: a note newer than shown */

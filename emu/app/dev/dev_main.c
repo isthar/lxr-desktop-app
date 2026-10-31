@@ -650,8 +650,10 @@ int main(int argc, char **argv)
 			o.render = argv[++i];
 		else if (!strcmp(a, "--after-pid") && i + 1 < argc)
 		{
-			double pid;
-			if (parseNum(argv[++i], 1.0, 4294967295.0, &pid) != 0)
+			char *end;	/* a pid is an int: 1..INT_MAX, in decimal */
+			errno = 0;
+			const long pid = strtol(argv[++i], &end, 10);
+			if (end == argv[i] || *end != '\0' || errno || pid < 1 || pid > INT_MAX)
 			{
 				usage();
 				return 1;

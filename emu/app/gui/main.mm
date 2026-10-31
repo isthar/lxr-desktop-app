@@ -17,6 +17,9 @@
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
 
+#include <atomic>
+
+#include <errno.h>
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
@@ -76,6 +79,11 @@ static void emu_alert(NSString *title, NSString *text)
 static int emu_relaunch(void *ctx)
 {
 	(void)ctx;
+	/* once: a second openApplicationAtURL: would start a third process. The shell has the same guard; this one is for
+	 * whatever reaches here by another way. A failure ends the process (below), so the guard is never taken back. */
+	static std::atomic<bool> started(false);
+	if (started.exchange(true))
+		return 0;
 	NSWorkspaceOpenConfiguration *cfg = [NSWorkspaceOpenConfiguration configuration];
 	cfg.createsNewApplicationInstance = YES;
 	cfg.arguments = @[ @"--after-pid", [NSString stringWithFormat:@"%d", getpid()] ];
@@ -370,7 +378,7 @@ static void emu_loadDisplayFont(void)
 		snprintf(gLastPath, sizeof gLastPath, "%s", panel.URL.fileSystemRepresentation);
 		gLastProject = project;
 		const int op = request == PANEL_REQ_IMPORT ? APP_OP_IMPORT : request == PANEL_REQ_EXPORT ? APP_OP_EXPORT : APP_OP_PROJECT;
-		if (app_shellCardOp(gShell, op, gLastPath, project, 0) != 0)
+		if (app_shellCardOp(gShell, op, gLastPath, project, 0) != 0 && !app_shellRelaunching(gShell))
 			panel_message(&gPanel, "error: a card operation or a power cycle is running; try again in a moment");
 	}];
 }
@@ -408,7 +416,7 @@ static void emu_loadDisplayFont(void)
 	const int request = panel_request(&gPanel, &project);
 	if (request == PANEL_REQ_REPLACE)
 	{
-		if (app_shellCardOp(gShell, APP_OP_PROJECT, gLastPath, gLastProject, 1) != 0)
+		if (app_shellCardOp(gShell, APP_OP_PROJECT, gLastPath, gLastProject, 1) != 0 && !app_shellRelaunching(gShell))
 			panel_message(&gPanel, "error: a card operation or a power cycle is running; try again in a moment");
 	}
 	else if (request != PANEL_REQ_NONE)
@@ -436,23 +444,35 @@ int main(int argc, char **argv)
 			return 0;
 		}
 		if (strcmp(argv[i], "--after-pid") == 0 && i + 1 < argc)
-			afterPid = atoi(argv[++i]);
+		{
+			/* a pid is 1..INT_MAX in decimal; anything else is no pid, and nothing is waited for */
+			char *end;
+			errno = 0;
+			const long pid = strtol(argv[++i], &end, 10);
+			if (end != argv[i] && *end == '\0' && errno == 0 && pid >= 1 && pid <= INT_MAX)
+				afterPid = (int)pid;
+		}
 		/* anything else (the system passes some arguments of its own) is not ours */
 	}
-	/* E18: before any Cocoa or CoreMIDI call, and never on the main run loop: the process of the power cycle that this one
-	 * replaces may still own the MIDI endpoints and the card. Up to 5 s; then the start goes on. */
-	if (afterPid > 0)
-		(void)app_waitPid(afterPid, 5.0);
 	@autoreleasepool
 	{
 		/* The app puts its own window back from its settings (spec 6.9). Without this, the system asks at the next start
 		 * whether to reopen the windows, after a crash or a kill, and the app waits for the answer behind that alert. */
 		[[NSUserDefaults standardUserDefaults] registerDefaults:@{ @"ApplePersistenceIgnoreState" : @YES }];
+		/* The system calls the completion handler of the old process's openApplicationAtURL: only when this process has
+		 * checked in with LaunchServices, which [NSApplication sharedApplication] does. Waiting before it would hold the old
+		 * process up for the whole 5 s of the wait. This is the only Cocoa call before the wait: it takes neither the MIDI
+		 * endpoints nor the card. */
+		NSApplication *app = [NSApplication sharedApplication];
+		/* E18: before app_shellStart() (which runs in applicationDidFinishLaunching, after [app run]) and never on the main
+		 * run loop: the process of the power cycle that this one replaces may still own the MIDI endpoints and the card.
+		 * Up to 5 s; then the start goes on. */
+		if (afterPid > 0)
+			(void)app_waitPid(afterPid, 5.0);
 		NSString *render = [[NSBundle mainBundle] pathForAuxiliaryExecutable:@"lichomat-render"];
 		if (render != nil)
 			snprintf(gRender, sizeof gRender, "%s", render.fileSystemRepresentation);
 		panel_init(&gPanel);
-		NSApplication *app = [NSApplication sharedApplication];
 		[app setActivationPolicy:NSApplicationActivationPolicyRegular];
 		gDelegate = [[EmuDelegate alloc] init];
 		app.delegate = gDelegate;

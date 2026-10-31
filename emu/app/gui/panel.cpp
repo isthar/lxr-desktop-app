@@ -858,7 +858,8 @@ void popups(panel_t *p, app_shell_t *s)
 	}
 	if (p->popupHang)
 	{
-		ImGui::OpenPopup("Stopped");
+		if (!app_shellRelaunching(s))	/* a restart is on its way: the popup would only invite a second click */
+			ImGui::OpenPopup("Stopped");
 		p->popupHang = 0;
 	}
 	if (p->popupAsk)
@@ -894,6 +895,8 @@ void popups(panel_t *p, app_shell_t *s)
 		ImGui::TextUnformatted(p->hangText);
 		if (ImGui::Button("Restart", ImVec2(96.0f, 0.0f)))
 			app_shellRestart(s);	/* the settings are saved and the MIDI ports disposed of; no card out: the thread is stuck */
+		if (app_shellRelaunching(s))
+			ImGui::CloseCurrentPopup();	/* the footer says 'restarting...' */
 		ImGui::EndPopup();
 	}
 	popupCentre();
@@ -947,14 +950,15 @@ void menuBar(panel_t *p, app_shell_t *s)
 		return;
 	if (ImGui::BeginMenu("Card"))
 	{
-		if (ImGui::MenuItem("Import card folder..."))
+		const bool idle = !app_shellRelaunching(s);	/* nothing starts once a new process is on its way */
+		if (ImGui::MenuItem("Import card folder...", NULL, false, idle))
 			p->request = PANEL_REQ_IMPORT;
-		if (ImGui::MenuItem("Export card..."))
+		if (ImGui::MenuItem("Export card...", NULL, false, idle))
 			p->request = PANEL_REQ_EXPORT;
-		if (ImGui::MenuItem("Export project..."))
+		if (ImGui::MenuItem("Export project...", NULL, false, idle))
 			p->popupProject = 1;
 		ImGui::Separator();
-		if (ImGui::MenuItem("Power cycle"))
+		if (ImGui::MenuItem("Power cycle", NULL, false, idle))
 			app_shellPowerCycle(s);
 		ImGui::EndMenu();
 	}
@@ -1046,7 +1050,13 @@ void mainWindow(panel_t *p, app_shell_t *s, const app_snapshot_t *snap, double n
 	ImGui::PopFont();
 	/* the newest line the shell said, at the foot of the window */
 	ImGui::SetCursorScreenPos(ImVec2(vp->WorkPos.x + margin + 2.0f, vp->WorkPos.y + vp->WorkSize.y - footer));
-	if (p->lines > 0u)
+	if (app_shellRelaunching(s))	/* a new process is on its way: this is what the user waits for, whatever else was said */
+	{
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.69f, 0.0f, 1.0f));
+		ImGui::TextUnformatted("restarting...");
+		ImGui::PopStyleColor();
+	}
+	else if (p->lines > 0u)
 	{
 		char text[PANEL_LINE];
 		firstLine(p->line[(p->lines - 1u) % PANEL_LINES], text, sizeof text);

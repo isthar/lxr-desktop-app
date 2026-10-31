@@ -564,6 +564,72 @@ TEST(R4_dev_cardop)
 	PROBE(cardopChild, "R4_dev_cardop", 15);
 }
 
+/* spec 6.9, E18: once a new process is on its way, a second click (the hang popup's Restart, the power cycle, a card
+ * operation) must not start a third. The first relaunch that fails clears the guard: there is nothing on its way then. */
+static int relaunchCounted(void *ctx)
+{
+	atomic_fetch_add(&gRelaunches, 1);
+	return *(int *)ctx;	/* the result that this call gives */
+}
+
+static void relaunchMessage(void *ctx, const char *text)
+{
+	(void)ctx;
+	if (strstr(text, "restarting") != NULL)
+		atomic_fetch_add(&gOpDone, 1);
+}
+
+static int relaunchChild(void)
+{
+	app_shell_t *s = app_shellNew();
+	app_shellOptions_t o;
+	char err[256] = "";
+	int result = -1;	/* the first relaunch fails */
+	memset(&o, 0, sizeof o);
+	o.cardDir = gCard;
+	o.home = gHome;
+	o.noAudio = 1;
+	o.noMidi = 1;
+	o.message = relaunchMessage;
+	o.relaunch = relaunchCounted;
+	o.ctx = &result;
+	if (!s || app_shellStart(s, &o, err, sizeof err) != 0)
+	{
+		printf("start: %s\n", err);
+		return 1;
+	}
+	int ok = !app_shellRelaunching(s);
+	app_shellRestart(s);
+	ok &= atomic_load(&gRelaunches) == 1 && !app_shellRelaunching(s);	/* it failed: nothing is on its way */
+	result = 0;
+	app_shellRestart(s);
+	ok &= atomic_load(&gRelaunches) == 2 && app_shellRelaunching(s);
+	app_shellRestart(s);	/* the hang popup's second click */
+	app_shellPowerCycle(s);	/* the menu */
+	ok &= app_shellCardOp(s, APP_OP_EXPORT, gOpDst, 0, 0) == -1;
+	ok &= atomic_load(&gRelaunches) == 2;
+	const double t0 = app_wallSeconds();
+	while (app_wallSeconds() - t0 < 2.5)	/* past the power cycle's 2 s deadline, the one that would restart again */
+	{
+		(void)app_shellFrame(s);
+		nanosleep(&(const struct timespec){ 0, 5000000L }, NULL);
+	}
+	ok &= atomic_load(&gRelaunches) == 2 && app_shellRelaunching(s);
+	ok &= atomic_load(&gOpDone) == 2;	/* 'restarting' was said for the two relaunches, not for the clicks that came after */
+	printf("relaunches: %d, restarting said %d time(s)\n", atomic_load(&gRelaunches), atomic_load(&gOpDone));
+	app_shellStop(s);
+	return ok ? 0 : 1;
+}
+
+TEST(R4_dev_relaunch)
+{
+	emu_testTempDir(gCard, sizeof gCard);
+	emu_testTempDir(gHome, sizeof gHome);
+	emu_testTempDir(gOpDst, sizeof gOpDst);
+	ASSERT_EQ(emu_hostCopyCard(EMU_TEST_CARDS "/init", gCard, 0), 0);
+	PROBE(relaunchChild, "R4_dev_relaunch", 15);
+}
+
 /* spec 4.2, 6.2: the stop command is taken between slices, and the firmware thread may be in a wait of the engine, the first
  * callback of an output (3 s), when it is given. app_shellStop() waits for that, not for 2 s. The thread is held up 3.5 s
  * here; neither audio nor MIDI is needed. */

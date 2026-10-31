@@ -72,6 +72,7 @@ struct app_shell
 	double setSaveAt;				/**< app_wallSeconds() */
 	int powerActive;				/**< a power cycle waits for 'card out applied' */
 	double powerDeadline;
+	int relaunching;				/**< the relaunch of the options has been called and has not failed: a new process is on its way */
 	char outputErr[256];		/**< the last open failure told to the main thread; firmware thread */
 	char card[PATH_MAX];
 	char warnings[APP_SHELL_WARNINGS][255];
@@ -126,6 +127,7 @@ static void *app_shellFirmware(void *arg)
 {
 	app_shell_t *s = arg;
 	app_crashThread();	/* its own alternate stack, for a fault signal on this thread (spec 6.9) */
+	app_crashSetFirmware();	/* the note says whether the fault was here or elsewhere */
 	s->mach.realtime = app_threadRealtime(atomic_load(&s->mach.period)) == 0;	/* E29: a refusal is not an error */
 	s->engine.diag.realtime = s->mach.realtime;
 	app_enginePowerOn(&s->engine, &s->cfg);
@@ -392,20 +394,35 @@ static void app_shellRunOp(app_shell_t *s)
 
 void app_shellRestart(app_shell_t *s)
 {
+	if (s->relaunching)
+		return;	/* a new process is on its way; a second one would start a third */
 	if (!s->o.relaunch)
 	{
 		app_shellSay(s, "notice: no restart from here");
 		return;
 	}
+	s->relaunching = 1;
+	s->opActive = s->powerActive = 0;	/* a card operation or power cycle that waited for 'card out applied' ends here: nothing is copied */
+	app_shellSay(s, "notice: restarting...");
 	app_shellSave(s);	/* the settings, with the endpoints' IDs, are what the new process starts from */
 	app_shellMidiStop(s);	/* their unique IDs are free before the new process asks for them (E18, A10) */
 	if (s->o.relaunch(s->o.ctx) != 0)
+	{
+		s->relaunching = 0;	/* nothing is on its way: the user may try again */
 		app_shellSay(s, "error: the app could not start itself again; start it by hand");
+	}
+}
+
+int app_shellRelaunching(const app_shell_t *s)
+{
+	return s->relaunching;
 }
 
 void app_shellPowerCycle(app_shell_t *s)
 {
 	app_cmd_t c;
+	if (s->relaunching)
+		return;	/* the new process is on its way (app_shellRestart) */
 	if (s->opActive || s->powerActive)
 	{
 		app_shellSay(s, "error: a card operation or a power cycle is running");
@@ -432,7 +449,7 @@ void app_shellPowerCycle(app_shell_t *s)
 int app_shellCardOp(app_shell_t *s, int op, const char *path, int project, int replace)
 {
 	app_cmd_t c;
-	if (!s->havePaths || s->opActive || s->powerActive || !path || !path[0]
+	if (!s->havePaths || s->relaunching || s->opActive || s->powerActive || !path || !path[0]
 		|| snprintf(s->opPath, sizeof s->opPath, "%s", path) >= (int)sizeof s->opPath)
 		return -1;
 	memset(&c, 0, sizeof c);

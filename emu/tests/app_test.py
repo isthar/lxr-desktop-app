@@ -112,6 +112,7 @@ def R4_dev_crash(t):
     with open(os.path.join(t.home, notes[0])) as f:
         text = f.read()
     check(text.startswith('LICHOMAT Emu crash: SIGSEGV\nvirtual time: ') and text.count('\n') >= 10, text)
+    check('\nthread: firmware\n' in text, 'the fault was on the firmware thread: ' + text)
     r = t.dev(['--card', card, '--no-audio', '--no-midi', '--seconds', '2'])
     check('crash note: ' + notes[0] in r.stdout, 'the next launch did not show the note: ' + r.stdout)
     check('LICHOMAT Emu crash: SIGSEGV' in r.stdout, 'the note\'s first lines are not shown: ' + r.stdout)
@@ -135,6 +136,11 @@ def R4_dev_power(t):
 def R4_dev_afterpid(t):
     """--after-pid N waits for that process to end, but for at most 5 s (plan E18)"""
     args = ['--card', t.card(), '--no-audio', '--no-midi', '--seconds', '0.3']
+    for bad in ('2147483648', '4294967295', '99999999999999999999', '0', '-5', '12abc', ''):
+        r = t.dev(args + ['--after-pid', bad])	# a pid is 1..INT_MAX; (int)4294967295.0 was undefined behaviour
+        check(r.returncode == 1 and 'usage' in r.stderr, '--after-pid %r was accepted: exit %d' % (bad, r.returncode))
+    r = t.dev(args + ['--after-pid', '2147483647'])	# the largest pid: no such process, so nothing to wait for
+    check(r.returncode == 0, '--after-pid 2147483647: exit %d: %s' % (r.returncode, r.stderr))
     done = subprocess.Popen(['/usr/bin/true'])
     done.wait()
     t0 = time.monotonic()

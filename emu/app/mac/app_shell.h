@@ -91,6 +91,10 @@ void app_shellPowerCycle(app_shell_t *s);
  * free for the new process (spec 6.9, E18), then calls the relaunch of the options. It needs no firmware thread, so it
  * is also the hang's Restart; it puts no card out. A failure is said as a message. Main thread; it may not return */
 void app_shellRestart(app_shell_t *s);
+/** 1 from the moment app_shellRestart() has handed the start of a new process to the relaunch of the options (it clears
+ * again if that fails). While it is 1, app_shellRestart(), app_shellPowerCycle() and app_shellCardOp() do nothing: a
+ * second relaunch would start a third process. The GUI shows 'restarting...' and closes the hang popup. Main thread */
+int app_shellRelaunching(const app_shell_t *s);
 /** Waits up to sec seconds for the process pid to end (kqueue, EVFILT_PROC): 0 if it has ended or is gone, -1 if it
  * is still running, pid is invalid or the wait failed. The GUI's main() and the harness call it before
  * app_shellStart() when they are given --after-pid N (E18); never on the main run loop */

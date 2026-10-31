@@ -16,7 +16,10 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
+#include <stdatomic.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,7 +30,11 @@
 static char app_crashDir[1024];
 static uint64_t (*app_crashNow)(void);
 static void (*app_crashTrail)(int fd, unsigned n);
-static volatile sig_atomic_t app_crashDone;
+/* one note per process; a signal handler may run on two threads at once, so it is taken with one exchange. Lock-free
+ * atomics are async-signal-safe */
+static atomic_int app_crashDone;
+static atomic_uintptr_t app_crashFirmware;	/* the firmware thread's pthread_t, 0 until it is set */
+_Static_assert(ATOMIC_INT_LOCK_FREE == 2 && ATOMIC_POINTER_LOCK_FREE == 2, "the crash note needs lock-free atomics");
 
 static size_t app_add(char *b, size_t k, size_t n, const char *s)
 {
@@ -57,9 +64,8 @@ void app_crashInit(const char *dir, uint64_t (*now)(void), void (*trail)(int fd,
 
 int app_crashWrite(const char *what)
 {
-	if (app_crashDone || !app_crashDir[0])
-		return -1;
-	app_crashDone = 1;	/* a model check writes, then aborts: one note */
+	if (!app_crashDir[0] || atomic_exchange(&app_crashDone, 1) != 0)
+		return -1;	/* a model check writes, then aborts: one note */
 	char name[40], path[1100], text[512];
 	if (!app_stampName(app_localSeconds(), "crash-", ".txt", name, sizeof name))
 		return -1;
@@ -73,7 +79,10 @@ int app_crashWrite(const char *what)
 	k = app_add(text, k, sizeof text, what);
 	k = app_add(text, k, sizeof text, "\nvirtual time: ");
 	k = app_addU64(text, k, sizeof text, app_crashNow ? app_crashNow() : 0u);
-	k = app_add(text, k, sizeof text, " cycles\nthe last 64 scheduler events and inputs, oldest first:\n");
+	const uintptr_t fw = atomic_load(&app_crashFirmware);	/* pthread_self() is async-signal-safe */
+	k = app_add(text, k, sizeof text, fw != 0u && fw == (uintptr_t)pthread_self() ? " cycles\nthread: firmware"
+		: " cycles\nthread: other");
+	k = app_add(text, k, sizeof text, "\nthe last 64 scheduler events and inputs, oldest first:\n");
 	(void)!write(fd, text, k);
 	if (app_crashTrail)
 		app_crashTrail(fd, 64u);
@@ -86,7 +95,14 @@ static void app_crashOnSignal(int sig)
 	const char *name = sig == SIGSEGV ? "SIGSEGV" : sig == SIGBUS ? "SIGBUS" : sig == SIGFPE ? "SIGFPE"
 		: sig == SIGILL ? "SIGILL" : sig == SIGABRT ? "SIGABRT" : "SIGTRAP";
 	(void)app_crashWrite(name);
-	raise(sig);	/* SA_RESETHAND: the default action ends the app */
+	/* macOS ignores SA_RESETHAND for SIGILL and SIGTRAP, so the handler would catch its own raise() for ever: the default
+	 * action is put back by hand, and it ends the app when the handler returns */
+	struct sigaction dfl;
+	memset(&dfl, 0, sizeof dfl);
+	dfl.sa_handler = SIG_DFL;
+	sigemptyset(&dfl.sa_mask);
+	(void)sigaction(sig, &dfl, NULL);
+	raise(sig);
 }
 
 void app_crashThread(void)
@@ -97,6 +113,11 @@ void app_crashThread(void)
 	ss.ss_sp = malloc(ss.ss_size);	/* the thread's, for its life */
 	if (ss.ss_sp)
 		(void)sigaltstack(&ss, NULL);
+}
+
+void app_crashSetFirmware(void)
+{
+	atomic_store(&app_crashFirmware, (uintptr_t)pthread_self());
 }
 
 void app_crashSignals(void)
