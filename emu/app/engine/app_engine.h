@@ -20,13 +20,14 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
+#include "app_jackaudio.h"
 #include "app_midi.h"
 #include "app_ring.h"
 #include "app_timemap.h"
 #include "app_types.h"
 #include "emu_core.h"
 
-#define APP_AUDIO_FRAMES 16384u	/**< the audio ring, in 4-channel int16 frames (E5) */
+#define APP_AUDIO_FRAMES 16384u	/**< the audio ring, in app_frame_t frames (E5) */
 #define APP_RING_SLACK 256u		/**< 4 blocks above the largest request (spec 6.2) */
 #define APP_WARMUP 32u			/**< callbacks of an open before L is fixed (E7) */
 #define APP_SNAP_BLOCKS 8u		/**< a snapshot every 8 blocks (E15) */
@@ -39,15 +40,18 @@
 #define APP_WALL_LEAD_MAX_SEC 0.5	/**< the most that a closed audio line's lead carries over to the wall clock */
 #define APP_GEN_BPM_MAX 300.0	/**< the generator's tempo is 1 to this: the firmware's SEQC_SLAVE_BPM_MAX (app_fw.c checks it) */
 
+/** the audio ring's frame (E5, R5 F1): L1 R1 L2 R2, and the clock-out jack's level, 1 high */
+typedef struct app_frame { int16_t s[4]; int16_t clock; } app_frame_t;
+
 typedef struct app_audioTime { uint64_t hostTime, entry; double rateScalar; } app_audioTime_t;
 /** a time-map point: the ring position of the callback's first frame, its times, request and frames */
 typedef struct app_point { uint64_t frame, hostTime, entry; double rateScalar; uint32_t request, got; } app_point_t;
 
 typedef struct app_audio
 {
-	app_ring_t frames;				/**< int16_t[4] per frame, L1 R1 L2 R2: firmware -> callback */
+	app_ring_t frames;				/**< app_frame_t: firmware -> callback */
 	app_ring_t points;				/**< app_point_t: callback -> firmware */
-	_Atomic int mix, mute;			/**< app_mix_t; 1: silence (a hang, spec 6.9) */
+	_Atomic int mix, mute, clockChannel;	/**< app_mix_t; 1: silence (a hang, spec 6.9); the clock-out jack's output channel 1-64, 0 off */
 	_Atomic uint32_t maxRequest;	/**< the largest request so far (E6) */
 	_Atomic uint64_t underruns, callbacks;	/**< written by the callback */
 	void (*wake)(void *ctx);		/**< signals the firmware thread; never blocks */
@@ -78,6 +82,7 @@ typedef struct app_engineConfig
 	int dAuto;
 	double dSec;
 	app_mix_t mix;
+	int clockOutChannel;	/**< 1-64: clock out as audio on that output channel; else off (spec 6.8) */
 	app_outputRequest_t output;
 	void (*fault)(void *ctx, const char *what);	/**< a model check (spec 11); NULL: print and abort() */
 	void *faultCtx;
@@ -87,6 +92,7 @@ typedef struct app_engine
 {
 	app_host_t host;
 	app_audio_t audio;
+	app_jackIn_t jackIn;	/**< clock and reset in from audio: its edges ring is drained after the panel's (F8) */
 	app_ring_t panel, cmd, snap, ack, notes;
 	app_ring_t midiIn[2];	/**< [APP_PORT_USB], [APP_PORT_DIN]: one read proc each */
 	app_ring_t midiOut[2];	/**< the same for the MIDI-out thread: DIN waits behind no USB entry (E11) */
@@ -95,6 +101,11 @@ typedef struct app_engine
 	app_engineConfig_t cfg;
 	app_outputRequest_t req;
 	app_timemap_t map;
+	app_clkOut_t clkOut;	/**< the clock-out sink's edges, waiting for their block (F1) */
+	int clockOutAudio, held;	/**< the option is on; the block in hold[] waits for the next request (F2) */
+	int16_t hold[2][2u * EMU_BLOCK_FRAMES];
+	uint64_t holdFirst;		/**< the held block's first frame */
+	double inLead;			/**< s: the input's lead, as L holds it (F7) */
 	app_outputInfo_t out;
 	int outputRunning, dAuto, clockLevel, clockSeen, genOn;
 	int panelCard;			/**< the panel's card switch as it stands (1 in), kept while the card is held, for CARD_IN */

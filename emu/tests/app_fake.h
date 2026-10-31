@@ -48,6 +48,8 @@ typedef struct fake
 	uint64_t openAt[64];	/* the fake clock when each open returned */
 	char uid[128];			/* the last request */
 	uint32_t bufferFrames;
+	unsigned deviceChannels, channels;	/* the device's outputs (2 if 0); the open unit's (R5, F3) */
+	void (*rendered)(const float *buf, unsigned frames, unsigned channels);	/* every callback's output, if set */
 	float buf[4096 * 4];
 } fake_t;
 static fake_t fk;
@@ -75,7 +77,10 @@ static inline void fakeAdvance(uint64_t until, int stop)
 		if (next == cb)
 		{
 			const app_audioTime_t ts = { cb + FAKE_LEAD, cb, 1.0 };
-			app_audioRender(fk.audio, &ts, fakeRequest(fk.callbacks++), fk.buf, 2u);
+			const unsigned req = fakeRequest(fk.callbacks++);
+			app_audioRender(fk.audio, &ts, req, fk.buf, fk.channels);
+			if (fk.rendered)
+				fk.rendered(fk.buf, req, fk.channels);
 			fk.nextCallback += FAKE_PERIOD;
 			if (stop)
 				return;
@@ -91,7 +96,7 @@ static inline void fakeSleep(void *ctx, uint64_t until) { (void)ctx; fakeAdvance
 static inline void fakeCallback(unsigned frames)
 {
 	const app_audioTime_t ts = { fk.now + FAKE_LEAD, fk.now, 1.0 };
-	app_audioRender(fk.audio, &ts, frames, fk.buf, 2u);
+	app_audioRender(fk.audio, &ts, frames, fk.buf, fk.channels);
 }
 static inline void fakeClose(void *ctx)
 {
@@ -125,7 +130,10 @@ static inline int fakeOpen(void *ctx, app_audio_t *a, const app_outputRequest_t 
 	info->streamLatency = 690u;
 	info->safetyOffset = 48u;
 	info->bufferFrames = 512u;
-	info->channels = 2u;
+	const unsigned dev = fk.deviceChannels ? fk.deviceChannels : 2u;
+	fk.channels = req->channels < 2u ? 2u : req->channels > dev ? dev : req->channels;	/* as app_caOpen() (F3) */
+	info->channels = fk.channels;
+	info->deviceChannels = dev;
 	fk.audio = a;
 	fk.running = 1;
 	fk.nextCallback = fk.silent ? UINT64_MAX : fk.now + (fk.firstDelay ? fk.firstDelay : FAKE_PERIOD);
