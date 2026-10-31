@@ -19,6 +19,7 @@
 #include "Soundengine/DSPAudio/FX/atmo.h"	//LICHOMAT v0.4: the reverb stage (plan D32)
 #include "Soundengine/DSPAudio/FX/fxsync.h"	//LICHOMAT v0.4: the synced delay (plan D38)
 #include "Soundengine/Sequencer/seq_core.h"	//LICHOMAT v0.4: seqc_currentBpm() (plan D38)
+#include <string.h>	//LICHOMAT v0.4: memset() of the reverb's bus (plan D32)
 INDTCMZ FxBus fxBus;
 uint8_t fxBus_delaySync;	//LICHOMAT v0.4: PAR_FX_DELAY_SYNC, 0 = off (plan D38)
 
@@ -43,38 +44,9 @@ void FxBus_init()
 #endif
 }
 
-IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,int16_t* outL2, int16_t* outR2, uint32_t size)
+//LICHOMAT v0.4: fw 1.7's slot effect, moved unchanged out of FxBus_process() (plan D32)
+static __attribute__((noinline)) IN_ITCM_RAM void FxBus_processSlot(int16_t *fxBuffer, int16_t *out, int16_t *out2, uint32_t size, uint8_t channels)
 {
-	int16_t* out;
-	int16_t* out2 = NULL;
-	// < MIXER_ROUTING_DAC1_L -> stereo 1 or 2
-	const uint8_t channels = fxBus.audioRouting < MIXER_ROUTING_DAC1_L ? 2 : 1;
-	switch(fxBus.audioRouting)
-	{
-	default:
-	case MIXER_ROUTING_DAC1_STEREO:
-		out = outL2;
-		out2 = outR2;
-		break;
-	case MIXER_ROUTING_DAC2_STEREO:
-		out = outL;
-		out2 = outR;
-		break;
-	case MIXER_ROUTING_DAC1_L:
-		out = outL2;
-		break;
-	case MIXER_ROUTING_DAC1_R:
-		out = outR2;
-		break;
-	case MIXER_ROUTING_DAC2_L:
-		out = outL;
-		break;
-	case MIXER_ROUTING_DAC2_R:
-		out = outR;
-		break;
-
-	}
-
 	switch(fxBus.fxType)
 	{
 	default:
@@ -141,6 +113,62 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 
 	}
 
+}
+
+IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,int16_t* outL2, int16_t* outR2, uint32_t size)
+{
+	int16_t* out;
+	int16_t* out2 = NULL;
+	// < MIXER_ROUTING_DAC1_L -> stereo 1 or 2
+	const uint8_t channels = fxBus.audioRouting < MIXER_ROUTING_DAC1_L ? 2 : 1;
+	switch(fxBus.audioRouting)
+	{
+	default:
+	case MIXER_ROUTING_DAC1_STEREO:
+		out = outL2;
+		out2 = outR2;
+		break;
+	case MIXER_ROUTING_DAC2_STEREO:
+		out = outL;
+		out2 = outR;
+		break;
+	case MIXER_ROUTING_DAC1_L:
+		out = outL2;
+		break;
+	case MIXER_ROUTING_DAC1_R:
+		out = outR2;
+		break;
+	case MIXER_ROUTING_DAC2_L:
+		out = outL;
+		break;
+	case MIXER_ROUTING_DAC2_R:
+		out = outR;
+		break;
+
+	}
+
+	//LICHOMAT v0.4: the reverb after the slot; with the level at 0 this is v0.3's path (plan D32)
+	if(!atmo_active())
+	{
+		FxBus_processSlot(fxBuffer, out, out2, size, channels);
+		return;
+	}
+	int16_t bus[OUTPUT_DMA_SIZE * 2];
+	memset(bus, 0, sizeof bus);
+	FxBus_processSlot(fxBuffer, bus, bus + 1, size, 2);
+	atmo_process(bus, size);
+	if(channels == 2)
+	{
+		int32_t *o = (int32_t*)out;
+		const int32_t *b = (const int32_t*)bus;
+		for(uint32_t i = 0; i < size; i++)
+			o[i] = __QADD16(o[i], b[i]);
+	}
+	else
+	{
+		for(uint32_t i = 0; i < size; i++)
+			out[2 * i] = __SSAT((int32_t)out[2 * i] + bus[2 * i], 16);
+	}
 }
 
 void FxBus_prepareFxChange()

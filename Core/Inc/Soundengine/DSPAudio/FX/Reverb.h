@@ -78,6 +78,16 @@ typedef struct ReverbStruct
 	TiltEq eq;
 	TiltEq eqFb;
 
+	//LICHOMAT v0.4: the right output, the rate and the knobs (plan D36, D42)
+	TiltEq eqFbR;		/* the mirrored taps' tilt EQ */
+	float inGain;		/* 1, or 0 when frozen */
+	float size;			/* s = 0.4..1 on the eight loop units */
+	float decay;		/* 0..1, RT60 = 0.3 s * 2^(6 decay) */
+	float mod;			/* 0..1 */
+	float lastWetL;		/* the last core output, which the half rate interpolates from */
+	float lastWetR;
+	uint8_t decim;		/* 1 full rate, 2 half rate */
+
 } Reverb;
 
 void Reverb_init(Reverb *r);
@@ -86,6 +96,14 @@ void Reverb_setDelayTime(Reverb *r, float t);
 void Reverb_setFeedback(Reverb *r, float fb);
 void Reverb_setVariation(Reverb *r, float v);
 void Reverb_setComposition(Reverb *r, float c);
+
+//LICHOMAT v0.4: the stereo wet signal of a stereo block in[2*frames], and the knobs of plan D36, D42
+void Reverb_processWet(Reverb *r, const int16_t *in, float *wetL, float *wetR, uint16_t frames);
+void Reverb_setDecim(Reverb *r, uint8_t decim);
+void Reverb_setSize(Reverb *r, float s01);
+void Reverb_setDecay(Reverb *r, float d01);
+void Reverb_setMod(Reverb *r, float m01);
+void Reverb_clearState(Reverb *r);
 
 
 /*

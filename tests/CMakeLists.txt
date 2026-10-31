@@ -275,11 +275,13 @@ set(ATMO_REVERB_SOURCES
     ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/VerbTools/VerbDelay.c
     ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/VerbTools/VerbModDelay.c
     ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/VerbTools/sinCos.c)
-seqc_add_test(test_atmo      IDS RV1 EXTRA ${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES})  # v0.4 A2  every unit of the reverb carries signal
+seqc_add_test(test_atmo      IDS RV1 RV2 RV4 EXTRA ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/atmo.c ${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES})  # v0.4 A2  every unit of the reverb carries signal; A7 RT60 at both rates, the stage
 if(TARGET test_atmo)
     target_include_directories(test_atmo BEFORE PRIVATE stubs)
     target_include_directories(test_atmo SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
-    set_source_files_properties(${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
+    # plan A7: atmo.c, a firmware file, builds without warnings too
+    set_source_files_properties(${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES}
+        ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/atmo.c PROPERTIES COMPILE_OPTIONS -w)
     # sinCos.c, TiltEq.c, TiltEq.h and 1PoleLp.h use M_PI, which the C library of Linux
     # defines under strict C11 only with _DEFAULT_SOURCE (as for test_dsp below)
     target_compile_definitions(test_atmo PRIVATE _DEFAULT_SOURCE)

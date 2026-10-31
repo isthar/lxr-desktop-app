@@ -15,6 +15,12 @@
 
 #include "Soundengine/DSPAudio/FX/Reverb.h"
 #include "Soundengine/DSPAudio/FX/FxRamBuffer.h"
+#include "Soundengine/DSPAudio/FX/atmo.h"	//LICHOMAT v0.4: ATMO_REVERB_LEAN (plan D41)
+#include <math.h>
+
+//LICHOMAT v0.4: the modulated allpasses' position smoothing and depth in samples (plan D36)
+#define REVERB_MOD_SMOOTH_HZ	10.f
+#define REVERB_MOD_DEPTH		32.f
 
 
 
@@ -31,6 +37,13 @@ void Reverb_init(Reverb *r)
 
 	TiltEq_init(&r->eq);
 	TiltEq_init(&r->eqFb);
+	TiltEq_init(&r->eqFbR);	//LICHOMAT v0.4: the right output (plan D36)
+	r->inGain = 1.f;
+	r->size = 1.f;
+	r->decay = 0.5f;
+	r->mod = 0.f;
+	r->decim = 1;
+	r->lastWetL = r->lastWetR = 0.f;
 
 	SineCosine_init(&r->lfo);
 	r->reverbBufferSram = REVERB_RAM;	//LICHOMAT v0.4: own buffer (plan D31)
@@ -191,7 +204,19 @@ void Reverb_init(Reverb *r)
 
 		AllpassModDelay_setDelay(&r->apModDelay[0], 672);
 		AllpassModDelay_setDelay(&r->apModDelay[1], 908);
+
+		for(int i=0;i<2;i++)
+		{
+			//LICHOMAT v0.4: VerbModDelay_init()'s setOnePoleFreq(0.00013) smooths the read position with
+			//a time constant of about 20 minutes, so the unit starts near 0 samples and neither the size
+			//nor the LFO reaches it. 10 Hz here (16 ms, 32 ms at half rate), from the unit's length, and a
+			//depth: the LFO's amplitude is 0.5, so +-16 samples at modulation 127 (plan D36)
+			setOnePoleFreq(&r->apModDelay[i].delay.lp, REVERB_MOD_SMOOTH_HZ);
+			setOnePoleValue(&r->apModDelay[i].delay.lp, VerbModDelay_getLength(&r->apModDelay[i].delay));
+			AllpassModDelay_setModDepth(&r->apModDelay[i], REVERB_MOD_DEPTH);
+		}
 #endif
+	Reverb_setDecay(r, r->decay);	//LICHOMAT v0.4: a feedback from the start (plan D36)
 
 	    AllpassDelay_setCoefficient(&r->inputAllpass[0], 0.75);
 	    AllpassDelay_setCoefficient(&r->inputAllpass[1], 0.75);
@@ -203,30 +228,10 @@ void Reverb_init(Reverb *r)
 
 
 
-//void Reverb_process(Reverb *r, int16_t* input1, int16_t* input2)
-void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet)
+//LICHOMAT v0.4: one tick of the reverb's core: the per-sample body of fw 1.7's Reverb_process(),
+//unchanged, plus the right output of the mirrored taps (plan D36)
+static inline void Reverb_tick(Reverb *r, float monoInput, float *wetL, float *wetR)
 {
-	int32_t x;
-	int32_t* stereoOut = (int32_t*)outL;
-
-#if !HIGH_RES_SINE_COS
-	 SineCosine_calc(&r->lfo);
-#if SPIN_SEMI
-	 AllpassModDelay_setModValue(&r->modDelay[1], SineCosine_getSine(&r->lfo));
-	 AllpassModDelay_setModValue(&r->modDelay[0], SineCosine_getCosine(&r->lfo));
-#else
-	 VerbModDelay_setModValue(&r->apModDelay[1].delay, SineCosine_getSine(&r->lfo));
-	 VerbModDelay_setModValue(&r->apModDelay[0].delay, SineCosine_getCosine(&r->lfo));
-#endif
-#endif
-	for(uint8_t i=0; i<size;i++)
-	{
-		const uint8_t idx1 = i*2;
-		const uint8_t idx2 = i*2+1;
-
-		const int16_t mix = (__QADD16(fxBuffer[idx1]/2, fxBuffer[idx2]/2));
-		float monoInput = mix/32768.f;
-
 		monoInput = VerbDelay_process(&r->preDelay, monoInput);
 
 		float tmp;
@@ -247,6 +252,7 @@ void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, u
 
 		 float early = 0;
 		 //float vol = 1;//0.25f;
+#if !ATMO_REVERB_LEAN	//LICHOMAT v0.4: lean has no early reflections (plan D41)
 		 VerbDelay_process(&r->earlyReflectionDelay, monoInput);
 		 /*
 		 for(int j=0;j<EARLY_TAPS;j++)
@@ -259,6 +265,7 @@ void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, u
 		 early += VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[1]) * 0.5f ;
 		 early += VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[2]) * 0.125f ;
 		 early += VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[3]) * 0.25f ;
+#endif
 
 		 monoInput = 0.5 * TiltEq_process(&r->eq, monoInput);//calcOnePole(&r->lpImpulse, monoInput);
 		 in  = AllpassDelay_process(&r->inputAllpass[0], AllpassDelay_process(&r->inputAllpass[1], (monoInput)));
@@ -438,9 +445,73 @@ void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, u
 
 			out= TiltEq_process(&r->eqFb,fmaf(early, r->earlyVolume, out2));
 
+#if ATMO_REVERB_LEAN
+			*wetR = out;	//LICHOMAT v0.4: lean, the wet R is the wet L (plan D41)
+#else
+			float outR;
+			outR  = VerbDelay_ReadTapSample(&r->delay[0], 266) * 0.6f;	//LICHOMAT v0.4: the mirrored taps (plan D36)
+			outR -= VerbDelay_ReadTapSample(&r->apDelay[0].delay, 1913) * 0.6f;
+			outR += VerbDelay_ReadTapSample(&r->delay[1], 996) * 0.6f;
+			outR -= VerbDelay_ReadTapSample(&r->apDelay[1].delay, 187) * 0.6f;
+			outR -= VerbDelay_ReadTapSample(&r->delay[3], 1066) * 0.6f;
+			*wetR = TiltEq_process(&r->eqFbR, fmaf(early, r->earlyVolume, outR));
 #endif
-			int16_t wet =  __SSAT(out*32768, 16);
-			//int16_t wet2 =  __SSAT(out*32768, 16);
+
+#endif
+			*wetL = out;
+}
+
+//LICHOMAT v0.4: the wet signal of a stereo block, L and R (plan D36). At half rate each core tick
+//takes the mean of two frames, and the outputs interpolate linearly from the previous tick (plan D42).
+void Reverb_processWet(Reverb *r, const int16_t *in, float *wetL, float *wetR, uint16_t frames)
+{
+#if !HIGH_RES_SINE_COS
+	 SineCosine_calc(&r->lfo);
+	 VerbModDelay_setModValue(&r->apModDelay[1].delay, SineCosine_getSine(&r->lfo) * r->mod);
+	 VerbModDelay_setModValue(&r->apModDelay[0].delay, SineCosine_getCosine(&r->lfo) * r->mod);
+#endif
+	const float g = r->inGain * (0.5f / 32768.f);
+	if(r->decim == 2)
+	{
+		float prevL = r->lastWetL;
+		float prevR = r->lastWetR;
+		for(uint16_t i = 0; i + 1 < frames; i += 2)
+		{
+			const float x = ((float)in[2*i] + (float)in[2*i+1] + (float)in[2*i+2] + (float)in[2*i+3]) * (0.5f * g);
+			float l, rr;
+			Reverb_tick(r, x, &l, &rr);
+			wetL[i] = 0.5f * (prevL + l);
+			wetR[i] = 0.5f * (prevR + rr);
+			wetL[i+1] = l;
+			wetR[i+1] = rr;
+			prevL = l;
+			prevR = rr;
+		}
+		r->lastWetL = prevL;
+		r->lastWetR = prevR;
+	}
+	else
+	{
+		for(uint16_t i = 0; i < frames; i++)
+			Reverb_tick(r, ((float)in[2*i] + (float)in[2*i+1]) * g, &wetL[i], &wetR[i]);
+	}
+}
+
+//void Reverb_process(Reverb *r, int16_t* input1, int16_t* input2)
+void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet)
+{
+	//LICHOMAT v0.4: the core is Reverb_processWet()'s; fw 1.7's dry/wet mix of the (mono) wet L stays
+	float wetL[OUTPUT_DMA_SIZE], wetR[OUTPUT_DMA_SIZE];
+	int32_t x;
+	int32_t* stereoOut = (int32_t*)outL;
+
+	if(size > OUTPUT_DMA_SIZE) size = OUTPUT_DMA_SIZE;
+	Reverb_processWet(r, fxBuffer, wetL, wetR, size);
+	for(uint8_t i=0; i<size;i++)
+	{
+		const uint8_t idx1 = i*2;
+		const uint8_t idx2 = i*2+1;
+			int16_t wet =  __SSAT(wetL[i]*32768, 16);
 			//int16_t dw = fxBuffer[i] + __SSAT((wet - fxBuffer[i]) * dryWet,16);
 
 			x = __PKHBT(fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16), fxBuffer[idx2] + __SSAT((wet - fxBuffer[idx2]) * dryWet,16), 16);
@@ -486,9 +557,68 @@ IN_ITCM_RAM void Reverb_setComposition(Reverb *r, float c)
 {
 	TiltEq_setParameter(&r->eq, -1+2*c);
 	TiltEq_setParameter(&r->eqFb, -1+2*c);
+	TiltEq_setParameter(&r->eqFbR, -1+2*c);	//LICHOMAT v0.4: the right output (plan D36)
 	//compositionParameter = c;
 	setOnePoleCoef(&r->lpFeedback, c);
 //	setOnePoleCoef(&r->lpImpulse, c);
+}
+
+//LICHOMAT v0.4: the knobs of plan D36 and D42
+static float Reverb_clamp01(float v)
+{
+	return (v > 0.f) ? ((v < 1.f) ? v : 1.f) : 0.f;
+}
+
+//RT60 = 0.3 s * 2^(6 d); the loop multiplies by fb four times per round trip of its eight units,
+//tau = 12,262 s samples of the core, so fb = 10^(-3 tau / (4 RT60)); in expf() only, which the
+//emulator vendors (its check M19)
+static void Reverb_calcFeedback(Reverb *r)
+{
+	const float rt60 = 0.3f * expf(6.f * 0.69314718f * r->decay);
+	const float tau = 12262.f * r->size * (float)r->decim / REAL_FS;
+	r->feedback = expf(-0.75f * 2.30258509f * tau / rt60);
+}
+
+void Reverb_setDecim(Reverb *r, uint8_t decim)
+{
+	r->decim = (decim == 2) ? 2 : 1;
+	r->lastWetL = r->lastWetR = 0.f;
+	Reverb_calcFeedback(r);
+}
+
+void Reverb_setSize(Reverb *r, float s01)
+{
+	const float s = 0.4f + 0.6f * Reverb_clamp01(s01);
+	r->size = s;
+	for(int i=0;i<4;i++)
+		VerbDelay_setRoomSize(&r->delay[i], s);
+	for(int i=0;i<2;i++)
+	{
+		AllpassDelay_setRoomSize(&r->apDelay[i], s);
+		AllpassModDelay_setRoomSize(&r->apModDelay[i], s);
+	}
+	Reverb_calcFeedback(r);
+}
+
+void Reverb_setDecay(Reverb *r, float d01)
+{
+	r->decay = Reverb_clamp01(d01);
+	Reverb_calcFeedback(r);
+}
+
+//the LFO runs at 0.2 + 1.3 m Hz; Reverb_processWet() steps it once per block of OUTPUT_DMA_SIZE frames
+void Reverb_setMod(Reverb *r, float m01)
+{
+	r->mod = Reverb_clamp01(m01);
+	SineCosine_setFreq(&r->lfo, (0.2f + 1.3f * r->mod) * (float)OUTPUT_DMA_SIZE);
+}
+
+//the loop's state after REVERB_RAM was cleared (atmo.c, on waking)
+void Reverb_clearState(Reverb *r)
+{
+	r->lastOut = r->lastOut2 = 0.f;
+	r->lastWetL = r->lastWetR = 0.f;
+	setOnePoleValue(&r->lpFeedback, 0.0);
 }
 
 IN_ITCM_RAM void Reverb_setVariation(Reverb *r, float v)

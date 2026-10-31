@@ -17,8 +17,25 @@
 
 #include <stdint.h>
 
+/* LICHOMAT v0.4: the reverb's rate by plan D41, PROVISIONAL until the owner's reading H12
+ * (tracker Q30): H12 pk not read yet, R*_full 35.07 %, R*_half 18.03 %, R_dj 3.69 %
+ * -> full rate if P + F + D <= 85 (pk <= 46.24), else half rate if P + H + D <= 85
+ * (pk <= 63.28), else half rate and lean. Half rate until then; both rates are built and
+ * tested (RV2, RV4), so the reading changes only these two lines. */
+#ifndef ATMO_REVERB_DECIM
+#define ATMO_REVERB_DECIM	2	/* 1 full rate, 2 half rate (plan D42) */
+#endif
+#ifndef ATMO_REVERB_LEAN
+#define ATMO_REVERB_LEAN	0	/* 1: no early reflections, and the wet R is the wet L */
+#endif
+
 /* sets the reverb up on its own buffer; FxBus_init() calls it */
 void atmo_init(void);
+
+/** plan D32: 1 while the reverb stage runs (level > 0, or its gain not yet ramped to 0) */
+uint8_t atmo_active(void);
+/** plan D32: adds the reverb's wet L/R x gain to the stereo bus of the slot effect, frames <= 64 */
+void atmo_process(int16_t *bus, uint32_t frames);
 
 /** LICHOMAT v0.4: a parameter of the reverb stage, the delay sync or the DJ filter, 0..1 (plan D33, D34) */
 void atmo_setParam(uint16_t paramNr, float v);
