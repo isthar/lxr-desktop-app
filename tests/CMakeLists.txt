@@ -283,8 +283,10 @@ if(TARGET test_atmo)
 endif()
 # LICHOMAT v0.4 (plan A5, A6): the synced delay's arithmetic (fxsync.h) and the DJ filter's
 # math (djfilter.h), both headers
-seqc_add_test(test_fxsync    IDS DY1 DJ1 DJ2)  # v0.4 A5 synced delay, A6 DJ filter
+seqc_add_test(test_fxsync    IDS DY1 DJ1 DJ2 DJ3 DJ4 EXTRA ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/DjFilter.c)  # v0.4 A5 synced delay, A6 DJ filter
 if(TARGET test_fxsync)
+    # DJ3, DJ4: DjFilter.c with the stand-in HAL (__SSAT)
+    target_include_directories(test_fxsync BEFORE PRIVATE stubs)
     target_include_directories(test_fxsync SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
 endif()
 # LICHOMAT v0.4 (plan A3): the preset manager calls the kit block's defaults and checks in

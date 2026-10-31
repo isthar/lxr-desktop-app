@@ -89,6 +89,18 @@ void djFilter_process(int16_t *out1, int16_t *out2, uint32_t frames)
 		/* leaving it: the last coefficients, crossfaded out to the dry signal */
 		djf_run(out1, out2, frames, &old, 2);
 	}
+	else if(djf_c.mode != old.mode)
+	{
+		/* from one side straight to the other (a p-lock, a CC jump, a square LFO): the output
+		 * formula changes, which stepped by up to the signal itself. As the knob does, through
+		 * the flat centre: out to the dry signal here, and the new side comes in from flat in
+		 * the next block, from its rest state. Two blocks of one filter each, as entering and
+		 * leaving cost, not two filters in one block. djf_coefPos 64 makes the next block
+		 * compute the new side again, unless the knob is flat by then. */
+		djf_run(out1, out2, frames, &old, 2);
+		djf_c.mode = DJF_FLAT;
+		djf_coefPos = 64;
+	}
 	else
 	{
 		djf_run(out1, out2, frames, &djf_c, 0);
