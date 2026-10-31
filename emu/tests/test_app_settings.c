@@ -49,6 +49,50 @@ TEST(R4_settings_roundtrip)
 	ASSERT_EQ(strcmp(t.mix, "out2"), 0);
 	ASSERT_EQ(strcmp(t.crashShown, s.crashShown), 0);
 	ASSERT_EQ(t.window[2], s.window[2]);
+
+	/* strings are written escaped, so that no name can break the file: a line feed, a backslash, a tab, a carriage return,
+	 * and the spaces at the ends, which the reader would trim (review of d6fbcd7) */
+	snprintf(s.dinSrcName, sizeof s.dinSrcName, "  Port\n2 \\ C:\\x\ty\r  ");
+	snprintf(s.dinDstName, sizeof s.dinDstName, " ");
+	snprintf(s.outputUid, sizeof s.outputUid, "\\n is a backslash and an n, not a line feed\n");
+	snprintf(s.crashShown, sizeof s.crashShown, "x\ny = 1\nwindow.x = 5");	/* a name that holds a whole line of the file */
+	s.window[0] = 321;
+	ASSERT_EQ(app_settingsSave(&s, path), 0);
+	app_settingsDefaults(&t);
+	ASSERT_EQ(app_settingsLoad(&t, path), 0);
+	ASSERT_EQ(strcmp(t.dinSrcName, s.dinSrcName), 0);
+	ASSERT_EQ(strcmp(t.dinDstName, " "), 0);
+	ASSERT_EQ(strcmp(t.outputUid, s.outputUid), 0);
+	ASSERT_EQ(strcmp(t.crashShown, s.crashShown), 0);
+	ASSERT_EQ(t.window[0], 321);	/* the "line" in the name did not become one */
+	ASSERT_EQ(t.extra[0], 0);
+	FILE *f = fopen(path, "r");	/* the file holds one line per key */
+	ASSERT_TRUE(f != NULL);
+	unsigned lines = 0;
+	for (int c; (c = fgetc(f)) != EOF;)
+		lines += c == '\n';
+	fclose(f);
+	ASSERT_EQ(lines, 1u + 18u);	/* the comment and the 18 keys */
+
+	/* an over-long line ends at its line feed: its rest is not the next line */
+	f = fopen(path, "w");
+	ASSERT_TRUE(f != NULL);
+	fputs("output.mix = four\n# ", f);
+	for (unsigned i = 0; i < 1021u; i++)
+		fputc('x', f);
+	fputs("window.x = 777\nunknown.long = ", f);
+	for (unsigned i = 0; i < 3000u; i++)
+		fputc('y', f);
+	fputs("\nwindow.y = 55\nunknown.key = kept\nslave.delay.ms = 7", f);	/* the last line has no line feed */
+	fclose(f);
+	app_settingsDefaults(&t);
+	ASSERT_EQ(app_settingsLoad(&t, path), 0);
+	ASSERT_EQ(strcmp(t.mix, "four"), 0);
+	ASSERT_EQ(t.window[0], 100);	/* the second chunk of the comment line was not read as a setting */
+	ASSERT_EQ(t.window[1], 55);		/* the line after the long ones is read */
+	ASSERT_EQ_DBL(t.dMs, 7.0);
+	ASSERT_TRUE(strstr(t.extra, "unknown.key = kept\n") != NULL);
+	ASSERT_TRUE(strstr(t.extra, "unknown.long") == NULL);	/* the long one is dropped whole, not cut */
 }
 
 TEST(R4_settings_keep)

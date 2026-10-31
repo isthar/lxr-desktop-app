@@ -68,13 +68,60 @@ static char *app_trim(char *s)
 	return s;
 }
 
+/* A string is written with \\ for a backslash, \n, \r and \t for those characters and \s for a space at either end
+ * (the reader trims those), so that no name breaks the file. Any other backslash is read as itself. */
+static void app_putEscaped(FILE *f, const char *s)
+{
+	const size_t n = strlen(s);
+	for (size_t i = 0; i < n; i++)
+	{
+		const char c = s[i];
+		if (c == '\\')
+			fputs("\\\\", f);
+		else if (c == '\n')
+			fputs("\\n", f);
+		else if (c == '\r')
+			fputs("\\r", f);
+		else if (c == '\t')
+			fputs("\\t", f);
+		else if (c == ' ' && (i == 0u || i + 1u == n))
+			fputs("\\s", f);
+		else
+			fputc(c, f);
+	}
+}
+
+static void app_unescape(char *s)
+{
+	char *w = s;
+	for (const char *r = s; *r; r++)
+	{
+		if (*r == '\\' && r[1])
+		{
+			const char c = r[1] == 'n' ? '\n' : r[1] == 'r' ? '\r' : r[1] == 't' ? '\t' : r[1] == 's' ? ' '
+				: r[1] == '\\' ? '\\' : '\0';
+			if (c)
+			{
+				*w++ = c;
+				r++;
+				continue;
+			}
+		}
+		*w++ = *r;
+	}
+	*w = '\0';
+}
+
 static void app_setField(app_settings_t *s, const app_field_t *f, const char *v)
 {
 	char *p = (char *)s + f->off, *end;
 	if (f->type == T_STR)
 	{
-		if (strlen(v) < f->size)
-			memcpy(p, v, strlen(v) + 1u);
+		char u[1024];
+		snprintf(u, sizeof u, "%s", v);
+		app_unescape(u);
+		if (strlen(u) < f->size)
+			memcpy(p, u, strlen(u) + 1u);
 		return;
 	}
 	errno = 0;
@@ -114,6 +161,19 @@ int app_settingsLoad(app_settings_t *s, const char *path)
 	char line[1024];
 	while (fgets(line, sizeof line, f))
 	{
+		const size_t len = strlen(line);
+		if (len + 1u == sizeof line && line[len - 1u] != '\n')
+		{
+			/* a line of 1023 characters or more: the rest of it, up to its line feed, is not a line of its own, and a
+			 * value that was cut would be a wrong one: the line is dropped whole */
+			int c = fgetc(f);
+			if (c != EOF && c != '\n')
+			{
+				while ((c = fgetc(f)) != EOF && c != '\n')
+					;
+				continue;
+			}
+		}
 		char *t = app_trim(line), *eq = strchr(t, '=');
 		if (!*t || *t == '#' || !eq)
 			continue;
@@ -159,7 +219,7 @@ int app_settingsSave(const app_settings_t *s, const char *path)
 		fprintf(f, "%s = ", app_fields[k].key);
 		switch (app_fields[k].type)
 		{
-		case T_STR: fputs(p, f); break;
+		case T_STR: app_putEscaped(f, p); break;
 		case T_U32: memcpy(&u, p, sizeof u); fprintf(f, "%u", u); break;
 		case T_I32: memcpy(&i, p, sizeof i); fprintf(f, "%d", i); break;
 		case T_INT: memcpy(&n, p, sizeof n); fprintf(f, "%d", n); break;
