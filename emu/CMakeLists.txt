@@ -439,7 +439,7 @@ if(LICHOMAT_EMU_APP)
     endfunction()
     emu_app_tests(R4_dev_headless R4_dev_import R4_dev_crash R4_dev_power R4_dev_afterpid R4_gui_version R4_gui_clash)
     emu_add_app_test(test_app_devices ENGINE MAC FRAMEWORKS AudioToolbox CoreAudio CoreMIDI CoreFoundation
-        IDS R4_dev_coreaudio R4_dev_coremidi R4_dev_midiout R4_dev_cardop)
+        IDS R4_dev_coreaudio R4_dev_spread R4_dev_render_short R4_dev_coremidi R4_dev_midiout R4_dev_cardop R4_dev_stopwait R4_dev_period)
     list(APPEND EMU_GATE_BINARIES $<TARGET_FILE:lichomat-emu-dev>)
 
     # --- the GUI: Dear ImGui on its Cocoa and Metal backends, the panel, the bundle (spec 6.6, 9.2; plan Task 12) ---

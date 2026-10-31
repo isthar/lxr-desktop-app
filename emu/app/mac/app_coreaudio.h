@@ -44,5 +44,8 @@ int app_caList(app_outputDevice_t *out, int max);	/**< the output devices (app_t
 /** 0 running, else -1 with "the call: the OSStatus" (or "no output device") in err; a failed open leaves nothing open */
 int app_caOpen(app_ca_t *ca, app_audio_t *a, const app_outputRequest_t *req, app_outputInfo_t *info, char *err, size_t n);
 void app_caClose(app_ca_t *ca);	/**< stops the unit and the listeners; the callback has returned for good when it returns */
+/** the unit's render callback (ref is the app_ca_t), here for a test to call */
+OSStatus app_caRender(void *ref, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *ts, UInt32 bus, UInt32 frames,
+	AudioBufferList *io);
 
 #endif /* APP_COREAUDIO_H_ */

@@ -116,6 +116,14 @@ int app_threadRealtime(double periodSec)
 		(thread_policy_t)&p, THREAD_TIME_CONSTRAINT_POLICY_COUNT) == KERN_SUCCESS ? 0 : -1;
 }
 
+int app_threadRealtimeFollow(double *applied, double periodSec)
+{
+	if (periodSec == *applied)
+		return 0;
+	*applied = periodSec;
+	return app_threadRealtime(periodSec) == 0 ? 1 : -1;
+}
+
 double app_wallSeconds(void)
 {
 	struct timespec ts;

@@ -16,6 +16,7 @@
 #include <mach/mach_time.h>
 #include <limits.h>
 #include <math.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
 #include <sys/wait.h>
@@ -58,6 +59,59 @@ static int probe(int (*fn)(void), const char *id, int sec)
 
 #define PROBE(fn, id, sec) do { const int r_ = probe(fn, id, sec); if (r_ == 77) exit(77); ASSERT_EQ(r_, 0); } while (0)
 
+/* callbacks until there are n, at most sec seconds: 1 if they came. A slow device gets its time; a fast one is not waited for */
+static int waitCallbacks(app_engine_t *e, uint64_t n, double sec)
+{
+	const double t0 = app_wallSeconds();
+	while (atomic_load(&e->audio.callbacks) < n && app_wallSeconds() - t0 < sec)
+		nanosleep(&(const struct timespec){ 0, 5000000L }, NULL);
+	return atomic_load(&e->audio.callbacks) >= n;
+}
+
+/* the smallest and the largest request among the callbacks that the ring of points holds */
+static void requestSpread(app_ring_t *points, unsigned *lo, unsigned *hi)
+{
+	*lo = UINT_MAX;
+	*hi = 0u;
+	for (uint32_t i = 0, n = app_ringCount(points); i < n; i++)
+	{
+		const app_point_t *p = app_ringPeek(points, i);
+		*lo = p->request < *lo ? p->request : *lo;
+		*hi = p->request > *hi ? p->request : *hi;
+	}
+}
+
+/* a device whose buffer size is fixed asks 470 or 471 frames in turn (512 at 48 kHz, in 44,140.625 Hz frames); one that
+ * varies asks more, and the probe skips it */
+#define SPREAD_MAX 2u
+
+TEST(R4_dev_spread)
+{
+	static app_engine_t e;
+	app_host_t h;
+	memset(&h, 0, sizeof h);
+	h.ticksPerSec = 24e6;
+	ASSERT_EQ(app_engineInit(&e, &h), 0);
+	unsigned lo, hi;
+	requestSpread(&e.audio.points, &lo, &hi);
+	ASSERT_EQ(lo, UINT_MAX);	/* no callback: nothing to say */
+	app_point_t p = { 0u, 0u, 0u, 1.0, 470u, 470u };
+	for (unsigned k = 0; k < 4u; k++)
+	{
+		p.request = 470u + (k & 1u);
+		ASSERT_EQ(app_ringPush(&e.audio.points, &p), 0);
+	}
+	requestSpread(&e.audio.points, &lo, &hi);
+	ASSERT_EQ(lo, 470);
+	ASSERT_EQ(hi, 471);
+	ASSERT_TRUE(hi - lo <= SPREAD_MAX);
+	p.request = 940u;	/* a device that asks twice as much now and then */
+	ASSERT_EQ(app_ringPush(&e.audio.points, &p), 0);
+	requestSpread(&e.audio.points, &lo, &hi);
+	ASSERT_EQ(hi, 940);
+	ASSERT_TRUE(hi - lo > SPREAD_MAX);
+}
+
 static int coreaudioChild(void)
 {
 	static app_engine_t e;	/* its audio rings only */
@@ -77,15 +131,21 @@ static int coreaudioChild(void)
 		printf("SKIP R4_dev_coreaudio: %s\n", err);
 		return 77;
 	}
-	const struct timespec d = { 1, 0 };
-	nanosleep(&d, NULL);
+	const int came = waitCallbacks(&e, 20u, 3.0);	/* about 0.2 s at 512 frames; as long as it takes at 4,096 */
 	app_caClose(&ca);
+	unsigned lo, hi;
+	requestSpread(&e.audio.points, &lo, &hi);
+	if (hi > lo + SPREAD_MAX)
+	{
+		printf("SKIP R4_dev_coreaudio: %s asks %u to %u frames: its buffer size varies\n", info.name, lo, hi);
+		return 77;
+	}
 	const double want = info.bufferFrames * 44140.625 / info.deviceRate;
 	const unsigned got = atomic_load(&e.audio.maxRequest);
 	printf("%s: %.0f Hz, %u frames, client %.6f Hz, %s; %llu callbacks, largest request %u (expected %.1f)\n",
 		info.name, info.deviceRate, info.bufferFrames, info.clientRate, info.format,
 		(unsigned long long)atomic_load(&e.audio.callbacks), got, want);
-	if (!(info.clientRate == 44140.625 && atomic_load(&e.audio.callbacks) >= 5u && fabs(got - want) <= 2.0))
+	if (!(info.clientRate == 44140.625 && (came || atomic_load(&e.audio.callbacks) >= 5u) && fabs(got - want) <= 2.0))
 		return 1;
 	/* the engine reopens at a stall, a device change and a mix change: open and close must repeat cleanly. Four
 	 * channels asked of a stereo device give two. */
@@ -98,7 +158,7 @@ static int coreaudioChild(void)
 			printf("cycle %d: %s\n", k, err);
 			return 1;
 		}
-		nanosleep(&(const struct timespec){ 0, 100000000L }, NULL);
+		(void)waitCallbacks(&e, before + 3u, 2.0);	/* at its own pace, not 3 in 100 ms */
 		app_caClose(&ca);
 		if (atomic_load(&e.audio.callbacks) < before + 3u || (info.channels != 2u && info.channels != 4u))
 		{
@@ -111,6 +171,50 @@ static int coreaudioChild(void)
 }
 
 TEST(R4_dev_coreaudio) { PROBE(coreaudioChild, "R4_dev_coreaudio", 10); }
+
+/* spec 6.2: the render callback never leaves a buffer as it found it. A buffer that is not the interleaved one the format
+ * promised gets silence, not whatever it held (it would play as noise). No device is needed. */
+TEST(R4_dev_render_short)
+{
+	static app_engine_t e;
+	app_host_t h;
+	memset(&h, 0, sizeof h);
+	h.ticksPerSec = 24e6;
+	ASSERT_EQ(app_engineInit(&e, &h), 0);
+	app_ca_t ca;
+	memset(&ca, 0, sizeof ca);
+	ca.channels = 2u;
+	ca.audio = &e.audio;
+	static uint8_t one[100], two[64], full[512 * 2 * sizeof(float)];
+	struct { UInt32 n; AudioBuffer b[2]; } io;
+	AudioUnitRenderActionFlags flags = 0;
+	AudioTimeStamp ts;
+	memset(&ts, 0, sizeof ts);
+	memset(one, 0x55, sizeof one);
+	memset(two, 0x55, sizeof two);
+	io.n = 1u;
+	io.b[0] = (AudioBuffer){ 2u, sizeof one, one };	/* an interleaved buffer that is too short for 512 frames */
+	ASSERT_EQ(app_caRender(&ca, &flags, &ts, 0, 512u, (AudioBufferList *)&io), noErr);
+	for (size_t i = 0; i < sizeof one; i++)
+		ASSERT_EQ(one[i], 0);
+	memset(one, 0x55, sizeof one);
+	io.n = 2u;	/* two buffers: the non-interleaved layout, which the format did not promise */
+	io.b[1] = (AudioBuffer){ 1u, sizeof two, two };
+	ASSERT_EQ(app_caRender(&ca, &flags, &ts, 0, 512u, (AudioBufferList *)&io), noErr);
+	for (size_t i = 0; i < sizeof one; i++)
+		ASSERT_EQ(one[i], 0);
+	for (size_t i = 0; i < sizeof two; i++)
+		ASSERT_EQ(two[i], 0);
+	io.n = 0u;	/* no buffer: nothing to write */
+	ASSERT_EQ(app_caRender(&ca, &flags, &ts, 0, 512u, (AudioBufferList *)&io), noErr);
+	memset(full, 0x55, sizeof full);
+	io.n = 1u;
+	io.b[0] = (AudioBuffer){ 2u, sizeof full, full };	/* the promised buffer: rendered, silence from an empty ring */
+	ASSERT_EQ(app_caRender(&ca, &flags, &ts, 0, 512u, (AudioBufferList *)&io), noErr);
+	for (size_t i = 0; i < sizeof full; i++)
+		ASSERT_EQ(full[i], 0);
+	ASSERT_EQ(atomic_load(&e.audio.callbacks), 1);
+}
 
 static _Atomic unsigned gSeen;	/* what the probe's own input port got from our source */
 static _Atomic uint32_t gWord;
@@ -458,6 +562,92 @@ TEST(R4_dev_cardop)
 	emu_testTempDir(gOpDst, sizeof gOpDst);
 	ASSERT_EQ(emu_hostCopyCard(EMU_TEST_CARDS "/init", gCard, 0), 0);
 	PROBE(cardopChild, "R4_dev_cardop", 15);
+}
+
+/* spec 4.2, 6.2: the stop command is taken between slices, and the firmware thread may be in a wait of the engine, the first
+ * callback of an output (3 s), when it is given. app_shellStop() waits for that, not for 2 s. The thread is held up 3.5 s
+ * here; neither audio nor MIDI is needed. */
+static int stopwaitChild(void)
+{
+	app_shell_t *s = app_shellNew();
+	app_shellOptions_t o;
+	char err[256] = "";
+	memset(&o, 0, sizeof o);
+	o.cardDir = gCard;
+	o.home = gHome;
+	o.noAudio = 1;
+	o.noMidi = 1;
+	if (!s || app_shellStart(s, &o, err, sizeof err) != 0)
+	{
+		printf("start: %s\n", err);
+		return 1;
+	}
+	const double t0 = app_wallSeconds();
+	for (const app_snapshot_t *sn = NULL; (!sn || sn->vt < (uint64_t)(1.2 * EMU_CPU_HZ)) && app_wallSeconds() - t0 < 6.0;
+		sn = app_shellSnapshot(s))	/* 0.2 s after the boot, which is the first slice */
+	{
+		(void)app_shellFrame(s);
+		nanosleep(&(const struct timespec){ 0, 5000000L }, NULL);
+	}
+	app_shellTestStall(s, 3500);
+	nanosleep(&(const struct timespec){ 0, 50000000L }, NULL);	/* the thread is in its sleep */
+	const double t1 = app_wallSeconds();
+	const int rc = app_shellStop(s);
+	printf("stop returned %d after %.3f s\n", rc, app_wallSeconds() - t1);
+	return rc == 0 ? 0 : 1;
+}
+
+TEST(R4_dev_stopwait)
+{
+	emu_testTempDir(gCard, sizeof gCard);
+	emu_testTempDir(gHome, sizeof gHome);
+	ASSERT_EQ(emu_hostCopyCard(EMU_TEST_CARDS "/init", gCard, 0), 0);
+	PROBE(stopwaitChild, "R4_dev_stopwait", 15);
+}
+
+/* spec 6.1: the MIDI-out thread's period is the output's buffer duration, and the buffer changes (a new device, a new size).
+ * The thread follows it: the policy is set again when the period has changed and not otherwise. */
+static struct { int r1, r2, r3; double p1, p2; } gFollow;
+
+static double policyPeriod(void)	/* the calling thread's time-constraint period, in seconds */
+{
+	thread_time_constraint_policy_data_t p;
+	mach_msg_type_number_t count = THREAD_TIME_CONSTRAINT_POLICY_COUNT;
+	boolean_t dflt = FALSE;
+	mach_timebase_info_data_t tb;
+	mach_timebase_info(&tb);
+	if (thread_policy_get(mach_thread_self(), THREAD_TIME_CONSTRAINT_POLICY, (thread_policy_t)&p, &count, &dflt) != KERN_SUCCESS)
+		return -1.0;
+	return (double)p.period * tb.numer / tb.denom / 1e9;
+}
+
+static void *followThread(void *arg)
+{
+	(void)arg;
+	double applied = 0.0;
+	gFollow.r1 = app_threadRealtimeFollow(&applied, 0.010);
+	gFollow.p1 = policyPeriod();
+	gFollow.r2 = app_threadRealtimeFollow(&applied, 0.010);
+	gFollow.r3 = app_threadRealtimeFollow(&applied, 0.020);
+	gFollow.p2 = policyPeriod();
+	return NULL;
+}
+
+TEST(R4_dev_period)
+{
+	pthread_t t;
+	ASSERT_EQ(pthread_create(&t, NULL, followThread, NULL), 0);
+	pthread_join(t, NULL);
+	if (gFollow.r1 < 0)
+	{
+		printf("SKIP R4_dev_period: the system refuses the time-constraint policy\n");
+		exit(77);
+	}
+	ASSERT_EQ(gFollow.r1, 1);
+	ASSERT_NEAR(gFollow.p1, 0.010, 0.0001);
+	ASSERT_EQ(gFollow.r2, 0);	/* the same period: not set again */
+	ASSERT_EQ(gFollow.r3, 1);
+	ASSERT_NEAR(gFollow.p2, 0.020, 0.0002);	/* the new period took */
 }
 
 TEST_MAIN()

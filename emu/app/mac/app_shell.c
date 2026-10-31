@@ -37,6 +37,7 @@
 #define APP_SHELL_STACK ((size_t)8 << 20)	/* the main thread's size: the firmware's frames are deep */
 #define APP_SHELL_SAVE_SEC 0.5	/**< a changed setting is saved this long after the first change: a slider's drag is one save */
 #define APP_SHELL_POWER_SEC 2.0	/**< a power cycle waits this long for 'card out applied' */
+#define APP_SHELL_STOP_SEC 1.0	/**< what app_shellStop() waits beyond the engine's longest wait: the first callback and the open */
 #define APP_SHELL_HANG "hang: no progress for 10 s; the audio is stopped. Restart LICHOMAT Emu."
 
 struct app_shell
@@ -47,7 +48,8 @@ struct app_shell
 	app_engineConfig_t cfg;
 	pthread_t firmware, watchdog;
 	int haveFirmware, haveWatchdog;
-	_Atomic int stopped, testFault;
+	_Atomic int stopped, testFault, testStallMs;
+	_Atomic double openSec;			/**< the longest output open so far; the firmware thread writes it */
 	int hungShown, haveSnap;
 	app_snapshot_t snap;
 	app_ca_t ca;
@@ -88,7 +90,11 @@ static int app_shellOutputOpen(void *ctx, app_audio_t *a, const app_outputReques
 	app_mach_t *m = ctx;
 	app_shell_t *s = m->owner;
 	char err[256];
-	if (app_caOpen(&s->ca, a, req, info, err, sizeof err) != 0)
+	const double t0 = app_wallSeconds();
+	const int failed = app_caOpen(&s->ca, a, req, info, err, sizeof err) != 0;
+	if (app_wallSeconds() - t0 > atomic_load(&s->openSec))
+		atomic_store(&s->openSec, app_wallSeconds() - t0);	/* app_shellStop() waits at least this long for the engine */
+	if (failed)
 	{
 		if (strcmp(err, s->outputErr) != 0)
 		{
@@ -103,8 +109,8 @@ static int app_shellOutputOpen(void *ctx, app_audio_t *a, const app_outputReques
 	}
 	s->outputErr[0] = '\0';
 	if (info->deviceRate > 0.0 && info->bufferFrames > 0u)
-		m->period = (double)info->bufferFrames / info->deviceRate;
-	m->realtime = app_threadRealtime(m->period) == 0;	/* E29 */
+		atomic_store(&m->period, (double)info->bufferFrames / info->deviceRate);	/* the MIDI-out thread follows it */
+	m->realtime = app_threadRealtime(atomic_load(&m->period)) == 0;	/* E29 */
 	s->engine.diag.realtime = m->realtime;
 	return 0;
 }
@@ -120,14 +126,23 @@ static void *app_shellFirmware(void *arg)
 {
 	app_shell_t *s = arg;
 	app_crashThread();	/* its own alternate stack, for a fault signal on this thread (spec 6.9) */
-	s->mach.realtime = app_threadRealtime(s->mach.period) == 0;	/* E29: a refusal is not an error */
+	s->mach.realtime = app_threadRealtime(atomic_load(&s->mach.period)) == 0;	/* E29: a refusal is not an error */
 	s->engine.diag.realtime = s->mach.realtime;
 	app_enginePowerOn(&s->engine, &s->cfg);
 	while (!app_engineSlice(&s->engine))
+	{
 		if (atomic_load(&s->testFault))
 			raise(SIGSEGV);	/* the crash check, on this thread */
+		const int stall = atomic_exchange(&s->testStallMs, 0);
+		if (stall > 0)
+			nanosleep(&(const struct timespec){ stall / 1000, (long)(stall % 1000) * 1000000L }, NULL);
+	}
 	if (s->engine.outputRunning)
+	{
+		emu_waitBegin();	/* stopping a unit can take a while: a wait, not a hang (spec 4.2) */
 		app_shellOutputClose(&s->mach);	/* the unit stops before the thread does */
+		emu_waitEnd();
+	}
 	atomic_store(&s->stopped, 1);
 	return NULL;
 }
@@ -137,10 +152,13 @@ static void *app_shellFirmware(void *arg)
 static void *app_shellMidiOut(void *arg)
 {
 	app_shell_t *s = arg;
-	(void)app_threadRealtime(s->mach.period);	/* a refusal is not an error here either (E29) */
+	double applied = 0.0;
 	const app_midiOutSink_t sink = { &s->cm, app_cmSend };
 	while (!atomic_load(&s->stopped) && !atomic_load(&s->midiStop))
 	{
+		/* the period is the output's buffer duration, which a new device or a new size changes (spec 6.1); a refusal is
+		 * not an error here either (E29) */
+		(void)app_threadRealtimeFollow(&applied, atomic_load(&s->mach.period));
 		const uint64_t now = mach_absolute_time();
 		const uint64_t next = app_midiOutStep(&s->engine, now, &sink);
 		const uint64_t limit = now + (uint64_t)(0.02 * s->mach.ticksPerSec);	/* the stop flags are looked at every 20 ms */
@@ -779,8 +797,14 @@ void app_shellTestFault(app_shell_t *s)
 	atomic_store(&s->testFault, 1);
 }
 
-void app_shellStop(app_shell_t *s)
+void app_shellTestStall(app_shell_t *s, int ms)
 {
+	atomic_store(&s->testStallMs, ms);
+}
+
+int app_shellStop(app_shell_t *s)
+{
+	int rc = 0;
 	if (s->haveFirmware)
 	{
 		app_cmd_t c;
@@ -791,7 +815,10 @@ void app_shellStop(app_shell_t *s)
 			const struct timespec d = { 0, 5000000L };	/* a full command ring: the thread drains it */
 			(void)nanosleep(&d, NULL);
 		}
-		for (int i = 0; i < 400 && !atomic_load(&s->stopped); i++)	/* up to 2 s */
+		/* the thread takes the command between slices, and a slice can be in a wait of the engine: the first callback of
+		 * an output, 3 s, and an open, as long as the longest so far; then the close and the command itself */
+		const double deadline = app_wallSeconds() + APP_FIRST_SEC + atomic_load(&s->openSec) + APP_SHELL_STOP_SEC;
+		while (!atomic_load(&s->stopped) && app_wallSeconds() < deadline)
 		{
 			const struct timespec d = { 0, 5000000L };
 			(void)nanosleep(&d, NULL);
@@ -806,8 +833,11 @@ void app_shellStop(app_shell_t *s)
 				s->haveWatchdog = 0;
 			}
 		}
+		else
+			rc = -1;
 	}
 	app_shellMidiStop(s);
 	if (s->setDirty)
 		app_shellSave(s);	/* a change of the last half second */
+	return rc;
 }

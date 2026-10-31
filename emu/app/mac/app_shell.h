@@ -69,6 +69,9 @@ int app_shellHung(const app_shell_t *s);
 int app_shellWarnings(const app_shell_t *s);				/**< the warnings kept, at most the last 64 (spec 11) */
 const char *app_shellWarning(const app_shell_t *s, int i);	/**< oldest first */
 void app_shellTestFault(app_shell_t *s);	/**< harness only: SIGSEGV on the firmware thread (the crash note, spec 6.9) */
+/** tests only: the firmware thread sleeps ms milliseconds before its next slice, as if it were held up in a wait of the
+ * engine, where it takes no command (a silent open, a slow close). Any thread */
+void app_shellTestStall(app_shell_t *s, int ms);
 /** tests only: the main thread handles an acknowledgement of kind app_ackKind_t and number seq as if the engine had sent it
  * (a late 'card out applied' of an operation that has timed out, say). Main thread */
 void app_shellTestAck(app_shell_t *s, int kind, int32_t seq);
@@ -92,9 +95,11 @@ void app_shellRestart(app_shell_t *s);
  * is still running, pid is invalid or the wait failed. The GUI's main() and the harness call it before
  * app_shellStart() when they are given --after-pid N (E18); never on the main run loop */
 int app_waitPid(int pid, double sec);
-/** APP_CMD_STOP; joins the firmware thread for up to 2 s; then stops and joins the MIDI-out thread and disposes of the
- * MIDI endpoints, so that their unique IDs are free again (spec 6.9) */
-void app_shellStop(app_shell_t *s);
+/** APP_CMD_STOP; joins the firmware thread; then stops and joins the MIDI-out thread and disposes of the MIDI endpoints,
+ * so that their unique IDs are free again (spec 6.9). The firmware thread takes the command between slices, so it may be
+ * a wait of the engine away: the first callback of an output (3 s) and the time an open takes. 0 once the thread has
+ * stopped; -1 if it has not within that time (the process ends without it) */
+int app_shellStop(app_shell_t *s);
 
 #ifdef __cplusplus
 }

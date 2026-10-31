@@ -27,7 +27,7 @@ typedef struct app_mach
 	app_engine_t *engine;
 	void *output;		/**< the app_ca_t of Task 7; NULL: no audio (--no-audio) */
 	void *owner;		/**< the shell, for the host functions that it overrides */
-	double period;		/**< s: the firmware thread's period, the output buffer's duration */
+	_Atomic double period;	/**< s: the firmware thread's period, the output buffer's duration; the firmware thread writes it, the MIDI-out thread follows it */
 	int realtime;		/**< 1 if thread_policy_set() took the policy (E29) */
 } app_mach_t;
 
@@ -37,6 +37,10 @@ void app_machHost(app_mach_t *m, app_host_t *h);
 void app_machWaitSem(semaphore_t sem, uint64_t until, double ticksPerSec);
 /** THREAD_TIME_CONSTRAINT_POLICY for the calling thread: period, 25 % computation, constraint = period */
 int app_threadRealtime(double periodSec);
+/** The same for a thread whose period changes (the output's buffer): applies the policy when periodSec is not *applied, and
+ * stores it there (0 at the thread's start). 1 applied, 0 already for that period, -1 the system refused it (the thread
+ * runs at default priority; it is not tried again for the same period, E29) */
+int app_threadRealtimeFollow(double *applied, double periodSec);
 double app_wallSeconds(void);	/**< CLOCK_MONOTONIC */
 uint64_t app_seedNow(void);		/**< E27 */
 

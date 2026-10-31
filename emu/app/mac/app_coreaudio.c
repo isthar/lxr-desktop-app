@@ -157,15 +157,22 @@ int app_caList(app_outputDevice_t *out, int max)
 
 /* spec 6.3: the callback's host time is mHostTime (the safety offset and the converter are in it), the entry is when
  * the callback began; both in mach ticks */
-static OSStatus app_caRender(void *ref, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *ts, UInt32 bus,
+OSStatus app_caRender(void *ref, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *ts, UInt32 bus,
 	UInt32 frames, AudioBufferList *io)
 {
 	(void)flags;
 	(void)bus;
 	const uint64_t entry = mach_absolute_time();
 	app_ca_t *ca = ref;
-	if (io->mNumberBuffers < 1u || io->mBuffers[0].mDataByteSize < (size_t)frames * ca->channels * sizeof(float))
-		return noErr;	/* not the interleaved buffer that the format promised */
+	if (io->mNumberBuffers != 1u || io->mBuffers[0].mDataByteSize < (size_t)frames * ca->channels * sizeof(float)
+		|| io->mBuffers[0].mData == NULL)
+	{
+		/* not the interleaved buffer that the format promised: silence in every buffer, not what they held */
+		for (UInt32 i = 0; i < io->mNumberBuffers; i++)
+			if (io->mBuffers[i].mData)
+				memset(io->mBuffers[i].mData, 0, io->mBuffers[i].mDataByteSize);
+		return noErr;
+	}
 	const app_audioTime_t t = {
 		(ts->mFlags & kAudioTimeStampHostTimeValid) ? ts->mHostTime : entry,
 		entry,
