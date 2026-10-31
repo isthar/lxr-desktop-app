@@ -482,12 +482,35 @@ if(LICHOMAT_EMU_APP)
     set(B "$<TARGET_BUNDLE_CONTENT_DIR:lichomat-emu>")
     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/app-bundle.stamp"
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lichomat-render> "${B}/MacOS/lichomat-render"
+        # the licences and the README, in the bundle as the renderer's package has them (spec 10.1); they go in before
+        # the signing, which seals Resources
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${B}/Resources"
+        COMMAND ${CMAKE_COMMAND} -E copy "${LXR_ROOT}/LICENSE" "${LXR_ROOT}/NOTICE.md" "${EMU_DIR}/README.md" "${B}/Resources/"
+        COMMAND ${CMAKE_COMMAND} -E copy "${EMU_DIR}/libm/LICENSE" "${B}/Resources/LICENSE.arm-optimized-routines"
+        COMMAND ${CMAKE_COMMAND} -E copy "${EMU_IMGUI}/LICENSE.txt" "${B}/Resources/LICENSE.dear-imgui"
+        COMMAND /bin/sh -c "head -n 18 '${LXR_ROOT}/Middlewares/Third_Party/FatFs/src/ff.h' > '${B}/Resources/LICENSE.fatfs'"
         COMMAND codesign --force --sign - "${B}/MacOS/lichomat-render"	# the nested renderer first (spec 9.2)
         COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:lichomat-emu>"
         COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/app-bundle.stamp"
         DEPENDS lichomat-emu lichomat-render	# targets: rerun when either binary is relinked
+            "${LXR_ROOT}/LICENSE" "${LXR_ROOT}/NOTICE.md" "${EMU_DIR}/README.md" "${EMU_DIR}/libm/LICENSE"
+            "${EMU_IMGUI}/LICENSE.txt" "${LXR_ROOT}/Middlewares/Third_Party/FatFs/src/ff.h"
         VERBATIM)
     add_custom_target(emu_app_bundle ALL DEPENDS "${CMAKE_BINARY_DIR}/app-bundle.stamp")
+    # M21 over the GUI binary too: Dear ImGui and the system frameworks must not bring a name or an unlicensed file in
+    list(APPEND EMU_GATE_BINARIES $<TARGET_FILE:lichomat-emu>)
+    # R4_bundle: the signed bundle, its Resources and the README (spec 9.2, 10.3). emu_app_bundle is part of ALL,
+    # so the build has made and signed it by the time ctest runs. --sanitized: any sanitizer runtime is linked from
+    # the toolchain, which the otool check of the shipped (Release) build must not find.
+    if(LICHOMAT_EMU_SANITIZE)
+        set(emu_any_sanitizer 1)
+    else()
+        set(emu_any_sanitizer 0)
+    endif()
+    add_test(NAME R4_bundle COMMAND ${Python3_EXECUTABLE} "${EMU_DIR}/tests/app_test.py"
+        --app "$<TARGET_BUNDLE_DIR:lichomat-emu>" --sanitized ${emu_any_sanitizer} --root "${LXR_ROOT}"
+        --work "${CMAKE_BINARY_DIR}/app-test" R4_bundle)
+    set_tests_properties(R4_bundle PROPERTIES TIMEOUT 120)
     # R4_gui_clash: every object of the app that is not the firmware's or app_fw.c, to be compared with the firmware's names
     file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/gui/objects.txt" CONTENT
         "$<JOIN:$<TARGET_OBJECTS:emu_imgui>,\n>\n$<JOIN:$<TARGET_OBJECTS:lichomat-emu>,\n>\n$<JOIN:$<TARGET_OBJECTS:emu_app_mac>,\n>\n$<JOIN:$<TARGET_OBJECTS:emu_app_units>,\n>\n$<JOIN:$<TARGET_OBJECTS:emu_app_engine>,\n>\n")

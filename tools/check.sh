@@ -1,8 +1,8 @@
 #!/bin/bash
 # One-shot verification used during development:
 #   1. host tests (tests/, built with the host compiler), if present
-#   2. the emulator (emu/, build/emu: Debug with UBSan) and its ctest ids, on macOS
-#      on arm64 only
+#   2. the emulator (emu/, build/emu: Debug with UBSan) with LICHOMAT Emu.app and
+#      lichomat-emu-dev, and its ctest ids, on macOS on arm64 only
 #   3. firmware release build (build/release), with a memory summary
 #   4. update file check (tools/check_image.py: name, header, splash screen)
 #   5. compiler warning count (must stay 0; it covers the emulator's build too)
@@ -44,6 +44,7 @@ if [ "$(uname -s)-$(uname -m)" = "Darwin-arm64" ] && [ -f "$ROOT/emu/CMakeLists.
   if cmake -S "$ROOT/emu" -B "$ROOT/build/emu" -G Ninja >>"$LOG" 2>&1 \
      && cmake --build "$ROOT/build/emu" >>"$LOG" 2>&1; then
     (cd "$ROOT/build/emu" && ctest --output-on-failure 2>&1) | tee -a "$LOG" | tail -n 25 || status=1
+    [ -d "$ROOT/build/emu/LICHOMAT Emu.app" ] && echo "== app: build/emu/LICHOMAT Emu.app"
   else
     echo "emulator build FAILED"; grep -E "error|warning" "$LOG" | head -n 30; status=1
   fi

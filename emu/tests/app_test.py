@@ -2,7 +2,10 @@
 """The app's tests that run lichomat-emu-dev, the Dear ImGui pin and the bundle
 (stage 1b plan R4). Each case is a ctest id:
 
-    app_test.py --dev DEV --render RENDER --root ROOT --work WORK [--app APP] ID
+    app_test.py --dev DEV --render RENDER --root ROOT --work WORK [--app APP] [--sanitized 0|1] ID
+
+--app is the executable for R4_gui_version and R4_gui_clash, and the bundle (LICHOMAT Emu.app)
+for R4_bundle. --sanitized 1 says that the build links a sanitizer runtime, as render_test.py's.
 
 Copyright (C) 2026 Tomasz Krzywicki
 SPDX-License-Identifier: GPL-3.0-only
@@ -220,14 +223,75 @@ def R4_gui_clash(t):
     check(not clash, 'the app refers to names that the firmware defines: ' + ', '.join(clash))
 
 
+def R4_bundle(t):
+    """The bundle that CI uploads (spec 9.2, 10.1, 10.3): the nested renderer and the bundle both verify, the plist names
+    the app, the licence files and the README are in Resources, both binaries are arm64 and link only system libraries,
+    and the README says what the owner decided (E33, A4) without naming the maker outside the tagline."""
+    contents = os.path.join(t.a.app, 'Contents')
+    exe, render = (os.path.join(contents, 'MacOS', n) for n in ('LICHOMAT Emu', 'lichomat-render'))
+    # the nested renderer is signed first, then the bundle, which --deep checks over again (a file added after
+    # the bundle was signed, or a renderer signed after it, fails here)
+    for args in (['--strict', render], ['--deep', '--strict', t.a.app]):
+        r = subprocess.run(['codesign', '--verify', '--verbose=2'] + args, capture_output=True, text=True)
+        check(r.returncode == 0, 'codesign --verify %s: %s' % (' '.join(args), r.stderr))
+    plist = os.path.join(contents, 'Info.plist')
+    for key, want in (('CFBundleIdentifier', 'io.github.isthar.lichomat-emu'), ('CFBundleExecutable', 'LICHOMAT Emu'),
+                      ('CFBundleName', 'LICHOMAT Emu'), ('LSMinimumSystemVersion', '13.0')):
+        got = subprocess.run(['plutil', '-extract', key, 'raw', plist], capture_output=True, text=True).stdout.strip()
+        check(got == want, '%s is %r, not %r' % (key, got, want))
+    res = os.path.join(contents, 'Resources')
+    for name in ('LICENSE', 'NOTICE.md', 'README.md', 'LICENSE.arm-optimized-routines', 'LICENSE.dear-imgui',
+                 'LICENSE.fatfs'):
+        check(os.path.isfile(os.path.join(res, name)), 'Resources lacks ' + name)
+
+    def read(*parts):
+        with open(os.path.join(*parts), 'rb') as f:
+            return f.read()
+    for name, src in (('LICENSE', ('LICENSE',)), ('NOTICE.md', ('NOTICE.md',)), ('README.md', ('emu', 'README.md')),
+                      ('LICENSE.arm-optimized-routines', ('emu', 'libm', 'LICENSE')),
+                      ('LICENSE.dear-imgui', ('emu', 'third_party', 'imgui', 'LICENSE.txt'))):
+        check(read(res, name) == read(t.a.root, *src), 'Resources/%s is not %s of the tree' % (name, '/'.join(src)))
+    fatfs = read(res, 'LICENSE.fatfs').decode('utf-8')
+    ff_h = read(t.a.root, 'Middlewares', 'Third_Party', 'FatFs', 'src', 'ff.h').decode('utf-8').splitlines(True)[:18]
+    check(fatfs == ''.join(ff_h) and 'ChaN' in fatfs and 'DISCLAIMED' in fatfs, 'LICENSE.fatfs is not the notice of ff.h')
+    for b in (exe, render):
+        archs = subprocess.run(['lipo', '-archs', b], capture_output=True, text=True).stdout.split()
+        check(archs == ['arm64'], '%s is %r' % (b, archs))
+        if t.a.sanitized != '1':  # a sanitizer build links the toolchain's runtime (spec 9.3)
+            libs = subprocess.run(['otool', '-L', b], capture_output=True, text=True).stdout.splitlines()[1:]
+            bad = [l.split()[0] for l in libs if not l.split()[0].startswith(('/usr/lib/', '/System/Library/'))]
+            check(not bad, '%s links %r' % (b, bad))
+    out = subprocess.run([render, '--version'], capture_output=True, text=True).stdout
+    check('with the emulator changes F1-F18 and F6b.' in out, out)
+
+    # the README (spec 10.2, 10.3, 12.3)
+    readme = read(res, 'README.md').decode('utf-8')
+    tagline = 'emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02'
+    check(tagline in readme.splitlines(), 'the tagline is not a line of the README')
+    for n, line in enumerate(readme.splitlines(), 1):
+        # the tagline and the repository's address (the source, as GPL asks) may name them; no other line
+        left = line.replace(tagline, '').replace('https://github.com/isthar/lxr-desktop-app', '')
+        check(not re.search(r'lxr|erica|sonic\s*potions', left, re.I), 'README line %d names the maker or the device: %r' % (n, line))
+    flat = ' '.join(readme.split())  # a phrase may wrap over two lines
+    check('Open Anyway' in flat and 'xattr -dr com.apple.quarantine "LICHOMAT Emu.app"' in flat,
+          'the README does not say how to open a downloaded copy')
+    check('faceplate' not in flat.lower(), "the README speaks of a faceplate: the panel rule is E33's")
+    check('roughly like' in flat and 'muscle memory' in flat and 'wordmark' in flat and "Mac's own volume" in flat,
+          'the README does not state the panel rule of E33 and the missing VOLUME fader')
+    # A4: the one F8 interval that contains Start
+    check('exactly 1 ms after' in flat and '0 to 20.8 ms' in flat,
+          'the README does not say that the F8 interval that contains Start is anywhere from 0 to 20.8 ms')
+
+
 CASES = {f.__name__: f for f in [R4_dev_headless, R4_dev_import, R4_dev_crash, R4_dev_power, R4_dev_afterpid,
-                                 R4_imgui_pin, R4_gui_version, R4_gui_clash]}
+                                 R4_imgui_pin, R4_gui_version, R4_gui_clash, R4_bundle]}
 
 
 def main():
     p = argparse.ArgumentParser()
     for o in ('--dev', '--render', '--root', '--work', '--app', '--firmware', '--objects'):
         p.add_argument(o)
+    p.add_argument('--sanitized', choices=('0', '1'), default='0')
     p.add_argument('id')
     a = p.parse_args()
     check(a.id in CASES, 'no case ' + a.id)
