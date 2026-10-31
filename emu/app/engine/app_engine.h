@@ -35,6 +35,8 @@
 #define APP_FIRST_SEC 3.0		/**< the first callback of an open may take this long; none is a failed open */
 #define APP_RETRY_SEC 2.0		/**< reopen tries while no output runs */
 #define APP_D_MAX_SEC 1.0		/**< D is 0 to this */
+#define APP_WALL_LEAD_SEC 0.025	/**< the wall clock's render lead: output stamps are this far ahead of the pacing, so that a stall of the firmware thread (spec 6.3) still delivers on time */
+#define APP_WALL_LEAD_MAX_SEC 0.5	/**< the most that a closed audio line's lead carries over to the wall clock */
 #define APP_GEN_BPM_MAX 300.0	/**< the generator's tempo is 1 to this: the firmware's SEQC_SLAVE_BPM_MAX (app_fw.c checks it) */
 
 typedef struct app_audioTime { uint64_t hostTime, entry; double rateScalar; } app_audioTime_t;
@@ -85,8 +87,9 @@ typedef struct app_engine
 {
 	app_host_t host;
 	app_audio_t audio;
-	app_ring_t panel, cmd, snap, ack, notes, midiOut;
+	app_ring_t panel, cmd, snap, ack, notes;
 	app_ring_t midiIn[2];	/**< [APP_PORT_USB], [APP_PORT_DIN]: one read proc each */
+	app_ring_t midiOut[2];	/**< the same for the MIDI-out thread: DIN waits behind no USB entry (E11) */
 	_Atomic int hung;		/**< written by the watchdog thread */
 	/* the firmware thread's */
 	app_engineConfig_t cfg;
@@ -96,7 +99,8 @@ typedef struct app_engine
 	int outputRunning, dAuto, cardAck, clockLevel, clockSeen, genOn;
 	int cbSeen;				/**< this open has had a callback: the stall test is armed */
 	uint8_t extSync;
-	uint64_t retryAt, lastCallback, frameBase, dCycles, staleFrom, prev[3];
+	uint64_t retryAt, lastCallback, frameBase, dCycles, staleFrom, prev[3], outPrev[2];
+	uint64_t wallLead;		/**< host ticks: the wall map's lead over the pacing (APP_WALL_LEAD_SEC, or what a closed audio line had) */
 	uint64_t genT0, genK, genNext, genMbpm, genPpq;
 	uint64_t blocks, slices, lastSnap, winHost, winBlocks, waitTicks, winWait;
 	uint32_t warm, lReq;
@@ -121,8 +125,9 @@ typedef struct app_midiOutSink
 	void *ctx;
 	void (*send)(void *ctx, uint8_t port, uint64_t when, const uint32_t *w, unsigned n);
 } app_midiOutSink_t;
-/** MIDI-out thread (spec 6.5, E11): sends what is due at host time now; returns the
- * presentation time of the USB entry it waits for, or 0 when the ring is empty */
+/** MIDI-out thread (spec 6.5, E11): sends all the DIN messages queued, with their stamps (CoreMIDI schedules them), and the
+ * USB entries that are due at host time now; returns the presentation time of the USB entry it waits for, or 0 when the
+ * USB ring is empty. A DIN message that comes while it waits is for the next call: the thread is woken by every push */
 uint64_t app_midiOutStep(app_engine_t *e, uint64_t now, const app_midiOutSink_t *sink);
 
 #endif /* APP_ENGINE_H_ */

@@ -2,7 +2,7 @@
  * test_app_devices.c
  *
  * R4 (stage 1b spec 6.2, plan E22): the device glue against the real system. Each
- * probe runs in a forked child for at most 5 s and skips (exit 77) when there is
+ * probe runs in a forked child for at most its own number of seconds (5 to 15) and skips (exit 77) when there is
  * no output device, when the server refuses, or when there is no answer: CI has
  * no audio device and the sandbox may refuse or hang CoreAudio.
  *
@@ -14,6 +14,7 @@
  * the repository.
  */
 #include <mach/mach_time.h>
+#include <limits.h>
 #include <math.h>
 #include <signal.h>
 #include <stdatomic.h>
@@ -28,9 +29,9 @@
 #include "emu_hostfs.h"
 #include "emu_test.h"
 
-/* fn in a forked child for at most 5 s: its exit code, or 77 without an answer (E22). The parent
+/* fn in a forked child for at most sec seconds: its exit code, or 77 without an answer (E22). The parent
  * never touches CoreAudio or CoreMIDI, so the child starts clean. */
-static int probe(int (*fn)(void), const char *id)
+static int probe(int (*fn)(void), const char *id, int sec)
 {
 	fflush(stdout);
 	const pid_t pid = fork();
@@ -40,7 +41,7 @@ static int probe(int (*fn)(void), const char *id)
 		fflush(stdout);	/* _exit() does not */
 		_exit(r);
 	}
-	for (int i = 0; i < 100; i++)
+	for (int i = 0; i < sec * 20; i++)
 	{
 		int status;
 		if (waitpid(pid, &status, WNOHANG) == pid)
@@ -50,11 +51,11 @@ static int probe(int (*fn)(void), const char *id)
 	}
 	kill(pid, SIGKILL);
 	waitpid(pid, NULL, 0);
-	printf("SKIP %s: no answer within 5 s\n", id);
+	printf("SKIP %s: no answer within %d s\n", id, sec);
 	return 77;
 }
 
-#define PROBE(fn, id) do { const int r_ = probe(fn, id); if (r_ == 77) exit(77); ASSERT_EQ(r_, 0); } while (0)
+#define PROBE(fn, id, sec) do { const int r_ = probe(fn, id, sec); if (r_ == 77) exit(77); ASSERT_EQ(r_, 0); } while (0)
 
 static int coreaudioChild(void)
 {
@@ -108,7 +109,7 @@ static int coreaudioChild(void)
 	return 0;
 }
 
-TEST(R4_dev_coreaudio) { PROBE(coreaudioChild, "R4_dev_coreaudio"); }
+TEST(R4_dev_coreaudio) { PROBE(coreaudioChild, "R4_dev_coreaudio", 10); }
 
 static _Atomic unsigned gSeen;	/* what the probe's own input port got from our source */
 static _Atomic uint32_t gWord;
@@ -182,7 +183,7 @@ static int coremidiChild(void)
 	return ok && got == 3u ? 0 : 1;
 }
 
-TEST(R4_dev_coremidi) { PROBE(coremidiChild, "R4_dev_coremidi"); }
+TEST(R4_dev_coremidi) { PROBE(coremidiChild, "R4_dev_coremidi", 5); }
 
 /* spec 6.5, 6.9: the whole shell with MIDI and without audio. Play on the init card (120 BPM) gives 48 clocks a second
  * on the virtual source at their presentation times, and Note Ons on a DIN destination that the test binds; the
@@ -191,7 +192,7 @@ TEST(R4_dev_coremidi) { PROBE(coremidiChild, "R4_dev_coremidi"); }
 static char gCard[1024], gHome[1024];
 static char gWhy[256];
 static _Atomic int gNoMidi;
-static _Atomic unsigned gClocks, gDinNotes, gDinOther;
+static _Atomic unsigned gClocks, gDinNotes, gDinOther, gStartAt = UINT_MAX;	/* gStartAt: the clocks seen before the FA */
 static uint64_t gClockStamp[MO_MAX], gClockArrive[MO_MAX];	/* the read block's; read after the port is disposed */
 
 static void midioutMessage(void *ctx, const char *text)
@@ -250,7 +251,12 @@ static int midioutChild(void)
 		const MIDIEventPacket *p = &list->packet[0];
 		for (UInt32 i = 0; i < list->numPackets; i++, p = MIDIEventPacketNext(p))
 			for (UInt32 k = 0; k < p->wordCount; k++)
-				if (p->words[k] == 0x10F80000u)
+				if (p->words[k] == 0x10FA0000u)
+				{
+					unsigned none = UINT_MAX;	/* the first Start only */
+					atomic_compare_exchange_strong(&gStartAt, &none, atomic_load(&gClocks));
+				}
+				else if (p->words[k] == 0x10F80000u)
 				{
 					const unsigned n = atomic_load(&gClocks);
 					if (n < MO_MAX)
@@ -307,18 +313,29 @@ static int midioutChild(void)
 	}
 	ok &= MIDIPortDispose(in) == noErr;	/* no read block runs after this */
 	app_shellStop(s);
-	const unsigned n = atomic_load(&gClocks);
-	double delta[MO_MAX], early = 1e9, late = -1e9, med = 0.0;
-	unsigned off = 0;
+	const unsigned n = atomic_load(&gClocks), start = atomic_load(&gStartAt);
+	double delta[MO_MAX], early = 1e9, late = -1e9, med = 0.0, steadyLate = -1e9, aMin = 1e9, aMax = -1e9;
+	unsigned off = 0, spacingBad = 0;
 	for (unsigned i = 0; i < n; i++)
 	{
 		const double after = ((double)gClockArrive[i] - (double)gClockStamp[i]) / ms;
 		early = fmin(early, after);
 		late = fmax(late, after);
+		if (i >= 10u)
+			steadyLate = fmax(steadyLate, after);
 		if (i > 0u)
 		{
 			delta[i - 1u] = (double)(gClockStamp[i] - gClockStamp[i - 1u]) / ms;
 			off += fabs(delta[i - 1u] - 1000.0 / 48.0) > 2.5;
+			/* A4: the F8 intervals as they arrive are 20.83 +- 1.5 ms. The interval from the last F8 before Start to the first
+			 * one after it is the firmware's: it restarts the phase of its clocks 1 ms after the FA (M18_out_start_phase) */
+			const double gap = ((double)gClockArrive[i] - (double)gClockArrive[i - 1u]) / ms;
+			if (i != start)
+			{
+				aMin = fmin(aMin, gap);
+				aMax = fmax(aMax, gap);
+				spacingBad += fabs(gap - 1000.0 / 48.0) > 1.5;
+			}
 		}
 	}
 	if (n >= 2u)
@@ -326,13 +343,15 @@ static int midioutChild(void)
 		qsort(delta, n - 1u, sizeof delta[0], cmpDouble);
 		med = delta[(n - 1u) / 2u];
 	}
-	/* the firmware's clock moves in its 1.45 ms blocks: spacings of 19.75 to 21.75 ms around the median, and a short one
-	 * (3.5 ms) in some runs where play restarts its phase. The first clocks of the run arrive up to 17 ms after their
-	 * stamps because the firmware thread pushes them late, so only an arrival before the stamp fails */
-	printf("clocks: %u, median spacing %.4f ms (%.4f), %u more than 2.5 ms off; arrival %.3f to %.3f ms after the stamp\n",
-		n, med, 1000.0 / 48.0, off, early, late);
+	/* The firmware's clock moves in its 1.45 ms blocks: spacings of 19.75 to 21.75 ms around the median, and one short or
+	 * long one where Start restarts its phase. The wall clock's render lead (25 ms) puts every message in the ring before its
+	 * stamp, so even a firmware thread that is held up for a few ms delivers on time. */
+	printf("clocks: %u, median spacing %.4f ms (%.4f), %u more than 2.5 ms off; arrival %.3f to %.3f ms after the stamp "
+		"(%.3f from the 10th on)\n", n, med, 1000.0 / 48.0, off, early, late, steadyLate);
+	printf("arrival spacing %.3f to %.3f ms, %u outside 20.83 +- 1.5 ms (Start at clock %u)\n", aMin, aMax, spacingBad, start);
 	printf("DIN: %u Note Ons, %u other words\n", atomic_load(&gDinNotes), atomic_load(&gDinOther));
-	ok &= n >= 100u && fabs(med - 1000.0 / 48.0) < 0.1 && off <= 3u && early > -1.0;	/* not before its stamp - 1 ms */
+	ok &= n >= 100u && start < n && fabs(med - 1000.0 / 48.0) < 0.1 && off <= 3u && early > -1.0;	/* not before its stamp - 1 ms */
+	ok &= spacingBad == 0u;
 	ok &= atomic_load(&gDinNotes) >= 4u;
 	ok &= MIDIObjectFindByUniqueID(uid, &obj, &type) != noErr;	/* disposed by app_shellStop() */
 	ok &= MIDIObjectFindByUniqueID(uid + 1, &obj, &type) != noErr;
@@ -359,7 +378,7 @@ TEST(R4_dev_midiout)
 	emu_testTempDir(gCard, sizeof gCard);
 	emu_testTempDir(gHome, sizeof gHome);
 	ASSERT_EQ(emu_hostCopyCard(EMU_TEST_CARDS "/init", gCard, 0), 0);
-	PROBE(midioutChild, "R4_dev_midiout");
+	PROBE(midioutChild, "R4_dev_midiout", 15);
 }
 
 TEST_MAIN()

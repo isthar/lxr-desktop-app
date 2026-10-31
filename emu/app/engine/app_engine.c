@@ -177,7 +177,7 @@ static void app_engineOpen(app_engine_t *e)
 	const uint64_t opened = e->host.now(e->host.ctx);
 	e->lastCallback = opened;	/* the stall test and the first callback's 3 s count from the open's return */
 	if (!e->map.valid)
-		app_tmWall(&e->map, 0.0, opened);
+		app_tmWall(&e->map, 0.0, opened + e->wallLead);
 	if (e->outputRunning)
 		app_maxRequest(&e->audio, (uint32_t)ceil((double)e->out.bufferFrames * APP_FS / e->out.deviceRate));	/* E6 */
 	else
@@ -188,12 +188,25 @@ static void app_engineOpen(app_engine_t *e)
 static void app_engineClose(app_engine_t *e)
 {
 	if (e->outputRunning)
+	{
+		emu_waitBegin();	/* stopping a unit can take a while: a wait, not a hang (spec 4.2) */
 		e->host.outputClose(e->host.ctx);
+		emu_waitEnd();
+	}
 	e->outputRunning = 0;
 	app_ringReset(&e->audio.points);	/* the callback has stopped; a callback that was in flight left its point here */
 	const uint64_t host = e->host.now(e->host.ctx);
 	e->retryAt = host + app_ticks(e, APP_RETRY_SEC);	/* the wall clock paces virtual time between the tries */
-	app_tmWall(&e->map, (double)emu_now(), host);
+	if (e->map.audio)
+	{
+		/* the audio line is ahead of the host clock by the render lead; the wall map goes on from there, or the
+		 * stamps would step back by it (spec 6.3) */
+		const uint64_t shown = app_tmHost(&e->map, (double)emu_now());
+		const uint64_t lead = shown > host ? shown - host : 0u;
+		if (lead > e->wallLead && lead <= app_ticks(e, APP_WALL_LEAD_MAX_SEC))
+			e->wallLead = lead;
+	}
+	app_tmWall(&e->map, (double)emu_now(), host + e->wallLead);
 	e->staleFrom = host;	/* E9 */
 }
 
@@ -224,14 +237,16 @@ static void app_engineWaitRing(app_engine_t *e)
 	e->waitTicks += e->host.now(e->host.ctx) - t0;
 }
 
-/* the wall clock's pacing of virtual time now (spec 6.3) */
+/* the wall clock's pacing of virtual time now (spec 6.3): the map is anchored a lead ahead of the host clock, so the
+ * firmware thread runs that far ahead of the stamps and a stall of up to the lead still delivers on time */
 static void app_enginePaceWall(app_engine_t *e, uint64_t now)
 {
 	const uint64_t host = e->host.now(e->host.ctx);
-	const uint64_t until = app_tmHost(&e->map, (double)now);
+	const uint64_t shown = app_tmHost(&e->map, (double)now);
+	const uint64_t until = shown > e->wallLead ? shown - e->wallLead : 0u;
 	if (host > until + app_ticks(e, 0.1))
 	{
-		app_tmWall(&e->map, (double)now, host);	/* no catching up */
+		app_tmWall(&e->map, (double)now, host + e->wallLead);	/* no catching up */
 		e->staleFrom = host;
 	}
 	else if (until > host)
@@ -375,11 +390,18 @@ static void app_sinkAudio(void *ctx, uint64_t t, const int16_t *out1, const int1
 	app_ringCommit(&e->audio.frames, n);
 }
 
-/* a message of the DIN or USB out sink goes to the MIDI-out ring at its presentation time (spec 6.5) */
+/* a message of the DIN or USB out sink goes to its port's MIDI-out ring at its presentation time (spec 6.5). A port's
+ * stamps never go back: a map that moves back (a re-anchor, the end of the audio line) would send what follows before
+ * what went out already */
 static int app_pushOut(void *ctx, const app_midiEntry_t *m)
 {
 	app_engine_t *e = ctx;
-	const int r = app_ringPush(&e->midiOut, m);	/* a full ring counts the drop */
+	const unsigned din = m->port == APP_PORT_DIN;
+	app_midiEntry_t c = *m;
+	if (c.stamp < e->outPrev[din])
+		c.stamp = e->outPrev[din];
+	e->outPrev[din] = c.stamp;
+	const int r = app_ringPush(&e->midiOut[din], &c);	/* a full ring counts the drop */
 	e->host.midiOutWake(e->host.ctx);
 	return r;
 }
@@ -509,6 +531,7 @@ int app_engineInit(app_engine_t *e, const app_host_t *host)
 	e->host = *host;
 	app_tmInit(&e->map, host->ticksPerSec);
 	e->cardAck = -1;
+	e->wallLead = app_ticks(e, APP_WALL_LEAD_SEC);
 	e->dAuto = 1;
 	e->winInMin = 1e9;
 	e->winInMax = -1e9;
@@ -522,7 +545,8 @@ int app_engineInit(app_engine_t *e, const app_host_t *host)
 		{ &e->notes, 1u, 64u },
 		{ &e->midiIn[0], sizeof(app_midiEntry_t), 2048u },
 		{ &e->midiIn[1], sizeof(app_midiEntry_t), 2048u },
-		{ &e->midiOut, sizeof(app_midiEntry_t), 4096u },
+		{ &e->midiOut[0], sizeof(app_midiEntry_t), 4096u },
+		{ &e->midiOut[1], sizeof(app_midiEntry_t), 4096u },
 	};
 	for (unsigned i = 0; i < sizeof rings / sizeof rings[0]; i++)
 	{
@@ -636,7 +660,7 @@ static void app_engineSnap(app_engine_t *e, uint64_t now)
 	e->diag.callbacks = atomic_load_explicit(&e->audio.callbacks, memory_order_relaxed);
 	e->diag.mapJumps = e->map.jumps;
 	e->diag.midiInDropped = app_ringDropped(&e->midiIn[0]) + app_ringDropped(&e->midiIn[1]);
-	e->diag.midiOutDropped = app_ringDropped(&e->midiOut);
+	e->diag.midiOutDropped = app_ringDropped(&e->midiOut[0]) + app_ringDropped(&e->midiOut[1]);
 	e->diag.panelDropped = app_ringDropped(&e->panel);
 	e->diag.snapDropped = app_ringDropped(&e->snap);
 	e->diag.ackDropped = app_ringDropped(&e->ack);
@@ -693,12 +717,18 @@ int app_engineAck(app_engine_t *e, app_ack_t *out)
 uint64_t app_midiOutStep(app_engine_t *e, uint64_t now, const app_midiOutSink_t *sink)
 {
 	const app_midiEntry_t *m;
-	while ((m = app_ringPeek(&e->midiOut, 0u)) != NULL)
+	/* DIN at once, with its stamp: CoreMIDI schedules it, and only an early message keeps that (spec 6.5, E11) */
+	while ((m = app_ringPeek(&e->midiOut[APP_PORT_DIN], 0u)) != NULL)
 	{
-		if (m->port == APP_PORT_USB && m->stamp > now)
+		sink->send(sink->ctx, m->port, m->stamp, m->words, m->nwords);
+		app_ringPop(&e->midiOut[APP_PORT_DIN], 1u);
+	}
+	while ((m = app_ringPeek(&e->midiOut[APP_PORT_USB], 0u)) != NULL)
+	{
+		if (m->stamp > now)
 			return m->stamp;
 		sink->send(sink->ctx, m->port, m->stamp, m->words, m->nwords);
-		app_ringPop(&e->midiOut, 1u);
+		app_ringPop(&e->midiOut[APP_PORT_USB], 1u);
 	}
 	return 0;
 }

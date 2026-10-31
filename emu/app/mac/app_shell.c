@@ -143,10 +143,8 @@ static void *app_shellMidiOut(void *arg)
 		const uint64_t now = mach_absolute_time();
 		const uint64_t next = app_midiOutStep(&s->engine, now, &sink);
 		const uint64_t limit = now + (uint64_t)(0.02 * s->mach.ticksPerSec);	/* the stop flags are looked at every 20 ms */
-		if (next == 0u)
-			app_machWaitSem(s->mach.midiWake, limit, s->mach.ticksPerSec);
-		else
-			(void)mach_wait_until(next < limit ? next : limit);
+		/* every push signals the semaphore: a DIN message that comes while a USB entry is awaited goes out at once (E11) */
+		app_machWaitSem(s->mach.midiWake, next != 0u && next < limit ? next : limit, s->mach.ticksPerSec);
 	}
 	return NULL;
 }

@@ -404,7 +404,7 @@ emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R
     R4_engine_silent_open R4_engine_close_inflight R4_engine_late_point R4_engine_max_request R4_engine_cmd_delay
     R4_engine_power_dneg R4_engine_power_dnan R4_engine_power_dbig R4_engine_cmd_generator R4_engine_cmd_text)
 emu_add_app_test(test_app_m18 ENGINE IDS M18_midi_out_step M18_slave_90 M18_slave_128 M18_slave_174 M18_din_128
-    M18_zero_d)
+    M18_zero_d M18_out_start_phase M18_out_lead M18_out_stall M18_out_reopen M18_out_hang M18_out_jump)
 
 # the vendored Dear ImGui is the 15 files of v1.92.9b, as its README pins them (plan Task 11)
 add_test(NAME R4_imgui_pin COMMAND ${Python3_EXECUTABLE} "${EMU_DIR}/tests/app_test.py" --root "${LXR_ROOT}"
