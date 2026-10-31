@@ -199,18 +199,62 @@ TEST(vsched_window)
 	ASSERT_EQ(len, L0);
 }
 
-static int hookStep, hookTimes;
+TEST(vsched_window_late)
+{
+	/* review of Task 7: a stamp 0.6 blocks late (TIM2 renders during card access and delays the
+	 * SPI3 interrupt) re-seeds the estimate. The window it ends, 1.6 blocks, is none: a record in
+	 * it goes to offset 0 and counts as late, as v0.4 would play it; it would otherwise be due
+	 * at k 40, 24 frames early */
+	uint32_t w0, len;
+	vsched_stats_t st;
+	reset();
+	uint32_t t = 40000u;
+	for (int i = 0; i < 6; i++, t += L0)
+		vsched_blockDone(t);
+	ASSERT_TRUE(vsched_window(&w0, &len));
+	ASSERT_EQ(w0, t - 2u * L0);
+	const uint32_t late = t + 6u * L0 / 10u;
+	vsched_blockDone(late);
+	ASSERT_FALSE(vsched_window(&w0, &len));		/* not [t - L0, late) */
+	ASSERT_EQ(kOfRecordAt(t), 0);
+	vsched_stats(&st);
+	ASSERT_EQ(st.late, 1);
+	ASSERT_EQ(traced[ntraced - 1].late, 1);
+	t += L0;
+	vsched_blockDone(t);					/* on time: 0.6 blocks before the estimate, a re-seed */
+	ASSERT_FALSE(vsched_window(&w0, &len));
+	vsched_blockDone(t + L0);				/* from the re-seeded stamp on: whole */
+	ASSERT_TRUE(vsched_window(&w0, &len));
+	ASSERT_EQ(w0, t);
+	ASSERT_EQ(len, L0);
+
+	reset();						/* 0.4 blocks late: no re-seed, the filter moves 1/20 block */
+	t = 40000u;
+	for (int i = 0; i < 6; i++, t += L0)
+		vsched_blockDone(t);
+	vsched_blockDone(t + 4u * L0 / 10u);
+	ASSERT_TRUE(vsched_window(&w0, &len));
+	ASSERT_EQ(w0, t - L0);
+	ASSERT_EQ(len, L0 + 4u * L0 / 10u / 8u);
+}
+
+static int hookStep, hookTimes, hookEvery;
 static uint32_t hookT;
+/* hookTimes completions at the read's step hookStep; then hookEvery at each later read (0: none) */
 static void writeBetween(int step)
 {
-	if (step == hookStep)
-		for (; hookTimes > 0; hookTimes--, hookT += L0)
-			vsched_blockDone(hookT);
+	if (step != hookStep)
+		return;
+	for (int i = 0; i < hookTimes; i++, hookT += L0)
+		vsched_blockDone(hookT);
+	hookTimes = hookEvery;
 }
 
 TEST(vsched_window_torn)
 {
-	/* 1-3 completions between any two loads of the read: always a window the writer published */
+	/* 1-3 completions between any two loads of the read: always a window the writer published.
+	 * One leaves the slot read: the window the read started with. Two or three make it read
+	 * once more: the latest window (review of Task 7) */
 	for (int step = 0; step < 3; step++)
 		for (int times = 1; times <= 3; times++)
 		{
@@ -221,12 +265,27 @@ TEST(vsched_window_torn)
 			vsched_testReadHook = writeBetween;
 			hookStep = step;
 			hookTimes = times;
+			hookEvery = 0;
 			const int ok = vsched_window(&w0, &len);
 			vsched_testReadHook = 0;
 			ASSERT_TRUE(ok);
 			ASSERT_EQ(len, L0);
-			ASSERT_EQ((w0 - 9000u) % L0, 0);
+			ASSERT_EQ(w0, 9000u + (times < 2 ? 1u : 1u + (uint32_t)times) * L0);
 		}
+	/* two completions inside each of the two reads: no window, not a torn one */
+	for (int step = 0; step < 3; step++)
+	{
+		reset();
+		for (hookT = 9000u; hookT < 9000u + 3u * L0; hookT += L0)
+			vsched_blockDone(hookT);
+		uint32_t w0 = 0, len = 0;
+		vsched_testReadHook = writeBetween;
+		hookStep = step;
+		hookTimes = hookEvery = 2;
+		const int ok = vsched_window(&w0, &len);
+		vsched_testReadHook = 0;
+		ASSERT_FALSE(ok);
+	}
 }
 
 TEST(vsched_rings)
@@ -328,6 +387,68 @@ TEST(vsched_rings)
 	ASSERT_EQ(st.offTick, 1);
 	block();
 	ASSERT_EQ(ncalls, 0);
+}
+
+TEST(vsched_rings_phase_replaced)
+{
+	/* spec 4.2, both in one block: a record at k2 in the block where voice 0's phase k1 is pending
+	 * splits it at k2 (the control path skipped the voice: the old note's first step runs on to
+	 * k2), and its split sets the phase k2; the replaced phase split is not counted (review of
+	 * Task 7). k2 after k1 and before it */
+	static const uint8_t ks[2][2] = { { 16, 40 }, { 40, 16 } };
+	vsched_stats_t st;
+	for (unsigned c = 0; c < 2; c++)
+	{
+		reset();
+		windowAt(5000u);
+		postTimed(0, 5000u + ks[c][0] * L0 / 64u, 1);
+		vsched_beginBlock();
+		ASSERT_EQ(vsched_split(0), ks[c][0]);
+		vsched_applyPhase0();
+		vsched_applySplit(0);
+		ASSERT_EQ(vsched_phase(0), ks[c][0]);
+		vsched_blockDone(5000u + 2u * L0);
+		postTimed(0, 5000u + L0 + ks[c][1] * L0 / 64u, 2);
+		vsched_beginBlock();
+		ASSERT_EQ(vsched_split(0), ks[c][1]);
+		ASSERT_EQ(vsched_phase(0), ks[c][0]);	/* pending: the control path skips voice 0 */
+		vsched_applyPhase0();
+		ASSERT_EQ(vsched_phase(0), ks[c][0]);
+		ASSERT_EQ(triggers(), 1);
+		vsched_applySplit(0);
+		ASSERT_EQ(vsched_split(0), 0);
+		ASSERT_EQ(vsched_phase(0), ks[c][1]);	/* the new note's */
+		ASSERT_EQ(triggers(), 2);
+		ASSERT_EQ(calls[3].what, 't');		/* slide, 1, slide, 2 */
+		ASSERT_EQ(calls[3].a, 2);
+		vsched_blockDone(5000u + 3u * L0);
+		vsched_beginBlock();
+		ASSERT_EQ(vsched_split(0), 0);
+		ASSERT_EQ(vsched_phase(0), ks[c][1]);
+		vsched_applyPhase0();
+		vsched_endPhase(0);
+		ASSERT_EQ(vsched_phase(0), 0);
+		vsched_stats(&st);
+		ASSERT_EQ(st.splits, 2);
+		ASSERT_EQ(st.phaseSplits, 1);
+	}
+	/* a record at offset 0 there: the new note's first control step is the block's (S12), the
+	 * phase goes before the control path */
+	reset();
+	windowAt(5000u);
+	postTimed(0, 5000u + L0 / 4u, 1);
+	block();
+	ASSERT_EQ(vsched_phase(0), 16);
+	vsched_blockDone(5000u + 2u * L0);
+	postTimed(0, 5000u + L0, 2);
+	vsched_beginBlock();
+	ASSERT_EQ(vsched_split(0), 0);
+	ASSERT_EQ(vsched_phase(0), 16);
+	vsched_applyPhase0();
+	ASSERT_EQ(vsched_phase(0), 0);
+	ASSERT_EQ(triggers(), 2);
+	vsched_stats(&st);
+	ASSERT_EQ(st.phaseSplits, 0);
 }
 
 TEST(vsched_cap)

@@ -49,13 +49,14 @@ void vsched_blockDone(uint32_t t)
 {
 	const uint32_t pred = vs_est + VSCHED_BLOCK_CYCLES;
 	const int32_t e = (int32_t)(t - pred);
-	uint32_t next;
-	if (!vs_seeded || e > (int32_t)(VSCHED_BLOCK_CYCLES / 2u) || e < -(int32_t)(VSCHED_BLOCK_CYCLES / 2u))
-		next = t;					/* the first block, or a stall: re-seed */
-	else
-		next = pred + (uint32_t)(e < 0 ? e : e / 8);	/* late-only filter (S5) */
+	/* the first block, a stall, or a stamp more than half a block off: re-seed */
+	const int reseed = !vs_seeded || e > (int32_t)(VSCHED_BLOCK_CYCLES / 2u) || e < -(int32_t)(VSCHED_BLOCK_CYCLES / 2u);
+	const uint32_t next = reseed ? t : pred + (uint32_t)(e < 0 ? e : e / 8);	/* late-only filter (S5) */
 	const uint32_t n = vs_serial + 1u;
-	vs_slot[n & 1u].w0 = vs_est;			/* the previous estimate */
+	/* the window a re-seed ends is none, published empty: a stamp 0.6 blocks late (TIM2 rendering
+	 * delays this interrupt) would make it 1.6 blocks long and its events up to 38 frames early
+	 * (review of Task 7); its records go to offset 0, late */
+	vs_slot[n & 1u].w0 = reseed ? next : vs_est;	/* the previous estimate */
 	vs_slot[n & 1u].w1 = next;
 	vs_est = next;
 	vs_seeded = 1;
@@ -64,7 +65,7 @@ void vsched_blockDone(uint32_t t)
 //------------------------------------------------------------------------------
 /** the latest completion's window (P2): one completion writes the other slot; the serial
  * read again shows a second one, and the read is made once more (no spin). Not 0.5-2
- * blocks long (the first completion, a re-seed): no window */
+ * blocks long (the first completion, a re-seed: empty): no window */
 static int vs_window(uint32_t *w0, uint32_t *len, uint32_t *serial)
 {
 	for (int attempt = 0; attempt < 2; attempt++)
@@ -165,6 +166,14 @@ static void vs_apply(uint8_t v, uint8_t k)
 	vs_due[v] = vs_late[v] = 0;
 }
 //------------------------------------------------------------------------------
+/* Voice by voice, each voice's records in posting order: across voices the mixer's order, as at
+ * the splits (spec 4.5, cross-voice effects). fw 1.7 applied the triggers in the order they fired.
+ * The core fires the hits of one step in track order (seqc_firesBefore()), so the two orders are
+ * the same for them. They can differ where records of different ticks or sources meet at offset 0
+ * in one block (late records, a block without a window, the cap's fallback, a MIDI note and a step
+ * in one seq_tick()): if two of them p-lock one parameter, the higher voice's value stays, not the
+ * last-fired one's. The posting order across voices needs a serial per record; the 12-byte record
+ * has no spare byte, and 24 bytes more were not spent on it (review of plan v0.5 Task 7) */
 void vsched_applyPhase0(void)
 {
 	for (uint8_t v = 0; v < VSCHED_VOICES; v++)

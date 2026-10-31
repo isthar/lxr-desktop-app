@@ -14,6 +14,10 @@
  *    whole block, the second ends at the block grid).
  * 3. The snap at transient pitch 4 (+24 semitones for its first step, SnapEg 0.2 per
  *    block) is one of the sounds of 2, so its first step lasts 64 samples from k.
+ * 4. A retrigger at k over a ringing note: [0, k) is the old note's, and a drum's new step
+ *    ramps from the old step's gain at its last sample (review of Task 7).
+ * 5. A drum's first step that a record at k2 > phi cuts in the next block, 64 - phi + k2
+ *    samples: past its 64th sample the ramp holds its target, the next step ramps from it.
  *
  * The stand-ins: the LFOs, the modulation nodes and the faders (1.0); GetRngValue()
  * is a counter the test resets.
@@ -29,6 +33,7 @@
 
 #include <string.h>
 #include "Soundengine/DSPAudio/voices.h"
+#include "Soundengine/DSPAudio/BufferTools.h"
 #include "Soundengine/DSPAudio/Oscillator.h"
 #include "Soundengine/DSPAudio/modulationNode.h"
 #include "IO/adcPots.h"
@@ -273,6 +278,103 @@ TEST(voice_split_trigger_at_k)
 				ASSERT_TRUE(maxDiff(b + k, a, 2 * BLOCK - k) <= 1);
 			}
 		}
+}
+
+//------------------------------------------------------------------------------
+// 4, 5: a retrigger over a ringing note, a first step past 64 samples (review of Task 7)
+//------------------------------------------------------------------------------
+static const sound_t rampAttack = { 0, 0, 1 };	/* the attack ramps over 4 blocks */
+
+/** the drum's gain after a step cut at its sample n (drum_endStep(), from the step's lastGain and
+ * target as floats) */
+static double cutGain(float last, float target, unsigned n)
+{
+	return last + ((n - 1u) / (BLOCK - 1.f)) * (double)(target - last);
+}
+
+TEST(voice_split_ringing_tail)
+{
+	/* a note in its second block (a drum's attack ramp), retriggered at k: [0, k) is the old note's
+	 * as without the retrigger, bit for bit (S14); a drum's new step ramps from the old step's gain
+	 * at its last sample before k (P5) */
+	__attribute__((aligned(4))) int16_t buf[BLOCK], a[BLOCK], b[BLOCK];
+	for (uint8_t v = 0; v < VOICES_COUNT; v++)
+		for (uint8_t k = 2; k < BLOCK; k += 2)
+		{
+			double last = 0., target = 0.;
+			for (int retrigger = 0; retrigger < 2; retrigger++)
+			{
+				setSound(&rampAttack);
+				for (int n = 0; n < 200; n++)
+					block(v, buf, 0, 0, 0);
+				trigger(v);
+				block(v, buf, 0, 0, 0);
+				voices_control(v);
+				if (v < 3)
+				{
+					last = voiceArray[v].lastGain;
+					target = voiceArray[v].ampFilterInput;
+				}
+				if (!retrigger)
+				{
+					voices_render(v, a, BLOCK);
+					continue;
+				}
+				voices_render(v, b, k);
+				trigger(v);
+				voices_control(v);
+				voices_render(v, b + k, (uint8_t)(BLOCK - k));
+			}
+			int heard = 0;
+			for (int i = 0; i < BLOCK; i++)
+				heard |= a[i] != 0;
+			ASSERT_TRUE(heard);				/* the tail rings (peak 52 for the hi-hat) */
+			ASSERT_TRUE(maxDiff(a, b, k) == 0);
+			if (v < 3)
+			{
+				ASSERT_TRUE(target > last);			/* the old step ramps */
+				ASSERT_NEAR(voiceArray[v].lastGain, cutGain(last, target, k), 1e-6);
+			}
+		}
+}
+
+TEST(voice_split_past_64)
+{
+	/* a drum note's first step from a split at phi runs on to a record at k2 in the next block,
+	 * 64 - phi + k2 samples (spec 4.2, both in one block). From k2 > phi its ramp is past its 64th
+	 * sample, where it holds the target (bufferTool_addGainRamp()), and the next step ramps from the
+	 * target; at k2 < phi from the gain at its last sample, as at any split */
+	__attribute__((aligned(4))) int16_t buf[BLOCK];
+	static const uint8_t phis[] = { 2, 20, 40, 62 };
+	for (uint8_t v = 0; v < 3; v++)
+		for (unsigned p = 0; p < sizeof phis; p++)
+			for (uint8_t k2 = 2; k2 < BLOCK; k2 += 4)
+			{
+				const uint8_t phi = phis[p];
+				setSound(&rampAttack);
+				for (int n = 0; n < 200; n++)
+					block(v, buf, 0, 0, 0);
+				block(v, buf, 0, phi, 1);		/* the note at phi: its first step */
+				const double last = voiceArray[v].lastGain, target = voiceArray[v].ampFilterInput;
+				ASSERT_TRUE(target > last);
+				voices_render(v, buf, k2);		/* the phase pending: no control step before */
+				trigger(v);
+				voices_control(v);
+				voices_render(v, buf + k2, (uint8_t)(BLOCK - k2));
+				const unsigned n = (unsigned)(BLOCK - phi + k2);
+				if (n >= BLOCK)
+					ASSERT_EQ_DBL(voiceArray[v].lastGain, target);
+				else
+					ASSERT_NEAR(voiceArray[v].lastGain, cutGain(last, target, n), 1e-6);
+			}
+	/* the ramp past its last sample holds its value there */
+	int16_t r[30];
+	for (int i = 0; i < 30; i++)
+		r[i] = 10000;
+	bufferTool_addGainRamp(r, 0.5f, 0.1f, 50, 30);
+	ASSERT_TRUE(r[0] < r[13]);
+	for (int i = 13; i < 30; i++)				/* samples 63 to 79 of the step */
+		ASSERT_EQ(r[i], r[13]);
 }
 
 TEST_MAIN()
