@@ -30,6 +30,8 @@
 #include "menu/menu.h"
 #include "Soundengine/FxBus.h"
 #include "Soundengine/DSPAudio/FX/atmo.h"	//LICHOMAT v0.4: atmo_setParam() (plan D33)
+#include "Soundengine/vsched.h"	//LICHOMAT v0.5: a Note On as a record (plan v0.5, S9)
+#include "Soundengine/Sequencer/seq_platform.h"	//LICHOMAT v0.5: seqp_stamp()
 
 #include "Soundengine/MIDI/MidiMessages.h"
 
@@ -1525,7 +1527,17 @@ static void midiParser_noteOn(uint8_t voice, uint8_t note, uint8_t vel, uint8_t 
 				return; // note does not match. Do nothing
 		}
 
-		voiceControl_noteOn(voice,note,vel);
+		//LICHOMAT v0.5: in smp the voice starts at the arrival of the message's last byte (DIN) or
+		//its transfer (USB): the LED now, the trigger as a record of that time (S9); blk: v0.4
+		if(activeParameters[PAR_TRIG_TIMING] == 1)
+			voiceControl_noteOn(voice,note,vel);
+		else
+		{
+			const vsched_rec_t r = { .time = vsched_stampTime(seqp_stamp(), midiParser_rxStamp), .track = voice,
+				.note = note, .vel = vel, .flags = VS_TIMED | VS_SRC_MIDI };
+			voiceControl_noteOnEvent(voice);
+			vsched_post(&r);
+		}
 
 		//Recording Mode - record the note to sequencer and echo to channel of that voice
 		// (we'd want to hear what's being recorded)

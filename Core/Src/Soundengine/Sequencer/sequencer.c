@@ -449,6 +449,12 @@ uint8_t seq_isInTick(void)
 	return seq_inTick;
 }
 //------------------------------------------------------------------------------
+/** LICHOMAT v0.5: trg (PAR_TRIG_TIMING, S18): 1 is blk, v0.4's path; any other value smp */
+static uint8_t seq_blockTiming(void)
+{
+	return activeParameters[PAR_TRIG_TIMING] == 1;
+}
+//------------------------------------------------------------------------------
 void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 {
 	uint8_t midiNote; // which midi note to send
@@ -460,7 +466,9 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 	//first step (fw 1.7 read step -1 there)
 	const uint8_t step = seq_stepCopy[voiceNr];
 	const Step *stepData = (step < NUM_STEPS) ? &seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][step] : NULL;
-	if(stepData)
+	//LICHOMAT v0.5: in smp the p-locks go with the voice's record (S10)
+	const uint8_t blk = seq_blockTiming();
+	if(stepData && blk)
 		seq_parseAutomationNodes(voiceNr, stepData);
 
 	//turn the trigger off before sending the next one
@@ -478,8 +486,24 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 	// if a note is on for that channel send note-off first
 	voiceControl_noteOff(voiceNr);
 
-	//Trigger internal synth voice
-	voiceControl_noteOn(voiceNr, note, vol);
+	//Trigger internal synth voice; LICHOMAT v0.5: in smp an untimed record, at offset 0 of the
+	//next block as in v0.4 (S10), and the LED at once
+	if(blk)
+		voiceControl_noteOn(voiceNr, note, vol);
+	else
+	{
+		vsched_rec_t r = { .time = 0, .track = voiceNr, .note = note, .vel = vol, .flags = VS_SRC_ONESHOT };
+		if(stepData)
+		{
+			r.flags |= VS_PLOCKS;
+			r.p1Nr = stepData->param1Nr;
+			r.p1Val = stepData->param1Val;
+			r.p2Nr = stepData->param2Nr;
+			r.p2Val = stepData->param2Val;
+		}
+		voiceControl_noteOnEvent(voiceNr);
+		vsched_post(&r);
+	}
 
 	// the note that is played will be whatever is received unless we have a note override set
 	// A note override is any non-zero value for this parameter
@@ -1663,7 +1687,8 @@ void seq_sendMidiNoteOn(const uint8_t channel, const uint8_t note, const uint8_t
 /* LICHOMAT: send the MIDI Note On of a voice on its channel and remember the channel
  * and the note. A note of the voice that is still on gets its Note Off first, so a
  * voice has at most one MIDI note on. Filtered like seq_sendMidiNoteOn(). */
-void seq_sendVoiceNoteOn(const uint8_t voice, const uint8_t note, const uint8_t veloc)
+//LICHOMAT v0.5: not inlined, so that seq_cbTrigger() calls it once (tools/fw_checks.sh E2.3; plan v0.5 P7)
+__attribute__((noinline)) void seq_sendVoiceNoteOn(const uint8_t voice, const uint8_t note, const uint8_t veloc)
 {
 	MidiMsg msg = {0};
 
@@ -1994,24 +2019,44 @@ static uint8_t seq_slideMode(const uint8_t v, const seqc_event_t *ev)
 	return DRUM_SLIDE_OFF;
 }
 //------------------------------------------------------------------------------
+/** LICHOMAT v0.5: the voice side of an event (S8), after its MIDI Note Off. The slide mode is
+ * decided here at fire time (v0.3), from the event alone. blk is v0.4's path: the p-locks, the
+ * slide mode and the trigger at once. smp: the LED at once, and a record with the event's time
+ * (seqc_itemTime()) that vsched.c applies at the event's sample. Not inlined, so that
+ * seq_cbTrigger() keeps its one call of seq_sendVoiceNoteOn() (P7). */
+__attribute__((noinline)) static void seq_voiceSide(const seqc_event_t *ev)
+{
+	const uint8_t voiceNr = ev->track;
+	//LICHOMAT v0.3: hit 0 of a slide step of Drum 1-3 glides from the voice's last note, through
+	//the step's later hits
+	const uint8_t slide = (voiceNr < 3) ? seq_slideMode(voiceNr, ev) : DRUM_SLIDE_OFF;
+	if(seq_blockTiming())
+	{
+		const Step plocks = { .param1Nr = ev->p1Nr, .param1Val = ev->p1Val, .param2Nr = ev->p2Nr, .param2Val = ev->p2Val };
+		seq_parseAutomationNodes(voiceNr, &plocks);
+		if(voiceNr < 3)
+			Drum_setSlide(voiceNr, slide);
+		voiceControl_noteOn(voiceNr, ev->note, ev->vel);
+		return;
+	}
+	const vsched_rec_t r = {
+		.time = (uint32_t)seqc_itemTime(), .track = voiceNr, .note = ev->note, .vel = ev->vel,
+		.flags = (uint8_t)(VS_TIMED | VS_PLOCKS | VS_SRC_SEQ | (slide << VS_SLIDE_SHIFT)),
+		.p1Nr = ev->p1Nr, .p1Val = ev->p1Val, .p2Nr = ev->p2Nr, .p2Val = ev->p2Val };
+	voiceControl_noteOnEvent(voiceNr);
+	vsched_post(&r);
+}
+//------------------------------------------------------------------------------
 static void seq_cbTrigger(void *ctx, const seqc_event_t *ev)
 {
 	(void)ctx;
 	const uint8_t voiceNr = ev->track;
-	const Step plocks = { .param1Nr = ev->p1Nr, .param1Val = ev->p1Val, .param2Nr = ev->p2Nr, .param2Val = ev->p2Val };
 
 	// if a note is on for that voice send note-off first
 	voiceControl_noteOff(voiceNr);
 
-	seq_parseAutomationNodes(voiceNr, &plocks);
-
-	//LICHOMAT v0.3: hit 0 of a slide step of Drum 1-3 glides from the voice's last note, through
-	//the step's later hits
-	if(voiceNr < 3)
-		Drum_setSlide(voiceNr, seq_slideMode(voiceNr, ev));
-
-	//Trigger internal synth voice
-	voiceControl_noteOn(voiceNr, ev->note, ev->vel);
+	//Trigger internal synth voice; LICHOMAT v0.5: at once (blk) or at its sample (smp)
+	seq_voiceSide(ev);
 
 	// the note that is played will be whatever is received unless we have a note override set
 	// A note override is any non-zero value for this parameter

@@ -51,6 +51,7 @@
 #include "Soundengine/MIDI/Uart.h"
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/USB/usb_manager.h"
+#include "Soundengine/vsched.h"
 
 #define TABLE_SIZE 0xff
 #define GUARD_BEFORE 256
@@ -67,6 +68,9 @@ static uint8_t tableBefore[TABLE_SIZE];
 
 static int modNodeCalls;
 static uint16_t modNodeLastIdx;
+static int noteOnsNow;			/* voiceControl_noteOn() (LICHOMAT v0.5, plan Task 10) */
+static vsched_rec_t posted[16];		/* vsched_post() */
+static int posts, events;		/* vsched_post(), voiceControl_noteOnEvent() */
 
 /** guard bytes around the table, the table as it was, and no mod node call yet */
 static void reset(void)
@@ -276,6 +280,37 @@ TEST(midicc_note_on_past_the_64_steps_changes_no_pattern)
 			}
 }
 
+TEST(midicc_note_on_posts_its_arrival)
+{
+	/* LICHOMAT v0.5 (plan Task 10, S9): outside the step page, in smp, a Note On posts each
+	 * voice's record at the arrival of its last byte, rebuilt from the 16-bit stamp; blk
+	 * triggers at once */
+	menu_activePage = (uint8_t)(SEQ_PAGE + 1);
+	frontParser_activeTrack = 0;			/* the step page cases above leave track 6 active */
+	host_dwt.CYCCNT = 0x40001234u;
+	midiParser_rxStamp = (uint16_t)((0x40001234u - 70000u) >> 8);
+	activeParameters[PAR_TRIG_TIMING] = 0;
+	posts = events = noteOnsNow = 0;
+	noteOn(40);
+	ASSERT_EQ(posts, 7);				/* the global channel's track 0, then tracks 1-6 */
+	ASSERT_EQ(events, 7);
+	ASSERT_EQ(noteOnsNow, 0);
+	for (int i = 0; i < 7; i++)
+	{
+		ASSERT_EQ(posted[i].time, (0x40001234u - 70000u) & ~0xFFu);
+		ASSERT_EQ(posted[i].flags, VS_TIMED | VS_SRC_MIDI);
+		ASSERT_EQ(posted[i].note, 40);
+		ASSERT_EQ(posted[i].vel, 100);
+	}
+	ASSERT_EQ(posted[0].track, 0);
+	activeParameters[PAR_TRIG_TIMING] = 1;
+	posts = 0;
+	noteOn(40);
+	ASSERT_EQ(posts, 0);
+	ASSERT_EQ(noteOnsNow, 7);
+	activeParameters[PAR_TRIG_TIMING] = 0;
+}
+
 TEST_MAIN()
 
 //------------------------------------------------------------------------------
@@ -346,4 +381,6 @@ void transient_setWaveform(TransientGenerator *transient, const uint8_t waveform
 void uart_sendFrontpanelByte(uint8_t data) { (void)data; }
 void uart_sendMidi(MidiMsg msg) { (void)msg; }
 void usb_sendMidi(MidiMsg msg) { (void)msg; }
-void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel) { (void)voice; (void)note; (void)vel; }
+void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel) { (void)voice; (void)note; (void)vel; noteOnsNow++; }
+void vsched_post(const vsched_rec_t *r) { if (posts < 16) posted[posts] = *r; posts++; }	/* LICHOMAT v0.5 (plan Task 10) */
+void voiceControl_noteOnEvent(uint8_t voice) { (void)voice; events++; }

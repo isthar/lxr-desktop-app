@@ -51,6 +51,7 @@
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/TriggerOut.h"
 #include "Soundengine/USB/usb_manager.h"
+#include "Soundengine/vsched.h"
 #include "seq_random_test.h"
 
 #define GUARD_AFTER 256		/* past index 255, where fw 1.7 put the pattern */
@@ -182,6 +183,19 @@ void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
 		seq_setFill((uint8_t)on);
 	}
 }
+static vsched_rec_t posted[64];		/* vsched_post() (LICHOMAT v0.5, plan Task 10) */
+static seqc_time_t postedAt[64];
+static int posts, noteOnEvents;
+void vsched_post(const vsched_rec_t *r)
+{
+	if (posts < 64)
+	{
+		posted[posts] = *r;
+		postedAt[posts] = hostNow;
+	}
+	posts++;
+}
+void voiceControl_noteOnEvent(uint8_t voice) { (void)voice; noteOnEvents++; }
 
 //------------------------------------------------------------------------------
 // Driving the sequencer
@@ -203,6 +217,7 @@ static void run(int ms)
  * zeroed buffer would give pattern 0 lengths of 0 and silent steps. */
 static void reset(void)
 {
+	activeParameters[PAR_TRIG_TIMING] = 1;	/* LICHOMAT v0.5: blk, v0.4's path, which the cases above were written for (plan P11) */
 	seq_init();
 	seq_copyPatternToBackupBuffer(seq_activePattern);
 	seq_setRunning(0);
@@ -719,6 +734,81 @@ TEST(sequencer_mute_scene_empty_step_stopped_and_latest)
 	seq_muteSceneBoundary(0);
 	ASSERT_EQ(seq_isTrackMuted(6), 1);
 	seq_setMute(7, 0);
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT v0.5 (plan Task 10, S8, S10): trg smp posts the voice side as a record
+//------------------------------------------------------------------------------
+/** steps 0 (volume 90, p-lock 12 = 34) and 4 (slide) of track 0, played 600 ms */
+static void playTwoSteps(uint8_t timing)
+{
+	reset();
+	activeParameters[PAR_TRIG_TIMING] = timing;
+	Step *s0 = &seq_patternSet.seq_subStepPattern[0][0][0], *s4 = &seq_patternSet.seq_subStepPattern[0][0][4];
+	const Step old0 = *s0, old4 = *s4;
+	seq_setMainStep(0, 0, 0, 1);
+	seq_setMainStep(0, 0, 4, 1);
+	s0->volume = 90 | STEP_ACTIVE_MASK;
+	s0->param1Nr = 12;
+	s0->param1Val = 34;
+	s4->volume |= STEP_ACTIVE_MASK;
+	s4->prob = 100 | STEP_SLIDE_FLAG;
+	posts = noteOns = noteOnEvents = slideCalls = 0;
+	seq_setRunning(1);
+	run(600);
+	seq_setRunning(0);
+	run(1);
+	seq_setMainStep(0, 0, 0, 0);
+	seq_setMainStep(0, 0, 4, 0);
+	*s0 = old0;
+	*s4 = old4;
+}
+
+TEST(sequencer_smp_posts_the_voice_side)
+{
+	playTwoSteps(0);
+	ASSERT_EQ(posts, 2);
+	ASSERT_EQ(noteOnEvents, 2);			/* the LED at fire time */
+	ASSERT_EQ(noteOns, 0);				/* no trigger at fire time */
+	ASSERT_EQ(slideCalls, 0);			/* the slide mode goes with the record */
+	for (int i = 0; i < 2; i++)
+	{
+		ASSERT_EQ(posted[i].track, 0);
+		ASSERT_EQ(posted[i].flags & (VS_TIMED | VS_PLOCKS | VS_SRC_MASK), VS_TIMED | VS_PLOCKS | VS_SRC_SEQ);
+		ASSERT_TRUE(posted[i].time <= (uint32_t)postedAt[i]);	/* the event's time, not the tick's */
+		ASSERT_TRUE(posted[i].time + MS > (uint32_t)postedAt[i]);
+	}
+	ASSERT_EQ(posted[0].vel, 90);
+	ASSERT_EQ(posted[0].p1Nr, 12);
+	ASSERT_EQ(posted[0].p1Val, 34);
+	ASSERT_EQ((posted[0].flags & VS_SLIDE_MASK) >> VS_SLIDE_SHIFT, DRUM_SLIDE_OFF);
+	ASSERT_EQ((posted[1].flags & VS_SLIDE_MASK) >> VS_SLIDE_SHIFT, DRUM_SLIDE_ON);
+	const uint32_t d = posted[1].time - posted[0].time;	/* 4 steps at 120 BPM: 108,000,000 cycles */
+	ASSERT_TRUE(d >= 107999999u && d <= 108000001u);
+}
+
+TEST(sequencer_blk_triggers_at_once)
+{
+	playTwoSteps(1);
+	ASSERT_EQ(posts, 0);
+	ASSERT_EQ(noteOns, 2);
+	ASSERT_EQ(noteOnEvents, 0);
+}
+
+TEST(sequencer_smp_oneshot_roll_posts_an_untimed_record)
+{
+	reset();
+	activeParameters[PAR_TRIG_TIMING] = 0;
+	posts = noteOns = noteOnEvents = 0;
+	seq_setRoll(2, 1);				/* stopped: the one-shot roll, through the mailbox */
+	run(2);
+	seq_setRoll(2, 0);
+	ASSERT_EQ(posts, 1);
+	ASSERT_EQ(noteOnEvents, 1);
+	ASSERT_EQ(noteOns, 0);
+	ASSERT_EQ(posted[0].track, 2);
+	ASSERT_EQ(posted[0].flags, VS_SRC_ONESHOT);	/* untimed, no p-locks before the first step */
+	ASSERT_EQ(posted[0].note, SEQ_DEFAULT_NOTE);
 }
 
 TEST_MAIN()
