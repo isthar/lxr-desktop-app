@@ -340,7 +340,8 @@ set(EMU_APP_UNIT_SOURCES "${EMU_APP_DIR}/engine/app_ring.c"
     "${EMU_APP_DIR}/engine/app_timemap.c" "${EMU_APP_DIR}/engine/app_midi.c"
     "${EMU_APP_DIR}/engine/app_midilist.c" "${EMU_APP_DIR}/engine/app_bind.c"
     "${EMU_APP_DIR}/engine/app_time.c" "${EMU_APP_DIR}/engine/app_card.c"
-    "${EMU_APP_DIR}/engine/app_settings.c" "${EMU_APP_DIR}/engine/app_crash.c")
+    "${EMU_APP_DIR}/engine/app_settings.c" "${EMU_APP_DIR}/engine/app_crash.c"
+    "${EMU_APP_DIR}/engine/app_jackaudio.c")
 add_library(emu_app_units OBJECT ${EMU_APP_UNIT_SOURCES})
 target_include_directories(emu_app_units PUBLIC "${EMU_APP_DIR}/engine" "${EMU_DIR}/core" "${EMU_DIR}/common")
 target_compile_options(emu_app_units PRIVATE ${EMU_APP_FLAGS})
@@ -398,7 +399,8 @@ emu_add_app_test(test_app_settings IDS R4_settings_roundtrip R4_settings_keep R4
     R4_crash_once)
 emu_add_app_test(test_app_ring IDS M18_ring_fill_drop M18_ring_wrap M18_ring_threads)
 emu_add_app_test(test_app_timemap IDS M18_map_wall M18_map_drift M18_map_rate M18_map_jump M18_latency_table M18_entry_rule
-    M18_reanchor_order)
+    M18_reanchor_order R5_latency_input)
+emu_add_app_test(test_app_jackaudio IDS R5_clk_frame R5_clk_render R5_edge_step R5_in_host_time R5_jackin_render)
 emu_add_app_test(test_app_midi FRAMEWORKS CoreMIDI CoreFoundation IDS M18_midi_split M18_midi_usb_cin
     M18_midi_usb_transfer M18_midi_bytes M18_midi_din_asm M18_midi_usb_out M18_eventlist)
 emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R4_engine_splash R4_engine_ring R4_engine_cardseq R4_engine_cardheld

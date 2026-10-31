@@ -82,7 +82,7 @@ void app_audioRender(app_audio_t *a, const app_audioTime_t *ts, unsigned frames,
 
 static void app_engineSetL(app_engine_t *e)
 {
-	const app_latencyIn_t in = { e->lLead, e->out.deviceRate, e->out.deviceLatency, e->out.streamLatency, e->lReq, 0 };
+	const app_latencyIn_t in = { e->lLead, e->out.deviceRate, e->out.deviceLatency, e->out.streamLatency, e->lReq, 0, 0.0 };
 	e->L = app_latencyL(&in);
 	if (e->dAuto)
 		e->dCycles = (uint64_t)llround((e->L + APP_D_MARGIN) * EMU_CPU_HZ);
