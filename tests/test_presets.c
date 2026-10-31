@@ -1234,6 +1234,108 @@ TEST(presets_kit_block_values_out_of_range)
 	ASSERT_EQ(memcmp(lchmKit[5], top + 6, KIT_BLOCK_COUNT), 0);
 }
 
+/** tmp.snd as preset_saveTmpKit() writes it: the slot, the 247 parameters, the block */
+#define TMP_KIT_V04_SIZE (1 + KIT_SIZE + 6 + KIT_BLOCK_COUNT)
+
+TEST(presets_tmp_kit_block_round_trip)
+{
+	reset();
+	ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+	static const uint8_t block[KIT_BLOCK_COUNT] = { 11, 22, 33, 44, 3, 55, 7 };
+	memcpy(&activeParameters[END_OF_GLOBALS], block, KIT_BLOCK_COUNT);
+	activeParameters[PAR_DJ_RESO] = 90;
+	activeParameters[PAR_REV_LEVEL] = 80;
+	activeParameters[PAR_REV_DECAY] = 70;
+	activeParameters[PAR_DJ_FILTER] = 20;
+	activeParameters[PAR_REV_FREEZE] = 1;
+	menu_selectedPresetNr[SAVE_TYPE_KIT] = 9;
+	ASSERT_EQ(preset_saveTmpKit(), FR_OK);
+	const CardEntry *e = &card[find("/tmp/tmp.snd")];
+	ASSERT_EQ(e->len, TMP_KIT_V04_SIZE);
+	ASSERT_EQ(e->data[0], 9);
+	ASSERT_EQ(e->data[1 + PAR_DJ_FILTER], 64);	/* saved flat */
+	ASSERT_EQ(e->data[1 + PAR_REV_FREEZE], 0);	/* and off (plan D33) */
+	ASSERT_EQ(e->data[1 + PAR_DJ_RESO], 90);
+	static const uint8_t tail[13] = { 'L', 'C', 'H', 'M', 1, 7, 11, 22, 33, 44, 3, 55, 7 };
+	ASSERT_EQ(memcmp(e->data + 1 + KIT_SIZE, tail, sizeof tail), 0);
+	/* read back over other values; the live DJ filter and freeze are not the file's */
+	memset(&activeParameters[END_OF_GLOBALS], 0, KIT_BLOCK_COUNT);
+	activeParameters[PAR_DJ_RESO] = activeParameters[PAR_REV_LEVEL] = activeParameters[PAR_REV_DECAY] = 0;
+	activeParameters[PAR_DJ_FILTER] = 30;
+	activeParameters[PAR_REV_FREEZE] = 1;
+	ASSERT_EQ(preset_LoadTmpKit(), FR_OK);
+	ASSERT_EQ(menu_selectedPresetNr[SAVE_TYPE_KIT], 9);
+	ASSERT_EQ(memcmp(&activeParameters[END_OF_GLOBALS], block, KIT_BLOCK_COUNT), 0);
+	ASSERT_EQ(activeParameters[PAR_DJ_RESO], 90);
+	ASSERT_EQ(activeParameters[PAR_REV_LEVEL], 80);
+	ASSERT_EQ(activeParameters[PAR_REV_DECAY], 70);
+	ASSERT_EQ(activeParameters[PAR_DJ_FILTER], 30);	/* live */
+	ASSERT_EQ(activeParameters[PAR_REV_FREEZE], 1);
+}
+
+TEST(presets_tmp_kit_fw17_length_takes_defaults)
+{
+	/* tmp.snd of fw 1.7: the slot and the 247 parameters (0x22, also in the five v0.4 slots) */
+	reset();
+	putTmpKit(12);
+	ASSERT_EQ(card[find("/tmp/tmp.snd")].len, 1 + KIT_SIZE);
+	memset(&activeParameters[END_OF_GLOBALS], 0x5A, KIT_BLOCK_COUNT);
+	activeParameters[PAR_DJ_FILTER] = 20;
+	activeParameters[PAR_REV_FREEZE] = 1;
+	ASSERT_EQ(preset_LoadTmpKit(), FR_OK);
+	ASSERT_EQ(memcmp(&activeParameters[END_OF_GLOBALS], kitBlockDefaults, KIT_BLOCK_COUNT), 0);
+	ASSERT_EQ(activeParameters[PAR_DJ_RESO], 0);
+	ASSERT_EQ(activeParameters[PAR_REV_LEVEL], 0);
+	ASSERT_EQ(activeParameters[PAR_REV_DECAY], 64);
+	ASSERT_EQ(activeParameters[PAR_FX_P1], 0x22);	/* the rest is the file's */
+	ASSERT_EQ(activeParameters[PAR_DJ_FILTER], 20);	/* live */
+	ASSERT_EQ(activeParameters[PAR_REV_FREEZE], 1);
+}
+
+TEST(presets_morph_save_writes_the_edit_buffers_block)
+{
+	/* a morph save writes the morphed parameters and the edit buffer's block, which morph
+	 * does not touch (plan D34): not the slot's block, nor the morph source's */
+	kitCard();
+	static const uint8_t block[KIT_BLOCK_COUNT] = { 11, 22, 33, 44, 3, 55, 7 };
+	memcpy(&activeParameters[END_OF_GLOBALS], block, KIT_BLOCK_COUNT);
+	memset(lchmKit[5], 0x5A, KIT_BLOCK_COUNT);
+	memset(lchmKit[6], 0x66, KIT_BLOCK_COUNT);
+	morphParameters = mainParameters[6];
+	activeParameters[PAR_MORPH] = 255;		/* all the way to the morph source */
+	activeParameters[PAR_DJ_FILTER] = 20;
+	activeParameters[PAR_REV_FREEZE] = 1;
+	memcpy(savefileNames[5][KIT_NAMES], "MORPH   ", 8);
+	ASSERT_EQ(preset_saveDrumsetSD(5, 1), FR_OK);
+	CardEntry *e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, KIT_V04_SIZE);
+	static const uint8_t tail[13] = { 'L', 'C', 'H', 'M', 1, 7, 11, 22, 33, 44, 3, 55, 7 };
+	ASSERT_EQ(memcmp(e->data + KIT_FW17_SIZE, tail, sizeof tail), 0);
+	ASSERT_EQ(e->data[8 + PAR_FX_P1], 6);		/* morphed */
+	ASSERT_EQ(e->data[8 + PAR_DJ_FILTER], 64);	/* saved flat */
+	ASSERT_EQ(e->data[8 + PAR_REV_FREEZE], 0);
+	/* into the RAM slot too */
+	preset_saveDrumsetRam(5, 1);
+	ASSERT_EQ(memcmp(lchmKit[5], block, KIT_BLOCK_COUNT), 0);
+	ASSERT_EQ(mainParameters[5][PAR_FX_P1], 6);
+	/* a morph source loaded from the card keeps its block out of the slots and the edit buffer */
+	kitCard();
+	memcpy(&activeParameters[END_OF_GLOBALS], block, KIT_BLOCK_COUNT);
+	memset(lchmKit[5], 0x5A, KIT_BLOCK_COUNT);
+	memset(lchmKit[6], 0x66, KIT_BLOCK_COUNT);
+	static const uint8_t other[13] = { 'L', 'C', 'H', 'M', 1, 7, 1, 2, 3, 4, 5, 6, 7 };
+	putKit5(other, sizeof other);
+	morphParameters = mainParameters[6];
+	ASSERT_EQ(preset_loadDrumsetSD(5, 1), FR_OK);
+	ASSERT_EQ(morphParameters[PAR_FX_P1], 0x11);	/* the file's parameters are the morph source */
+	for (int i = 0; i < KIT_BLOCK_COUNT; i++) {
+		ASSERT_EQ(lchmKit[5][i], 0x5A);
+		ASSERT_EQ(lchmKit[6][i], 0x66);
+	}
+	ASSERT_EQ(memcmp(&activeParameters[END_OF_GLOBALS], block, KIT_BLOCK_COUNT), 0);
+}
+
 TEST(presets_glo_cfg_stays_30_bytes)
 {
 	reset();

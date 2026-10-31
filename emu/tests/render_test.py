@@ -1287,6 +1287,37 @@ def V04_kit_file(t):
     check(all(d[8 + 224] == 64 for d in kits), 'a kit saved the DJ filter off centre')
     no_copies_left()
 
+@case
+def V04_kit_fw17(t):
+    # a kit of fw 1.7 is 255 bytes, without the LCHM block: it takes the block's defaults and
+    # those of the five v0.4 slots, whatever fw 1.7 left there (plan D35), so it renders as the
+    # same kit with the default block. Through the DJ filter's low-pass, where the slots'
+    # resonance is heard; with a valid block the same stale slots are the kit's, and heard.
+    src = os.path.join(t.root, 'emu', 'tests', 'cards', 'fx')
+    name = os.path.join('PROJ00', '00-INITK.SND')
+    with open(os.path.join(src, name), 'rb') as f:
+        data = f.read()
+    check(len(data) == 268 and data[255:] == b'LCHM\x01\x07' + bytes([100, 64, 10, 40, 0, 100, 0])
+          and [data[8 + p] for p in (224, 225, 226, 227, 244)] == [64, 0, 0, 0, 64],
+          'the fx card\'s kit is not the kit with the default block')
+    stale = bytearray(data[:255])
+    for p, v in ((224, 0), (225, 127), (226, 127), (227, 1), (244, 0)):	# DJ filter, reso, level, freeze, decay
+        stale[8 + p] = v
+    cards = {}
+    for k, kit in (('default', data), ('fw17', bytes(stale)), ('stale', bytes(stale) + data[255:])):
+        cards[k] = card_copy(t, src, k)
+        with open(os.path.join(cards[k], name), 'wb') as f:
+            f.write(kit)
+    args = ['--bpm', '120', '--bars', '1', '--param', 'dj_filter=20']
+    wavs = {}
+    for k in cards:
+        _, wav, _ = t.render(cards[k], args)
+        with open(wav, 'rb') as f:
+            wavs[k] = f.read()
+    check(wavs['fw17'] == wavs['default'], 'the 255-byte kit renders unlike the kit with the default block')
+    check(wavs['stale'] != wavs['default'], 'the stale slots with a block render as the defaults: the case cannot tell')
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists
