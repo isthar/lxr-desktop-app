@@ -331,7 +331,8 @@ endif()
 option(LICHOMAT_EMU_APP "Build LICHOMAT Emu.app, its device glue and the dev harness" ON)
 set(EMU_APP_DIR "${EMU_DIR}/app")
 set(EMU_APP_FLAGS ${EMU_SAN_FLAGS} -Wall -Wextra -Werror "SHELL:-ivfsoverlay ${EMU_OVERLAY}")
-set(EMU_APP_UNIT_SOURCES "${EMU_APP_DIR}/engine/app_ring.c")
+set(EMU_APP_UNIT_SOURCES "${EMU_APP_DIR}/engine/app_ring.c"
+    "${EMU_APP_DIR}/engine/app_timemap.c")
 add_library(emu_app_units OBJECT ${EMU_APP_UNIT_SOURCES})
 target_include_directories(emu_app_units PUBLIC "${EMU_APP_DIR}/engine" "${EMU_DIR}/core" "${EMU_DIR}/common")
 target_compile_options(emu_app_units PRIVATE ${EMU_APP_FLAGS})
@@ -371,6 +372,8 @@ function(emu_add_app_test name)
 endfunction()
 
 emu_add_app_test(test_app_ring IDS M18_ring_fill_drop M18_ring_wrap M18_ring_threads)
+emu_add_app_test(test_app_timemap IDS M18_map_wall M18_map_drift M18_map_jump M18_latency_table M18_entry_rule
+    M18_reanchor_order)
 
 # The temporary folders: every test above gets TMPDIR = a folder of this build,
 # which emu_tmp_setup empties first and emu_tmp_clean checks last. A test removes
