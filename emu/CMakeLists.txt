@@ -330,7 +330,8 @@ emu_render_tests(M17_cli_usage M17_cli_info M17_card_errors M17_seed_card M17_t0
 emu_render_tests(V02_ui V02_tempo V02_groove V02_conditions V02_files V02_rotation)
 emu_render_tests(V03_rolls V03_slide V03_glide_through_ratchets V03_fill V03_scenes V03_scene_file)
 emu_render_tests(V04_kit_file V04_kit_fw17)
-emu_render_tests(V05_trig_setting V05_onsets_tool V05_onsets V05_midi_in V05_slave_onsets V05_save_onsets)
+emu_render_tests(V05_trig_setting V05_onsets_tool V05_onsets V05_midi_in V05_slave_onsets V05_save_onsets
+    V05_plocks)
 # M23: emu/tests/cards/make.sh gives the committed card fixtures (spec 5.6)
 emu_render_tests(M23)
 

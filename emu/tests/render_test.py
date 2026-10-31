@@ -1450,6 +1450,118 @@ def V05_save_onsets(t):
     check(code == 0, out)
     no_copies_left()
 
+def wav_channels(path):
+    """the four channels L1, R1, L2, R2 of a 16-bit WAV"""
+    with wave.open(path, 'rb') as w:
+        n = w.getnchannels()
+        x = array.array('h')
+        x.frombytes(w.readframes(w.getnframes()))
+    if sys.byteorder == 'big':
+        x.byteswap()
+    return [x[c::n] for c in range(n)]
+
+def trig_splits(path):
+    """(the split frame S, k, serial, source) of each record of a --trig-log; a timed record's S is
+    its event + 128 frames on the block grid at its k (a WAV starts at a block, t0)"""
+    out = []
+    with open(path) as f:
+        for line in f:
+            c, v, src, serial, k, late = line.split()
+            k = int(k)
+            if src == 'oneshot':
+                out.append((None, k, int(serial), src))
+                continue
+            e = float(fractions.Fraction(int(c)) * 113 / 552960) + 128
+            S = 64 * round((e - k) / 64) + k
+            check(abs(S - e) <= 1.5, '%s: %r: the split %d is %.2f frames from event + 128' % (path, line, S, S - e))
+            out.append((S, k, int(serial), src))
+    return out
+
+@case
+def V05_plocks(t):
+    # A step's p-locks in smp (S8, D5; final review of v0.5): they go with the step's record and
+    # take effect at its split. Drum 1 alone on out 1, hard left, a sine of long decay, steps 1-5
+    # at 120 BPM: step 2 p-locks Drum 1's pan to 127 through p1, step 4 through p2; steps 3 and 5
+    # have none, and their triggers put the pan back (autoNode_setDestination()). The pan is
+    # latched at each trigger, and hard left or right leaves exact zeros on the other channel.
+    # 1. At each split S of steps 2-5 (k > 0) the old note's [S - k, S) keeps the old pan; every
+    #    new note has the new one from S. 2. The one-shot roll (performance mode, rate One, while
+    #    running) after step 2, with the pan turned back to 0 after the step: its untimed record
+    #    (S10) carries step 2's p-lock, so the roll note, from its block's start, is on the right;
+    #    the render without the roll equals it up to that block. 3. The pan is latched at the
+    #    trigger, the volume is not (it goes through the mixer's one-pole smoother sample by
+    #    sample): step 2 alone p-locking Drum 1's volume to 0 leaves the render bit for bit that
+    #    of no p-lock before step 2's split, and makes the new note quiet from it.
+    seed = t.seed()
+    steps = press_steps(1, (1, 2, 3, 4, 5))
+    locks = ('+100ms param active_step=1\n+100ms param p1_dest=33\n+100ms param p1_val=127\n'   # PAR_PAN1
+             '+100ms param active_step=3\n+100ms param p2_dest=33\n+100ms param p2_val=127\n')
+    kit = ('+100ms param osc_wave_drum1=0\n+100ms param veloa1=0\n+100ms param velod1=40\n'
+           '+100ms param vol1=127\n+100ms param pan1=0\n')
+    run = '+100ms press 25\n+100ms param roll=0\n+100ms press start\n+150ms param pan1=0\n'
+    roll = '+20ms down step1\n+100ms up step1\n'
+    vol = '+100ms param active_step=1\n+100ms param p1_dest=32\n+100ms param p1_val=0\n'     # PAR_VOL1
+    none = '+100ms param active_step=1\n' * 3                                                 # the same times
+    renders = []
+    for name, lk, extra in (('plain', locks, ''), ('roll', locks, roll), ('none', none, ''), ('vol', vol, '')):
+        log = t.path(name + '.log')
+        s, wav, _ = t.render(seed, ['--no-start', '--seconds', '7', '--trig-log', log,
+                                    '--events', t.script(steps + lk + kit + run + extra)])
+        check(s['vsched']['late'] == 0 and s['vsched']['offTick'] == 0, '%s: vsched %r' % (name, s['vsched']))
+        renders.append((wav_channels(wav), trig_splits(log)))
+    (ch, recs), (rch, rrecs), (nch, nrecs), (vch, vrecs) = renders
+    L, R = ch[0], ch[1]
+    loud = lambda x, a, b: max((abs(v) for v in x[a:b]), default=0) >= 1000
+    zero = lambda x, a, b: not any(x[a:b])
+    pans = 'LRLRL'                      # steps 1-5: hard left, p1 127, back, p2 127, back
+    check(len(recs) >= 13 and all(r[3] == 'seq' for r in recs), 'plain: the records %r' % (recs,))
+    kinds, splits = set(), 0
+    for i, (S, k, _, _) in enumerate(recs):
+        new = pans[i % 5]
+        side, other = (R, L) if new == 'R' else (L, R)
+        check(loud(side, S, S + 64) and zero(other, S, S + 64),
+              'record %d (step %d, k %d): the new note from frame %d is not panned %s' % (i, i % 5 + 1, k, S, new))
+        if i % 5 == 0 or k == 0:
+            continue                    # step 1: step 5's note has decayed
+        old = pans[(i - 1) % 5]
+        side, other = (R, L) if old == 'R' else (L, R)
+        check(loud(side, S - k, S) and zero(other, S - k, S),
+              'record %d (step %d, k %d): the old note before its split at %d is not panned %s' % (i, i % 5 + 1, k, S, old))
+        splits += 1
+        kinds.add(i % 5)
+    print('of %d records: %d with an old note before the split at k > 0, steps %s among them'
+          % (len(recs), splits, sorted(x + 1 for x in kinds)))
+    check(splits >= 9 and kinds == {1, 2, 3, 4}, 'splits %d, steps %r' % (splits, kinds))
+
+    # the roll: its block from the serial (each timed record gives block - serial)
+    shot = [r for r in rrecs if r[3] == 'oneshot']
+    timed = [r for r in rrecs if r[3] == 'seq']
+    check(len(shot) == 1, 'roll: the one-shot records %r' % (shot,))
+    off = set((S - k) // 64 - serial for S, k, serial, _ in timed)
+    check(len(off) == 1, 'roll: block - serial is not one value: %r' % off)
+    b = shot[0][2] + off.pop()
+    a = 64 * b
+    check(timed[1][0] < a < timed[2][0], 'roll: its block at %d is not between steps 2 and 3 (%d, %d)'
+          % (a, timed[1][0], timed[2][0]))
+    check(all(rch[c][:a] == ch[c][:a] for c in range(4)), 'roll: the render differs before its block at %d' % a)
+    check(any(rch[c][a:a + 64] != ch[c][a:a + 64] for c in range(2)), 'roll: no new note in its block at %d' % a)
+    check(loud(rch[1], a, a + 64) and zero(rch[0], a, a + 64), 'roll: the note from %d is not panned right' % a)
+    print('the one-shot roll from frame %d (block %d): panned right, with step 2\'s p-lock' % (a, b))
+
+    # the volume
+    check(nrecs == vrecs, 'vol: the records differ from those without p-locks')
+    S, k = vrecs[1][0], vrecs[1][1]
+    check(k > 0, 'vol: step 2 at k 0')
+    first = next((f for f in range(len(vch[0])) if any(vch[c][f] != nch[c][f] for c in range(4))), None)
+    check(first is not None and S <= first < S + 16, 'vol: the render first differs from the one without p-locks '
+          'at frame %r, not within 16 frames from step 2\'s split at %d (k %d)' % (first, S, k))
+    peak = lambda x: max(abs(v) for v in x[S + 512:S + 2048])
+    check(peak(vch[0]) * 20 < peak(nch[0]), 'vol: step 2\'s note is not quiet: peak %d against %d'
+          % (peak(vch[0]), peak(nch[0])))
+    print('step 2 p-locking the volume to 0: the render first differs from that without p-locks at frame %d, its '
+          'split %d (k %d) + %d; then quiet (peak %d against %d)' % (first, S, k, first - S, peak(vch[0]), peak(nch[0])))
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists

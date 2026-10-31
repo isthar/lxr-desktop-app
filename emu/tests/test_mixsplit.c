@@ -30,6 +30,19 @@
  * 6. A retrigger at k2 in block 9 over hit 1 at k1 (k2 below, equal to and above k1, and 0):
  *    up to k2 the output is hit 1's alone (its step at k1 comes first when k1 < k2); from k2 it
  *    is hit 1 at offset 0 shifted to k2, for the whole note; the phase is k2 after block 9.
+ * From the final review of v0.5, from the same boot:
+ * 7. Check 5 for each of the six voices (tracks 0-5), alone, a hit at k = 20 with the amp EG at
+ *    about 190 ms: its phase is 20 while its amp EG runs, and 0 from 2 blocks after the EG has
+ *    ended (stopped, or in its decay at 0, and its output, the gain of the voice's last control
+ *    step, 0) to the end of the run. Measured: the drums 2 blocks (their gain ramps from the
+ *    step before), the others 1; from the EG's state alone, which ends a step before its
+ *    output, 3 and 2.
+ * 8. A trigger at once, as trg blk's glue makes it in seq_tick() before the render (the
+ *    p-locks, the slide mode, voiceControl_noteOn()), in block 9 over hit 1 at k1 = 20, as after
+ *    a switch from smp to blk while the note sounds: the whole run equals the one with a record
+ *    at offset 0 in block 9 (check 6's k2 = 0) bit for bit, and the phase is 0 from block 9.
+ *    voiceControl_noteOn() calls vsched_triggerNow(); without it the voice keeps the phase 20,
+ *    renders [0, 20) of the new note with the old step's gain, and starts its EG 20 frames late.
  *
  * The test links a copy of vsched.c whose seq_isInTick() is the test's emu_testInTick()
  * (emu/CMakeLists.txt): vsched_post() drops a record posted outside seq_tick() (P9), and the
@@ -50,11 +63,16 @@
 #include "stm32f7xx_hal.h"
 #include "Parameters.h"
 #include "menu/menu.h"
+#include "Soundengine/DSPAudio/CymbalVoice.h"
 #include "Soundengine/DSPAudio/DrumVoice.h"
+#include "Soundengine/DSPAudio/HiHat.h"
+#include "Soundengine/DSPAudio/SlopeEg2.h"
+#include "Soundengine/DSPAudio/Snare.h"
 #include "Soundengine/DSPAudio/lfo.h"
 #include "Soundengine/DSPAudio/mixer.h"
 #include "Soundengine/DSPAudio/modulationNode.h"
 #include "Soundengine/MIDI/MidiMessages.h"
+#include "Soundengine/MIDI/MidiVoiceControl.h"
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/vsched.h"
 #include "emu_test.h"
@@ -167,6 +185,8 @@ static int msEqual(const msRun_t *a, unsigned f, const msRun_t *b, unsigned g, u
 }
 
 static void mnNote(void);
+static void mzSilence(void);
+static void mnNow(void);
 
 TEST(M25_mixer_split)
 {
@@ -246,6 +266,8 @@ TEST(M25_mixer_split)
 	ASSERT_EQ(tail, MS_KS);
 	ASSERT_EQ(newPan, MS_KS);
 	mnNote();
+	mzSilence();
+	mnNow();
 }
 
 /* the persistent note phase: checks 4-6 */
@@ -267,6 +289,8 @@ typedef struct
 {
 	uint8_t k1, k2;		/* hit 1's offset in block 4; hit 2's in block 9, or MN_NONE */
 } mnArg_t;
+
+static uint8_t mnTriggerNow;	/* 1: in block 9 a trigger at once (check 8) */
 
 static const mnArg_t mnArgs[] = {
 	{ 0, MN_NONE }, { 2, MN_NONE }, { 4, MN_NONE }, { 6, MN_NONE }, { 8, MN_NONE }, { 10, MN_NONE },
@@ -309,6 +333,15 @@ static void mnScenario(void *arg)
 			msPost(w0 + (uint32_t)a->k1 * VSCHED_BLOCK_CYCLES / 64u, 0);
 		if (b == MN_HIT2 && a->k2 != MN_NONE)
 			msPost(w0 + (uint32_t)a->k2 * VSCHED_BLOCK_CYCLES / 64u, 0);
+		if (b == MN_HIT2 && mnTriggerNow)
+		{
+			/* trg blk's seq_voiceSide() with msPost()'s p-lock and slide mode */
+			msInTick = 1;
+			seq_applyPlocks(0, PAN1, 0, NO_AUTOMATION, 0);
+			Drum_setSlide(0, DRUM_SLIDE_OFF);
+			voiceControl_noteOn(0, SEQ_DEFAULT_NOTE, 127);
+			msInTick = 0;
+		}
 		mixer_calcNextSampleBlock(mnCur->out[b][1], mnCur->out[b][0]);
 		mnCur->phase[b] = vsched_phase(0);
 	}
@@ -452,6 +485,184 @@ static void mnNote(void)
 	ASSERT_EQ(tails, retriggers);
 	ASSERT_EQ(renotes, retriggers);
 	ASSERT_EQ(rephase, retriggers);
+}
+
+/* a child of the boot: fn(arg) in a direct call, then n bytes from out through a pipe into the
+ * parent's out */
+static void msFork(void (*fn)(void *), void *arg, void *out, size_t n)
+{
+	int fd[2];
+	ASSERT_EQ(pipe(fd), 0);
+	const pid_t pid = fork();
+	ASSERT_TRUE(pid >= 0);
+	if (pid == 0)
+	{
+		close(fd[0]);
+		emu_directCall(fn, arg);
+		const char *p = out;
+		size_t left = n;
+		while (left)
+		{
+			const ssize_t w = write(fd[1], p, left);
+			if (w <= 0)
+				_exit(1);
+			p += w;
+			left -= (size_t)w;
+		}
+		_exit(0);
+	}
+	close(fd[1]);
+	size_t got = 0;
+	for (ssize_t r; got < n && (r = read(fd[0], (char *)out + got, n - got)) > 0;)
+		got += (size_t)r;
+	close(fd[0]);
+	int status = 0;
+	ASSERT_EQ(waitpid(pid, &status, 0), pid);
+	ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+	ASSERT_EQ(got, n);
+}
+
+/* 7: each voice alone, its phase until its amp EG ends */
+#define MZ_BLOCKS 240u
+#define MZ_K 20u
+
+typedef struct
+{
+	uint8_t phase[MZ_BLOCKS];	/* vsched_phase(v) after each block */
+	uint8_t ended[MZ_BLOCKS];	/* the voice's amp EG has ended after the block, its output 0 */
+	uint8_t state[MZ_BLOCKS];	/* the EG's state alone has ended (a step before its output) */
+	unsigned applied;
+	uint8_t k;
+} mzRun_t;
+
+static mzRun_t mzRuns[6];
+static mzRun_t *mzCur;
+
+static SlopeEg2 *mzAmpEg(uint8_t v)
+{
+	switch (v)
+	{
+	case 0: case 1: case 2:	return &voiceArray[v].oscVolEg;
+	case 3:			return &snareVoice.oscVolEg;
+	case 4:			return &cymbalVoice.oscVolEg;
+	default:		return &hatVoice.oscVolEg;
+	}
+}
+
+static void mzTrace(const vsched_rec_t *r, uint32_t serial, uint8_t k, uint8_t late)
+{
+	(void)r;
+	(void)serial;
+	(void)late;
+	mzCur->k = k;
+	mzCur->applied++;
+}
+
+static void mzScenario(void *arg)
+{
+	const uint8_t v = *(const uint8_t *)arg;	/* the voice, and its track (5: the closed hat) */
+	vsched_setTrace(mzTrace);
+	SlopeEg2 *eg = mzAmpEg(v);
+	eg->attack = 1.0;
+	if (v == 5)
+		hatVoice.decayClosed = (float)MN_DECAY;	/* HiHat_trigger() sets the EG's decay from it */
+	else
+		eg->decay = MN_DECAY;
+	static int16_t out1[MS_FRAMES * 2], out2[MS_FRAMES * 2];
+	const uint32_t t0 = 0x40000000u;
+	for (uint32_t b = 0; b < MZ_BLOCKS; b++)
+	{
+		vsched_blockDone(t0 + b * VSCHED_BLOCK_CYCLES);
+		if (b == MS_HIT1)
+		{
+			const vsched_rec_t r = { .time = t0 + (b - 1u) * VSCHED_BLOCK_CYCLES + MZ_K * VSCHED_BLOCK_CYCLES / 64u,
+				.track = v, .note = SEQ_DEFAULT_NOTE, .vel = 127,
+				.flags = VS_TIMED | (DRUM_SLIDE_OFF << VS_SLIDE_SHIFT) };
+			msInTick = 1;
+			vsched_post(&r);
+			msInTick = 0;
+		}
+		mixer_calcNextSampleBlock(out2, out1);
+		mzCur->phase[b] = vsched_phase(v);
+		const int egEnd = eg->state == EG_STOPPED || (eg->state == EG_D && eg->value <= 0.0);
+		const double gain = v < 3u ? (double)voiceArray[v].ampFilterInput
+			: (double)(v == 3u ? snareVoice.egValueOscVol : v == 4u ? cymbalVoice.egValueOscVol : hatVoice.egValueOscVol);
+		mzCur->ended[b] = egEnd && gain == 0.0;
+		mzCur->state[b] = (uint8_t)egEnd;
+	}
+}
+
+static void mzSilence(void)
+{
+	unsigned planned = 0, ended = 0, kept = 0, dropped = 0;
+	char lags[64] = "";
+	for (uint8_t v = 0; v < 6u; v++)
+	{
+		mzCur = &mzRuns[v];
+		uint8_t arg = v;
+		msFork(mzScenario, &arg, mzCur, sizeof *mzCur);
+		const mzRun_t *r = &mzRuns[v];
+		planned += r->applied == 1u && r->k == MZ_K;
+		unsigned e = MS_HIT1;
+		while (e < MZ_BLOCKS && !r->ended[e])
+			e++;
+		if (e + 3u > MZ_BLOCKS)
+			continue;			/* the EG has not ended within the run */
+		ended++;
+		int keep = 1, drop = 1;
+		for (unsigned b = MS_HIT1; b < e; b++)
+			keep &= r->phase[b] == MZ_K;
+		for (unsigned b = e + 2u; b < MZ_BLOCKS; b++)
+			drop &= r->phase[b] == 0;
+		kept += keep;
+		dropped += drop;
+		unsigned lag = e;
+		while (lag < MZ_BLOCKS && r->phase[lag])
+			lag++;
+		unsigned es = MS_HIT1;
+		while (es < MZ_BLOCKS && !r->state[es])
+			es++;
+		snprintf(lags + strlen(lags), sizeof lags - strlen(lags), " %u/%u(%u)", e - MS_HIT1, lag - e, lag - es);
+	}
+	printf("M25 silence: of 6 voices: planned at k %u, amp EG ended within the run %u, phase k while it runs %u, "
+			"phase 0 from 2 blocks after its end %u; blocks from the hit to the EG's end / from there to "
+			"phase 0 (from the EG's state):%s\n",
+			planned, ended, kept, dropped, lags);
+	ASSERT_EQ(planned, 6);
+	ASSERT_EQ(ended, 6);
+	ASSERT_EQ(kept, 6);
+	ASSERT_EQ(dropped, 6);
+}
+
+/* 8: a trigger at once over hit 1 at 20, against the record at offset 0 of check 6 */
+static mnRun_t mnNowRun;
+
+static void mnNow(void)
+{
+	unsigned ref = MN_RUNS;
+	for (unsigned i = 0; i < MN_RUNS; i++)
+		if (mnArgs[i].k1 == 20u && mnArgs[i].k2 == 0u)
+			ref = i;
+	ASSERT_TRUE(ref < MN_RUNS);
+	mnCur = &mnNowRun;
+	mnArg_t a = { 20, MN_NONE };
+	mnTriggerNow = 1;
+	msFork(mnScenario, &a, mnCur, sizeof *mnCur);
+	mnTriggerNow = 0;
+	const mnRun_t *r = &mnNowRun, *rec = &mnRuns[ref];
+	const unsigned end = MN_BLOCKS * MS_FRAMES, at = MN_HIT2 * MS_FRAMES;
+	const int same = mnEqual(r, 0, rec, 0, end);
+	int phase = r->phase[MN_HIT2 - 1u] == 20u;
+	for (unsigned b = MN_HIT2; b < MN_BLOCKS; b++)
+		phase &= r->phase[b] == 0;
+	printf("M25 now: a trigger at once over hit 1 at 20: applied %u record(s), the run equals the record at "
+			"offset 0 %d, phase 20 before it and 0 from its block %d\n", r->applied, same, phase);
+	if (!same)
+		printf("M25 now: it departs from the record at offset 0 at frame %u from block 9's start\n",
+				mnEqual(r, 0, rec, 0, at) ? mnFirstDiff(r, at, rec, at, end - at) : 0u);
+	ASSERT_EQ(r->applied, 1);
+	ASSERT_TRUE(same);
+	ASSERT_TRUE(phase);
 }
 
 TEST_MAIN()

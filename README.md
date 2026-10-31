@@ -45,7 +45,9 @@ over DIN and USB and the playing as a clock slave all land where they belong. Fr
 there is a constant 2.9 ms (128 samples), on average 0.73 ms later than 0.4 against the MIDI out and
 the clock out jack. The setting `trg` on the second sub-page of the global menu (hold SHIFT and
 press step button 12; after `cko`) chooses `smp`, the new timing, or `blk`, the timing of 0.4. It is
-saved in byte 9 of `glo.cfg`, which 1.7 ignores.
+saved in byte 9 of `glo.cfg`, which 1.7 ignores. If `trg` is switched from `smp` to `blk` while
+playing, the hits already scheduled in `smp` (about 1.5 blocks, 2 ms) still start after the first
+`blk` hits, so for that moment an older hit can restart a voice over its newer one.
 
 It keeps everything of 0.3, which added tools for playing live and for acid lines. In the
 performance mode (the second mode button) holding step 8 turns the fill mode on, steps 9–16 recall
