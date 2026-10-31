@@ -234,7 +234,8 @@ emu_add_test(test_sched IDS M3_periods M3_order_at_equal_times M3_primask_defers
 emu_add_test(test_codec IDS M5_requests M5_halves M4_tim2_after_request M5_hook_per_block M3_paced_by_ring M5_window)
 emu_add_test(test_power IDS M6_power_on_once)
 emu_add_test(test_boot IDS M6_splash M6_no_card M6_card M6_no_globals)
-emu_add_test(test_hook IDS M3_fw_normal_pass M3_fw_kit_load M3_fw_sd_error M3_fw_screensaver M3_fw_splash_paced)
+emu_add_test(test_hook IDS M3_fw_normal_pass M3_fw_kit_load M3_fw_sd_error M3_fw_screensaver M3_fw_splash_paced
+    M3_fw_nested_kit_load)  # v0.5 review: a nested soundengine_process() keeps TIM2 masked (S17)
 emu_add_test(test_lcd IDS M7_commands M7_clear M7_cgram M7_row_wrap M7_arrows M7_led_latch M7_led_pulse M7_fw_repaint)
 emu_add_test(test_panel IDS M8_scan M8_gray M8_fw_encoder10 M8_fw_push_phases M8_fw_knob_normal M8_fw_knob_list
     M8_fw_no_edit_at_boot M8_fw_faders)

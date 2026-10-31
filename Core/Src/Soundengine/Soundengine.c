@@ -85,6 +85,11 @@ void soundengine_init()
 void soundengine_process()
 {
 #if CALC_SAMPLES_IN_INTERRUPT
+	//LICHOMAT v0.5: a nested call (a kit autoload inside a core callback runs preset_loadDrumsetRam(),
+	//which calls this again) leaves TIM2's interrupt as it found it, masked by the outer call: during a
+	//card operation TIM2 would otherwise preempt the outer seq_tick() and render while it posts a
+	//record (review of plan v0.5 Task 7, S17)
+	const uint8_t tim2Unmasked = (htim2.Instance->DIER & TIM_IT_UPDATE) != 0u;
 	__HAL_TIM_DISABLE_IT(&htim2, TIM_IT_UPDATE);
 	//HAL_TIM_Base_Stop_IT(&htim2);
 	soundengine_cpuBegin();
@@ -96,7 +101,8 @@ void soundengine_process()
 	soundengine_cpuEnd(pending ? soundengine_calcNextSampleBlock() : 0);
 	__HAL_TIM_SetCounter(&htim2, 1950);
 	//HAL_TIM_Base_Start_IT(&htim2);
-	__HAL_TIM_ENABLE_IT(&htim2, TIM_IT_UPDATE);
+	if(tim2Unmasked)
+		__HAL_TIM_ENABLE_IT(&htim2, TIM_IT_UPDATE);
 #endif
 	//generate next sample if no valid sample is present
 #if !CALC_SAMPLES_IN_INTERRUPT

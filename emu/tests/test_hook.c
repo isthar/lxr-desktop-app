@@ -5,8 +5,8 @@
  * rule in a normal pass and an immediate kit load; the tier hook during the
  * long firmware calls, menu_showSdError()'s HAL_Delay(2000) and a screensaver
  * wake, and during the boot splash; TIM2 parked by every pass, and firing every
- * 6,004 cycles inside a HAL_Delay(). Each test boots without a card (fast, no
- * files) unless it says otherwise.
+ * 6,004 cycles inside a HAL_Delay(); v0.5: a kit load inside soundengine_process() leaves
+ * TIM2 masked. Each test boots without a card (fast, no files) unless it says otherwise.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -19,6 +19,7 @@
 #include "menu/menu.h"
 #include "menu/screensaver.h"
 #include "Preset/PresetManager.h"
+#include "Soundengine/Soundengine.h"
 #include "emu_test.h"
 
 /* a wrapper that counts TIM2 bodies around the real one that emu_powerOn() installed,
@@ -98,6 +99,45 @@ TEST(M3_fw_kit_load)
 	emu_counters_t c;
 	emu_getCounters(&c);
 	ASSERT_TRUE(c.tickCalls > 100u && c.tickCalls <= 512u);	/* about 250 (spec 4.2) */
+}
+
+/* LICHOMAT v0.5, review of Task 7 (S17): a kit autoload inside a core callback runs within an
+ * outer soundengine_process(), which masks TIM2's update interrupt for its seq_tick() and its
+ * render; preset_loadDrumsetRam() calls soundengine_process() again after every parameter. Each
+ * nested call leaves the mask as it found it: during a card operation (TIM2 started) TIM2 would
+ * otherwise preempt the outer seq_tick(), and its render the posting of a record. 3 ms with TIM2
+ * masked after the load: two block requests, and no TIM2 body. An outer call unmasks it at its
+ * end, as before. */
+static uint64_t bodiesMasked;
+static int maskedAfterLoad, unmaskedAfterOuter;
+static void nestedKitLoad(void *arg)
+{
+	(void)arg;
+	HAL_TIM_Base_Start_IT(&htim2);			/* a card operation: TIM2 renders */
+	__HAL_TIM_DISABLE_IT(&htim2, TIM_IT_UPDATE);	/* as the outer soundengine_process() */
+	preset_loadDrumsetRam(0, 0, 1);
+	maskedAfterLoad = !(htim2.Instance->DIER & TIM_IT_UPDATE);
+	HAL_Delay(3);
+	bodiesMasked = tim2Bodies;
+	__HAL_TIM_ENABLE_IT(&htim2, TIM_IT_UPDATE);
+	soundengine_process();
+	unmaskedAfterOuter = (htim2.Instance->DIER & TIM_IT_UPDATE) != 0u;
+	HAL_TIM_Base_Stop_IT(&htim2);
+}
+
+TEST(M3_fw_nested_kit_load)
+{
+	bootNoCard(NULL);
+	emu_counters_t c0, c1;
+	emu_getCounters(&c0);
+	emu_directCall(nestedKitLoad, NULL);
+	emu_getCounters(&c1);
+	printf("M3_fw_nested_kit_load: masked after the load %d, %llu block requests and %llu TIM2 bodies in the 3 ms\n",
+			maskedAfterLoad, (unsigned long long)(c1.blocks - c0.blocks), (unsigned long long)bodiesMasked);
+	ASSERT_TRUE(c1.blocks - c0.blocks >= 2u);
+	ASSERT_TRUE(maskedAfterLoad);
+	ASSERT_EQ(bodiesMasked, 0);
+	ASSERT_TRUE(unmaskedAfterOuter);
 }
 
 /* the hook injects a DIN byte at its 100th block call after the test zeroes
