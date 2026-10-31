@@ -78,9 +78,16 @@ checks = emulator ? {
   "the two jobs fetch CMake and Ninja and record the toolchain with the same steps" =>
     ["Fetch CMake and Ninja", "Record the toolchain"].all? { |n|
       !find_step.call("emu-release", n).nil? && find_step.call("emu-release", n) == find_step.call("emu-sanitize", n) },
+  "emu-sanitize builds without the app, emu-release with it" =>
+    runs.call("emu-sanitize").match?(/-DLICHOMAT_EMU_APP=OFF(\s|$)/) && !runs.call("emu-release").include?("LICHOMAT_EMU_APP"),
   "emu-release uploads lichomat-render" =>
     uploads.call("emu-release").any? { |s| s["if"].nil? && s.fetch("with", {})["name"].to_s.start_with?("lichomat-render-") &&
       s.fetch("with", {})["if-no-files-found"] == "error" },
+  "emu-release uploads LICHOMAT Emu" =>
+    uploads.call("emu-release").any? { |s| s["if"].nil? && s.fetch("with", {})["name"].to_s.start_with?("lichomat-emu-") &&
+      s.fetch("with", {})["if-no-files-found"] == "error" },
+  "the otool step checks the app and its renderer" =>
+    find_step.call("emu-release", "Check the linked libraries").to_h["run"].to_s.include?("LICHOMAT Emu.app/Contents/MacOS/lichomat-render"),
   "both jobs upload the golden outputs on a failure" =>
     %w[emu-release emu-sanitize].all? { |j| uploads.call(j).any? { |s| s["if"] == "failure()" &&
       s.fetch("with", {})["path"] == "build/#{j}/goldens-out" } },

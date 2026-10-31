@@ -24,6 +24,7 @@
 
 #include "emu_core.h"
 #include "emu_hostfs.h"
+#include "emu_notices.h"
 #include "render_build.h"
 #include "render_card.h"
 #include "render_fw.h"
@@ -219,31 +220,15 @@ const char *__ubsan_default_options(void)
 	return "abort_on_error=1";
 }
 
-/* The notices of spec 10.1. Each line is one C string, so that each is one run
- * for M21's name scan; the lines that name the maker, the product or the
- * repository are on its allow-list (emu/tests/name_allow.txt). */
+/* The notices of spec 10.1 (plan E26): emu_notices.h, which the app's --version and About box share */
 static void render_version(void)
 {
-	static const char *const tagline =
-		"emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02";
 	printf("lichomat-render %s, the renderer of LICHOMAT Emu\n", EMU_RENDER_VERSION);
-	printf("%s\n", tagline);
-	printf("Runs LICHOMAT %s with the emulator changes F1-F12 and F6b. Built from commit %s.\n",
+	printf("%s\n", EMU_TAGLINE);
+	printf("Runs LICHOMAT %s with the emulator changes " EMU_FIRMWARE_CHANGES ". Built from commit %s.\n",
 		EMU_RENDER_VERSION, EMU_RENDER_COMMIT);
-	static const char *const legal[] = {
-		"Copyright (C) 2012-2026 Erica Synths",
-		"Copyright (C) 2026 Tomasz Krzywicki",
-		"Modified from the LXR firmware 1.7 by Erica Synths; LICHOMAT and its emulator by Tomasz Krzywicki, 2026",
-		"Arm Optimized Routines: Copyright (c) 1999-2022, Arm Limited. MIT licence.",
-		"FatFs ff.h and integer.h: Copyright (C) 2017, ChaN. FatFs licence.",
-		"This program comes with ABSOLUTELY NO WARRANTY. It is free software under the GNU",
-		"General Public License version 3 only, with the additional permission and terms",
-		"in NOTICE.md. See LICENSE and NOTICE.md.",
-		"Source: https://github.com/isthar/lxr-desktop-app at the commit above.",
-		"Not affiliated with Erica Synths.",
-	};
-	for (size_t i = 0; i < sizeof legal / sizeof legal[0]; i++)
-		printf("%s\n", legal[i]);
+	for (size_t i = 0; i < EMU_LEGAL_COUNT; i++)
+		printf("%s\n", emu_legal[i]);
 }
 
 /* a model check (spec 3.4, 5.7 code 3) */

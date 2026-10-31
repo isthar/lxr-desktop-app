@@ -97,7 +97,7 @@ from fw 1.7.
   10 of the wavetable oscillators changes its sound, so that change waits for a listening check (F9, §7).
 - **G7.** The binaries contain no ST SLA0044 code and no file without a licence. They show that they are
   unofficial. 'Erica Synths', 'LXR' and 'Sonic Potions' appear in them only in the allow-listed texts of
-  §10.2, and they carry no logo and no copy of the faceplate (§10).
+  §10.2, and the panel keeps none of the device's names, logos, printing, graphics or colours (§6.6, §10.2).
 
 ### Non-goals
 
@@ -1176,16 +1176,20 @@ The firmware thread maps host time (mach ticks) to virtual time and back.
 The panel uses Dear ImGui on its native Cocoa and Metal backends (Q16). Its Metal shaders compile at run
 time from source, so the Command Line Tools are enough to build it.
 
-- **Layout**, schematic and in our own colours (Q14), in rows by function:
-  - the LCD and the encoder;
-  - 4 knobs under the LCD's 4 columns, since knob i edits the parameter in column i;
-  - 6 faders, labelled by their voices;
-  - 41 buttons with their LEDs, labelled with their function names;
-  - a jack strip with the 4 output-jack switches, the card switch, the clock-out LED, and the clock-in
-    and reset-in controls (§6.8).
-- **No branding.** No LXR or Erica Synths name or logo, and no copy of the faceplate's layout, colours,
-  printing or graphics. The rows above group controls by function, not by their places on the faceplate,
-  and A1 has the owner confirm it.
+- **Layout** (owner's decision E33, 2026-10-31): arranged roughly like the device's control layout, so
+  that the owner's hands find each control where they expect it, drawn in our own shapes and colours:
+  - a jack strip along the top, with the 4 output-jack switches, the card switch, the clock-out LED, and
+    the clock-in and reset-in controls (§6.8);
+  - on the left, the LCD and the encoder, with 4 knobs under the LCD's 4 columns, since knob i edits the
+    parameter in column i;
+  - on the right, 6 faders, labelled by their voices, with the arrow and voice buttons under them. There is no
+    VOLUME fader, because the firmware reads 6 faders; the Mac's own volume controls the level;
+  - the other buttons of the 41, with their LEDs and their function names, in three framed groups, then
+    the row of 16 step buttons.
+- **No branding.** No LXR or Erica Synths name or logo, and none of the device's printing, graphics or
+  colours. The panel takes the arrangement of the controls and nothing else: plain function names, our
+  own colours, and a 'LICHOMAT' wordmark above the display, set in a system font that the app loads at
+  run time (nothing is embedded). A1 has the owner confirm it.
 - **Mouse and keys.**
   - Buttons: mouse down and up are button down and up. A secondary click latches a button down until the
     next click, so that SHIFT + step works with one mouse. The Shift key holds SHIFT, and the space bar
@@ -1655,8 +1659,9 @@ it is.
   About box and of `--version` (the copyright, modification and non-affiliation lines of §10.1). The
   bundled `NOTICE.md` names them too. M21 scans the binaries' C strings for them, case-insensitive, and
   fails on any other occurrence.
-- The panel is schematic, in our own colours, with no logo and no copy of the faceplate (NOTICE.md,
-  'Hardware'; §6.6).
+- The panel is arranged roughly like the device's control layout, for muscle memory (E33). It keeps no
+  device names, logos, printing, graphics or colours, and has a 'LICHOMAT' wordmark in a system font
+  loaded at run time (NOTICE.md, 'Hardware'; §6.6).
 - The boot splash, 'LICHOMAT' and 'v0.1 unofficial', shows in the app for 1 s of wall time, and the window
   title says 'unofficial' (NOTICE.md 7(c)).
 
@@ -1735,10 +1740,10 @@ G1–G10 (§8.6), in both CI jobs.
 
 | ID | Check |
 |---|---|
-| A1 | The app opens after Open Anyway. The splash shows 'LICHOMAT' and 'v0.1 unofficial' for about 1 s. About shows the notices of §10.1. The owner confirms that the panel is not a copy of the faceplate |
+| A1 | The app opens after Open Anyway. The splash shows 'LICHOMAT' and 'v0.1 unofficial' for about 1 s. About shows the notices of §10.1. The owner confirms that the controls sit where the device's do, and that the panel keeps none of the device's names, logos, printing, graphics or colours |
 | A2 | An imported copy of the owner's card plays its projects, and they sound like the device |
 | A3 | On the device and in the app (360 points of drag), the owner counts the steps of one full knob turn on a normal and on a list parameter; they agree within 10 %. Fader i, counted from the left, moves the same voice as fader i on the device. The encoder walks the menu, and SHIFT combinations work with a latched button |
-| A4 | Master over the virtual port at 120 BPM: the DAW shows 120.0 ± 0.1 BPM; F8 intervals on the virtual port are 20.83 ± 1.5 ms; the DAW starts and stops with the app |
+| A4 | Master over the virtual port at 120 BPM: the DAW shows 120.0 ± 0.1 BPM; F8 intervals on the virtual port are 20.83 ± 1.5 ms, except the one interval that contains Start: the firmware sends an F8 exactly 1 ms after FA, whatever the phase of the free-running clocks, so that interval may be anywhere from 0 to 20.8 ms, and the owner leaves it out; the DAW starts and stops with the app |
 | A5 | Slave over the virtual port with the default D, at 128 and at 140 BPM for 2 minutes each: the diagnostics' measured leads stay at most L, and their input latency stays within 1 ms of D. Start, Stop, Continue and a locate (SPP) to bar 3 put the step LEDs at the DAW's position within one step |
 | A6 | Slave over a hardware DIN interface, as A5 |
 | A7 | MIDI out over DIN to a synth: a pattern with notes on all 7 tracks runs for 5 minutes, with 10 stops and starts; after each stop the synth falls silent, so no note hangs |
@@ -1802,7 +1807,7 @@ When F1–F10 reach a firmware release (v0.2, R6), the hardware checklist gains 
 | 8 | Storage damages a user's card or diverges from FAT | The app's own folder; temporary copies for renders; copies that keep the order; the 'card out applied' handshake; duplicate warnings; export only into an empty folder or with a backup of a replaced project; M9 |
 | 9 | Input is lost or garbled: clicks between scans, fast knob moves, MIDI bursts | Queued release at the poll points (§4.6); paced injection (§4.3); the USART3 flag model (§4.2); counters in the summary and the diagnostics |
 | 10 | The sample-rate mapping shifts pitch and tempo: −1.6 cents and 0.092 % slow at 44.1 kHz without conversion, +145 cents at 48 kHz | AUHAL converts from 44,140.625 Hz; A11 checks the block rate |
-| 11 | Licence and trademark: SLA0044 code, files without a licence, names, the faceplate, non-commercial code, or a later change of NOTICE.md upstream | §10; the licence gate and name scan M21; the stand-ins written fresh |
+| 11 | Licence and trademark: SLA0044 code, files without a licence, names, the device's logos, printing, graphics or colours, non-commercial code, or a later change of NOTICE.md upstream | §10; the licence gate and name scan M21; the stand-ins written fresh |
 | 12 | Toolchain traps: Mach-O section names, the predefined `__weak`, fortify, signed `char`, header shadowing, the case clash, CRLF, a sanitizer runtime in a release binary | §3.4, §8.2, §9.2 and §9.3; the overlay instead of shadowing for `main.h`; the `otool` step |
 | 13 | The emulator's re-implementations drift from the firmware: interrupt bodies, the DataOut walk, the register model, the CubeMX rates and priorities | F4 removes the copy of `main.c`; M20's hashes; the priority check in `HAL_NVIC_SetPriority()`; M22; unknown registers fail to compile |
 | 14 | Panel state silently changes a render: untouched faders are silent, jack states reroute voices, knob angles edit at boot, seeds change noise | Goldens fix every input (§8.4); the knobs start at 0°; the summary prints the inputs |
@@ -1818,7 +1823,7 @@ This draft applies each default. Each question stays open in the tracker until t
 |---|---|---|---|
 | Q12 | Do we build stage 1b in the agreed order: the renderer first (goldens in CI, quick listening to stage 2's changes), then the app (virtual panel, CoreMIDI, master and slave), then stage 2? The alternative is the renderer, then stage 2, and the app later. **Agreed order:** the app's live sync checks (A4–A8) exist before stage 2 changes the groove, and stage 2 starts two plans later (R4 and R5). **Alternative:** the groove features reach the device two plans sooner. Their scripted sync tests run in the renderer (G7 and G8 drive DIN and USB clocks), and live tests wait for the device or the app | Renderer, app, stage 2, as agreed on 2026-10-23. Code starts only after the owner accepts this spec | Open |
 | Q13 | Do the small firmware changes the emulator needs go into the firmware? Most leave the device's behaviour unchanged: the two NULL reads, the `strcpy` in `menu.c`, splitting `main()` into a boot and one loop pass, saturating float-to-uint conversions, and a function that tells whether a kit transfer is running. One changes the sound: the read past the end of a table in `Oscillator.c`. The ping-pong delay report is settled: the sanitizer sweep reproduced it, and E4.8 fixed it on `timing-core` (`2bb5d80`) | Yes, as separate small commits on `emulator` (F1–F10), reaching the device in v0.2, after the owner's v0.1 checks. The `Oscillator.c` fix only after a listening check on the device (U8), which also decides the PWM oscillator's B13 and B14 from the sanitizer sweep. F2 also changes a morph without a card, which today reads stray bytes from address 0 | Open |
-| Q14 | Names and look: app 'LICHOMAT Emu', renderer 'lichomat-render', CoreMIDI port 'LICHOMAT Emu', tagline 'emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02', bundle ID `io.github.isthar.lichomat-emu` (with your GitHub handle); a schematic panel in its own colours, no logos and no copy of the faceplate. The naming rule also covers release titles and notes, the README and the repository's description | As proposed (§10.2) | Open |
+| Q14 | Names and look: app 'LICHOMAT Emu', renderer 'lichomat-render', CoreMIDI port 'LICHOMAT Emu', tagline 'emulator of LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02', bundle ID `io.github.isthar.lichomat-emu` (with your GitHub handle); a panel arranged roughly like the device's control layout for muscle memory (E33), in its own colours, with a LICHOMAT wordmark in a system font, and no device names, logos, printing or graphics. The naming rule also covers release titles and notes, the README and the repository's description | As proposed (§10.2) | Open |
 | Q15 | Distribution: arm64 only, macOS 13 or later, ad hoc signed binaries as release assets on the fork, no paid Apple developer account (Open Anyway at the first start), no Erica factory kits; users bring a copy of their card or a folder | As proposed (§10.3). Intel is not supported: an x86-64 build gives different results and can crash | Open |
 | Q16 | The app's behaviour: knobs like the device (about 134 steps per turn, 22 for list parameters); an instant display; a slave MIDI input delay computed from the audio output's latencies, about 58 ms at the built-in output's 512-frame buffer and about 34 ms at 128 frames, that the user can lower (the earlier figure of 24 ms is too short for the app's audio pipeline, §6.4); sound at the internal 44,140.625 Hz, resampled to the audio device at Normal complexity and maximum quality; the app's own card folder with import and export; the UI in Dear ImGui on Cocoa and Metal | As proposed (§6). The clock jacks are an LED and buttons; an audio pulse out and clock in from audio are options | Open |
 | Q17 | On DIN, MIDI clock bytes (F8) wait behind the Note Ons of the same moment, up to about 7 ms with 7 tracks. MIDI 1.0 allows realtime bytes to go ahead. Change it, in a v0.2 firmware or in stage 2? (A 0.1.x version does not fit the splash: 'v0.1.1 unofficial' has 17 characters) | Recorded for stage 2; nothing changes now. G6 pins today's behaviour, and H5 already allows for it | Open |
