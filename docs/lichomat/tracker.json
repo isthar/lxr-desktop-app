@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 11:50",
+    "updated": "2026-10-31 12:43",
     "phase": "Etap 2: v0.4 gotowe w kodzie (M13); częstotliwość pogłosu czeka na H12",
     "focus": "E5.5: aplikacja LICHOMAT Emu (R4 gotowe, R5 dalej)",
     "branch": "timing-core",
-    "head": "444d845",
+    "head": "1547edd",
     "next": "Twoje A1–A11 w aplikacji i H12 dla pogłosu v0.4",
-    "updated_at": "2026-10-31T11:50:00+01:00",
-    "now": "Scalenie emulator → v0.3 i v0.4"
+    "updated_at": "2026-10-31T12:43:00+01:00",
+    "now": "R5: zadania 3–4 (wejście audio, GUI)"
   },
   "epics": [
     {
@@ -3014,6 +3014,21 @@
       "n": 426,
       "at": "2026-10-31 11:50",
       "text": "Twój odczyt 65% i nowy próg 80% (11:49), kofeina na kolejne 8 h. Dalej: scalenie emulator do v0.3 i v0.4, żeby aplikacja grała ich firmware (v0.4 z pogłosem), potem plan R5 (jacki zegara jako audio)."
+    },
+    {
+      "n": 427,
+      "at": "2026-10-31 12:09",
+      "text": "Scalenie emulator do v0.3 (6d72e80) i v0.4 (ca0f622) bez konfliktów: aplikacja buduje i gra firmware obu wersji (ekran startowy v0.3 / v0.4, zero niedoborów). Obrazy firmware bez zmian bajt w bajt (v0.4: 2b00c7c5…). Testy emulatora: v0.3 276, v0.4 284; nagrania wzorcowe G1–G15 bez zmian. Wersja w testach aplikacji brana z CMakeLists firmware. Dla Ciebie: aplikacja v0.4 z kopią karty DLC w scratchpad/emu-show/v04."
+    },
+    {
+      "n": 428,
+      "at": "2026-10-31 12:26",
+      "text": "Plan R5 gotowy (3ed43aa): 4 zadania, decyzje F1–F15 planu. CLK OUT jako kanał wyjścia audio z opóźnieniem o jeden blok, CLK i RST IN z wejścia audio z progiem i histerezą, zgoda na mikrofon tylko po włączeniu opcji, nowe sprawdzenie A12 (kabel). Uwaga ze specyfikacji: domyślne D musi uwzględnić opóźnienie wejścia audio (F7). Wykonanie: najpierw zadania 1–2 (logika i silnik), plus wersja firmware w testach aplikacji jak na v0.3/v0.4."
+    },
+    {
+      "n": 429,
+      "at": "2026-10-31 12:43",
+      "text": "R5 zadania 1–2 (c52c4ae, 8ee07d3, 1547edd): logika jacków jako audio i silnik; CLK OUT: 17 zboczy na 17 impulsów firmware, bez zgubionych; slave z zegara audio: każde zbocze wchodzi w mapie + D, D 70,5 ms (L 69,5 ms z opóźnieniem wejścia 12,5 ms). 274 testy. Teraz zadania 3–4 (jednostka wejścia CoreAudio, okno Audio, zgoda na mikrofon)."
     }
   ]
 }

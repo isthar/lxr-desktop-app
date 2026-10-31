@@ -1347,3 +1347,15 @@ static void emu_clockIn(void)
 - **No permission means silence,** not an error, so the GUI checks the permission itself (F10).
 - **Size.** About 1,350 lines against the 400–800 asked for. Complete code for the pure logic, every test and the input glue takes about 1,000 of them; the engine glue is code, while the shell and the GUI are prose.
 - **Not testable here:** the GUI itself, the real input unit (by hand, with `LICHOMAT_EMU_INPUT_TEST=1`), and the cables (A12).
+
+## Changes during execution (2026-10-31)
+
+- **`R5_jack_slave` expects 10 notes, not 9.** After the last pulse (43, at 8.975 s) the slave position
+  carries on to the next target, as `seq_core.h` documents ("clamped to the next target"), so step 13
+  plays at the place of pulse 44 (9.1 s). The 48 input edges are as planned; the latency tolerance is
+  unchanged (the notes came 0.066–0.134 ms after D).
+- **Task 1:** `app_latencyIn_t.inputLead` needed `, 0.0` in the four rows of `M18_latency_table`
+  (`-Wmissing-field-initializers` is an error).
+- **Task 3 gets the output channel count** (`app_outputInfo_t.deviceChannels`) and opens max(mix, clock
+  channel) channels up to the device's, so a clock channel of 3 or more works on a real device; and the
+  closed sink drains the clock-edge queue, so a long output stop does not leave the clock level stale.
