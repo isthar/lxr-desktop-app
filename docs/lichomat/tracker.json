@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 10:14",
+    "updated": "2026-10-31 11:50",
     "phase": "Etap 2: v0.4 gotowe w kodzie (M13); częstotliwość pogłosu czeka na H12",
-    "focus": "E5.5: aplikacja LICHOMAT Emu (R4)",
+    "focus": "E5.5: aplikacja LICHOMAT Emu (R4 gotowe, R5 dalej)",
     "branch": "timing-core",
-    "head": "d785a30",
-    "next": "Twoje H12 ustala częstotliwość pogłosu v0.4",
-    "updated_at": "2026-10-31T10:14:00+01:00",
-    "now": "R4: zadanie 12 (panel w układzie urządzenia, poprawka symbolu time)"
+    "head": "444d845",
+    "next": "Twoje A1–A11 w aplikacji i H12 dla pogłosu v0.4",
+    "updated_at": "2026-10-31T11:50:00+01:00",
+    "now": "Scalenie emulator → v0.3 i v0.4"
   },
   "epics": [
     {
@@ -442,9 +442,9 @@
     {
       "id": "E5.5",
       "epic": "E5",
-      "status": "do zrobienia",
-      "title": "Aplikacja LICHOMAT Emu: CoreAudio, CoreMIDI, wirtualny panel (R4, R5): odłożona na koniec, po etapie 2 (Twoja decyzja z 29.10)",
-      "updated": "2026-10-29"
+      "status": "w toku",
+      "title": "Aplikacja LICHOMAT Emu (R4 gotowe w kodzie 31.10, M14: CoreAudio, CoreMIDI, panel w układzie LXR-02, karta, crash i power cycle; zostają Twoje A1–A11) i R5 (jacki zegara jako audio, mały plan)",
+      "updated": "2026-10-31"
     },
     {
       "id": "E5.6",
@@ -658,6 +658,12 @@
       "date": "2026-10-31",
       "title": "v0.4: atmosfera – pogłos, freeze, rumble, delay z tempem, filtr DJ (E7.3–E7.6, E6.9)",
       "summary": "Pogłos po efekcie slotu (stereo, rozmiar, decay, barwa w muzycznym zakresie, predelay, modulacja; bufor 56 KB w RAM), freeze (ok. −0,3 dB/min), rumble (ducking wybranym głosem), delay z tempem 1/16–1/4, filtr DJ na obu wyjściach. Ustawienia w bloku kitu, którego fw 1.7 nie czyta. Częstotliwość pogłosu tymczasowo połowiczna; Twój H12 ustala ostateczną (D41). 104 testy na hoście, 184 w emulatorze, nagrania wzorcowe G11–G15; fuzzing czysty. Trzy lekkie przeglądy: 1 ważna i 10 drobnych usterek poprawionych z testami. Raport: docs/lichomat/reports/M13-v0.4.md"
+    },
+    {
+      "id": "M14",
+      "date": "2026-10-31",
+      "title": "Aplikacja LICHOMAT Emu (emulator R4, E5.5)",
+      "summary": "Cały firmware gra na Macu w oknie z panelem w układzie LXR-02 (Twoja decyzja z 10:13; bez nazw, logo i kolorów urządzenia, napis LICHOMAT), dźwięk przez CoreAudio, wirtualne porty MIDI „LICHOMAT Emu” (master i slave, D liczone z opóźnień wyjścia), folder karty z importem i eksportem, watchdog, notatka po crashu, power cycle z zachowaniem ID portów. Dear ImGui v1.92.9b (Twoja zgoda). Zmierzone: 689,70 bloku/s, zero niedoborów, MIDI clock co 19,7–22,0 ms. 264 testy emulatora; plan i trzy lekkie przeglądy kodu: 2 blokujące i 22 inne usterki poprawione z testami. Aplikacja Release 1,9 MB, podpis ad hoc. Raport: docs/lichomat/reports/M14-emulator-R4-app.md"
     }
   ],
   "questions": [
@@ -2993,6 +2999,21 @@
       "n": 423,
       "at": "2026-10-31 10:14",
       "text": "Twoja decyzja (10:13): panel aplikacji emulatora mniej więcej w układzie LXR-02 (zmienia regułę §6.6, Q14), żeby ręka pamiętała położenie. Zostaje: bez nazw LXR, Erica Synths i Sonic Potions, bez logo, nadruków i grafiki panelu, z własnymi kolorami (LCD nie czerwony). Pierwszy build aplikacji padał przy starcie: zmienna globalna float time z graphic.c przesłaniała funkcję time() biblioteki, którą woła ImGui; poprawka tylko po stronie emulatora plus test na takie kolizje symboli."
+    },
+    {
+      "n": 424,
+      "at": "2026-10-31 11:06",
+      "text": "R4: zadanie 12 (66ebb3a): panel w ImGui w układzie urządzenia z napisem LICHOMAT (DIN Condensed Bold z systemu), About, notki; poprawka kolizji symbolu time i test R4_gui_clash. Poprawki po przeglądzie 5–9 (b1bf556, 429c620, d6fbcd7): zapas renderowania przy tempie zegara ściennego (clock MIDI teraz 19,7–22,0 ms, A4 ±1,5 ms), osobne pierścienie MIDI dla USB i DIN, eksport projektu bez chwili bez starego projektu, numery operacji karty. 254 testy. Ustalone: firmware wysyła F8 1 ms po FA niezależnie od fazy zegara, więc interwał ze Startem A4 pomija. Teraz zadanie 13 (bundle, podpis, CI) i przegląd 10–12."
+    },
+    {
+      "n": 425,
+      "at": "2026-10-31 11:50",
+      "text": "M14: aplikacja LICHOMAT Emu gotowa w kodzie (emulator 444d845). Zadanie 13 (570c110, 4092cd9): paczka .app z licencjami, podpis ad hoc, Release 1,9 MB, CI i lokalna próba CI. Poprawki po przeglądzie 10–12 (7bfb949, 816e3d4, 444d845): crash handler nie zapętla się przy SIGTRAP, restart w 0,08 s zamiast 5 s, jeden restart naraz, dioda CLK OUT łapie każdy impuls, suwaki przeciągane względnie, ustawienia z dowolnymi nazwami. 264 testy. Twoja kopia w scratchpadzie podmieniona na Release. Raport: docs/lichomat/reports/M14-emulator-R4-app.md."
+    },
+    {
+      "n": 426,
+      "at": "2026-10-31 11:50",
+      "text": "Twój odczyt 65% i nowy próg 80% (11:49), kofeina na kolejne 8 h. Dalej: scalenie emulator do v0.3 i v0.4, żeby aplikacja grała ich firmware (v0.4 z pogłosem), potem plan R5 (jacki zegara jako audio)."
     }
   ]
 }
