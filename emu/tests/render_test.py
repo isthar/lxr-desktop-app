@@ -198,7 +198,7 @@ def version_lines(root):
 @case
 def M17_cli_info(t):
     version, want = version_lines(t.root)
-    check(version == '0.3', 'the firmware version is %s, not 0.3 (spec 10.1)' % version)
+    check(version == '0.4', 'the firmware version is %s, not 0.4 (spec 10.1)' % version)
     out = t.run(['--version']).stdout
     m = re.search(r'Built from commit ([0-9a-f]{12}|unknown)\.', out)
     check(m, '--version names no commit of 12 hex digits: %r' % out)

@@ -17,11 +17,32 @@ approved or supported by Erica Synths. It is based on the official firmware 1.7
 ([erica-synths/lxr-desktop-app](https://github.com/erica-synths/lxr-desktop-app) at commit `a43cd4f`)
 and is aimed at groove techno: rolling percussion, swung hats over a straight kick, polymetric loops.
 
-Version 0.3 adds tools for playing live and for acid lines. In the performance mode (the second mode
-button) holding step 8 turns the fill mode on, steps 9–16 recall eight mute scenes and COPY + a step
-stores one; the scenes are saved with the project. Rolls go from a whole bar to 1/32, triplets
-included, on each track's own tempo. Drum 1–3 can slide: `sld` on the step page marks a step, and
-`slt` on the voice's first page sets the slide time.
+Version 0.4 adds atmosphere. A reverb runs after the FX slot, so the delay's echoes are
+reverberated: level, size, decay, tone, predelay, modulation and freeze, on a new FX sub-page
+(`lvl siz dec ton pre mod frz syn`; on the FX page SHIFT + step 15 steps from the slot's sub-page to
+the reverb, then to `dck ddp djf djr`, then back). The tone goes from a dark low-pass of about 1.5 kHz
+at 0, through flat at 64, to a gentle high-pass of about 400 Hz at 127. Freeze holds the tail, losing
+about 0.3 dB a minute: SHIFT + step 3 in the performance mode, or NRPN 99. Rumble ducks the reverb by
+one voice (`dck` picks it, `ddp` the depth). The delay can follow the tempo (`syn`, 1/16 triplet to
+1/4 dotted); a time longer than the delay line is halved until it fits. A DJ filter on both outputs
+(`djf`, `djr`, also on the performance page) is a low-pass to the left of the centre, flat at 63-65
+and a high-pass to the right. The DJ filter, its resonance, the reverb level, freeze and decay are
+reached by the menu and by NRPN 96-99 and 116; LFOs and velocity cannot target them. The other reverb
+settings are menu-only. **The reverb runs at half rate for now: the rate is provisional until the
+owner's CPU readings on the device (H12, U20) fix it.**
+
+Kits saved with 0.4 carry the new settings in a block after the 247 parameter bytes (a kit file
+grows from 255 to 268 bytes). Firmware 1.7 loads them, ignores the block and plays the kit with its
+own FX slot; a synced delay plays its free time there. A kit re-saved with 1.7 loses the block, and
+0.4 then uses the defaults (reverb off, DJ filter flat). Kits from 1.7 and from 0.1-0.3 load with
+those defaults too. A saved kit always stores the DJ filter flat and freeze off. `glo.cfg` stays 30
+bytes.
+
+It keeps everything of 0.3, which added tools for playing live and for acid lines. In the
+performance mode (the second mode button) holding step 8 turns the fill mode on, steps 9–16 recall
+eight mute scenes and COPY + a step stores one; the scenes are saved with the project. Rolls go from
+a whole bar to 1/32, triplets included, on each track's own tempo. Drum 1–3 can slide: `sld` on the
+step page marks a step, and `slt` on the voice's first page sets the slide time.
 
 It keeps everything of 0.2, which added groove per track: a tempo of its own for each track
 (polyrhythm), humanize and track delay, trig conditions and track rotation, together with the fixes
@@ -40,18 +61,18 @@ the step sequencer a new timing core and fixed the timing and MIDI problems of 1
   appears, right after the page with the clock in and clock out PPQ.
 
 Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged. The start-up
-screen shows `LICHOMAT` and `v0.3 unofficial`. The main changes of 0.1 are listed in its
+screen shows `LICHOMAT` and `v0.4 unofficial`. The main changes of 0.1 are listed in its
 [release notes](docs/lichomat/release-notes-v0.1.md), and every change against 1.7 in section 2 of the
-[stage 1 report](docs/lichomat/reports/stage1-report.md). The release notes of 0.2 and 0.3 are
-`docs/lichomat/release-notes-v0.2.md` and `docs/lichomat/release-notes-v0.3.md` on branch
-`timing-core`.
+[stage 1 report](docs/lichomat/reports/stage1-report.md). The release notes of 0.2, 0.3 and 0.4 are
+`docs/lichomat/release-notes-v0.2.md`, `docs/lichomat/release-notes-v0.3.md` and
+`docs/lichomat/release-notes-v0.4.md` on branch `timing-core`.
 
 ### Installing LICHOMAT
 
 Install `LXR_V2_LICHOMAT_<version>.img` like any other update, see
 [Installing the update](#installing-the-update). First delete every other `LXR*.img` file from the SD
 card: the updater installs the first one it finds. After the update the start-up screen shows
-`LICHOMAT` and `v0.3 unofficial`.
+`LICHOMAT` and `v0.4 unofficial`.
 
 ### Going back to the official firmware
 
@@ -151,7 +172,7 @@ When the build has finished it shows where the update file is and how to install
 ```
 ======================================================================
   Firmware update file:
-    .../lxr-desktop-app/build/release/LXR_V2_LICHOMAT_0.3.img
+    .../lxr-desktop-app/build/release/LXR_V2_LICHOMAT_0.4.img
   ...
 ```
 
