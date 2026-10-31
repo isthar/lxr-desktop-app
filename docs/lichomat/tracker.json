@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 05:06",
-    "phase": "Etap 2: v0.4 (atmosfera) w toku; A1-A6 gotowe, A7-A9 czekają na H12",
-    "focus": "v0.4 A1-A6 gotowe na gałęzi v0.4 (36245bf): delay z tempem, filtr DJ, bufor i parametry pogłosu. Pogłos, freeze i rumble (A7-A9) po Twoim odczycie CPU (H12).",
+    "updated": "2026-10-31 06:11",
+    "phase": "Etap 2: v0.4 gotowe w kodzie (M13); częstotliwość pogłosu czeka na H12",
+    "focus": "v0.4 gotowe w kodzie (gałąź v0.4 28abb29): pogłos, freeze, rumble, delay z tempem, filtr DJ. Wydanie po Twoim H12 (ustala częstotliwość pogłosu) i U20.",
     "branch": "timing-core",
-    "head": "c9d38cc",
-    "next": "Ty: jedna sesja testowa na v0.3 (docs/lichomat/test-session-v0.3.md), najpierw H12; odsłuch build/demo/v02-*, v03-*, v04-* i build/dlc/*. Ja przy wznowieniu: CI dla v0.4, potem po H12 v0.4 A7-A11.",
-    "updated_at": "2026-10-31T05:06:00+01:00",
-    "now": "Od 05:06: lekki przegląd v0.4 A7-A9 i Q31 (agent w tle); potem poprawki, A10 (wersja 0.4, demo) i A11 (Twoje dokumenty)."
+    "head": "28abb29",
+    "next": "Ty: H12 (strona CPU, jedna liczba pk) na v0.3 albo v0.4, potem jedna sesja testowa (docs/lichomat/test-session-v0.3.md, a dla 0.4 U20-U26); odsłuch build/demo/v02-*, v03-*, v04-* i build/dlc/*. Ja: po H12 ustawić częstotliwość pogłosu i dokończyć wydanie v0.4; CI, gdy GitHub ruszy.",
+    "updated_at": "2026-10-31T06:11:00+01:00",
+    "now": "Od 06:11: raport M13 i podsumowanie."
   },
   "epics": [
     {
@@ -520,7 +520,7 @@
       "id": "E6.9",
       "epic": "E6",
       "status": "w toku",
-      "title": "Filtr DJ na masterze: zrobiony na gałęzi v0.4 (A6, d4fe079; poprawki d2001f9), czeka na wydanie v0.4",
+      "title": "Filtr DJ na masterze: zrobione na gałęzi v0.4 (M13, 28abb29); wydanie po H12 i U20",
       "updated": "2026-10-31"
     },
     {
@@ -547,36 +547,36 @@
     {
       "id": "E7.2",
       "epic": "E7",
-      "status": "w toku",
-      "title": "Specyfikacja i plan atmosfery: plan v0.4 gotowy (docs/superpowers/plans/2026-10-31-v0.4-atmosphere.md, A1–A11, D30–D44); A1–A6 przed H12, A7–A9 po H12",
+      "status": "zrobione",
+      "title": "Specyfikacja i plan atmosfery: plan v0.4 wykonany (A1–A11, M13)",
       "updated": "2026-10-31"
     },
     {
       "id": "E7.3",
       "epic": "E7",
       "status": "w toku",
-      "title": "Pogłos jako osobny efekt obok delaya: zrobiony na gałęzi v0.4 (A7, c1dab2f; stereo, rozmiar, decay, barwa, predelay, modulacja; częstotliwość tymczasowo połowiczna, Q30), czeka na H12 i wydanie v0.4",
+      "title": "Pogłos jako osobny efekt obok delaya: zrobione na gałęzi v0.4 (M13, 28abb29); wydanie po H12 i U20",
       "updated": "2026-10-31"
     },
     {
       "id": "E7.4",
       "epic": "E7",
       "status": "w toku",
-      "title": "Delay zsynchronizowany z tempem: zrobiony na gałęzi v0.4 (A5, 955930d; poprawki 75c49ba), czeka na wydanie v0.4",
+      "title": "Delay zsynchronizowany z tempem: zrobione na gałęzi v0.4 (M13, 28abb29); wydanie po H12 i U20",
       "updated": "2026-10-31"
     },
     {
       "id": "E7.5",
       "epic": "E7",
       "status": "w toku",
-      "title": "Freeze: zrobiony na gałęzi v0.4 (A8, 9588542; SHIFT + krok 3 albo NRPN 99, poziom trzyma się w 0,1 dB przez 10 s), czeka na wydanie v0.4",
+      "title": "Freeze: zrobione na gałęzi v0.4 (M13, 28abb29); wydanie po H12 i U20",
       "updated": "2026-10-31"
     },
     {
       "id": "E7.6",
       "epic": "E7",
       "status": "w toku",
-      "title": "Rumble: zrobiony na gałęzi v0.4 (A9, 0e985e3; pogłos ściszany obwiednią wybranego głosu, bez opóźnienia), czeka na wydanie v0.4",
+      "title": "Rumble: zrobione na gałęzi v0.4 (M13, 28abb29); wydanie po H12 i U20",
       "updated": "2026-10-31"
     }
   ],
@@ -652,6 +652,12 @@
       "date": "2026-10-30",
       "title": "Emulator R3: nagrania wzorcowe G1–G10, CI z ASan, poprawki F13–F15 (E5.4, E5.7)",
       "summary": "18 nagrań wzorcowych (dźwięk, MIDI, zegar, panel) z warunkami i wariantami zepsutymi; karty testowe zapisane przez firmware; tools/emu_golden.py; CI emulatora na macOS (Release i Debug z ASan i UBSan) zielone, pierwszy pełny przebieg ASan bez błędów pamięci. Błędy fw 1.7 znalezione przez emulator i Twoją paczkę DLC: F13 (tabela diody), F14 i F15 (konwersje niezdefiniowane w C, obraz bez zmian). Przegląd: 1 ważna i 4 drobne usterki poprawione. R3 scalone też do v0.3. Raport: docs/lichomat/reports/M12-emulator-R3.md"
+    },
+    {
+      "id": "M13",
+      "date": "2026-10-31",
+      "title": "v0.4: atmosfera – pogłos, freeze, rumble, delay z tempem, filtr DJ (E7.3–E7.6, E6.9)",
+      "summary": "Pogłos po efekcie slotu (stereo, rozmiar, decay, barwa w muzycznym zakresie, predelay, modulacja; bufor 56 KB w RAM), freeze (ok. −0,3 dB/min), rumble (ducking wybranym głosem), delay z tempem 1/16–1/4, filtr DJ na obu wyjściach. Ustawienia w bloku kitu, którego fw 1.7 nie czyta. Częstotliwość pogłosu tymczasowo połowiczna; Twój H12 ustala ostateczną (D41). 104 testy na hoście, 184 w emulatorze, nagrania wzorcowe G11–G15; fuzzing czysty. Trzy lekkie przeglądy: 1 ważna i 10 drobnych usterek poprawionych z testami. Raport: docs/lichomat/reports/M13-v0.4.md"
     }
   ],
   "questions": [
@@ -2907,6 +2913,26 @@
       "n": 407,
       "at": "2026-10-31 05:06",
       "text": "05:06 Start lekkiego przeglądu v0.4 A7-A9 i Q31 (agent w tle)."
+    },
+    {
+      "n": 408,
+      "at": "2026-10-31 05:19",
+      "text": "05:19 Lekki przegląd v0.4 A7-A9 i Q31: 1 ważna uwaga i 5 drobnych. Ważna: wybudzenie pogłosu z poziomu 0 odtwarzało stary stan filtrów barwy jako basowe pyknięcie (zmierzone do -13 dBFS). Drobne: kompresor przy wyjściu mono brzmi inaczej z włączonym pogłosem; G15 nie sprawdza samego duckingu; testy narożników sprawdzają starą ścieżkę barwy; dioda kroku 3 przy trzymanym rollu; freeze gaśnie szybciej niż w D36 (do -9 dB w 5 min przy małym rozmiarze). Agent w tle poprawia wszystkie 6, testy najpierw."
+    },
+    {
+      "n": 409,
+      "at": "2026-10-31 05:49",
+      "text": "05:49 Poprawki z przeglądu pogłosu gotowe (d0aa80a, 0e259a7, 633b047; wypchnięte). Wybudzenie startuje od zera (resztki 0 zamiast 7848 LSB). Freeze gaśnie o 0,27-0,50 dB/min przy każdym rozmiarze (wcześniej do 1,84). Efekt slotu zachowuje liczbę kanałów wyjścia z włączonym pogłosem (kompresor mono jak w v0.3, test M24). G15 sprawdza teraz sam ducking (cisza pod stopą). Narożniki testują barwę przez Reverb_setTone. Dioda kroku 3 poprawna. G14 i G15 zatwierdzone od nowa (freeze z założenia zmienia zamrożony ogon). Host 104, emulator 184; fuzzing czysty."
+    },
+    {
+      "n": 410,
+      "at": "2026-10-31 05:49",
+      "text": "05:49 Start v0.4 A10 (wersja 0.4, odbiór, pełny fuzzing, demo pogłosu, freeze, rumble i przepisów) i A11 (kroki na LXR U20-U22 i U26, notatki do wydania v0.4, przepisy na kity) w tle."
+    },
+    {
+      "n": 411,
+      "at": "2026-10-31 06:11",
+      "text": "06:11 v0.4 A10 i A11 gotowe (28abb29 na v0.4, dbeb84b na timing-core; wypchnięte): wersja 0.4, README, pełny fuzzing (3x300 renderów, zero znalezisk), 7 nowych renderów demo (pogłos, freeze, rumble, 4 przepisy), kroki na LXR U20-U22 i U26, notatki do wydania v0.4, przepisy na kity. Raport M13: v0.4 gotowe w kodzie; częstotliwość pogłosu tymczasowa do Twojego H12."
     }
   ]
 }
