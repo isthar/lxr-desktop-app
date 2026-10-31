@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 04:34",
+    "updated": "2026-10-31 05:06",
     "phase": "Etap 2: v0.4 (atmosfera) w toku; A1-A6 gotowe, A7-A9 czekają na H12",
     "focus": "v0.4 A1-A6 gotowe na gałęzi v0.4 (36245bf): delay z tempem, filtr DJ, bufor i parametry pogłosu. Pogłos, freeze i rumble (A7-A9) po Twoim odczycie CPU (H12).",
     "branch": "timing-core",
-    "head": "a80140f",
+    "head": "c9d38cc",
     "next": "Ty: jedna sesja testowa na v0.3 (docs/lichomat/test-session-v0.3.md), najpierw H12; odsłuch build/demo/v02-*, v03-*, v04-* i build/dlc/*. Ja przy wznowieniu: CI dla v0.4, potem po H12 v0.4 A7-A11.",
-    "updated_at": "2026-10-31T04:34:00+01:00",
-    "now": "Od 04:34: agent w tle robi v0.4 A8, A9 i Q31."
+    "updated_at": "2026-10-31T05:06:00+01:00",
+    "now": "Od 05:06: lekki przegląd v0.4 A7-A9 i Q31 (agent w tle); potem poprawki, A10 (wersja 0.4, demo) i A11 (Twoje dokumenty)."
   },
   "epics": [
     {
@@ -568,16 +568,16 @@
     {
       "id": "E7.5",
       "epic": "E7",
-      "status": "do zrobienia",
-      "title": "Freeze: zamrożony, falujący ogon pogłosu, baza washy (v0.4)",
-      "updated": "2026-10-30"
+      "status": "w toku",
+      "title": "Freeze: zrobiony na gałęzi v0.4 (A8, 9588542; SHIFT + krok 3 albo NRPN 99, poziom trzyma się w 0,1 dB przez 10 s), czeka na wydanie v0.4",
+      "updated": "2026-10-31"
     },
     {
       "id": "E7.6",
       "epic": "E7",
-      "status": "do zrobienia",
-      "title": "Rumble: pogłos stopy z duckingiem (v0.4)",
-      "updated": "2026-10-30"
+      "status": "w toku",
+      "title": "Rumble: zrobiony na gałęzi v0.4 (A9, 0e985e3; pogłos ściszany obwiednią wybranego głosu, bez opóźnienia), czeka na wydanie v0.4",
+      "updated": "2026-10-31"
     }
   ],
   "milestones": [
@@ -2897,6 +2897,16 @@
       "n": 405,
       "at": "2026-10-31 04:34",
       "text": "04:34 Start v0.4 A8 (freeze, SHIFT + krok 3), A9 (rumble: ducking pogłosu przez wybrany głos) i Q31 (muzyczny zakres gałki barwy) w tle."
+    },
+    {
+      "n": 406,
+      "at": "2026-10-31 05:06",
+      "text": "05:06 v0.4 A8, A9, Q31 gotowe (9588542, 0e985e3, 1263082; wypchnięte). Freeze: SHIFT + krok 3 albo NRPN 99, poziom stoi w 0,1 dB przez 10 s, po wyłączeniu ogon spada o 46-50 dB. Rumble: pogłos ściszany obwiednią wybranego głosu, bez opóźnienia. Gałka barwy: od ciemnego LP 1,5 kHz do HP 400 Hz, końce najwyżej ok. 3 dB ciszej (wcześniej do -36 dB i cisza); usunięty offset DC po zmianie barwy. Nagrania wzorcowe G14, G15; fuzzing czysty. Host 104, emulator 183."
+    },
+    {
+      "n": 407,
+      "at": "2026-10-31 05:06",
+      "text": "05:06 Start lekkiego przeglądu v0.4 A7-A9 i Q31 (agent w tle)."
     }
   ]
 }
