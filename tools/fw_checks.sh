@@ -369,7 +369,7 @@ check_E6_10() {
 	must_call mixer_calcNextSampleBlock vsched_beginBlock vsched_applyPhase0
 	local mv=mixer_voice
 	linked mixer_voice || mv=mixer_calcNextSampleBlock
-	must_call "$mv" vsched_split vsched_applySplit vsched_endPhase
+	must_call "$mv" vsched_split vsched_phaseStep vsched_applySplit
 	# Task 10: the trigger glue keeps MIDI at fire time and posts the voice side (S8); in blk
 	# it triggers at once, as v0.4 (P7: seq_voiceSide() is not inlined)
 	must_call seq_cbTrigger seq_voiceSide

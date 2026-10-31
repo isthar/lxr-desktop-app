@@ -3,6 +3,11 @@
  * window (S5), the rings with their collapse, overflow and cap (S2, S10, S16, S20) and
  * the 16-bit MIDI stamps (S9). Built with VSCHED_TEST; built twice: cap 6, and
  * VSCHED_SPLIT_CAP=3 (ctest vsched_cap3).
+ * The persistent note phase (the amendment of S13, after the kick measurement of Task 11): a
+ * voice keeps its note's control grid, the phase phi, until its next record; each block its
+ * control step comes at phi (vsched_phaseStep()), unless a record at k <= phi cuts that step.
+ * A record at offset 0, the cap's fallback, a silent voice and a trigger outside the records
+ * (trg blk) put the voice back on the block grid.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -75,16 +80,23 @@ static void windowAt(uint32_t w0)
 	vsched_blockDone(w0 + L0);
 }
 
-/** the mixer's calls for one block */
-static void block(void)
+/** the mixer's calls for one block; bit v of silent: the mixer finds voice v silent */
+static void blockSilent(uint8_t silent)
 {
-	vsched_beginBlock();
+	vsched_beginBlock(silent);
 	vsched_applyPhase0();
 	for (uint8_t v = 0; v < VSCHED_VOICES; v++)
-		if (vsched_split(v))
+	{
+		const uint8_t k = vsched_split(v);
+		vsched_phaseStep(v);			/* before the split, which sets the phase */
+		if (k)
 			vsched_applySplit(v);
-		else if (vsched_phase(v))
-			vsched_endPhase(v);
+	}
+}
+
+static void block(void)
+{
+	blockSilent(0);
 }
 
 static void offsetsAround(uint32_t w0, uint32_t len)
@@ -133,11 +145,10 @@ TEST(vsched_offsets)
 static uint8_t kOfRecordAt(uint32_t t)
 {
 	postTimed(0, t, 1);
-	vsched_beginBlock();
+	vsched_beginBlock(0);
 	const uint8_t k = vsched_split(0);
 	vsched_applyPhase0();
 	vsched_applySplit(0);
-	vsched_endPhase(0);
 	return k;
 }
 
@@ -302,7 +313,7 @@ TEST(vsched_rings)
 	postTimed(1, w0 + 20u * L0 / 32u, 61);
 	vsched_post(&(vsched_rec_t){ .track = 3, .note = 62, .vel = 5, .flags = VS_SRC_ONESHOT });	/* untimed */
 	postTimed(6, w0 + L0, 63);				/* the open hat: the next block */
-	vsched_beginBlock();
+	vsched_beginBlock(0);
 	ASSERT_EQ(vsched_split(0), 32);
 	ASSERT_EQ(vsched_split(1), 40);
 	ASSERT_EQ(vsched_split(3), 0);
@@ -333,14 +344,17 @@ TEST(vsched_rings)
 
 	vsched_blockDone(w0 + 2u * L0);				/* the next block: the hat at 0, the phases */
 	ncalls = 0;
-	vsched_beginBlock();
+	vsched_beginBlock(0);
 	ASSERT_EQ(vsched_phase(0), 32);
 	ASSERT_EQ(vsched_phase(1), 40);
 	vsched_applyPhase0();
 	ASSERT_EQ(ncalls, 1);
 	ASSERT_EQ(calls[0].track, 6);
-	vsched_endPhase(0);
-	vsched_endPhase(1);
+	ASSERT_EQ(vsched_phaseStep(0), 32);			/* the notes' second control steps */
+	ASSERT_EQ(vsched_phaseStep(1), 40);
+	ASSERT_EQ(vsched_phaseStep(5), 0);			/* the hat at 0: on the block grid */
+	ASSERT_EQ(vsched_phase(0), 32);				/* kept for the next block */
+	ASSERT_EQ(vsched_phase(1), 40);
 	vsched_stats(&st);
 	ASSERT_EQ(st.splits, 2);
 	ASSERT_EQ(st.phaseSplits, 2);
@@ -389,66 +403,145 @@ TEST(vsched_rings)
 	ASSERT_EQ(ncalls, 0);
 }
 
-TEST(vsched_rings_phase_replaced)
+TEST(vsched_rings_phase_persists)
 {
-	/* spec 4.2, both in one block: a record at k2 in the block where voice 0's phase k1 is pending
-	 * splits it at k2 (the control path skipped the voice: the old note's first step runs on to
-	 * k2), and its split sets the phase k2; the replaced phase split is not counted (review of
-	 * Task 7). k2 after k1 and before it */
-	static const uint8_t ks[2][2] = { { 16, 40 }, { 40, 16 } };
+	/* the persistent note phase: a note at k keeps its control grid. Every later block without a
+	 * record of its voice has its control step at k (counted once per block), as many blocks as
+	 * the note sounds; a record at offset 0 ends it before the control path (S12) */
 	vsched_stats_t st;
-	for (unsigned c = 0; c < 2; c++)
-	{
-		reset();
-		windowAt(5000u);
-		postTimed(0, 5000u + ks[c][0] * L0 / 64u, 1);
-		vsched_beginBlock();
-		ASSERT_EQ(vsched_split(0), ks[c][0]);
-		vsched_applyPhase0();
-		vsched_applySplit(0);
-		ASSERT_EQ(vsched_phase(0), ks[c][0]);
-		vsched_blockDone(5000u + 2u * L0);
-		postTimed(0, 5000u + L0 + ks[c][1] * L0 / 64u, 2);
-		vsched_beginBlock();
-		ASSERT_EQ(vsched_split(0), ks[c][1]);
-		ASSERT_EQ(vsched_phase(0), ks[c][0]);	/* pending: the control path skips voice 0 */
-		vsched_applyPhase0();
-		ASSERT_EQ(vsched_phase(0), ks[c][0]);
-		ASSERT_EQ(triggers(), 1);
-		vsched_applySplit(0);
-		ASSERT_EQ(vsched_split(0), 0);
-		ASSERT_EQ(vsched_phase(0), ks[c][1]);	/* the new note's */
-		ASSERT_EQ(triggers(), 2);
-		ASSERT_EQ(calls[3].what, 't');		/* slide, 1, slide, 2 */
-		ASSERT_EQ(calls[3].a, 2);
-		vsched_blockDone(5000u + 3u * L0);
-		vsched_beginBlock();
-		ASSERT_EQ(vsched_split(0), 0);
-		ASSERT_EQ(vsched_phase(0), ks[c][1]);
-		vsched_applyPhase0();
-		vsched_endPhase(0);
-		ASSERT_EQ(vsched_phase(0), 0);
-		vsched_stats(&st);
-		ASSERT_EQ(st.splits, 2);
-		ASSERT_EQ(st.phaseSplits, 1);
-	}
-	/* a record at offset 0 there: the new note's first control step is the block's (S12), the
-	 * phase goes before the control path */
 	reset();
 	windowAt(5000u);
-	postTimed(0, 5000u + L0 / 4u, 1);
+	postTimed(0, 5000u + 24u * L0 / 64u, 1);
+	postTimed(3, 5000u + 50u * L0 / 64u, 2);
 	block();
-	ASSERT_EQ(vsched_phase(0), 16);
-	vsched_blockDone(5000u + 2u * L0);
-	postTimed(0, 5000u + L0, 2);
-	vsched_beginBlock();
+	ASSERT_EQ(vsched_phase(0), 24);
+	ASSERT_EQ(vsched_phase(3), 50);
+	for (uint32_t b = 2; b < 202u; b++)
+	{
+		vsched_blockDone(5000u + b * L0);
+		vsched_beginBlock(0);
+		ASSERT_EQ(vsched_phase(0), 24);			/* pending: the control path skips the voice */
+		vsched_applyPhase0();
+		ASSERT_EQ(vsched_split(0), 0);
+		ASSERT_EQ(vsched_phaseStep(0), 24);
+		ASSERT_EQ(vsched_phaseStep(3), 50);
+		ASSERT_EQ(vsched_phaseStep(1), 0);
+		ASSERT_EQ(vsched_phase(0), 24);
+	}
+	vsched_stats(&st);
+	ASSERT_EQ(st.splits, 2);
+	ASSERT_EQ(st.phaseSplits, 400);
+	/* a record at offset 0: the new note's first control step is the block's */
+	vsched_blockDone(5000u + 202u * L0);
+	postTimed(0, 5000u + 201u * L0, 3);
+	vsched_beginBlock(0);
 	ASSERT_EQ(vsched_split(0), 0);
-	ASSERT_EQ(vsched_phase(0), 16);
+	ASSERT_EQ(vsched_phase(0), 24);
 	vsched_applyPhase0();
 	ASSERT_EQ(vsched_phase(0), 0);
-	ASSERT_EQ(triggers(), 2);
+	ASSERT_EQ(vsched_phase(3), 50);			/* the other voice keeps its own */
+	ASSERT_EQ(triggers(), 3);
+	ASSERT_EQ(vsched_phaseStep(0), 0);
 	vsched_stats(&st);
-	ASSERT_EQ(st.phaseSplits, 0);
+	ASSERT_EQ(st.phaseSplits, 400);
+	vsched_blockDone(5000u + 203u * L0);
+	block();
+	ASSERT_EQ(vsched_phase(0), 0);				/* and it stays on the block grid */
+	vsched_stats(&st);
+	ASSERT_EQ(st.phaseSplits, 401);			/* voice 3's */
+}
+
+TEST(vsched_rings_phase_retrigger)
+{
+	/* a record at k2 over a note with phase k1, three blocks after the note: k2 > k1, the note's
+	 * step at k1 comes first (counted), then the split; k2 <= k1, the split cuts the step that
+	 * began at k1 in the block before (not counted); k2 = k1 is one boundary. Either way the new
+	 * note's phase is k2, and it persists */
+	static const uint8_t ks[][2] = { { 16, 40 }, { 40, 16 }, { 24, 24 }, { 2, 62 }, { 62, 2 } };
+	vsched_stats_t st;
+	for (unsigned c = 0; c < sizeof ks / sizeof ks[0]; c++)
+	{
+		const uint8_t k1 = ks[c][0], k2 = ks[c][1];
+		reset();
+		windowAt(5000u);
+		postTimed(0, 5000u + k1 * L0 / 64u, 1);
+		block();
+		ASSERT_EQ(vsched_phase(0), k1);
+		for (uint32_t b = 2; b < 4u; b++)
+		{
+			vsched_blockDone(5000u + b * L0);
+			block();
+		}
+		vsched_blockDone(5000u + 4u * L0);
+		postTimed(0, 5000u + 3u * L0 + k2 * L0 / 64u, 2);
+		vsched_beginBlock(0);
+		ASSERT_EQ(vsched_split(0), k2);
+		ASSERT_EQ(vsched_phase(0), k1);
+		vsched_applyPhase0();
+		ASSERT_EQ(vsched_phase(0), k1);
+		ASSERT_EQ(triggers(), 1);
+		ASSERT_EQ(vsched_phaseStep(0), k1 < k2 ? k1 : 0);
+		vsched_applySplit(0);
+		ASSERT_EQ(vsched_split(0), 0);
+		ASSERT_EQ(vsched_phase(0), k2);			/* the new note's */
+		ASSERT_EQ(triggers(), 2);
+		ASSERT_EQ(calls[3].what, 't');			/* slide, 1, slide, 2 */
+		ASSERT_EQ(calls[3].a, 2);
+		vsched_stats(&st);
+		ASSERT_EQ(st.splits, 2);
+		ASSERT_EQ(st.phaseSplits, 2u + (k1 < k2));	/* blocks 2 and 3, and the step before k2 */
+		vsched_blockDone(5000u + 5u * L0);
+		vsched_beginBlock(0);
+		ASSERT_EQ(vsched_split(0), 0);
+		ASSERT_EQ(vsched_phase(0), k2);
+		vsched_applyPhase0();
+		ASSERT_EQ(vsched_phaseStep(0), k2);
+		ASSERT_EQ(vsched_phase(0), k2);
+	}
+}
+
+TEST(vsched_rings_phase_silent)
+{
+	/* a voice that the mixer finds silent (its amp EG ended, its step's gain 0) drops its phase
+	 * before the plan: no control step at the phase; a record of it in that block splits as on
+	 * the block grid. A trigger outside the records (trg blk, v0.4's path) also puts its voice
+	 * back on the block grid, and leaves its records */
+	vsched_stats_t st;
+	reset();
+	windowAt(5000u);
+	postTimed(0, 5000u + 10u * L0 / 64u, 1);
+	postTimed(2, 5000u + 30u * L0 / 64u, 2);
+	postTimed(5, 5000u + 44u * L0 / 64u, 3);
+	block();
+	vsched_blockDone(5000u + 2u * L0);
+	postTimed(2, 5000u + L0 + 20u * L0 / 64u, 4);		/* voice 2: silent, and a record at 20 */
+	vsched_beginBlock((uint8_t)((1u << 0) | (1u << 2)));
+	ASSERT_EQ(vsched_phase(0), 0);
+	ASSERT_EQ(vsched_phase(2), 0);
+	ASSERT_EQ(vsched_phase(5), 44);
+	ASSERT_EQ(vsched_split(2), 20);
+	vsched_applyPhase0();
+	ASSERT_EQ(vsched_phaseStep(0), 0);
+	ASSERT_EQ(vsched_phaseStep(2), 0);
+	ASSERT_EQ(vsched_phaseStep(5), 44);
+	vsched_applySplit(2);
+	ASSERT_EQ(vsched_phase(2), 20);
+	vsched_stats(&st);
+	ASSERT_EQ(st.phaseSplits, 1);
+	ASSERT_EQ(triggers(), 4);
+
+	vsched_triggerNow(6);					/* the open hat: voice 5 */
+	ASSERT_EQ(vsched_phase(5), 0);
+	ASSERT_EQ(vsched_phase(2), 20);
+	postTimed(2, 5000u + 3u * L0, 5);			/* waits for the next block */
+	vsched_triggerNow(2);
+	ASSERT_EQ(vsched_phase(2), 0);
+	vsched_blockDone(5000u + 3u * L0);
+	block();
+	ASSERT_EQ(triggers(), 4);
+	vsched_blockDone(5000u + 4u * L0);
+	block();
+	ASSERT_EQ(triggers(), 5);				/* the record kept its place */
 }
 
 TEST(vsched_cap)
@@ -462,7 +555,7 @@ TEST(vsched_cap)
 		windowAt(77777u);
 		for (uint8_t v = 0; v < voices; v++)
 			postTimed(v, 77777u + L0 / 4u, 1);
-		vsched_beginBlock();
+		vsched_beginBlock(0);
 		for (uint8_t v = 0; v < voices; v++)
 			ASSERT_EQ(vsched_split(v), extra ? 0 : 16);
 		vsched_applyPhase0();
@@ -480,11 +573,53 @@ TEST(vsched_cap)
 		vsched_blockDone(77777u + 2u * L0);
 		for (uint8_t v = 1; v <= VSCHED_SPLIT_CAP; v++)
 			postTimed(v, 77777u + L0 + L0 / 2u, 1);
-		vsched_beginBlock();
+		vsched_beginBlock(0);
 		ASSERT_EQ(vsched_phase(0), 0);
 		ASSERT_EQ(vsched_split(1), 0);
 		vsched_stats(&st);
 		ASSERT_EQ(st.capFallbacks, 1);
+	}
+}
+
+TEST(vsched_cap_phases)
+{
+	/* the persistent note phase under the cap: CAP voices keep their phases block after block (no
+	 * fallback); a record of one more voice makes CAP + 1 and the block falls back, every phase
+	 * cleared, and the voices stay on the block grid afterwards. A voice found silent drops its
+	 * phase before the count */
+	vsched_stats_t st;
+	for (int silentOne = 0; silentOne < 2; silentOne++)
+	{
+		reset();
+		windowAt(77777u);
+		for (uint8_t v = 0; v < VSCHED_SPLIT_CAP; v++)
+			postTimed(v, 77777u + (uint32_t)(2u * v + 10u) * L0 / 64u, 1);
+		block();
+		for (uint32_t b = 2; b < 6u; b++)
+		{
+			vsched_blockDone(77777u + b * L0);
+			block();
+		}
+		for (uint8_t v = 0; v < VSCHED_SPLIT_CAP; v++)
+			ASSERT_EQ(vsched_phase(v), 2u * v + 10u);
+		vsched_stats(&st);
+		ASSERT_EQ(st.capFallbacks, 0);
+		ASSERT_EQ(st.phaseSplits, 4u * VSCHED_SPLIT_CAP);
+		if (VSCHED_SPLIT_CAP == VSCHED_VOICES)
+			continue;
+		vsched_blockDone(77777u + 6u * L0);
+		postTimed(VSCHED_SPLIT_CAP, 77777u + 5u * L0 + L0 / 2u, 2);
+		blockSilent((uint8_t)(silentOne ? 1u : 0u));
+		vsched_stats(&st);
+		ASSERT_EQ(st.capFallbacks, silentOne ? 0 : 1);
+		ASSERT_EQ(vsched_phase(0), 0);
+		for (uint8_t v = 1; v < VSCHED_SPLIT_CAP; v++)
+			ASSERT_EQ(vsched_phase(v), silentOne ? 2u * v + 10u : 0u);
+		ASSERT_EQ(vsched_phase(VSCHED_SPLIT_CAP), silentOne ? 32 : 0);
+		vsched_blockDone(77777u + 7u * L0);
+		block();
+		ASSERT_EQ(vsched_phase(VSCHED_SPLIT_CAP), silentOne ? 32 : 0);
+		ASSERT_EQ(vsched_phase(1), silentOne ? 12 : 0);
 	}
 }
 

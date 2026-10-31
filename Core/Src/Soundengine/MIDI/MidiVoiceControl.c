@@ -22,7 +22,7 @@
 #include "Soundengine/TriggerOut.h"
 #include "Soundengine/MIDI/Uart.h"
 #include "Soundengine/MIDI/MidiParser.h"
-#include "Soundengine/vsched.h"	//LICHOMAT v0.5: checks voiceControl_trigger()'s declaration
+#include "Soundengine/vsched.h"	//LICHOMAT v0.5: checks voiceControl_trigger()'s declaration; vsched_triggerNow()
 //#include "LCD_driver.h"
 uint8_t voiceStatus[NUM_DRUM_VOICES];
 static uint8_t active_voices=0;	// which voices are currently playing a note
@@ -55,6 +55,7 @@ void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
 {
 	active_voices |= (1<<voice);
 
+	vsched_triggerNow(voice);	//LICHOMAT v0.5: a trigger at once (trg blk): the voice on the block grid
 	voiceControl_trigger(voice, note, vel);	//LICHOMAT v0.5: fw 1.7's four cases, moved
 	
 	//Send trigger out signal

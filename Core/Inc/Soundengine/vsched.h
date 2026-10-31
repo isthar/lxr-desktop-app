@@ -57,7 +57,7 @@ typedef struct
 	uint32_t late;		/**< records more than 2 frames before their window, at offset 0 (S11) */
 	uint32_t overflow;	/**< records dropped by a full ring, the oldest (S16) */
 	uint32_t splits;	/**< record splits */
-	uint32_t phaseSplits;	/**< phase splits (S13) */
+	uint32_t phaseSplits;	/**< phase splits: a voice's control step at its phase, one per voice and block (S13) */
 	uint32_t capFallbacks;	/**< blocks that needed more than VSCHED_SPLIT_CAP splits (S20) */
 	uint32_t offTick;	/**< posts outside seq_tick(), dropped (S17, P9) */
 } vsched_stats_t;
@@ -106,18 +106,29 @@ static inline uint8_t vsched_voiceOf(uint8_t track)
 void vsched_blockDone(uint32_t t);
 /** queue a trigger on its voice's ring; a full ring drops the oldest (S16) */
 void vsched_post(const vsched_rec_t *r);
-/** the mixer, once per block in this order: read the window and plan every voice (its
+/* The phase (S13, amended after Task 11's kick measurement: the persistent note phase). A note
+ * that starts at offset k keeps its control grid: each of its control steps comes at k of a
+ * block and lasts 64 samples, its two parts in two blocks, until the voice's next record. A
+ * record at k' sets the phase k'; a record at offset 0, the cap's fallback (S20), a voice that
+ * the mixer finds silent and a trigger outside the records (trg blk) set it to 0, the block grid */
+
+/** the mixer, once per block in this order: drop the phase of each voice whose bit is set in
+ * silent (its amp EG ended, its step's gain 0); read the window and plan every voice (its
  * records' offsets, the collapse S2, the cap S20); ... */
-void vsched_beginBlock(void);
+void vsched_beginBlock(uint8_t silent);
 /** ... S12: apply every voice's records due at offset 0 (that voice's phase ends) ... */
 void vsched_applyPhase0(void);
-/** ... then per voice: its record split 2..62 or 0, its pending phase 2..62 or 0 (S13) ... */
+/** ... then per voice: its record split 2..62 or 0, its phase 2..62 or 0 (S13) ... */
 uint8_t vsched_split(uint8_t v);
 uint8_t vsched_phase(uint8_t v);
-/** ... at its split: apply its due records in order, and set its phase to the offset ... */
+/** ... its note's control step in this block, before its split: the phase when it has one and
+ * no record at k <= phase cuts the step (counted as a phase split), else 0 ... */
+uint8_t vsched_phaseStep(uint8_t v);
+/** ... at its split: apply its due records in order, and set its phase to the offset */
 void vsched_applySplit(uint8_t v);
-/** ... after its phase split: clear its phase */
-void vsched_endPhase(uint8_t v);
+/** a trigger of the track at once, outside the records (trg blk, v0.4's path, in the
+ * seq_tick() context): its voice goes back to the block grid; its records stay */
+void vsched_triggerNow(uint8_t track);
 
 void vsched_stats(vsched_stats_t *out);
 /** the window the next vsched_beginBlock() reads: 1 and [*w0, *w0 + *len), or 0 if none */

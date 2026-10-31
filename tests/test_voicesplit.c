@@ -9,15 +9,19 @@
  *    of one 64-sample call: bit for bit for the snare, cymbal and hi-hat, within
  *    1 LSB for Drum 1-3 (whose gain ramp is split, not changed).
  * 2. A silent voice triggered at k: [0, k) stays silent, and from k on its samples
- *    are those of the same trigger at offset 0, for the 128 - k samples up to the
- *    next block boundary after its second control step (S13: the first step lasts a
- *    whole block, the second ends at the block grid).
+ *    are those of the same trigger at offset 0 for the whole note, until it has ended
+ *    (the persistent note phase: every control step of the note comes at k and lasts
+ *    64 samples, its two parts in two blocks).
  * 3. The snap at transient pitch 4 (+24 semitones for its first step, SnapEg 0.2 per
  *    block) is one of the sounds of 2, so its first step lasts 64 samples from k.
  * 4. A retrigger at k over a ringing note: [0, k) is the old note's, and a drum's new step
  *    ramps from the old step's gain at its last sample (review of Task 7).
- * 5. A drum's first step that a record at k2 > phi cuts in the next block, 64 - phi + k2
- *    samples: past its 64th sample the ramp holds its target, the next step ramps from it.
+ * 5. A retrigger at k2 over a note whose phase is phi, two blocks after its onset: [0, k2) is
+ *    the note's as without the retrigger; a drum's new step ramps from the gain the old step
+ *    reached: k2 < phi cuts the step that began at phi in the block before at 64 - phi + k2
+ *    samples, k2 = phi ends it whole, k2 > phi cuts the step that began at phi at k2 - phi.
+ * 6. voices_silent(): once it holds at a block's start, the voice renders only zeros until its
+ *    next trigger, with its phase kept or dropped; it holds within 2 blocks of the amp EG's end.
  *
  * The stand-ins: the LFOs, the modulation nodes and the faders (1.0); GetRngValue()
  * is a counter the test resets.
@@ -129,30 +133,32 @@ static void trigger(uint8_t v)
 	}
 }
 
-/** one block of voice v as the mixer runs it: the block's control step (unless a
- * phase phi is pending), then the render, split at k (with a trigger) or at phi */
+/** one block of voice v as the mixer runs it, with the voice's phase phi (0: the block
+ * grid) and a record split at k (a trigger there if trig): the block's control step on the
+ * block grid; with a phase, the note's control step at phi, unless the split at k <= phi
+ * cuts the step that began at phi in the block before; the split's control step at k.
+ * Returns the voice's phase after the block */
 static uint8_t block(uint8_t v, int16_t *out, uint8_t phi, uint8_t k, int trig)
 {
+	uint8_t pos = 0;
 	if (!phi)
 		voices_control(v);
-	if (k)
-	{
-		voices_render(v, out, k);
-		if (trig)
-			trigger(v);
-		voices_control(v);
-		voices_render(v, out + k, (uint8_t)(BLOCK - k));
-		return k;
-	}
-	if (phi)
+	else if (!k || phi < k)
 	{
 		voices_render(v, out, phi);
 		voices_control(v);
-		voices_render(v, out + phi, (uint8_t)(BLOCK - phi));
-		return 0;
+		pos = phi;
 	}
-	voices_render(v, out, BLOCK);
-	return 0;
+	if (k)
+	{
+		voices_render(v, out + pos, (uint8_t)(k - pos));
+		if (trig)
+			trigger(v);
+		voices_control(v);
+		pos = k;
+	}
+	voices_render(v, out + pos, (uint8_t)(BLOCK - pos));
+	return k ? k : phi;
 }
 
 static void *stateOf(uint8_t v, size_t *n)
@@ -234,7 +240,9 @@ TEST(voice_split_without_trigger)
 //------------------------------------------------------------------------------
 // 2, 3: a trigger at k
 //------------------------------------------------------------------------------
-/** a silent voice (settled smoothers), triggered at offset k of a block; three
+#define NOTE_BLOCKS 64	/* 93 ms: every note of setSound() ends within it */
+
+/** a silent voice (settled smoothers), triggered at offset k of a block; NOTE_BLOCKS
  * blocks into out, as the mixer plays them */
 static void hit(uint8_t v, const sound_t *s, uint8_t k, int16_t *out)
 {
@@ -243,39 +251,34 @@ static void hit(uint8_t v, const sound_t *s, uint8_t k, int16_t *out)
 	for (int b = 0; b < 200; b++)			/* 12,800 samples: the one-pole smoothers settle */
 		block(v, buf, 0, 0, 0);
 	if (k == 0)
-	{
 		trigger(v);
-		block(v, out, 0, 0, 0);
-		block(v, out + BLOCK, 0, 0, 0);
-	}
-	else
-	{
-		const uint8_t phi = block(v, out, 0, k, 1);
-		block(v, out + BLOCK, phi, 0, 0);
-	}
-	block(v, out + 2 * BLOCK, 0, 0, 0);
+	uint8_t phi = block(v, out, 0, k, k != 0);
+	for (int b = 1; b < NOTE_BLOCKS; b++)
+		phi = block(v, out + b * BLOCK, phi, 0, 0);
 }
 
 TEST(voice_split_trigger_at_k)
 {
 	static const sound_t sounds[] = { { 0, 1, 1 }, { 0, 0, 1 }, { 1, 1, 1 }, { 1, 0, 0 } };
-	__attribute__((aligned(4))) int16_t a[3 * BLOCK], b[3 * BLOCK];
+	static __attribute__((aligned(4))) int16_t a[NOTE_BLOCKS * BLOCK], b[NOTE_BLOCKS * BLOCK];
 	for (unsigned si = 0; si < sizeof sounds / sizeof sounds[0]; si++)
 		for (uint8_t v = 0; v < VOICES_COUNT; v++)
 		{
 			hit(v, &sounds[si], 0, a);
-			int loud = 0;
+			int loud = 0, ended = 1;
 			for (int i = 0; i < BLOCK; i++)
 				loud |= a[i] > 1000 || a[i] < -1000;
+			for (int i = (NOTE_BLOCKS - 2) * BLOCK; i < NOTE_BLOCKS * BLOCK; i++)
+				ended &= a[i] == 0;
 			ASSERT_TRUE(loud);
+			ASSERT_TRUE(ended);				/* the comparison covers the whole note */
 			for (uint8_t k = 2; k < BLOCK; k += 2)
 			{
 				hit(v, &sounds[si], k, b);
 				for (int i = 0; i < k; i++)
 					ASSERT_EQ(b[i], 0);			/* silent before its onset */
-				/* from k: the k = 0 render's first 128 - k samples (step 1 whole, step 2
-				 * up to the block grid) */
-				ASSERT_TRUE(maxDiff(b + k, a, 2 * BLOCK - k) <= 1);
+				/* from k: the k = 0 render, the whole note */
+				ASSERT_TRUE(maxDiff(b + k, a, NOTE_BLOCKS * BLOCK - k) <= 1);
 			}
 		}
 }
@@ -338,36 +341,60 @@ TEST(voice_split_ringing_tail)
 		}
 }
 
-TEST(voice_split_past_64)
+TEST(voice_split_retrigger_phase)
 {
-	/* a drum note's first step from a split at phi runs on to a record at k2 in the next block,
-	 * 64 - phi + k2 samples (spec 4.2, both in one block). From k2 > phi its ramp is past its 64th
-	 * sample, where it holds the target (bufferTool_addGainRamp()), and the next step ramps from the
-	 * target; at k2 < phi from the gain at its last sample, as at any split */
-	__attribute__((aligned(4))) int16_t buf[BLOCK];
+	/* a note at phi, retriggered at k2 two blocks after its onset (spec 4.2 amended, the persistent
+	 * note phase): [0, k2) is the note's as without the retrigger, bit for bit, for every voice; a
+	 * drum's new step ramps from the gain at the last sample of the step that k2 cuts: k2 < phi, the
+	 * step from phi of the block before at its sample 64 - phi + k2; k2 = phi, that step whole, its
+	 * target; k2 > phi, the step from phi of this block at its sample k2 - phi */
+	__attribute__((aligned(4))) int16_t buf[BLOCK], a[BLOCK], b[BLOCK];
 	static const uint8_t phis[] = { 2, 20, 40, 62 };
-	for (uint8_t v = 0; v < 3; v++)
+	for (uint8_t v = 0; v < VOICES_COUNT; v++)
 		for (unsigned p = 0; p < sizeof phis; p++)
-			for (uint8_t k2 = 2; k2 < BLOCK; k2 += 4)
+			for (uint8_t k2 = 2; k2 < BLOCK; k2 += 2)
 			{
 				const uint8_t phi = phis[p];
-				setSound(&rampAttack);
-				for (int n = 0; n < 200; n++)
-					block(v, buf, 0, 0, 0);
-				block(v, buf, 0, phi, 1);		/* the note at phi: its first step */
-				const double last = voiceArray[v].lastGain, target = voiceArray[v].ampFilterInput;
-				ASSERT_TRUE(target > last);
-				voices_render(v, buf, k2);		/* the phase pending: no control step before */
-				trigger(v);
-				voices_control(v);
-				voices_render(v, buf + k2, (uint8_t)(BLOCK - k2));
-				const unsigned n = (unsigned)(BLOCK - phi + k2);
-				if (n >= BLOCK)
+				double last = 0., target = 0., lastAt = 0., targetAt = 0.;
+				for (int retrigger = 0; retrigger < 2; retrigger++)
+				{
+					setSound(&rampAttack);
+					for (int n = 0; n < 200; n++)
+						block(v, buf, 0, 0, 0);
+					uint8_t ph = block(v, buf, 0, phi, 1);	/* the note at phi: its first step */
+					ph = block(v, buf, ph, 0, 0);		/* its second step, from phi */
+					ASSERT_EQ(ph, phi);
+					if (v < 3)
+					{
+						last = voiceArray[v].lastGain;
+						target = voiceArray[v].ampFilterInput;
+					}
+					if (!retrigger)
+					{
+						block(v, a, ph, 0, 0);		/* its third step, from phi */
+						if (v < 3)
+						{
+							lastAt = voiceArray[v].lastGain;
+							targetAt = voiceArray[v].ampFilterInput;
+						}
+						continue;
+					}
+					ASSERT_EQ(block(v, b, ph, k2, 1), k2);
+				}
+				ASSERT_TRUE(maxDiff(a, b, k2) == 0);
+				if (v >= 3)
+					continue;
+				ASSERT_TRUE(target > last);			/* the steps ramp (the attack) */
+				ASSERT_TRUE(targetAt > lastAt);
+				if (k2 < phi)
+					ASSERT_NEAR(voiceArray[v].lastGain, cutGain((float)last, (float)target, (unsigned)(BLOCK - phi + k2)), 1e-6);
+				else if (k2 == phi)
 					ASSERT_EQ_DBL(voiceArray[v].lastGain, target);
 				else
-					ASSERT_NEAR(voiceArray[v].lastGain, cutGain(last, target, n), 1e-6);
+					ASSERT_NEAR(voiceArray[v].lastGain, cutGain((float)lastAt, (float)targetAt, (unsigned)(k2 - phi)), 1e-6);
 			}
-	/* the ramp past its last sample holds its value there */
+	/* the ramp past its last sample holds its value there (a step is never longer than 64
+	 * samples now; the clamp stays) */
 	int16_t r[30];
 	for (int i = 0; i < 30; i++)
 		r[i] = 10000;
@@ -375,6 +402,68 @@ TEST(voice_split_past_64)
 	ASSERT_TRUE(r[0] < r[13]);
 	for (int i = 13; i < 30; i++)				/* samples 63 to 79 of the step */
 		ASSERT_EQ(r[i], r[13]);
+}
+
+//------------------------------------------------------------------------------
+// 6: voices_silent()
+//------------------------------------------------------------------------------
+static const SlopeEg2 *egOf(uint8_t v)
+{
+	switch (v)
+	{
+	case 0: case 1: case 2:	return &voiceArray[v].oscVolEg;
+	case 3:			return &snareVoice.oscVolEg;
+	case 4:			return &cymbalVoice.oscVolEg;
+	default:		return &hatVoice.oscVolEg;
+	}
+}
+
+TEST(voice_split_silent)
+{
+	/* each voice and sound, a note at k (0, or a phase): voices_silent() is false at the start of
+	 * its first blocks; from the first block where it holds, the voice renders only zeros, with
+	 * its phase kept or dropped (the mixer drops it), for 40 blocks; it holds within 2 blocks of
+	 * the amp EG's end (the gain of the step at the end, then lastGain, reach 0). The shaped EG
+	 * renders zeros earlier than that: a drum of decay 0.02 from about block 19, its EG ends at
+	 * 50; the predicate waits for the EG */
+	static const sound_t sounds[] = { { 0, 1, 1 }, { 0, 0, 1 }, { 1, 1, 1 }, { 1, 0, 0 } };
+	static const uint8_t ks[] = { 0, 2, 34, 62 };
+	__attribute__((aligned(4))) int16_t buf[BLOCK];
+	for (unsigned si = 0; si < sizeof sounds / sizeof sounds[0]; si++)
+		for (uint8_t v = 0; v < VOICES_COUNT; v++)
+			for (unsigned ki = 0; ki < sizeof ks; ki++)
+				for (int drop = 0; drop < 2; drop++)
+				{
+					const uint8_t k = ks[ki];
+					setSound(&sounds[si]);
+					for (int n = 0; n < 200; n++)
+						block(v, buf, 0, 0, 0);
+					if (k == 0)
+						trigger(v);
+					uint8_t phi = block(v, buf, 0, k, k != 0);
+					int egEnd = 0, b = 1;
+					for (; b < 200 && !voices_silent(v); b++)
+					{
+						if (!egEnd && voices_egEnded(egOf(v)))
+							egEnd = b;
+						phi = block(v, buf, phi, 0, 0);
+					}
+					ASSERT_TRUE(b < 200);
+					ASSERT_TRUE(b > 4);			/* not at the note's start */
+					ASSERT_TRUE(egEnd > 0 || voices_egEnded(egOf(v)));
+					ASSERT_TRUE(b - (egEnd ? egEnd : b) <= 2);
+					if (drop)
+						phi = 0;
+					int zeros = 1;
+					for (int n = 0; n < 40; n++)
+					{
+						ASSERT_TRUE(voices_silent(v));
+						phi = block(v, buf, phi, 0, 0);
+						for (int i = 0; i < BLOCK; i++)
+							zeros &= buf[i] == 0;
+					}
+					ASSERT_TRUE(zeros);
+				}
 }
 
 TEST_MAIN()

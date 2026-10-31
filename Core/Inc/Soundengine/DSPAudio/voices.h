@@ -22,6 +22,7 @@
 #include "Soundengine/DSPAudio/HiHat.h"
 #include "Soundengine/DSPAudio/ResonantFilter.h"
 #include "Soundengine/DSPAudio/lfo.h"
+#include "Soundengine/DSPAudio/SlopeEg2.h"
 
 #define VOICES_COUNT 6
 
@@ -77,6 +78,27 @@ static inline void voices_pan(const uint8_t v, float *panL, float *panR)
 	case 3:			*panL = snareVoice.triggeredPanL; *panR = snareVoice.triggeredPanR; break;
 	case 4:			*panL = cymbalVoice.triggeredPanL; *panR = cymbalVoice.triggeredPanR; break;
 	default:		*panL = hatVoice.triggeredPanL; *panR = hatVoice.triggeredPanR; break;
+	}
+}
+
+/** the amp EG has ended: stopped, or decayed to 0, where it stays until a trigger */
+static inline uint8_t voices_egEnded(const SlopeEg2 *eg)
+{
+	return (eg->state == EG_STOPPED) || ((eg->state == EG_D) && (eg->value <= 0.0));
+}
+
+/** the voice renders only zeros until its next trigger: its amp EG has ended and its current
+ * control step's gain is 0 (a drum's ramp from lastGain to ampFilterInput, the others' one
+ * gain). Each voice applies that gain after its oscillators, transient and filter, and what
+ * follows (velocity, distortion, volume) keeps 0. The mixer drops such a voice's phase */
+static inline uint8_t voices_silent(const uint8_t v)
+{
+	switch(v)
+	{
+	case 0: case 1: case 2:	return voices_egEnded(&voiceArray[v].oscVolEg) && (voiceArray[v].ampFilterInput == 0.0) && (voiceArray[v].lastGain == 0.0);
+	case 3:			return voices_egEnded(&snareVoice.oscVolEg) && (snareVoice.egValueOscVol == 0.f);
+	case 4:			return voices_egEnded(&cymbalVoice.oscVolEg) && (cymbalVoice.egValueOscVol == 0.f);
+	default:		return voices_egEnded(&hatVoice.oscVolEg) && (hatVoice.egValueOscVol == 0.f);
 	}
 }
 

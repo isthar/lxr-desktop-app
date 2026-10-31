@@ -39,7 +39,7 @@ static uint8_t vs_count[VSCHED_VOICES];
 static uint8_t vs_due[VSCHED_VOICES];		/**< bit i: vs_rec[v][i] is due in this block */
 static uint8_t vs_late[VSCHED_VOICES];		/**< bit i: and late */
 static uint8_t vs_k[VSCHED_VOICES];		/**< the collapsed offset of the due records (S2, P3) */
-static uint8_t vs_phase[VSCHED_VOICES];		/**< S13: the pending phase split, 0 = none */
+static uint8_t vs_phase[VSCHED_VOICES];		/**< S13: the offset of the note's control steps, 0 = the block grid */
 static uint32_t vs_planSerial;			/**< the window's serial, for the trigger log */
 static vsched_stats_t vs_stats;
 static vsched_trace_t vs_trace;
@@ -104,8 +104,11 @@ void vsched_post(const vsched_rec_t *r)
 	vs_rec[v][vs_count[v]++] = *r;
 }
 //------------------------------------------------------------------------------
-void vsched_beginBlock(void)
+void vsched_beginBlock(uint8_t silent)
 {
+	for (uint8_t v = 0; v < VSCHED_VOICES; v++)
+		if (silent & (1u << v))
+			vs_phase[v] = 0;			/* nothing to keep in step until its next record */
 	uint32_t w0 = 0, len = 0, serial = 0;
 	const int haveWindow = vs_window(&w0, &len, &serial);
 	vs_planSerial = serial;
@@ -194,6 +197,18 @@ uint8_t vsched_phase(uint8_t v)
 	return v < VSCHED_VOICES ? vs_phase[v] : 0;
 }
 //------------------------------------------------------------------------------
+uint8_t vsched_phaseStep(uint8_t v)
+{
+	if (v >= VSCHED_VOICES || vs_phase[v] == 0)
+		return 0;
+	/* a record at k <= phase cuts the step that began at the phase in the block before: the old
+	 * note's tail; k = phase is one boundary */
+	if (vs_k[v] && vs_k[v] <= vs_phase[v])
+		return 0;
+	vs_stats.phaseSplits++;
+	return vs_phase[v];
+}
+//------------------------------------------------------------------------------
 void vsched_applySplit(uint8_t v)
 {
 	if (v >= VSCHED_VOICES || vs_k[v] == 0)
@@ -204,13 +219,9 @@ void vsched_applySplit(uint8_t v)
 	vs_stats.splits++;
 }
 //------------------------------------------------------------------------------
-void vsched_endPhase(uint8_t v)
+void vsched_triggerNow(uint8_t track)
 {
-	if (v < VSCHED_VOICES && vs_phase[v])
-	{
-		vs_phase[v] = 0;
-		vs_stats.phaseSplits++;
-	}
+	vs_phase[vsched_voiceOf(track)] = 0;
 }
 //------------------------------------------------------------------------------
 void vsched_stats(vsched_stats_t *out)

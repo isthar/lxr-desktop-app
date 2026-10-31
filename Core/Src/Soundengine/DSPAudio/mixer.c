@@ -442,11 +442,26 @@ IN_ITCM_RAM static inline void mixer_addDataToOutputFilteredPan(uint8_t dest, co
 }
 //#pragma GCC pop_options
 //-----------------------------------------------------------------------
-//LICHOMAT v0.5: voice v's block with the voice scheduler's splits (plan v0.5 Task 7, spec 4.2):
-//- a record split at k: [0, k) with the values the voice has (the block's control step, or the
-//  old note's first step whose phase split it replaces), then its records and the LFOs it
-//  retriggers (S15), a control step, [k, 64), and the phase k for the next block;
-//- a phase split at phi (S13): [0, phi) finishes the first step, then the second step, [phi, 64);
+//LICHOMAT v0.5: bit v set: voice v is silent until its next trigger (voices_silent()), and the voice
+//scheduler drops its phase. In flash, called once per block: inlined, GCC's jump threading makes
+//the six checks 916 B of ITCM
+__attribute__((noinline)) static uint8_t mixer_silentVoices(void)
+{
+	uint8_t silent = 0;
+	for(uint8_t v = 0; v < VOICES_COUNT; v++)
+		if(voices_silent(v))
+			silent |= (uint8_t)(1u << v);
+	return silent;
+}
+//-----------------------------------------------------------------------
+//LICHOMAT v0.5: voice v's block with the voice scheduler's splits (plan v0.5 Task 7, spec 4.2),
+//with the persistent note phase phi (S13 amended): a note started at k has its control steps at
+//k of every block, 64 samples each, until the voice's next record.
+//- a phase split at phi: [0, phi) ends the step that began at phi in the block before, then the
+//  note's next step; skipped when a record at k <= phi cuts that step (the old note's tail);
+//- a record split at k: up to k with the values the voice has, then its records and the LFOs it
+//  retriggers (S15), a control step, [k, 64), and the phase k;
+//- both when phi < k: [0, phi), a step, [phi, k), the split, [k, 64);
 //- otherwise one call of 64, as fw 1.7's six sections made it.
 //The decimator runs over the whole block; [0, k) is mixed with the pan latch from before the
 //split, [k, 64) with the new one (S14).
@@ -454,30 +469,24 @@ IN_ITCM_RAM static void mixer_voice(const uint8_t v, int16_t* sampleData, int16_
 {
 	float panL0 = 0.f, panR0 = 0.f, panL, panR;
 	const uint8_t k = vsched_split(v);
+	const uint8_t phi = vsched_phaseStep(v);
+	uint8_t pos = 0;
+	if(phi)
+	{
+		voices_render(v, sampleData, phi);
+		voices_control(v);
+		pos = phi;
+	}
 	if(k)
 	{
-		voices_render(v, sampleData, k);
+		voices_render(v, sampleData + pos, (uint8_t)(k - pos));
 		voices_pan(v, &panL0, &panR0);
 		vsched_applySplit(v);
 		voices_redispatchLfos(v);
 		voices_control(v);
-		voices_render(v, sampleData + k, (uint8_t)(OUTPUT_DMA_SIZE - k));
+		pos = k;
 	}
-	else
-	{
-		const uint8_t phi = vsched_phase(v);
-		if(phi)
-		{
-			voices_render(v, sampleData, phi);
-			voices_control(v);
-			voices_render(v, sampleData + phi, (uint8_t)(OUTPUT_DMA_SIZE - phi));
-			vsched_endPhase(v);
-		}
-		else
-		{
-			voices_render(v, sampleData, OUTPUT_DMA_SIZE);
-		}
-	}
+	voices_render(v, sampleData + pos, (uint8_t)(OUTPUT_DMA_SIZE - pos));
 	//decimate voice
 	mixer_decimateBlock(v, sampleData);
 	//copy to selected dma buffer
@@ -502,9 +511,10 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
 	l2_Available = (switch_l2_GPIO_Port->IDR & switch_l2_Pin)>0;
 	r1_Available = (switch_r1_GPIO_Port->IDR & switch_r1_Pin)>0;
 
-	//LICHOMAT v0.5: the voice scheduler's plan of this block, and its records at offset 0 before
-	//the control path, where fw 1.7's triggers came (plan v0.5 Task 7, S12)
-	vsched_beginBlock();
+	//LICHOMAT v0.5: the voice scheduler's plan of this block (a silent voice back on the block
+	//grid first), and its records at offset 0 before the control path, where fw 1.7's triggers
+	//came (plan v0.5 Task 7, S12)
+	vsched_beginBlock(mixer_silentVoices());
 	vsched_applyPhase0();
 
 	modNode_resetTargets();
@@ -519,8 +529,8 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
 	lfo_dispatchNextValue(&cymbalVoice.lfo);
 	lfo_dispatchNextValue(&hatVoice.lfo);
 
-	//update filter frequencies, then calc async, in fw 1.7's order; LICHOMAT v0.5: a voice whose
-	//first control step goes on (a phase split pending, S13) keeps it until its phase
+	//update filter frequencies, then calc async, in fw 1.7's order; LICHOMAT v0.5: a voice with a
+	//phase (S13) keeps its note's step until its phase
 	for(uint8_t v = 0; v < VOICES_COUNT; v++)
 		if(!vsched_phase(v))
 			voices_filter(v);

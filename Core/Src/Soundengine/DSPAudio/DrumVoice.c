@@ -38,11 +38,12 @@ static slide_t drum_slide[3];
 static uint8_t drum_slideNext;	//bit v: the next trigger of voice v slides
 static uint8_t drum_slideKeep;	//bit v: the next trigger of voice v keeps the glide (a later hit of its step)
 //LICHOMAT v0.5: the samples of the current control step's gain ramp rendered so far, 0 at the step's
-//start; a step can be rendered in parts and run on past 64 (plan v0.5 P5, spec 4.2)
+//start; a step can be rendered in parts, in two blocks, 64 samples at most (plan v0.5 P5, spec 4.2)
 static uint8_t drum_rampPos[NUM_DRUM_VOICES];
 //---------------------------------------------------
-//LICHOMAT v0.5: a step cut short (the old note at a split, or the step after a phase split at the
-//block's end) ends at the gain of its last rendered sample, which the next step ramps from
+//LICHOMAT v0.5: a step cut short (the old note's at a record split, or a note's step that a record
+//at offset 0, the split cap or a silent voice moves back to the block grid) ends at the gain of
+//its last rendered sample, which the next step ramps from
 static void drum_endStep(const uint8_t voiceNr)
 {
 	const uint8_t pos = drum_rampPos[voiceNr];
