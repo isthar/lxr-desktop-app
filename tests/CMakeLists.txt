@@ -280,6 +280,9 @@ if(TARGET test_atmo)
     target_include_directories(test_atmo BEFORE PRIVATE stubs)
     target_include_directories(test_atmo SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
     set_source_files_properties(${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
+    # sinCos.c, TiltEq.c, TiltEq.h and 1PoleLp.h use M_PI, which the C library of Linux
+    # defines under strict C11 only with _DEFAULT_SOURCE (as for test_dsp below)
+    target_compile_definitions(test_atmo PRIVATE _DEFAULT_SOURCE)
 endif()
 # LICHOMAT v0.4 (plan A5, A6): the synced delay's arithmetic (fxsync.h) and the DJ filter's
 # math (djfilter.h), both headers
@@ -288,6 +291,7 @@ if(TARGET test_fxsync)
     # DJ3, DJ4: DjFilter.c with the stand-in HAL (__SSAT)
     target_include_directories(test_fxsync BEFORE PRIVATE stubs)
     target_include_directories(test_fxsync SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+    target_compile_definitions(test_fxsync PRIVATE _DEFAULT_SOURCE)	# M_PI, as test_atmo
 endif()
 # LICHOMAT v0.4 (plan A3): the preset manager calls the kit block's defaults and checks in
 # atmo.c, which brings the reverb with it; built without warnings as presetManager.c is.
@@ -297,6 +301,7 @@ if(TARGET test_presets)
         ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/DjFilter.c)
     set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/atmo.c
         ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/DjFilter.c PROPERTIES COMPILE_OPTIONS -w)
+    target_compile_definitions(test_presets PRIVATE _DEFAULT_SOURCE)	# M_PI, as test_atmo
 endif()
 
 # The sound engine's broken states (E4.9): test_dsp compiles the firmware's DSP
