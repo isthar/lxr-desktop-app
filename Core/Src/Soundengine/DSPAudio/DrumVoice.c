@@ -26,6 +26,7 @@
 #include "IO/adcPots.h"
 #include "Soundengine/DSPAudio/slide.h"
 #include "menu/menu.h"
+#include "Soundengine/vsched.h"	//LICHOMAT v0.5: checks Drum_setSlide()'s declaration there
 
 INDTCM static float ampSmoothValue = 0.1f;
 //---------------------------------------------------
@@ -36,6 +37,23 @@ _Static_assert(SLIDE_BLOCK == OUTPUT_DMA_SIZE, "the slide counts audio blocks");
 static slide_t drum_slide[3];
 static uint8_t drum_slideNext;	//bit v: the next trigger of voice v slides
 static uint8_t drum_slideKeep;	//bit v: the next trigger of voice v keeps the glide (a later hit of its step)
+//LICHOMAT v0.5: the samples of the current control step's gain ramp rendered so far, 0 at the step's
+//start; a step can be rendered in parts and run on past 64 (plan v0.5 P5, spec 4.2)
+static uint8_t drum_rampPos[NUM_DRUM_VOICES];
+//---------------------------------------------------
+//LICHOMAT v0.5: a step cut short (the old note at a split, or the step after a phase split at the
+//block's end) ends at the gain of its last rendered sample, which the next step ramps from
+static void drum_endStep(const uint8_t voiceNr)
+{
+	const uint8_t pos = drum_rampPos[voiceNr];
+	drum_rampPos[voiceNr] = 0;
+	if((pos == 0) || (pos >= OUTPUT_DMA_SIZE))
+		return;
+	const float gain = voiceArray[voiceNr].ampFilterInput;
+	const float lastGain = voiceArray[voiceNr].lastGain;
+	const double frac = (pos - 1)/(OUTPUT_DMA_SIZE-1.f);
+	voiceArray[voiceNr].ampFilterInput = lastGain + frac*(gain - lastGain);
+}
 
 void Drum_setSlide(const uint8_t voiceNr, const uint8_t mode)
 {
@@ -213,6 +231,7 @@ void Drum_trigger(const uint8_t voiceNr, const uint8_t vol, const uint8_t note)
 //---------------------------------------------------
 IN_ITCM_RAM void calcDrumVoiceAsync(const uint8_t voiceNr)
 {
+	drum_endStep(voiceNr);	//LICHOMAT v0.5 (plan v0.5 P5)
 
 
 	//add modulation eg to osc freq (1 = no change. a+eg = original freq + modulation
@@ -313,7 +332,9 @@ IN_ITCM_RAM void calcDrumVoiceSyncBlock(const uint8_t voiceNr, int16_t* buf, con
 #else
 	//bufferTool_addGainInterpolatedDoubleDithered(&voiceArray[voiceNr].dither, buf,voiceArray[voiceNr].ampFilterInput, voiceArray[voiceNr].lastGain, size);
 	//float
-	bufferTool_addGainInterpolated(buf,voiceArray[voiceNr].ampFilterInput, voiceArray[voiceNr].lastGain, size);
+	//LICHOMAT v0.5: this part of the step's ramp; a whole block is fw 1.7's ramp (plan v0.5 P5)
+	bufferTool_addGainRamp(buf,voiceArray[voiceNr].ampFilterInput, voiceArray[voiceNr].lastGain, drum_rampPos[voiceNr], size);
+	drum_rampPos[voiceNr] = (uint8_t)(drum_rampPos[voiceNr] + size);
 
 	//buf[i] = dither_process(voiceArray[voiceNr].dither, buf[i]
 #endif

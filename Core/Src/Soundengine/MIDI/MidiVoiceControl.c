@@ -41,19 +41,21 @@ void voiceControl_trigger(uint8_t track, uint8_t note, uint8_t vel)
 		HiHat_trigger(vel,track-5,note);
 }
 //----------------------------------------------------------------
+//LICHOMAT v0.5: the event side of a Note On, at fire time; the trigger follows as a record (S8)
+void voiceControl_noteOnEvent(uint8_t voice)
+{
+	active_voices |= (1<<voice);
+	uart_sendFrontpanelByte(NOTE_ON);
+	uart_sendFrontpanelByte(voice);
+	uart_sendFrontpanelByte(0);
+}
+//----------------------------------------------------------------
 // this fn assumes a valid voice is sent
 void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
 {
 	active_voices |= (1<<voice);
 
-	if(voice < 3)
-		Drum_trigger(voice, vel, note);
-	else if(voice < 4)
-		Snare_trigger(vel, note);
-	else if(voice < 5)
-		Cymbal_trigger(vel, note);
-	else
-		HiHat_trigger(vel,voice-5,note);
+	voiceControl_trigger(voice, note, vel);	//LICHOMAT v0.5: fw 1.7's four cases, moved
 	
 	//Send trigger out signal
 	/*

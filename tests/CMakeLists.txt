@@ -345,6 +345,27 @@ if(TARGET test_dsp)
     set_source_files_properties(${DSP_STRICT_MATH_SOURCES}
         PROPERTIES COMPILE_OPTIONS "-w;-O3;-fno-sanitize=float-cast-overflow")
 endif()
+# LICHOMAT v0.5 (plan Task 6): the voices rendered in parts (spec 9.1 dsp_split, id voice_split),
+# with test_dsp's DSP files and options
+set(VOICE_SPLIT_SOURCES
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/DrumVoice.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/Snare.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/CymbalVoice.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/HiHat.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/SlopeEg2.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/snapEg.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/transientGenerator.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/transientTables.c
+    ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/distortion.c)
+seqc_add_test(test_voicesplit IDS voice_split EXTRA ${VOICE_SPLIT_SOURCES} ${DSP_FAST_MATH_SOURCES}
+    ${DSP_STRICT_MATH_SOURCES} ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/1PoleLp.c)
+if(TARGET test_voicesplit)
+    target_include_directories(test_voicesplit BEFORE PRIVATE stubs)
+    target_include_directories(test_voicesplit SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+    target_compile_definitions(test_voicesplit PRIVATE _DEFAULT_SOURCE)
+    set_source_files_properties(${VOICE_SPLIT_SOURCES}
+        PROPERTIES COMPILE_OPTIONS "-w;-O3;-ffast-math;-freciprocal-math;-fno-sanitize=float-cast-overflow")
+endif()
 
 # The modulation nodes (stage 1b F1): test_modnode compiles the firmware's
 # modulationNode.c with the stand-in headers in stubs/. A node at destination 0,

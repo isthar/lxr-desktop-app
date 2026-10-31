@@ -170,6 +170,22 @@ static inline void bufferTool_addGainInterpolated(int16_t* buf, const float gain
 #endif
 }
 //---------------------------------------------------
+//LICHOMAT v0.5: samples [first, first + size) of bufferTool_addGainInterpolated()'s ramp over
+//OUTPUT_DMA_SIZE samples, from lastGain to gain; past its last sample it holds gain. First 0 and
+//size OUTPUT_DMA_SIZE compute what bufferTool_addGainInterpolated() computes, sample for sample
+//(plan v0.5 P5)
+static inline void bufferTool_addGainRamp(int16_t* buf, const float gain, const float lastGain, const uint8_t first, const uint8_t size)
+{
+	uint8_t i;
+	for(i=0;i<size;i++)
+	{
+		const uint8_t n = ((first + i) < OUTPUT_DMA_SIZE) ? (uint8_t)(first + i) : (uint8_t)(OUTPUT_DMA_SIZE - 1);
+		const double frac = n/(OUTPUT_DMA_SIZE-1.f);
+		const double currentGain = lastGain + frac*(gain - lastGain);
+		buf[i] = buf[i] * currentGain;
+	}
+}
+//---------------------------------------------------
 static inline void bufferTool_addGainInterpolatedDouble(int16_t* buf, const double gain, const double lastGain, const uint8_t size)
 {
 

@@ -37,6 +37,9 @@ extern uint8_t voiceStatus[NUM_DRUM_VOICES];
 //---------------------------------------------------
 //------------- Functions ---------------------------
 void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel);
+//LICHOMAT v0.5: voiceControl_noteOn() in its two halves (plan v0.5, S8): the active bit and the panel's LED byte at fire time; the voice trigger at the trigger's sample
+void voiceControl_noteOnEvent(uint8_t voice);
+void voiceControl_trigger(uint8_t track, uint8_t note, uint8_t vel);
 void voiceControl_noteOff(uint8_t voice);//0xff == all voices
 uint8_t voiceControl_isVoicePlaying(uint8_t voice);
 
