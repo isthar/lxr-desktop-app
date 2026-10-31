@@ -825,21 +825,19 @@ def M17_param_engine(t):
 def M17_param_refused(t):
     seed = t.seed()
     out = t.path('o.wav')
-    # the special cases of menu_encoderChangeParameter(), then two that do not exist;
-    # all are refused before power-on, so --out is not made
-    for spec, special in (('voice_lfo1=2', True), ('target_lfo1=3', True), ('vel_dest_1=3', True),
-                          ('nosuch=1', False), ('999=1', False)):
+    # two that do not exist, refused before power-on, so --out is not made
+    for spec in ('nosuch=1', '999=1'):
         name = spec.split('=')[0]
         p = t.run(['--card', seed, '--out', out, '--param', spec], code=1)
         lines = p.stderr.splitlines()
-        check(len(lines) == 1 and lines[0].startswith('lichomat-render: --param: parameter %s: ' % name)
-              and ('special case' in lines[0]) == special, '--param %s: %r' % (spec, p.stderr))
+        check(len(lines) == 1 and lines[0].startswith('lichomat-render: --param: parameter %s: no such' % name),
+              '--param %s: %r' % (spec, p.stderr))
         check(not os.path.exists(out), '--param %s: the WAV was made' % spec)
-    script = t.script('0ms mark a\n0ms param voice_lfo1=2\n')
+    script = t.script('0ms mark a\n0ms param nosuch=2\n')
     p = t.run(['--card', seed, '--out', out, '--events', script], code=1)
     lines = p.stderr.splitlines()
-    check(len(lines) == 1 and lines[0].startswith('lichomat-render: %s:2: ' % script) and 'voice_lfo1' in lines[0]
-          and 'special case' in lines[0], 'the param line: %r' % p.stderr)
+    check(len(lines) == 1 and lines[0].startswith('lichomat-render: %s:2: ' % script) and 'nosuch' in lines[0],
+          'the param line: %r' % p.stderr)
     check(not os.path.exists(out), 'the param line: the WAV was made')
     # a name in upper case, clamped by DTYPE_0B127; then the same parameter by number
     s, _, _ = t.render(seed, ['--seconds', '0.1', '--param', 'SHUFFLE=200'])
@@ -848,6 +846,46 @@ def M17_param_refused(t):
     s, _, _ = t.render(seed, ['--seconds', '0.1', '--param', '%d=5' % n])
     check(s['params'] == {'shuffle': 5} and s['paramNumbers'] == {'shuffle': n},
           '%d=5: params %r, paramNumbers %r' % (n, s['params'], s['paramNumbers']))
+    no_copies_left()
+
+@case
+def M17_param_targets(t):
+    """the menu's special cases: the LFO voices and the velocity and LFO targets (indices
+    into modTargets, menu/Cc2Text.c) by --param and by the param event, kept by save-kit"""
+    seed = t.seed()
+    keep = t.path('K')
+    # LFO 1 on the hihat's closed decay (196) by --param; the velocity of voice 6 to the same.
+    # The param event: LFO 2's target off its voice's range goes to the range's end; vel_dest_4
+    # below voice 4's targets goes to its first (116); LFO 5 on voice 1's filter (22) keeps
+    # the kind on voice 5 (173)
+    params = ['voice_lfo1=6', 'target_lfo1=196', 'vel_dest_6=196']
+    script = t.script('0ms param target_lfo2=250\n+20ms param vel_dest_4=5\n+20ms param target_lfo5=22\n'
+                      '+20ms param voice_lfo5=5\n+100ms save-kit 7\n+200ms save-project 0\n+100ms mark saved\n')
+    args = ['--no-start', '--seconds', '1.5', '--keep-card', keep, '--events', script]
+    for spec in params:
+        args += ['--param', spec]
+    s, _, _ = t.render(seed, args)
+    check(s['params'] == {'voice_lfo1': 6, 'target_lfo1': 196, 'vel_dest_6': 196}, 'params %r' % s['params'])
+    want = {'voice_lfo1': 6, 'target_lfo1': 196, 'vel_dest_6': 196, 'target_lfo2': 39, 'vel_dest_4': 116,
+            'voice_lfo5': 5, 'target_lfo5': 173}
+    names = s['paramNumbers']
+    for p in ('target_lfo2', 'vel_dest_4', 'voice_lfo5', 'target_lfo5'):
+        names[p] = t.render(seed, ['--no-start', '--seconds', '0.1', '--param', p + '=0'])[0]['paramNumbers'][p]
+    k7 = one_file(keep, '07-*.SND')
+    got = {p: k7[8 + names[p]] for p in want}
+    check(got == want, 'kit 7 holds %r, not %r' % (got, want))
+    # the engine takes the target: LFO 1 on voice 1's volume (32) changes the audio, its depth
+    # without a target does not
+    steps = t.script(STEPS)
+    lfo = ['--param', 'amount_lfo1=127', '--param', 'freq_lfo1=100']
+    _, plain, _ = t.render(seed, ['--no-start', '--seconds', '3', '--events', steps])
+    _, idle, _ = t.render(seed, ['--no-start', '--seconds', '3', '--events', steps] + lfo)
+    _, moved, _ = t.render(seed, ['--no-start', '--seconds', '3', '--events', steps, '--param', 'target_lfo1=32']
+                           + lfo)
+    check(samples(idle) == samples(plain), 'the LFO without a target changed the audio')
+    a, b = dbfs(plain, (0, 1), 1.7, 3.0), dbfs(moved, (0, 1), 1.7, 3.0)
+    check(samples(moved) != samples(plain) and a > -60, 'the LFO on vol1: %.1f and %.1f dBFS' % (a, b))
+    print('kit 7 holds %r; voice 1 %.1f dBFS, %.1f dBFS with LFO 1 on its volume' % (got, a, b))
     no_copies_left()
 
 def par_enumerators(header):

@@ -42,16 +42,18 @@ typedef struct rfw_param
  * parameter's table name in lower case (for a number, the last of its aliases,
  * so 250 is bpm, not beginning_of_globals), or NULL for a number without one.
  * Returns 0, or -1 with the problem in err: not NAME=VALUE, a value out of
- * range, "parameter NAME: no such parameter", or "parameter NAME:
- * menu_encoderChangeParameter() has a special case for it (spec 5.3)" for the
- * LFO voices and the modulation targets. A lookup in const tables, not a
+ * range, or "parameter NAME: no such parameter". A lookup in const tables, not a
  * firmware call: it runs at any time, also before power-on. */
 int rfw_paramParse(const char *spec, rfw_param_t *out, const char **name, char *err, size_t n);
 
 /** the menu's edit path (spec 5.3, plan P3, menu.c menu_encoderChangeParameter()):
  * clamp v by parameter_dtypes[p] as the menu does, set activeParameters[p], then
  * the menu's send: frontPanel_sendData() with MIDI_CC or CC_2 for a sound
- * parameter, menu_parseGlobalParam() for any other. arg is an rfw_param_t. */
+ * parameter, menu_parseGlobalParam() for any other. The menu's special cases come
+ * first: a velocity or LFO target (an index into modTargets, 0 off) is limited to
+ * its voice's targets and sent as CC_VELO_TARGET or CC_LFO_TARGET; an LFO's voice
+ * (1-6) moves the LFO's target to the same kind on the new voice. arg is an
+ * rfw_param_t. */
 void rfw_edit(void *arg);
 
 /** activeParameters[p] into v; arg is an rfw_param_t */

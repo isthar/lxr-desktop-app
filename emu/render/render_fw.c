@@ -168,10 +168,58 @@ static uint8_t rfw_clamp(uint16_t p, unsigned v)
 	}
 }
 
-static int rfw_paramRefused(uint16_t p)
+/* menu_encoderChangeParameter()'s special cases (M20 hashes the original), for a value set
+ * at once. A target is an index into modTargets: 0 (off) or one of the voice's own,
+ * modTargetVoiceOffsets[voice]; 1 to start - 1 give the first, as the encoder going up
+ * from off, and past the end the last. */
+static uint8_t rfw_modTarget(unsigned voice, unsigned v)
 {
-	const unsigned d = parameter_dtypes[p] & 0xFF;
-	return d == DTYPE_TARGET_SELECTION_VELO || d == DTYPE_VOICE_LFO || d == DTYPE_TARGET_SELECTION_LFO;
+	const ModTargetVoiceOffset *o = &modTargetVoiceOffsets[voice];
+	return (uint8_t)(v == 0 ? 0 : v < o->start ? o->start : v > o->end ? o->end : v);
+}
+
+/* the menu's send of target t of LFO or velocity modulator n: its parameter number */
+static void rfw_sendTarget(uint8_t cc, unsigned n, uint8_t t)
+{
+	const uint8_t value = (uint8_t)modTargets[t].param;
+	frontPanel_sendData(cc, (uint8_t)(((value & 0x80) >> 7) | ((n & 0x3f) << 1)), value & 0x7f);
+}
+
+/* the stored value of a special case, after its send; -1 for any other parameter */
+static int rfw_special(uint16_t p, unsigned v)
+{
+	switch (parameter_dtypes[p] & 0xFF)
+	{
+	case DTYPE_TARGET_SELECTION_VELO:
+	{
+		const unsigned n = p - PAR_VEL_DEST_1;
+		const uint8_t t = rfw_modTarget(n, v);
+		rfw_sendTarget(CC_VELO_TARGET, n, t);
+		return t;
+	}
+	case DTYPE_VOICE_LFO:
+	{
+		/* **LFOTARGFIX: the target keeps its kind on the new voice. The menu takes the kind
+		 * from its last target edit or kit load; this takes it from this LFO's target. */
+		const unsigned n = p - PAR_VOICE_LFO1;
+		const uint8_t voice = (uint8_t)(v < 1 ? 1 : v > 6 ? 6 : v);
+		const uint8_t t = getModTargetIdxFromGapIdx((uint8_t)(voice - 1),
+			getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1 + n]));
+		activeParameters[PAR_TARGET_LFO1 + n] = t;
+		rfw_sendTarget(CC_LFO_TARGET, n, t);
+		return voice;
+	}
+	case DTYPE_TARGET_SELECTION_LFO:
+	{
+		/* a target of the LFO's voice (1-6; a kit load makes any other 1) */
+		const unsigned n = p - PAR_TARGET_LFO1, voice = activeParameters[PAR_VOICE_LFO1 + n];
+		const uint8_t t = rfw_modTarget(voice >= 1 && voice <= 6 ? voice - 1 : 0, v);
+		rfw_sendTarget(CC_LFO_TARGET, n, t);
+		return t;
+	}
+	default:
+		return -1;
+	}
 }
 
 /* a decimal number of digits only, up to max; -1 if not */
@@ -228,12 +276,6 @@ int rfw_paramParse(const char *spec, rfw_param_t *out, const char **name, char *
 		snprintf(err, n, "parameter %.*s: no such parameter", (int)len, spec);
 		return -1;
 	}
-	if (rfw_paramRefused((uint16_t)p))
-	{
-		snprintf(err, n, "parameter %.*s: menu_encoderChangeParameter() has a special case for it (spec 5.3)",
-			(int)len, spec);
-		return -1;
-	}
 	out->p = (uint16_t)p;
 	out->v = (uint8_t)v;
 	return 0;
@@ -243,8 +285,10 @@ void rfw_edit(void *arg)
 {
 	const rfw_param_t *e = arg;
 	const uint16_t p = e->p;
-	/* the clamp, then menu.c's send at the end of menu_encoderChangeParameter() */
-	activeParameters[p] = rfw_clamp(p, e->v);
+	/* the clamp or a special case, then menu.c's send at the end of
+	 * menu_encoderChangeParameter() */
+	const int special = rfw_special(p, e->v);
+	activeParameters[p] = special >= 0 ? (uint8_t)special : rfw_clamp(p, e->v);
 	if (p < 128)
 		frontPanel_sendData(MIDI_CC, (uint8_t)p, activeParameters[p]);
 	else if (p < END_OF_SOUND_PARAMETERS)
