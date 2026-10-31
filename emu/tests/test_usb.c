@@ -19,6 +19,7 @@
 #include "stm32f7xx_hal.h"
 #include "usbd_cdc.h"
 #include "Soundengine/USB/usb_manager.h"
+#include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/Sequencer/seq_platform.h"
 #include "emu_test.h"
 
@@ -233,6 +234,21 @@ TEST(M11_no_stall_drop)
 	}
 	ASSERT_EQ(usb_midiTxDropped(), 0);
 	ASSERT_EQ(txState(), 0);
+}
+
+/* LICHOMAT v0.5 (plan Task 5, S9): a message's transfer stamp reaches the parser with it */
+TEST(M11_stamps)
+{
+	setup();
+	const uint8_t note[4] = { 0x09, 0x90, 0x3C, 0x64 };
+	ASSERT_EQ(emu_inUsb(1000, note, 4), 0);
+	ASSERT_EQ(emu_inUsb(5000000, note, 4), 0);
+	HAL_Delay(30);
+	MidiMsg m;
+	ASSERT_EQ(usb_getMidi(&m), 1);
+	ASSERT_EQ(midiParser_rxStamp, (uint16_t)(1000u >> 8));
+	ASSERT_EQ(usb_getMidi(&m), 1);
+	ASSERT_EQ(midiParser_rxStamp, (uint16_t)(5000000u >> 8));
 }
 
 TEST_MAIN()

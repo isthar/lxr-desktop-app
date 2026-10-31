@@ -57,6 +57,7 @@ static union {
 
 //tx is high nibble
 uint8_t midiParser_txRxFilter = 0xFF;
+uint16_t midiParser_rxStamp;	//LICHOMAT v0.5 (plan v0.5, S9)
 
 enum State
 {

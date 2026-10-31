@@ -17,6 +17,7 @@
 #include <stdatomic.h>
 #include <string.h>
 #include "usbd_cdc_if.h"
+#include "Soundengine/MIDI/MidiParser.h"	//LICHOMAT v0.5: midiParser_rxStamp (plan v0.5)
 
 
 
@@ -192,6 +193,7 @@ uint8_t usb_getMidi(MidiMsg* msg)
 		//we have unprocessed messages in the queue
 		atomic_signal_fence(memory_order_acquire);	//the write index before the slot
 		*msg = usb_MidiMessages[read];
+		midiParser_rxStamp = usb_MidiStamps[read];	//LICHOMAT v0.5: its stamp, for the parser (plan v0.5 P8, S9)
 		atomic_signal_fence(memory_order_release);	//the slot copied before it is freed
 
 		usb_MidiMessagesRead = (read + 1) & USB_MIDI_INPUT_BUFFER_MASK;

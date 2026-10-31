@@ -89,6 +89,7 @@
 
 //buffer for parsed midi messages
 MidiMsg usb_MidiMessages[USB_MIDI_INPUT_BUFFER_SIZE];
+volatile uint16_t usb_MidiStamps[USB_MIDI_INPUT_BUFFER_SIZE];	//LICHOMAT v0.5 (plan v0.5, S9)
 uint8_t usb_MidiMessagesRead = 0;
 uint8_t usb_MidiMessagesWrite = 0;
 
@@ -1039,6 +1040,7 @@ static uint8_t  USBD_CDC_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum)
 			// is it possible for there to be more than one sysex message byte received?
 			usb_MidiMessages[usb_MidiMessagesWrite].bits.sysxbyte = 0;
 			usb_MidiMessages[usb_MidiMessagesWrite].bits.source = midiSourceUSB;
+			usb_MidiStamps[usb_MidiMessagesWrite] = (uint16_t)(stamp >> 8);	//LICHOMAT v0.5: the transfer's stamp (S9)
 
 			//increment and wrap write pointer
 			usb_MidiMessagesWrite++;

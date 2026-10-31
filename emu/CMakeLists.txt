@@ -241,8 +241,8 @@ emu_add_test(test_panel IDS M8_scan M8_gray M8_fw_encoder10 M8_fw_push_phases M8
 emu_add_test(test_card IDS M9_scenario M9_truncate M9_order M9_skipped M9_duplicate M9_lock M9_card_switch M9_copy
     M9_fw_save_load)
 emu_add_test(test_din IDS M10_wire_in M10_wire_out M10_tx_enable_late M10_rx_during_tx M10_tx_from_rx_body
-    M10_tx_slot_before_pass M10_overrun M10_spp_and_pc)
-emu_add_test(test_usb IDS M11_walk M11_window_16 M11_window_start M11_out M11_no_stall_drop)
+    M10_tx_slot_before_pass M10_overrun M10_spp_and_pc M10_rx_stamps)
+emu_add_test(test_usb IDS M11_walk M11_window_16 M11_window_start M11_out M11_no_stall_drop M11_stamps)
 emu_add_test(test_jacks IDS M12_clock_in M12_reset M12_clock_out_core M12_fw_clock_out M8_fw_output_jacks)
 emu_add_test(test_fwchanges IDS M15_f1_cc1 M15_f2_morph M15_f3_clear_pages M15_f9_band10
     M15_f11_knobs_at_boot M15_f12_euklid M15_f13_diode_table

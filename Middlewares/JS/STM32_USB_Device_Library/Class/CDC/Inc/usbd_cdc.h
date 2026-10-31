@@ -149,6 +149,8 @@
 
  //buffer for parsed midi messages
  extern MidiMsg usb_MidiMessages[USB_MIDI_INPUT_BUFFER_SIZE];
+ //LICHOMAT v0.5: each message's transfer stamp (DWT >> 8), at its index (plan v0.5, S9)
+ extern volatile uint16_t usb_MidiStamps[USB_MIDI_INPUT_BUFFER_SIZE];
  extern uint8_t usb_MidiMessagesRead;
  extern uint8_t usb_MidiMessagesWrite;
 

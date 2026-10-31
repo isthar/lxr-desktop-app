@@ -33,6 +33,8 @@
 
 static Fifo fifo_midiTx;
 static Fifo fifo_midiRx;
+//LICHOMAT v0.5: each received byte's stamp (DWT >> 8) at the byte's FIFO index (plan v0.5, S9)
+static volatile uint16_t uart_midiRxStamp[BUFFER_SIZE];
 
 static Fifo fifo_frontTx;
 static FifoBig fifo_frontRx; //we use a bigger fifo here because we have lots of data coming in for the preset
@@ -66,6 +68,7 @@ void USART3_IRQHandler(void)
 
 		// put the received data in the RX midi buffer
     // fifo_bufferIn(&fifo_midiRx, data);
+    uart_midiRxStamp[fifo_midiRx.write] = (uint16_t)(stamp >> 8);	//LICHOMAT v0.5: before fifo_bufferIn() moves the write index
     if (fifo_bufferIn(&fifo_midiRx, data) == 0)
     {
     }
@@ -91,8 +94,12 @@ void USART3_IRQHandler(void)
 void uart_processMidi(uint8_t maxBytes)
 {
 	uint8_t data;
-	while(maxBytes-- && fifo_bufferOut(&fifo_midiRx, &data))
+	//LICHOMAT v0.5: the byte's stamp, read once the write index covers the byte and before
+	//fifo_bufferOut() frees its slot (plan v0.5 P8, S9)
+	while(maxBytes-- && (fifo_midiRx.read != fifo_midiRx.write))
 	{
+		midiParser_rxStamp = uart_midiRxStamp[fifo_midiRx.read];
+		fifo_bufferOut(&fifo_midiRx, &data);
 		midiParser_parseUartData(data);
 	}
 }

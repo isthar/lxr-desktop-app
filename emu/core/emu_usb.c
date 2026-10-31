@@ -32,6 +32,7 @@
 #define EMU_USB_PACKETS_PER_MS 16u
 
 MidiMsg usb_MidiMessages[USB_MIDI_INPUT_BUFFER_SIZE];
+volatile uint16_t usb_MidiStamps[USB_MIDI_INPUT_BUFFER_SIZE];	/* LICHOMAT v0.5 (plan Task 5) */
 uint8_t usb_MidiMessagesRead;
 uint8_t usb_MidiMessagesWrite;
 USBD_HandleTypeDef hUsbDeviceFS;
@@ -137,6 +138,7 @@ static void emu_usbOutBody(void)
 		m->bits.length = (unsigned)(length - 1u) & 3u;
 		m->bits.sysxbyte = 0;
 		m->bits.source = midiSourceUSB;
+		usb_MidiStamps[usb_MidiMessagesWrite] = (uint16_t)(stamp >> 8);	/* LICHOMAT v0.5 (plan Task 5) */
 		usb_MidiMessagesWrite = (uint8_t)((usb_MidiMessagesWrite + 1u) & USB_MIDI_INPUT_BUFFER_MASK);
 	}
 	emu_usbFire();	/* the next transfer may already be due */

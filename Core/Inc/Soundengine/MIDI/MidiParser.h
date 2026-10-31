@@ -74,5 +74,7 @@ enum TxRxFilterValues
 
 // high nibble is TX low nibble is RX. see above (midiParser_setFilter) for bitmap
 extern uint8_t midiParser_txRxFilter;
+//LICHOMAT v0.5: the 16-bit arrival stamp (DWT >> 8) of the byte (DIN) or message (USB) being parsed (plan v0.5, S9)
+extern uint16_t midiParser_rxStamp;
 
 #endif /* MIDIPARSER_H_ */

@@ -21,6 +21,7 @@
 #include "stm32f7xx_hal.h"
 #include "main.h"
 #include "Soundengine/MIDI/Uart.h"
+#include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/Sequencer/seq_platform.h"
 #include "emu_test.h"
 
@@ -267,6 +268,26 @@ TEST(M10_spp_and_pc)
 	ASSERT_EQ(entry[1].type, SEQQ_PROGRAM_CHANGE);
 	ASSERT_EQ(entry[1].value, 5);				/* channel 0, program 5 */
 	ASSERT_EQ(stamp[1], 1000u + 4u * BYTE);		/* the data byte */
+}
+
+/* LICHOMAT v0.5 (plan Task 5, S9): each byte's arrival stamp (DWT >> 8) reaches the parser
+ * with the byte, across the FIFO's wrap; Active Sensing bytes, which the parser ignores */
+TEST(M10_rx_stamps)
+{
+	setup();
+	uint8_t fe[200];
+	memset(fe, 0xFE, sizeof fe);
+	for (unsigned round = 0; round < 2; round++)
+	{
+		const uint64_t t = emu_now() + 1000u;
+		emu_inDin(t, fe, round ? 100u : 200u);
+		HAL_Delay(round ? 40 : 70);			/* 100 or 200 bytes of 320 us */
+		for (unsigned k = 0; k < (round ? 100u : 200u); k++)
+		{
+			uart_processMidi(1);
+			ASSERT_EQ(midiParser_rxStamp, (uint16_t)((t + k * BYTE) >> 8));
+		}
+	}
 }
 
 TEST_MAIN()
