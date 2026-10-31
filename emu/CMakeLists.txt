@@ -250,6 +250,22 @@ emu_add_test(test_fwchanges IDS M15_f1_cc1 M15_f2_morph M15_f3_clear_pages M15_f
     M15_f18_mono_delay)
 emu_add_test(test_pingpong IDS M16_pingpong)
 emu_add_test(test_fxstage IDS M24_slot_channels_with_reverb)  # v0.4 review: the slot sees the destination's channels with the reverb on (plan D32)
+# v0.5 review of Task 7: the firmware's mixer with records posted at offset k. vsched_post() drops
+# a record posted outside seq_tick() (P9): the test links a copy of vsched.c whose seq_isInTick()
+# is the test's emu_testInTick(), in place of the firmware's object, so the image has no test hook
+add_library(test_mixsplit_vsched OBJECT "${LXR_ROOT}/Core/Src/Soundengine/vsched.c")
+target_link_libraries(test_mixsplit_vsched PRIVATE emu_fw_headers)
+target_compile_options(test_mixsplit_vsched PRIVATE -w)
+target_compile_definitions(test_mixsplit_vsched PRIVATE seq_isInTick=emu_testInTick)
+if(LICHOMAT_EMU_SANITIZE)
+    target_compile_options(test_mixsplit_vsched PRIVATE -ftrivial-auto-var-init=pattern)
+endif()
+add_executable(test_mixsplit tests/test_mixsplit.c
+    "$<FILTER:$<TARGET_OBJECTS:lxr_firmware>,EXCLUDE,/vsched\\.c\\.o$>" $<TARGET_OBJECTS:test_mixsplit_vsched>
+    $<TARGET_OBJECTS:emu_core> $<TARGET_OBJECTS:emu_hostfs> $<TARGET_OBJECTS:emu_libm>)
+target_link_libraries(test_mixsplit PRIVATE emu_test_options)
+add_test(NAME M25_mixer_split COMMAND test_mixsplit M25_mixer_split)
+set_tests_properties(M25_mixer_split PROPERTIES TIMEOUT 300)
 
 # M19: the firmware objects import no libm name but the vendored ones and fmod
 add_library(emu_libm_canary OBJECT tests/libm_canary.c)
