@@ -18,8 +18,9 @@
    the allow-listed texts of emu/tests/name_allow.txt (one per line). Code is
    left out: its bytes can spell 'lxr' by chance (R2.4 saw it in a Release
    build after an unrelated change), and no text the device shows lives there.
-   So are the tables that describe code (__TEXT,__unwind_info and __eh_frame:
-   function offsets and encodings; R5 saw the offset 0x52784c spell 'LxR').
+   So are the tables that describe code (__TEXT,__unwind_info, __eh_frame and
+   __gcc_except_tab: function offsets and encodings; R5 saw the offset
+   0x52784c spell 'LxR').
    Paths of the repository and the build inside a string are left out first.
 
 The last line is 'licence gate: N errors' when the gate fails (exit 1).
@@ -122,8 +123,9 @@ LC_SEGMENT_64 = 0x19
 ZEROFILL = {0x01, 0x0c, 0x12}
 # S_ATTR_PURE_INSTRUCTIONS, S_ATTR_SOME_INSTRUCTIONS: the section holds code
 CODE_ATTRS = 0x80000000 | 0x00000400
-# the tables that describe code: offsets and encodings, no text (see the docstring)
-CODE_TABLES = {('__TEXT', '__unwind_info'), ('__TEXT', '__eh_frame')}
+# the tables that describe code: offsets and encodings, no text (see the docstring); __gcc_except_tab holds the
+# language-specific exception tables (call-site and landing-pad offsets) of C++ code such as the panel's
+CODE_TABLES = {('__TEXT', '__unwind_info'), ('__TEXT', '__eh_frame'), ('__TEXT', '__gcc_except_tab')}
 # a printable run of 3 or more bytes, as strings -a -n 3 finds it
 RUN = re.compile(rb'[\t\x20-\x7e]{3,}')
 
@@ -134,7 +136,7 @@ def strings(binary, errors):
     while a const char x[][16] lies in __TEXT,__const and a char x[] = "..." in
     __DATA,__data. Every other section is read too, except those that hold
     instructions (S_ATTR_PURE_INSTRUCTIONS or S_ATTR_SOME_INSTRUCTIONS) and the
-    unwind tables."""
+    unwind and exception tables."""
     with open(binary, 'rb') as f:
         data = f.read()
     if len(data) < 32 or struct.unpack_from('<I', data)[0] != MH_MAGIC_64:
