@@ -49,6 +49,8 @@
 #define MENU_TRK_DELAY		30
 #define MENU_STEP_PROB		31
 #define MENU_SCENE_QUANT	32	// LICHOMAT v0.3
+#define MENU_DUCK_SRC		33	// LICHOMAT v0.4 (plan D40)
+#define MENU_DELAY_SYNC		34	// LICHOMAT v0.4 (plan D38)
 
 //-----------------------------------------------------------------
 // Shared texts. Reduce mem usage by pooling common text
@@ -110,6 +112,20 @@ const char sceneQuantNames[][4] =
 {
 	{2},		//number of entries
 	{"bar"}, {"stp"},
+};
+//-----------------------------------------------------------------
+// LICHOMAT v0.4: the voice that ducks the reverb (plan D40)
+const char duckSrcNames[][4] =
+{
+	{7},		//number of entries
+	{"off"}, {"dr1"}, {"dr2"}, {"dr3"}, {"snr"}, {"cym"}, {"hat"},
+};
+//-----------------------------------------------------------------
+// LICHOMAT v0.4: synced delay times, by length (plan D38)
+const char delaySyncNames[][4] =
+{
+	{10},		//number of entries
+	{"off"}, {"16t"}, {"16"}, {"8t"}, {"16d"}, {"8"}, {"4t"}, {"8d"}, {"4"}, {"4d"},
 };
 //-----------------------------------------------------------------
 // LICHOMAT v0.2: the trig conditions of PAR_STEP_PROB 101..115 (SeqStepTypes.h)

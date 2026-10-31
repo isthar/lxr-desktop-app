@@ -278,7 +278,8 @@ def M17_seed_card(t):
     names = os.listdir(proj)
     check(all(os.path.isfile(os.path.join(proj, x)) for x in names), 'PROJ00 holds a folder')
     size = sum(os.path.getsize(os.path.join(proj, x)) for x in names)
-    check((len(names), size) == (194, 257588), 'PROJ00 holds %d files of %d bytes, not 194 of 257,588'
+    # v0.4 (plan D34): each of the 64 kits carries the 13-byte LCHM block, 64 x 13 = 832 bytes more
+    check((len(names), size) == (194, 258420), 'PROJ00 holds %d files of %d bytes, not 194 of 258,420'
           % (len(names), size))
     def read(name):
         with open(os.path.join(proj, name), 'rb') as f:
@@ -287,7 +288,7 @@ def M17_seed_card(t):
     check(read('PRJ.NFO') == b'Init\0\0\0\0LCHM\x01\x08' + bytes(8), 'PRJ.NFO is %r' % read('PRJ.NFO'))
     glo = read('GLO.CFG')
     check(len(glo) == 30 and glo[0] == 120 and glo[29] == 1, 'GLO.CFG is %r' % glo)
-    check(len(read('00-INITK.SND')) == 255, '00-INITK.SND has %d bytes' % len(read('00-INITK.SND')))
+    check(len(read('00-INITK.SND')) == 268, '00-INITK.SND has %d bytes' % len(read('00-INITK.SND')))
     # into an empty folder holding a dot entry: the same card, so seeding is deterministic
     second = t.path('dot')
     os.makedirs(second)
@@ -1265,6 +1266,25 @@ def V03_scene_file(t):
                     '--midi-log', log, '--events', t.script('100ms press 25\n+100ms press step11\n+100ms press start\n')])
     check(din_notes(log, '91'), 'voice 2 is silent too')
     check(not din_notes(log, '90') and not din_notes(log, '92'), 'voices 1 or 3 play after the recall')
+    no_copies_left()
+
+# --- LICHOMAT v0.4 (plan A3-A9): atmosphere ------------------------------------------
+
+@case
+def V04_kit_file(t):
+    # kits saved by v0.4 carry the 13-byte LCHM block after their 255 fw 1.7 bytes (plan D34);
+    # the active kit holds the edited values, the DJ filter saved flat
+    seed = t.seed()
+    keep = t.path('K')
+    script = t.script('+100ms param rev_size=90\n+100ms param fx_delay_sync=6\n'
+                      '+100ms param dj_filter=20\n+100ms save-project 0\n')
+    t.render(seed, ['--no-start', '--seconds', '3', '--keep-card', keep, '--events', script])
+    kits = [open(k, 'rb').read() for k in sorted(glob.glob(os.path.join(keep, '**', '*.[Ss][Nn][Dd]'), recursive=True))]
+    check(kits, 'no kit file on the kept card')
+    check({len(d) for d in kits} == {268}, 'kit sizes %r' % sorted({len(d) for d in kits}))
+    check(all(d[255:261] == b'LCHM\x01\x07' for d in kits), 'a kit without the block head')
+    check(any(d[261] == 90 and d[267] == 6 for d in kits), 'no kit holds size 90 and sync 6')
+    check(all(d[8 + 224] == 64 for d in kits), 'a kit saved the DJ filter off centre')
     no_copies_left()
 
 def kept_report(t, p, head):

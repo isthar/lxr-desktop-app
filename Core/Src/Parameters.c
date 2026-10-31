@@ -25,7 +25,7 @@ uint8_t parameterOrder[END_OF_SOUND_PARAMETERS] = {
 		PAR_FX_P4,
 		PAR_FX_RATIO,
 		PAR_FX_WAVE,
-		PAR_FX_REVERB_TYPE,
+		PAR_REV_DECAY,		// LICHOMAT v0.4: was the Plt type (plan D33)
 		PAR_FX_DELAY_TYPE,
 		PAR_FX_TYPE,
 		PAR_FX_ROUTING,
@@ -349,10 +349,11 @@ uint8_t parameterOrder[END_OF_SOUND_PARAMETERS] = {
 	PAR_SLIDE_TIME1,
 	PAR_SLIDE_TIME2,
 	PAR_SLIDE_TIME3,
-	PAR_UNUSED_4,
-	PAR_UNUSED_5,
-	PAR_UNUSED_6,
-	PAR_UNUSED_7,
+	// LICHOMAT v0.4: DJ filter, resonance, reverb level, freeze (plan D33)
+	PAR_DJ_FILTER,
+	PAR_DJ_RESO,
+	PAR_REV_LEVEL,
+	PAR_REV_FREEZE,
 
 
 

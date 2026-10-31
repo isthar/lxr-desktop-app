@@ -304,10 +304,11 @@ enum ParamEnums
 	PAR_SLIDE_TIME1,
 	PAR_SLIDE_TIME2,
 	PAR_SLIDE_TIME3,
-	PAR_UNUSED_4,
-	PAR_UNUSED_5,
-	PAR_UNUSED_6,
-	PAR_UNUSED_7,
+	// LICHOMAT v0.4: DJ filter, resonance, reverb level, freeze (plan D33)
+	PAR_DJ_FILTER,
+	PAR_DJ_RESO,
+	PAR_REV_LEVEL,
+	PAR_REV_FREEZE,
 
 	PAR_PWM_1,
 	PAR_PWM_2,
@@ -327,7 +328,7 @@ enum ParamEnums
 	PAR_FX_P4,
 	PAR_FX_RATIO,
 	PAR_FX_WAVE,
-	PAR_FX_REVERB_TYPE,
+	PAR_REV_DECAY,		// LICHOMAT v0.4: was the Plt type, one name (plan D33)
 	PAR_FX_DELAY_TYPE,
 	PAR_MORPH_KIT_DEST,
 
@@ -427,7 +428,18 @@ enum ParamEnums
 
 		PAR_PATTERN_MODE,
 
-	NUM_PARAMS	
+	// LICHOMAT v0.4: glo.cfg and menu_sendAllGlobals() end here, as in fw 1.7 (plan D34)
+	END_OF_GLOBALS,
+	// LICHOMAT v0.4: kit settings saved in the kit file's LCHM block, not in glo.cfg (plan D34)
+	PAR_REV_SIZE = END_OF_GLOBALS,	/*302*/
+	PAR_REV_TONE,
+	PAR_REV_PREDELAY,
+	PAR_REV_MOD,
+	PAR_REV_DUCK_SRC,
+	PAR_REV_DUCK_DEPTH,
+	PAR_FX_DELAY_SYNC,
+	END_OF_KIT_BLOCK,
+	NUM_PARAMS = END_OF_KIT_BLOCK	/*309*/
 };
 
 extern uint8_t parameterOrder[END_OF_SOUND_PARAMETERS];

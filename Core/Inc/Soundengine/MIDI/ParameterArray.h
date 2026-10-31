@@ -358,7 +358,18 @@ enum ParamEnums
 
 	PAR_QUANTISATION,
 
-	NUM_PARAMS
+	// LICHOMAT v0.4: glo.cfg and menu_sendAllGlobals() end here, as in fw 1.7 (plan D34)
+	END_OF_GLOBALS,
+	// LICHOMAT v0.4: kit settings saved in the kit file's LCHM block, not in glo.cfg (plan D34)
+	PAR_REV_SIZE = END_OF_GLOBALS,
+	PAR_REV_TONE,
+	PAR_REV_PREDELAY,
+	PAR_REV_MOD,
+	PAR_REV_DUCK_SRC,
+	PAR_REV_DUCK_DEPTH,
+	PAR_FX_DELAY_SYNC,
+	END_OF_KIT_BLOCK,
+	NUM_PARAMS = END_OF_KIT_BLOCK
 */
 };
 #endif

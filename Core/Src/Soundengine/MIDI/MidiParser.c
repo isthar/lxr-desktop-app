@@ -29,6 +29,7 @@
 #include "Soundengine/USB/usb_manager.h"
 #include "menu/menu.h"
 #include "Soundengine/FxBus.h"
+#include "Soundengine/DSPAudio/FX/atmo.h"	//LICHOMAT v0.4: atmo_setParam() (plan D33)
 
 #include "Soundengine/MIDI/MidiMessages.h"
 
@@ -1427,8 +1428,12 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				Ringmod_setWave(&fxBus.ringmod, value.itg);
 				break;
 
-			case CC2_FX_REVERB_TYPE:
-
+			case CC2_DJ_FILTER:	//LICHOMAT v0.4: the five kit slots of plan D33
+			case CC2_DJ_RESO:
+			case CC2_REV_LEVEL:
+			case CC2_REV_FREEZE:
+			case CC2_REV_DECAY:
+				atmo_setParam(paramNr, value.flt);
 				break;
 
 			case CC2_FX_DELAY_TYPE:

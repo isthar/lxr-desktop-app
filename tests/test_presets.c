@@ -506,10 +506,13 @@ TEST(presets_kit_ram_load_stays_in_the_64_kits)
 		ASSERT_TRUE(morphParameters == mainParameters[0]);
 	}
 	/* a kit in range is loaded as before (sendDrumsetParameters() puts the
-	 * six LFO voice numbers of the kit, 17, back to 1) */
+	 * six LFO voice numbers of the kit, 17, back to 1). LICHOMAT v0.4: the
+	 * live DJ filter and freeze keep their values, 0 here (plan D33) */
 	reset();
 	preset_loadDrumsetRam(17, 0, 0);
-	ASSERT_EQ(activeDiffers(17), 6);
+	ASSERT_EQ(activeDiffers(17), 6 + 2);
+	ASSERT_EQ(activeParameters[PAR_DJ_FILTER], 0);
+	ASSERT_EQ(activeParameters[PAR_REV_FREEZE], 0);
 	ASSERT_EQ(activeParameters[PAR_VOICE_LFO1], 1);
 	preset_loadDrumsetRam(63, 1, 0);
 	ASSERT_TRUE(morphParameters == mainParameters[63]);
@@ -1045,6 +1048,184 @@ TEST(presets_new_project_scene_quant_is_bar)
 	sceneQuant = 1;
 	ASSERT_EQ(preset_createProject(3), FR_OK);
 	ASSERT_EQ(sceneQuant, 0);
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT v0.4 (plan A3, D33-D35): the kit extension block and its guard
+//------------------------------------------------------------------------------
+#define KIT_FW17_SIZE (8 + KIT_SIZE)		/* the name, then the 247 parameters */
+#define KIT_BLOCK_COUNT (END_OF_KIT_BLOCK - END_OF_GLOBALS)
+#define KIT_V04_SIZE (KIT_FW17_SIZE + 6 + KIT_BLOCK_COUNT)
+
+extern uint8_t lchmKit[NUM_KIT_SLOTS][KIT_BLOCK_COUNT];	/* presetManager.c */
+
+static const uint8_t kitBlockDefaults[KIT_BLOCK_COUNT] = { 100, 64, 10, 40, 0, 100, 0 };
+
+/** a fresh card with /proj00 as the current folder */
+static void kitCard(void)
+{
+	reset();
+	ASSERT_EQ(f_mkdir("/proj00"), FR_OK);
+	ASSERT_EQ(f_chdir("/proj00"), FR_OK);
+}
+
+/** /proj00/05-KIT.SND as fw 1.7 writes it (255 bytes: 0x11, and 36, 40, 45, 50 in the four
+ * fw 1.7 PAR_UNUSED slots, 0 in the old reverb type), then the extra bytes */
+static void putKit5(const uint8_t *extra, UINT extraLen)
+{
+	uint8_t file[KIT_FW17_SIZE + 32];
+	memcpy(file, "KIT     ", 8);
+	memset(file + 8, 0x11, KIT_SIZE);
+	file[8 + PAR_DJ_FILTER] = 36;
+	file[8 + PAR_DJ_RESO] = 40;
+	file[8 + PAR_REV_LEVEL] = 45;
+	file[8 + PAR_REV_FREEZE] = 50;
+	file[8 + PAR_REV_DECAY] = 0;
+	ASSERT_TRUE(extraLen <= 32);
+	memcpy(file + KIT_FW17_SIZE, extra, extraLen);
+	cardPut("/proj00/05-KIT.SND", file, KIT_FW17_SIZE + extraLen);
+}
+
+/** loads kit 5 from the card into its slot and then into the edit buffer; the slot and the
+ * block start stale, and the live DJ filter and freeze are 20 and 1 */
+static void loadKit5(void)
+{
+	memset(mainParameters[5], 0x5A, KIT_SIZE);
+	memset(lchmKit[5], 0x5A, KIT_BLOCK_COUNT);
+	ASSERT_EQ(preset_loadDrumsetSD(5, 0), FR_OK);
+	activeParameters[PAR_DJ_FILTER] = 20;
+	activeParameters[PAR_REV_FREEZE] = 1;
+	preset_loadDrumsetRam(5, 0, 0);
+}
+
+/** kit 5 took the D35 defaults: the five slots and the block */
+static void assertKit5Defaults(void)
+{
+	ASSERT_EQ(mainParameters[5][PAR_DJ_FILTER], 64);
+	ASSERT_EQ(mainParameters[5][PAR_DJ_RESO], 0);
+	ASSERT_EQ(mainParameters[5][PAR_REV_LEVEL], 0);
+	ASSERT_EQ(mainParameters[5][PAR_REV_FREEZE], 0);
+	ASSERT_EQ(mainParameters[5][PAR_REV_DECAY], 64);
+	ASSERT_EQ(mainParameters[5][PAR_FX_P1], 0x11);	/* the rest is the file's */
+	ASSERT_EQ(memcmp(lchmKit[5], kitBlockDefaults, KIT_BLOCK_COUNT), 0);
+	ASSERT_EQ(activeParameters[PAR_DJ_RESO], 0);
+	ASSERT_EQ(activeParameters[PAR_REV_LEVEL], 0);
+	ASSERT_EQ(activeParameters[PAR_REV_DECAY], 64);
+	ASSERT_EQ(memcmp(&activeParameters[END_OF_GLOBALS], kitBlockDefaults, KIT_BLOCK_COUNT), 0);
+	ASSERT_EQ(activeParameters[PAR_DJ_FILTER], 20);	/* live */
+	ASSERT_EQ(activeParameters[PAR_REV_FREEZE], 1);
+}
+
+TEST(presets_kit_block_round_trip)
+{
+	kitCard();
+	static const uint8_t block[KIT_BLOCK_COUNT] = { 11, 22, 33, 44, 3, 55, 7 };
+	memcpy(&activeParameters[PAR_REV_SIZE], block, KIT_BLOCK_COUNT);
+	activeParameters[PAR_DJ_RESO] = 90;
+	activeParameters[PAR_REV_LEVEL] = 80;
+	activeParameters[PAR_REV_DECAY] = 70;
+	activeParameters[PAR_DJ_FILTER] = 20;
+	activeParameters[PAR_REV_FREEZE] = 1;
+	memcpy(savefileNames[5][KIT_NAMES], "KIT     ", 8);
+	preset_saveDrumsetRam(5, 0);
+	ASSERT_EQ(preset_saveDrumsetSD(5, 0), FR_OK);
+	CardEntry *e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, KIT_V04_SIZE);
+	ASSERT_EQ(KIT_V04_SIZE, 268);
+	static const uint8_t tail[13] = { 'L', 'C', 'H', 'M', 1, 7, 11, 22, 33, 44, 3, 55, 7 };
+	ASSERT_EQ(memcmp(e->data + 255, tail, sizeof tail), 0);
+	ASSERT_EQ(e->data[8 + 224], 64);	/* the DJ filter is saved flat */
+	ASSERT_EQ(e->data[8 + 227], 0);		/* and freeze off */
+	ASSERT_EQ(e->data[8 + PAR_DJ_RESO], 90);
+	/* load it back over other values */
+	memset(&activeParameters[PAR_REV_SIZE], 0, KIT_BLOCK_COUNT);
+	activeParameters[PAR_DJ_RESO] = activeParameters[PAR_REV_LEVEL] = activeParameters[PAR_REV_DECAY] = 0;
+	memset(mainParameters[5], 0x5A, KIT_SIZE);
+	memset(lchmKit[5], 0x5A, KIT_BLOCK_COUNT);
+	ASSERT_EQ(preset_loadDrumsetSD(5, 0), FR_OK);
+	preset_loadDrumsetRam(5, 0, 0);
+	ASSERT_EQ(memcmp(&activeParameters[PAR_REV_SIZE], block, KIT_BLOCK_COUNT), 0);
+	ASSERT_EQ(activeParameters[PAR_DJ_RESO], 90);
+	ASSERT_EQ(activeParameters[PAR_REV_LEVEL], 80);
+	ASSERT_EQ(activeParameters[PAR_REV_DECAY], 70);
+	ASSERT_EQ(activeParameters[PAR_DJ_FILTER], 20);	/* the live values stay */
+	ASSERT_EQ(activeParameters[PAR_REV_FREEZE], 1);
+	ASSERT_EQ(kitsGuardChanged(), 0);
+}
+
+TEST(presets_kit_fw17_length_takes_defaults)
+{
+	kitCard();
+	putKit5(NULL, 0);
+	loadKit5();
+	assertKit5Defaults();
+}
+
+TEST(presets_kit_block_other_version)
+{
+	kitCard();
+	static const uint8_t block[13] = { 'L', 'C', 'H', 'M', 2, 7, 11, 22, 33, 44, 3, 55, 7 };
+	putKit5(block, sizeof block);
+	loadKit5();
+	assertKit5Defaults();
+	/* a short block too */
+	putKit5(block, 9);
+	loadKit5();
+	assertKit5Defaults();
+}
+
+TEST(presets_kit_block_longer_count)
+{
+	kitCard();
+	static const uint8_t block[15] = { 'L', 'C', 'H', 'M', 1, 9, 11, 22, 33, 44, 3, 55, 7, 99, 98 };
+	putKit5(block, sizeof block);
+	loadKit5();
+	static const uint8_t first7[KIT_BLOCK_COUNT] = { 11, 22, 33, 44, 3, 55, 7 };
+	ASSERT_EQ(memcmp(lchmKit[5], first7, KIT_BLOCK_COUNT), 0);
+	ASSERT_EQ(memcmp(&activeParameters[END_OF_GLOBALS], first7, KIT_BLOCK_COUNT), 0);
+	/* with a valid block the five slots are the file's */
+	ASSERT_EQ(mainParameters[5][PAR_DJ_RESO], 40);
+	ASSERT_EQ(mainParameters[5][PAR_REV_LEVEL], 45);
+	ASSERT_EQ(mainParameters[5][PAR_REV_DECAY], 0);
+	ASSERT_EQ(activeParameters[PAR_DJ_FILTER], 20);	/* live */
+	ASSERT_EQ(activeParameters[PAR_REV_FREEZE], 1);
+}
+
+TEST(presets_kit_block_values_out_of_range)
+{
+	/* each value past its maximum (127, 127, 127, 127, 6, 127, 9) takes its default */
+	kitCard();
+	static const uint8_t block[13] = { 'L', 'C', 'H', 'M', 1, 7, 128, 127, 255, 0, 7, 6, 10 };
+	putKit5(block, sizeof block);
+	loadKit5();
+	static const uint8_t checked[KIT_BLOCK_COUNT] = { 100, 127, 10, 0, 0, 6, 0 };
+	ASSERT_EQ(memcmp(lchmKit[5], checked, KIT_BLOCK_COUNT), 0);
+	/* the largest values are kept */
+	static const uint8_t top[13] = { 'L', 'C', 'H', 'M', 1, 7, 127, 127, 127, 127, 6, 127, 9 };
+	putKit5(top, sizeof top);
+	loadKit5();
+	ASSERT_EQ(memcmp(lchmKit[5], top + 6, KIT_BLOCK_COUNT), 0);
+}
+
+TEST(presets_glo_cfg_stays_30_bytes)
+{
+	reset();
+	ASSERT_EQ(f_chdir("/"), FR_OK);
+	for (int i = PAR_BEGINNING_OF_GLOBALS; i < NUM_PARAMS; i++)
+		activeParameters[i] = (uint8_t)i;
+	ASSERT_EQ(preset_saveGlobals(), FR_OK);
+	const int g = find("/glo.cfg");
+	ASSERT_TRUE(g >= 0);
+	ASSERT_EQ(card[g].len, 30);
+	ASSERT_EQ(card[g].data[29], (uint8_t)PAR_PATTERN_MODE);
+	/* a 30-byte glo.cfg loads, and leaves the kit block alone */
+	for (int i = PAR_BEGINNING_OF_GLOBALS; i < NUM_PARAMS; i++)
+		activeParameters[i] = 0;
+	ASSERT_EQ(preset_loadGlobals(), 1);
+	ASSERT_EQ(activeParameters[PAR_BPM], (uint8_t)PAR_BPM);
+	ASSERT_EQ(activeParameters[PAR_PATTERN_MODE], (uint8_t)PAR_PATTERN_MODE);
+	ASSERT_EQ(activeParameters[PAR_REV_SIZE], 0);
 }
 
 TEST_MAIN()

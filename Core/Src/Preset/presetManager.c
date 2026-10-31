@@ -30,6 +30,7 @@
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Soundengine.h"
+#include "Soundengine/DSPAudio/FX/atmo.h"	//LICHOMAT v0.4: the kit block's defaults (plan D35)
 
 
 
@@ -74,6 +75,12 @@ static FRESULT preset_makeFileNameLoad(char *buf, uint8_t num, uint8_t type);
 static void preset_makeFileNameSave(char *buf, uint8_t num, uint8_t type, char *name);
 
 //static void preset_makeFileNameTemp(char *buf, uint8_t num, uint8_t type);
+
+//LICHOMAT v0.4: the kit extension block (plan D34), defined after the pattern block
+static void preset_writeKitExt(const uint8_t *values);
+static uint8_t preset_readKitExt(uint8_t *values);
+static void preset_sendKitExt(void);
+static uint8_t preset_savedKitValue(uint16_t i, uint8_t value);
 
 
 #define PRESET_SAVE_TIME 2000
@@ -227,7 +234,13 @@ FRESULT preset_saveTmpKit()
 		return res;
 	}
 	//write the preset data
-	f_write((FIL*)&SDFile,activeParameters,END_OF_SOUND_PARAMETERS,&bytesWritten);
+	//LICHOMAT v0.4: as a kit file, the DJ filter flat and freeze off (plan D33), then the kit block (plan D34)
+	for(uint16_t i=0;i<END_OF_SOUND_PARAMETERS;i++)
+	{
+		const uint8_t value = preset_savedKitValue(i, activeParameters[i]);
+		f_write((FIL*)&SDFile,&value,1,&bytesWritten);
+	}
+	preset_writeKitExt(&activeParameters[END_OF_GLOBALS]);
 
 	//close the file
 	f_close((FIL*)&SDFile);
@@ -269,6 +282,10 @@ FRESULT preset_LoadTmpKit()
 
 		para=activeParameters;
 
+		//LICHOMAT v0.4: the DJ filter and freeze are live controls, kept across a kit load (plan D33)
+		const uint8_t djFilter = activeParameters[PAR_DJ_FILTER];
+		const uint8_t freeze = activeParameters[PAR_REV_FREEZE];
+
 		res=f_read((FIL*)&SDFile, para,END_OF_SOUND_PARAMETERS, &bytesRead);
 		if(res==FR_OK) {
 			// set to 0 for any that were not read from the file
@@ -285,6 +302,12 @@ FRESULT preset_LoadTmpKit()
 				if(para[PAR_TARGET_LFO1+i] >= nmt )
 					para[PAR_TARGET_LFO1+i] = 0;
 			}
+
+			//LICHOMAT v0.4: the kit block, or the defaults of plan D35
+			if(!preset_readKitExt(&activeParameters[END_OF_GLOBALS]))
+				atmo_kitSlotDefaults(para);
+			para[PAR_DJ_FILTER] = djFilter;
+			para[PAR_REV_FREEZE] = freeze;
 		}
 
 
@@ -294,6 +317,7 @@ FRESULT preset_LoadTmpKit()
 
 		// update the soundengine with the new parameters
 		if(res==FR_OK) {
+			preset_sendKitExt();	//LICHOMAT v0.4
 			preset_sendDrumsetParameters();
 			return FR_OK;
 		}
@@ -334,6 +358,76 @@ static void preset_readPatternExt(uint8_t patternNr)
 		return;
 	for(uint8_t t=0; t<NUM_TRACKS; t++)
 		seq_patternSet.groove[patternNr][t] = trackGroove_checked(g[t]);
+}
+
+//----------------------------------------------------
+// LICHOMAT v0.4: the kit extension block after the 247 parameter bytes of a kit file (.snd and
+// the tmp kit), 13 bytes: "LCHM", the version 1, the count 7, then PAR_REV_SIZE ..
+// PAR_FX_DELAY_SYNC (plan D34). fw 1.7 reads the name and 247 bytes and closes the file, so it
+// does not see the block. A kit without a valid block takes the defaults for the block and for
+// the five v0.4 slots (plan D35).
+//----------------------------------------------------
+#define KIT_EXT_VERSION 1
+#define KIT_EXT_COUNT (END_OF_KIT_BLOCK - END_OF_GLOBALS)
+
+uint8_t lchmKit[NUM_KIT_SLOTS][KIT_EXT_COUNT];
+
+static void preset_writeKitExt(const uint8_t *values)
+{
+	UINT bytesWritten;
+	const uint8_t head[6] = { 'L', 'C', 'H', 'M', KIT_EXT_VERSION, KIT_EXT_COUNT };
+	f_write((FIL*)&SDFile, head, sizeof head, &bytesWritten);
+	f_write((FIL*)&SDFile, values, KIT_EXT_COUNT, &bytesWritten);
+}
+
+/** reads the block into values and returns 1, or leaves the defaults there and returns 0 */
+static uint8_t preset_readKitExt(uint8_t *values)
+{
+	UINT bytesRead = 0;
+	uint8_t head[6];
+	uint8_t v[KIT_EXT_COUNT];
+
+	atmo_kitBlockDefaults(values);
+	if((f_read((FIL*)&SDFile, head, sizeof head, &bytesRead) != FR_OK) || (bytesRead != sizeof head))
+		return 0;
+	if((memcmp(head, "LCHM", 4) != 0) || (head[4] != KIT_EXT_VERSION) || (head[5] < 1))
+		return 0;
+	const uint8_t n = (head[5] < KIT_EXT_COUNT) ? head[5] : KIT_EXT_COUNT;
+	if((f_read((FIL*)&SDFile, v, n, &bytesRead) != FR_OK) || (bytesRead != n))
+		return 0;
+	for(uint8_t i = 0; i < n; i++)
+		values[i] = atmo_kitBlockChecked(i, v[i]);
+	return 1;
+}
+
+/** the kit block's settings of the edit buffer to the FX bus */
+static void preset_sendKitExt(void)
+{
+	for(uint8_t i = 0; i < KIT_EXT_COUNT; i++)
+		atmo_setParam(END_OF_GLOBALS + i, activeParameters[END_OF_GLOBALS + i] / 127.f);
+}
+
+/** a kit parameter as a kit save writes it: the DJ filter flat and freeze off (plan D33) */
+static uint8_t preset_savedKitValue(uint16_t i, uint8_t value)
+{
+	if(i == PAR_DJ_FILTER)
+		return 64;
+	if(i == PAR_REV_FREEZE)
+		return 0;
+	return value;
+}
+
+/** a kit into the edit buffer: the DJ filter and freeze keep their live values (plan D33),
+ * and the kit block's settings come with it (plan D34) */
+static void preset_copyKitToActive(uint8_t presetNr)
+{
+	const uint8_t djFilter = activeParameters[PAR_DJ_FILTER];
+	const uint8_t freeze = activeParameters[PAR_REV_FREEZE];
+	memcpy(activeParameters, mainParameters[presetNr], sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
+	activeParameters[PAR_DJ_FILTER] = djFilter;
+	activeParameters[PAR_REV_FREEZE] = freeze;
+	memcpy(&activeParameters[END_OF_GLOBALS], lchmKit[presetNr], KIT_EXT_COUNT);
+	preset_sendKitExt();
 }
 
 FRESULT preset_LoadTmpPat()
@@ -833,8 +927,12 @@ void preset_init(uint8_t presetNr)
 			para[PAR_TARGET_LFO1+i] = 0;
 	}
 
+	//LICHOMAT v0.4: the init kit has no block: the defaults of plan D35
+	atmo_kitSlotDefaults(para);
+	atmo_kitBlockDefaults(lchmKit[presetNr]);
+
 	//copy parameters to edit buffer
-	memcpy(activeParameters, mainParameters[presetNr], sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
+	preset_copyKitToActive(presetNr);	//LICHOMAT v0.4: was a memcpy of the 247 parameters
 	preset_sendDrumsetParameters();
 	//frontPanel_sendData(PRESET,PRESET_LOAD,presetNr);
 
@@ -862,16 +960,22 @@ static void preset_writeDrumsetData(uint8_t presetNr, uint8_t isMorph)
 			{
 				value = activeParameters[i];
 			} 
+			else if( (i == PAR_DJ_FILTER) || (i == PAR_REV_FREEZE) )	//LICHOMAT v0.4: live controls (plan D33)
+			{
+				value = activeParameters[i];
+			}
 			else 
 			{
 				value = preset_getMorphValue(i,activeParameters[PAR_MORPH]);
 			}					
+			value = preset_savedKitValue(i, value);	//LICHOMAT v0.4
 			f_write((FIL*)&SDFile,&value,1,&bytesWritten);
 		}
 	} else {
 		for(i=0;i<END_OF_SOUND_PARAMETERS;i++)
 		{
-			f_write((FIL*)&SDFile,&mainParameters[presetNr][i],1,&bytesWritten);
+			const uint8_t value = preset_savedKitValue(i, mainParameters[presetNr][i]);	//LICHOMAT v0.4
+			f_write((FIL*)&SDFile,&value,1,&bytesWritten);
 		}
 	}
 }
@@ -888,7 +992,7 @@ void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmedi
 	else
 	{
 		//copy parameters to edit buffer
-		memcpy(activeParameters, mainParameters[presetNr], sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
+		preset_copyKitToActive(presetNr);	//LICHOMAT v0.4: keeps the DJ filter and freeze, copies the kit block
 		//if(activeParameters[PAR_PATTERN_MODE] = 1)
 		//load asociated morph kit as well
 
@@ -928,6 +1032,10 @@ void preset_saveDrumsetRam(uint8_t presetNr, uint8_t isMorph)
 			{
 				value = activeParameters[i];
 			}
+			else if( (i == PAR_DJ_FILTER) || (i == PAR_REV_FREEZE) )	//LICHOMAT v0.4: live controls (plan D33)
+			{
+				value = activeParameters[i];
+			}
 			else
 			{
 				value = preset_getMorphValue(i,activeParameters[PAR_MORPH]);
@@ -941,6 +1049,8 @@ void preset_saveDrumsetRam(uint8_t presetNr, uint8_t isMorph)
 		//copy edit buffer to parameter array
 		memcpy(mainParameters[presetNr], activeParameters, sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
 	}
+	//LICHOMAT v0.4: the kit block's settings, which morph does not touch (plan D34)
+	memcpy(lchmKit[presetNr], &activeParameters[END_OF_GLOBALS], KIT_EXT_COUNT);
 }
 //----------------------------------------------------
 FRESULT preset_saveDrumsetSD(uint8_t presetNr, uint8_t isMorph)
@@ -965,6 +1075,8 @@ FRESULT preset_saveDrumsetSD(uint8_t presetNr, uint8_t isMorph)
 	if(res != FR_OK) return res;
 	//write the preset data
 	preset_writeDrumsetData(presetNr, isMorph);
+	//LICHOMAT v0.4: the kit block (plan D34)
+	preset_writeKitExt(isMorph ? &activeParameters[END_OF_GLOBALS] : lchmKit[presetNr]);
 	
 	//close the file
 	f_close((FIL*)&SDFile);
@@ -979,7 +1091,7 @@ static void preset_writeGlobalData()
 {
 	unsigned int bytesWritten;
 	int i;
-	for(i=PAR_BEGINNING_OF_GLOBALS;(i<NUM_PARAMS);i++)
+	for(i=PAR_BEGINNING_OF_GLOBALS;(i<END_OF_GLOBALS);i++)	//LICHOMAT v0.4: glo.cfg stays 30 bytes (plan D34)
 	{
 		f_write((FIL*)&SDFile,&activeParameters[i],1,&bytesWritten);
 	}
@@ -1019,7 +1131,7 @@ static uint8_t preset_readGlobalData()
 	UINT bytesRead;
 #if 0
 	int i;
-	for(i=PAR_BEGINNING_OF_GLOBALS;(i<NUM_PARAMS) &&( bytesRead!=0);i++) {
+	for(i=PAR_BEGINNING_OF_GLOBALS;(i<END_OF_GLOBALS) &&( bytesRead!=0);i++) {
 		f_read((FIL*)&SDFile,&activeParameters[i],1,&bytesRead);
 		if(!bytesRead)
 			return 0;
@@ -1028,7 +1140,7 @@ static uint8_t preset_readGlobalData()
 		return 0;
 	return 1;
 #else
-	const uint8_t numGlobals = NUM_PARAMS - PAR_BEGINNING_OF_GLOBALS;
+	const uint8_t numGlobals = END_OF_GLOBALS - PAR_BEGINNING_OF_GLOBALS;	//LICHOMAT v0.4: 30, as fw 1.7 (plan D34)
 	f_read((FIL*)&SDFile,&activeParameters[PAR_BEGINNING_OF_GLOBALS],numGlobals,&bytesRead);
 	if(bytesRead != numGlobals)	return 0;
 	else return 1;
@@ -1215,6 +1327,12 @@ static FRESULT preset_readDrumsetData(uint8_t presetNr, uint8_t isMorph)
 			if(para[PAR_TARGET_LFO1+i] >= nmt )
 				para[PAR_TARGET_LFO1+i] = 0;
 		}
+
+		//LICHOMAT v0.4: the kit block, or the defaults of plan D35. A morph source keeps the
+		//block out of the kit slot (plan D34); it is read only for the guard.
+		uint8_t morphBlock[KIT_EXT_COUNT];
+		if(!preset_readKitExt(isMorph ? morphBlock : lchmKit[presetNr]))
+			atmo_kitSlotDefaults(para);
 	}
 
 	return res;
@@ -2195,7 +2313,8 @@ void preset_morph_tick()
 		uint8_t morph;
 
 		//Do not morph audio routing
-		if((morph_index >= PAR_AUDIO_OUT1) && (morph_index <= PAR_AUDIO_OUT6)) //morph_index++;
+		if(((morph_index >= PAR_AUDIO_OUT1) && (morph_index <= PAR_AUDIO_OUT6)) //morph_index++;
+			|| (morph_index == PAR_DJ_FILTER) || (morph_index == PAR_REV_FREEZE))	//LICHOMAT v0.4: live controls (plan D33)
 		{
 			//always use source kit (morph = 0) for audio routing
 			morph = 0;

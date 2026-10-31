@@ -42,6 +42,7 @@
 #include "Soundengine/DSPAudio/modulationNode.h"
 #include "Soundengine/DSPAudio/Snare.h"
 #include "Soundengine/FxBus.h"
+#include "Soundengine/DSPAudio/FX/atmo.h"
 #include "Soundengine/globals.h"
 #include "Soundengine/MIDI/CortexParser.h"
 #include "Soundengine/MIDI/MidiMessages.h"
@@ -313,6 +314,7 @@ void FxBus_setParameter(uint8_t idx, float value) { (void)idx; (void)value; }
 void FxBus_updateParameter(void) {}
 void HiHat_setPan(const uint8_t pan) { (void)pan; }
 void Ringmod_setWave(Ringmod *rm, uint8_t w) { (void)rm; (void)w; }
+void atmo_setParam(uint16_t paramNr, float v) { (void)paramNr; (void)v; }	/* LICHOMAT v0.4 (plan A3) */
 void SVF_directSetFilterValue(ResonantFilter *filter, float val) { (void)filter; (void)val; }
 void SVF_setDrive(ResonantFilter *filter, float drive) { (void)filter; (void)drive; }
 void SVF_setReso(ResonantFilter *filter, float feedback) { (void)filter; (void)feedback; }

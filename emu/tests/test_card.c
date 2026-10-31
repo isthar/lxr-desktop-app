@@ -439,7 +439,7 @@ TEST(M9_fw_save_load)
 		const size_t len = strlen(after[i].name);
 		ASSERT_TRUE(len > 4 && !strcmp(after[i].name + len - 4, ".SND"));
 		ASSERT_TRUE(!strncmp(after[i].name, "07-", 3) || !strcmp(after[i].name, "P007.SND"));
-		ASSERT_EQ(after[i].size, 255);
+		ASSERT_EQ(after[i].size, 268);	/* LICHOMAT v0.4: 255 + the 13-byte LCHM block (plan D34) */
 		ASSERT_EQ(strcmp(after[i].host, after[i].name), 0);	/* upper case on create */
 	}
 	ASSERT_EQ(found, 1);

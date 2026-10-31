@@ -42,6 +42,7 @@ uint8_t saveScreenPots[4]; //hold absolute pot position for save page name editi
 
 
 #include "Soundengine/DSPAudio/modulationNode.h"
+#include "Soundengine/DSPAudio/FX/atmo.h"	// LICHOMAT v0.4: atmo_setParam() (plan D34)
 
 // uppercase 3 letters in buf
 static void upr_three(char *buf);
@@ -490,10 +491,10 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_SLIDE_TIME1*/	DTYPE_0B127,	// LICHOMAT v0.3: x 4 ms (plan D25)
 	    /*PAR_SLIDE_TIME2*/	DTYPE_0B127,
 	    /*PAR_SLIDE_TIME3*/	DTYPE_0B127,
-	    /*PAR_UNUSED4*/		DTYPE_NOTE_NAME,
-	    /*PAR_UNUSED5*/		DTYPE_NOTE_NAME,
-	    /*PAR_UNUSED6*/		DTYPE_NOTE_NAME,
-	    /*PAR_UNUSED7*/		DTYPE_NOTE_NAME,
+	    /*PAR_DJ_FILTER*/	DTYPE_0B127,	// LICHOMAT v0.4: DJ filter, resonance, reverb level, freeze (plan D33)
+	    /*PAR_DJ_RESO*/		DTYPE_0B127,
+	    /*PAR_REV_LEVEL*/	DTYPE_0B127,
+	    /*PAR_REV_FREEZE*/	DTYPE_ON_OFF,
 
 		/*PAR_PWM_1,*/			DTYPE_0B127,
 		/*PAR_PWM_2,*/			DTYPE_0B127,
@@ -513,7 +514,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 		/*PAR_FX_P4*/			DTYPE_0B127,
 		/*PAR_FX_RATIO*/		DTYPE_MENU | (MENU_RATIO<<8),
 		/*PAR_FX_WAVE*/			DTYPE_MENU | (MENU_WAVEFORM<<8),
-		/*PAR_FX_REVERB_TYPE*/	DTYPE_MENU | (MENU_REVERB<<8),
+		/*PAR_REV_DECAY*/		DTYPE_0B127,	// LICHOMAT v0.4: was the Plt type (plan D33)
 		/*PAR_FX_DELAY_TYPE*/	DTYPE_MENU | (MENU_DELAY<<8),
 		/*PAR_MORPH_KIT_DEST*/	DTYPE_0B127,
 
@@ -574,6 +575,14 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_MIDI_NOTE6*/		DTYPE_NOTE_NAME,
 	    /*PAR_MIDI_NOTE7*/		DTYPE_NOTE_NAME,
 		/*PAR_PATTERN_MODE*/ DTYPE_MENU | (MENU_PAT_MODE<<8),
+		// LICHOMAT v0.4: the kit block, after the globals (plan D34)
+		/*PAR_REV_SIZE*/		DTYPE_0B127,
+		/*PAR_REV_TONE*/		DTYPE_0B127,
+		/*PAR_REV_PREDELAY*/	DTYPE_0B127,
+		/*PAR_REV_MOD*/			DTYPE_0B127,
+		/*PAR_REV_DUCK_SRC*/	DTYPE_MENU | (MENU_DUCK_SRC<<8),
+		/*PAR_REV_DUCK_DEPTH*/	DTYPE_0B127,
+		/*PAR_FX_DELAY_SYNC*/	DTYPE_MENU | (MENU_DELAY_SYNC<<8),
 };
 
 
@@ -2689,6 +2698,10 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 		return STEP_PROB_CODES;
 	case MENU_SCENE_QUANT:		// LICHOMAT v0.3
 		return sceneQuantNames[0][0];
+	case MENU_DUCK_SRC:			// LICHOMAT v0.4 (plan D40)
+		return duckSrcNames[0][0];
+	case MENU_DELAY_SYNC:		// LICHOMAT v0.4 (plan D38)
+		return delaySyncNames[0][0];
 
 	default:
 		return 0;
@@ -2752,6 +2765,12 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 		break;
 	case MENU_SCENE_QUANT:		// LICHOMAT v0.3: any value but 0 from glo.cfg is stp, as seq_setMuteSceneQuant()
 		p=sceneQuantNames[(curParmVal ? 1 : 0) + 1];
+		break;
+	case MENU_DUCK_SRC:			// LICHOMAT v0.4: a value past the list reads "off", as the kit block's guard (plan D35)
+		p=duckSrcNames[((curParmVal < duckSrcNames[0][0]) ? curParmVal : 0) + 1];
+		break;
+	case MENU_DELAY_SYNC:		// LICHOMAT v0.4: likewise
+		p=delaySyncNames[((curParmVal < delaySyncNames[0][0]) ? curParmVal : 0) + 1];
 		break;
 	case MENU_MIDI_ROUTING:
 		p=midiRoutingNames[curParmVal+1];
@@ -3524,7 +3543,7 @@ void menu_switchPage(uint8_t pageNr)
 void menu_sendAllGlobals()
 {
 	uint16_t i;
-	for(i=PAR_BEGINNING_OF_GLOBALS;(i<NUM_PARAMS);i++)
+	for(i=PAR_BEGINNING_OF_GLOBALS;(i<END_OF_GLOBALS);i++)	// LICHOMAT v0.4: the globals of glo.cfg (plan D34)
 	{
 		menu_parseGlobalParam(i,activeParameters[i]);
 	}
@@ -3627,6 +3646,16 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 
 	case PAR_SCENE_QUANT:	// LICHOMAT v0.3: mute scenes at the bar or the step (plan D19)
 		seq_setMuteSceneQuant(value);
+		break;
+
+	case PAR_REV_SIZE:	// LICHOMAT v0.4: the kit block's settings go to the FX bus directly (plan D34)
+	case PAR_REV_TONE:
+	case PAR_REV_PREDELAY:
+	case PAR_REV_MOD:
+	case PAR_REV_DUCK_SRC:
+	case PAR_REV_DUCK_DEPTH:
+	case PAR_FX_DELAY_SYNC:
+		atmo_setParam(paramNr, value / 127.f);
 		break;
 
 

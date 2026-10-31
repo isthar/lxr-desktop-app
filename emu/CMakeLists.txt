@@ -306,6 +306,7 @@ emu_render_tests(M17_cli_usage M17_cli_info M17_card_errors M17_seed_card M17_t0
     M17_sync_fallback M17_save M17_fault M17_hang)
 emu_render_tests(V02_ui V02_tempo V02_groove V02_conditions V02_files V02_rotation)
 emu_render_tests(V03_rolls V03_slide V03_glide_through_ratchets V03_fill V03_scenes V03_scene_file)
+emu_render_tests(V04_kit_file)
 # M23: emu/tests/cards/make.sh gives the committed card fixtures (spec 5.6)
 emu_render_tests(M23)
 

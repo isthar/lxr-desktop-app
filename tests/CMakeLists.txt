@@ -281,6 +281,13 @@ if(TARGET test_atmo)
     target_include_directories(test_atmo SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
     set_source_files_properties(${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
 endif()
+# LICHOMAT v0.4 (plan A3): the preset manager calls the kit block's defaults and checks in
+# atmo.c, which brings the reverb with it; built without warnings as presetManager.c is.
+if(TARGET test_presets)
+    target_sources(test_presets PRIVATE
+        ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/atmo.c ${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES})
+    set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/atmo.c PROPERTIES COMPILE_OPTIONS -w)
+endif()
 
 # The sound engine's broken states (E4.9): test_dsp compiles the firmware's DSP
 # files with the stand-in headers in stubs/ at -O3, as the device build has them.
