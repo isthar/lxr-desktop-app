@@ -222,10 +222,7 @@ void atmo_setParam(uint16_t paramNr, float v)
 		if(paramNr == PAR_REV_SIZE)
 			atmo_setReverb(Reverb_setSize, v);
 		else if(paramNr == PAR_REV_TONE)
-		{	/* composition 0 makes both tilt EQs a low-pass at 0 Hz, which holds its last output
-			 * for ever (a0 0, b1 1): tone 0 plays as tone 1 */
-			atmo_setReverb(Reverb_setComposition, (v > 1.f / 127.f) ? v : (1.f / 127.f));
-		}
+			atmo_setReverb(Reverb_setTone, v);	/* tracker Q31: 64 is fw 1.7's composition 64/127 */
 		else if(paramNr == PAR_REV_PREDELAY)
 			atmo_setReverb(Reverb_setDelayTime, v);
 		else if(paramNr == PAR_REV_MOD)

@@ -154,10 +154,15 @@ TEST(RV2_tone_0_leaves_no_offset)
 {
 	/* fw 1.7's composition 0 sets both tilt EQs to a low-pass at 0 Hz (a0 0, b1 1), which holds
 	 * its last output for ever: tone 0 during a tail would leave the wet signal at a constant
-	 * offset. The stage plays tone 0 as tone 1 (a low-pass at about 930 Hz). */
+	 * offset. A7 played tone 0 as tone 1 (a low-pass at about 930 Hz); since tracker Q31 tone 0 is
+	 * Reverb_setTone()'s one-pole low-pass at 1.5 kHz, and the test still holds. */
 	int16_t bus[128];
 	uint32_t seed = 15007u;
 	atmo_init();
+	/* tracker Q31: decay 0 (RT60 0.3 s), so that 2.5 s later only an offset can be left. At the
+	 * default decay 64 (2.4 s) the new tone 0 (loop damping 0.25, A7's tone 1 had 0.008) leaves
+	 * 1.11 LSB RMS of plain tail there; the limit stays 1 LSB */
+	atmo_setParam(PAR_REV_DECAY, 0.f);
 	atmo_setParam(PAR_REV_LEVEL, 1.f);
 	atmo_setParam(PAR_REV_TONE, 0.25f);
 	for(int b = 0; b < 352; b++)	/* the wake-up, then 0.5 s of noise */
@@ -475,6 +480,150 @@ TEST(DK1_ducks_the_wet_across_a_block)
 	atmo_setParam(PAR_REV_LEVEL, 0.f);
 	memset(bus, 0, sizeof bus);
 	atmo_process(bus, 64);
+}
+
+/* tracker Q31: the wet level (dB, L and R) of a reverb at the D35 defaults and the given tone, fed
+ * for 3 s with pink noise (sine 0) or a sine of hz at -12 dBFS, measured over 1.5-3.0 s. Pink:
+ * Kellet's filter on the LCG's white noise, about -14 dBFS RMS. Counts non-finite outputs. */
+static double rv_toneLevel(uint8_t decim, uint8_t tone, float hz)
+{
+	static Reverb r;
+	int16_t in[128];
+	float wl[64], wr[64];
+	double e = 0.;
+	float b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0, h1 = 0, h2 = 0;
+	uint32_t seed = 16031u;
+	const uint32_t fs = (uint32_t)REAL_FS;
+	memset(REVERB_RAM, 0, sizeof REVERB_RAM);
+	memset(&r, 0, sizeof r);	/* Reverb_init() leaves the filters' states as they were */
+	Reverb_init(&r);
+	Reverb_setDecim(&r, decim);
+	Reverb_setSize(&r, 100 / 127.f);
+	Reverb_setDecay(&r, 64 / 127.f);
+	Reverb_setMod(&r, 40 / 127.f);
+	Reverb_setTone(&r, tone / 127.f);
+	for(uint32_t b = 0; b < 3 * fs / 64; b++)
+	{
+		for(int i = 0; i < 64; i++)
+		{
+			float x;
+			if(hz > 0.f)
+				x = 0.25f * sinf(6.2831853f * hz * (float)(b * 64 + (uint32_t)i) / REAL_FS);
+			else
+			{
+				seed = seed * 1664525u + 1013904223u;
+				const float w = ((float)(seed >> 8) / 8388608.f - 1.f);
+				b0 = 0.99886f * b0 + w * 0.0555179f;
+				b1 = 0.99332f * b1 + w * 0.0750759f;
+				b2 = 0.96900f * b2 + w * 0.1538520f;
+				b3 = 0.86650f * b3 + w * 0.3104856f;
+				b4 = 0.55000f * b4 + w * 0.5329522f;
+				b5 = -0.7616f * b5 - w * 0.0168980f;
+				x = 0.11f * (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362f);
+				b6 = w * 0.115926f;
+				/* two one-pole high-passes at 20 Hz: pink noise of 20 Hz-20 kHz */
+				h1 += 0.0028429f * (x - h1);
+				x -= h1;
+				h2 += 0.0028429f * (x - h2);
+				x -= h2;
+			}
+			const int32_t v = (int32_t)(x * 32767.f);
+			in[2 * i] = in[2 * i + 1] = (int16_t)((v > 32767) ? 32767 : (v < -32768) ? -32768 : v);
+		}
+		Reverb_processWet(&r, in, wl, wr, 64);
+		for(int i = 0; i < 64; i++)
+		{
+			rv_nonFinite += !(isfinite(wl[i]) && isfinite(wr[i]));
+			if(b * 64 >= 3 * fs / 2)
+				e += (double)wl[i] * wl[i] + (double)wr[i] * wr[i];
+		}
+	}
+	return 10. * log10(e / (2. * (3 * fs / 2)));
+}
+
+/* tracker Q31: the level at the ends of the tone knob. The bare one-pole filters at the asked
+ * corners cost 2.05 dB (low-pass 1.5 kHz) and 2.47 dB (high-pass 400 Hz) of pink noise of
+ * 20 Hz-20 kHz, computed; the tank tilts the wet spectrum (its loop damping, an octave lower at half
+ * rate) and moves that by up to about 1 dB. So the ends stay within 3.5 dB of tone 64. fw 1.7's
+ * mapping gave -4.1 dB at tone 1 and -36.6 dB at tone 127 on the same measure (full rate). */
+#define RV5_LEVEL_BOUND 3.5
+
+TEST(RV5_tone_ends_keep_the_level)
+{
+	for(uint8_t decim = 1; decim <= 2; decim++)
+	{
+		rv_nonFinite = 0;
+		const double mid = rv_toneLevel(decim, 64, 0.f);
+		const double lo = rv_toneLevel(decim, 0, 0.f) - mid;
+		const double hi = rv_toneLevel(decim, 127, 0.f) - mid;
+		printf("RV5: decim %u, pink 20 Hz-20 kHz: tone 64 %.1f dB, tone 0 %+.2f dB, tone 127 %+.2f dB\n",
+				decim, mid, lo, hi);
+		ASSERT_EQ(rv_nonFinite, 0);
+		ASSERT_TRUE(fabs(lo) <= RV5_LEVEL_BOUND);
+		ASSERT_TRUE(fabs(hi) <= RV5_LEVEL_BOUND);
+	}
+}
+
+TEST(RV5_tone_is_a_low_pass_and_a_high_pass)
+{
+	/* sines at -12 dBFS through the reverb, against tone 64: tone 0 is a one-pole low-pass at
+	 * 1.5 kHz (theory: -3 dB at 1.5 kHz, -12.3 dB at 6 kHz, 0 at 200 Hz), tone 127 a one-pole
+	 * high-pass at 400 Hz (-3 dB at 400 Hz, -12.3 dB at 100 Hz, 0 at 3 kHz); the tank's comb
+	 * response moves a single sine by about a dB */
+	static const struct { uint8_t tone; float hz; double lo, hi; } c[] = {
+		{ 0, 6000.f, -99., -9. }, { 0, 1500.f, -4.5, -1.5 }, { 0, 200.f, -1., 1. },
+		{ 127, 100.f, -99., -9. }, { 127, 400.f, -4.5, -1.5 }, { 127, 3000.f, -1.5, 1.5 },
+	};
+	for(uint8_t decim = 1; decim <= 2; decim++)
+		for(unsigned k = 0; k < sizeof c / sizeof c[0]; k++)
+		{
+			rv_nonFinite = 0;
+			const double d = rv_toneLevel(decim, c[k].tone, c[k].hz) - rv_toneLevel(decim, 64, c[k].hz);
+			printf("RV5: decim %u, tone %3u, %5.0f Hz: %+.2f dB\n", decim, c[k].tone, (double)c[k].hz, d);
+			ASSERT_EQ(rv_nonFinite, 0);
+			ASSERT_TRUE((d >= c[k].lo) && (d <= c[k].hi));
+		}
+}
+
+TEST(RV5_tone_64_after_a_side_leaves_no_offset)
+{
+	/* tone 64's output high-pass is at 0.01 Hz: entering it from either side clears the output
+	 * filters' state, else that state stays on the bus as an offset (seen failing first without
+	 * the clearing: 127 -> 64 left 493.22 LSB RMS) */
+	static const uint8_t from[] = { 127, 30 };
+	for(unsigned k = 0; k < sizeof from; k++)
+	{
+		int16_t bus[128];
+		uint32_t seed = 16041u;
+		atmo_init();
+		atmo_setParam(PAR_REV_DECAY, 0.f);	/* RT60 0.3 s: after 2.5 s only an offset is left */
+		atmo_setParam(PAR_REV_LEVEL, 1.f);
+		atmo_setParam(PAR_REV_TONE, from[k] / 127.f);
+		for(int b = 0; b < 352; b++)	/* the wake-up, then 0.5 s of noise */
+		{
+			for(int i = 0; i < 128; i++)
+			{
+				seed = seed * 1664525u + 1013904223u;
+				bus[i] = (int16_t)(((int32_t)(seed >> 16) - 32768) / 4);
+			}
+			atmo_process(bus, 64);
+		}
+		atmo_setParam(PAR_REV_TONE, 64 / 127.f);
+		double e = 0.;
+		for(int b = 0; b < 2069; b++)	/* 3 s of silence, the last 0.5 s measured */
+		{
+			memset(bus, 0, sizeof bus);
+			atmo_process(bus, 64);
+			if(b >= 1724)
+				for(int i = 0; i < 128; i++)
+					e += (double)bus[i] * bus[i];
+		}
+		const double rms = sqrt(e / (128. * 345.));
+		printf("RV5: tone %u -> 64 after noise: bus RMS %.2f LSB after 2.5 s\n", from[k], rms);
+		ASSERT_TRUE(rms < 1.0);
+		atmo_setParam(PAR_REV_LEVEL, 0.f);
+		atmo_process(bus, 64);
+	}
 }
 
 TEST_MAIN()

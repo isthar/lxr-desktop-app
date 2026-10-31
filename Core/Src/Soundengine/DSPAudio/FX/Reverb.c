@@ -25,6 +25,16 @@
 #define REVERB_FREEZE_FB		0.9999f
 #define REVERB_FREEZE_LFO_HZ	0.15f
 #define REVERB_FREEZE_MOD		0.3f
+//LICHOMAT v0.4: the tone knob (tracker Q31): the corners of the output filter at tone 0, 63, 65 and
+//127, and the loop damping's coefficient at tone 0, 64 (fw 1.7's 64/127) and 127
+#define REVERB_TONE_LP_HZ		1500.f
+#define REVERB_TONE_LP_TOP_HZ	18000.f
+#define REVERB_TONE_HP_BOT_HZ	20.f
+#define REVERB_TONE_HP_HZ		400.f
+#define REVERB_TONE_DAMP_DARK	0.25f
+#define REVERB_TONE_DAMP_MID	(64.f / 127.f)
+#define REVERB_TONE_DAMP_BRIGHT	0.85f
+#define REVERB_TONE_NONE		255
 
 
 
@@ -51,6 +61,7 @@ void Reverb_init(Reverb *r)
 	r->frozen = 0;	//LICHOMAT v0.4: freeze (plan A8)
 	r->damp = 0.5f;
 	r->modDepth = 0.f;
+	r->tone = REVERB_TONE_NONE;	//LICHOMAT v0.4: tracker Q31
 
 	SineCosine_init(&r->lfo);
 	r->reverbBufferSram = REVERB_RAM;	//LICHOMAT v0.4: own buffer (plan D31)
@@ -597,6 +608,8 @@ void Reverb_setDecim(Reverb *r, uint8_t decim)
 	r->decim = (decim == 2) ? 2 : 1;
 	r->lastWetL = r->lastWetR = 0.f;
 	Reverb_calcFeedback(r);
+	if(r->tone != REVERB_TONE_NONE)	/* the tone's corners are in Hz of the core's rate */
+		Reverb_setTone(r, r->tone / 127.f);
 }
 
 void Reverb_setSize(Reverb *r, float s01)
@@ -645,6 +658,66 @@ void Reverb_setFreeze(Reverb *r, uint8_t on)
 	Reverb_calcFeedback(r);
 	setOnePoleCoef(&r->lpFeedback, r->frozen ? 1.f : r->damp);
 	Reverb_setMod(r, r->mod);
+}
+
+//tracker Q31: a one-pole low-pass (or, as x - low-pass, high-pass) at hz on a tilt EQ, matched to
+//the core's rate fs: a = 1 - e^(-2 pi hz / fs), whose -3 dB point is hz within 2 % up to 1.5 kHz
+//at both rates (fw 1.7's TiltEq_setFreq() uses 3 REAL_FS at any rate)
+static void Reverb_setOnePoleEq(TiltEq *eq, float hz, float fs, uint8_t highpass)
+{
+	const float a = 1.f - expf(-6.2831853f * hz / fs);
+	eq->a0 = a;
+	eq->b1 = 1.f - a;
+	eq->lgain = highpass ? 0.f : 1.f;
+	eq->hgain = highpass ? 1.f : 0.f;
+}
+
+//tracker Q31: the tone 0..1 (0..127). fw 1.7's Reverb_setComposition(tone/127) is nearly silent at
+//both ends: tone 1 a low-pass at about 930 Hz on the input and the output with a loop damping of
+//0.008 (a 55 Hz one-pole in the loop), tone 127 a high-pass at 20 kHz. Here:
+//- tone 64 is Reverb_setComposition(64/127), A7's coefficients bit for bit (flat);
+//- the input EQ keeps tone 64's setting, and the tone is one pole on each output (6 dB per octave,
+//  heard at once on the tail already in the tank): 0..63 a low-pass from 1.5 kHz to 18 kHz,
+//  65..127 a high-pass from 20 Hz to 400 Hz, both geometric in the knob (equal steps are equal
+//  intervals, as the DJ filter's, plan D39);
+//- the loop damping is geometric too, from 0.25 (tone 0) through 64/127 to 0.85 (tone 127): the
+//  dark side's tail darkens as it decays, the bright side's keeps its air;
+//- entering tone 64, or crossing from the low-pass side to the high-pass side, clears the output
+//  filters' state: tone 64's high-pass is at 0.01 Hz, so the state of a low-pass (the signal) or of
+//  the 400 Hz high-pass (its bass) would stay on the output as an offset for about 16 s.
+void Reverb_setTone(Reverb *r, float t01)
+{
+	const float tf = Reverb_clamp01(t01) * 127.f + 0.5f;
+	const uint8_t t = (uint8_t)tf;
+	const uint8_t old = r->tone;
+	if((old != t) && ((t == 64) || ((old < 64) != (t < 64))))
+		r->eqFb.lp_out = r->eqFbR.lp_out = 0.f;
+	if(t == 64)
+	{
+		Reverb_setComposition(r, 64.f / 127.f);
+		r->tone = 64;
+		return;
+	}
+	TiltEq_setParameter(&r->eq, -1 + 2 * (64.f / 127.f));	/* the input EQ as at tone 64 */
+	const float fs = REAL_FS / (float)r->decim;
+	float hz, damp;
+	if(t < 64)
+	{	/* x = 1 at tone 0, 1/63 at tone 63; ln(18000/1500) = 2.4849, ln(0.50394/0.25) = 0.70110 */
+		const float x = (63.f - (float)t) / 63.f;
+		hz = REVERB_TONE_LP_TOP_HZ * expf(-2.4849066f * x);
+		damp = REVERB_TONE_DAMP_MID * expf(-0.70110f * (64.f - (float)t) / 64.f);
+	}
+	else
+	{	/* x = 1 at tone 127, 0 at tone 65; ln(400/20) = 2.9957, ln(0.85/0.50394) = 0.52281 */
+		const float x = ((float)t - 65.f) / 62.f;
+		hz = REVERB_TONE_HP_BOT_HZ * expf(2.9957323f * x);
+		damp = REVERB_TONE_DAMP_MID * expf(0.52281f * ((float)t - 64.f) / 63.f);
+	}
+	Reverb_setOnePoleEq(&r->eqFb, hz, fs, t > 64);
+	Reverb_setOnePoleEq(&r->eqFbR, hz, fs, t > 64);
+	r->damp = damp;
+	setOnePoleCoef(&r->lpFeedback, r->frozen ? 1.f : damp);
+	r->tone = t;
 }
 
 //the loop's state after REVERB_RAM was cleared (atmo.c, on waking)

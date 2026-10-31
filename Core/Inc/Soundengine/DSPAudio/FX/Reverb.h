@@ -91,6 +91,7 @@ typedef struct ReverbStruct
 	uint8_t frozen;		/* 1: input 0, feedback 0.9999, no loop damping, slow LFO */
 	float damp;			/* the loop damping's coefficient of the tone, restored on unfreezing */
 	float modDepth;		/* the LFO's depth: mod, frozen max(mod, 0.3) */
+	uint8_t tone;		/* tracker Q31: the tone 0..127 of Reverb_setTone(), 255 before it */
 
 } Reverb;
 
@@ -109,6 +110,7 @@ void Reverb_setDecay(Reverb *r, float d01);
 void Reverb_setMod(Reverb *r, float m01);
 void Reverb_clearState(Reverb *r);
 void Reverb_setFreeze(Reverb *r, uint8_t on);	//LICHOMAT v0.4: plan D36, A8
+void Reverb_setTone(Reverb *r, float t01);	//LICHOMAT v0.4: tracker Q31
 
 
 /*
