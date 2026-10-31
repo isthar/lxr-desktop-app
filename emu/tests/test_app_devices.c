@@ -484,10 +484,14 @@ static int midioutChild(void)
 		{
 			delta[i - 1u] = (double)(gClockStamp[i] - gClockStamp[i - 1u]) / ms;
 			off += fabs(delta[i - 1u] - 1000.0 / 48.0) > 2.5;
-			/* A4: the F8 intervals as they arrive are 20.83 +- 1.5 ms. The interval from the last F8 before Start to the first
-			 * one after it is the firmware's: it restarts the phase of its clocks 1 ms after the FA (M18_out_start_phase) */
+			/* A4: the F8 intervals as they arrive are 20.83 +- 1.5 ms, from the 10th clock on. The first clocks come out of
+			 * the firmware's post-splash work, which is not wall-paced: while other render processes run it takes longer than
+			 * the 25 ms render lead, and the first F8 reaches the MIDI-out ring 16 to 131 ms after its stamp (the first USB
+			 * program change 53 to 241 ms), so their spacing is not the thread's (it sends what it sees at once). A4 is a
+			 * steady-state check. The interval from the last F8 before Start to the first one after it is the firmware's: it
+			 * restarts the phase of its clocks 1 ms after the FA (M18_out_start_phase) */
 			const double gap = ((double)gClockArrive[i] - (double)gClockArrive[i - 1u]) / ms;
-			if (i != start)
+			if (i != start && i >= 10u)
 			{
 				aMin = fmin(aMin, gap);
 				aMax = fmax(aMax, gap);
