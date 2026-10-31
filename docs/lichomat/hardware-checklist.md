@@ -1,4 +1,4 @@
-# LICHOMAT 0.1, 0.2, 0.3 and 0.4: hardware checklist (H1–H13, U1–U26, X4, optional X1–X3)
+# LICHOMAT 0.1, 0.2, 0.3, 0.4 and 0.5: hardware checklist (H1–H13, U1–U32, X4, optional X1–X3)
 
 These are the checks of spec §13.2, written out as procedures for the LXR-02. Only the owner can run
 them, on the real device; nothing here is ever marked as passed by an agent. Record every result in
@@ -48,12 +48,29 @@ Test 0.4 (U21–U26) only on the build whose rate H12 and U20 have fixed. 0.4 ke
 synced delay, DJ filter sweeps, the reverb, freeze, rumble and the four kit recipes in the emulator
 (`build/demo/v04-*.wav`), to compare by ear.
 
+**LICHOMAT 0.5.** The whole of 0.5 is built (plan
+`docs/superpowers/plans/2026-10-31-v0.5-sample-accurate.md`, spec
+`docs/superpowers/specs/2026-10-31-sample-accurate-triggering.md`, branch `v0.5`): each voice starts
+at the sample of its event, a constant 128 samples (2.90 ms) after it, where 0.4 started it with the
+next audio block, 64 to 128 samples after it. The new global setting `trg` chooses `smp`, the new
+timing and the default, or `blk`, the timing of 0.4. It is saved in byte 9 of `GLO.CFG`, which 1.7
+writes as 0 and never reads; no file changes its size or format. 0.5 is built on 0.4 and is not
+released yet: 0.4's remaining work (the reverb's rate after H12 and U20, and its release) is merged
+into 0.5 first. So there is no `LXR_V2_LICHOMAT_0.5.img` to install yet; its SHA-256 goes into the
+run sheet when CI builds the release commit, and H1 will then show `v0.5 unofficial`. Run U27–U32
+on that file. 0.5 keeps everything of 0.4, so the 0.4 checks need not be repeated. U27–U29 read
+onsets at sample level with the click of `docs/lichomat/kit-recipes-v0.5.md`. Back up the card
+before you install 0.5, too. `tools/demo_v05.sh` on branch `v0.5` renders 0.4's demos in both
+settings and two grooves in both (in the worktree `build/wt-v05`: `build/demo-v05/v05-*.wav`), to
+compare by ear.
+
 **What you need**
 
 - The LXR-02, its SD card and a card reader.
 - The update files of the [run sheet](#run-sheet): `LXR_V2_LICHOMAT_0.1.img`,
-  `LXR_V2_LICHOMAT_0.2.img` and `LXR_V2_LICHOMAT_0.3.img` (LICHOMAT), and `LXR_V2_V1.7.img`
-  (official 1.7, for H13, U12, U14, U16, U18 and for comparisons).
+  `LXR_V2_LICHOMAT_0.2.img` and `LXR_V2_LICHOMAT_0.3.img` (LICHOMAT; 0.4 and 0.5 once CI builds their
+  release commits), and `LXR_V2_V1.7.img` (official 1.7, for H13, U12, U14, U16, U18, U25, U32 and
+  for comparisons).
 - A computer with a DAW that can record the LXR's audio output and send and receive MIDI over USB
   (and over DIN through a MIDI interface).
 - A MIDI monitor that shows time stamps, for example MIDI Monitor on macOS. Watch the LXR's MIDI
@@ -90,8 +107,8 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
 - Global menu: hold SHIFT and press step button 12. Each further SHIFT + step 12 moves on, in this
   order: the first sub-page (`bpm` BPM, `shu` shuffle, `ch` MIDI channel, `ssv` screensaver), its
   second screen (`mtx` MIDI transmit filter, `mrx` receive filter, `mrt` routing, `flw` follow), the
-  second sub-page (`kcm` kit autoload, `Aut` or `off`; `cki` clock in PPQ; `cko` clock out PPQ),
-  **the new CPU page**, and back to the first sub-page. Coming from the second screen of another
+  second sub-page (`kcm` kit autoload, `Aut` or `off`; `cki` clock in PPQ; `cko` clock out PPQ;
+  from 0.5 `trg`, see below), **the new CPU page**, and back to the first sub-page. Coming from the second screen of another
   page, the menu opens on the MIDI filter screen, so the CPU page is one press sooner.
 - MIDI filters: `mtx` and `mrx` show the messages they pass: `N` notes, `R` realtime (clock, Start,
   Stop, Continue; received, also Song Position Pointer and MTC), `C` control changes, `P` Program
@@ -153,6 +170,11 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
   low-pass that closes towards 0, 63–65 is flat, 66–127 a high-pass that opens towards 127. It
   filters stereo outputs 1 and 2, after the FX bus. NRPN 96 sets `djf` and NRPN 97 `djr`. A kit load
   keeps `djf` where it is (a kit save stores it as 64); `djr` belongs to the kit.
+- Trigger timing (0.5, `trg`, a global setting): knob 4 of the global menu's second sub-page, after
+  `kcm cki cko`. `smp` (the default) starts each voice at the sample of its event, a constant 128
+  samples (2.90 ms) after it; `blk` starts it at the beginning of the next audio block, as 0.4 did.
+  It is saved with the global settings (the save page's global type, as in 1.7), in byte 9 of
+  `GLO.CFG`. A switch while playing takes effect at the next hit.
 
 **Measuring times in a recording.** Record the LXR's main output at 48 kHz (H7 step 6 at 44.1
 kHz). Find a hit's onset by zooming in on the waveform (or with the DAW's transient detection), and
@@ -160,6 +182,9 @@ measure from a reference hit.
 One audio block of the LXR is 64 samples at 44.14 kHz, 1.45 ms: in fw 1.7 and in LICHOMAT a voice
 starts at the beginning of the block after its event is due, so ±1.5 ms around the expected time is
 on time. At 120 BPM a step (a 16th) is 125 ms, and 1/96 of a step (a tick) is 1.30 ms.
+From 0.5 on, with `trg smp`, a voice starts a constant 128 samples (2.90 ms) after its event, within
+one sample; with `trg blk` as before. U27–U29 therefore read onsets at sample level (see their
+setup).
 
 ## H1: start-up screen
 
@@ -1267,6 +1292,157 @@ played, and the values shown back on 0.4.
 **Record:** the start-up screen, and a short note per recipe: how it sounded, and any name or value
 in the text that did not match the device.
 
+## U27–U32: sample-accurate triggering (0.5)
+
+0.5 starts each voice at the sample of its event (spec
+`docs/superpowers/specs/2026-10-31-sample-accurate-triggering.md` §10.1, tracker E6.10). Run these
+checks on `LXR_V2_LICHOMAT_0.5.img`. U27–U29 need the same setup:
+
+- the LXR's main output (output 1, stereo) recorded into a DAW at 44.1 or 48 kHz;
+- for the MIDI checks (U28, U29), the DAW's MIDI on the same interface as the recording;
+- the **click** on Drum 1 (voice 1), and for U27 step 2 its copy on Drum 2, built from
+  `docs/lichomat/kit-recipes-v0.5.md`: oscillator `Sin`, `atk` 0, `dec` 0 (the shortest decay),
+  the transient `Clk` at `vol` 127, the filter `off`, `vol` 127, `pan` −63, `out` `St1`, every
+  other voice on `St2`. The click lasts about 2.9 ms. Save it in a kit slot you can spare.
+
+Read the offsets at sample level in the DAW: zoom in until single samples show, and take the first
+sample of each onset that rises clearly above the noise. With `trg smp` an onset is within one
+sample of its place, a constant 128 samples (2.90 ms) after its event; with `trg blk` it is 64 to
+128 samples after, a different amount at each hit, as in 0.4. `trg` is knob 4 of the global menu's
+second sub-page (hold SHIFT and press step 12 until `kcm cki cko trg` shows).
+
+## U27: sequencer onsets
+
+0.5's onsets from the sequencer (spec S3, S4). Use a pattern you can spare, all tracks 16 steps long,
+with the click kit.
+
+1. Internal sync, BPM 120, shuffle 0. Voice 1 (the click) on all 16 steps, every other voice off.
+   Set `trg` `smp`. Press START and record 2 bars. Then set `trg` `blk` and record 2 bars.
+2. Voice 2 (the click's copy: `pan` +64, `out` `St1`, so it is the right channel of output 1) on
+   steps 1, 5, 9 and 13, with `dly` +1 on the track page (select voice 2, SHIFT + the second mode
+   button, the second screen `tmp hmt hmv dly`): one tick, 1.30 ms at 120 BPM (the core rounds the
+   track delay to whole ticks). Voice 1 stays as in step 1. Record 2 bars with `smp`, then 2 bars
+   with `blk`, and listen.
+
+**Expected:**
+- 1: with `smp`, the 15 intervals between 16 consecutive onsets are 125.0 ms within 2 samples, at
+  either recording rate. With `blk` the intervals vary by up to about 64 samples (1.45 ms).
+- 2: with `smp`, each of voice 2's hits comes 56–58 samples (at 44.1 kHz; 61–63 at 48 kHz, that is
+  1.27–1.31 ms) after voice 1's, and the flam sounds the same on every hit. With `blk` the gap jumps
+  between about 0 and 64 samples, and the flam flutters.
+
+**Record:** the largest and the smallest of the 15 intervals in step 1, for `smp` and for `blk`;
+the eight gaps of step 2 (two bars of four), for both.
+
+## U28: MIDI in
+
+0.5 starts a voice for a MIDI Note On at the arrival of its last byte (DIN) or of its USB transfer
+(spec S9). The click kit, the LXR stopped, every voice on its own MIDI channel (voice n on channel n,
+as in H8; `ch` on the voice's MIX sub-page, second screen). Voice 1's `nte` (the same screen) set to
+`any`, or the clip's notes at the note it shows: a voice with a note set plays only that note.
+
+1. The DAW plays a clip of 16 notes on voice 1's channel to the LXR's DIN MIDI in, through the MIDI
+   interface, with uneven gaps of 30–200 ms. Record the LXR with `trg smp`, then play the clip again
+   with `trg blk`.
+2. The same over USB (the DAW's MIDI to the LXR's USB port, `Sonic Potions USB MIDI`).
+
+**Expected:** with `smp`, every onset comes the same time after its note in the DAW: the spread of
+(onset − note) is within the interface's own MIDI jitter, about 0.3 ms for DIN and about 1 ms for
+USB (USB carries notes in 1 ms frames; every note of a transfer shares its time). With `blk` the
+spread is about 1.45 ms larger.
+
+**Record:** the spread for each of the four runs, and the mean offset (onset − note) with `smp`. The
+DAW's MIDI offset can be set to that mean.
+
+## U29: clock slave
+
+0.5 as a MIDI clock slave (spec §4.5: a constant 2.90 ms behind the incoming clock). The click kit,
+voice 1 on all 16 steps, every other voice off, BPM set to `MID`, `mrx` with R (for example `all`).
+
+1. The DAW sends MIDI clock at 128 BPM to the LXR's DIN MIDI in, through the MIDI interface, and
+   nothing to its USB port. If the DAW sends the clocks of one audio buffer together, set its buffer
+   to 64 samples (see H6). Start from the DAW and record 4 bars with `trg smp`, then 4 bars with
+   `trg blk`.
+2. The same over USB: the clock to the LXR's USB port only.
+
+**Expected:** with `smp`, from bar 2 on, the onsets lie on the DAW's 16th grid with a constant offset
+and a spread at the level of U28's. With `blk` the spread is about 1.45 ms larger.
+
+**Record:** the spread and the offset for each of the four runs, and the DAW's buffer size.
+
+## U30: CPU with E6.10
+
+0.5's CPU cost (spec §6, S19, S20). A note that does not start on a block boundary runs a control
+step inside every block while it sounds, so both the mean and the peak rise. Use H12 step 3's kit,
+pattern and BPM 140, with the reverb at the rate the 0.4 release chose (U20) and the delay in the
+slot.
+
+1. `trg` `blk`. Press START, open the CPU page (SHIFT + step 12, the page after `kcm cki cko trg`)
+   and read the values for 30 s.
+2. `trg` `smp`, the CPU page for 30 s.
+3. Again with `smp`, after turning on LFO retrigger on voices 1–6, each LFO retriggered by its own
+   voice: on voice n's LFO page (select button 7) `rtg` `vn` (`v1` for voice 1, … `v6` for voice 6).
+   The CPU page for 30 s.
+
+**Expected:** `pk` in step 2 at most about 3.7 points above step 1, and in step 3 at most about 4.7
+above it. `pk` below 95 and `ovf` 0 in every step, with no dropouts or clicks. `CPU` (the mean) in
+step 2 up to about 1.2 points above step 1. If `pk` goes past these limits or reaches 95, the fix-up
+is a build that caps the splits at 3 (`-DVSCHED_SPLIT_CAP=3`, spec S20), and U30 runs again on it.
+In that build a block in which more than three voices start a hit off the block boundary starts
+those hits at the block, as 0.4 does; the voices that are only sounding go on unchanged. Your own
+fallback is `trg blk`.
+
+**Record:** `CPU` and `pk` for each step, `Qmax` and `ovf`, the BPM, and the reverb's rate of the
+build (the release notes name it).
+
+## U31: sound
+
+0.5 must sound as 0.4, only on time. Listen with `trg smp`, then with `trg blk`, to:
+
+1. a kick with the snap transient (`wav` `Snp` on the transient page, select button 5) at a high
+   transient pitch (`frq` on the same page);
+2. a Drum 1 acid line with slide steps (`sld` on the step page, `slt` on the oscillator page's second
+   screen);
+3. an LFO retriggered by its voice (`rtg`), as a pitch envelope;
+4. the open and the closed hat on the same step, and on neighbouring steps;
+5. p-locks on every step of a track;
+6. humanize 8 ms on the hats (`hmt` on the track page).
+
+Then switch `trg` while it plays, several times.
+
+**Expected:** the same timbre in both modes: the snap and the attack unchanged, no clicks at
+retriggers, the open hat choked by the closed one as in 0.4. Switching makes no glitch, with one
+known exception: for about 1.5 blocks after a switch from `smp` to `blk`, a hit posted in `smp` can
+retrigger a voice after a newer `blk` hit of the same voice, once, at the switch. One known
+difference: an LFO retriggered by its voice whose target is applied when the LFO sends its value,
+such as the drum filter cutoff, moves by up to 62 samples (1.4 ms) against the onset from hit to hit
+(spec §4.5); a target the voice reads at its control step, such as the pitch EG's amount, does not.
+
+**Record:** anything that differs between `smp` and `blk`, with the item number.
+
+## U32: setting, files, card access
+
+0.5's setting in `GLO.CFG` and its timing around card access (spec S18, §8).
+
+1. Set `trg` `blk` and save the global settings as in 1.7 (the save page's global type). Power off
+   and on, and look at `trg`.
+2. Install `LXR_V2_V1.7.img` (H13's way back) and start it with the card, without saving the global
+   settings there; then install the 0.5 file again, start it and look at `trg`. Set `smp` and save
+   the global settings again.
+3. While a pattern plays, save the pattern, the kit and the project. Then change the pattern while
+   it plays, with kit autoload on (`kcm` `Aut`).
+
+**Expected:**
+- 1: `trg` shows `blk` after the restart.
+- 2: 1.7 starts without `glo.cfg error` and loads everything; 0.5 loads everything again, and `trg`
+  shows `blk`, as 0.5 saved it. (Had 1.7 saved the global settings, `trg` would show `smp`: 1.7
+  writes 0 into that byte.)
+- 3: no dropout or stuck note, and the timing before and after the saves as in U27. During a kit
+  load a hit may start at the block, as in 0.4 (the voice scheduler counts such a hit as late,
+  spec §5.3); the hits after it are on time again.
+
+**Record:** pass or fail per step, and what `trg` showed in 1 and 2.
+
 ## X4: USB MIDI out
 
 Not in the spec's list: 1.7 defects of the USB MIDI out that LICHOMAT fixes (tracker E2.8).
@@ -1376,6 +1552,7 @@ Update files under test (filled in when the files were built):
 | `LXR_V2_LICHOMAT_0.2.img` | `f99cb713d7f92cbc13d54084cd9603ee71e8bfcb81fa20594a55991ecda5ad7f` | `v0.2` at `4b63f2d`, built by CI | the artifact `lichomat-firmware-4b63f2db6e15e5845599bf554598e6611377d14f` of CI run 41016102539 (kept until 2027-01-28) |
 | `LXR_V2_LICHOMAT_0.3.img` | `d630eabc990fe19a6dca1d620162f3f4af5efde970e975ccaff914574604aee9` | `v0.3` at `813aaf6`, built by CI; `a9865dc` (F14–F18 and the emulator's goldens) builds the same file, CI run 41140852554 (a later firmware change on `v0.3` replaces this row) | the artifact `lichomat-firmware-813aaf665353f9c7c2004f803cf7e08a4273049e` of CI run 41126736959 (kept until 2027-01-28) |
 | `LXR_V2_LICHOMAT_0.4.img` | filled in when CI builds the release commit | `v0.4`, the release commit, built by CI, once H12 and U20 have fixed the reverb's rate | the artifact of that CI run (filled in then) |
+| `LXR_V2_LICHOMAT_0.5.img` | filled in when CI builds the release commit | `v0.5`, the release commit, built by CI, once 0.4's release is merged in | the artifact of that CI run (filled in then) |
 
 The LICHOMAT file is the one CI builds, the file the release attaches (spec §14). Download it with
 `gh run download 40435442579 --repo isthar/lxr-desktop-app -n lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f`
@@ -1433,6 +1610,12 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | U24 | | | |
 | U25 | | | |
 | U26 | | | |
+| U27 | | | |
+| U28 | | | |
+| U29 | | | |
+| U30 | | | |
+| U31 | | | |
+| U32 | | | |
 | X1 | | | |
 | X2 | | | |
 | X3 | | | |
