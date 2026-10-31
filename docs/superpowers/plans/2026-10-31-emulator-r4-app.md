@@ -4536,3 +4536,25 @@ Expected: `check.sh` with 57 host tests, 213 emulator ids, the image `OK`, 0 war
 - **Size.** The plan is longer than the 1,800 lines asked for: complete code for the interfaces, every test and the listed pure logic take about two thirds of it.
 - **Not testable here:** the GUI itself (no window server in CI), the audio and MIDI hardware paths (A2–A11), and Open Anyway (A1). The device tests skip in CI.
 - **Q14–Q16** stand as applied: the names, the schematic panel, D's default, the app's own card folder.
+
+## Changes during execution (2026-10-31)
+
+- **E32.** `diag.blockRate` comes from the audio time-map points: the frames between the newest point and
+  the oldest point at least 2 s older, over their host-time difference, divided by 64. Counting whole
+  blocks over 2 s read 690.1 on real CoreAudio against A11's 689.7 ± 0.1; the rate from the points
+  reads 689.70. Wall pacing keeps the count.
+- **E33**, the owner's decision of 10:13 and 10:16: the panel follows the device's control layout
+  (jack strip on top, LCD with the 4 knobs and the encoder at the upper left, the faders and the bar and
+  voice buttons at the right, the three button groups, the 16 steps at the bottom), with no device
+  names, logos, printing, graphics or colours, and a 'LICHOMAT' wordmark in a system font loaded at run
+  time (DIN Condensed Bold, then Futura, Impact, or the LCD's dot font). The VOLUME fader is left out:
+  the firmware reads 6 faders.
+- **The `time` clash.** `Core/Src/graphic.c` defines a global `float time`, which bound ImGui's call to
+  libc `time()` and crashed the app at start. The emulator builds that file with `time=lxr_graphic_time`
+  (the firmware image is unchanged), and `R4_gui_clash` fails on any firmware global that the app's own
+  objects reference.
+- **Start and F8.** The firmware sends an F8 1 ms after FA, whatever the phase of the free-running
+  clocks, so the one F8 interval that contains Start is 0–20.8 ms. A4 leaves that interval out.
+- **Reviews.** Three light reviews of the code (Tasks 1–4, 5–9, 10–12) on top of the plan review; their
+  fixes added test ids, so the counts above are low: 254 ids in Debug after the fixes of the second
+  review.

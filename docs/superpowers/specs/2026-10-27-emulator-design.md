@@ -97,7 +97,8 @@ from fw 1.7.
   10 of the wavetable oscillators changes its sound, so that change waits for a listening check (F9, §7).
 - **G7.** The binaries contain no ST SLA0044 code and no file without a licence. They show that they are
   unofficial. 'Erica Synths', 'LXR' and 'Sonic Potions' appear in them only in the allow-listed texts of
-  §10.2, and they carry no logo and no copy of the faceplate (§10).
+  §10.2, and they carry no logo and none of the faceplate's names, printing, graphics or colours (§10;
+  the panel follows the device's control layout since E33).
 
 ### Non-goals
 
@@ -1189,16 +1190,18 @@ The firmware thread maps host time (mach ticks) to virtual time and back.
 The panel uses Dear ImGui on its native Cocoa and Metal backends (Q16). Its Metal shaders compile at run
 time from source, so the Command Line Tools are enough to build it.
 
-- **Layout**, schematic and in our own colours (Q14), in rows by function:
+- **Layout**, in our own colours (Q14). Since the owner's decision of 2026-10-31 (E33 in the R4 plan),
+  the controls sit roughly where they sit on the device, for muscle memory; before, they were grouped
+  in rows by function. The controls:
   - the LCD and the encoder;
   - 4 knobs under the LCD's 4 columns, since knob i edits the parameter in column i;
   - 6 faders, labelled by their voices;
   - 41 buttons with their LEDs, labelled with their function names;
   - a jack strip with the 4 output-jack switches, the card switch, the clock-out LED, and the clock-in
     and reset-in controls (§6.8).
-- **No branding.** No LXR or Erica Synths name or logo, and no copy of the faceplate's layout, colours,
-  printing or graphics. The rows above group controls by function, not by their places on the faceplate,
-  and A1 has the owner confirm it.
+- **No branding.** No LXR, Erica Synths or Sonic Potions name or logo, and none of the faceplate's
+  colours, printing or graphics. Where the device has its logo, the panel shows a 'LICHOMAT' wordmark in
+  a system font loaded at run time (E33). A1 has the owner confirm it.
 - **Mouse and keys.**
   - Buttons: mouse down and up are button down and up. A secondary click latches a button down until the
     next click, so that SHIFT + step works with one mouse. The Shift key holds SHIFT, and the space bar
@@ -1658,7 +1661,8 @@ it is.
       LICHOMAT and its emulator by Tomasz Krzywicki, 2026';
     - the absence of warranty and the licence;
     - the commit the binary was built from, and the firmware state it runs: 'LICHOMAT 0.1 with the
-      emulator changes F1–F12 and F6b' until those reach a release. The splash still shows the
+      emulator changes F1–F18 and F6b' until those reach a release (E26 of the R4 plan; F13–F18 came
+      later). The splash still shows the
       firmware's own 'v0.1 unofficial';
     - where the source is;
     - that the product is not affiliated with Erica Synths.
@@ -1683,8 +1687,8 @@ it is.
   About box and of `--version` (the copyright, modification and non-affiliation lines of §10.1). The
   bundled `NOTICE.md` names them too. M21 scans the binaries' C strings for them, case-insensitive, and
   fails on any other occurrence.
-- The panel is schematic, in our own colours, with no logo and no copy of the faceplate (NOTICE.md,
-  'Hardware'; §6.6).
+- The panel follows the device's control layout (E33), in our own colours, with no logo and none of the
+  faceplate's names, printing or graphics (NOTICE.md, 'Hardware'; §6.6).
 - The boot splash, 'LICHOMAT' and 'v0.1 unofficial', shows in the app for 1 s of wall time, and the window
   title says 'unofficial' (NOTICE.md 7(c)).
 
@@ -1763,7 +1767,7 @@ G1–G10 (§8.6), in both CI jobs.
 
 | ID | Check |
 |---|---|
-| A1 | The app opens after Open Anyway. The splash shows 'LICHOMAT' and 'v0.1 unofficial' for about 1 s. About shows the notices of §10.1. The owner confirms that the panel is not a copy of the faceplate |
+| A1 | The app opens after Open Anyway. The splash shows 'LICHOMAT' and 'v0.1 unofficial' for about 1 s. About shows the notices of §10.1. The owner confirms that the panel carries none of the faceplate's names, logos, printing, graphics or colours (E33) |
 | A2 | An imported copy of the owner's card plays its projects, and they sound like the device |
 | A3 | On the device and in the app (360 points of drag), the owner counts the steps of one full knob turn on a normal and on a list parameter; they agree within 10 %. Fader i, counted from the left, moves the same voice as fader i on the device. The encoder walks the menu, and SHIFT combinations work with a latched button |
 | A4 | Master over the virtual port at 120 BPM: the DAW shows 120.0 ± 0.1 BPM; F8 intervals on the virtual port are 20.83 ± 1.5 ms; the DAW starts and stops with the app |

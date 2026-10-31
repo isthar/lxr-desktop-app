@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 07:20",
+    "updated": "2026-10-31 10:14",
     "phase": "Etap 2: v0.4 gotowe w kodzie (M13); częstotliwość pogłosu czeka na H12",
     "focus": "E5.5: aplikacja LICHOMAT Emu (R4)",
     "branch": "timing-core",
-    "head": "94f2982",
+    "head": "d785a30",
     "next": "Twoje H12 ustala częstotliwość pogłosu v0.4",
-    "updated_at": "2026-10-31T07:20:00+01:00",
-    "now": "Przegląd planu R4 przed wykonaniem"
+    "updated_at": "2026-10-31T10:14:00+01:00",
+    "now": "R4: zadanie 12 (panel w układzie urządzenia, poprawka symbolu time)"
   },
   "epics": [
     {
@@ -2953,6 +2953,46 @@
       "n": 415,
       "at": "2026-10-31 07:20",
       "text": "Plan R4 gotowy (94f2982): 13 zadań, decyzje E1–E31, 4421 linii. Najpierw logika bez sprzętu i bez ImGui (pierścienie, mapa czasu, D, MIDI, karta, ustawienia, crash), testowana deterministycznie na fałszywym urządzeniu audio i fałszywym DAW; potem CoreAudio, CoreMIDI, ImGui, panel i bundle. Trwa lekki przegląd planu."
+    },
+    {
+      "n": 416,
+      "at": "2026-10-31 08:01",
+      "text": "Przegląd planu R4: 16 uwag, w tym 2 blokujące (testy czytały stary snapshot; UBSan przerywał przy ujemnych ustawieniach). Wszystkie naniesione (d785a30). Start wykonania: zadania 1–2 (pierścień SPSC, mapa czasu, L i D)."
+    },
+    {
+      "n": 417,
+      "at": "2026-10-31 08:07",
+      "text": "R4 zadania 1–2 gotowe (dd44c78, 66e434d): pierścień SPSC, mapa czasu z odwrotnością, L i domyślne D zgodne z tabelą specyfikacji, reguła czasu wejścia; 173 testy emulatora, 0 ostrzeżeń. Teraz zadania 3–4 (konwersje MIDI, silnik z wątkiem firmware)."
+    },
+    {
+      "n": 418,
+      "at": "2026-10-31 08:21",
+      "text": "R4 zadania 3–4 gotowe (0b25e38, 0191332): konwersje MIDI i transfery USB, silnik z wątkiem firmware, pierścieniem audio, tempem i snapshotami; na fałszywym urządzeniu 689,70 bloku/s, L 56,97 ms, zero niedoborów; 187 testów. Teraz zadania 5–6 (MIDI w silniku, scenariusze slave M18, wątki Mach, harness) i lekki przegląd zadań 1–4."
+    },
+    {
+      "n": 419,
+      "at": "2026-10-31 08:37",
+      "text": "R4 zadania 5–6 gotowe (de41521, 29d4222): MIDI w silniku i scenariusze slave M18 (90, 128, 174 BPM, USB i DIN: opóźnienie wejścia stałe, D + 0,00–0,25 ms), wątki Mach z priorytetem czasu rzeczywistego, watchdog (zawieszenie wykryte po 10 s), harness lichomat-emu-dev: 689,69 bloku/s. 194 testy. Przegląd zadań 1–4: 2 ważne uwagi (SysEx z USB przez CIN 0xF, pętla ponownego otwierania wyjścia audio) i 3 drobne; poprawki teraz, potem zadanie 7 (CoreAudio)."
+    },
+    {
+      "n": 420,
+      "at": "2026-10-31 09:00",
+      "text": "Poprawki po przeglądzie 1–4 (b0b4aeb, 12 nowych testów) i zadanie 7 (f504faf): wyjście CoreAudio na tym Macu: 48 kHz, 512 ramek, L 56,96 ms, D 57,96 ms, zero niedoborów, wątek firmware w czasie rzeczywistym; bez serwera audio test się pomija, a aplikacja wraca do tempa zegara ściennego. 207 testów. Decyzja E32: liczba bloków na sekundę z mapy czasu, bo liczenie całych bloków w oknie 2 s daje 690,1 zamiast 689,7 (A11 wymaga ±0,1). Teraz zadania 8–9 (CoreMIDI, folder karty)."
+    },
+    {
+      "n": 421,
+      "at": "2026-10-31 09:31",
+      "text": "R4: E32 (62889dd: 689,70 bloku/s z mapy czasu), zadanie 8 (5646cca: wirtualne porty CoreMIDI 'LICHOMAT Emu', wątek MIDI out, wiązanie DIN; pakiety przychodzą 0,02–0,07 ms po znaczniku) i zadanie 9 (d81d9f7: folder karty, pierwsze uruchomienie, import i eksport z kopią zapasową i wycofaniem przy błędzie). 223 testy. Teraz zadania 10–11 (ustawienia, notatka po crashu, power cycle, diagnostyka; Dear ImGui) i lekki przegląd zadań 5–9."
+    },
+    {
+      "n": 422,
+      "at": "2026-10-31 09:49",
+      "text": "R4: zadanie 10 (5f5ae34: ustawienia w settings.txt, notatka po crashu pisana funkcjami bezpiecznymi w sygnale, power cycle z zachowaniem unikalnych ID portów MIDI, diagnostyka) i zadanie 11 (d91d63a: Dear ImGui v1.92.9b, 15 plików, każdy zgodny co do hasha z tagiem upstream). 230 testów. Teraz zadanie 12: panel w ImGui, About z notkami licencyjnymi, ekran startowy."
+    },
+    {
+      "n": 423,
+      "at": "2026-10-31 10:14",
+      "text": "Twoja decyzja (10:13): panel aplikacji emulatora mniej więcej w układzie LXR-02 (zmienia regułę §6.6, Q14), żeby ręka pamiętała położenie. Zostaje: bez nazw LXR, Erica Synths i Sonic Potions, bez logo, nadruków i grafiki panelu, z własnymi kolorami (LCD nie czerwony). Pierwszy build aplikacji padał przy starcie: zmienna globalna float time z graphic.c przesłaniała funkcję time() biblioteki, którą woła ImGui; poprawka tylko po stronie emulatora plus test na takie kolizje symboli."
     }
   ]
 }
