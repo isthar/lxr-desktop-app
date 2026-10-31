@@ -483,7 +483,7 @@ if(LICHOMAT_EMU_APP)
     set_target_properties(lichomat-emu PROPERTIES OUTPUT_NAME "LICHOMAT Emu"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_BINARY_DIR}/Info.plist")
     target_link_libraries(lichomat-emu PRIVATE ${EMU_APP_FRAMEWORKS} "-framework Cocoa" "-framework Metal"
-        "-framework MetalKit" "-framework QuartzCore" "-framework GameController" "-framework CoreText")
+        "-framework MetalKit" "-framework QuartzCore" "-framework GameController" "-framework CoreText" "-framework AVFoundation")
     add_dependencies(lichomat-emu emu_render_build)
     # The nested renderer and the signatures (spec 6.7, 9.2) as a command of their own, so that a change
     # of lichomat-render alone copies and signs again: a POST_BUILD of the app would not run then.
