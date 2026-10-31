@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-31 22:49",
+    "updated": "2026-10-31 22:50",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Przerwa: v0.5 (M16) i kity WIR/MGLA/RDZA/IGLA (gałąź kits) gotowe",
     "branch": "timing-core",
-    "head": "c128099",
+    "head": "0716879",
     "next": "Twój odsłuch kitów i dem v0.5; H12 (pogłos v0.4), U27–U32 dla v0.5, A1–A12 w aplikacji, sesja testowa na LXR",
-    "updated_at": "2026-10-31T22:49:00+01:00",
+    "updated_at": "2026-10-31T22:50:00+01:00",
     "now": ""
   },
   "epics": [
@@ -3256,6 +3256,11 @@
       "n": 472,
       "at": "2026-10-31 22:49",
       "text": "Specyfikacja emulatora uzupełniona: --param ustawia teraz głosy LFO i cele modulacji (2938dbf na gałęzi kits; przedtem odrzucane). Ruch w kitach skończony: wszystkie testy emulatora przechodzą (331), dema smp/blk nagrane od nowa."
+    },
+    {
+      "n": 473,
+      "at": "2026-10-31 22:50",
+      "text": "CI na GitHubie: obejrzałem stan. Repozytorium publiczne, workflowy aktywne; jeden przebieg build (v0.4, z 31.10 00:11 UTC) stoi w kolejce bez żadnego joba, a od tamtej pory żaden push nie utworzył przebiegu. Workflowy nie mają workflow_dispatch, więc nie da się ich uruchomić ręcznie. To problem po stronie GitHuba; blokuje pliki .img v0.4/v0.5 z CI (testy na LXR mają być na plikach z CI). H12 na v0.3 nie jest zablokowane. Przerwa: dalej czekam na odsłuch kitów i dem, ASan od właściciela, H12."
     }
   ]
 }
