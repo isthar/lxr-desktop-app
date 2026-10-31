@@ -21,6 +21,10 @@
 //LICHOMAT v0.4: the modulated allpasses' position smoothing and depth in samples (plan D36)
 #define REVERB_MOD_SMOOTH_HZ	10.f
 #define REVERB_MOD_DEPTH		32.f
+//LICHOMAT v0.4: freeze: the loop's feedback, the LFO and its least depth (plan D36, A8)
+#define REVERB_FREEZE_FB		0.9999f
+#define REVERB_FREEZE_LFO_HZ	0.15f
+#define REVERB_FREEZE_MOD		0.3f
 
 
 
@@ -44,6 +48,9 @@ void Reverb_init(Reverb *r)
 	r->mod = 0.f;
 	r->decim = 1;
 	r->lastWetL = r->lastWetR = 0.f;
+	r->frozen = 0;	//LICHOMAT v0.4: freeze (plan A8)
+	r->damp = 0.5f;
+	r->modDepth = 0.f;
 
 	SineCosine_init(&r->lfo);
 	r->reverbBufferSram = REVERB_RAM;	//LICHOMAT v0.4: own buffer (plan D31)
@@ -467,8 +474,8 @@ void Reverb_processWet(Reverb *r, const int16_t *in, float *wetL, float *wetR, u
 {
 #if !HIGH_RES_SINE_COS
 	 SineCosine_calc(&r->lfo);
-	 VerbModDelay_setModValue(&r->apModDelay[1].delay, SineCosine_getSine(&r->lfo) * r->mod);
-	 VerbModDelay_setModValue(&r->apModDelay[0].delay, SineCosine_getCosine(&r->lfo) * r->mod);
+	 VerbModDelay_setModValue(&r->apModDelay[1].delay, SineCosine_getSine(&r->lfo) * r->modDepth);
+	 VerbModDelay_setModValue(&r->apModDelay[0].delay, SineCosine_getCosine(&r->lfo) * r->modDepth);
 #endif
 	const float g = r->inGain * (0.5f / 32768.f);
 	if(r->decim == 2)
@@ -559,7 +566,8 @@ IN_ITCM_RAM void Reverb_setComposition(Reverb *r, float c)
 	TiltEq_setParameter(&r->eqFb, -1+2*c);
 	TiltEq_setParameter(&r->eqFbR, -1+2*c);	//LICHOMAT v0.4: the right output (plan D36)
 	//compositionParameter = c;
-	setOnePoleCoef(&r->lpFeedback, c);
+	r->damp = c;	//LICHOMAT v0.4: frozen, the loop keeps no damping until unfrozen (plan A8)
+	setOnePoleCoef(&r->lpFeedback, r->frozen ? 1.f : c);
 //	setOnePoleCoef(&r->lpImpulse, c);
 }
 
@@ -574,6 +582,11 @@ static float Reverb_clamp01(float v)
 //emulator vendors (its check M19)
 static void Reverb_calcFeedback(Reverb *r)
 {
+	if(r->frozen)
+	{	/* plan D36: -0.3 dB per minute, the loop always loses a little */
+		r->feedback = REVERB_FREEZE_FB;
+		return;
+	}
 	const float rt60 = 0.3f * expf(6.f * 0.69314718f * r->decay);
 	const float tau = 12262.f * r->size * (float)r->decim / REAL_FS;
 	r->feedback = expf(-0.75f * 2.30258509f * tau / rt60);
@@ -610,7 +623,28 @@ void Reverb_setDecay(Reverb *r, float d01)
 void Reverb_setMod(Reverb *r, float m01)
 {
 	r->mod = Reverb_clamp01(m01);
-	SineCosine_setFreq(&r->lfo, (0.2f + 1.3f * r->mod) * (float)OUTPUT_DMA_SIZE);
+	if(r->frozen)
+	{	/* plan D36: frozen, the LFO at 0.15 Hz with a depth of at least 0.3 */
+		r->modDepth = (r->mod > REVERB_FREEZE_MOD) ? r->mod : REVERB_FREEZE_MOD;
+		SineCosine_setFreq(&r->lfo, REVERB_FREEZE_LFO_HZ * (float)OUTPUT_DMA_SIZE);
+	}
+	else
+	{
+		r->modDepth = r->mod;
+		SineCosine_setFreq(&r->lfo, (0.2f + 1.3f * r->mod) * (float)OUTPUT_DMA_SIZE);
+	}
+}
+
+//plan D36, A8: frozen, the input gain is 0, the feedback 0.9999, the loop damping off (the
+//coefficient of tone 127) and the LFO slow; unfrozen, the decay, tone and mod settings return.
+//The size, decay, tone and mod setters keep the freeze while it lasts.
+void Reverb_setFreeze(Reverb *r, uint8_t on)
+{
+	r->frozen = (on != 0);
+	r->inGain = r->frozen ? 0.f : 1.f;
+	Reverb_calcFeedback(r);
+	setOnePoleCoef(&r->lpFeedback, r->frozen ? 1.f : r->damp);
+	Reverb_setMod(r, r->mod);
 }
 
 //the loop's state after REVERB_RAM was cleared (atmo.c, on waking)

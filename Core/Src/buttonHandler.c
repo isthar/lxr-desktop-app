@@ -26,6 +26,7 @@
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Preset/PresetManager.h"
 #include "Soundengine/FxBus.h"
+#include "Soundengine/DSPAudio/FX/atmo.h"	//LICHOMAT v0.4: atmo_toggleFreeze() (plan D37)
 
 //used to remember the last active page when entering the sequencer mode
 //needed to return to the previously shown page when seq mode button is released
@@ -869,6 +870,13 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			led_updateSeqLeds();
 			break;
 		case SEQ_DRUM3:
+			if(buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_PERF)
+			{
+				//LICHOMAT v0.4: SHIFT + step 3 toggles the reverb's freeze (plan D37)
+				atmo_toggleFreeze();
+				led_setValue(activeParameters[PAR_REV_FREEZE] != 0, ledNr);
+			}
+			break;
 		case SEQ_SNARE:
 		case SEQ_CLP:
 		case SEQ_CL_HH:
@@ -1368,8 +1376,8 @@ static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 			if (seqButtonPressed < 7) {
 				//turn roll off
 				frontPanel_sendData(SEQ_CC, SEQ_ROLL_ON_OFF, (seqButtonPressed & 0xf));
-				//turn button led off
-				led_setValue(0, ledNr);
+				//turn button led off; LICHOMAT v0.4: step 3's shows the freeze while SHIFT is held (plan D37)
+				led_setValue((seqButtonPressed == SEQ_DRUM3) ? (activeParameters[PAR_REV_FREEZE] != 0) : 0, ledNr);
 			}
 			break;
 
@@ -1897,6 +1905,9 @@ void buttonHandler_buttonPressed(uint8_t buttonNr) {
 
 					break;
 				case SELECT_MODE_PERF:
+					//LICHOMAT v0.4: step 3's LED shows the freeze while SHIFT is held (plan D37)
+					led_setValue(activeParameters[PAR_REV_FREEZE] != 0, LED_STEP3);
+					break;
 				case SELECT_MODE_PAT_GEN:
 
 					// Pattern changes will be done via SHIFT+PATTERN button, so do nothing here in V2
@@ -2228,6 +2239,7 @@ void buttonHandler_buttonReleased(uint8_t buttonNr) {
 			menu_switchPage(PERFORMANCE_PAGE);
 			led_initPerformanceLeds();
 			*/
+			led_setValue(0, LED_STEP3);	//LICHOMAT v0.4: back to the roll's LED (plan D37)
 			return;
 		case SELECT_MODE_PAT_GEN:
 			/*

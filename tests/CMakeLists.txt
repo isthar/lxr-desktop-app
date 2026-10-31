@@ -275,7 +275,7 @@ set(ATMO_REVERB_SOURCES
     ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/VerbTools/VerbDelay.c
     ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/VerbTools/VerbModDelay.c
     ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/VerbTools/sinCos.c)
-seqc_add_test(test_atmo      IDS RV1 RV2 RV4 EXTRA ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/atmo.c ${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES})  # v0.4 A2  every unit of the reverb carries signal; A7 RT60 at both rates, the stage
+seqc_add_test(test_atmo      IDS RV1 RV2 RV3 RV4 EXTRA ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/atmo.c ${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES})  # v0.4 A2  every unit of the reverb carries signal; A7 RT60 at both rates, the stage; A8 freeze
 if(TARGET test_atmo)
     target_include_directories(test_atmo BEFORE PRIVATE stubs)
     target_include_directories(test_atmo SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)

@@ -87,6 +87,10 @@ typedef struct ReverbStruct
 	float lastWetL;		/* the last core output, which the half rate interpolates from */
 	float lastWetR;
 	uint8_t decim;		/* 1 full rate, 2 half rate */
+	//LICHOMAT v0.4: freeze (plan D36, A8)
+	uint8_t frozen;		/* 1: input 0, feedback 0.9999, no loop damping, slow LFO */
+	float damp;			/* the loop damping's coefficient of the tone, restored on unfreezing */
+	float modDepth;		/* the LFO's depth: mod, frozen max(mod, 0.3) */
 
 } Reverb;
 
@@ -104,6 +108,7 @@ void Reverb_setSize(Reverb *r, float s01);
 void Reverb_setDecay(Reverb *r, float d01);
 void Reverb_setMod(Reverb *r, float m01);
 void Reverb_clearState(Reverb *r);
+void Reverb_setFreeze(Reverb *r, uint8_t on);	//LICHOMAT v0.4: plan D36, A8
 
 
 /*

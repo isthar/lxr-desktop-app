@@ -148,7 +148,15 @@ void atmo_setParam(uint16_t paramNr, float v)
 			atmo_target = l * l;
 		}
 		break;
-	case PAR_REV_FREEZE:	atmo_par[ATMO_REV_FREEZE] = v;	break;
+	case PAR_REV_FREEZE:
+		atmo_par[ATMO_REV_FREEZE] = v;
+		{	/* plan A8: on from 1 (DTYPE_ON_OFF sends 0 or 1, NRPN 99 0..127) */
+			const uint32_t primask = __get_PRIMASK();
+			__disable_irq();
+			Reverb_setFreeze(&atmo_reverb, atmo_u7(v) >= 1);
+			__set_PRIMASK(primask);
+		}
+		break;
 	case PAR_REV_DECAY:
 		atmo_par[ATMO_REV_DECAY] = v;
 		atmo_setReverb(Reverb_setDecay, v);	/* plan D36 */
@@ -182,6 +190,12 @@ void atmo_setParam(uint16_t paramNr, float v)
 	default:
 		break;
 	}
+}
+
+void atmo_toggleFreeze(void)
+{
+	activeParameters[PAR_REV_FREEZE] = activeParameters[PAR_REV_FREEZE] ? 0 : 1;
+	atmo_setParam(PAR_REV_FREEZE, activeParameters[PAR_REV_FREEZE] / 127.f);
 }
 
 void atmo_kitBlockDefaults(uint8_t *values)

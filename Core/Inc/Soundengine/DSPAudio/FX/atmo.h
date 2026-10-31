@@ -39,6 +39,9 @@ void atmo_process(int16_t *bus, uint32_t frames);
 
 /** LICHOMAT v0.4: a parameter of the reverb stage, the delay sync or the DJ filter, 0..1 (plan D33, D34) */
 void atmo_setParam(uint16_t paramNr, float v);
+/** plan A8, D37: flips activeParameters[PAR_REV_FREEZE] 0/1 and applies it (SHIFT + step 3 in the
+ * performance mode) */
+void atmo_toggleFreeze(void);
 /** the defaults of the kit block, and a value of it checked (plan D35) */
 void atmo_kitBlockDefaults(uint8_t *values);
 uint8_t atmo_kitBlockChecked(uint8_t idx, uint8_t value);

@@ -269,6 +269,114 @@ TEST(RV2_level_wakes_on_a_clean_buffer)
 	ASSERT_EQ(atmo_active(), 0);
 }
 
+/* plan A8: 0.5 s of noise at decay 64, then freeze. The RMS of the wet L in 1.0-1.5 s is E1, in
+ * 10.0-10.5 s E2; unfrozen at 10.5 s, 13.0-13.5 s is E3. Returns 10 log10(E2/E1) and, in *after,
+ * 10 log10(E3/E1); counts non-finite outputs in rv_nonFinite */
+static double rv_freeze(uint8_t decim, double *after)
+{
+	static Reverb r;
+	int16_t in[128];
+	float wl[64], wr[64];
+	double e[3] = {0};
+	const uint32_t fs = (uint32_t)REAL_FS;
+	const uint32_t from[3] = { fs, 10 * fs, 13 * fs };
+	uint32_t seed = 16000u + decim;
+	memset(REVERB_RAM, 0, sizeof REVERB_RAM);
+	Reverb_init(&r);
+	Reverb_setDecim(&r, decim);
+	Reverb_setSize(&r, 100 / 127.f);	/* the D35 defaults */
+	Reverb_setDecay(&r, 64 / 127.f);
+	Reverb_setComposition(&r, 64 / 127.f);
+	Reverb_setMod(&r, 40 / 127.f);
+	for(uint32_t b = 0; b < (27 * fs / 2) / 64 + 1; b++)	/* 13.5 s */
+	{
+		const uint32_t n0 = b * 64;
+		if(n0 < fs / 2)
+			for(int i = 0; i < 128; i++)
+			{
+				seed = seed * 1664525u + 1013904223u;
+				in[i] = (int16_t)(((int32_t)(seed >> 16) - 32768) / 4);
+			}
+		else
+			memset(in, 0, sizeof in);
+		if(n0 == (fs / 2 + 63) / 64 * 64)
+			Reverb_setFreeze(&r, 1);
+		if(n0 == (21 * fs / 2 + 63) / 64 * 64)
+			Reverb_setFreeze(&r, 0);
+		Reverb_processWet(&r, in, wl, wr, 64);
+		for(uint32_t i = 0; i < 64; i++)
+		{
+			rv_nonFinite += !(isfinite(wl[i]) && isfinite(wr[i]));
+			for(int w = 0; w < 3; w++)
+				if((n0 + i >= from[w]) && (n0 + i < from[w] + fs / 2))
+					e[w] += (double)wl[i] * wl[i];
+		}
+	}
+	*after = 10. * log10(e[2] / e[0]);
+	return 10. * log10(e[1] / e[0]);
+}
+
+TEST(RV3_freeze_holds)
+{
+	for(uint8_t decim = 1; decim <= 2; decim++)
+	{
+		double after;
+		rv_nonFinite = 0;
+		const double drift = rv_freeze(decim, &after);
+		printf("RV3: decim %u: frozen 1.0-1.5 s -> 10.0-10.5 s %+.3f dB, unfrozen 13.0-13.5 s %+.1f dB\n",
+				decim, drift, after);
+		ASSERT_EQ(rv_nonFinite, 0);
+		ASSERT_TRUE((drift > -1.5) && (drift < 0.5));
+		ASSERT_TRUE(after < -20.);
+	}
+}
+
+/* the summed |bus - input| of 200 blocks of noise through atmo_process(), after the wake-up */
+static int32_t rv_stageWet(uint32_t *seed)
+{
+	int16_t bus[128], dry[128];
+	int32_t wet = 0;
+	for(int k = 0; k < 207; k++)
+	{
+		for(int i = 0; i < 128; i++)
+		{
+			*seed = *seed * 1664525u + 1013904223u;
+			bus[i] = dry[i] = (int16_t)(((int32_t)(*seed >> 16) - 32768) / 4);
+		}
+		atmo_process(bus, 64);
+		for(int i = 0; i < 128; i++)
+			wet += abs(bus[i] - dry[i]);
+	}
+	return wet;
+}
+
+TEST(RV3_toggle_and_nrpn_99_freeze)
+{
+	/* plan A8: atmo_toggleFreeze() flips activeParameters[PAR_REV_FREEZE] 0/1 and applies it;
+	 * atmo_setParam(PAR_REV_FREEZE) (NRPN 99, the menu) freezes from 1/127. Frozen, the input
+	 * does not reach the reverb (inGain 0), so a clean reverb adds nothing to the bus */
+	uint32_t seed = 16011u;
+	atmo_init();
+	activeParameters[PAR_REV_FREEZE] = 0;
+	atmo_toggleFreeze();
+	ASSERT_EQ(activeParameters[PAR_REV_FREEZE], 1);
+	atmo_setParam(PAR_REV_LEVEL, 1.f);	/* wakes on a cleared buffer */
+	ASSERT_EQ(rv_stageWet(&seed), 0);
+	atmo_toggleFreeze();
+	ASSERT_EQ(activeParameters[PAR_REV_FREEZE], 0);
+	ASSERT_TRUE(rv_stageWet(&seed) > 0);
+	atmo_setParam(PAR_REV_LEVEL, 0.f);
+	(void)rv_stageWet(&seed);		/* off */
+
+	atmo_setParam(PAR_REV_FREEZE, 1 / 127.f);
+	atmo_setParam(PAR_REV_LEVEL, 1.f);
+	ASSERT_EQ(rv_stageWet(&seed), 0);
+	atmo_setParam(PAR_REV_FREEZE, 0.f);
+	ASSERT_TRUE(rv_stageWet(&seed) > 0);
+	atmo_setParam(PAR_REV_LEVEL, 0.f);
+	(void)rv_stageWet(&seed);
+}
+
 TEST(RV4_half_rate_keeps_rt60)
 {
 	rv_nonFinite = 0;

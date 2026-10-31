@@ -133,8 +133,14 @@ static uint8_t ledValue[256];		/* led_setValue() per LED number */
 void led_setValue(uint8_t val, uint8_t ledNr) { ledValue[ledNr] = val; }
 void led_updateBarLeds(void) {}
 
+static int rollCalls;			/* LICHOMAT v0.4: SEQ_ROLL_ON_OFF sent */
+static uint8_t lastRoll;		/* its data byte: voice, bit 4 on */
 void frontPanel_sendData(uint8_t status, uint8_t data1, uint8_t data2)
 {
+	if (status == SEQ_CC && data1 == SEQ_ROLL_ON_OFF) {
+		rollCalls++;
+		lastRoll = data2;
+	}
 	if (status == ARM_AUTOMATION_STEP && (data2 & 0x40)) {	/* buttonHandler.c ARM_AUTOMATION */
 		armCalls++;
 		armedStep = data1;
@@ -572,6 +578,53 @@ TEST(buttons_fx_page_cycles_reverb)
 	ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_VOICE);
 	ASSERT_TRUE(menu_activePage != FX_MODE_PAGE);
 	fxBus.fxType = 0;
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT v0.4 (plan A8, D37): SHIFT + step 3 in the performance mode toggles the freeze
+//------------------------------------------------------------------------------
+static int freezeCalls;
+void atmo_toggleFreeze(void)
+{
+	freezeCalls++;
+	activeParameters[PAR_REV_FREEZE] = !activeParameters[PAR_REV_FREEZE];
+}
+
+TEST(buttons_perf_shift_step3_freezes)
+{
+	enterPerf();
+	freezeCalls = 0;
+	rollCalls = 0;
+	activeParameters[PAR_REV_FREEZE] = 0;
+	down(BUT_SHIFT);
+	press(BUT_SEQ3);
+	ASSERT_EQ(freezeCalls, 1);
+	ASSERT_EQ(ledValue[LED_STEP3], 1);	/* the state, while SHIFT is held */
+	press(BUT_SEQ3);
+	ASSERT_EQ(freezeCalls, 2);
+	ASSERT_EQ(ledValue[LED_STEP3], 0);
+	up(BUT_SHIFT);
+	ASSERT_EQ(activeParameters[PAR_REV_FREEZE], 0);
+	/* without SHIFT, step 3 rolls voice 3 as before */
+	rollCalls = 0;
+	down(BUT_SEQ3);
+	ASSERT_EQ(rollCalls, 1);
+	ASSERT_EQ(lastRoll, 0x12);
+	ASSERT_EQ(ledValue[LED_STEP3], 1);
+	up(BUT_SEQ3);
+	ASSERT_EQ(lastRoll, 0x02);
+	ASSERT_EQ(freezeCalls, 2);
+	/* frozen: SHIFT alone shows it on step 3, and its release gives the LED back to the roll */
+	activeParameters[PAR_REV_FREEZE] = 1;
+	down(BUT_SHIFT);
+	ASSERT_EQ(ledValue[LED_STEP3], 1);
+	up(BUT_SHIFT);
+	ASSERT_EQ(ledValue[LED_STEP3], 0);
+	activeParameters[PAR_REV_FREEZE] = 0;
+	/* SHIFT + step 3 in voice mode does not freeze */
+	reset();
+	pressWith(BUT_SHIFT, BUT_SEQ3);
+	ASSERT_EQ(freezeCalls, 2);
 }
 
 TEST_MAIN()
