@@ -22,9 +22,24 @@
 #include "Soundengine/TriggerOut.h"
 #include "Soundengine/MIDI/Uart.h"
 #include "Soundengine/MIDI/MidiParser.h"
+#include "Soundengine/vsched.h"	//LICHOMAT v0.5: checks voiceControl_trigger()'s declaration
 //#include "LCD_driver.h"
 uint8_t voiceStatus[NUM_DRUM_VOICES];
 static uint8_t active_voices=0;	// which voices are currently playing a note
+//----------------------------------------------------------------
+//LICHOMAT v0.5: the voice trigger, track 0-6 (5 and 6 the closed and the open hi-hat); vsched.c
+//calls it at the trigger's sample, voiceControl_noteOn() at once (plan v0.5)
+void voiceControl_trigger(uint8_t track, uint8_t note, uint8_t vel)
+{
+	if(track < 3)
+		Drum_trigger(track, vel, note);
+	else if(track < 4)
+		Snare_trigger(vel, note);
+	else if(track < 5)
+		Cymbal_trigger(vel, note);
+	else
+		HiHat_trigger(vel,track-5,note);
+}
 //----------------------------------------------------------------
 // this fn assumes a valid voice is sent
 void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)

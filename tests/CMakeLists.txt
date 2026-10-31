@@ -177,6 +177,18 @@ seqc_add_test(test_conditions IDS TC1 TC2 TC3 STRICT_CORE seq_core_strict)    # 
 seqc_add_test(test_perform IDS RL1 RL2 SL1 STRICT_CORE seq_core_strict)    # v0.3 P1 rolls, P2 slide
 seqc_add_test(test_slide IDS GL1)    # v0.3 P3 glide
 seqc_add_test(test_itemtime  IDS seqc_itemtime STRICT_CORE seq_core_strict)    # v0.5 Task 2 seqc_itemTime()
+# LICHOMAT v0.5 (plan Task 3): the voice scheduler, plain C11 like the core, with its test
+# hooks (VSCHED_TEST); a second build with the fix-up's split cap 3 (S20) runs vsched_cap
+set(VSCHED_SOURCE ${LXR_ROOT}/Core/Src/Soundengine/vsched.c)
+seqc_add_test(test_vsched    IDS vsched_offsets vsched_window vsched_rings vsched_cap vsched_stamps EXTRA ${VSCHED_SOURCE})
+if(TARGET test_vsched)
+    target_compile_definitions(test_vsched PRIVATE VSCHED_TEST)
+    add_executable(test_vsched_cap3 test_vsched.c ${VSCHED_SOURCE})
+    target_link_libraries(test_vsched_cap3 PRIVATE seqc_fake_host seq_core)
+    target_compile_definitions(test_vsched_cap3 PRIVATE VSCHED_TEST VSCHED_SPLIT_CAP=3)
+    add_test(NAME vsched_cap3 COMMAND test_vsched_cap3 vsched_cap)
+    set_tests_properties(vsched_cap3 PROPERTIES TIMEOUT ${SEQC_TEST_TIMEOUT})
+endif()
 seqc_add_test(test_queue     IDS queue EXTRA queue_equiv.c CORE seq_core_queue_test)  # E1.16, E1.18 queue order and real-time cost
 seqc_add_test(test_syncq     IDS syncq EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/seq_syncq.c)  # E2.1  sync input queues (seq_platform)
 seqc_add_test(test_cpumeter  IDS cpumeter EXTRA ${LXR_ROOT}/Core/Src/Soundengine/cpuMeter.c)  # E3.3 CPU meter

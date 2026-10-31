@@ -38,6 +38,7 @@
 #include "ledHandler.h"
 #include "buttonHandler.h"
 #include "Preset/PresetManager.h"
+#include "Soundengine/vsched.h"	//LICHOMAT v0.5: sample-accurate triggering (plan v0.5)
 
 void seq_setPendingPatternActive();
 
@@ -432,6 +433,20 @@ static void seq_parseAutomationNodes(uint8_t track, const Step* stepData)
 	//set new mod value
 	autoNode_updateValue(&seq_automationNodes[track][0], stepData->param1Val);
 	autoNode_updateValue(&seq_automationNodes[track][1], stepData->param2Val);
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.5: a record's own p-locks, applied by vsched.c at the record's sample (S8) */
+void seq_applyPlocks(uint8_t track, uint8_t p1Nr, uint8_t p1Val, uint8_t p2Nr, uint8_t p2Val)
+{
+	if(track >= NUM_TRACKS) return;
+	const Step plocks = { .param1Nr = p1Nr, .param1Val = p1Val, .param2Nr = p2Nr, .param2Val = p2Val };
+	seq_parseAutomationNodes(track, &plocks);
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.5: 1 while seq_tick() runs; vsched_post() takes records only then (S17) */
+uint8_t seq_isInTick(void)
+{
+	return seq_inTick;
 }
 //------------------------------------------------------------------------------
 void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)

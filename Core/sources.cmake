@@ -99,6 +99,7 @@ set(LXR_SOURCES_ENGINE
     Src/Soundengine/FxBus.c
     Src/Soundengine/Soundengine.c
     Src/Soundengine/TriggerOut.c
+    Src/Soundengine/vsched.c
 )
 
 # MIDI: UART driver, parsers, parameter mapping, voice control.
