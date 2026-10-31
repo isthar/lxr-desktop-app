@@ -312,6 +312,13 @@ and counted in `vsched.overflow` (S16). That case behaves as fw 1.7, where the l
   Its 64 samples therefore equal v0.4's first block. Two small differences remain:
   - the per-sample smoothers (the fader, the mixer page, the drive) have advanced k samples further;
   - the drum ramp starts from the old tail's value at k.
+
+  *Amended 2026-10-31 (review of plan v0.5 Tasks 1–7).* The equality holds for targets that the
+  voice reads in its control step. It does not hold for targets that the LFO writes when it is
+  dispatched, such as the drum filter cutoff. The next block's dispatch then changes the sound from
+  note frame 64 − k on. The emulator measured a difference at all 31 offsets k > 0. A retriggered
+  LFO on such a target therefore moves by up to 62 samples relative to the onset, just like the
+  later control steps below. The goldens G16–G19 leave such an LFO out.
 - **Later control steps.** From step 2 on, a note's control steps come up to 62 samples earlier
   relative to its onset than in v0.4, since step 2 is shortened by φ. This shift is smaller than the
   control rate itself, and it applies to slow envelopes only.
