@@ -274,6 +274,102 @@ TEST(RV2_level_wakes_on_a_clean_buffer)
 	ASSERT_EQ(atmo_active(), 0);
 }
 
+/* v0.4 review: a wake starts every piece of the reverb's state from rest. 1 s of a 40 Hz sine at
+ * -6 dBFS at tone a (decay 0), then asleep (not computed) and the tone moved to b, then atmo.c's
+ * wake (REVERB_RAM cleared, Reverb_clearState()) and 0.5 s of silence: the input is silent and
+ * the tank is clear, so the right output is 0. Returns the largest |wet| x 32768, in LSB of the
+ * bus. The bound is 1 LSB: atmo_process() converts wet x gain toward 0, so below 1 LSB at the
+ * full level nothing reaches the bus. Before the fix, the input EQ's and the two output
+ * filters' state (frozen at the last block before the sleep) came back as a low thump */
+static float rv_wakeResidue(uint8_t decim, uint8_t a, uint8_t b)
+{
+	static Reverb r;
+	int16_t in[128];
+	float wl[64], wr[64];
+	float top = 0.f;
+	memset(REVERB_RAM, 0, sizeof REVERB_RAM);
+	Reverb_init(&r);
+	Reverb_setDecim(&r, decim);
+	Reverb_setSize(&r, 100 / 127.f);
+	Reverb_setDecay(&r, 0.f);
+	Reverb_setMod(&r, 40 / 127.f);
+	Reverb_setTone(&r, a / 127.f);
+	for(uint32_t k = 0, n = 0; k < 690; k++)	/* 1 s */
+	{
+		for(int i = 0; i < 64; i++, n++)
+			in[2 * i] = in[2 * i + 1] = (int16_t)(16384.f * sinf(6.2831853f * 40.f * (float)n / REAL_FS));
+		Reverb_processWet(&r, in, wl, wr, 64);
+	}
+	Reverb_setTone(&r, b / 127.f);
+	memset(REVERB_RAM, 0, sizeof REVERB_RAM);
+	Reverb_clearState(&r);
+	memset(in, 0, sizeof in);
+	for(int k = 0; k < 345; k++)
+	{
+		Reverb_processWet(&r, in, wl, wr, 64);
+		for(int i = 0; i < 64; i++)
+			top = fmaxf(top, 32768.f * fmaxf(fabsf(wl[i]), fabsf(wr[i])));
+	}
+	return top;
+}
+
+/* the same through the stage at its compiled rate: level 1 during the sine, level 0 (one block
+ * ramps down, then the stage is off), tone b, level 1 on silence; the largest |bus| in LSB */
+static int rv_stageWakeResidue(uint8_t a, uint8_t b)
+{
+	int16_t bus[128];
+	int top = 0;
+	atmo_init();
+	atmo_setParam(PAR_REV_DECAY, 0.f);
+	atmo_setParam(PAR_REV_TONE, a / 127.f);
+	atmo_setParam(PAR_REV_LEVEL, 1.f);
+	for(uint32_t k = 0, n = 0; k < 697; k++)	/* the 7 blocks of the wake, then 1 s */
+	{
+		for(int i = 0; i < 64; i++, n++)
+			bus[2 * i] = bus[2 * i + 1] = (int16_t)(16384.f * sinf(6.2831853f * 40.f * (float)n / REAL_FS));
+		atmo_process(bus, 64);
+	}
+	atmo_setParam(PAR_REV_LEVEL, 0.f);
+	memset(bus, 0, sizeof bus);
+	atmo_process(bus, 64);
+	if(atmo_active())
+		return 99999;
+	atmo_setParam(PAR_REV_TONE, b / 127.f);
+	atmo_setParam(PAR_REV_LEVEL, 1.f);
+	for(int k = 0; k < 7 + 345; k++)
+	{
+		memset(bus, 0, sizeof bus);
+		atmo_process(bus, 64);
+		for(int i = 0; i < 128; i++)
+			top = (abs(bus[i]) > top) ? abs(bus[i]) : top;
+	}
+	atmo_setParam(PAR_REV_LEVEL, 0.f);
+	atmo_process(bus, 64);
+	return top;
+}
+
+/* the tones of the review (65, 100, 127, 127 -> 65 while asleep), both sides and 64 */
+static const uint8_t rv_wakeTones[][2] = { {65, 65}, {100, 100}, {127, 127}, {127, 65}, {0, 0}, {30, 0}, {64, 64}, {127, 64} };
+#define RV_WAKE_CASES (sizeof rv_wakeTones / sizeof rv_wakeTones[0])
+
+TEST(RV2_wake_starts_from_rest)
+{
+	for(unsigned c = 0; c < RV_WAKE_CASES; c++)
+	{
+		const float top = rv_wakeResidue(1, rv_wakeTones[c][0], rv_wakeTones[c][1]);
+		printf("RV2: full rate, tone %3u -> %3u while asleep: after the wake largest |wet| %.4f LSB\n",
+				rv_wakeTones[c][0], rv_wakeTones[c][1], (double)top);
+		ASSERT_TRUE(top < 1.f);
+	}
+	for(unsigned c = 0; c < 4; c++)
+	{
+		const int top = rv_stageWakeResidue(rv_wakeTones[c][0], rv_wakeTones[c][1]);
+		printf("RV2: the stage (decim %d), tone %3u -> %3u: after the wake largest |bus| %d LSB\n",
+				ATMO_REVERB_DECIM, rv_wakeTones[c][0], rv_wakeTones[c][1], top);
+		ASSERT_EQ(top, 0);
+	}
+}
+
 /* plan A8: 0.5 s of noise at decay 64, then freeze. The RMS of the wet L in 1.0-1.5 s is E1, in
  * 10.0-10.5 s E2; unfrozen at 10.5 s, 13.0-13.5 s is E3. Returns 10 log10(E2/E1) and, in *after,
  * 10 log10(E3/E1); counts non-finite outputs in rv_nonFinite */
@@ -336,6 +432,81 @@ TEST(RV3_freeze_holds)
 	}
 }
 
+/* v0.4 review, plan D36: frozen, the tank loses about 0.3 dB per minute at every size and both
+ * rates. 0.5 s of noise at decay 127 (tone 64, mod 40), then frozen; the energy of the wet L+R in
+ * seven windows of 20 s from 10 s after the freeze (20 s is three periods of the frozen LFO, so
+ * its beating averages out; the first 10 s let the interpolating reads take off the top). Returns
+ * the drift of the last window against the first in dB per minute (their starts are 2 minutes
+ * apart) and, in *grow, the loudest later window against the first in dB */
+#define RV_DRIFT_WINDOWS 7
+static double rv_freezeDrift(uint8_t decim, float size, double *grow)
+{
+	static Reverb r;
+	int16_t in[128];
+	float wl[64], wr[64];
+	double e[RV_DRIFT_WINDOWS] = {0};
+	const uint32_t fs = (uint32_t)REAL_FS;
+	const uint32_t frozenAt = (fs / 2 + 63) / 64 * 64;
+	const uint32_t from = frozenAt + 10 * fs, win = 20 * fs;
+	const uint32_t blocks = (from + RV_DRIFT_WINDOWS * win) / 64 + 1;
+	uint32_t seed = 16100u + decim;
+	memset(REVERB_RAM, 0, sizeof REVERB_RAM);
+	Reverb_init(&r);
+	Reverb_setDecim(&r, decim);
+	Reverb_setSize(&r, size);
+	Reverb_setDecay(&r, 1.f);
+	Reverb_setTone(&r, 64 / 127.f);
+	Reverb_setMod(&r, 40 / 127.f);
+	for(uint32_t b = 0; b < blocks; b++)
+	{
+		const uint32_t n0 = b * 64;
+		if(n0 < frozenAt)
+			for(int i = 0; i < 128; i++)
+			{
+				seed = seed * 1664525u + 1013904223u;
+				in[i] = (int16_t)(((int32_t)(seed >> 16) - 32768) / 4);
+			}
+		else
+			memset(in, 0, sizeof in);
+		if(n0 == frozenAt)
+			Reverb_setFreeze(&r, 1);
+		Reverb_processWet(&r, in, wl, wr, 64);
+		for(uint32_t i = 0; i < 64; i++)
+		{
+			rv_nonFinite += !(isfinite(wl[i]) && isfinite(wr[i]));
+			if(n0 + i >= from)
+			{
+				const uint32_t w = (n0 + i - from) / win;
+				if(w < RV_DRIFT_WINDOWS)
+					e[w] += (double)wl[i] * wl[i] + (double)wr[i] * wr[i];
+			}
+		}
+	}
+	*grow = -999.;
+	for(int w = 1; w < RV_DRIFT_WINDOWS; w++)
+		*grow = fmax(*grow, 10. * log10(e[w] / e[0]));
+	return 10. * log10(e[RV_DRIFT_WINDOWS - 1] / e[0]) / ((RV_DRIFT_WINDOWS - 1) * 20. / 60.);
+}
+
+/* the band: D36's -0.3 dB per minute, within 0.3 dB per minute; the loss is spread over the
+ * loop's modes, whose round trips differ (the allpasses' group delay), so it is not exact; above
+ * 0 the freeze would grow, which no window may */
+TEST(RV3_freeze_loses_0_3_dB_per_minute)
+{
+	for(uint8_t decim = 1; decim <= 2; decim++)
+		for(int s = 0; s <= 1; s++)
+		{
+			double grow;
+			rv_nonFinite = 0;
+			const double drift = rv_freezeDrift(decim, (float)s, &grow);
+			printf("RV3: decim %u, size %3d: frozen %+.3f dB per minute, loudest later window %+.3f dB\n",
+					decim, s * 127, drift, grow);
+			ASSERT_EQ(rv_nonFinite, 0);
+			ASSERT_TRUE((drift > -0.6) && (drift < 0.));
+			ASSERT_TRUE(grow < 0.);
+		}
+}
+
 /* the summed |bus - input| of 200 blocks of noise through atmo_process(), after the wake-up */
 static int32_t rv_stageWet(uint32_t *seed)
 {
@@ -389,6 +560,17 @@ TEST(RV4_half_rate_keeps_rt60)
 	printf("RV4: half rate, decay 58: T60 %.2f s\n", (double)t);
 	ASSERT_EQ(rv_nonFinite, 0);
 	ASSERT_EQ((t > 1.4f) && (t < 2.6f), 1);
+}
+
+TEST(RV4_wake_starts_from_rest)
+{
+	for(unsigned c = 0; c < RV_WAKE_CASES; c++)
+	{
+		const float top = rv_wakeResidue(2, rv_wakeTones[c][0], rv_wakeTones[c][1]);
+		printf("RV4: half rate, tone %3u -> %3u while asleep: after the wake largest |wet| %.4f LSB\n",
+				rv_wakeTones[c][0], rv_wakeTones[c][1], (double)top);
+		ASSERT_TRUE(top < 1.f);
+	}
 }
 
 TEST(RV4_corners_stay_bounded)

@@ -88,7 +88,7 @@ typedef struct ReverbStruct
 	float lastWetR;
 	uint8_t decim;		/* 1 full rate, 2 half rate */
 	//LICHOMAT v0.4: freeze (plan D36, A8)
-	uint8_t frozen;		/* 1: input 0, feedback 0.9999, no loop damping, slow LFO */
+	uint8_t frozen;		/* 1: input 0, feedback -0.3 dB a minute, no loop damping, slow LFO */
 	float damp;			/* the loop damping's coefficient of the tone, restored on unfreezing */
 	float modDepth;		/* the LFO's depth: mod, frozen max(mod, 0.3) */
 	uint8_t tone;		/* tracker Q31: the tone 0..127 of Reverb_setTone(), 255 before it */

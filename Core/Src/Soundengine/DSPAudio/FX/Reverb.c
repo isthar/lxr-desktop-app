@@ -21,8 +21,8 @@
 //LICHOMAT v0.4: the modulated allpasses' position smoothing and depth in samples (plan D36)
 #define REVERB_MOD_SMOOTH_HZ	10.f
 #define REVERB_MOD_DEPTH		32.f
-//LICHOMAT v0.4: freeze: the loop's feedback, the LFO and its least depth (plan D36, A8)
-#define REVERB_FREEZE_FB		0.9999f
+//LICHOMAT v0.4: freeze: the loop's loss in dB per minute, the LFO and its least depth (plan D36, A8)
+#define REVERB_FREEZE_DB_PER_MIN	0.3f
 #define REVERB_FREEZE_LFO_HZ	0.15f
 #define REVERB_FREEZE_MOD		0.3f
 //LICHOMAT v0.4: the tone knob (tracker Q31): the corners of the output filter at tone 0, 63, 65 and
@@ -593,13 +593,16 @@ static float Reverb_clamp01(float v)
 //emulator vendors (its check M19)
 static void Reverb_calcFeedback(Reverb *r)
 {
+	const float tau = 12262.f * r->size * (float)r->decim / REAL_FS;
 	if(r->frozen)
-	{	/* plan D36: -0.3 dB per minute, the loop always loses a little */
-		r->feedback = REVERB_FREEZE_FB;
+	{	/* LICHOMAT v0.4: plan D36, -0.3 dB per minute at every size and rate, so the loop always
+		 * loses a little: a round trip of tau s loses 0.3 tau / 60 dB in its 4 multiplications,
+		 * fb = 10^(-0.3 tau / (60 * 4 * 20)). A fixed 0.9999 lost 0.0035 dB per round trip, which
+		 * the smaller sizes and the full rate make more often (size 0, full rate: -1.8 dB per minute) */
+		r->feedback = expf(-2.30258509f * REVERB_FREEZE_DB_PER_MIN * tau / 4800.f);
 		return;
 	}
 	const float rt60 = 0.3f * expf(6.f * 0.69314718f * r->decay);
-	const float tau = 12262.f * r->size * (float)r->decim / REAL_FS;
 	r->feedback = expf(-0.75f * 2.30258509f * tau / rt60);
 }
 
@@ -648,7 +651,7 @@ void Reverb_setMod(Reverb *r, float m01)
 	}
 }
 
-//plan D36, A8: frozen, the input gain is 0, the feedback 0.9999, the loop damping off (the
+//plan D36, A8: frozen, the input gain is 0, the feedback -0.3 dB a minute, the loop damping off (the
 //coefficient of tone 127) and the LFO slow; unfrozen, the decay, tone and mod settings return.
 //The size, decay, tone and mod setters keep the freeze while it lasts.
 void Reverb_setFreeze(Reverb *r, uint8_t on)
@@ -726,6 +729,12 @@ void Reverb_clearState(Reverb *r)
 	r->lastOut = r->lastOut2 = 0.f;
 	r->lastWetL = r->lastWetR = 0.f;
 	setOnePoleValue(&r->lpFeedback, 0.0);
+	//LICHOMAT v0.4: and the filters around the loop, which carry the signal from before the sleep: the
+	//input EQ and the two output tone filters (their low-pass state would come back as a low thump,
+	//v0.4 review), and the unused lpImpulse. The allpasses' in/out are written before they are read,
+	//the modulated delays' smoothing holds a read position and the LFO a phase, not the signal
+	r->eq.lp_out = r->eqFb.lp_out = r->eqFbR.lp_out = 0.f;
+	setOnePoleValue(&r->lpImpulse, 0.0);
 }
 
 IN_ITCM_RAM void Reverb_setVariation(Reverb *r, float v)
