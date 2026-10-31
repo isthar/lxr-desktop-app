@@ -1256,6 +1256,7 @@ uint8_t menu_loadedPresetNr[NUM_CURRENT];
 uint8_t menu_playedPattern;
 uint8_t menu_shownPattern;
 uint8_t menu_activePage;
+uint8_t fxBus_delaySync;	/* FxBus.c; atmo.c sets it (LICHOMAT v0.4, plan A5) */
 
 //------------------------------------------------------------------------------
 // Stand-ins for the rest of the firmware

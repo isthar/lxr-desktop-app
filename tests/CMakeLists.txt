@@ -281,6 +281,11 @@ if(TARGET test_atmo)
     target_include_directories(test_atmo SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
     set_source_files_properties(${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
 endif()
+# LICHOMAT v0.4 (plan A5): the synced delay's arithmetic, a header (fxsync.h)
+seqc_add_test(test_fxsync    IDS DY1)  # v0.4 A5 synced delay
+if(TARGET test_fxsync)
+    target_include_directories(test_fxsync SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+endif()
 # LICHOMAT v0.4 (plan A3): the preset manager calls the kit block's defaults and checks in
 # atmo.c, which brings the reverb with it; built without warnings as presetManager.c is.
 if(TARGET test_presets)

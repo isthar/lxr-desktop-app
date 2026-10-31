@@ -61,6 +61,7 @@ typedef struct DelayStruct
 	float delayTime;
 	float pendingDelayTime;
 	uint8_t timePending;
+	float syncSamples;	//LICHOMAT v0.4: 0 = free time (plan D38)
 
 	OnePoleFilter tone;
 	OnePoleFilter tone2;
@@ -78,6 +79,8 @@ void Delay_setDelayTime(Delay* d, float t);
 void Delay_setFeedback(Delay* d, float fb);
 void Delay_setRange(Delay* d, float r);
 void Delay_setFilter(Delay* d, float f);
+//LICHOMAT v0.4: a synced time in samples, 0 = back to the free time (plan D38)
+void Delay_setSync(Delay* d, float samples);
 
 
 

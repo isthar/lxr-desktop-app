@@ -14,6 +14,7 @@
 
 
 #include "Soundengine/DSPAudio/FX/Delay.h"
+#include "Soundengine/DSPAudio/FX/fxsync.h"	//LICHOMAT v0.4: fxsync_moved() (plan D38)
 
 //LICHOMAT: the word at p, which mono output puts 2 bytes off a 4-byte boundary
 //(&output[pos + 1]). The M7's LDR loads it unaligned, so the device keeps the plain
@@ -35,6 +36,7 @@ void Delay_init(Delay* d)
 
 	d->pendingDelayTime = 0.f;
 	d->timePending = 0;
+	d->syncSamples = 0;	//LICHOMAT v0.4: free time (plan D38)
 	d->oldRead = d->newRead = 0;
 	d->fracReadNew = d->fracReadOld = 0;
 	d->write = FX_BUFFER_SIZE/20-10;
@@ -297,6 +299,7 @@ float interpolate(float a, float b, float x)
 }
 float calcDelayTime(Delay* d, float timeCv)
 {
+	if(d->syncSamples > 0.f) return d->syncSamples;	//LICHOMAT v0.4: synced time (plan D38)
 	if(d->delayType == DELAY_NORMAL)
 	{
 		const float min = interpolate(LOW_MIN,HI_MIN,d->range);
@@ -382,5 +385,14 @@ void Delay_setFilter(Delay* d, float f)
 {
 	setOnePoleCoef(&d->tone, f*f);
 	setOnePoleCoef(&d->tone2, f*f);
+}
+
+//LICHOMAT v0.4: a synced time in samples, 0 = back to the free time (plan D38)
+void Delay_setSync(Delay* d, float samples)
+{
+	if((samples == 0.f) ? (d->syncSamples == 0.f) : !fxsync_moved(d->syncSamples, samples))
+		return;
+	d->syncSamples = samples;
+	Delay_setDelayTime(d, d->delayTime);
 }
 

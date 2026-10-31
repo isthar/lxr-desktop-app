@@ -303,6 +303,72 @@
    "sha256": "83d865424c688e91976aff8821753fa0f7e813a1901371b0064415b42ddd849b"
   }
  },
+ "G11_dsync": {
+  "clock": {
+   "chunks": [
+    "72563732"
+   ],
+   "lines": 2,
+   "sha256": "5fec9b277d23182792f8417d63d825410d28a42dcf7d923c04a670f793bb142c"
+  },
+  "midi": {
+   "chunks": [
+    "13020702",
+    "dd145a37",
+    "4c8c41a2",
+    "9d5abffb"
+   ],
+   "lines": 242,
+   "sha256": "b9ad82eca1b4e75cee13d70f3cc09a34586ca0677e17141da23450b2d7322eaa"
+  },
+  "toolchain": {
+   "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+   "sdk": "15.5"
+  },
+  "wav": {
+   "bits": 16,
+   "channels": 4,
+   "chunks": [
+    "28789c06",
+    "c8d9f5d5",
+    "d57f3c08",
+    "e22166d2",
+    "f69c9622",
+    "16819bdb",
+    "133c3629",
+    "c731a90f",
+    "5415f03e",
+    "677df50e",
+    "34ec0a2b",
+    "475df8c5",
+    "0da34d01",
+    "4fae621a",
+    "75e8eaf0",
+    "a76d7299",
+    "ee82bd3d",
+    "277239ba",
+    "d67c7edb",
+    "00b35102",
+    "043c7a05",
+    "63f394e0"
+   ],
+   "frames": 88320,
+   "peak": [
+    25645,
+    25537,
+    0,
+    0
+   ],
+   "rate": 44141,
+   "rms": [
+    -15.99,
+    -15.99,
+    null,
+    null
+   ],
+   "sha256": "ce0d663d5a3f425396a641e504f2aca8cec9b3775e97c0707132abff09627769"
+  }
+ },
  "G2_comp": {
   "clock": {
    "chunks": [

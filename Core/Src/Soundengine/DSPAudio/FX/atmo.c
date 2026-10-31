@@ -14,6 +14,9 @@
 #include "Soundengine/DSPAudio/FX/Reverb.h"
 #include "Parameters.h"
 #include "menu/menu.h"	/* activeParameters */
+#include "Soundengine/FxBus.h"	/* fxBus_delaySync */
+#include "Soundengine/DSPAudio/FX/fxsync.h"
+#include <math.h>
 
 /* plan D31: in .bss (RAM), zero at boot */
 __fp16 REVERB_RAM[REVERB_UNITS * MAX_ALLPASS_SIZE];
@@ -68,6 +71,11 @@ void atmo_setParam(uint16_t paramNr, float v)
 	case PAR_REV_DUCK_DEPTH:
 	case PAR_FX_DELAY_SYNC:
 		atmo_par[ATMO_BLOCK + (paramNr - PAR_REV_SIZE)] = v;
+		if(paramNr == PAR_FX_DELAY_SYNC)
+		{	/* plan D38: the division 0..9, which FxBus_process() reads once per block */
+			const long d = lroundf(v * 127.f);
+			fxBus_delaySync = (uint8_t)((d < 0) ? 0 : (d > FXSYNC_COUNT - 1) ? (FXSYNC_COUNT - 1) : d);
+		}
 		break;
 	default:
 		break;

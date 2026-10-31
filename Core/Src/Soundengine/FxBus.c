@@ -17,7 +17,10 @@
 #include "Soundengine/DSPAudio/BufferTools.h"
 #include "Soundengine/DSPAudio/mixer.h"
 #include "Soundengine/DSPAudio/FX/atmo.h"	//LICHOMAT v0.4: the reverb stage (plan D32)
+#include "Soundengine/DSPAudio/FX/fxsync.h"	//LICHOMAT v0.4: the synced delay (plan D38)
+#include "Soundengine/Sequencer/seq_core.h"	//LICHOMAT v0.4: seqc_currentBpm() (plan D38)
 INDTCMZ FxBus fxBus;
+uint8_t fxBus_delaySync;	//LICHOMAT v0.4: PAR_FX_DELAY_SYNC, 0 = off (plan D38)
 
 void FxBus_init()
 {
@@ -117,6 +120,10 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 		break;
 
 	case FX_DELAY:
+		{	//LICHOMAT v0.4: the synced time, once per block (plan D38)
+			const float maxS = (fxBus.delay.delayType == DELAY_NORMAL) ? (float)(FX_BUFFER_SIZE - 64) : (float)((FX_BUFFER_SIZE >> 1) - 64);
+			Delay_setSync(&fxBus.delay, fxsync_samples(fxBus_delaySync, seqc_currentBpm(), REAL_FS, maxS));
+		}
 		if(fxBus.delay.delayType == DELAY_NORMAL)
 		{
 			Delay_process(&fxBus.delay, fxBuffer, out, out2, size, channels, fxBus.dryWet);

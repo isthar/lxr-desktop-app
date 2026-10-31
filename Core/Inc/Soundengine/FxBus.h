@@ -61,6 +61,7 @@ typedef struct FxStruct
 } FxBus;
 
 extern INDTCMZ FxBus fxBus;
+extern uint8_t fxBus_delaySync;	//LICHOMAT v0.4: PAR_FX_DELAY_SYNC 0..9, 0 = off (plan D38)
 
 void FxBus_init();
 void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,int16_t* outL2, int16_t* outR2, uint32_t size);
