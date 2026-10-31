@@ -28,6 +28,7 @@
 
 #define DEV_DUE_MAX 256u
 #define DEV_LINE 256u
+#define DEV_ENDPOINTS 64
 
 typedef struct due { double at; char line[DEV_LINE]; } due_t;
 
@@ -400,6 +401,38 @@ static void command(char *line)
 				snprintf(cmd.text, sizeof cmd.text, "%s", w[1]);
 			cmd.a = (int32_t)a;
 			(void)send(&cmd);
+		}
+	}
+	else if (!strcmp(c, "midi"))
+	{
+		app_endpoint_t ep[DEV_ENDPOINTS];
+		int total = 0;
+		for (int source = 1; source >= 0; source--)
+		{
+			const int count = app_shellEndpoints(D.shell, source, ep, DEV_ENDPOINTS);
+			for (int i = 0; i < count; i++)
+				printf("midi %s %d %d %s\n", source ? "source" : "destination", i, (int)ep[i].uid, ep[i].name);
+			total += count;
+		}
+		if (total == 0)
+			printf("midi none\n");
+	}
+	else if (!strcmp(c, "din-src") || !strcmp(c, "din-dst"))
+	{
+		const int source = !strcmp(c, "din-src");
+		app_endpoint_t ep[DEV_ENDPOINTS];
+		const int count = app_shellEndpoints(D.shell, source, ep, DEV_ENDPOINTS);
+		if (w[1] && !strcmp(w[1], "off"))
+		{
+			app_shellBind(D.shell, source, 0, "");
+			printf("din %s off\n", source ? "source" : "destination");
+		}
+		else if (parseInt(w[1], 0, DEV_ENDPOINTS - 1, &a) != 0 || a >= count)
+			printf("error: %s N|off: N is the index that `midi` lists\n", c);
+		else
+		{
+			app_shellBind(D.shell, source, ep[a].uid, ep[a].name);
+			printf("din %s %s (%d)\n", source ? "source" : "destination", ep[a].name, (int)ep[a].uid);
 		}
 	}
 	else if (!strcmp(c, "diag"))

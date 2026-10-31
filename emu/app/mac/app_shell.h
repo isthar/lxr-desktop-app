@@ -18,6 +18,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "app_bind.h"
 #include "app_types.h"
 
 #ifdef __cplusplus
@@ -32,6 +33,9 @@ typedef struct app_shellOptions
 	int noAudio, noMidi;
 	const char *deviceUid;	/**< the output device's UID; NULL or "" the system's default */
 	uint32_t bufferFrames;	/**< the output buffer in device frames; 0 the device's own */
+	int32_t usbSrcUid, usbDstUid;	/**< the stored unique IDs of the virtual endpoints, 0 for none (spec 6.9) */
+	int32_t dinSrcUid, dinDstUid;	/**< the stored DIN bindings: the unique ID first, then the name */
+	const char *dinSrcName, *dinDstName;	/**< NULL or "" for none; copied by app_shellStart() */
 	void (*message)(void *ctx, const char *text);	/**< warnings, notices, errors; main thread */
 	void *ctx;
 } app_shellOptions_t;
@@ -43,11 +47,17 @@ const app_snapshot_t *app_shellSnapshot(const app_shell_t *s);	/**< the newest; 
 int app_shellPanel(app_shell_t *s, const app_panelEvent_t *ev);
 int app_shellCommand(app_shell_t *s, const app_cmd_t *c);
 int app_shellDevices(app_shell_t *s, app_outputDevice_t *out, int max);	/**< the output devices, for the GUI and `devices`; main thread */
+/** the system's MIDI endpoints (not ours), sources or destinations, for the DIN bindings; main thread. 0 without MIDI */
+int app_shellEndpoints(app_shell_t *s, int sources, app_endpoint_t *out, int max);
+/** stores the DIN binding (source 1: the DIN input, 0: the output) and binds it; uid 0 and "" unbinds. Main thread */
+void app_shellBind(app_shell_t *s, int source, int32_t uid, const char *name);
 int app_shellHung(const app_shell_t *s);
 int app_shellWarnings(const app_shell_t *s);				/**< the warnings kept, at most the last 64 (spec 11) */
 const char *app_shellWarning(const app_shell_t *s, int i);	/**< oldest first */
 void app_shellTestFault(app_shell_t *s);	/**< harness only (Task 10): SIGSEGV on the firmware thread */
-void app_shellStop(app_shell_t *s);		/**< APP_CMD_STOP; joins the firmware thread for up to 2 s */
+/** APP_CMD_STOP; joins the firmware thread for up to 2 s; then stops and joins the MIDI-out thread and disposes of the
+ * MIDI endpoints, so that their unique IDs are free again (spec 6.9) */
+void app_shellStop(app_shell_t *s);
 
 #ifdef __cplusplus
 }

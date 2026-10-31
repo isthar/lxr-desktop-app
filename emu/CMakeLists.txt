@@ -333,7 +333,7 @@ set(EMU_APP_DIR "${EMU_DIR}/app")
 set(EMU_APP_FLAGS ${EMU_SAN_FLAGS} -Wall -Wextra -Werror "SHELL:-ivfsoverlay ${EMU_OVERLAY}")
 set(EMU_APP_UNIT_SOURCES "${EMU_APP_DIR}/engine/app_ring.c"
     "${EMU_APP_DIR}/engine/app_timemap.c" "${EMU_APP_DIR}/engine/app_midi.c"
-    "${EMU_APP_DIR}/engine/app_midilist.c")
+    "${EMU_APP_DIR}/engine/app_midilist.c" "${EMU_APP_DIR}/engine/app_bind.c")
 add_library(emu_app_units OBJECT ${EMU_APP_UNIT_SOURCES})
 target_include_directories(emu_app_units PUBLIC "${EMU_APP_DIR}/engine" "${EMU_DIR}/core" "${EMU_DIR}/common")
 target_compile_options(emu_app_units PRIVATE ${EMU_APP_FLAGS})
@@ -381,6 +381,7 @@ function(emu_add_app_test name)
     endforeach()
 endfunction()
 
+emu_add_app_test(test_app_bind IDS R4_bind)
 emu_add_app_test(test_app_ring IDS M18_ring_fill_drop M18_ring_wrap M18_ring_threads)
 emu_add_app_test(test_app_timemap IDS M18_map_wall M18_map_drift M18_map_rate M18_map_jump M18_latency_table M18_entry_rule
     M18_reanchor_order)
@@ -395,13 +396,13 @@ emu_add_app_test(test_app_m18 ENGINE IDS M18_midi_out_step M18_slave_90 M18_slav
 
 if(LICHOMAT_EMU_APP)
     set(EMU_APP_MAC_SOURCES "${EMU_APP_DIR}/mac/app_mach.c" "${EMU_APP_DIR}/mac/app_shell.c"
-        "${EMU_APP_DIR}/mac/app_coreaudio.c")
+        "${EMU_APP_DIR}/mac/app_coreaudio.c" "${EMU_APP_DIR}/mac/app_coremidi.c")
     add_library(emu_app_mac OBJECT ${EMU_APP_MAC_SOURCES})
     target_include_directories(emu_app_mac PUBLIC "${EMU_APP_DIR}/mac" "${EMU_APP_DIR}/engine" "${EMU_DIR}/core"
         "${EMU_DIR}/common")
     target_compile_options(emu_app_mac PRIVATE ${EMU_APP_FLAGS})
     set(EMU_APP_FRAMEWORKS "-framework CoreFoundation")
-    list(APPEND EMU_APP_FRAMEWORKS "-framework AudioToolbox" "-framework CoreAudio")
+    list(APPEND EMU_APP_FRAMEWORKS "-framework AudioToolbox" "-framework CoreAudio" "-framework CoreMIDI")
     set(EMU_APP_OBJECTS $<TARGET_OBJECTS:emu_app_mac> $<TARGET_OBJECTS:emu_app_units> $<TARGET_OBJECTS:emu_app_engine>
         $<TARGET_OBJECTS:emu_app_fw> ${EMU_DEVICE_OBJECTS})
     add_executable(lichomat-emu-dev "${EMU_APP_DIR}/dev/dev_main.c" ${EMU_APP_OBJECTS})
@@ -419,7 +420,7 @@ if(LICHOMAT_EMU_APP)
     endfunction()
     emu_app_tests(R4_dev_headless)
     emu_add_app_test(test_app_devices ENGINE MAC FRAMEWORKS AudioToolbox CoreAudio CoreMIDI CoreFoundation
-        IDS R4_dev_coreaudio)
+        IDS R4_dev_coreaudio R4_dev_coremidi R4_dev_midiout)
     list(APPEND EMU_GATE_BINARIES $<TARGET_FILE:lichomat-emu-dev>)
 endif()
 

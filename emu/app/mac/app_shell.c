@@ -15,6 +15,7 @@
 #include "app_shell.h"
 
 #include <limits.h>
+#include <mach/mach_time.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
@@ -24,6 +25,7 @@
 #include <time.h>
 
 #include "app_coreaudio.h"
+#include "app_coremidi.h"
 #include "app_mach.h"
 
 #define APP_SHELL_WARNINGS 64u
@@ -42,6 +44,14 @@ struct app_shell
 	int hungShown, haveSnap;
 	app_snapshot_t snap;
 	app_ca_t ca;
+	app_cm_t cm;
+	pthread_t midiOut;
+	int haveMidi, haveMidiThread;	/**< the CoreMIDI client exists; the MIDI-out thread runs */
+	_Atomic int midiStop;
+	int32_t dinUid[2];				/**< [source]: 1 the DIN input, 0 the output */
+	char dinName[2][128];
+	int dinTold[2];					/**< 'not connected' has been said for the binding as it is now */
+	double nextBind;				/**< app_wallSeconds() of the next check (E28) */
 	char outputErr[256];		/**< the last open failure told to the main thread; firmware thread */
 	char card[PATH_MAX];
 	char warnings[APP_SHELL_WARNINGS][255];
@@ -103,6 +113,26 @@ static void *app_shellFirmware(void *arg)
 	return NULL;
 }
 
+/* the MIDI-out thread (spec 6.1, 6.5): DIN messages at once, USB messages at their presentation time. Its wake-up
+ * precision is MIDI out's jitter. */
+static void *app_shellMidiOut(void *arg)
+{
+	app_shell_t *s = arg;
+	(void)app_threadRealtime(s->mach.period);	/* a refusal is not an error here either (E29) */
+	const app_midiOutSink_t sink = { &s->cm, app_cmSend };
+	while (!atomic_load(&s->stopped) && !atomic_load(&s->midiStop))
+	{
+		const uint64_t now = mach_absolute_time();
+		const uint64_t next = app_midiOutStep(&s->engine, now, &sink);
+		const uint64_t limit = now + (uint64_t)(0.02 * s->mach.ticksPerSec);	/* the stop flags are looked at every 20 ms */
+		if (next == 0u)
+			app_machWaitSem(s->mach.midiWake, limit, s->mach.ticksPerSec);
+		else
+			(void)mach_wait_until(next < limit ? next : limit);
+	}
+	return NULL;
+}
+
 /* spec 4.2, 6.9: 10 s without progress outside the hook's waits stop the audio */
 static void *app_shellWatchdog(void *arg)
 {
@@ -121,6 +151,35 @@ static void *app_shellWatchdog(void *arg)
 		}
 	}
 	return NULL;
+}
+
+static void app_shellSay(app_shell_t *s, const char *text)
+{
+	if (s->o.message)
+		s->o.message(s->o.ctx, text);
+}
+
+/* binds one DIN endpoint to what is stored; 'not connected' is said once per binding, not once per check (E28) */
+static void app_shellBindNow(app_shell_t *s, int source)
+{
+	if (!s->haveMidi)
+		return;
+	const int ok = app_cmBind(&s->cm, source, s->dinUid[source], s->dinName[source]);
+	const int stored = s->dinUid[source] != 0 || s->dinName[source][0] != '\0';
+	if (ok || !stored)
+		s->dinTold[source] = 0;
+	else if (!s->dinTold[source])
+	{
+		char line[300];
+		s->dinTold[source] = 1;
+		if (s->dinName[source][0])
+			snprintf(line, sizeof line, "notice: DIN %s %s not connected", source ? "source" : "destination",
+				s->dinName[source]);
+		else
+			snprintf(line, sizeof line, "notice: DIN %s %d not connected", source ? "source" : "destination",
+				(int)s->dinUid[source]);
+		app_shellSay(s, line);
+	}
 }
 
 static int app_shellFail(char *err, size_t n, const char *what, int code)
@@ -177,13 +236,35 @@ int app_shellStart(app_shell_t *s, const app_shellOptions_t *o, char *err, size_
 		return app_shellFail(err, n, "the watchdog thread did not start", e);
 	}
 	s->haveWatchdog = 1;
+	s->dinUid[1] = o->dinSrcUid;
+	s->dinUid[0] = o->dinDstUid;
+	snprintf(s->dinName[1], sizeof s->dinName[1], "%s", o->dinSrcName ? o->dinSrcName : "");
+	snprintf(s->dinName[0], sizeof s->dinName[0], "%s", o->dinDstName ? o->dinDstName : "");
+	if (!o->noMidi)
+	{
+		char merr[256];
+		if (app_cmInit(&s->cm, &s->engine, o->usbSrcUid, o->usbDstUid, merr, sizeof merr) != 0)
+		{
+			char line[300];
+			snprintf(line, sizeof line, "notice: MIDI is off: %s", merr);	/* the app runs on without it */
+			app_shellSay(s, line);
+		}
+		else
+		{
+			s->haveMidi = 1;
+			e = pthread_create(&s->midiOut, NULL, app_shellMidiOut, s);
+			if (e != 0)
+			{
+				app_shellStop(s);
+				return app_shellFail(err, n, "the MIDI-out thread did not start", e);
+			}
+			s->haveMidiThread = 1;
+			app_shellBindNow(s, 1);
+			app_shellBindNow(s, 0);
+			s->nextBind = app_wallSeconds() + 1.0;
+		}
+	}
 	return 0;
-}
-
-static void app_shellSay(app_shell_t *s, const char *text)
-{
-	if (s->o.message)
-		s->o.message(s->o.ctx, text);
 }
 
 int app_shellFrame(app_shell_t *s)
@@ -203,6 +284,12 @@ int app_shellFrame(app_shell_t *s)
 			snprintf(line, sizeof line, "notice: %s", a.text);
 			app_shellSay(s, line);
 		}
+	}
+	if (s->haveMidi && app_wallSeconds() >= s->nextBind)
+	{
+		s->nextBind = app_wallSeconds() + 1.0;
+		app_shellBindNow(s, 1);
+		app_shellBindNow(s, 0);
 	}
 	const int fresh = app_engineSnapshot(&s->engine, &s->snap);
 	if (fresh)
@@ -236,6 +323,20 @@ int app_shellDevices(app_shell_t *s, app_outputDevice_t *out, int max)
 	return app_caList(out, max);
 }
 
+int app_shellEndpoints(app_shell_t *s, int sources, app_endpoint_t *out, int max)
+{
+	return s->haveMidi ? app_cmList(&s->cm, sources, out, max) : 0;
+}
+
+void app_shellBind(app_shell_t *s, int source, int32_t uid, const char *name)
+{
+	source = source != 0;
+	s->dinUid[source] = uid;
+	snprintf(s->dinName[source], sizeof s->dinName[source], "%s", name ? name : "");
+	s->dinTold[source] = 0;
+	app_shellBindNow(s, source);
+}
+
 int app_shellHung(const app_shell_t *s)
 {
 	return atomic_load(&s->engine.hung);
@@ -259,30 +360,50 @@ void app_shellTestFault(app_shell_t *s)
 	atomic_store(&s->testFault, 1);
 }
 
+/* the MIDI-out thread, then the endpoints: after this their unique IDs are free (E18) */
+static void app_shellMidiStop(app_shell_t *s)
+{
+	if (s->haveMidiThread)
+	{
+		atomic_store(&s->midiStop, 1);
+		(void)semaphore_signal(s->mach.midiWake);
+		(void)pthread_join(s->midiOut, NULL);	/* it looks at the flag every 20 ms */
+		s->haveMidiThread = 0;
+	}
+	if (s->haveMidi)
+	{
+		app_cmDispose(&s->cm);
+		s->haveMidi = 0;
+	}
+}
+
 void app_shellStop(app_shell_t *s)
 {
-	if (!s->haveFirmware)
-		return;
-	app_cmd_t c;
-	memset(&c, 0, sizeof c);
-	c.kind = APP_CMD_STOP;
-	for (int i = 0; i < 200 && app_engineCommand(&s->engine, &c) != 0; i++)
+	if (s->haveFirmware)
 	{
-		const struct timespec d = { 0, 5000000L };	/* a full command ring: the thread drains it */
-		(void)nanosleep(&d, NULL);
+		app_cmd_t c;
+		memset(&c, 0, sizeof c);
+		c.kind = APP_CMD_STOP;
+		for (int i = 0; i < 200 && app_engineCommand(&s->engine, &c) != 0; i++)
+		{
+			const struct timespec d = { 0, 5000000L };	/* a full command ring: the thread drains it */
+			(void)nanosleep(&d, NULL);
+		}
+		for (int i = 0; i < 400 && !atomic_load(&s->stopped); i++)	/* up to 2 s */
+		{
+			const struct timespec d = { 0, 5000000L };
+			(void)nanosleep(&d, NULL);
+		}
+		if (atomic_load(&s->stopped))	/* else a stuck thread: the process ends without it */
+		{
+			(void)pthread_join(s->firmware, NULL);
+			s->haveFirmware = 0;
+			if (s->haveWatchdog)
+			{
+				(void)pthread_join(s->watchdog, NULL);	/* it looks at stopped every 100 ms */
+				s->haveWatchdog = 0;
+			}
+		}
 	}
-	for (int i = 0; i < 400 && !atomic_load(&s->stopped); i++)	/* up to 2 s */
-	{
-		const struct timespec d = { 0, 5000000L };
-		(void)nanosleep(&d, NULL);
-	}
-	if (!atomic_load(&s->stopped))
-		return;	/* a stuck thread: the process ends without it */
-	(void)pthread_join(s->firmware, NULL);
-	s->haveFirmware = 0;
-	if (s->haveWatchdog)
-	{
-		(void)pthread_join(s->watchdog, NULL);	/* it looks at stopped every 100 ms */
-		s->haveWatchdog = 0;
-	}
+	app_shellMidiStop(s);
 }
