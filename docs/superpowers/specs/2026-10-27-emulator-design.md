@@ -1267,6 +1267,16 @@ time from source, so the Command Line Tools are enough to build it.
     only when the option is turned on. `Info.plist` carries `NSMicrophoneUsageDescription`. An ad hoc
     signed app is identified by its code hash, so macOS asks again after each new release; the README
     says so.
+  - **As built in R5** (plan `2026-10-31-emulator-r5-clock-audio.md`, decisions F1–F15 there): while the
+    input runs, L, and so D's default, also holds the input's measured lead (one input buffer plus its
+    latency), since an audio edge reaches the app that late and would otherwise enter at 'now' with
+    jitter (F7). The clock may go on any output channel 1–64 the device has; on a 2-channel device the
+    mix plays mono on the other channel, and under the 4-channel mix the clock replaces that output
+    (F3, F4). The thresholds have hysteresis. Clock and reset must use different input channels, and
+    while the reset comes from audio the panel's reset switch is off (F11). The input follows the
+    device's buffer size and reopens when it changes. Most interfaces have AC-coupled inputs, so a held
+    reset needs a DC-coupled one; clock pulses work on any input. Without the permission macOS delivers
+    silence, so the app checks the permission itself and leaves the option off when it is denied.
 
 ### 6.9 Power, crashes and settings
 
@@ -1770,7 +1780,7 @@ G1–G10 (§8.6), in both CI jobs.
 | A1 | The app opens after Open Anyway. The splash shows 'LICHOMAT' and 'v0.1 unofficial' for about 1 s. About shows the notices of §10.1. The owner confirms that the panel carries none of the faceplate's names, logos, printing, graphics or colours (E33) |
 | A2 | An imported copy of the owner's card plays its projects, and they sound like the device |
 | A3 | On the device and in the app (360 points of drag), the owner counts the steps of one full knob turn on a normal and on a list parameter; they agree within 10 %. Fader i, counted from the left, moves the same voice as fader i on the device. The encoder walks the menu, and SHIFT combinations work with a latched button |
-| A4 | Master over the virtual port at 120 BPM: the DAW shows 120.0 ± 0.1 BPM; F8 intervals on the virtual port are 20.83 ± 1.5 ms; the DAW starts and stops with the app |
+| A4 | Master over the virtual port at 120 BPM: the DAW shows 120.0 ± 0.1 BPM; F8 intervals on the virtual port are 20.83 ± 1.5 ms, leaving out the one interval that contains Start (the firmware sends an F8 1 ms after FA, so that interval is 0–20.8 ms) and the first clocks after launch; the DAW starts and stops with the app |
 | A5 | Slave over the virtual port with the default D, at 128 and at 140 BPM for 2 minutes each: the diagnostics' measured leads stay at most L, and their input latency stays within 1 ms of D. Start, Stop, Continue and a locate (SPP) to bar 3 put the step LEDs at the DAW's position within one step |
 | A6 | Slave over a hardware DIN interface, as A5 |
 | A7 | MIDI out over DIN to a synth: a pattern with notes on all 7 tracks runs for 5 minutes, with 10 stops and starts; after each stop the synth falls silent, so no note hangs |
@@ -1778,6 +1788,7 @@ G1–G10 (§8.6), in both CI jobs.
 | A9 | Export to an empty folder and to a freshly formatted card; the exported card loads on the device. Export one project into a copy of the owner's card; their other projects stay |
 | A10 | A power cycle works, and the DAW keeps its routing to the virtual ports. A launch after a crash shows the crash note |
 | A11 | Diagnostics with the built-in output: 689.7 ± 0.1 blocks per second, and a firmware-thread load below 10 % on the owner's Mac. A project load during playback gives no output underrun |
+| A12 | R5, the clock jacks as audio: (a) the clock channel cabled to the device's clock in runs it for 2 minutes without a slip, and a DAW recording of that channel shows 5.2 ms pulses at 120 BPM; (b) the microphone prompt appears on the first turn-on only, a clock and a reset from an audio input drive the app, and the input latency stays within 1 ms of D; a denial leaves the option off with a message |
 
 ### 12.4 Device checks for the firmware changes
 

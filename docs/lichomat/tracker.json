@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-10-31 12:43",
+    "updated": "2026-10-31 14:20",
     "phase": "Etap 2: v0.4 gotowe w kodzie (M13); częstotliwość pogłosu czeka na H12",
-    "focus": "E5.5: aplikacja LICHOMAT Emu (R4 gotowe, R5 dalej)",
+    "focus": "Wszystko z planu gotowe w kodzie; czekają sprawdzenia na sprzęcie",
     "branch": "timing-core",
-    "head": "1547edd",
-    "next": "Twoje A1–A11 w aplikacji i H12 dla pogłosu v0.4",
-    "updated_at": "2026-10-31T12:43:00+01:00",
-    "now": "R5: zadania 3–4 (wejście audio, GUI)"
+    "head": "91a61b5",
+    "next": "Twoje H12 (pogłos v0.4), A1–A12 w aplikacji, sesja testowa na LXR",
+    "updated_at": "2026-10-31T14:20:00+01:00",
+    "now": "Czekam na Twoje wyniki (H12, A1–A12, sesja na LXR) albo wybór kolejnej pracy"
   },
   "epics": [
     {
@@ -443,7 +443,7 @@
       "id": "E5.5",
       "epic": "E5",
       "status": "w toku",
-      "title": "Aplikacja LICHOMAT Emu (R4 gotowe w kodzie 31.10, M14: CoreAudio, CoreMIDI, panel w układzie LXR-02, karta, crash i power cycle; zostają Twoje A1–A11) i R5 (jacki zegara jako audio, mały plan)",
+      "title": "Aplikacja LICHOMAT Emu: R4 (M14) i R5 (M15) gotowe w kodzie 31.10, scalone do v0.3 i v0.4; zostają Twoje A1–A12 w aplikacji",
       "updated": "2026-10-31"
     },
     {
@@ -664,6 +664,12 @@
       "date": "2026-10-31",
       "title": "Aplikacja LICHOMAT Emu (emulator R4, E5.5)",
       "summary": "Cały firmware gra na Macu w oknie z panelem w układzie LXR-02 (Twoja decyzja z 10:13; bez nazw, logo i kolorów urządzenia, napis LICHOMAT), dźwięk przez CoreAudio, wirtualne porty MIDI „LICHOMAT Emu” (master i slave, D liczone z opóźnień wyjścia), folder karty z importem i eksportem, watchdog, notatka po crashu, power cycle z zachowaniem ID portów. Dear ImGui v1.92.9b (Twoja zgoda). Zmierzone: 689,70 bloku/s, zero niedoborów, MIDI clock co 19,7–22,0 ms. 264 testy emulatora; plan i trzy lekkie przeglądy kodu: 2 blokujące i 22 inne usterki poprawione z testami. Aplikacja Release 1,9 MB, podpis ad hoc. Raport: docs/lichomat/reports/M14-emulator-R4-app.md"
+    },
+    {
+      "id": "M15",
+      "date": "2026-10-31",
+      "title": "Jacki zegara jako audio w aplikacji (emulator R5, E5.5)",
+      "summary": "CLK OUT na wybranym kanale wyjścia audio (impulsy w swoich ramkach, dźwięk opóźniony o jeden blok), CLK i RST IN z wejścia audio z progiem i histerezą, D z opóźnieniem wejścia, zgoda na mikrofon tylko po włączeniu opcji. Emulator ma całą specyfikację etapu 1b (R1–R5). 288 testów emulatora (v0.3: 300, v0.4: 308), obrazy firmware bez zmian. Przegląd: 1 blokująca, 1 ważna i 6 drobnych usterek poprawionych; wyjaśniony niestabilny test (pierwsze takty MIDI clock po starcie). Nowe sprawdzenie A12 (kabel). Raport: docs/lichomat/reports/M15-emulator-R5-clock-audio.md"
     }
   ],
   "questions": [
@@ -3029,6 +3035,21 @@
       "n": 429,
       "at": "2026-10-31 12:43",
       "text": "R5 zadania 1–2 (c52c4ae, 8ee07d3, 1547edd): logika jacków jako audio i silnik; CLK OUT: 17 zboczy na 17 impulsów firmware, bez zgubionych; slave z zegara audio: każde zbocze wchodzi w mapie + D, D 70,5 ms (L 69,5 ms z opóźnieniem wejścia 12,5 ms). 274 testy. Teraz zadania 3–4 (jednostka wejścia CoreAudio, okno Audio, zgoda na mikrofon)."
+    },
+    {
+      "n": 430,
+      "at": "2026-10-31 13:15",
+      "text": "R5 zadania 3–4 (4563389, 13f6cae, 6b085f9, 876c9f6): jednostka wejścia CoreAudio, liczba kanałów wyjścia (zegar na kanale 3+ działa na prawdziwym urządzeniu, ostrzeżenie, gdy kanału nie ma), opcje w oknie Audio, zgoda na mikrofon tylko po włączeniu opcji, NSMicrophoneUsageDescription, README. 279 testów. Bramka nazw M21 pomija tablice __unwind_info i __eh_frame (offset funkcji przypadkiem układał się w 'LxR'). Teraz lekki przegląd R5 i szukanie testu, który raz na kilka przebiegów pada."
+    },
+    {
+      "n": 431,
+      "at": "2026-10-31 13:29",
+      "text": "Przegląd R5: wyjście zegara, opóźnienie o blok, czasy zboczy wejścia i odwrócenie resetu poprawne. 1 blokująca uwaga (wejście audio milknie po zmianie rozmiaru bufora na wspólnym interfejsie), 1 ważna (kolejność wyłączenia resetu z panelu) i 6 drobnych; zmiana bramki nazw (13f6cae) uznana za poprawną. Poprawki trwają."
+    },
+    {
+      "n": 432,
+      "at": "2026-10-31 14:20",
+      "text": "R5: poprawki po przeglądzie i niestabilnego testu (5a2e130, e861db9, 590e280, c70971f), 288 testów. Scalenie do v0.3 (321c2f7, 300 testów) i v0.4 (91a61b5, 308 testów), obrazy firmware bez zmian bajt w bajt. M15: emulator ma całą specyfikację etapu 1b (R1–R5). Twoje kopie aplikacji v0.1 i v0.4 w scratchpadzie odświeżone."
     }
   ]
 }
