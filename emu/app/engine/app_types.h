@@ -42,10 +42,12 @@ typedef struct app_panelEvent { uint64_t host; double level; int32_t value; uint
 typedef enum { APP_CMD_CARD_OUT, APP_CMD_CARD_IN, APP_CMD_DELAY, APP_CMD_MIX, APP_CMD_GENERATOR, APP_CMD_OUTPUT,
 	APP_CMD_STOP } app_cmdKind_t;
 /** DELAY a = 1 automatic, else x = D in s; MIX a = app_mix_t; GENERATOR a = on, x = BPM, b = PPQ (4 or 24);
- * OUTPUT text = device UID ("" the default), a = buffer frames (0 the device's) */
+ * OUTPUT text = device UID ("" the default), a = buffer frames (0 the device's); CARD_OUT and CARD_IN a = a number that the
+ * acknowledgement echoes, so that the sender can tell its own from an earlier one */
 typedef struct app_cmd { uint8_t kind; int32_t a, b; double x; char text[128]; } app_cmd_t;
 typedef enum { APP_ACK_CARD_OUT, APP_ACK_CARD_IN, APP_MSG_WARNING, APP_MSG_NOTICE } app_ackKind_t;
-typedef struct app_ack { uint8_t kind; char text[255]; } app_ack_t;
+/** seq: the number of the CARD_OUT or CARD_IN command that this acknowledges (0 for the other kinds) */
+typedef struct app_ack { uint8_t kind; int32_t seq; char text[255]; } app_ack_t;
 enum { APP_NOTE_DEVICE, APP_NOTE_OVERLOAD };	/**< the notification ring's entries, one byte */
 
 /** the firmware's counters of spec 5.5 */

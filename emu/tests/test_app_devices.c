@@ -23,6 +23,7 @@
 #include <unistd.h>
 
 #include "app_coreaudio.h"
+#include "app_card.h"
 #include "app_coremidi.h"
 #include "app_mach.h"
 #include "app_shell.h"
@@ -379,6 +380,84 @@ TEST(R4_dev_midiout)
 	emu_testTempDir(gHome, sizeof gHome);
 	ASSERT_EQ(emu_hostCopyCard(EMU_TEST_CARDS "/init", gCard, 0), 0);
 	PROBE(midioutChild, "R4_dev_midiout", 15);
+}
+
+/* spec 6.7, 6.9: a card operation waits for ITS 'card out applied'. A late acknowledgement of an operation that has timed out
+ * must not start the next one before the card is out: the shell compares the number that the acknowledgement echoes. Neither
+ * audio nor MIDI is needed. */
+static char gOpDst[1024];
+static _Atomic int gOpDone, gRelaunches;
+
+static void cardopMessage(void *ctx, const char *text)
+{
+	(void)ctx;
+	if (strstr(text, "exported the card into") != NULL)
+		atomic_store(&gOpDone, 1);
+}
+
+static int cardopRelaunch(void *ctx)
+{
+	(void)ctx;
+	atomic_fetch_add(&gRelaunches, 1);
+	return 0;
+}
+
+static int cardopChild(void)
+{
+	app_shell_t *s = app_shellNew();
+	app_shellOptions_t o;
+	char err[256] = "";
+	memset(&o, 0, sizeof o);
+	o.cardDir = gCard;
+	o.home = gHome;
+	o.noAudio = 1;
+	o.noMidi = 1;
+	o.message = cardopMessage;
+	o.relaunch = cardopRelaunch;
+	if (!s || app_shellStart(s, &o, err, sizeof err) != 0)
+	{
+		printf("start: %s\n", err);
+		return 1;
+	}
+	int ok = app_shellCardOp(s, APP_OP_EXPORT, gOpDst, 0, 0) == 0;
+	app_shellTestAck(s, APP_ACK_CARD_OUT, 424242);	/* the late one of an earlier operation: not this one's */
+	char names[256];
+	ok &= !atomic_load(&gOpDone) && app_cardNonDot(gOpDst, names, sizeof names) == 0;	/* nothing is copied yet */
+	if (!ok)
+		printf("a stale acknowledgement started the export\n");
+	const double t0 = app_wallSeconds();
+	while (!atomic_load(&gOpDone) && app_wallSeconds() - t0 < 6.0)
+	{
+		(void)app_shellFrame(s);
+		nanosleep(&(const struct timespec){ 0, 2000000L }, NULL);
+	}
+	char proj[1100];
+	snprintf(proj, sizeof proj, "%s/PROJ00", gOpDst);
+	ok &= atomic_load(&gOpDone) && emu_hostKind(proj) == 1;	/* its own acknowledgement: now it is copied */
+	/* the power cycle waits for its own as well, and does not fall back on its 2 s deadline when it comes */
+	app_shellPowerCycle(s);
+	app_shellTestAck(s, APP_ACK_CARD_OUT, 424243);
+	ok &= atomic_load(&gRelaunches) == 0;
+	const double t1 = app_wallSeconds();
+	while (atomic_load(&gRelaunches) == 0 && app_wallSeconds() - t1 < 4.0)
+	{
+		(void)app_shellFrame(s);
+		nanosleep(&(const struct timespec){ 0, 2000000L }, NULL);
+	}
+	const double took = app_wallSeconds() - t1;
+	printf("export done: %d; power cycle: %d relaunch(es) after %.3f s\n", atomic_load(&gOpDone), atomic_load(&gRelaunches), took);
+	ok &= atomic_load(&gRelaunches) == 1 && took < 1.5;
+	app_shellStop(s);
+	return ok ? 0 : 1;
+}
+
+TEST(R4_dev_cardop)
+{
+	emu_testTempDir(gCard, sizeof gCard);
+	emu_testTempDir(gHome, sizeof gHome);
+	emu_testTempDir(gOpDst, sizeof gOpDst);
+	ASSERT_EQ(emu_hostCopyCard(EMU_TEST_CARDS "/init", gCard, 0), 0);
+	PROBE(cardopChild, "R4_dev_cardop", 15);
 }
 
 TEST_MAIN()

@@ -96,7 +96,10 @@ typedef struct app_engine
 	app_outputRequest_t req;
 	app_timemap_t map;
 	app_outputInfo_t out;
-	int outputRunning, dAuto, cardAck, clockLevel, clockSeen, genOn;
+	int outputRunning, dAuto, clockLevel, clockSeen, genOn;
+	int cardHeld;			/**< CARD_OUT has taken the card out and no CARD_IN has put it back: the panel's switch is left alone */
+	struct { uint8_t kind; int32_t seq; } cardAcks[64];
+	unsigned nCardAcks;		/**< acknowledgements that wait for the end of the pass: one per command, in order */
 	int cbSeen;				/**< this open has had a callback: the stall test is armed */
 	uint8_t extSync;
 	uint64_t retryAt, lastCallback, frameBase, dCycles, staleFrom, prev[3], outPrev[2];

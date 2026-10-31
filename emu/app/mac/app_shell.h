@@ -69,6 +69,9 @@ int app_shellHung(const app_shell_t *s);
 int app_shellWarnings(const app_shell_t *s);				/**< the warnings kept, at most the last 64 (spec 11) */
 const char *app_shellWarning(const app_shell_t *s, int i);	/**< oldest first */
 void app_shellTestFault(app_shell_t *s);	/**< harness only: SIGSEGV on the firmware thread (the crash note, spec 6.9) */
+/** tests only: the main thread handles an acknowledgement of kind app_ackKind_t and number seq as if the engine had sent it
+ * (a late 'card out applied' of an operation that has timed out, say). Main thread */
+void app_shellTestAck(app_shell_t *s, int kind, int32_t seq);
 /** The settings of spec 6.9 (the app folder's settings.txt) are loaded by app_shellStart(), kept as the app runs and
  * saved within a second of a change. The window frame x, y, width, height is the GUI's to read at start and to set as
  * it moves; main thread */

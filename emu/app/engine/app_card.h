@@ -57,11 +57,16 @@ int app_cardList(const char *dir, int fat, app_cardEntry_t **out, app_warn_t war
 int app_cardCopy(const char *src, const char *dst, app_warn_t warn, void *ctx);	/**< into an existing folder */
 int app_backupName(const char *backups, int64_t localSec, const char *suffix, char *out, size_t n);
 /** step 2 and 3 of spec 6.7: the card moves to a backup, src is copied in; a failed copy puts the card back (backup is
- * then empty). Never from the card's own folder, one inside it or one that holds it. 0 or -1 */
+ * then empty). Never from the card's own folder, one inside it or one that holds it. 0 or -1; -2: the copy failed and the
+ * card could not be put back, backup names the folder that holds it */
 int app_cardImport(const app_paths_t *p, const char *src, int64_t localSec, char *backup, size_t bn, app_warn_t warn, void *ctx);
-int app_cardExport(const char *card, const char *dst, char *err, size_t n, app_warn_t warn, void *ctx);	/**< -2 not empty */
+/** -2 dst is not empty (err lists what is in it); -3 dst is the card, one inside it or one that holds it (err says so) */
+int app_cardExport(const char *card, const char *dst, char *err, size_t n, app_warn_t warn, void *ctx);
+/** The new PROJnn is copied into a temporary 8.3 folder of dst, the one there is copied into Card backups and moved aside,
+ * the new one is renamed in and the old one removed; a failure leaves dst's project where it was and err names the backup.
+ * 0; 2 dst has PROJnn and replace is 0; -1 (also for a dst that is the card, one inside it or one that holds it) */
 int app_cardExportProject(const app_paths_t *p, int project, const char *dst, int replace, int64_t localSec,
-	char *err, size_t n, app_warn_t warn, void *ctx);	/**< 0; 2 dst has PROJnn and replace is 0; -1 */
+	char *err, size_t n, app_warn_t warn, void *ctx);
 
 #ifdef __cplusplus
 }

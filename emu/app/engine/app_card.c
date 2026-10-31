@@ -388,16 +388,53 @@ int app_cardImport(const app_paths_t *p, const char *src, int64_t localSec, char
 		(void)app_rmTree(p->card);	/* what this copy made */
 	if (status != 0)
 	{
-		if (had)
-			(void)rename(backup, p->card);	/* the old card is back */
+		if (had && rename(backup, p->card) != 0)
+			return -2;	/* the old card is not back: backup says where it is */
 		backup[0] = '\0';
 		return -1;
 	}
 	return 0;
 }
 
+/* the real path of path, or of its parent with its last name when it is not there yet (an export makes the folder) */
+static int app_realTarget(const char *path, char *out)
+{
+	if (realpath(path, out))
+		return 0;
+	char parent[PATH_MAX];
+	if (errno != ENOENT || snprintf(parent, sizeof parent, "%s", path) >= (int)sizeof parent)
+		return -1;
+	char *slash = strrchr(parent, '/');
+	if (!slash)
+		return -1;
+	const char *leaf = slash + 1;
+	char real[PATH_MAX];
+	if (slash == parent)
+		slash[1] = '\0';	/* the root */
+	else
+		*slash = '\0';
+	if (!leaf[0] || !realpath(parent, real))
+		return -1;
+	return snprintf(out, PATH_MAX, "%s%s%s", real, real[1] ? "/" : "", leaf) < PATH_MAX ? 0 : -1;
+}
+
+/* dst is the app's card folder, one inside it, or one that holds it: an export there would copy a folder into itself, or
+ * replace a project of the card that is being read */
+static int app_ownCard(const char *card, const char *dst)
+{
+	char rc[PATH_MAX], rd[PATH_MAX];
+	if (!realpath(card, rc))
+		return 0;	/* no card folder: nothing of it to hurt */
+	return app_realTarget(dst, rd) == 0 && (app_within(rd, rc) || app_within(rc, rd));
+}
+
 int app_cardExport(const char *card, const char *dst, char *err, size_t n, app_warn_t warn, void *ctx)
 {
+	if (app_ownCard(card, dst))
+	{
+		snprintf(err, n, "%s is the app's card folder, or holds it or lies inside it", dst);
+		return -3;
+	}
 	const int others = app_cardNonDot(dst, err, n);
 	if (others != 0)
 		return others < 0 ? -1 : -2;
@@ -429,13 +466,36 @@ static void app_countWarn(void *ctx, const char *what)
 	(*(int *)ctx)++;
 }
 
+/* the names of two temporary folders in dir that nothing there has, EMUN00.TMP and EMUO00.TMP, then 01 and so on: 8.3 names,
+ * as the device's FatFs would see them if a crash left them behind */
+static int app_tempPair(const char *dir, char *fresh, char *aside, size_t n)
+{
+	for (unsigned k = 0; k < 100u; k++)
+	{
+		snprintf(fresh, n, "%s/EMUN%02u.TMP", dir, k);
+		snprintf(aside, n, "%s/EMUO%02u.TMP", dir, k);
+		if (emu_hostKind(fresh) < 0 && emu_hostKind(aside) < 0)
+			return 0;
+	}
+	return -1;
+}
+
+/* The new project is copied into a temporary folder of the target first. A project there is then copied into Card backups,
+ * moved aside by a rename, the new one is renamed into place, and the old one is removed. A failure at any step leaves
+ * the target's project where it was, and the message names the backup once there is one. */
 int app_cardExportProject(const app_paths_t *p, int project, const char *dst, int replace, int64_t localSec,
 	char *err, size_t n, app_warn_t warn, void *ctx)
 {
-	char name[13], sfx[16], from[EMU_HOST_PATH], to[EMU_HOST_PATH], backup[EMU_HOST_PATH];
+	char name[13], sfx[16], from[EMU_HOST_PATH], old[EMU_HOST_PATH], fin[EMU_HOST_PATH], backup[EMU_HOST_PATH];
+	char fresh[EMU_HOST_PATH], aside[EMU_HOST_PATH];
 	if (project < 0 || project > 63)
 	{
 		snprintf(err, n, "project %d: the card has projects 0 to 63", project);
+		return -1;
+	}
+	if (app_ownCard(p->card, dst))
+	{
+		snprintf(err, n, "%s is the app's card folder, or holds it or lies inside it", dst);
 		return -1;
 	}
 	snprintf(name, sizeof name, "PROJ%02d", project);
@@ -444,28 +504,62 @@ int app_cardExportProject(const app_paths_t *p, int project, const char *dst, in
 		snprintf(err, n, "the card has no %s", name);
 		return -1;
 	}
-	if (app_cardFind(dst, name, to, sizeof to))
+	const int has = app_cardFind(dst, name, old, sizeof old);
+	if (has && !replace)
 	{
-		if (!replace)
-		{
-			snprintf(err, n, "%s already holds %s", dst, name);
-			return 2;
-		}
-		int skipped = 0;	/* a name the copy would drop: nothing is replaced */
+		snprintf(err, n, "%s already holds %s", dst, name);
+		return 2;
+	}
+	snprintf(fin, sizeof fin, "%s/%s", dst, name);
+	if (emu_hostKind(dst) != 1 || app_tempPair(dst, fresh, aside, sizeof fresh) != 0 || mkdir(fresh, 0755) != 0)
+	{
+		snprintf(err, n, "%s could not be written", fin);
+		return -1;
+	}
+	if (app_cardCopy(from, fresh, warn, ctx) != 0)
+	{
+		(void)app_rmTree(fresh);
+		snprintf(err, n, "%s could not be written%s", fin, has ? "; the project there is unchanged" : "");
+		return -1;
+	}
+	backup[0] = '\0';
+	if (has)
+	{
+		int skipped = 0, made = 0;	/* a name the copy would drop: nothing is replaced */
 		snprintf(sfx, sizeof sfx, "-%s", name);
-		if (app_backupName(p->backups, localSec, sfx, backup, sizeof backup) != 0 || mkdir(backup, 0755) != 0
-			|| app_cardCopy(to, backup, app_countWarn, &skipped) != 0 || skipped || app_rmTree(to) != 0)
+		if (app_backupName(p->backups, localSec, sfx, backup, sizeof backup) != 0 || !(made = mkdir(backup, 0755) == 0)
+			|| app_cardCopy(old, backup, app_countWarn, &skipped) != 0 || skipped)
 		{
-			snprintf(err, n, "%s could not be moved into %s%s", to, backup,
+			snprintf(err, n, "%s could not be moved into %s%s; it is unchanged", old, backup,
 				skipped ? ": it holds names that are not 8.3" : "");
+			if (made)
+				(void)app_rmTree(backup);	/* a copy with names missing is no backup */
+			(void)app_rmTree(fresh);
+			return -1;
+		}
+		if (rename(old, aside) != 0)
+		{
+			snprintf(err, n, "%s could not be set aside; it is unchanged, and its copy is in %s", old, backup);
+			(void)app_rmTree(fresh);
 			return -1;
 		}
 	}
-	snprintf(to, sizeof to, "%s/%s", dst, name);
-	if (mkdir(to, 0755) != 0 || app_cardCopy(from, to, warn, ctx) != 0)
+	if (rename(fresh, fin) != 0)
 	{
-		snprintf(err, n, "%s could not be written", to);
+		if (has && rename(aside, old) != 0)
+			snprintf(err, n, "%s could not be written, and %s could not be put back: it is in %s, and its copy in %s", fin,
+				old, aside, backup);
+		else
+			snprintf(err, n, "%s could not be written%s%s", fin, has ? "; the project there is back, and its copy is in " : "",
+				backup);
+		(void)app_rmTree(fresh);
 		return -1;
+	}
+	if (has && app_rmTree(aside) != 0 && warn)
+	{
+		char w[EMU_HOST_PATH + 64];
+		snprintf(w, sizeof w, "%s could not be removed; delete it by hand (the old project's copy is in %s)", aside, backup);
+		warn(ctx, w);
 	}
 	return 0;
 }

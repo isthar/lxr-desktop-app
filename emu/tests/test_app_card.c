@@ -244,6 +244,203 @@ TEST(R4_card_own)
 	ASSERT_TRUE(holds(again, "PROJ00/PRJ.NFO", "SECOND"));
 }
 
+/* the entries of dir that are not dot entries, as "A, B": whatever order readdir() gives, sorted */
+static void listing(const char *dir, char *out, size_t n)
+{
+	app_cardEntry_t *l = NULL;
+	const int c = app_cardList(dir, 0, &l, NULL, NULL);
+	char *names[64];
+	int k = 0;
+	for (int i = 0; i < c && k < 64; i++)
+		names[k++] = l[i].host;
+	for (int i = 0; i < k; i++)
+		for (int j = i + 1; j < k; j++)
+			if (strcmp(names[i], names[j]) > 0)
+			{
+				char *t = names[i];
+				names[i] = names[j];
+				names[j] = t;
+			}
+	out[0] = '\0';
+	for (int i = 0; i < k; i++)
+		snprintf(out + strlen(out), n - strlen(out), "%s%s", i ? ", " : "", names[i]);
+	free(l);
+}
+
+/* the card and a target for PROJ01: the card's has an unreadable file after a good one; the target is the owner's card, with
+ * the project that is to be replaced under a lower-case name */
+static void projectFixture(app_paths_t *p, char *target, size_t tn, int withOld)
+{
+	char path[1200];
+	home(p);
+	mkdir(p->card, 0755);
+	snprintf(path, sizeof path, "%s/PROJ01", p->card);
+	mkdir(path, 0755);
+	put(path, "PRJ.NFO", "NEWPROJ");
+	put(path, "A.SND", "a");
+	put(path, "B.SND", "b");
+	snprintf(path, sizeof path, "%s/PROJ01/B.SND", p->card);
+	if (chmod(path, 0) != 0)	/* it cannot be read: the copy stops there */
+		exit(2);
+	emu_testTempDir(target, tn);
+	snprintf(path, sizeof path, "%s/PROJ00", target);
+	mkdir(path, 0755);
+	put(path, "PRJ.NFO", "OTHER");
+	snprintf(path, sizeof path, "%s/proj01", target);
+	if (withOld)
+	{
+		mkdir(path, 0755);
+		put(path, "PRJ.NFO", "OLDPROJ");
+		put(path, "X.SND", "x");
+	}
+	put(target, "PROJ.IDX", "0");
+}
+
+static void unreadableBack(const app_paths_t *p)
+{
+	char path[1200];
+	snprintf(path, sizeof path, "%s/PROJ01/B.SND", p->card);
+	chmod(path, 0644);
+}
+
+/* the new copy fails half way: the owner's project is as it was, no partial PROJ01 and no temporary folder is left */
+TEST(R4_card_projfail)
+{
+	app_paths_t p;
+	char target[512], err[512], names[256];
+	projectFixture(&p, target, sizeof target, 1);
+	ASSERT_EQ(app_cardExportProject(&p, 1, target, 1, STAMP, err, sizeof err, NULL, NULL), -1);
+	unreadableBack(&p);
+	ASSERT_TRUE(holds(target, "proj01/PRJ.NFO", "OLDPROJ"));
+	ASSERT_TRUE(holds(target, "proj01/X.SND", "x"));
+	ASSERT_TRUE(holds(target, "PROJ00/PRJ.NFO", "OTHER"));
+	listing(target, names, sizeof names);
+	ASSERT_EQ(strcmp(names, "PROJ.IDX, PROJ00, proj01"), 0);
+	ASSERT_TRUE(strstr(err, "unchanged") != NULL);
+	ASSERT_EQ(app_cardNonDot(p.backups, names, sizeof names), 0);	/* nothing was taken from the target yet */
+}
+
+/* the same without a project in the way: the target gets nothing */
+TEST(R4_card_projnew)
+{
+	app_paths_t p;
+	char target[512], err[512], names[256];
+	projectFixture(&p, target, sizeof target, 0);
+	ASSERT_EQ(app_cardExportProject(&p, 1, target, 0, STAMP, err, sizeof err, NULL, NULL), -1);
+	unreadableBack(&p);
+	listing(target, names, sizeof names);
+	ASSERT_EQ(strcmp(names, "PROJ.IDX, PROJ00"), 0);
+}
+
+/* a good replace leaves the new project under its own name, the old one in Card backups, and no temporary folder */
+TEST(R4_card_projclean)
+{
+	app_paths_t p;
+	char target[512], err[512], names[256], path[1200];
+	projectFixture(&p, target, sizeof target, 1);
+	unreadableBack(&p);
+	ASSERT_EQ(app_cardExportProject(&p, 1, target, 1, STAMP, err, sizeof err, NULL, NULL), 0);
+	listing(target, names, sizeof names);
+	ASSERT_EQ(strcmp(names, "PROJ.IDX, PROJ00, PROJ01"), 0);
+	ASSERT_TRUE(holds(target, "PROJ01/PRJ.NFO", "NEWPROJ"));
+	ASSERT_TRUE(holds(target, "PROJ01/B.SND", "b"));
+	snprintf(path, sizeof path, "%s/20261031-130509-PROJ01", p.backups);
+	ASSERT_TRUE(holds(path, "X.SND", "x"));
+}
+
+/* a stale temporary folder of an earlier run is no reason to fail: the next free name is taken */
+TEST(R4_card_projstale)
+{
+	app_paths_t p;
+	char target[512], err[512], names[256], path[1200];
+	projectFixture(&p, target, sizeof target, 1);
+	unreadableBack(&p);
+	snprintf(path, sizeof path, "%s/EMUN00.TMP", target);
+	mkdir(path, 0755);
+	snprintf(path, sizeof path, "%s/EMUO00.TMP", target);
+	mkdir(path, 0755);
+	ASSERT_EQ(app_cardExportProject(&p, 1, target, 1, STAMP, err, sizeof err, NULL, NULL), 0);
+	listing(target, names, sizeof names);
+	ASSERT_EQ(strcmp(names, "EMUN00.TMP, EMUO00.TMP, PROJ.IDX, PROJ00, PROJ01"), 0);	/* theirs are theirs */
+	ASSERT_TRUE(holds(target, "PROJ01/PRJ.NFO", "NEWPROJ"));
+}
+
+/* the old project cannot be copied into Card backups: nothing is taken from the target */
+TEST(R4_card_projnobackup)
+{
+	app_paths_t p;
+	char target[512], err[512], names[256];
+	projectFixture(&p, target, sizeof target, 1);
+	unreadableBack(&p);
+	ASSERT_EQ(chmod(p.backups, 0555), 0);
+	const int rc = app_cardExportProject(&p, 1, target, 1, STAMP, err, sizeof err, NULL, NULL);
+	chmod(p.backups, 0755);
+	ASSERT_EQ(rc, -1);
+	ASSERT_TRUE(holds(target, "proj01/PRJ.NFO", "OLDPROJ"));
+	listing(target, names, sizeof names);
+	ASSERT_EQ(strcmp(names, "PROJ.IDX, PROJ00, proj01"), 0);
+	ASSERT_TRUE(strstr(err, "Card backups") != NULL);
+}
+
+static char gChmodDir[1100];
+static void chmodWarn(void *ctx, const char *what) { (void)ctx; (void)what; chmod(gChmodDir, 0555); }
+
+/* the copy fails and the folder it made cannot be cleared (here a folder of it turns read-only while the copy is on its way
+ * to the next one), so the old card cannot be put back: the result says so and names the backup, where the old card is */
+TEST(R4_card_noreturn)
+{
+	app_paths_t p;
+	home(&p);
+	mkdir(p.card, 0755);
+	put(p.card, "OLD.TXT", "old");
+	char src[512], backup[1024], a[1100], b[1100];
+	emu_testTempDir(src, sizeof src);
+	snprintf(a, sizeof a, "%s/A", src);
+	snprintf(b, sizeof b, "%s/B", src);
+	mkdir(a, 0755);
+	put(a, "F1.TXT", "f");	/* copied; its folder then turns read-only */
+	mkdir(b, 0755);
+	put(b, "B1.TXT", "b");
+	put(b, "Long Name.txt", "x");	/* a warning, while B is listed */
+	snprintf(a, sizeof a, "%s/B/B1.TXT", src);
+	ASSERT_EQ(chmod(a, 0), 0);	/* the copy of B stops here */
+	snprintf(gChmodDir, sizeof gChmodDir, "%s/A", p.card);
+	const int rc = app_cardImport(&p, src, STAMP, backup, sizeof backup, chmodWarn, NULL);
+	chmod(gChmodDir, 0755);
+	chmod(a, 0644);
+	ASSERT_EQ(rc, -2);
+	ASSERT_TRUE(strstr(backup, "/Card backups/20261031-130509") != NULL);
+	ASSERT_TRUE(holds(backup, "OLD.TXT", "old"));
+}
+
+/* an export into the app's own card, into a folder in it or into one that holds it is refused, before anything is moved */
+TEST(R4_card_exportown)
+{
+	app_paths_t p;
+	home(&p);
+	char sub[1100], err[512], names[256], path[1200];
+	mkdir(p.card, 0755);
+	snprintf(sub, sizeof sub, "%s/PROJ01", p.card);
+	mkdir(sub, 0755);
+	put(sub, "PRJ.NFO", "FIRST");
+	ASSERT_EQ(app_cardExport(p.card, p.card, err, sizeof err, NULL, NULL), -3);
+	ASSERT_TRUE(strstr(err, "card") != NULL);
+	ASSERT_EQ(app_cardExport(p.card, sub, err, sizeof err, NULL, NULL), -3);	/* inside it */
+	snprintf(path, sizeof path, "%s/NEW", p.card);
+	ASSERT_EQ(app_cardExport(p.card, path, err, sizeof err, NULL, NULL), -3);	/* inside it, not there yet */
+	ASSERT_EQ(emu_hostKind(path), -1);
+	ASSERT_EQ(app_cardExport(p.card, p.home, err, sizeof err, NULL, NULL), -3);	/* holds it */
+	snprintf(path, sizeof path, "%s/../%s", p.card, strrchr(p.card, '/') + 1);
+	ASSERT_EQ(app_cardExport(p.card, path, err, sizeof err, NULL, NULL), -3);	/* by another way round */
+	ASSERT_EQ(app_cardExportProject(&p, 1, p.card, 1, STAMP, err, sizeof err, NULL, NULL), -1);	/* its own PROJ01 */
+	ASSERT_TRUE(strstr(err, "card") != NULL);
+	ASSERT_EQ(app_cardExportProject(&p, 1, p.home, 1, STAMP, err, sizeof err, NULL, NULL), -1);
+	ASSERT_TRUE(holds(p.card, "PROJ01/PRJ.NFO", "FIRST"));
+	listing(p.card, names, sizeof names);
+	ASSERT_EQ(strcmp(names, "PROJ01"), 0);
+	ASSERT_EQ(app_cardNonDot(p.backups, names, sizeof names), 0);
+}
+
 /* E21: LICHOMAT_EMU_HOME, else the Application Support folder under $HOME, made as far as it goes */
 TEST(R4_card_paths)
 {

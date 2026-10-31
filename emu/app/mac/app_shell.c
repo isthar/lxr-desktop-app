@@ -62,6 +62,7 @@ struct app_shell
 	app_paths_t paths;				/**< paths.card is the folder that the engine runs on */
 	int havePaths;
 	int opActive, op, opProject, opReplace;	/**< a card operation waits for 'card out applied' */
+	int32_t cardSeq, opSeq, powerSeq;	/**< the number of the last card command; of the operation's and the power cycle's CARD_OUT */
 	char opPath[PATH_MAX];
 	double opDeadline, nextZone;	/**< app_wallSeconds() */
 	app_settings_t set;				/**< what the app runs with now (spec 6.9); saved to paths.settings */
@@ -309,6 +310,7 @@ static void app_shellCardIn(app_shell_t *s)
 	app_cmd_t c;
 	memset(&c, 0, sizeof c);
 	c.kind = APP_CMD_CARD_IN;
+	c.a = ++s->cardSeq;
 	(void)app_engineCommand(&s->engine, &c);
 }
 
@@ -322,7 +324,11 @@ static void app_shellRunOp(app_shell_t *s)
 	s->opActive = 0;
 	if (s->op == APP_OP_IMPORT)
 	{
-		if (app_cardImport(&s->paths, s->opPath, now, backup, sizeof backup, app_shellCopyWarn, s) != 0)
+		const int rc = app_cardImport(&s->paths, s->opPath, now, backup, sizeof backup, app_shellCopyWarn, s);
+		if (rc == -2)	/* the copy failed and the old card could not be moved back */
+			app_shellSayf(s, "error", "the import failed and the card could not be put back: it is in ", backup,
+				"; move it back by hand");
+		else if (rc != 0)
 			app_shellSayf(s, "error", "the import from ", s->opPath, " failed; the card is as it was");
 		else
 		{
@@ -336,7 +342,9 @@ static void app_shellRunOp(app_shell_t *s)
 	else if (s->op == APP_OP_EXPORT)
 	{
 		const int rc = app_cardExport(s->paths.card, s->opPath, err, sizeof err, app_shellCopyWarn, s);
-		if (rc == -2)
+		if (rc == -3)	/* the card's own folder, or one in it or around it */
+			app_shellSayf(s, "error", err, "; nothing was copied", NULL);
+		else if (rc == -2)
 			app_shellSayf(s, "error", s->opPath, " is not empty, nothing was copied: ", err);
 		else if (rc != 0)
 			app_shellSayf(s, "error", "the export into ", s->opPath, " failed");
@@ -392,11 +400,13 @@ void app_shellPowerCycle(app_shell_t *s)
 	}
 	memset(&c, 0, sizeof c);
 	c.kind = APP_CMD_CARD_OUT;
+	c.a = s->cardSeq + 1;
 	if (app_engineCommand(&s->engine, &c) != 0)
 	{
 		app_shellSay(s, "error: the command ring is full; no power cycle");
 		return;
 	}
+	s->powerSeq = s->cardSeq = c.a;
 	s->powerActive = 1;
 	s->powerDeadline = app_wallSeconds() + APP_SHELL_POWER_SEC;
 }
@@ -409,8 +419,10 @@ int app_shellCardOp(app_shell_t *s, int op, const char *path, int project, int r
 		return -1;
 	memset(&c, 0, sizeof c);
 	c.kind = APP_CMD_CARD_OUT;
+	c.a = s->cardSeq + 1;
 	if (app_engineCommand(&s->engine, &c) != 0)
 		return -1;
+	s->opSeq = s->cardSeq = c.a;
 	s->op = op;
 	s->opProject = project;
 	s->opReplace = replace;
@@ -594,30 +606,45 @@ int app_shellStart(app_shell_t *s, const app_shellOptions_t *o, char *err, size_
 	return 0;
 }
 
+/* one acknowledgement or message of the engine, on the main thread */
+static void app_shellAck(app_shell_t *s, const app_ack_t *a)
+{
+	char line[300];
+	if (a->kind == APP_MSG_WARNING)
+		app_shellKeepWarning(s, a->text);
+	else if (a->kind == APP_ACK_CARD_OUT)
+	{
+		/* only the acknowledgement of this operation's own CARD_OUT: one that comes late from an operation that has
+		 * timed out says nothing about the card now */
+		if (s->opActive && a->seq == s->opSeq)
+			app_shellRunOp(s);
+		else if (s->powerActive && a->seq == s->powerSeq)
+		{
+			s->powerActive = 0;
+			app_shellRestart(s);	/* the card is out and nothing writes (E18) */
+		}
+	}
+	else if (a->kind == APP_MSG_NOTICE)
+	{
+		snprintf(line, sizeof line, "notice: %s", a->text);
+		app_shellSay(s, line);
+	}
+}
+
+void app_shellTestAck(app_shell_t *s, int kind, int32_t seq)
+{
+	app_ack_t a;
+	memset(&a, 0, sizeof a);
+	a.kind = (uint8_t)kind;
+	a.seq = seq;
+	app_shellAck(s, &a);
+}
+
 int app_shellFrame(app_shell_t *s)
 {
 	app_ack_t a;
-	char line[300];
 	while (app_engineAck(&s->engine, &a))
-	{
-		if (a.kind == APP_MSG_WARNING)
-			app_shellKeepWarning(s, a.text);
-		else if (a.kind == APP_ACK_CARD_OUT)
-		{
-			if (s->opActive)
-				app_shellRunOp(s);
-			else if (s->powerActive)
-			{
-				s->powerActive = 0;
-				app_shellRestart(s);	/* the card is out and nothing writes (E18) */
-			}
-		}
-		else if (a.kind == APP_MSG_NOTICE)
-		{
-			snprintf(line, sizeof line, "notice: %s", a.text);
-			app_shellSay(s, line);
-		}
-	}
+		app_shellAck(s, &a);
 	const double wall = app_wallSeconds();
 	if (s->opActive && wall > s->opDeadline)
 	{

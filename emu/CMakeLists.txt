@@ -390,7 +390,8 @@ endfunction()
 
 emu_add_app_test(test_app_bind IDS R4_bind)
 emu_add_app_test(test_app_card IDS R4_card_order R4_card_stamp R4_card_state R4_card_import R4_card_export
-    R4_card_project R4_card_seed R4_card_rollback R4_card_own R4_card_paths)
+    R4_card_project R4_card_seed R4_card_rollback R4_card_own R4_card_paths R4_card_projfail R4_card_projnew
+    R4_card_projclean R4_card_projstale R4_card_projnobackup R4_card_noreturn R4_card_exportown)
 target_compile_definitions(test_app_card PRIVATE "EMU_TEST_RENDER=\"$<TARGET_FILE:lichomat-render>\"")
 add_dependencies(test_app_card lichomat-render)
 emu_add_app_test(test_app_settings IDS R4_settings_roundtrip R4_settings_keep R4_crash_note)
@@ -399,7 +400,7 @@ emu_add_app_test(test_app_timemap IDS M18_map_wall M18_map_drift M18_map_rate M1
     M18_reanchor_order)
 emu_add_app_test(test_app_midi FRAMEWORKS CoreMIDI CoreFoundation IDS M18_midi_split M18_midi_usb_cin
     M18_midi_usb_transfer M18_midi_bytes M18_midi_din_asm M18_midi_usb_out M18_eventlist)
-emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R4_engine_splash R4_engine_ring
+emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R4_engine_splash R4_engine_ring R4_engine_cardseq R4_engine_cardheld
     R4_engine_blockrate R4_engine_wall R4_engine_card R4_engine_generator R4_engine_open_bracket R4_engine_slow_first
     R4_engine_silent_open R4_engine_close_inflight R4_engine_late_point R4_engine_max_request R4_engine_cmd_delay
     R4_engine_power_dneg R4_engine_power_dnan R4_engine_power_dbig R4_engine_cmd_generator R4_engine_cmd_text)
@@ -438,7 +439,7 @@ if(LICHOMAT_EMU_APP)
     endfunction()
     emu_app_tests(R4_dev_headless R4_dev_import R4_dev_crash R4_dev_power R4_dev_afterpid R4_gui_version R4_gui_clash)
     emu_add_app_test(test_app_devices ENGINE MAC FRAMEWORKS AudioToolbox CoreAudio CoreMIDI CoreFoundation
-        IDS R4_dev_coreaudio R4_dev_coremidi R4_dev_midiout)
+        IDS R4_dev_coreaudio R4_dev_coremidi R4_dev_midiout R4_dev_cardop)
     list(APPEND EMU_GATE_BINARIES $<TARGET_FILE:lichomat-emu-dev>)
 
     # --- the GUI: Dear ImGui on its Cocoa and Metal backends, the panel, the bundle (spec 6.6, 9.2; plan Task 12) ---

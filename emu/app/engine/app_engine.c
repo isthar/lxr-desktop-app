@@ -282,7 +282,8 @@ static void app_enginePanelEvent(app_engine_t *e, const app_panelEvent_t *p, uin
 		emu_inJacks(now, (uint8_t)p->value);
 		break;
 	case APP_P_CARD:
-		emu_inCard(now, p->value);
+		if (!e->cardHeld)	/* an import, an export or a power cycle has the card out; the switch waits for it */
+			emu_inCard(now, p->value);
 		break;
 	case APP_P_CLOCK:	/* the jack input takes the entry rule on its own port (E13) */
 		if (app_engineEntry(e, APP_PORT_JACK, p->host, now, &t))
@@ -476,13 +477,18 @@ static int app_engineCommands(app_engine_t *e)
 		switch (c.kind)
 		{
 		case APP_CMD_CARD_OUT:
-			emu_inCard(emu_now(), 0);
-			e->cardAck = APP_ACK_CARD_OUT;
-			break;
 		case APP_CMD_CARD_IN:
-			emu_inCard(emu_now(), 1);
-			e->cardAck = APP_ACK_CARD_IN;
+		{
+			const int in = c.kind == APP_CMD_CARD_IN;
+			emu_inCard(emu_now(), in);
+			e->cardHeld = !in;
+			if (e->nCardAcks < sizeof e->cardAcks / sizeof e->cardAcks[0])	/* the command ring holds 64 */
+			{
+				e->cardAcks[e->nCardAcks].kind = in ? APP_ACK_CARD_IN : APP_ACK_CARD_OUT;
+				e->cardAcks[e->nCardAcks++].seq = c.a;
+			}
 			break;
+		}
 		case APP_CMD_DELAY:
 			if (c.a == 0 && isnan(c.x))
 				break;	/* no number: the command changes nothing */
@@ -530,7 +536,6 @@ int app_engineInit(app_engine_t *e, const app_host_t *host)
 	memset(e, 0, sizeof *e);
 	e->host = *host;
 	app_tmInit(&e->map, host->ticksPerSec);
-	e->cardAck = -1;
 	e->wallLead = app_ticks(e, APP_WALL_LEAD_SEC);
 	e->dAuto = 1;
 	e->winInMin = 1e9;
@@ -603,14 +608,15 @@ int app_engineSlice(app_engine_t *e)
 		app_engineOpen(e);
 	emu_runUntil(emu_now() + emu_framesToCycles(EMU_BLOCK_FRAMES));	/* the first call boots */
 	e->slices++;
-	if (e->cardAck >= 0)
+	for (unsigned i = 0; i < e->nCardAcks; i++)
 	{
 		app_ack_t a;
 		memset(&a, 0, sizeof a);
-		a.kind = (uint8_t)e->cardAck;
+		a.kind = e->cardAcks[i].kind;
+		a.seq = e->cardAcks[i].seq;
 		(void)app_ringPush(&e->ack, &a);	/* after the pass boundary: the card has switched */
-		e->cardAck = -1;
 	}
+	e->nCardAcks = 0;
 	emu_directCall(app_fwExtSync, &e->extSync);
 	if (e->slices % 8u == 0u)
 		emu_directCall(app_fwCounters, &e->diag.fw);

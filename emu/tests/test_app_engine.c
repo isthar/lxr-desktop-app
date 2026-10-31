@@ -479,4 +479,55 @@ TEST(R4_engine_cmd_text)
 	ASSERT_EQ(fk.uid[126], 'A');
 }
 
+/* an acknowledgement carries the number of its command, one per command and in order, so that the sender can tell its own
+ * from one of an operation that has timed out */
+TEST(R4_engine_cardseq)
+{
+	boot(1);
+	runTo(1.5);
+	app_cmd_t c = { .kind = APP_CMD_CARD_OUT, .a = 7 };
+	ASSERT_EQ(app_engineCommand(&E, &c), 0);
+	c.kind = APP_CMD_CARD_IN;	/* both in one slice: two acknowledgements */
+	c.a = 9;
+	ASSERT_EQ(app_engineCommand(&E, &c), 0);
+	app_engineSlice(&E);
+	app_ack_t a;
+	ASSERT_TRUE(nextAck(&a));
+	ASSERT_EQ(a.kind, APP_ACK_CARD_OUT);
+	ASSERT_EQ(a.seq, 7);
+	ASSERT_TRUE(nextAck(&a));
+	ASSERT_EQ(a.kind, APP_ACK_CARD_IN);
+	ASSERT_EQ(a.seq, 9);
+	ASSERT_FALSE(nextAck(&a));
+	c.kind = APP_CMD_CARD_OUT;
+	c.a = 11;
+	command(&c);
+	ASSERT_TRUE(nextAck(&a));
+	ASSERT_EQ(a.seq, 11);
+}
+
+/* from CARD_OUT to CARD_IN the card is the operation's: the panel's switch is left alone until then */
+TEST(R4_engine_cardheld)
+{
+	boot(1);
+	runTo(1.5);
+	app_cmd_t c = { .kind = APP_CMD_CARD_OUT, .a = 1 };
+	command(&c);
+	ASSERT_EQ(BSP_SD_IsDetected(), 0);
+	app_panelEvent_t ev = { .kind = APP_P_CARD, .value = 1 };
+	ASSERT_EQ(app_enginePanel(&E, &ev), 0);
+	for (unsigned i = 0; i < 20u; i++)
+		app_engineSlice(&E);
+	ASSERT_EQ(BSP_SD_IsDetected(), 0);	/* a click on the switch does not put it in */
+	c.kind = APP_CMD_CARD_IN;
+	c.a = 2;
+	command(&c);
+	ASSERT_EQ(BSP_SD_IsDetected(), 1);
+	ev.value = 0;
+	ASSERT_EQ(app_enginePanel(&E, &ev), 0);
+	for (unsigned i = 0; i < 20u; i++)
+		app_engineSlice(&E);
+	ASSERT_EQ(BSP_SD_IsDetected(), 0);	/* and afterwards the switch works again */
+}
+
 TEST_MAIN()
