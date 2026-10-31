@@ -172,6 +172,26 @@ TEST(M18_midi_usb_out)
 	ASSERT_EQ(u.w[1][0], 0x10F80000u);
 	ASSERT_EQ(u.w[2][0], 0x20C00500u);
 	ASSERT_EQ(u.t[2], 5000);
+
+	/* the DIN -> USB thru sends a SysEx one byte per CIN 0xF packet (MidiParser.c, usb_midiTx.c:54): one MT 3
+	 * packet comes out, not four MT 1 words. A realtime byte inside it is a message of its own; F4 and F5 are dropped */
+	const uint8_t sysex[] = { 0x0F, 0xF0, 0, 0, 0x0F, 0x7E, 0, 0, 0x0F, 0x01, 0, 0, 0x0F, 0xF7, 0, 0 };
+	memset(&sx, 0, sizeof sx);
+	u.n = 0;
+	app_usbToUmp(6000u, sysex, sizeof sysex, &sx, umpEmit, &u);
+	ASSERT_EQ(u.n, 1);
+	ASSERT_EQ(u.w[0][0], 0x30027E01u);	/* complete, 2 bytes */
+	ASSERT_EQ(u.w[0][1], 0);
+	ASSERT_EQ(u.t[0], 6000);
+	const uint8_t mixed[] = { 0x0F, 0xF0, 0, 0, 0x0F, 0x7E, 0, 0, 0x0F, 0xF8, 0, 0, 0x0F, 0xF4, 0, 0, 0x0F, 0xF5, 0, 0,
+		0x0F, 0x01, 0, 0, 0x05, 0xFA, 0, 0, 0x05, 0xF7, 0, 0 };
+	memset(&sx, 0, sizeof sx);
+	u.n = 0;
+	app_usbToUmp(7000u, mixed, sizeof mixed, &sx, umpEmit, &u);
+	ASSERT_EQ(u.n, 3);
+	ASSERT_EQ(u.w[0][0], 0x10F80000u);	/* the clock, at once */
+	ASSERT_EQ(u.w[1][0], 0x10FA0000u);	/* CIN 0x5 carries a realtime byte as well: a Start, not a SysEx byte */
+	ASSERT_EQ(u.w[2][0], 0x30027E01u);	/* F4, F5 dropped; 7E 01 stay */
 }
 
 /* spec 12.1 M18: distinct stamps stay distinct; six clocks stamped 0 enter as one transfer */

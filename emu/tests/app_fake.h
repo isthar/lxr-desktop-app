@@ -36,6 +36,18 @@ typedef struct fake
 	uint64_t nextCallback, callbacks;
 	void (*event)(struct fake *f);	/* the test's arrivals; it sets the next nextEvent */
 	uint64_t nextEvent;
+	/* a test's knobs for the device, all 0 for a well-behaved one */
+	uint64_t openTicks;		/* the time an open takes; the watchdog is polled before and after it */
+	uint64_t firstDelay;	/* the first callback comes this long after the open returns (0: one period) */
+	int silent;				/* the unit opens and never calls back */
+	int flushOnClose;		/* a callback that is in flight when the unit stops, and completes */
+	unsigned earlyRequest;	/* a callback of this many frames before the open returns */
+	emu_watchdog_t dog;		/* polled with the fake clock (the watchdog thread's job) */
+	int dogFired;
+	unsigned opens, closes;	/* successful opens, closes of an open unit */
+	uint64_t openAt[64];	/* the fake clock when each open returned */
+	char uid[128];			/* the last request */
+	uint32_t bufferFrames;
 	float buf[4096 * 4];
 } fake_t;
 static fake_t fk;
@@ -76,15 +88,36 @@ static inline void fakeAdvance(uint64_t until, int stop)
 static inline uint64_t fakeNow(void *ctx) { (void)ctx; return fk.now; }
 static inline void fakeWait(void *ctx, uint64_t until) { (void)ctx; fakeAdvance(until, 1); }
 static inline void fakeSleep(void *ctx, uint64_t until) { (void)ctx; fakeAdvance(until, 0); }
-static inline void fakeClose(void *ctx) { (void)ctx; fk.running = 0; }
+static inline void fakeCallback(unsigned frames)
+{
+	const app_audioTime_t ts = { fk.now + FAKE_LEAD, fk.now, 1.0 };
+	app_audioRender(fk.audio, &ts, frames, fk.buf, 2u);
+}
+static inline void fakeClose(void *ctx)
+{
+	(void)ctx;
+	if (fk.running && fk.flushOnClose)
+		fakeCallback(fakeRequest(fk.callbacks++));
+	fk.running = 0;
+	fk.closes++;
+}
+static inline void fakePoll(void)
+{
+	if (emu_watchdogPoll(&fk.dog, (double)fk.now / FAKE_TPS))
+		fk.dogFired = 1;
+}
 static inline void fakeMidiWake(void *ctx) { (void)ctx; }
 /* spec 6.3's built-in output: 48 kHz, 512 frames, latencies 60 + 690 frames, safety offset 48 */
 static inline int fakeOpen(void *ctx, app_audio_t *a, const app_outputRequest_t *req, app_outputInfo_t *info)
 {
 	(void)ctx;
-	(void)req;
+	snprintf(fk.uid, sizeof fk.uid, "%s", req->uid);
+	fk.bufferFrames = req->bufferFrames;
 	if (!fk.device)
 		return -1;
+	fakePoll();
+	fk.now += fk.openTicks;
+	fakePoll();
 	memset(info, 0, sizeof *info);
 	info->deviceRate = 48000.0;
 	info->clientRate = 44140.625;
@@ -95,7 +128,12 @@ static inline int fakeOpen(void *ctx, app_audio_t *a, const app_outputRequest_t 
 	info->channels = 2u;
 	fk.audio = a;
 	fk.running = 1;
-	fk.nextCallback = fk.now + FAKE_PERIOD;
+	fk.nextCallback = fk.silent ? UINT64_MAX : fk.now + (fk.firstDelay ? fk.firstDelay : FAKE_PERIOD);
+	if (fk.earlyRequest)
+		fakeCallback(fk.earlyRequest);	/* the unit was running before this function returned */
+	if (fk.opens < sizeof fk.openAt / sizeof fk.openAt[0])
+		fk.openAt[fk.opens] = fk.now;
+	fk.opens++;
 	return 0;
 }
 

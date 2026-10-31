@@ -20,9 +20,25 @@
 
 #include "app_fw.h"
 
+/* D in cycles: a number from 0 to 1 s; NaN is 0 and a value out of range is cut. A negative D would wrap to 2^64 cycles
+ * and reach a float to integer conversion that has no result */
+static uint64_t app_dCycles(double sec)
+{
+	sec = isnan(sec) || sec < 0.0 ? 0.0 : sec > APP_D_MAX_SEC ? APP_D_MAX_SEC : sec;
+	return (uint64_t)llround(sec * EMU_CPU_HZ);
+}
+
 static uint64_t app_ticks(const app_engine_t *e, double sec)
 {
 	return (uint64_t)(sec * e->host.ticksPerSec);
+}
+
+/* a max loop: the callback and the open both raise maxRequest, and neither may lower what the other stored */
+static void app_maxRequest(app_audio_t *a, uint32_t v)
+{
+	uint32_t cur = atomic_load_explicit(&a->maxRequest, memory_order_relaxed);
+	while (v > cur && !atomic_compare_exchange_weak_explicit(&a->maxRequest, &cur, v, memory_order_relaxed, memory_order_relaxed))
+		;
 }
 
 void app_audioRender(app_audio_t *a, const app_audioTime_t *ts, unsigned frames, float *out, unsigned channels)
@@ -58,8 +74,7 @@ void app_audioRender(app_audio_t *a, const app_audioTime_t *ts, unsigned frames,
 		atomic_fetch_add_explicit(&a->underruns, 1u, memory_order_relaxed);
 	const app_point_t p = { first, ts->hostTime, ts->entry, ts->rateScalar, frames, n };
 	(void)app_ringPush(&a->points, &p);
-	if (frames > atomic_load_explicit(&a->maxRequest, memory_order_relaxed))
-		atomic_store_explicit(&a->maxRequest, frames, memory_order_relaxed);
+	app_maxRequest(a, frames);
 	atomic_fetch_add_explicit(&a->callbacks, 1u, memory_order_relaxed);
 	if (a->wake)
 		a->wake(a->wakeCtx);
@@ -79,7 +94,14 @@ static void app_enginePoints(app_engine_t *e)
 	const app_point_t *p;
 	while ((p = app_ringPeek(&e->audio.points, 0u)) != NULL)
 	{
-		e->lastCallback = p->entry;
+		if (!e->outputRunning)
+		{
+			app_ringPop(&e->audio.points, 1u);	/* a point of a stopped unit: it would put the map on a line no callback keeps */
+			continue;
+		}
+		e->cbSeen = 1;
+		if (p->entry > e->lastCallback)
+			e->lastCallback = p->entry;
 		const double lead = (double)(int64_t)(p->hostTime - p->entry) / e->host.ticksPerSec;
 		if (e->warm < APP_WARMUP)
 		{
@@ -136,7 +158,6 @@ static void app_engineSnap(app_engine_t *e, uint64_t now);
 /* the output is not running, and neither is its callback: a fresh ring and a fresh warm-up (spec 6.2, 6.4) */
 static void app_engineOpen(app_engine_t *e)
 {
-	const uint64_t host = e->host.now(e->host.ctx);
 	emu_counters_t c;
 	emu_getCounters(&c);
 	app_ringReset(&e->audio.frames);
@@ -144,18 +165,23 @@ static void app_engineOpen(app_engine_t *e)
 	e->frameBase = (uint64_t)EMU_BLOCK_FRAMES * (c.blocks + 1u);	/* the next block request's first frame */
 	e->warm = e->lReq = 0u;
 	e->lLead = 0.0;
+	e->cbSeen = 0;
 	e->diag.leadMin = 1e9;
 	e->diag.leadMax = -1e9;
-	if (!e->map.valid)
-		app_tmWall(&e->map, 0.0, host);
 	e->req.channels = atomic_load(&e->audio.mix) == APP_MIX_FOUR ? 4u : 2u;
 	memset(&e->out, 0, sizeof e->out);
+	atomic_store(&e->audio.maxRequest, 0u);	/* no callback runs between two opens */
+	emu_waitBegin();	/* a slow open is a wait, not a hang (spec 4.2) */
 	e->outputRunning = e->host.outputOpen(e->host.ctx, &e->audio, &e->req, &e->out) == 0;
-	e->lastCallback = host;
+	emu_waitEnd();
+	const uint64_t opened = e->host.now(e->host.ctx);
+	e->lastCallback = opened;	/* the stall test and the first callback's 3 s count from the open's return */
+	if (!e->map.valid)
+		app_tmWall(&e->map, 0.0, opened);
 	if (e->outputRunning)
-		atomic_store(&e->audio.maxRequest, (uint32_t)ceil((double)e->out.bufferFrames * APP_FS / e->out.deviceRate));	/* E6 */
+		app_maxRequest(&e->audio, (uint32_t)ceil((double)e->out.bufferFrames * APP_FS / e->out.deviceRate));	/* E6 */
 	else
-		e->retryAt = host + app_ticks(e, APP_RETRY_SEC);
+		e->retryAt = opened + app_ticks(e, APP_RETRY_SEC);
 }
 
 /* the wall clock paces until new callback points re-anchor the map */
@@ -164,8 +190,9 @@ static void app_engineClose(app_engine_t *e)
 	if (e->outputRunning)
 		e->host.outputClose(e->host.ctx);
 	e->outputRunning = 0;
-	e->retryAt = 0;
+	app_ringReset(&e->audio.points);	/* the callback has stopped; a callback that was in flight left its point here */
 	const uint64_t host = e->host.now(e->host.ctx);
+	e->retryAt = host + app_ticks(e, APP_RETRY_SEC);	/* the wall clock paces virtual time between the tries */
 	app_tmWall(&e->map, (double)emu_now(), host);
 	e->staleFrom = host;	/* E9 */
 }
@@ -184,9 +211,10 @@ static void app_engineWaitRing(app_engine_t *e)
 	while (app_ringCount(&e->audio.frames) >= atomic_load_explicit(&e->audio.maxRequest, memory_order_relaxed) + APP_RING_SLACK)
 	{
 		const uint64_t host = e->host.now(e->host.ctx);
-		if (host > e->lastCallback + app_ticks(e, APP_STALL_SEC))
+		/* a stall: no callback while the ring is full. Before the first callback of an open it is a failed open */
+		if (host > e->lastCallback + app_ticks(e, e->cbSeen ? APP_STALL_SEC : APP_FIRST_SEC))
 		{
-			app_engineClose(e);	/* a stall: no callback while the ring is full */
+			app_engineClose(e);
 			break;
 		}
 		e->host.waitAudio(e->host.ctx, host + app_ticks(e, 0.1));
@@ -321,7 +349,7 @@ static void app_hook(void *ctx, uint64_t now, emu_hookReason_t why)
 		app_engineSnap(e, now);
 	if (why == EMU_HOOK_BLOCK && e->outputRunning)
 		app_engineWaitRing(e);
-	else if (!e->map.audio)
+	else if (!e->outputRunning || !e->map.audio)
 		app_enginePaceWall(e, now);
 }
 
@@ -420,8 +448,9 @@ static int app_engineCommands(app_engine_t *e)
 	const app_cmd_t *p;
 	while ((p = app_ringPeek(&e->cmd, 0u)) != NULL)
 	{
-		const app_cmd_t c = *p;
+		app_cmd_t c = *p;
 		app_ringPop(&e->cmd, 1u);
+		c.text[sizeof c.text - 1u] = 0;	/* the GUI's text may come without its NUL */
 		switch (c.kind)
 		{
 		case APP_CMD_CARD_OUT:
@@ -433,9 +462,11 @@ static int app_engineCommands(app_engine_t *e)
 			e->cardAck = APP_ACK_CARD_IN;
 			break;
 		case APP_CMD_DELAY:
+			if (c.a == 0 && isnan(c.x))
+				break;	/* no number: the command changes nothing */
 			e->dAuto = c.a != 0;
 			if (!e->dAuto)
-				e->dCycles = (uint64_t)llround(c.x * EMU_CPU_HZ);
+				e->dCycles = app_dCycles(c.x);
 			else if (e->warm >= APP_WARMUP)
 				app_engineSetL(e);
 			break;
@@ -447,11 +478,15 @@ static int app_engineCommands(app_engine_t *e)
 			break;
 		}
 		case APP_CMD_GENERATOR:
-			e->genOn = c.a != 0 && c.x >= 1.0 && (c.b == 4 || c.b == 24);
-			e->genMbpm = (uint64_t)llround(c.x * 1000.0);
-			e->genPpq = (uint64_t)c.b;
-			e->genT0 = e->genNext = emu_now();
-			e->genK = 0;
+			/* 1 to the firmware's maximum BPM, or the interval is 0 cycles and the loop of pulses never ends; NaN fails both */
+			e->genOn = c.a != 0 && c.x >= 1.0 && c.x <= APP_GEN_BPM_MAX && (c.b == 4 || c.b == 24);
+			if (e->genOn)
+			{
+				e->genMbpm = (uint64_t)llround(c.x * 1000.0);
+				e->genPpq = (uint64_t)c.b;
+				e->genT0 = e->genNext = emu_now();
+				e->genK = 0;
+			}
 			break;
 		case APP_CMD_OUTPUT:
 			snprintf(e->req.uid, sizeof e->req.uid, "%s", c.text);
@@ -506,7 +541,7 @@ void app_enginePowerOn(app_engine_t *e, const app_engineConfig_t *cfg)
 	e->cfg = *cfg;
 	e->req = cfg->output;
 	e->dAuto = cfg->dAuto;
-	e->dCycles = (uint64_t)llround(cfg->dSec * EMU_CPU_HZ);
+	e->dCycles = app_dCycles(cfg->dSec);
 	atomic_store(&e->audio.mix, (int)cfg->mix);
 	e->winHost = e->host.now(e->host.ctx);	/* the first diagnostics window starts here */
 	emu_config_t c;

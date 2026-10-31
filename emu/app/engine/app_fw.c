@@ -19,6 +19,10 @@
 #include "Soundengine/Sequencer/seq_platform.h"
 #include "Soundengine/USB/usb_manager.h"
 
+/* the generator's highest tempo is the firmware's: the sequencer clamps a slave's tempo to it */
+_Static_assert((long)SEQC_SLAVE_BPM_MAX == (long)APP_GEN_BPM_MAX && (long)SEQC_MASTER_BPM_MAX == (long)APP_GEN_BPM_MAX,
+	"APP_GEN_BPM_MAX is the firmware's BPM maximum");
+
 void app_fwExtSync(void *out)
 {
 	*(uint8_t *)out = seq_getExtSync();

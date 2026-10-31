@@ -19,16 +19,27 @@ uint8_t BSP_SD_IsDetected(void);	/* emu/stubs/fatfs.h: SD_PRESENT 1, SD_NOT_PRES
 
 static app_engine_t E;
 
-static void boot(int device)
+/* boot() in two steps, so that a test can set the fake device's knobs between them */
+static void bootStart(int device)
 {
 	app_host_t h;
 	fakeHost(&h, device);
 	if (app_engineInit(&E, &h) != 0)
 		exit(2);
+}
+
+static void bootGo(int dAuto, double dSec)
+{
 	static char card[1024];
 	fakeCard(card, sizeof card, 120u);
-	const app_engineConfig_t c = { .cardDir = card, .seed = 1u, .dAuto = 1, .mix = APP_MIX_SUM };
+	const app_engineConfig_t c = { .cardDir = card, .seed = 1u, .dAuto = dAuto, .dSec = dSec, .mix = APP_MIX_SUM };
 	app_enginePowerOn(&E, &c);
+}
+
+static void boot(int device)
+{
+	bootStart(device);
+	bootGo(1, 0.0);
 }
 
 static app_snapshot_t last;	/* the newest snapshot: runTo() empties the ring at every slice */
@@ -191,8 +202,250 @@ TEST(R4_engine_generator)
 	emu_counters_t cnt;
 	emu_getCounters(&cnt);
 	ASSERT_TRUE(cnt.late <= 1u);	/* only the first pulse, stamped at the command's time, can be late: the hooks are 1.45 ms apart */
-	ASSERT_EQ(E.genK, 9);	/* 120 BPM at 4 PPQ: t0 + k x 125 ms for k = 0..8, pulses up to 1 ms ahead */
+	ASSERT_EQ(E.genK, 9);	/* 120 BPM at 4 PPQ: t0 + k x 125 ms for k = 0..8, pulses up to one block (1.45 ms) and 1 ms ahead */
 	ASSERT_EQ(E.genNext, t0 + 9u * 27000000u);
+}
+
+/* --- the output's life: opens, stalls, retries (spec 6.2, 6.9) and the commands' limits ------------------------ */
+
+static double virtualSec(void) { return (double)emu_now() / EMU_CPU_HZ; }
+static double wallSec(void) { return (double)(fk.now - 1000u) / FAKE_TPS; }
+
+/* slices until the fake clock reaches sec, at most maxSlices: a runaway shows as a clock that stands still */
+static void runBounded(double sec, unsigned maxSlices)
+{
+	for (unsigned n = 0; (double)fk.now < 1000.0 + sec * FAKE_TPS && n < maxSlices; n++)
+	{
+		app_engineSlice(&E);
+		(void)app_engineSnapshot(&E, &last);
+	}
+}
+
+/* slices until the engine has closed the output, at most maxSlices */
+static void runUntilClosed(unsigned maxSlices)
+{
+	for (unsigned n = 0; E.outputRunning && n < maxSlices; n++)
+		app_engineSlice(&E);
+}
+
+/* the device stops calling back, and no open succeeds from now on */
+static void hang(void)
+{
+	fk.nextCallback = UINT64_MAX;
+	fk.device = 0;
+}
+
+static void command(const app_cmd_t *c)
+{
+	(void)app_engineCommand(&E, c);
+	app_engineSlice(&E);
+}
+
+/* a slow open is a wait, not a hang: the watchdog's 10 s do not count it (spec 4.2), and the stall test counts from the
+ * open's return */
+TEST(R4_engine_open_bracket)
+{
+	bootStart(1);
+	fk.openTicks = (uint64_t)(12.0 * FAKE_TPS);
+	bootGo(1, 0.0);
+	ASSERT_EQ(fk.opens, 1);
+	ASSERT_FALSE(fk.dogFired);
+	ASSERT_TRUE(E.outputRunning);
+	ASSERT_EQ(E.lastCallback, fk.now);
+	runBounded(16.0, 20000u);
+	ASSERT_EQ(fk.opens, 1);
+	ASSERT_TRUE(E.outputRunning);
+	ASSERT_TRUE(atomic_load(&E.audio.callbacks) > 100u);
+}
+
+/* a first callback that comes late, but within 3 s, is no stall */
+TEST(R4_engine_slow_first)
+{
+	bootStart(1);
+	fk.firstDelay = (uint64_t)(1.5 * FAKE_TPS);
+	bootGo(1, 0.0);
+	runBounded(4.0, 20000u);
+	ASSERT_EQ(fk.opens, 1);
+	ASSERT_EQ(fk.closes, 0);
+	ASSERT_TRUE(E.outputRunning);
+	ASSERT_TRUE(atomic_load(&E.audio.callbacks) > 100u);
+	ASSERT_TRUE(E.map.audio);
+}
+
+/* a unit that opens and never calls back is a failed open after 3 s; the wall clock paces for 2 s, then it tries again */
+TEST(R4_engine_silent_open)
+{
+	bootStart(1);
+	fk.silent = 1;
+	bootGo(1, 0.0);
+	runUntilClosed(20000u);
+	ASSERT_FALSE(E.outputRunning);
+	ASSERT_EQ(fk.closes, 1);
+	ASSERT_TRUE(wallSec() > 3.0 && wallSec() < 3.2);
+	const double v0 = virtualSec(), w0 = wallSec();
+	runBounded(w0 + 1.5, 5000u);
+	ASSERT_FALSE(E.outputRunning);
+	ASSERT_EQ(fk.opens, 1);
+	ASSERT_NEAR(virtualSec() - v0, wallSec() - w0, 0.005);
+	runBounded(18.0, 20000u);
+	ASSERT_EQ(fk.opens, 4);	/* at 0, 5.1, 10.2 and 15.3 s */
+	for (unsigned i = 1; i < fk.opens; i++)
+	{
+		const double gap = (double)(fk.openAt[i] - fk.openAt[i - 1u]) / FAKE_TPS;
+		ASSERT_TRUE(gap >= 5.0 && gap < 5.2);	/* 3 s to the first callback, seen at the wait's 0.1 s steps, then 2 s */
+	}
+}
+
+/* a callback that is in flight while the unit stops leaves a point (with frames) in the ring: it must not put the map on
+ * the audio line, which no callback keeps any more */
+TEST(R4_engine_close_inflight)
+{
+	boot(1);
+	fk.flushOnClose = 1;
+	runBounded(2.0, 20000u);
+	ASSERT_TRUE(E.map.audio);
+	hang();
+	runUntilClosed(20000u);
+	ASSERT_FALSE(E.outputRunning);
+	ASSERT_EQ(fk.closes, 1);
+	const double v0 = virtualSec(), w0 = wallSec();
+	runBounded(w0 + 1.0, 5000u);
+	ASSERT_FALSE(E.map.audio);
+	ASSERT_NEAR(virtualSec() - v0, wallSec() - w0, 0.005);	/* the wall clock paces: 1 s of each */
+	ASSERT_TRUE(wallSec() - w0 > 0.99);
+}
+
+/* and a point that arrives after the close is dropped, not mapped */
+TEST(R4_engine_late_point)
+{
+	boot(1);
+	runBounded(2.0, 20000u);
+	hang();
+	runUntilClosed(20000u);
+	ASSERT_FALSE(E.outputRunning);
+	const app_point_t p = { 0u, fk.now, fk.now, 1.0, 470u, 470u };
+	ASSERT_EQ(app_ringPush(&E.audio.points, &p), 0);
+	const double v0 = virtualSec(), w0 = wallSec();
+	runBounded(w0 + 1.0, 5000u);
+	ASSERT_FALSE(E.map.audio);
+	ASSERT_EQ(app_ringCount(&E.audio.points), 0);
+	ASSERT_NEAR(virtualSec() - v0, wallSec() - w0, 0.005);
+	ASSERT_TRUE(wallSec() - w0 > 0.99);
+}
+
+/* maxRequest has two writers, the callback and the open: a callback that ran before the open returned keeps its larger
+ * value, and a reopen starts from the new nominal request (E6) */
+TEST(R4_engine_max_request)
+{
+	bootStart(1);
+	fk.earlyRequest = 1024u;
+	bootGo(1, 0.0);
+	ASSERT_TRUE(atomic_load(&E.audio.maxRequest) >= 1024u);
+	fk.earlyRequest = 0;
+	const app_cmd_t c = { .kind = APP_CMD_OUTPUT, .a = 256 };
+	command(&c);
+	ASSERT_EQ(fk.opens, 2);
+	ASSERT_EQ(fk.bufferFrames, 256);
+	ASSERT_EQ(atomic_load(&E.audio.maxRequest), 471);	/* ceil(512 x 44,140.625 / 48,000) */
+}
+
+/* D is 0 to 1 s and a number */
+TEST(R4_engine_cmd_delay)
+{
+	boot(1);
+	app_cmd_t c = { .kind = APP_CMD_DELAY, .a = 0, .x = -0.25 };
+	command(&c);
+	ASSERT_EQ(E.dAuto, 0);
+	ASSERT_EQ(E.dCycles, 0);	/* it used to wrap to 2^64 - 54,000,000 cycles */
+	c.x = 0.05;
+	command(&c);
+	ASSERT_EQ(E.dCycles, 10800000);
+	c.x = NAN;
+	command(&c);
+	ASSERT_EQ(E.dCycles, 10800000);	/* refused: nothing changes */
+	c.x = 3.5;
+	command(&c);
+	ASSERT_EQ(E.dCycles, 216000000);
+	c.x = INFINITY;
+	command(&c);
+	ASSERT_EQ(E.dCycles, 216000000);
+}
+
+/* D at power-on is a number from 0 to 1 s as well (one boot per process: three ids) */
+TEST(R4_engine_power_dneg)
+{
+	bootStart(1);
+	bootGo(0, -0.5);
+	ASSERT_EQ(E.dAuto, 0);
+	ASSERT_EQ(E.dCycles, 0);
+}
+
+TEST(R4_engine_power_dnan)
+{
+	bootStart(1);
+	bootGo(0, NAN);
+	ASSERT_EQ(E.dCycles, 0);
+}
+
+TEST(R4_engine_power_dbig)
+{
+	bootStart(1);
+	bootGo(0, 9.0);
+	ASSERT_EQ(E.dCycles, 216000000);
+}
+
+/* the generator runs from 1 BPM to the firmware's maximum, SEQC_SLAVE_BPM_MAX (300) */
+TEST(R4_engine_cmd_generator)
+{
+	boot(1);
+	app_cmd_t c = { .kind = APP_CMD_GENERATOR, .a = 1, .b = 4, .x = 301.0 };
+	command(&c);
+	ASSERT_FALSE(E.genOn);
+	c.x = 300.0;
+	command(&c);
+	ASSERT_TRUE(E.genOn);
+	ASSERT_EQ(E.genMbpm, 300000);
+	c.x = 1.0;
+	command(&c);
+	ASSERT_TRUE(E.genOn);
+	c.x = 0.5;
+	command(&c);
+	ASSERT_FALSE(E.genOn);
+	c.x = 120.0;
+	c.b = 5;
+	command(&c);
+	ASSERT_FALSE(E.genOn);
+	c.b = 24;
+	command(&c);
+	ASSERT_TRUE(E.genOn);
+	c.x = NAN;
+	command(&c);
+	ASSERT_FALSE(E.genOn);
+	c.x = INFINITY;
+	command(&c);
+	ASSERT_FALSE(E.genOn);
+	c.x = 1e12;	/* an interval of 0 cycles: the loop of pulses would never end */
+	command(&c);
+	ASSERT_FALSE(E.genOn);
+	c.x = 120.0;
+	c.b = 4;
+	command(&c);
+	ASSERT_TRUE(E.genOn);
+	command(&c);	/* the new command restarts it at the slice's time */
+	ASSERT_TRUE(E.genK < 3u);
+}
+
+/* a text without its NUL is cut, and read only up to the end of the field */
+TEST(R4_engine_cmd_text)
+{
+	boot(1);
+	app_cmd_t c = { .kind = APP_CMD_OUTPUT, .a = 256 };
+	memset(c.text, 'A', sizeof c.text);
+	command(&c);
+	ASSERT_EQ(fk.opens, 2);
+	ASSERT_EQ(fk.bufferFrames, 256);
+	ASSERT_EQ(strlen(fk.uid), 127);
+	ASSERT_EQ(fk.uid[126], 'A');
 }
 
 TEST_MAIN()

@@ -311,13 +311,18 @@ void app_usbToUmp(uint64_t t, const uint8_t *data, unsigned len, app_sx_t *sx, a
 		const unsigned cin = data[i] & 0xFu;
 		const uint32_t b0 = data[i + 1u], b1 = data[i + 2u], b2 = data[i + 3u];
 		uint32_t w;
+		/* CIN 0xF is one byte as it is (usb_midiTx.c): a realtime message, or a SysEx byte, F0 and F7 included,
+		 * that the DIN -> USB thru sends one per packet. CIN 0x5 is F6, or the last byte of a SysEx */
+		const int rt = b0 >= 0xF8u;
 		if (cin >= 0x8u && cin <= 0xEu)
 			w = 0x20000000u | b0 << 16 | b1 << 8 | b2;
-		else if (cin == 0xFu || cin == 0x2u || cin == 0x3u || (cin == 0x5u && b0 == 0xF6u))
+		else if (cin == 0x2u || cin == 0x3u || (cin == 0x5u && (b0 == 0xF6u || rt)) || (cin == 0xFu && rt))
 			w = 0x10000000u | b0 << 16 | (cin == 0x2u || cin == 0x3u ? b1 << 8 : 0u) | (cin == 0x3u ? b2 : 0u);
+		else if (cin == 0xFu && b0 >= 0x80u && b0 != 0xF0u && b0 != 0xF7u)
+			continue;	/* F4, F5 and anything else that is no SysEx byte and no realtime message */
 		else
 		{
-			const unsigned nb = cin == 0x4u || cin == 0x7u ? 3u : cin == 0x6u ? 2u : cin == 0x5u ? 1u : 0u;
+			const unsigned nb = cin == 0x4u || cin == 0x7u ? 3u : cin == 0x6u ? 2u : cin == 0x5u || cin == 0xFu ? 1u : 0u;
 			const uint8_t b[3] = { (uint8_t)b0, (uint8_t)b1, (uint8_t)b2 };
 			for (unsigned k = 0; k < nb; k++)
 				app_sxByte(sx, t, b[k], emit, ctx);

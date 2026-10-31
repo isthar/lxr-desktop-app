@@ -32,7 +32,10 @@
 #define APP_SNAP_BLOCKS 8u		/**< a snapshot every 8 blocks (E15) */
 #define APP_STALE_SEC 0.1		/**< spec 4.3, E9 */
 #define APP_STALL_SEC 0.5		/**< no callback for this long while the ring is full: a stall */
+#define APP_FIRST_SEC 3.0		/**< the first callback of an open may take this long; none is a failed open */
 #define APP_RETRY_SEC 2.0		/**< reopen tries while no output runs */
+#define APP_D_MAX_SEC 1.0		/**< D is 0 to this */
+#define APP_GEN_BPM_MAX 300.0	/**< the generator's tempo is 1 to this: the firmware's SEQC_SLAVE_BPM_MAX (app_fw.c checks it) */
 
 typedef struct app_audioTime { uint64_t hostTime, entry; double rateScalar; } app_audioTime_t;
 /** a time-map point: the ring position of the callback's first frame, its times, request and frames */
@@ -91,6 +94,7 @@ typedef struct app_engine
 	app_timemap_t map;
 	app_outputInfo_t out;
 	int outputRunning, dAuto, cardAck, clockLevel, clockSeen, genOn;
+	int cbSeen;				/**< this open has had a callback: the stall test is armed */
 	uint8_t extSync;
 	uint64_t retryAt, lastCallback, frameBase, dCycles, staleFrom, prev[3];
 	uint64_t genT0, genK, genNext, genMbpm, genPpq;
