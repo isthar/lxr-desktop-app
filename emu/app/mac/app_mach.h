@@ -26,6 +26,7 @@ typedef struct app_mach
 	double ticksPerSec;
 	app_engine_t *engine;
 	void *output;		/**< the app_ca_t of Task 7; NULL: no audio (--no-audio) */
+	void *owner;		/**< the shell, for the host functions that it overrides */
 	double period;		/**< s: the firmware thread's period, the output buffer's duration */
 	int realtime;		/**< 1 if thread_policy_set() took the policy (E29) */
 } app_mach_t;

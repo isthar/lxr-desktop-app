@@ -23,6 +23,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "app_coreaudio.h"
 #include "app_mach.h"
 
 #define APP_SHELL_WARNINGS 64u
@@ -40,6 +41,8 @@ struct app_shell
 	_Atomic int stopped, testFault;
 	int hungShown, haveSnap;
 	app_snapshot_t snap;
+	app_ca_t ca;
+	char outputErr[256];		/**< the last open failure told to the main thread; firmware thread */
 	char card[PATH_MAX];
 	char warnings[APP_SHELL_WARNINGS][255];
 	unsigned warningsTotal;
@@ -48,6 +51,40 @@ struct app_shell
 app_shell_t *app_shellNew(void)
 {
 	return calloc(1u, sizeof(app_shell_t));
+}
+
+/* The host's output, on the firmware thread (spec 6.1): the open, then the thread's period is the buffer's duration.
+ * A failure goes to the main thread as a notice, once per error text. */
+static int app_shellOutputOpen(void *ctx, app_audio_t *a, const app_outputRequest_t *req, app_outputInfo_t *info)
+{
+	app_mach_t *m = ctx;
+	app_shell_t *s = m->owner;
+	char err[256];
+	if (app_caOpen(&s->ca, a, req, info, err, sizeof err) != 0)
+	{
+		if (strcmp(err, s->outputErr) != 0)
+		{
+			app_ack_t ack;
+			memset(&ack, 0, sizeof ack);
+			ack.kind = APP_MSG_NOTICE;
+			snprintf(ack.text, sizeof ack.text, "audio output: %s", err);
+			(void)app_ringPush(&s->engine.ack, &ack);
+			snprintf(s->outputErr, sizeof s->outputErr, "%s", err);
+		}
+		return -1;
+	}
+	s->outputErr[0] = '\0';
+	if (info->deviceRate > 0.0 && info->bufferFrames > 0u)
+		m->period = (double)info->bufferFrames / info->deviceRate;
+	m->realtime = app_threadRealtime(m->period) == 0;	/* E29 */
+	s->engine.diag.realtime = m->realtime;
+	return 0;
+}
+
+static void app_shellOutputClose(void *ctx)
+{
+	app_mach_t *m = ctx;
+	app_caClose(&((app_shell_t *)m->owner)->ca);
 }
 
 /* the firmware thread: power-on, then one slice after the other until APP_CMD_STOP */
@@ -60,6 +97,8 @@ static void *app_shellFirmware(void *arg)
 	while (!app_engineSlice(&s->engine))
 		if (atomic_load(&s->testFault))
 			raise(SIGSEGV);	/* Task 10's crash check, on this thread */
+	if (s->engine.outputRunning)
+		app_shellOutputClose(&s->mach);	/* the unit stops before the thread does */
 	atomic_store(&s->stopped, 1);
 	return NULL;
 }
@@ -103,13 +142,23 @@ int app_shellStart(app_shell_t *s, const app_shellOptions_t *o, char *err, size_
 	}
 	if (app_machInit(&s->mach, &s->engine) != 0)
 		return app_shellFail(err, n, "the Mach host did not start", 0);
+	s->mach.owner = s;
 	app_machHost(&s->mach, &host);
+	if (!o->noAudio)
+	{
+		s->mach.output = &s->ca;
+		s->ca.engine = &s->engine;
+		host.outputOpen = app_shellOutputOpen;	/* the host is copied by app_engineInit() */
+		host.outputClose = app_shellOutputClose;
+	}
 	if (app_engineInit(&s->engine, &host) != 0)	/* it zeroes the engine */
 		return app_shellFail(err, n, "out of memory for the rings", 0);
 	s->engine.audio.wake = app_machWake;
 	s->engine.audio.wakeCtx = &s->mach;
 	s->cfg = (app_engineConfig_t){ .cardDir = s->o.cardDir, .seed = app_seedNow(), .dAuto = 1, .dSec = 0.0,
-		.mix = APP_MIX_SUM, .output = { "", 0u, 2u }, .fault = NULL, .faultCtx = NULL };
+		.mix = APP_MIX_SUM, .output = { "", o->bufferFrames, 2u }, .fault = NULL, .faultCtx = NULL };
+	if (o->deviceUid)
+		snprintf(s->cfg.output.uid, sizeof s->cfg.output.uid, "%s", o->deviceUid);
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	pthread_attr_setstacksize(&attr, APP_SHELL_STACK);
@@ -179,6 +228,12 @@ int app_shellPanel(app_shell_t *s, const app_panelEvent_t *ev)
 int app_shellCommand(app_shell_t *s, const app_cmd_t *c)
 {
 	return app_engineCommand(&s->engine, c) == 0 ? 0 : -1;
+}
+
+int app_shellDevices(app_shell_t *s, app_outputDevice_t *out, int max)
+{
+	(void)s;
+	return app_caList(out, max);
 }
 
 int app_shellHung(const app_shell_t *s)

@@ -57,8 +57,8 @@ static void onSignal(int sig)
 
 static void usage(void)
 {
-	fputs("usage: lichomat-emu-dev [--card DIR] [--no-audio] [--no-midi] [--seconds S] [--script FILE]\n"
-		"                        [--print-diag] [--print-leds]\n", stderr);
+	fputs("usage: lichomat-emu-dev [--card DIR] [--no-audio] [--no-midi] [--device UID] [--buffer N]\n"
+		"                        [--seconds S] [--script FILE] [--print-diag] [--print-leds]\n", stderr);
 }
 
 static void message(void *ctx, const char *text)
@@ -379,6 +379,29 @@ static void command(char *line)
 			(void)send(&cmd);
 		}
 	}
+	else if (!strcmp(c, "devices"))
+	{
+		app_outputDevice_t dev[32];
+		const int count = app_shellDevices(D.shell, dev, 32);
+		for (int i = 0; i < count; i++)
+			printf("device %u %s %u %s\n", dev[i].id, dev[i].uid, dev[i].channels, dev[i].name);
+		if (count == 0)
+			printf("device none\n");
+	}
+	else if (!strcmp(c, "output"))
+	{
+		a = 0;
+		if (!w[1] || (w[2] && parseInt(w[2], 0, 4096, &a) != 0) || strlen(w[1]) >= sizeof cmd.text)
+			printf("error: output UID|default [N]: N 0-4096 frames, 0 the device's\n");
+		else
+		{
+			cmd.kind = APP_CMD_OUTPUT;
+			if (strcmp(w[1], "default") != 0)
+				snprintf(cmd.text, sizeof cmd.text, "%s", w[1]);
+			cmd.a = (int32_t)a;
+			(void)send(&cmd);
+		}
+	}
 	else if (!strcmp(c, "diag"))
 		printDiag();
 	else if (!strcmp(c, "quit"))
@@ -466,6 +489,18 @@ int main(int argc, char **argv)
 			o.noAudio = 1;
 		else if (!strcmp(a, "--no-midi"))
 			o.noMidi = 1;
+		else if (!strcmp(a, "--device") && i + 1 < argc)
+			o.deviceUid = argv[++i];
+		else if (!strcmp(a, "--buffer") && i + 1 < argc)
+		{
+			double frames;
+			if (parseNum(argv[++i], 0.0, 4096.0, &frames) != 0)
+			{
+				usage();
+				return 1;
+			}
+			o.bufferFrames = (uint32_t)frames;
+		}
 		else if (!strcmp(a, "--seconds") && i + 1 < argc)
 		{
 			if (parseNum(argv[++i], 0.0, 86400.0, &D.seconds) != 0)

@@ -16,6 +16,7 @@
 #define APP_SHELL_H_
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "app_types.h"
 
@@ -29,6 +30,8 @@ typedef struct app_shellOptions
 {
 	const char *cardDir;	/**< the card folder; Task 9: NULL is the app folder's Card */
 	int noAudio, noMidi;
+	const char *deviceUid;	/**< the output device's UID; NULL or "" the system's default */
+	uint32_t bufferFrames;	/**< the output buffer in device frames; 0 the device's own */
 	void (*message)(void *ctx, const char *text);	/**< warnings, notices, errors; main thread */
 	void *ctx;
 } app_shellOptions_t;
@@ -39,6 +42,7 @@ int app_shellFrame(app_shell_t *s);	/**< main thread: snapshot, messages; 1 if a
 const app_snapshot_t *app_shellSnapshot(const app_shell_t *s);	/**< the newest; NULL before the first */
 int app_shellPanel(app_shell_t *s, const app_panelEvent_t *ev);
 int app_shellCommand(app_shell_t *s, const app_cmd_t *c);
+int app_shellDevices(app_shell_t *s, app_outputDevice_t *out, int max);	/**< the output devices, for the GUI and `devices`; main thread */
 int app_shellHung(const app_shell_t *s);
 int app_shellWarnings(const app_shell_t *s);				/**< the warnings kept, at most the last 64 (spec 11) */
 const char *app_shellWarning(const app_shell_t *s, int i);	/**< oldest first */
