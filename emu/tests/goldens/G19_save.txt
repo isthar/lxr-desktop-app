@@ -1,0 +1,16 @@
+# G19_save: the onset card playing, a project save at 2 s: TIM2 renders while the card is busy
+# (plan v0.5 Task 10, P16, spec 9.2)
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card onset --bpm 120 --no-start --seconds 6
+#expect energy L1 -40 0.2s..5.9s
+#expect summary underrunsAfterT0 0..0
+#expect summary vsched.late 0..0
+#broken-drop press
+100ms press start
+2s save-project 0

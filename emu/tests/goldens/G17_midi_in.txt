@@ -1,0 +1,56 @@
+# G17_midi_in: the onset card stopped, voice 1 on MIDI channel 2: 20 DIN Note Ons at irregular
+# times, then the same over USB in transfers of their own (plan v0.5 Task 10, spec 9.2, S9);
+# midi_note1=0: voice 1 takes any note (the card's kit filters for note 48), so note 60 plays
+# note 60, the sequencer's default note
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card onset --bpm 120 --no-start --seconds 5 --param midi_chan_1=2 --param midi_note1=0
+#expect energy L1 -40 0s..2.2s
+#expect energy L1 -40 2.5s..4.7s
+#expect summary vsched.late 0..0
+#broken-drop din,usb
+100ms din 91 3C 7F
+187ms din 91 3C 7F
+311ms din 91 3C 7F
+400ms din 91 3C 7F
+452ms din 91 3C 7F
+590ms din 91 3C 7F
+633ms din 91 3C 7F
+771ms din 91 3C 7F
+820ms din 91 3C 7F
+957ms din 91 3C 7F
+1041ms din 91 3C 7F
+1130ms din 91 3C 7F
+1222ms din 91 3C 7F
+1305ms din 91 3C 7F
+1419ms din 91 3C 7F
+1488ms din 91 3C 7F
+1602ms din 91 3C 7F
+1690ms din 91 3C 7F
+1823ms din 91 3C 7F
+1907ms din 91 3C 7F
+2600ms usb 91 3C 7F
+2687ms usb 91 3C 7F
+2811ms usb 91 3C 7F
+2900ms usb 91 3C 7F
+2952ms usb 91 3C 7F
+3090ms usb 91 3C 7F
+3133ms usb 91 3C 7F
+3271ms usb 91 3C 7F
+3320ms usb 91 3C 7F
+3457ms usb 91 3C 7F
+3541ms usb 91 3C 7F
+3630ms usb 91 3C 7F
+3722ms usb 91 3C 7F
+3805ms usb 91 3C 7F
+3919ms usb 91 3C 7F
+3988ms usb 91 3C 7F
+4102ms usb 91 3C 7F
+4190ms usb 91 3C 7F
+4323ms usb 91 3C 7F
+4407ms usb 91 3C 7F

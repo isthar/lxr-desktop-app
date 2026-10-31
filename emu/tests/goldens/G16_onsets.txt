@@ -1,0 +1,28 @@
+# G16_onsets: the onset card at 120 BPM: Drum 1's click alone on L1 with shifts, ratchets, shuffle,
+# delay, humanize, a 1/32 and a triplet roll; Drum 2 at x3/4 on out 2; each hit starts at its event
+# + 128 frames (plan v0.5 Task 10, spec 9.2); V05_onsets measures it
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card onset --bpm 120 --no-start --seconds 17 --seed 1
+#expect energy L1 -40 0.2s..16.9s
+#expect summary vsched.late 0..0
+#expect summary vsched.overflow 0..0
+#expect summary vsched.splits 1..1000000
+#expect summary underrunsAfterT0 0..0
+#broken --param trig_timing=1
+# the performance mode (MODE2): step 1 held rolls voice 1 at the roll rate
+0ms press 25
+50ms param roll=10
+100ms press start
+# step 16 (index 15) begins at about 2,000 ms: its 1/32 roll, two hits
+1912ms down step1
+2037ms up step1
+# the triplet roll (1/24) on index 10 of the second loop (step 43), about 5,350 ms: three hits
+4000ms param roll=9
+5287ms down step1
+5425ms up step1

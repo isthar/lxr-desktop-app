@@ -1,0 +1,17 @@
+# G18_slave_onsets: the onset card as DIN slave at 128 BPM, Start at 500 ms; from bar 2 every hit on
+# the clock grid (plan v0.5 Task 10, spec 9.2); V05_slave_onsets measures it
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card onset --bpm mid --no-start --seconds 8
+#expect energy L1 -40 2s..7.5s
+#expect summary seqc.dropouts 0..0
+#expect summary selected.sync 2..2
+#expect summary vsched.late 0..0
+#broken --bpm 120
+100ms din-clock 128
+500ms din FA

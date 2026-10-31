@@ -1374,6 +1374,82 @@ def V05_onsets_tool(t):
         check((code == 0) == ok, '%r: exit %d\n%s' % (args, code, out))
     check(onsets(t, off, '--against', wav)[1] == 63.0, 'the spread against the shifted render')
 
+def golden(t, gid):
+    """the card, the #! options and the path of a golden, to render it with more options"""
+    path = os.path.join(t.root, 'emu', 'tests', 'goldens', gid + '.txt')
+    opts = []
+    with open(path) as f:
+        for line in f:
+            if line.startswith('#! '):
+                opts += shlex.split(line[3:])
+    i = opts.index('--card')
+    card = os.path.join(t.root, 'emu', 'tests', 'cards', opts[i + 1])
+    return card, opts[:i] + opts[i + 2:], path
+
+@case
+def V05_onsets(t):
+    # G16 (spec 9.2, S21): each hit at its event + 128 frames within a frame, against the trigger
+    # log and the tick grid; in blk the same hits spread over a block (the "before", P13)
+    card, opts, script = golden(t, 'G16_onsets')
+    log = t.path('trig.log')
+    s, wav, _ = t.render(card, opts + ['--trig-log', log, '--events', script])
+    check(s['vsched']['late'] == 0 and s['vsched']['offTick'] == 0, 'vsched %r' % s['vsched'])
+    for args in (['--log', log], ['--grid', 120]):
+        code, spread, out = onsets(t, wav, *args, '--limit', 2)
+        print('smp %s: %s' % (args[0], out.strip()))
+        check(code == 0, 'smp %s: %s' % (args[0], out))
+    _, blk, _ = t.render(card, opts + ['--param', 'trig_timing=1', '--events', script])
+    code, spread, out = onsets(t, blk, '--against', wav, '--min', 32)
+    print('blk against smp: %s' % out.strip())
+    check(code == 0, 'blk against smp: %s' % out)
+    no_copies_left()
+
+@case
+def V05_midi_in(t):
+    # G17 (S9): against the trigger log, and against the script: a DIN Note On's last byte comes
+    # two bytes (2 x 69,120 cycles) after its line, a USB transfer at its line
+    card, opts, script = golden(t, 'G17_midi_in')
+    log, ref = t.path('trig.log'), t.path('script.log')
+    _, wav, _ = t.render(card, opts + ['--trig-log', log, '--events', script])
+    with open(script) as f, open(ref, 'w') as o:
+        n = 0
+        for line in f:
+            w = line.split('#', 1)[0].split()
+            if len(w) >= 3 and w[1] in ('din', 'usb') and w[2] == '91':
+                c = math.floor(fractions.Fraction(w[0][:-2]) * 216000) + (2 * 69120 if w[1] == 'din' else 0)
+                o.write('%d 0 midi %d 0 0\n' % (c, n))
+                n += 1
+    check(n == 40, '%d notes in the script' % n)
+    for r in (log, ref):
+        code, spread, out = onsets(t, wav, '--log', r, '--limit', 2)
+        print('%s: %s' % (os.path.basename(r), out.strip()))
+        check(code == 0, '%s: %s' % (r, out))
+    no_copies_left()
+
+@case
+def V05_slave_onsets(t):
+    # G18: as a DIN slave at 128 BPM, from bar 2 (Start at 0.5 s + 1.875 s) on the clock grid
+    card, opts, script = golden(t, 'G18_slave_onsets')
+    s, wav, _ = t.render(card, opts + ['--events', script])
+    check(s['seqc']['dropouts'] == 0, 'seqc %r' % s['seqc'])
+    code, spread, out = onsets(t, wav, '--grid', 128, '--from', 2.4, '--limit', 2)
+    print(out.strip())
+    check(code == 0, out)
+    no_copies_left()
+
+@case
+def V05_save_onsets(t):
+    # G19 (P16): a project save at 2 s; TIM2 runs seq_tick() before each render, so no record is late
+    card, opts, script = golden(t, 'G19_save')
+    log = t.path('trig.log')
+    s, wav, _ = t.render(card, opts + ['--trig-log', log, '--events', script])
+    check(s['underrunsAfterT0'] == 0 and s['vsched']['late'] == 0, 'underruns %r, vsched %r' % (
+        s['underrunsAfterT0'], s['vsched']))
+    code, spread, out = onsets(t, wav, '--log', log, '--limit', 2)
+    print(out.strip())
+    check(code == 0, out)
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists
