@@ -281,8 +281,9 @@ if(TARGET test_atmo)
     target_include_directories(test_atmo SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
     set_source_files_properties(${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
 endif()
-# LICHOMAT v0.4 (plan A5): the synced delay's arithmetic, a header (fxsync.h)
-seqc_add_test(test_fxsync    IDS DY1)  # v0.4 A5 synced delay
+# LICHOMAT v0.4 (plan A5, A6): the synced delay's arithmetic (fxsync.h) and the DJ filter's
+# math (djfilter.h), both headers
+seqc_add_test(test_fxsync    IDS DY1 DJ1 DJ2)  # v0.4 A5 synced delay, A6 DJ filter
 if(TARGET test_fxsync)
     target_include_directories(test_fxsync SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
 endif()
@@ -290,8 +291,10 @@ endif()
 # atmo.c, which brings the reverb with it; built without warnings as presetManager.c is.
 if(TARGET test_presets)
     target_sources(test_presets PRIVATE
-        ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/atmo.c ${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES})
-    set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/atmo.c PROPERTIES COMPILE_OPTIONS -w)
+        ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/atmo.c ${ATMO_REVERB_SOURCES} ${ATMO_DSP_SOURCES}
+        ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/DjFilter.c)
+    set_source_files_properties(${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/atmo.c
+        ${LXR_ROOT}/Core/Src/Soundengine/DSPAudio/FX/DjFilter.c PROPERTIES COMPILE_OPTIONS -w)
 endif()
 
 # The sound engine's broken states (E4.9): test_dsp compiles the firmware's DSP

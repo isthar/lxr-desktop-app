@@ -24,6 +24,7 @@
 #include "Soundengine/TriggerOut.h"
 #include "menu/menu.h"
 #include "Soundengine/FxBus.h"
+#include "Soundengine/DSPAudio/FX/djfilter.h"	//LICHOMAT v0.4: the DJ filter (plan D39)
 
 	uint8_t r2_Available;
 	uint8_t l1_Available;
@@ -710,6 +711,7 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
 
 #endif
 	FxBus_process(fxBusData,  &output[pos],&output[pos+1],&output2[pos],&output2[pos+1], OUTPUT_DMA_SIZE);
+	djFilter_process(&output[pos], &output2[pos], OUTPUT_DMA_SIZE);	//LICHOMAT v0.4: the DJ filter on both stereo outputs (plan D39)
 /*
 	if(activeParameters[UNUSED_PAR_GLO_SAT])
 	{

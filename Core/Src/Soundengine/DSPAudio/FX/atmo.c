@@ -16,6 +16,7 @@
 #include "menu/menu.h"	/* activeParameters */
 #include "Soundengine/FxBus.h"	/* fxBus_delaySync */
 #include "Soundengine/DSPAudio/FX/fxsync.h"
+#include "Soundengine/DSPAudio/FX/djfilter.h"
 #include <math.h>
 
 /* plan D31: in .bss (RAM), zero at boot */
@@ -43,6 +44,13 @@ static const uint8_t atmo_blockMax[END_OF_KIT_BLOCK - END_OF_GLOBALS] = { 127, 1
 #define ATMO_DJ_FLAT 64		/* plan D39: 63..65 is flat */
 #define ATMO_DECAY_DEFAULT 64
 
+/* a parameter 0..1 as 0..127 */
+static uint8_t atmo_u7(float v)
+{
+	const long u = lroundf(v * 127.f);
+	return (uint8_t)((u < 0) ? 0 : (u > 127) ? 127 : u);
+}
+
 void atmo_init(void)
 {
 	Reverb_init(&atmo_reverb);
@@ -58,8 +66,12 @@ void atmo_setParam(uint16_t paramNr, float v)
 {
 	switch(paramNr)
 	{
-	case PAR_DJ_FILTER:		atmo_par[ATMO_DJ_FILTER] = v;	break;
-	case PAR_DJ_RESO:		atmo_par[ATMO_DJ_RESO] = v;		break;
+	case PAR_DJ_FILTER:
+	case PAR_DJ_RESO:
+		atmo_par[(paramNr == PAR_DJ_FILTER) ? ATMO_DJ_FILTER : ATMO_DJ_RESO] = v;
+		/* plan D39: the DJ filter takes both, 0..127 */
+		djFilter_set(atmo_u7(atmo_par[ATMO_DJ_FILTER]), atmo_u7(atmo_par[ATMO_DJ_RESO]));
+		break;
 	case PAR_REV_LEVEL:		atmo_par[ATMO_REV_LEVEL] = v;	break;
 	case PAR_REV_FREEZE:	atmo_par[ATMO_REV_FREEZE] = v;	break;
 	case PAR_REV_DECAY:		atmo_par[ATMO_REV_DECAY] = v;	break;

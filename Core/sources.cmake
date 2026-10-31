@@ -78,6 +78,7 @@ set(LXR_SOURCES_DSP
     Src/Soundengine/DSPAudio/FX/Compressor.c
     Src/Soundengine/DSPAudio/FX/Delay.c
     Src/Soundengine/DSPAudio/FX/Distortion.c
+    Src/Soundengine/DSPAudio/FX/DjFilter.c
     Src/Soundengine/DSPAudio/FX/FxRamBuffer.c
     Src/Soundengine/DSPAudio/FX/Reverb.c
     Src/Soundengine/DSPAudio/FX/atmo.c
