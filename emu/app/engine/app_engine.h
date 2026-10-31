@@ -97,6 +97,7 @@ typedef struct app_engine
 	app_timemap_t map;
 	app_outputInfo_t out;
 	int outputRunning, dAuto, clockLevel, clockSeen, genOn;
+	int panelCard;			/**< the panel's card switch as it stands (1 in), kept while the card is held, for CARD_IN */
 	int cardHeld;			/**< CARD_OUT has taken the card out and no CARD_IN has put it back: the panel's switch is left alone */
 	struct { uint8_t kind; int32_t seq; } cardAcks[64];
 	unsigned nCardAcks;		/**< acknowledgements that wait for the end of the pass: one per command, in order */
@@ -121,7 +122,7 @@ int app_enginePanel(app_engine_t *e, const app_panelEvent_t *ev);	/**< GUI threa
 int app_engineCommand(app_engine_t *e, const app_cmd_t *c);		/**< GUI thread */
 int app_engineNote(app_engine_t *e, unsigned kind);				/**< CoreAudio's listener queue */
 int app_engineMidiPush(void *ctx, const app_midiEntry_t *m);		/**< read procs: into midiIn[m->port] */
-int app_engineSnapshot(app_engine_t *e, app_snapshot_t *out);		/**< GUI thread: the newest, older dropped; 1 if any */
+int app_engineSnapshot(app_engine_t *e, app_snapshot_t *out);		/**< GUI thread: the newest; older ones are dropped, but their latched LEDs and clock-out pulse go into it; 1 if any */
 int app_engineAck(app_engine_t *e, app_ack_t *out);				/**< GUI thread */
 typedef struct app_midiOutSink
 {

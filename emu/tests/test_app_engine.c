@@ -530,4 +530,130 @@ TEST(R4_engine_cardheld)
 	ASSERT_EQ(BSP_SD_IsDetected(), 0);	/* and afterwards the switch works again */
 }
 
+/* from CARD_OUT to CARD_IN the panel's switch is not applied, but it is not lost either: CARD_IN puts the card in as the
+ * switch stands (review of d6fbcd7) */
+TEST(R4_engine_cardswitch)
+{
+	boot(1);
+	runTo(1.5);
+	app_cmd_t c = { .kind = APP_CMD_CARD_OUT, .a = 1 };
+	command(&c);
+	ASSERT_EQ(BSP_SD_IsDetected(), 0);
+	app_panelEvent_t ev = { .kind = APP_P_CARD, .value = 0 };	/* the user flips the switch out while the operation runs */
+	ASSERT_EQ(app_enginePanel(&E, &ev), 0);
+	for (unsigned i = 0; i < 20u; i++)
+		app_engineSlice(&E);
+	c.kind = APP_CMD_CARD_IN;
+	c.a = 2;
+	command(&c);
+	for (unsigned i = 0; i < 20u; i++)
+		app_engineSlice(&E);
+	ASSERT_EQ(BSP_SD_IsDetected(), 0);	/* the switch is out: the card stays out (it used to come in) */
+	ev.value = 1;
+	ASSERT_EQ(app_enginePanel(&E, &ev), 0);
+	for (unsigned i = 0; i < 20u; i++)
+		app_engineSlice(&E);
+	ASSERT_EQ(BSP_SD_IsDetected(), 1);	/* and the switch works again */
+	c.kind = APP_CMD_CARD_OUT;
+	c.a = 3;
+	command(&c);
+	ev.value = 0;	/* out and in again during the operation: the last position counts */
+	ASSERT_EQ(app_enginePanel(&E, &ev), 0);
+	app_engineSlice(&E);
+	ev.value = 1;
+	ASSERT_EQ(app_enginePanel(&E, &ev), 0);
+	app_engineSlice(&E);
+	c.kind = APP_CMD_CARD_IN;
+	c.a = 4;
+	command(&c);
+	for (unsigned i = 0; i < 20u; i++)
+		app_engineSlice(&E);
+	ASSERT_EQ(BSP_SD_IsDetected(), 1);
+}
+
+/* A8, E15: the main thread drains the snapshots every 2 or 3 and keeps the newest. The latch of the ones it drops
+ * (the clock-out pulse, the LEDs) goes into it, or a pulse in a dropped snapshot is never seen. 120 BPM at 4 PPQ: 8 a second */
+TEST(R4_engine_clockled)
+{
+	boot(1);
+	runTo(1.5);
+	uint64_t next = emu_now();
+	unsigned pulses = 0, seen = 0, target = 2;
+	const uint64_t end = emu_now() + 6u * EMU_CPU_HZ;
+	app_snapshot_t s;
+	for (unsigned tail = 0; tail < 60u;)	/* after the pulses, 60 slices for the last one to come out */
+	{
+		if (emu_now() < end)
+		{
+			if (emu_now() >= next)
+			{
+				E.clockSeen = 1;	/* what the firmware's clock-out sink latches (app_sinkClock) */
+				pulses++;
+				next += EMU_CPU_HZ / 8u;
+			}
+		}
+		else
+			tail++;
+		app_engineSlice(&E);
+		if (app_ringCount(&E.snap) >= target)
+		{
+			seen += app_engineSnapshot(&E, &s) && s.clockOut;
+			target = target == 2u ? 3u : 2u;
+		}
+	}
+	while (app_engineSnapshot(&E, &s))
+		seen += s.clockOut;
+	ASSERT_EQ(pulses, 48);
+	ASSERT_EQ(seen, pulses);	/* about 40 % of them were lost */
+}
+
+static void fakeSnap(uint64_t leds, uint8_t clockOut, uint64_t vt)
+{
+	app_snapshot_t s;
+	memset(&s, 0, sizeof s);
+	s.leds = leds;
+	s.clockOut = clockOut;
+	s.vt = vt;
+	s.diag.callbacks = vt;
+	ASSERT_EQ(app_ringPush(&E.snap, &s), 0);
+}
+
+TEST(R4_engine_snapshot_latch)
+{
+	bootStart(1);	/* the rings only */
+	fakeSnap(1u, 1u, 10u);
+	fakeSnap(2u, 0u, 20u);
+	fakeSnap((uint64_t)1 << 40, 0u, 30u);
+	app_snapshot_t s;
+	ASSERT_EQ(app_engineSnapshot(&E, &s), 1);
+	ASSERT_EQ(s.vt, 30);							/* the newest one's own values */
+	ASSERT_EQ(s.diag.callbacks, 30);
+	ASSERT_EQ(s.leds, ((uint64_t)1 << 40) | 3u);	/* with the latch of the two before it */
+	ASSERT_EQ(s.clockOut, 1);
+	ASSERT_EQ(app_engineSnapshot(&E, &s), 0);
+	fakeSnap(4u, 0u, 40u);
+	ASSERT_EQ(app_engineSnapshot(&E, &s), 1);
+	ASSERT_EQ(s.leds, 4);							/* what was drained is not latched again */
+	ASSERT_EQ(s.clockOut, 0);
+}
+
+/* a lead that a closed audio line carries over to the wall clock lasts that wall stretch only (review of d6fbcd7): the
+ * next time the callbacks put the map back on the audio line it is the nominal one again, so that it cannot only grow */
+TEST(R4_engine_leadcarry)
+{
+	boot(1);
+	runBounded(2.0, 20000u);
+	ASSERT_TRUE(E.map.audio);
+	const uint64_t nominal = (uint64_t)(APP_WALL_LEAD_SEC * FAKE_TPS);
+	ASSERT_EQ(E.wallLead, nominal);
+	const app_cmd_t c = { .kind = APP_CMD_OUTPUT, .a = 256 };	/* a reopen while the audio line runs, as a device change does */
+	command(&c);
+	ASSERT_EQ(fk.opens, 2);
+	ASSERT_TRUE(E.wallLead > nominal);	/* the audio line's render lead is carried over to the wall clock */
+	ASSERT_FALSE(E.map.audio);
+	runBounded(wallSec() + 1.0, 20000u);
+	ASSERT_TRUE(E.map.audio);	/* the callbacks of the new unit have put the map on the audio line */
+	ASSERT_EQ(E.wallLead, nominal);
+}
+
 TEST_MAIN()

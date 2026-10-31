@@ -404,7 +404,8 @@ emu_add_app_test(test_app_midi FRAMEWORKS CoreMIDI CoreFoundation IDS M18_midi_s
 emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R4_engine_splash R4_engine_ring R4_engine_cardseq R4_engine_cardheld
     R4_engine_blockrate R4_engine_wall R4_engine_card R4_engine_generator R4_engine_open_bracket R4_engine_slow_first
     R4_engine_silent_open R4_engine_close_inflight R4_engine_late_point R4_engine_max_request R4_engine_cmd_delay
-    R4_engine_power_dneg R4_engine_power_dnan R4_engine_power_dbig R4_engine_cmd_generator R4_engine_cmd_text)
+    R4_engine_power_dneg R4_engine_power_dnan R4_engine_power_dbig R4_engine_cmd_generator R4_engine_cmd_text
+    R4_engine_cardswitch R4_engine_clockled R4_engine_snapshot_latch R4_engine_leadcarry)
 emu_add_app_test(test_app_m18 ENGINE IDS M18_midi_out_step M18_slave_90 M18_slave_128 M18_slave_174 M18_din_128
     M18_zero_d M18_out_start_phase M18_out_lead M18_out_stall M18_out_reopen M18_out_hang M18_out_jump)
 
@@ -517,7 +518,7 @@ if(LICHOMAT_EMU_APP)
         "$<JOIN:$<TARGET_OBJECTS:emu_imgui>,\n>\n$<JOIN:$<TARGET_OBJECTS:lichomat-emu>,\n>\n$<JOIN:$<TARGET_OBJECTS:emu_app_mac>,\n>\n$<JOIN:$<TARGET_OBJECTS:emu_app_units>,\n>\n$<JOIN:$<TARGET_OBJECTS:emu_app_engine>,\n>\n")
 
     # the LCD's glyphs and the panel's layout tables are plain C: what the window shows is checked without one (E24)
-    emu_add_app_test(test_app_font IDS R4_panel_font R4_panel_layout)
+    emu_add_app_test(test_app_font IDS R4_panel_font R4_panel_layout R4_panel_fader)
     target_sources(test_app_font PRIVATE "${EMU_APP_DIR}/gui/panel_font.c" "${EMU_APP_DIR}/gui/panel_layout.c")
     target_include_directories(test_app_font PRIVATE "${EMU_APP_DIR}/gui")
 endif()

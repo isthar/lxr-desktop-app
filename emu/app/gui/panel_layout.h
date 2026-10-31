@@ -58,6 +58,17 @@ static inline int panel_ledOn(uint64_t leds, unsigned n)
 	return n < PANEL_BUTTONS && ((leds >> n) & 1u) != 0u;
 }
 
+/** A fader is dragged relative to where it is: the mouse moving dy points down (screen y grows downward) over a track of
+ * travel points moves the level by -dy / travel, held to 0-1. A press moves nothing, so a click on the track does not make
+ * the level jump to the click */
+static inline float panel_faderDrag(float level, float dy, float travel)
+{
+	if (!(travel > 0.0f))
+		return level;
+	const float v = level - dy / travel;
+	return v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v;
+}
+
 #ifdef __cplusplus
 }
 #endif

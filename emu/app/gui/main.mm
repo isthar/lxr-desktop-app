@@ -155,6 +155,14 @@ static void emu_loadDisplayFont(void)
 	}
 }
 
+/* seconds on a clock that runs while the app is asleep as little as possible; for the timer's backstop below */
+static double emu_uptime(void)
+{
+	return (double)clock_gettime_nsec_np(CLOCK_UPTIME_RAW) * 1e-9;
+}
+
+static double gLastDraw;	/* emu_uptime() of the last drawn frame; the main thread */
+
 @interface EmuDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, MTKViewDelegate>
 @property (nonatomic, strong) NSWindow *window;
 @property (nonatomic, strong) MTKView *view;
@@ -318,7 +326,10 @@ static void emu_loadDisplayFont(void)
 	/* the shell's per-frame work goes on while the window is hidden and no frame is drawn */
 	self.timer = [NSTimer timerWithTimeInterval:0.05 repeats:YES block:^(NSTimer *t) {
 		(void)t;
-		(void)app_shellFrame(gShell);
+		/* a drawn frame does the shell's work itself, and takes the snapshots: a snapshot that this timer took between two
+		 * frames would never be shown, and with it a clock-out pulse (A8) */
+		if (emu_uptime() - gLastDraw > 0.1)
+			(void)app_shellFrame(gShell);
 	}];
 	[[NSRunLoop currentRunLoop] addTimer:self.timer forMode:NSRunLoopCommonModes];
 }
@@ -404,6 +415,7 @@ static void emu_loadDisplayFont(void)
 	ImGui_ImplOSX_NewFrame(view);
 	ImGui::NewFrame();
 	(void)app_shellFrame(gShell);
+	gLastDraw = emu_uptime();
 	panel_frame(&gPanel, gShell);
 	ImGui::Render();
 	id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:pass];

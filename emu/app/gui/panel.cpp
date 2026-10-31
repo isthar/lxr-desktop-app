@@ -295,21 +295,32 @@ void knob(panel_t *p, app_shell_t *s, unsigned k, ImVec2 c, float r)
 	ImGui::PopID();
 }
 
-/* a fader: 0-1, a double click returns it to full (spec 6.6). What the firmware has been sent is kept apart, so that a
- * full panel ring only delays a level. */
+/* a fader: 0-1, moved by the drag from where it is, never to the click; a double click returns it to full (spec 6.6).
+ * What the firmware has been sent is kept apart, so that a full panel ring only delays a level. */
 void fader(panel_t *p, app_shell_t *s, unsigned i, ImVec2 pos)
 {
 	ImGui::SetCursorScreenPos(pos);
 	ImGui::PushID(200 + (int)i);
-	ImGui::VSliderFloat("##fader", ImVec2(S(kFaderW), S(kFaderH)), &p->fader[i], 0.0f, 1.0f, "", ImGuiSliderFlags_NoInput);
+	const float w = S(kFaderW), h = S(kFaderH), thumb = S(18.0f);
+	ImGui::InvisibleButton("##fader", ImVec2(w, h));
+	const bool active = ImGui::IsItemActive();
 	if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-		p->faderHold[i] = 1u;
-	if (p->faderHold[i])	/* the second press of a double click is still dragging the slider: full until it is let go */
 	{
-		p->fader[i] = 1.0f;
-		if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-			p->faderHold[i] = 0u;
+		p->fader[i] = 1.0f;	/* at once, with no level in between */
+		p->faderHold[i] = 1u;
 	}
+	else if (active && !p->faderHold[i])	/* the drag of a double click's second press does not move it */
+		p->fader[i] = panel_faderDrag(p->fader[i], ImGui::GetIO().MouseDelta.y, h - thumb);
+	if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+		p->faderHold[i] = 0u;
+	const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+	const float cx = (a.x + b.x) * 0.5f, ty = b.y - thumb * 0.5f - p->fader[i] * (h - thumb);
+	ImDrawList *dl = ImGui::GetWindowDrawList();
+	dl->AddRectFilled(ImVec2(cx - S(2.5f), a.y), ImVec2(cx + S(2.5f), b.y), kDial, S(2.0f));
+	dl->AddRectFilled(ImVec2(a.x, ty - thumb * 0.5f), ImVec2(b.x, ty + thumb * 0.5f),
+		active ? kKeyDown : ImGui::IsItemHovered() ? kKeyHot : kKey, S(3.0f));
+	dl->AddRect(ImVec2(a.x, ty - thumb * 0.5f), ImVec2(b.x, ty + thumb * 0.5f), kRowLine, S(3.0f));
+	dl->AddLine(ImVec2(a.x + S(3.0f), ty), ImVec2(b.x - S(3.0f), ty), kLedOn, S(2.0f));
 	if (p->fader[i] != p->faderSent[i] && post(s, APP_P_FADER, (uint8_t)(i + 1u), 0, (double)p->fader[i]) == 0)
 		p->faderSent[i] = p->fader[i];
 	ImGui::PopID();

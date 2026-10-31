@@ -160,4 +160,15 @@ TEST(R4_panel_layout)
 	}
 }
 
+/* faders move by the drag, not to the click (review of d6fbcd7) */
+TEST(R4_panel_fader)
+{
+	ASSERT_EQ_DBL(panel_faderDrag(0.5f, 0.0f, 200.0f), 0.5);		/* a press, no movement: no change */
+	ASSERT_EQ_DBL(panel_faderDrag(0.25f, -100.0f, 200.0f), 0.75);	/* up by half the track */
+	ASSERT_EQ_DBL(panel_faderDrag(0.75f, 50.0f, 200.0f), 0.5);		/* down by a quarter */
+	ASSERT_EQ_DBL(panel_faderDrag(0.9f, -100.0f, 200.0f), 1.0);	/* held to the ends */
+	ASSERT_EQ_DBL(panel_faderDrag(0.1f, 100.0f, 200.0f), 0.0);
+	ASSERT_EQ_DBL(panel_faderDrag(0.5f, -10.0f, 0.0f), 0.5);		/* no track: nothing */
+}
+
 TEST_MAIN()

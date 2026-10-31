@@ -125,6 +125,8 @@ static void app_enginePoints(app_engine_t *e)
 			if (app_tmPoint(&e->map, app_frameCycles(c.codecStart, (double)(e->frameBase + p->frame)),
 					p->hostTime + (uint64_t)llround(lat)))
 				e->staleFrom = e->host.now(e->host.ctx);	/* host time now, not the presentation time (E9) */
+			if (e->map.audio)	/* the audio line paces again: a lead that a closed line carried over lasted one wall stretch */
+				e->wallLead = app_ticks(e, APP_WALL_LEAD_SEC);
 		}
 		app_ringPop(&e->audio.points, 1u);
 	}
@@ -282,6 +284,7 @@ static void app_enginePanelEvent(app_engine_t *e, const app_panelEvent_t *p, uin
 		emu_inJacks(now, (uint8_t)p->value);
 		break;
 	case APP_P_CARD:
+		e->panelCard = p->value != 0;	/* always kept: CARD_IN puts the card in as the switch stands */
 		if (!e->cardHeld)	/* an import, an export or a power cycle has the card out; the switch waits for it */
 			emu_inCard(now, p->value);
 		break;
@@ -480,7 +483,7 @@ static int app_engineCommands(app_engine_t *e)
 		case APP_CMD_CARD_IN:
 		{
 			const int in = c.kind == APP_CMD_CARD_IN;
-			emu_inCard(emu_now(), in);
+			emu_inCard(emu_now(), in && e->panelCard);	/* the operation is over: the card is where the switch says */
 			e->cardHeld = !in;
 			if (e->nCardAcks < sizeof e->cardAcks / sizeof e->cardAcks[0])	/* the command ring holds 64 */
 			{
@@ -537,6 +540,7 @@ int app_engineInit(app_engine_t *e, const app_host_t *host)
 	e->host = *host;
 	app_tmInit(&e->map, host->ticksPerSec);
 	e->wallLead = app_ticks(e, APP_WALL_LEAD_SEC);
+	e->panelCard = 1;	/* the panel starts with the card in */
 	e->dAuto = 1;
 	e->winInMin = 1e9;
 	e->winInMax = -1e9;
@@ -701,11 +705,23 @@ int app_engineMidiPush(void *ctx, const app_midiEntry_t *m)
 
 int app_engineSnapshot(app_engine_t *e, app_snapshot_t *out)
 {
-	if (!app_ringPeek(&e->snap, 0u))
+	const app_snapshot_t *s = app_ringPeek(&e->snap, 0u);
+	if (!s)
 		return 0;
+	/* the newest one is kept; what the ones before it latched (a clock-out pulse of 5 ms, an LED that blinked) goes into it,
+	 * or a pulse in a snapshot that is dropped here is never seen (A8, E15) */
+	uint64_t leds = 0u;
+	uint8_t clockOut = 0u;
 	while (app_ringCount(&e->snap) > 1u)
+	{
+		leds |= s->leds;
+		clockOut |= s->clockOut;
 		app_ringPop(&e->snap, 1u);
-	*out = *(const app_snapshot_t *)app_ringPeek(&e->snap, 0u);
+		s = app_ringPeek(&e->snap, 0u);
+	}
+	*out = *s;
+	out->leds |= leds;
+	out->clockOut |= clockOut;
 	app_ringPop(&e->snap, 1u);
 	return 1;
 }
