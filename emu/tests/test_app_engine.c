@@ -833,4 +833,27 @@ TEST(R5_engine_clockdown)
 	ASSERT_EQ(highFrames, 0);	/* the jack is low: no stale edge of the seconds without output */
 }
 
+/* spec 6.8 (review of F3): a clock channel that the device does not have is said, not dropped in silence */
+TEST(R5_engine_clocknone)
+{
+	boot(1);
+	runTo(1.0);
+	app_ack_t a;
+	while (app_engineAck(&E, &a))
+		;
+	const app_cmd_t c = { .kind = APP_CMD_CLOCK_OUT, .a = 3 };	/* the fake device has two outputs */
+	command(&c);
+	ASSERT_EQ(fk.opens, 2);
+	ASSERT_EQ(E.out.deviceChannels, 2);
+	int told = 0;
+	while (app_engineAck(&E, &a))
+		if (a.kind == APP_MSG_NOTICE && strstr(a.text, "clock out") && strstr(a.text, "channel 3") && strstr(a.text, "2 channels"))
+			told++;
+	ASSERT_EQ(told, 1);
+	const app_cmd_t two = { .kind = APP_CMD_CLOCK_OUT, .a = 2 };	/* a channel it has: nothing to say */
+	command(&two);
+	while (app_engineAck(&E, &a))
+		ASSERT_FALSE(a.kind == APP_MSG_NOTICE);
+}
+
 TEST_MAIN()

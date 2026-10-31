@@ -53,6 +53,10 @@ struct app_shell
 	int hungShown, haveSnap;
 	app_snapshot_t snap;
 	app_ca_t ca;
+	app_ci_t ci;					/**< the input of clock and reset in from audio (F9); the main thread owns it */
+	int haveInput, inputAllowed;	/**< the input unit is open; the option is on and the microphone was granted */
+	double inputRetryAt;			/**< app_wallSeconds() of the next try while the input should run and is closed */
+	char inputErr[256];				/**< the last open failure said */
 	app_cm_t cm;
 	pthread_t midiOut;
 	int haveMidi, haveMidiThread;	/**< the CoreMIDI client exists; the MIDI-out thread runs */
@@ -315,6 +319,11 @@ static void app_shellNoteCommand(app_shell_t *s, const app_cmd_t *c)
 			t->genPpq = c->b;
 		}
 		break;
+	case APP_CMD_CLOCK_OUT:	/* a channel the engine takes (1-64) is on; the channel is kept while it is off */
+		t->clockOutAudio = c->a >= 1 && c->a <= (int)APP_CLOCK_CHANNELS;
+		if (t->clockOutAudio)
+			t->clockOutChannel = c->a;
+		break;
 	case APP_CMD_OUTPUT:
 		snprintf(t->outputUid, sizeof t->outputUid, "%s", c->text);
 		t->bufferFrames = c->a > 0 && c->a <= 4096 ? (uint32_t)c->a : 0u;
@@ -323,6 +332,91 @@ static void app_shellNoteCommand(app_shell_t *s, const app_cmd_t *c)
 		return;
 	}
 	app_shellChanged(s);
+}
+
+/* closes the input: the callback has returned for good then, so this thread may push the release of a high reset (F11) */
+static void app_shellInputClose(app_shell_t *s)
+{
+	if (!s->haveInput)
+		return;
+	app_ciClose(&s->ci);
+	s->haveInput = 0;
+	app_jackInStop(&s->engine.jackIn, mach_absolute_time());
+}
+
+static int app_shellInputOpen(app_shell_t *s)
+{
+	const app_settings_t *t = &s->set;
+	app_clockInOptions_t o;
+	char err[256];
+	memset(&o, 0, sizeof o);
+	o.on = 1;
+	snprintf(o.uid, sizeof o.uid, "%s", t->clockInDevice);
+	o.clockChannel = t->clockInChannel;
+	o.resetChannel = t->resetChannel;
+	o.clockThreshold = t->clockInThreshold;
+	o.resetThreshold = t->resetThreshold;
+	if (app_ciOpen(&s->ci, &s->engine.jackIn, &o, s->mach.ticksPerSec, err, sizeof err) == 0)
+	{
+		s->haveInput = 1;
+		s->inputErr[0] = '\0';
+		return 0;
+	}
+	s->inputRetryAt = app_wallSeconds() + 2.0;
+	if (strcmp(err, s->inputErr) != 0)	/* said once per text, not at every try */
+	{
+		char line[300];
+		snprintf(s->inputErr, sizeof s->inputErr, "%s", err);
+		snprintf(line, sizeof line, "notice: clock in from audio: %s", err);
+		app_shellSay(s, line);
+	}
+	return -1;
+}
+
+int app_shellClockIn(app_shell_t *s, const app_clockInOptions_t *o)
+{
+	app_settings_t *t = &s->set;
+	const int cc = o->clockChannel >= 1 && o->clockChannel <= (int)APP_CLOCK_CHANNELS ? o->clockChannel : t->clockInChannel;
+	const int rc = o->resetChannel >= 0 && o->resetChannel <= (int)APP_CLOCK_CHANNELS ? o->resetChannel : t->resetChannel;
+	char uid[sizeof o->uid];
+	snprintf(uid, sizeof uid, "%s", o->uid);
+	const int reopen = !s->haveInput || strcmp(uid, t->clockInDevice) != 0 || cc != t->clockInChannel || rc != t->resetChannel;
+	t->clockInAudio = s->inputAllowed = o->on != 0;
+	snprintf(t->clockInDevice, sizeof t->clockInDevice, "%s", uid);
+	t->clockInChannel = cc;
+	t->resetChannel = rc;
+	if (o->clockThreshold >= 0.05 && o->clockThreshold <= 0.95)	/* NaN fails both */
+		t->clockInThreshold = o->clockThreshold;
+	if (o->resetThreshold >= 0.05 && o->resetThreshold <= 0.95)
+		t->resetThreshold = o->resetThreshold;
+	app_shellChanged(s);
+	atomic_store(&s->engine.jackIn.clockThreshold, (float)t->clockInThreshold);	/* a running input follows at once */
+	atomic_store(&s->engine.jackIn.resetThreshold, (float)t->resetThreshold);
+	if (!o->on)
+	{
+		app_shellInputClose(s);
+		s->inputErr[0] = '\0';
+		return 0;
+	}
+	if (!reopen)
+		return 0;
+	app_shellInputClose(s);
+	return app_shellInputOpen(s);
+}
+
+int app_shellInputs(app_shell_t *s, app_outputDevice_t *out, int max)
+{
+	(void)s;
+	return app_caInputs(out, max);
+}
+
+int app_shellInputInfo(const app_shell_t *s, app_outputInfo_t *out, const char **err)
+{
+	if (err)
+		*err = s->inputErr;
+	if (s->haveInput && out)
+		*out = s->ci.info;
+	return s->haveInput;
 }
 
 static void app_shellCardIn(app_shell_t *s)
@@ -405,6 +499,7 @@ void app_shellRestart(app_shell_t *s)
 	s->opActive = s->powerActive = 0;	/* a card operation or power cycle that waited for 'card out applied' ends here: nothing is copied */
 	app_shellSay(s, "notice: restarting...");
 	app_shellSave(s);	/* the settings, with the endpoints' IDs, are what the new process starts from */
+	app_shellInputClose(s);
 	app_shellMidiStop(s);	/* their unique IDs are free before the new process asks for them (E18, A10) */
 	if (s->o.relaunch(s->o.ctx) != 0)
 	{
@@ -567,8 +662,8 @@ int app_shellStart(app_shell_t *s, const app_shellOptions_t *o, char *err, size_
 		if (!strcmp(s->set.mix, app_shellMixNames[k]))
 			mix = (app_mix_t)k;
 	s->cfg = (app_engineConfig_t){ .cardDir = s->o.cardDir, .seed = app_seedNow(), .dAuto = s->set.dAuto,
-		.dSec = s->set.dMs / 1e3, .mix = mix, .output = { "", s->set.bufferFrames, 2u }, .fault = app_shellFault,
-		.faultCtx = s };
+		.dSec = s->set.dMs / 1e3, .mix = mix, .clockOutChannel = s->set.clockOutAudio ? s->set.clockOutChannel : 0,
+		.output = { "", s->set.bufferFrames, 2u }, .fault = app_shellFault, .faultCtx = s };
 	snprintf(s->cfg.output.uid, sizeof s->cfg.output.uid, "%s", s->set.outputUid);
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
@@ -692,6 +787,10 @@ int app_shellFrame(app_shell_t *s)
 		s->powerActive = 0;
 		app_shellRestart(s);	/* no answer in 2 s: the power goes off all the same (spec 6.9) */
 	}
+	if (s->haveInput && atomic_exchange(&s->ci.changed, 0))
+		app_shellInputClose(s);	/* the device went, or its rate or inputs changed: a new try below (F9) */
+	if (s->set.clockInAudio && s->inputAllowed && !s->haveInput && wall >= s->inputRetryAt)
+		(void)app_shellInputOpen(s);
 	if (s->setDirty && wall >= s->setSaveAt)
 		app_shellSave(s);
 	if (wall >= s->nextZone)
@@ -822,6 +921,7 @@ void app_shellTestStall(app_shell_t *s, int ms)
 int app_shellStop(app_shell_t *s)
 {
 	int rc = 0;
+	app_shellInputClose(s);
 	if (s->haveFirmware)
 	{
 		app_cmd_t c;

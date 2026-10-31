@@ -147,23 +147,26 @@ static int coreaudioChild(void)
 		(unsigned long long)atomic_load(&e.audio.callbacks), got, want);
 	if (!(info.clientRate == 44140.625 && (came || atomic_load(&e.audio.callbacks) >= 5u) && fabs(got - want) <= 2.0))
 		return 1;
-	/* the engine reopens at a stall, a device change and a mix change: open and close must repeat cleanly. Four
-	 * channels asked of a stereo device give two. */
-	const app_outputRequest_t four = { "", 0u, 4u };
-	for (int k = 0; k < 3; k++)
+	/* the engine reopens at a stall, a device change and a mix change: open and close must repeat cleanly. The unit has the
+	 * channels asked for (the mix's 2 or 4, or the clock's channel, R5 F3), as many as the device has, and at least two */
+	static const unsigned ask[] = { 4u, 3u, 8u, 2u };
+	for (int k = 0; k < 4; k++)
 	{
 		const uint64_t before = atomic_load(&e.audio.callbacks);
-		if (app_caOpen(&ca, &e.audio, &four, &info, err, sizeof err) != 0)
+		const app_outputRequest_t more = { "", 0u, ask[k] };
+		if (app_caOpen(&ca, &e.audio, &more, &info, err, sizeof err) != 0)
 		{
 			printf("cycle %d: %s\n", k, err);
 			return 1;
 		}
 		(void)waitCallbacks(&e, before + 3u, 2.0);	/* at its own pace, not 3 in 100 ms */
 		app_caClose(&ca);
-		if (atomic_load(&e.audio.callbacks) < before + 3u || (info.channels != 2u && info.channels != 4u))
+		unsigned want = ask[k] < info.deviceChannels ? ask[k] : info.deviceChannels;
+		want = want < 2u ? 2u : want;
+		if (atomic_load(&e.audio.callbacks) < before + 3u || info.channels != want || info.deviceChannels == 0u)
 		{
-			printf("cycle %d: %llu callbacks, %u channels\n", k,
-				(unsigned long long)(atomic_load(&e.audio.callbacks) - before), info.channels);
+			printf("cycle %d: %llu callbacks, %u of %u channels (asked %u, expected %u)\n", k,
+				(unsigned long long)(atomic_load(&e.audio.callbacks) - before), info.channels, info.deviceChannels, ask[k], want);
 			return 1;
 		}
 	}
@@ -171,6 +174,55 @@ static int coreaudioChild(void)
 }
 
 TEST(R4_dev_coreaudio) { PROBE(coreaudioChild, "R4_dev_coreaudio", 10); }
+
+/* R5 (F13): the input's properties need no permission; the open starts input IO, which prompts the terminal for the
+ * microphone, so it runs only with LICHOMAT_EMU_INPUT_TEST=1. No input device, no permission and no callbacks are a skip */
+static int inputChild(void)
+{
+	app_outputDevice_t d[32];
+	app_outputInfo_t info;
+	if (app_caInputs(d, 32) == 0 || app_ciProbe("", &info) != 0)
+	{
+		printf("SKIP R5_dev_input: no input device\n");
+		return 77;
+	}
+	printf("%s: %.0f Hz, %u ch, %u frames, latency %u + %u, safety offset %u\n", info.name, info.deviceRate, info.channels,
+		info.bufferFrames, info.deviceLatency, info.streamLatency, info.safetyOffset);
+	if (!(info.deviceRate > 0.0 && info.channels >= 1u))
+		return 1;
+	const char *go = getenv("LICHOMAT_EMU_INPUT_TEST");
+	if (!go || strcmp(go, "1") != 0)
+	{
+		printf("SKIP R5_dev_input: the open needs the microphone permission; LICHOMAT_EMU_INPUT_TEST=1 runs it\n");
+		return 77;
+	}
+	mach_timebase_info_data_t tb;
+	mach_timebase_info(&tb);
+	const double tps = 1e9 * tb.denom / tb.numer;
+	static app_jackIn_t in;
+	static app_ci_t ci;
+	const app_clockInOptions_t o = { 1, "", 1, 0, 0.5, 0.5 };
+	char err[256] = "";
+	if (app_ringInit(&in.edges, sizeof(app_panelEvent_t), 256u) != 0 || app_ciOpen(&ci, &in, &o, tps, err, sizeof err) != 0)
+	{
+		printf("SKIP R5_dev_input: open: %s\n", err);
+		return 77;
+	}
+	const double t0 = app_wallSeconds();
+	while (atomic_load(&in.callbacks) < APP_IN_WARMUP + 8u && app_wallSeconds() - t0 < 6.0)
+		nanosleep(&(const struct timespec){ 0, 5000000L }, NULL);
+	app_ciClose(&ci);
+	const double lead = (double)atomic_load(&in.lead) / tps;
+	printf("%llu input callbacks, lead %.2f ms\n", (unsigned long long)atomic_load(&in.callbacks), lead * 1e3);
+	if (atomic_load(&in.callbacks) < APP_IN_WARMUP + 8u)
+	{
+		printf("SKIP R5_dev_input: no input callbacks in 6 s (permission pending?)\n");
+		return 77;
+	}
+	return lead > 0.0 && lead < 0.5 ? 0 : 1;
+}
+
+TEST(R5_dev_input) { PROBE(inputChild, "R5_dev_input", 12); }
 
 /* spec 6.2: the render callback never leaves a buffer as it found it. A buffer that is not the interleaved one the format
  * promised gets silence, not whatever it held (it would play as noise). No device is needed. */
@@ -714,6 +766,125 @@ TEST(R4_dev_period)
 	ASSERT_EQ(gFollow.r2, 0);	/* the same period: not set again */
 	ASSERT_EQ(gFollow.r3, 1);
 	ASSERT_NEAR(gFollow.p2, 0.020, 0.0002);	/* the new period took */
+}
+
+/* R5 (F9-F12): the shell and the two options, with no input IO. A clock channel of 64 fails before a unit is made on any
+ * device that has fewer inputs (and a machine without one has none), so no microphone prompt can come from this test.
+ * The C side never opens the input by itself (F10), a failed open is said once and retried, off clears it */
+static char gClkSays[4][300];
+static _Atomic unsigned gClkSaid;
+
+static void clockinMessage(void *ctx, const char *text)
+{
+	(void)ctx;
+	const unsigned n = atomic_load(&gClkSaid);
+	if (strstr(text, "clock in from audio") != NULL && n < 4u)
+	{
+		snprintf(gClkSays[n], sizeof gClkSays[n], "%s", text);
+		atomic_store(&gClkSaid, n + 1u);
+	}
+}
+
+static void frames(app_shell_t *s, double sec)
+{
+	const double t0 = app_wallSeconds();
+	while (app_wallSeconds() - t0 < sec)
+	{
+		(void)app_shellFrame(s);
+		nanosleep(&(const struct timespec){ 0, 5000000L }, NULL);
+	}
+}
+
+#define CK(c) do { if (!(c)) { printf("check failed, line %d: %s\n", __LINE__, #c); ok = 0; } } while (0)
+
+static int clockinChild(void)
+{
+	app_outputDevice_t in[32];
+	const int n = app_caInputs(in, 32);
+	for (int i = 0; i < n; i++)
+		if (in[i].channels >= APP_CLOCK_CHANNELS)
+		{
+			printf("SKIP R5_shell_clockin: %s has %u inputs, so the open of channel 64 would start input IO\n", in[i].name,
+				in[i].channels);
+			return 77;
+		}
+	app_shell_t *s = app_shellNew();
+	app_shellOptions_t o;
+	char err[256] = "";
+	memset(&o, 0, sizeof o);
+	o.cardDir = gCard;
+	o.home = gHome;
+	o.noAudio = 1;
+	o.noMidi = 1;
+	o.message = clockinMessage;
+	if (!s || app_shellStart(s, &o, err, sizeof err) != 0)
+	{
+		printf("start: %s\n", err);
+		return 1;
+	}
+	const app_settings_t *set = app_shellSettings(s);
+	int ok = 1;
+	CK(set->clockOutAudio == 1 && set->clockOutChannel == 3 && set->clockInAudio == 1 && set->clockInChannel == 64);
+	frames(s, 0.3);
+	CK(atomic_load(&gClkSaid) == 0u);	/* the stored option does not open the input: the GUI asks for the permission first */
+	/* the clock-out command: the flag and the channel, as the engine will take them */
+	app_cmd_t c;
+	memset(&c, 0, sizeof c);
+	c.kind = APP_CMD_CLOCK_OUT;
+	c.a = 0;
+	CK(app_shellCommand(s, &c) == 0 && set->clockOutAudio == 0 && set->clockOutChannel == 3);
+	c.a = 5;
+	CK(app_shellCommand(s, &c) == 0 && set->clockOutAudio == 1 && set->clockOutChannel == 5);
+	c.a = 65;	/* the engine takes it as off */
+	CK(app_shellCommand(s, &c) == 0 && set->clockOutAudio == 0 && set->clockOutChannel == 5);
+	/* the options of the input, off: stored, in range only */
+	app_clockInOptions_t x;
+	memset(&x, 0, sizeof x);
+	snprintf(x.uid, sizeof x.uid, "dev:x");
+	x.clockChannel = 7;
+	x.resetChannel = 8;
+	x.clockThreshold = 0.3;
+	x.resetThreshold = 0.7;
+	CK(app_shellClockIn(s, &x) == 0);
+	CK(set->clockInAudio == 0 && !strcmp(set->clockInDevice, "dev:x") && set->clockInChannel == 7 && set->resetChannel == 8
+		&& set->clockInThreshold == 0.3 && set->resetThreshold == 0.7);
+	x.clockChannel = 65;
+	x.resetChannel = 70;
+	x.clockThreshold = 0.01;
+	x.resetThreshold = 0.99;
+	CK(app_shellClockIn(s, &x) == 0);
+	CK(set->clockInChannel == 7 && set->resetChannel == 8 && set->clockInThreshold == 0.3 && set->resetThreshold == 0.7);
+	/* on, with a channel no device has: no unit, no IO; said once, however often it is tried */
+	x.clockChannel = 64;
+	x.resetChannel = 0;
+	x.clockThreshold = x.resetThreshold = 0.5;
+	x.on = 1;
+	app_outputInfo_t info;
+	const char *why = "";
+	CK(app_shellClockIn(s, &x) == -1 && set->clockInAudio == 1 && set->clockInChannel == 64 && set->resetChannel == 0);
+	CK(!app_shellInputInfo(s, &info, &why) && why[0] != '\0');
+	CK(atomic_load(&gClkSaid) == 1u && !strncmp(gClkSays[0], "notice: clock in from audio: ", 29));
+	frames(s, 2.4);	/* the 2-s retry fails the same way: the same text is not said again */
+	CK(atomic_load(&gClkSaid) == 1u && !app_shellInputInfo(s, &info, &why) && why[0] != '\0');
+	printf("said: %s\n", gClkSays[0]);
+	x.on = 0;
+	CK(app_shellClockIn(s, &x) == 0 && set->clockInAudio == 0 && !app_shellInputInfo(s, &info, &why) && why[0] == '\0');
+	frames(s, 2.4);
+	CK(atomic_load(&gClkSaid) == 1u);	/* off: no retry */
+	app_shellStop(s);
+	return ok ? 0 : 1;
+}
+
+#undef CK
+
+TEST(R5_shell_clockin)
+{
+	emu_testTempDir(gCard, sizeof gCard);
+	emu_testTempDir(gHome, sizeof gHome);
+	ASSERT_EQ(emu_hostCopyCard(EMU_TEST_CARDS "/init", gCard, 0), 0);
+	const char *text = "clockout.audio = 1\nclockout.channel = 3\nclockin.audio = 1\nclockin.channel = 64\n";
+	emu_testWrite(gHome, "settings.txt", text, strlen(text));
+	PROBE(clockinChild, "R5_shell_clockin", 15);
 }
 
 TEST_MAIN()

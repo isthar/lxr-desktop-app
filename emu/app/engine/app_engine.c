@@ -197,7 +197,19 @@ static void app_engineOpen(app_engine_t *e)
 	if (!e->map.valid)
 		app_tmWall(&e->map, 0.0, opened + e->wallLead);
 	if (e->outputRunning)
+	{
 		app_maxRequest(&e->audio, (uint32_t)ceil((double)e->out.bufferFrames * APP_FS / e->out.deviceRate));	/* E6 */
+		const int clk = atomic_load(&e->audio.clockChannel);
+		if (clk > 0 && e->out.deviceChannels > 0u && (unsigned)clk > e->out.deviceChannels)	/* spec 6.8: not heard, so said */
+		{
+			app_ack_t a;
+			memset(&a, 0, sizeof a);
+			a.kind = APP_MSG_NOTICE;
+			snprintf(a.text, sizeof a.text, "clock out as audio: channel %d is not on %s (%u channels): it is not heard", clk,
+				e->out.name[0] ? e->out.name : "the output", e->out.deviceChannels);
+			(void)app_ringPush(&e->ack, &a);
+		}
+	}
 	else
 		e->retryAt = opened + app_ticks(e, APP_RETRY_SEC);
 }

@@ -34,6 +34,15 @@ typedef struct app_outputInfo
 	char name[128], format[160];	/**< the device; the formats and the converter (spec 6.9) */
 } app_outputInfo_t;
 
+/** clock and reset in from audio (spec 6.8, plan R5): inputs 1-64, reset 0 none; thresholds 0.05-0.95 of full scale */
+typedef struct app_clockInOptions
+{
+	int on;
+	char uid[128];	/**< the input device's UID, "" the system's default input */
+	int clockChannel, resetChannel;
+	double clockThreshold, resetThreshold;
+} app_clockInOptions_t;
+
 /* the rings' entries (spec 6.1) */
 typedef enum { APP_P_BUTTON, APP_P_ENCODER, APP_P_PUSH, APP_P_KNOB, APP_P_FADER, APP_P_JACKS, APP_P_CARD,
 	APP_P_CLOCK, APP_P_RESET } app_panelKind_t;
