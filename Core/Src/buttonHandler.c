@@ -882,6 +882,16 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			break;
 
 		case SEQ_FX:
+			//LICHOMAT v0.4: on the FX page, SHIFT + step 15 again steps slot -> reverb -> rumble -> slot (plan D37)
+			if(menu_activePage == FX_MODE_PAGE)
+			{
+				const uint8_t sub = menu_getSubPage();
+				menu_switchSubPage((sub == FX_SUBPAGE_REVERB) ? FX_SUBPAGE_RUMBLE
+						: ((sub == FX_SUBPAGE_RUMBLE) ? fxBus.fxType : FX_SUBPAGE_REVERB), 1);
+				menu_resetActiveParameter();
+				menu_repaintAll();
+				break;
+			}
 			buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_FX;
 			led_clearAllBlinkLeds();
 			led_setBlinkLed(LED_STEP15,1);

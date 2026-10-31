@@ -275,6 +275,8 @@ enum NamesEnum
 	TEXT_CPU_METER,	// LICHOMAT: marks the CPU meter sub-page, it has no parameter
 	TEXT_TRACK_TEMPO, TEXT_HUMAN_TIME, TEXT_HUMAN_VOL, TEXT_TRACK_DELAY,	// LICHOMAT v0.2
 	TEXT_SLIDE_TIME, TEXT_STEP_SLIDE, TEXT_SCENE_QUANT,	// LICHOMAT v0.3
+	TEXT_REV_LEVEL, TEXT_REV_SIZE, TEXT_REV_MOD, TEXT_REV_FREEZE, TEXT_DELAY_SYNC,	// LICHOMAT v0.4 (plan D37)
+	TEXT_DUCK_SRC, TEXT_DUCK_DEPTH, TEXT_DJ_FILTER, TEXT_DJ_RESO,
 
 
 	NUM_NAMES
@@ -391,7 +393,16 @@ enum shortNamesEnum
 	SHORT_TRK_DELAY,
 	SHORT_SLIDE_TIME,	// LICHOMAT v0.3
 	SHORT_STEP_SLIDE,
-	SHORT_SCENE_QUANT
+	SHORT_SCENE_QUANT,
+	SHORT_REV_LEVEL,	// LICHOMAT v0.4
+	SHORT_REV_SIZE,
+	SHORT_REV_MOD,
+	SHORT_REV_FREEZE,
+	SHORT_DELAY_SYNC,
+	SHORT_DUCK_SRC,
+	SHORT_DUCK_DEPTH,
+	SHORT_DJ_FILTER,
+	SHORT_DJ_RESO
 
 	
 };
@@ -527,7 +538,16 @@ enum longNamesEnum
 	LONG_TRK_DELAY,
 	LONG_SLIDE_TIME,	// LICHOMAT v0.3
 	LONG_STEP_SLIDE,
-	LONG_SCENE_QUANT
+	LONG_SCENE_QUANT,
+	LONG_REV_LEVEL,	// LICHOMAT v0.4
+	LONG_REV_SIZE,
+	LONG_REV_MOD,
+	LONG_REV_FREEZE,
+	LONG_DELAY_SYNC,
+	LONG_DUCK_SRC,
+	LONG_DUCK_DEPTH,
+	LONG_DJ_FILTER,
+	LONG_DJ_RESO
 	
 };
 
@@ -695,6 +715,9 @@ void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle);
 void menu_resetActiveParameter();
 //-----------------------------------------------------------------
 uint8_t menu_getSubPage();
+// LICHOMAT v0.4: the FX page's sub-pages of the reverb and of rumble and the DJ filter (plan D37)
+#define FX_SUBPAGE_REVERB 6
+#define FX_SUBPAGE_RUMBLE 7
 //-----------------------------------------------------------------
 uint8_t menu_getDisplayParameterType(uint8_t pos);
 //-----------------------------------------------------------------

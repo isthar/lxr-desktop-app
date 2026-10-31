@@ -45,6 +45,7 @@ static int setTrackLengthCalls;
 static int toggleMainStepCalls;
 static int updateSeqLedsCalls;
 static int switchSubPageCalls;
+static uint8_t lastSubPage;		/* LICHOMAT v0.4: menu_switchSubPage(), read back by menu_getSubPage() */
 static uint8_t blinking[256];		/* led_setBlinkLed() per LED number */
 static int armCalls;			/* ARM_AUTOMATION_STEP sent with the arm bit */
 static uint8_t armedStep;		/* the step of the last one */
@@ -97,8 +98,8 @@ void seq_setSongModeEnabled(uint8_t onOff) { (void)onOff; }
 PatternSet *get_seq_patternSet_p(void) { return &seq_patternSet; }
 
 void menu_switchPage(uint8_t pageNr) { menu_activePage = pageNr; }
-void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle) { (void)subPageNr; (void)toggle; switchSubPageCalls++; }
-uint8_t menu_getSubPage(void) { return 0; }
+void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle) { (void)toggle; lastSubPage = subPageNr; switchSubPageCalls++; }
+uint8_t menu_getSubPage(void) { return lastSubPage; }
 uint8_t menu_getActivePage(void) { return menu_activePage; }
 uint8_t menu_getActiveVoice(void) { return menu_activeVoice; }
 void menu_setActiveVoice(uint8_t voiceNr) { menu_activeVoice = voiceNr; }
@@ -171,6 +172,7 @@ static void reset(void)
 	toggleMainStepCalls = 0;
 	updateSeqLedsCalls = 0;
 	switchSubPageCalls = 0;
+	lastSubPage = 0;
 	armCalls = 0;
 	armedStep = 0;
 	menu_activePage = VOICE1_PAGE;
@@ -542,6 +544,34 @@ TEST(buttons_voice_mode_steps_do_not_recall_scenes)
 	press(BUT_MODE1);
 	press(BUT_SEQ9);
 	ASSERT_EQ(recallCalls, 0);
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT v0.4 (plan A4, D37): SHIFT + step 15 on the FX page steps the slot's
+// sub-page -> reverb (6) -> rumble (7) -> the slot's
+//------------------------------------------------------------------------------
+TEST(buttons_fx_page_cycles_reverb)
+{
+	reset();
+	fxBus.fxType = 4;
+	pressWith(BUT_SHIFT, BUT_SEQ15);		/* fw 1.7: the slot's sub-page */
+	ASSERT_EQ(menu_activePage, FX_MODE_PAGE);
+	ASSERT_EQ(lastSubPage, 4);
+	pressWith(BUT_SHIFT, BUT_SEQ15);
+	ASSERT_EQ(lastSubPage, 6);
+	pressWith(BUT_SHIFT, BUT_SEQ15);
+	ASSERT_EQ(lastSubPage, 7);
+	pressWith(BUT_SHIFT, BUT_SEQ15);
+	ASSERT_EQ(lastSubPage, 4);
+	ASSERT_EQ(menu_activePage, FX_MODE_PAGE);
+	ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_FX);
+	ASSERT_TRUE(blinking[LED_STEP15]);
+	pressWith(BUT_SHIFT, BUT_SEQ15);
+	ASSERT_EQ(lastSubPage, 6);
+	press(BUT_SELECT1);				/* a select button still returns to voice mode */
+	ASSERT_EQ(buttonHandler_getMode(), SELECT_MODE_VOICE);
+	ASSERT_TRUE(menu_activePage != FX_MODE_PAGE);
+	fxBus.fxType = 0;
 }
 
 TEST_MAIN()

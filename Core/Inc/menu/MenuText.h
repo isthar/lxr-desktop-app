@@ -523,6 +523,7 @@ const char shortNames[][4]  =
 	{"shf"},
 	{"tmp"}, {"hmt"}, {"hmv"}, {"dly"},	// LICHOMAT v0.2
 	{"slt"}, {"sld"}, {"scn"},	// LICHOMAT v0.3
+	{"lvl"}, {"siz"}, {"mod"}, {"frz"}, {"syn"}, {"dck"}, {"ddp"}, {"djf"}, {"djr"},	// LICHOMAT v0.4
 
 };
 //-----------------------------------------------------------------
@@ -655,6 +656,8 @@ const char longNames[][16] =
 	{"Shift"},
 	{"TrkTempo"}, {"HumTime"}, {"HumVol"}, {"TrkDelay"},	// LICHOMAT v0.2
 	{"Slide time"}, {"Slide"}, {"Scene change"},	// LICHOMAT v0.3
+	{"rev level"}, {"rev size"}, {"rev modul"}, {"rev freeze"}, {"delay sync"},	// LICHOMAT v0.4
+	{"duck src"}, {"duck depth"}, {"DJ filter"}, {"DJ reso"},
 };
 
 
