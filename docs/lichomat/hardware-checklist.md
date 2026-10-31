@@ -1,4 +1,4 @@
-# LICHOMAT 0.1, 0.2 and 0.3: hardware checklist (H1–H13, U1–U19, X4, optional X1–X3)
+# LICHOMAT 0.1, 0.2, 0.3 and 0.4: hardware checklist (H1–H13, U1–U19, U23–U25, X4, optional X1–X3)
 
 These are the checks of spec §13.2, written out as procedures for the LXR-02. Only the owner can run
 them, on the real device; nothing here is ever marked as passed by an agent. Record every result in
@@ -32,6 +32,17 @@ each project's `prj.nfo`, keeps the slide flag in bit 7 of a step's probability 
 time in three kit bytes that 1.7 does not use; 1.7 and 0.2 ignore all three. Back up the card
 before you install 0.3, too. 0.3 holds all of 0.1 and 0.2, so one session on 0.3 can run every check;
 a proposed order, with H12 first, is in `docs/lichomat/test-session-v0.3.md` (Polish).
+
+**LICHOMAT 0.4 (first half).** 0.4 is not released yet: there is no `LXR_V2_LICHOMAT_0.4.img` to
+install, and its SHA-256 goes into the run sheet when CI builds it; H1 will then show
+`v0.4 unofficial`. U23–U25 are written for the parts of 0.4 that are done (plan
+`docs/superpowers/plans/2026-10-31-v0.4-atmosphere.md`, branch `v0.4`): the tempo-synced delay, the
+DJ filter, and a 13-byte block after the parameters of every kit file (`.SND` 255 → 268 B, and
+`tmp.snd`) that holds the new kit settings; 1.7 ignores the block, and a kit saved by 1.7 loses it
+(U25). U20–U22 (CPU with the reverb, reverb and freeze, rumble) and U26 (version and kit recipes)
+come with the reverb, which waits for H12's CPU reading: run H12 on 0.3 first. 0.4 keeps everything
+of 0.3. Back up the card before you install 0.4, too. `tools/demo_v04.sh` on branch `v0.4` renders
+the synced delay and a DJ filter sweep in the emulator, to compare by ear.
 
 **What you need**
 
@@ -124,6 +135,20 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
 - Slide (0.3): the step page has `sld` (`off`/`on`) after `prb`, before its second screen. Drum 1–3
   (voices 1–3) have `slt`, the slide time (0–127, × 4 ms), on the second screen of their oscillator
   page (select button 1). `slt` belongs to the kit.
+- The FX page (0.4): SHIFT + step 15 opens it on the sub-page of the FX type, as in 1.7 (knob 1
+  `typ`; with `del`, the delay, knob 4 is the delay type, `Del` or `Pp`, and the second screen is
+  `tim rng ton fbk`). Each further SHIFT + step 15 moves on: the reverb sub-page, `lvl siz dec ton`
+  and on its second screen `pre mod frz syn`; then `dck ddp djf djr`; then back to the FX type's
+  sub-page. A select button leaves the FX page for voice mode.
+- Delay sync (0.4, `syn`, a kit setting): `off`, `16t`, `16`, `8t`, `16d`, `8`, `4t`, `8d`, `4`,
+  `4d` (t triplet, d dotted). With `off` the delay plays its own time (`tim`, `rng`); with a note
+  value `tim` and `rng` have no effect. A time longer than the delay line is halved until it fits
+  (the line holds 741 ms, 370 ms for `Pp`).
+- The DJ filter (0.4): `djf` and `djr` (its resonance) are knobs 3 and 4 of the performance page's
+  second screen, after `shu scn`, and also on the FX page's `dck ddp djf djr`. `djf` 0–62 is a
+  low-pass that closes towards 0, 63–65 is flat, 66–127 a high-pass that opens towards 127. It
+  filters stereo outputs 1 and 2, after the FX bus. NRPN 96 sets `djf` and NRPN 97 `djr`. A kit load
+  keeps `djf` where it is (a kit save stores it as 64); `djr` belongs to the kit.
 
 **Measuring times in a recording.** Record the LXR's main output at 48 kHz (H7 step 6 at 44.1
 kHz). Find a hit's onset by zooming in on the waveform (or with the DAW's transient detection), and
@@ -1035,6 +1060,101 @@ played and sent in 6.
 
 **Record:** the start-up screen, and `slt` of voices 1–3 for each kit.
 
+## U23: synced delay
+
+0.4's tempo-synced delay (plan v0.4 D38). Use a pattern and a kit you can spare, all tracks 16
+steps long. Leave the reverb's `lvl` at 0.
+
+1. Internal sync, BPM 125, shuffle 0, voice mode. Voice 4 (snare) on step 1 only. Voice 4: MIX
+   sub-page (select button 8), second screen, `out` `FX`. Open the FX page: SHIFT + step 15. Knob 1
+   (`typ`) `del`, `out` `St1`, `d/w` about 50, knob 4 (`typ`, the delay type) `Del`; on the second
+   screen `ton` about 100 and `fbk` about 60. SHIFT + step 15 once more (the reverb sub-page),
+   second screen: `syn` (knob 4) `8d`. Press START and record 2 bars.
+2. `syn` `off` for a bar, then `8d` again. SHIFT + step 15 twice (back to the delay's sub-page),
+   second screen: turn `tim` and `rng` slowly over their range while it plays, for 2 bars.
+3. External clock: BPM set to `MID`, the master's clock into DIN MIDI in as in H6 step 1. Master at
+   125 BPM; start it and record. While it runs, change the master's tempo in steps of 1 BPM from 125
+   to 130 and back to 125, about 2 bars per step.
+4. Internal sync, BPM 120, `syn` `4d` (a 1/4 dotted, 750 ms, does not fit the line). Record 2 bars.
+5. Knob 4 of the delay's sub-page `Pp` (ping-pong), BPM 130, `syn` `4` (461.5 ms, does not fit the
+   ping-pong line). Record 2 bars.
+
+**Expected:**
+- 1: the echoes come 360 ms apart (a 1/8 dotted at 125 BPM, three steps; ±1.5 ms in a recording),
+  the first 360 ms after the hit, so they fall on steps 4, 7, 10 and 13.
+- 2: with `off` the echo time follows `tim` and `rng`; with `8d` it is 360 ms again, and turning
+  `tim` and `rng` changes nothing. Switching `syn` gives no click.
+- 3: the echoes stay three steps behind their hit at every tempo (360 ms at 125 BPM, 346.2 ms at
+  130 BPM). They follow each tempo step with no zipper noise, no clicks and no wobble, while the
+  clock settles and while it runs steady.
+- 4: the time is halved to a 1/8 dotted: 375 ms apart.
+- 5: the time is halved to a 1/8: the echoes are on a 230.8 ms grid.
+
+**Record:** the smallest and largest interval of 8 echoes in 1, 4 and 5 (by a recording, or by ear
+against the steps), what 2 did, and what was heard during the tempo steps in 3.
+
+## U24: DJ filter
+
+0.4's DJ filter on stereo outputs 1 and 2 (plan v0.4 D39). Use a pattern you can spare, all tracks
+16 steps long. Record both outputs (or listen to each in turn).
+
+1. Internal sync, BPM 125, voice mode. Voice 1 (kick) on steps 1, 5, 9 and 13, voice 4 (snare) on
+   steps 5 and 13, voice 6 (closed hat) on all 16 steps. Voice 6: MIX sub-page (select button 8),
+   second screen, `out` `St2`; the others stay on `St1`. Press START.
+2. The performance mode (the second mode button), second screen: `djf` (knob 3), `djr` (knob 4).
+   With `djr` 0, turn `djf` slowly from 64 to 0, back to 64, on to 127 and back to 64, about 4 bars
+   each way. Then the same with `djr` 100.
+3. `djr` 0. Turn `djf` quickly, in about half a second, from about 20 to about 110 and back, 10
+   times.
+4. NRPN 96 from SendMIDI or a controller. In the global menu note `ch` and set it to 1, `mrx`
+   `all`. Send `sendmidi dev "Sonic Potions USB MIDI" ch 1 cc 99 0 cc 98 96 cc 6 20`, then, about
+   2 bars apart, `sendmidi dev "Sonic Potions USB MIDI" ch 1 cc 6 64`, `cc 6 110` and `cc 6 64` the
+   same way. A controller sends a 7-bit NRPN: CC 99 = 0, CC 98 = 96, then CC 6 = the value, without
+   CC 38 (the LXR takes CC 38 as Drum 1's filter frequency). Set `ch` back.
+5. `djf` 30. Load another kit, then the first one again.
+
+Not in this build: the LFOs, velocity and p-locks cannot reach `djf` (it is not in their target
+lists), so this check has no LFO step.
+
+**Expected:**
+- 2: left of the centre a low-pass that closes towards 0 (at 0 only the lowest bass is left), right
+  of it a high-pass that opens towards 127 (at 127 almost nothing is left); 63, 64 and 65 sound as
+  the unfiltered pattern. No click when `djf` enters or leaves 63–65. With `djr` 100 a resonant peak
+  follows the cutoff. Output 2 (the hats) is filtered exactly like output 1.
+- 3: no clicks; a jump from one side to the other passes through flat (about 3 ms).
+- 4: each NRPN value acts as the knob would: 20 a low-pass, 64 flat, 110 a high-pass.
+- 5: `djf` stays at 30 through both loads (a live control); `djr` takes each kit's value.
+
+**Record:** by ear: the sound of each output in 2–4, any click, whether the display's `djf`
+followed the NRPN in 4, and the controller or command used.
+
+## U25: compatibility with fw 1.7
+
+0.4's kit block and `GLO.CFG` against 1.7 (plan v0.4 D33–D35). Use a project and a kit slot you can
+spare, and copy the project's folder (`PROJnn`) to the computer first.
+
+1. On 0.4: voice 4 to the FX bus and on a few steps; on the FX page `typ` `del`, `tim` about 60,
+   `fbk` about 60; on the reverb sub-page `lvl` 80, `siz` 50, `dec` 20, `ton` 30, `pre` 80, `mod` 0
+   and `syn` `8d`; on the next sub-page `dck` `dr1` and `ddp` 50; on the performance page `djr` 90
+   and `djf` 30. Save the kit (its slot) and the project. On the computer note the sizes of the
+   kit's `.SND` file and of `GLO.CFG` in `PROJnn`.
+2. Install `LXR_V2_V1.7.img` (H13 step 1). Load the kit and play the pattern.
+3. Save the kit there (the same slot). Note the `.SND` file's size.
+4. Install the 0.4 file again. Load the kit, play the pattern, and look at the reverb sub-page,
+   `dck ddp`, and `djr`.
+
+**Expected:**
+- 1: the `.SND` file is 268 B, `GLO.CFG` 30 B (as with 0.3 and 1.7).
+- 2: 1.7 starts without `glo.cfg error`, loads the kit and plays it with its own effect: the delay
+  at its free time (`tim`), not synced, with no reverb and no DJ filter.
+- 3: the `.SND` file is 255 B: 1.7 dropped the block.
+- 4: the kit has the defaults again, because the block is gone: `lvl` 0, `siz` 100, `dec` 64, `ton`
+  64, `pre` 10, `mod` 40, `syn` `off`, `dck` `off`, `ddp` 100, `djr` 0. The delay plays its free
+  time. `djf` stays where the knob is.
+
+**Record:** the file sizes (`.SND` after the 0.4 save and after the 1.7 save, `GLO.CFG`), what 1.7
+played, and the values shown back on 0.4.
+
 ## X4: USB MIDI out
 
 Not in the spec's list: 1.7 defects of the USB MIDI out that LICHOMAT fixes (tracker E2.8).
@@ -1193,6 +1313,9 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | U17 | | | |
 | U18 | | | |
 | U19 | | | |
+| U23 | | | |
+| U24 | | | |
+| U25 | | | |
 | X1 | | | |
 | X2 | | | |
 | X3 | | | |
