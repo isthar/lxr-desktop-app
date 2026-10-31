@@ -244,6 +244,7 @@ emu_add_test(test_fwchanges IDS M15_f1_cc1 M15_f2_morph M15_f3_clear_pages M15_f
     M15_f14_transient_shift M15_f16_full_phase M15_f17_negative_frequency
     M15_f18_mono_delay)
 emu_add_test(test_pingpong IDS M16_pingpong)
+emu_add_test(test_fxstage IDS M24_slot_channels_with_reverb)  # v0.4 review: the slot sees the destination's channels with the reverb on (plan D32)
 
 # M19: the firmware objects import no libm name but the vendored ones and fmod
 add_library(emu_libm_canary OBJECT tests/libm_canary.c)

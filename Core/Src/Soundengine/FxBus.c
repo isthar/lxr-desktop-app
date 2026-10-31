@@ -155,7 +155,13 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 	}
 	int16_t bus[OUTPUT_DMA_SIZE * 2];
 	memset(bus, 0, sizeof bus);
-	FxBus_processSlot(fxBuffer, bus, bus + 1, size, 2);
+	//LICHOMAT v0.4: the slot with the destination's channels, as v0.3 runs it (plan D32: the slot is
+	//unchanged; v0.4 review: the compressor's stereo branch follows (L+R)/2, its mono branch L); a mono
+	//destination's signal is the reverb's input on both sides
+	FxBus_processSlot(fxBuffer, bus, (channels == 2) ? bus + 1 : NULL, size, channels);
+	if(channels != 2)
+		for(uint32_t i = 0; i < size; i++)
+			bus[2 * i + 1] = bus[2 * i];
 	atmo_process(bus, size);
 	if(channels == 2)
 	{
