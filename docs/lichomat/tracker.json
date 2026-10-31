@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-31 22:31",
+    "updated": "2026-10-31 22:49",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Przerwa: v0.5 (M16) i kity WIR/MGLA/RDZA/IGLA (gałąź kits) gotowe",
     "branch": "timing-core",
-    "head": "65c43d2",
+    "head": "c128099",
     "next": "Twój odsłuch kitów i dem v0.5; H12 (pogłos v0.4), U27–U32 dla v0.5, A1–A12 w aplikacji, sesja testowa na LXR",
-    "updated_at": "2026-10-31T22:31:00+01:00",
+    "updated_at": "2026-10-31T22:49:00+01:00",
     "now": ""
   },
   "epics": [
@@ -3231,6 +3231,31 @@
       "n": 467,
       "at": "2026-10-31 22:31",
       "text": "Odczyt właściciela: usage 74% (22:29); szacunek skalibrowany (1% ≈ 7,83 M jednostek). Dema kitów w obu trybach do porównania A/B na tym samym wzorcu (8 taktów, 128 BPM): build/wt-kits/build/demo-blk/{wir,mgla,rdza,igla}-{smp,blk}.wav; wersje smp są identyczne z demami w gałęzi kits. CI na GitHubie dalej stoi (build v0.4 w kolejce od 18 h). Przerwa: kolejne kroki czekają na odsłuch kitów i dem v0.5."
+    },
+    {
+      "n": 468,
+      "at": "2026-10-31 22:32",
+      "text": "Następny krok (w ramach kitów): ruch w kitach. Renderer emulatora ma się nauczyć ustawiać cele LFO i velocity, potem każdy kit dostaje subtelną modulację (np. decay hi-hatu, wysokość perkusji, cutoff), przebudowa, nowe dema smp/blk i pomiary. Limit: jeśli zmiana w rendererze nie jest mała, stop i raport."
+    },
+    {
+      "n": 469,
+      "at": "2026-10-31 22:38",
+      "text": "Właściciel: kofeina na ok. 4 h, praca do 80%. Równolegle z ruchem w kitach: lokalny przebieg ASan + UBSan dla v0.5 (emulator i testy hosta). W CI ASan nie ruszył, bo GitHub nie uruchamia przebiegów, a w sandboxie ASan się wiesza; testy uruchomię poza sandboxem."
+    },
+    {
+      "n": 470,
+      "at": "2026-10-31 22:38",
+      "text": "ASan dla v0.5 zbudowany lokalnie (emulator i testy hosta, 0 ostrzeżeń), ale uruchomienie testów poza sandboxem wymaga zgody właściciela: automat uprawnień tego nie przepuścił. Skrypt jednym poleceniem: scratchpad/run_asan.sh (uruchamia tylko gotowe binarki testowe, zapisuje logi)."
+    },
+    {
+      "n": 471,
+      "at": "2026-10-31 22:48",
+      "text": "Ruch w kitach (gałąź kits, 2938dbf, bc606f6): renderer emulatora ustawia teraz cele LFO i velocity tą samą ścieżką co menu (test M17_param_targets: zapis do .SND i odczyt). Każdy kit ma LFO zsynchronizowane z tempem: WIR na decay zamkniętego hi-hatu (do 2,8 dB między taktami) i velocity na głośność hi-hatu; MGLA na indeks FM stabu (1,1 dB jasności) i velocity na głośność stabu; RDZA na górnoprzepustowy hi-hatu (1,9 dB); IGLA na indeks FM Drum 2 (1,2 dB). Dema nagrane od nowa: szczyty −1,3 do −1,6 dBFS. Firmware bez zmian."
+    },
+    {
+      "n": 472,
+      "at": "2026-10-31 22:49",
+      "text": "Specyfikacja emulatora uzupełniona: --param ustawia teraz głosy LFO i cele modulacji (2938dbf na gałęzi kits; przedtem odrzucane). Ruch w kitach skończony: wszystkie testy emulatora przechodzą (331), dema smp/blk nagrane od nowa."
     }
   ]
 }
