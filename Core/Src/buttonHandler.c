@@ -57,6 +57,8 @@ volatile struct {
 static uint8_t buttonHandler_mutedVoices = 0;
 //LICHOMAT v0.3: step 8 is held as fill in the performance mode (plan D16)
 static uint8_t buttonHandler_fillHeld = 0;
+//LICHOMAT v0.4: step 3 is held with its roll on, which SHIFT's release shows on its LED (v0.4 review, plan D37)
+static uint8_t buttonHandler_step3Rolls = 0;
 //LICHOMAT v0.3: the step LED of a recalled mute scene that waits, and the applied scenes seen (plan D17)
 static uint8_t buttonHandler_sceneLed = 0;
 static uint8_t buttonHandler_sceneSerial = 0;
@@ -1273,6 +1275,8 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 						(uint8_t) ((seqButtonPressed & 0xf) + 0x10));
 				//turn button led on
 				led_setValue(1, ledNr);
+				if(seqButtonPressed == SEQ_DRUM3)
+					buttonHandler_step3Rolls = 1;	//LICHOMAT v0.4: for SHIFT's release (plan D37)
 			} else if (seqButtonPressed == 7) {
 				//LICHOMAT v0.3: step 8 held = fill mode (plan D16)
 				buttonHandler_fillHeld = 1;
@@ -1348,6 +1352,10 @@ static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 {
 
 	uint8_t ledNr = led_idx2StepLed(seqButtonPressed);
+
+	//LICHOMAT v0.4: step 3 is up, in any mode: its roll ends below (plan D37)
+	if(seqButtonPressed == SEQ_DRUM3)
+		buttonHandler_step3Rolls = 0;
 
 	//LICHOMAT v0.3: the release of step 8 ends fill mode whatever is held now (plan D16)
 	if((seqButtonPressed == 7) && buttonHandler_fillHeld)
@@ -2239,7 +2247,8 @@ void buttonHandler_buttonReleased(uint8_t buttonNr) {
 			menu_switchPage(PERFORMANCE_PAGE);
 			led_initPerformanceLeds();
 			*/
-			led_setValue(0, LED_STEP3);	//LICHOMAT v0.4: back to the roll's LED (plan D37)
+			//LICHOMAT v0.4: back to the roll's LED: on while step 3 is held with its roll, else off (plan D37)
+			led_setValue(buttonHandler_step3Rolls, LED_STEP3);
 			return;
 		case SELECT_MODE_PAT_GEN:
 			/*

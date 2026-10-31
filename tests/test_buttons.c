@@ -627,4 +627,47 @@ TEST(buttons_perf_shift_step3_freezes)
 	ASSERT_EQ(freezeCalls, 2);
 }
 
+TEST(buttons_perf_shift_tap_keeps_step3_roll_led)
+{
+	/* v0.4 review: step 3 held (its roll on, its LED on), SHIFT tapped: while SHIFT is held the
+	 * LED shows the freeze (plan D37); on its release it shows the roll again while step 3 is
+	 * held, and its usual 0 once step 3 is up */
+	enterPerf();
+	freezeCalls = 0;
+	rollCalls = 0;
+	activeParameters[PAR_REV_FREEZE] = 0;
+	down(BUT_SEQ3);
+	ASSERT_EQ(lastRoll, 0x12);
+	ASSERT_EQ(ledValue[LED_STEP3], 1);
+	down(BUT_SHIFT);
+	ASSERT_EQ(ledValue[LED_STEP3], 0);	/* the freeze, off */
+	up(BUT_SHIFT);
+	ASSERT_EQ(ledValue[LED_STEP3], 1);	/* the roll goes on */
+	ASSERT_EQ(lastRoll, 0x12);
+	up(BUT_SEQ3);
+	ASSERT_EQ(lastRoll, 0x02);
+	ASSERT_EQ(ledValue[LED_STEP3], 0);
+	/* frozen: the same, and after step 3's release SHIFT's tap leaves it at 0 */
+	activeParameters[PAR_REV_FREEZE] = 1;
+	down(BUT_SEQ3);
+	down(BUT_SHIFT);
+	ASSERT_EQ(ledValue[LED_STEP3], 1);	/* the freeze, on */
+	up(BUT_SHIFT);
+	ASSERT_EQ(ledValue[LED_STEP3], 1);	/* the roll */
+	up(BUT_SEQ3);
+	ASSERT_EQ(ledValue[LED_STEP3], 0);
+	down(BUT_SHIFT);
+	up(BUT_SHIFT);
+	ASSERT_EQ(ledValue[LED_STEP3], 0);
+	/* step 3 released while SHIFT is held: the roll ends there, and SHIFT's release gives 0 */
+	down(BUT_SEQ3);
+	down(BUT_SHIFT);
+	up(BUT_SEQ3);
+	ASSERT_EQ(lastRoll, 0x02);
+	up(BUT_SHIFT);
+	ASSERT_EQ(ledValue[LED_STEP3], 0);
+	activeParameters[PAR_REV_FREEZE] = 0;
+	ASSERT_EQ(freezeCalls, 0);
+}
+
 TEST_MAIN()

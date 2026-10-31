@@ -95,8 +95,9 @@ static float rv_t60(uint8_t decim, uint8_t decay)
 	return 99.f;
 }
 
-/* the 16 corners of size, decay, tone and mod at 0 and 127, 0.5 s of noise each: every output
- * finite and |wet| < 4 (plan A7); returns the largest |wet| */
+/* the 24 corners of size, decay and mod at 0 and 127 and the tone at 0, 64 and 127, 0.5 s of
+ * noise each: every output finite and |wet| < 4 (plan A7); returns the largest |wet|. The tone
+ * goes through Reverb_setTone(), the path atmo.c takes since tracker Q31 (v0.4 review) */
 static float rv_corners(uint8_t decim)
 {
 	static Reverb r;
@@ -104,15 +105,16 @@ static float rv_corners(uint8_t decim)
 	float wl[64], wr[64];
 	float top = 0.f;
 	uint32_t seed = 15000u + decim;
-	for(int c = 0; c < 16; c++)
+	static const uint8_t tones[3] = { 0, 64, 127 };
+	for(int c = 0; c < 24; c++)
 	{
 		memset(REVERB_RAM, 0, sizeof REVERB_RAM);
 		Reverb_init(&r);
 		Reverb_setDecim(&r, decim);
 		Reverb_setSize(&r, (c & 1) ? 1.f : 0.f);
 		Reverb_setDecay(&r, (c & 2) ? 1.f : 0.f);
-		Reverb_setComposition(&r, (c & 4) ? 1.f : 0.f);
-		Reverb_setMod(&r, (c & 8) ? 1.f : 0.f);
+		Reverb_setTone(&r, tones[(c >> 2) % 3] / 127.f);
+		Reverb_setMod(&r, ((c >> 2) / 3) ? 1.f : 0.f);
 		for(int b = 0; b < 345; b++)	/* 0.5 s */
 		{
 			for(int i = 0; i < 128; i++)
@@ -145,7 +147,7 @@ TEST(RV2_corners_stay_bounded)
 {
 	rv_nonFinite = 0;
 	const float top = rv_corners(1);
-	printf("RV2: full rate, 16 corners: largest |wet| %.3f\n", (double)top);
+	printf("RV2: full rate, 24 corners: largest |wet| %.3f\n", (double)top);
 	ASSERT_EQ(rv_nonFinite, 0);
 	ASSERT_TRUE(top < 4.f);
 }
@@ -577,7 +579,7 @@ TEST(RV4_corners_stay_bounded)
 {
 	rv_nonFinite = 0;
 	const float top = rv_corners(2);
-	printf("RV4: half rate, 16 corners: largest |wet| %.3f\n", (double)top);
+	printf("RV4: half rate, 24 corners: largest |wet| %.3f\n", (double)top);
 	ASSERT_EQ(rv_nonFinite, 0);
 	ASSERT_TRUE(top < 4.f);
 }
