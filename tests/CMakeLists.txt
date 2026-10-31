@@ -366,6 +366,11 @@ if(TARGET test_voicesplit)
     set_source_files_properties(${VOICE_SPLIT_SOURCES}
         PROPERTIES COMPILE_OPTIONS "-w;-O3;-ffast-math;-freciprocal-math;-fno-sanitize=float-cast-overflow")
 endif()
+seqc_add_test(test_mixseg    IDS mixer_segments)  # v0.5 Task 7 the mixer's segments
+if(TARGET test_mixseg)
+    target_include_directories(test_mixseg BEFORE PRIVATE stubs)
+    target_include_directories(test_mixseg SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
+endif()
 
 # The modulation nodes (stage 1b F1): test_modnode compiles the firmware's
 # modulationNode.c with the stand-in headers in stubs/. A node at destination 0,

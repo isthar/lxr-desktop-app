@@ -363,6 +363,13 @@ check_E6_10() {
 			END{exit !(p && t && c && p < t && t < c)}' "${f%%:*}" \
 			|| fail "${f%%:*}: the pending block is not read before seq_tick() (S6)"
 	done
+	# Task 7: the mixer plans the block, applies offset 0 first (S12), and splits per voice;
+	# mixer_voice() is static with one call site, and GCC inlines it (the plan's 2,716 B of
+	# mixer.c's .itcm_text): its calls are then mixer_calcNextSampleBlock()'s
+	must_call mixer_calcNextSampleBlock vsched_beginBlock vsched_applyPhase0
+	local mv=mixer_voice
+	linked mixer_voice || mv=mixer_calcNextSampleBlock
+	must_call "$mv" vsched_split vsched_applySplit vsched_endPhase
 }
 
 check_tasks="E2.2 E2.3 E2.4 E2.5 E2.6 E2.7 E2.8 E3.3 E4.9 E6.10"
