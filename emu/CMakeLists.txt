@@ -382,12 +382,12 @@ function(emu_add_app_test name)
 endfunction()
 
 emu_add_app_test(test_app_ring IDS M18_ring_fill_drop M18_ring_wrap M18_ring_threads)
-emu_add_app_test(test_app_timemap IDS M18_map_wall M18_map_drift M18_map_jump M18_latency_table M18_entry_rule
+emu_add_app_test(test_app_timemap IDS M18_map_wall M18_map_drift M18_map_rate M18_map_jump M18_latency_table M18_entry_rule
     M18_reanchor_order)
 emu_add_app_test(test_app_midi FRAMEWORKS CoreMIDI CoreFoundation IDS M18_midi_split M18_midi_usb_cin
     M18_midi_usb_transfer M18_midi_bytes M18_midi_din_asm M18_midi_usb_out M18_eventlist)
 emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R4_engine_splash R4_engine_ring
-    R4_engine_wall R4_engine_card R4_engine_generator R4_engine_open_bracket R4_engine_slow_first
+    R4_engine_blockrate R4_engine_wall R4_engine_card R4_engine_generator R4_engine_open_bracket R4_engine_slow_first
     R4_engine_silent_open R4_engine_close_inflight R4_engine_late_point R4_engine_max_request R4_engine_cmd_delay
     R4_engine_power_dneg R4_engine_power_dnan R4_engine_power_dbig R4_engine_cmd_generator R4_engine_cmd_text)
 emu_add_app_test(test_app_m18 ENGINE IDS M18_midi_out_step M18_slave_90 M18_slave_128 M18_slave_174 M18_din_128

@@ -22,6 +22,7 @@
 #define APP_TM_WINDOW 2.0		/**< s: the slope's window */
 #define APP_TM_JUMP 216000.0	/**< a point more than 1 ms off the line re-anchors */
 #define APP_FS 44140.625		/**< the device's sample rate */
+#define APP_FRAME_CYCLES (552960.0 / 113.0)	/**< virtual cycles of one device frame */
 #define APP_D_MARGIN 0.001		/**< D's default is L + 1 ms */
 
 typedef struct app_timemap
@@ -29,11 +30,12 @@ typedef struct app_timemap
 	double ticksPerSec;
 	double nominal;			/**< cycles per tick: EMU_CPU_HZ / ticksPerSec */
 	double slope;			/**< cycles per tick of the line */
+	double rate;			/**< cycles per tick over the newest span of at least 2 s; 0 while there is none (E32) */
 	double c0;				/**< the anchor: virtual cycles at host time h0 */
 	uint64_t h0;
 	int valid;
 	int audio;				/**< 1: anchored on callback points; 0: the wall clock */
-	struct { double c; uint64_t h; } hist[APP_TM_HIST];
+	struct { double c; uint64_t h; } hist[APP_TM_HIST];	/**< [0] is the newest point at least 2 s old, if any */
 	unsigned nhist;
 	uint64_t jumps;			/**< re-anchors on a point off the line */
 	uint64_t jumpHost;		/**< host time of the last re-anchor or wall anchor */

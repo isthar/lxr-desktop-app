@@ -608,7 +608,11 @@ static void app_engineSnap(app_engine_t *e, uint64_t now)
 	if (host - e->winHost >= app_ticks(e, 2.0))
 	{
 		const double ticks = (double)(host - e->winHost);
-		e->diag.blockRate = (double)(c.blocks - e->winBlocks) / (ticks / e->host.ticksPerSec);
+		/* with a device the rate is the map's: frames over host time, over 64 (E32). A count of blocks over the window is
+		 * a block off (690.1 where the slope says 689.7), and without audio there is no map to ask */
+		e->diag.blockRate = e->map.audio && e->map.rate > 0.0
+			? e->map.rate * e->host.ticksPerSec / APP_FRAME_CYCLES / EMU_BLOCK_FRAMES
+			: (double)(c.blocks - e->winBlocks) / (ticks / e->host.ticksPerSec);
 		e->diag.load = 1.0 - (double)(e->waitTicks - e->winWait) / ticks;
 		if (e->winInMin <= e->winInMax)
 		{

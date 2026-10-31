@@ -62,6 +62,27 @@ TEST(M18_map_jump)
 	ASSERT_NEAR(app_tmVirtual(&m, h), c, 1e-6);
 }
 
+/* E32: the rate over the newest span of at least 2 s, for the diagnostics' block rate; none before there is one */
+TEST(M18_map_rate)
+{
+	app_timemap_t m;
+	app_tmInit(&m, TPS);
+	const double ratio = 1.0001;
+	for (unsigned k = 0; k < 400u; k++)
+	{
+		app_tmPoint(&m, 1e9 + (double)k * 256000.0 * 9.0 * ratio, 5000000u + (uint64_t)k * 256000u);
+		if (k < 187u)	/* 187 periods are 1.995 s */
+			ASSERT_EQ_DBL(m.rate, 0.0);
+	}
+	ASSERT_NEAR(m.rate / 9.0, ratio, 1e-9);
+	ASSERT_NEAR(m.slope / 9.0, ratio, 1e-9);	/* the slope keeps its 2-s window */
+	uint64_t h = 5000000u + 400u * 256000u;
+	ASSERT_EQ(app_tmPoint(&m, 2e9, h), 1);		/* a jump starts a new line: no rate until it has 2 s */
+	ASSERT_EQ_DBL(m.rate, 0.0);
+	app_tmWall(&m, 3e9, h);
+	ASSERT_EQ_DBL(m.rate, 0.0);
+}
+
 /* spec 6.4's table; the 128-frame rows: 2.67 ms buffer + 1.00 ms safety + 1.09 ms converter */
 TEST(M18_latency_table)
 {

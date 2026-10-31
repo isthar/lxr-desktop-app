@@ -206,6 +206,37 @@ TEST(R4_engine_generator)
 	ASSERT_EQ(E.genNext, t0 + 9u * 27000000u);
 }
 
+
+/* E32: with a device the block rate is the time map's (frames over host time over 64), not a count of blocks over 2 s.
+ * A callback takes a whole request, so the engine renders about 7 blocks at once, and a count over a window that starts
+ * before one and ends after another is a block off: 690.16 in every window here, 690.1 on the real CoreAudio, while the
+ * map's slope is the device's own 689.70. */
+TEST(R4_engine_blockrate)
+{
+	boot(1);
+	uint64_t wh = E.winHost, wb = E.winBlocks;
+	unsigned windows = 0;
+	double countMin = 1e9;
+	for (unsigned n = 0; windows < 5u && n < 200000u; n++)
+	{
+		app_engineSlice(&E);
+		(void)app_engineSnapshot(&E, &last);
+		if (E.winHost == wh)
+			continue;
+		const double count = (double)(E.winBlocks - wb) / ((double)(E.winHost - wh) / FAKE_TPS);	/* the old rule */
+		if (windows++ > 0u)	/* the first window spans the boot's wall-clock pacing */
+		{
+			ASSERT_TRUE(E.map.audio);
+			ASSERT_NEAR(last.diag.blockRate, 689.70, 0.02);
+			countMin = count < countMin ? count : countMin;
+		}
+		wh = E.winHost;
+		wb = E.winBlocks;
+	}
+	ASSERT_EQ(windows, 5);
+	ASSERT_TRUE(countMin >= 690.0 && countMin < 691.0);	/* what the old rule said in every one of them */
+}
+
 /* --- the output's life: opens, stalls, retries (spec 6.2, 6.9) and the commands' limits ------------------------ */
 
 static double virtualSec(void) { return (double)emu_now() / EMU_CPU_HZ; }

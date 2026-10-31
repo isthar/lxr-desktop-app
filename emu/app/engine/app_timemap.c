@@ -30,6 +30,7 @@ void app_tmWall(app_timemap_t *m, double c, uint64_t h)
 	m->valid = 1;
 	m->audio = 0;
 	m->slope = m->nominal;
+	m->rate = 0.0;
 	m->c0 = c;
 	m->h0 = h;
 	m->nhist = 0;
@@ -49,7 +50,7 @@ uint64_t app_tmHost(const app_timemap_t *m, double c)
 
 double app_frameCycles(uint64_t codecStart, double frame)
 {
-	return (double)codecStart + frame * 552960.0 / 113.0;
+	return (double)codecStart + frame * APP_FRAME_CYCLES;
 }
 
 int app_tmPoint(app_timemap_t *m, double c, uint64_t h)
@@ -83,19 +84,23 @@ int app_tmPoint(app_timemap_t *m, double c, uint64_t h)
 		m->hist[m->nhist].h = h;
 		m->nhist++;
 	}
+	/* hist[0] stays the newest point at least a window old, if there is one: the start of the rate's span (E32) */
 	unsigned old = 0;
-	while (old + 1u < m->nhist && (double)(h - m->hist[old].h) > window)
+	while (old + 1u < m->nhist && (double)(h - m->hist[old + 1u].h) >= window)
 		old++;
 	if (old)
 	{
 		memmove(m->hist, m->hist + old, (m->nhist - old) * sizeof m->hist[0]);
 		m->nhist -= old;
 	}
-	const double span = (double)(h - m->hist[0].h);
+	const double age = (double)(h - m->hist[0].h);
+	m->rate = age >= window ? (c - m->hist[0].c) / age : 0.0;
+	const unsigned from = m->nhist > 1u && age > window ? 1u : 0u;	/* the slope's window is at most 2 s */
+	const double span = (double)(h - m->hist[from].h);
 	if (span >= window / 8.0)
 	{
 		/* the drift of the device's clock against the host's; a wild value keeps the nominal slope */
-		const double s = (c - m->hist[0].c) / span;
+		const double s = (c - m->hist[from].c) / span;
 		m->slope = fabs(s / m->nominal - 1.0) <= 0.01 ? s : m->nominal;
 	}
 	return off;
