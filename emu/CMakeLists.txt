@@ -338,6 +338,15 @@ add_library(emu_app_units OBJECT ${EMU_APP_UNIT_SOURCES})
 target_include_directories(emu_app_units PUBLIC "${EMU_APP_DIR}/engine" "${EMU_DIR}/core" "${EMU_DIR}/common")
 target_compile_options(emu_app_units PRIVATE ${EMU_APP_FLAGS})
 
+# the firmware thread's code (plan Task 4); app_fw.c alone sees firmware headers (E12)
+add_library(emu_app_engine OBJECT "${EMU_APP_DIR}/engine/app_engine.c")
+target_include_directories(emu_app_engine PUBLIC "${EMU_APP_DIR}/engine" "${EMU_DIR}/core")
+target_compile_options(emu_app_engine PRIVATE ${EMU_APP_FLAGS})
+add_library(emu_app_fw OBJECT "${EMU_APP_DIR}/engine/app_fw.c")
+target_link_libraries(emu_app_fw PRIVATE emu_fw_headers)
+target_include_directories(emu_app_fw PRIVATE "${EMU_APP_DIR}/engine" "${EMU_DIR}/core")
+target_compile_options(emu_app_fw PRIVATE -Wall -Wextra -Werror)
+
 # The options of the app's tests: no emu_fw_headers, whose section define must not reach
 # Apple's headers (spec 3.4)
 add_library(emu_app_test_options INTERFACE)
@@ -377,6 +386,8 @@ emu_add_app_test(test_app_timemap IDS M18_map_wall M18_map_drift M18_map_jump M1
     M18_reanchor_order)
 emu_add_app_test(test_app_midi FRAMEWORKS CoreMIDI CoreFoundation IDS M18_midi_split M18_midi_usb_cin
     M18_midi_usb_transfer M18_midi_bytes M18_midi_din_asm M18_midi_usb_out M18_eventlist)
+emu_add_app_test(test_app_engine ENGINE IDS M18_render_mix M18_render_underrun R4_engine_splash R4_engine_ring
+    R4_engine_wall R4_engine_card R4_engine_generator)
 
 # The temporary folders: every test above gets TMPDIR = a folder of this build,
 # which emu_tmp_setup empties first and emu_tmp_clean checks last. A test removes
