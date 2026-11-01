@@ -48,7 +48,7 @@ vol1 = 100
 
 # Drum 2: the bed. A low sine on F#1 a little sharp (about 47 Hz), on the off-beat
 # 8ths: it starts as the kick fades, holds, and its decay ends at the next kick
-# (vol_slope 127 is a gate), so it is gone 50 ms after a missing kick
+# (vol_slope 120: nearly a gate), so it is gone 50 ms after a missing kick
 osc_wave_drum2 = 0
 coarse2 = 30
 fine2 = 100           # about 0.3 semitone up: 47 Hz

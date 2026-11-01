@@ -27,7 +27,7 @@ shuffle = 24
 pattern = album
 
 # Drum 1: the kick. A sine on G1 a little flat (about 48.5 Hz), a pitch drop from
-# about 5.7x fitted to the reference: 280 Hz at the hit, 214 Hz at 10 ms, 171 at 20,
+# about 6x fitted to the reference: 280 Hz at the hit, 214 Hz at 10 ms, 171 at 20,
 # 120 at 40, 49 at 150 ms (a time constant of about 34 ms). No transient, no filter
 # and a lot of drive: the harmonics of a driven sine, still almost no click
 osc_wave_drum1 = 0
@@ -47,7 +47,7 @@ vol1 = 100
 
 # Drum 2: the bed. A low sine on F#1 a little flat (about 45.8 Hz), on the off-beat
 # 8ths: it starts as the kick fades, holds, and its decay ends at the next kick
-# (vol_slope 127 is a gate), so it is gone 50 ms after a missing kick
+# (vol_slope 120: nearly a gate), so it is gone 50 ms after a missing kick
 osc_wave_drum2 = 0
 coarse2 = 30
 fine2 = 41            # about 0.2 semitone down: 45.8 Hz

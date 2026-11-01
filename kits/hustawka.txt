@@ -38,7 +38,7 @@ mod_eg1 = 58          # its length
 pitch_slope1 = 15     # its curve: fast at first, then a long glide down
 fmamnt1 = 0
 veloa1 = 0
-velod1 = 20           # the body: -3 dB at about 190 ms, -6 dB at about 225 ms
+velod1 = 20           # the body: -6 dB at about 215 ms
 vol_slope1 = 106      # held, then a quick fall
 trans1_vol = 0
 filter_type_1 = 7     # off
@@ -130,7 +130,7 @@ vol6 = 127
 pan6 = 64
 
 # FX: the slot off. The reverb only takes the bed (Drum 2): dark (ton 5), about
-# 2.5 s, no predelay, ducked fully by Drum 1 (rumble: dck dr1, ddp 127). It sounds
+# 3.7 s, no predelay, ducked fully by Drum 1 (rumble: dck dr1, ddp 127). It sounds
 # only between the kicks and when they stop. The reverb runs at a provisional
 # sample rate (half rate until the CPU reading on the device): check this kit again
 # when that changes
