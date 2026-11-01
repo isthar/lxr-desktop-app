@@ -1,0 +1,150 @@
+# PULS: groove techno, the reference album's median. A long near-sine kick that
+# falls from about 260 Hz to about 50 Hz, a dark tonal bed that comes back after
+# each kick, noise hats on every 16th with the off-beat 8ths loud, a 16th bleep
+# figure on D and a quiet noise hit on 2 and 4.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#
+# Built by tools/kit_build.py: NAME = VALUE, the values as the menu stores them
+# (emu/render/render_params.h names them). Menus count from 0: osc wave 0 Sin 1 Tri
+# 2 Saw 3 Rec 4 Noi 5 PWM; filter 0 LP 1 HP 2 BP 3 UBP 4 Nch 5 Pek 6 LP2 7 off;
+# out 0 St1 ... 6 FX; transient 0 Snp 1 Ofs 2 Clk 3 Ck2 4 Tik 5 Kik 6 Rim 7 Drp
+# 8 Hat 9 Clp 10 Kk2 11 Snr 12 Tom 13 Sp2. Notes: coarse 31 is G1 (49 Hz), +12 an
+# octave; fine 64 is in tune, 0 and 127 about half a semitone down and up.
+#
+# The demo plays the album pattern (tools/kit_build.py ALBUM_PATTERN) at 142 BPM
+# with shuffle 18: the even 16ths 10 ms late. The shuffle is the pattern's, not
+# the kit's: set it on the pattern.
+
+name = PULS
+slot = 56
+bpm = 142
+shuffle = 18
+pattern = album
+
+# Drum 1: the kick. A sine on G#1 a little flat (about 50.7 Hz), a pitch drop from
+# about 5.2x fitted to the reference: 260 Hz at the hit, 205 Hz at 10 ms, 160 at 20,
+# 110 at 40, 51 at 150 ms (a time constant of about 32 ms). No transient, no filter
+# and a little drive: almost no click, a few % THD
+osc_wave_drum1 = 0
+coarse1 = 32
+fine1 = 14            # about 0.4 semitone down: 50.7 Hz
+modamnt1 = 50         # the pitch drop
+mod_eg1 = 58          # its length
+pitch_slope1 = 17     # its curve: fast at first, then a long glide down
+fmamnt1 = 0
+veloa1 = 0
+velod1 = 19           # the body: -3 dB at about 170 ms, -6 dB at about 210 ms
+vol_slope1 = 104      # held, then a quick fall
+trans1_vol = 0
+filter_type_1 = 7     # off
+drive1 = 37           # the harmonics: about 6 % THD
+vol1 = 100
+
+# Drum 2: the bed. A low sine on F#1 a little sharp (about 47 Hz), on the off-beat
+# 8ths: it starts as the kick fades, holds, and its decay ends at the next kick
+# (vol_slope 127 is a gate), so it is gone 50 ms after a missing kick
+osc_wave_drum2 = 0
+coarse2 = 30
+fine2 = 100           # about 0.3 semitone up: 47 Hz
+modamnt2 = 0
+fmamnt2 = 0
+veloa2 = 0
+velod2 = 16
+vol_slope2 = 120
+trans2_vol = 0
+filter_type_2 = 7
+vol2 = 64             # about 4.4 dB under the kick
+
+# Drum 3: the figure. A sine on D4 with a little FM and a short blip of pitch, an
+# exponential decay; the step volumes give the accents
+osc_wave_drum3 = 0
+coarse3 = 62          # D4
+modamnt3 = 6
+mod_eg3 = 12
+fmamnt3 = 20
+fm_freq3 = 76         # the modulator an octave up: hollow, still one pitch
+mod_wave_drum3 = 0
+veloa3 = 0
+velod3 = 7
+vol_slope3 = 30
+trans3_vol = 0
+filter_type_3 = 7
+volume_mod_on_off3 = 1
+vol3 = 34
+pan3 = 64
+
+# Snare: the quiet noise hit on 2 and 4. Band-passed noise, a very short decay
+osc_wave_snare = 0
+mix1 = 104            # mostly noise, a little of the sine
+noise_freq1 = 60
+modamnt4 = 0
+veloa4 = 0
+velod4 = 7
+vol_slope4 = 30
+repeat4 = 0
+filter_type_4 = 2     # BP
+filter_freq_4 = 76    # about 2 kHz
+reso_4 = 10
+snare_distortion = 20
+trans4_vol = 0
+vol4 = 127
+
+# Cymbal: the ghosts on the even 16ths. Noise, a darker HP than the hat, short
+wave1_cym = 4         # Noi
+mod_osc_gain1_cym = 0
+mod_osc_gain2_cym = 0
+filter_type_5 = 1     # HP
+filter_freq_5 = 97
+reso_5 = 0
+veloa5 = 0
+velod5 = 4
+cymbal_distortion = 0
+volume_mod_on_off5 = 1
+vol5 = 28
+pan5 = 64
+
+# Hihat: noise through HP 101 (a centroid of about 8.3 kHz). The closed hat on the
+# quarters, the open hat short (-10 dB at about 30 ms) on the off-beat 8ths
+wave1_hh = 4          # Noi
+mod_osc_gain1 = 0
+mod_osc_gain2 = 0
+coarse6 = 90
+filter_type_6 = 1     # HP
+filter_freq_6 = 101
+reso_6 = 0
+veloa6 = 0
+velod6_closed = 4
+velod6_open = 14
+vol_slope6 = 8
+hat_distortion = 0
+volume_mod_on_off6 = 1
+vol6 = 127
+pan6 = 64
+
+# FX: off. No reverb, so nothing here waits on the reverb's sample rate
+fx_type = 0
+rev_level = 0
+
+# Modulation (target numbers as in wir.txt: modTargets in Core/Src/menu/Cc2Text.c,
+# 0 off; sync 1 is 4/1, 10 a 16th; wave 1 tri, 5 random, a new value each cycle).
+# LFO 6: a random pan for each 16th of the hat: the top gets the reference's width
+# (side about 5.7 dB under mid above 6 kHz) while the hits stay on the grid
+voice_lfo6 = 6
+target_lfo6 = 222     # pan6
+wave_lfo6 = 5         # random
+sync_lfo6 = 10        # a 16th
+retrigger_lfo6 = 0
+amount_lfo6 = 127
+# LFO 3: the figure's FM index moves over 4 bars: brighter, then rounder
+voice_lfo3 = 3
+target_lfo3 = 91      # fmamnt3
+wave_lfo3 = 1         # tri
+sync_lfo3 = 1         # 4/1
+retrigger_lfo3 = 0
+amount_lfo3 = 16      # fmamnt3 4-36
