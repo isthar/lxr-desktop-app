@@ -3321,13 +3321,13 @@
     },
     {
       "n": 477,
-      "at": "2026-11-01 07:05",
+      "at": "2026-11-01 06:50",
       "text": "Pomiar albumu gotowy (8 utworów, raport i szablony w scratchpadzie, nic w repo). Sygnatura: 142–144 BPM. Stopa prawie sinusoidalna, wysokość spada od ok. 263 Hz ze stałą 32 ms do ok. 50,6 Hz, długie ciało (−6 dB przy 150–235 ms), prawie bez kliku. Rumble to ciemna, mono warstwa 44–49 Hz tylko 4–6,5 dB pod stopą, duckowana: wraca ok. 245 ms po stopie i trzyma do następnej. Hi-haty w szesnastkach z akcentem na offbeatach, shuffle od prostego do 26 ms (mediana 10 ms). Perkusja: tonalne figury szesnastkowe 220–590 Hz, bez mocnego backbeatu."
     },
     {
       "n": 478,
       "at": "2026-11-01 06:53",
-      "text": "Start agenta projektu kitów (gałąź kits): 4 kity w slotach 56–59 (mediana albumu; mocny shuffle i szeroka góra; proste haty z basowym bedem; przesterowana stopa). Stopa dopasowywana renderem firmware do szablonów z albumu. Bed na dwa sposoby: pogłos v0.4 duckowany stopą albo osobny głos; wybór według dopasowania. Dema w tempie i grooveie albumu. Stare kity w 60–63 bez zmian."
+      "text": "Start agenta projektu kitów (gałąź kits): 4 kity w slotach 56–59 (mediana albumu; mocny shuffle i szeroka góra; proste haty z basowym bedem; przesterowana stopa). Stopa dopasowywana renderem firmware do szablonów z albumu. Bed na dwa sposoby: pogłos v0.4 duckowany stopą albo osobny głos; wybór według dopasowania. Dema w tempie i groovie albumu. Stare kity w 60–63 bez zmian."
     }
   ]
 }
