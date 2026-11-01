@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-10-31 22:50",
+    "updated": "2026-11-01 05:24",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Przerwa: v0.5 (M16) i kity WIR/MGLA/RDZA/IGLA (gałąź kits) gotowe",
+    "focus": "Przerwa: kod v0.4, v0.5 i kity gotowy; czeka na Twoje testy (E8)",
     "branch": "timing-core",
-    "head": "0716879",
-    "next": "Twój odsłuch kitów i dem v0.5; H12 (pogłos v0.4), U27–U32 dla v0.5, A1–A12 w aplikacji, sesja testowa na LXR",
-    "updated_at": "2026-10-31T22:50:00+01:00",
+    "head": "0dd486d",
+    "next": "E8.1: sesja na v0.3 z H12 na początku; odsłuch kitów i dem v0.5; ASan (run_asan.sh); A1–A12 w aplikacji",
+    "updated_at": "2026-11-01T05:24:00+01:00",
     "now": ""
   },
   "epics": [
@@ -65,6 +65,13 @@
       "stage": "Etap 3",
       "title": "Efekty",
       "goal": "Reverb, echo zsynchronizowane z tempem, ambient, rumble — po pomiarach CPU na sprzęcie."
+    },
+    {
+      "id": "E8",
+      "order": 8,
+      "stage": "Testy i wydania",
+      "title": "Testy na LXR i wydania",
+      "goal": "Twoje sprawdzenia na urządzeniu i w aplikacji, potem wydania kolejnych wersji. Kod tych wersji jest gotowy w E4–E7."
     }
   ],
   "tasks": [
@@ -442,9 +449,9 @@
     {
       "id": "E5.5",
       "epic": "E5",
-      "status": "w toku",
-      "title": "Aplikacja LICHOMAT Emu: R4 (M14) i R5 (M15) gotowe w kodzie 31.10, scalone do v0.3 i v0.4; zostają Twoje A1–A12 w aplikacji",
-      "updated": "2026-10-31"
+      "status": "zrobione",
+      "title": "Aplikacja LICHOMAT Emu: R4 (M14) i R5 (M15), scalone do v0.3 i v0.4; Twoje A1–A12 w E8.4",
+      "updated": "2026-11-01"
     },
     {
       "id": "E5.6",
@@ -463,9 +470,9 @@
     {
       "id": "E6.1",
       "epic": "E6",
-      "status": "w toku",
-      "title": "Specyfikacja i plany etapu 2: szkic gotowy (docs/superpowers/specs/2026-10-29-stage2-draft.md); plany v0.2 (V1–V11) i v0.3 (P1–P9) gotowe i wykonane; plan v0.4 (atmosfera) czeka na odczyt CPU (H12)",
-      "updated": "2026-10-30"
+      "status": "zrobione",
+      "title": "Specyfikacja i plany etapu 2: szkic (docs/superpowers/specs/2026-10-29-stage2-draft.md), plany v0.2, v0.3, v0.4 i v0.5 napisane i wykonane",
+      "updated": "2026-11-01"
     },
     {
       "id": "E6.2",
@@ -519,16 +526,16 @@
     {
       "id": "E6.9",
       "epic": "E6",
-      "status": "w toku",
-      "title": "Filtr DJ na masterze: zrobione na gałęzi v0.4 (M13, 28abb29); wydanie po H12 i U20",
-      "updated": "2026-10-31"
+      "status": "zrobione",
+      "title": "Filtr DJ na masterze: w kodzie na gałęzi v0.4 (M13, 28abb29); testy na LXR i wydanie w E8.2",
+      "updated": "2026-11-01"
     },
     {
       "id": "E6.10",
       "epic": "E6",
-      "status": "w toku",
-      "title": "Wyzwalanie z dokładnością do próbki: zrobione na gałęzi v0.5 (M16, c7c6b33); wydanie po v0.4 i U27–U32",
-      "updated": "2026-10-31"
+      "status": "zrobione",
+      "title": "Wyzwalanie z dokładnością do próbki: w kodzie na gałęzi v0.5 (M16, c7c6b33); testy na LXR i wydanie w E8.3",
+      "updated": "2026-11-01"
     },
     {
       "id": "E6.11",
@@ -536,6 +543,13 @@
       "status": "zrobione",
       "title": "Slide dla Drum 1–3 (acid), znacznik w bicie 7 bajtu prawdopodobieństwa kroku (v0.3, M11)",
       "updated": "2026-10-30"
+    },
+    {
+      "id": "E6.12",
+      "epic": "E6",
+      "status": "zrobione",
+      "title": "Kity WIR, MGLA, RDZA i IGLA z modulacją LFO i velocity (gałąź kits, 6a5a723, bc606f6); renderer ustawia cele LFO i velocity (2938dbf); czekają na Twój odsłuch",
+      "updated": "2026-10-31"
     },
     {
       "id": "E7.1",
@@ -554,30 +568,65 @@
     {
       "id": "E7.3",
       "epic": "E7",
-      "status": "w toku",
-      "title": "Pogłos jako osobny efekt obok delaya: zrobione na gałęzi v0.4 (M13, 28abb29); wydanie po H12 i U20",
-      "updated": "2026-10-31"
+      "status": "zrobione",
+      "title": "Pogłos jako osobny efekt obok delaya: w kodzie na gałęzi v0.4 (M13, 28abb29); częstotliwość po H12, testy i wydanie w E8.2",
+      "updated": "2026-11-01"
     },
     {
       "id": "E7.4",
       "epic": "E7",
-      "status": "w toku",
-      "title": "Delay zsynchronizowany z tempem: zrobione na gałęzi v0.4 (M13, 28abb29); wydanie po H12 i U20",
-      "updated": "2026-10-31"
+      "status": "zrobione",
+      "title": "Delay zsynchronizowany z tempem: w kodzie na gałęzi v0.4 (M13, 28abb29); testy na LXR i wydanie w E8.2",
+      "updated": "2026-11-01"
     },
     {
       "id": "E7.5",
       "epic": "E7",
-      "status": "w toku",
-      "title": "Freeze: zrobione na gałęzi v0.4 (M13, 28abb29); wydanie po H12 i U20",
-      "updated": "2026-10-31"
+      "status": "zrobione",
+      "title": "Freeze: w kodzie na gałęzi v0.4 (M13, 28abb29); testy na LXR i wydanie w E8.2",
+      "updated": "2026-11-01"
     },
     {
       "id": "E7.6",
       "epic": "E7",
-      "status": "w toku",
-      "title": "Rumble: zrobione na gałęzi v0.4 (M13, 28abb29); wydanie po H12 i U20",
-      "updated": "2026-10-31"
+      "status": "zrobione",
+      "title": "Rumble: w kodzie na gałęzi v0.4 (M13, 28abb29); testy na LXR i wydanie w E8.2",
+      "updated": "2026-11-01"
+    },
+    {
+      "id": "E8.1",
+      "epic": "E8",
+      "status": "do zrobienia",
+      "title": "Ty: sesja testowa na v0.3, H12 najpierw, potem H1–H13 i U1–U19 (kolejność w docs/lichomat/test-session-v0.3.md)",
+      "updated": "2026-11-01"
+    },
+    {
+      "id": "E8.2",
+      "epic": "E8",
+      "status": "zablokowane",
+      "title": "v0.4: częstotliwość pogłosu według H12, U20, potem U21–U26 i wydanie; czeka na H12",
+      "updated": "2026-11-01"
+    },
+    {
+      "id": "E8.3",
+      "epic": "E8",
+      "status": "zablokowane",
+      "title": "v0.5: scalenie końca v0.4 (ponowny zapis G13–G15), U27–U32 i wydanie; czeka na E8.2",
+      "updated": "2026-11-01"
+    },
+    {
+      "id": "E8.4",
+      "epic": "E8",
+      "status": "do zrobienia",
+      "title": "Ty: A1–A12 w aplikacji LICHOMAT Emu",
+      "updated": "2026-11-01"
+    },
+    {
+      "id": "E8.5",
+      "epic": "E8",
+      "status": "zablokowane",
+      "title": "CI na GitHubie: build v0.4 w kolejce od 31.10, 00:11 UTC, bez nowych przebiegów; bez CI nie ma obrazów .img v0.4 i v0.5",
+      "updated": "2026-11-01"
     }
   ],
   "milestones": [
@@ -3261,6 +3310,11 @@
       "n": 473,
       "at": "2026-10-31 22:50",
       "text": "CI na GitHubie: obejrzałem stan. Repozytorium publiczne, workflowy aktywne; jeden przebieg build (v0.4, z 31.10 00:11 UTC) stoi w kolejce bez żadnego joba, a od tamtej pory żaden push nie utworzył przebiegu. Workflowy nie mają workflow_dispatch, więc nie da się ich uruchomić ręcznie. To problem po stronie GitHuba; blokuje pliki .img v0.4/v0.5 z CI (testy na LXR mają być na plikach z CI). H12 na v0.3 nie jest zablokowane. Przerwa: dalej czekam na odsłuch kitów i dem, ASan od właściciela, H12."
+    },
+    {
+      "n": 474,
+      "at": "2026-11-01 05:24",
+      "text": "Zadania uporządkowane po Twoim pytaniu o 60/73. „Zrobione” znaczy teraz wszędzie to samo: kod gotowy i sprawdzony w emulatorze, tak jak już było przy E6.3, E6.6 i E6.7. Dlatego E5.5, E6.1, E6.9, E6.10 i E7.3–E7.6 są zrobione. Brakowało zadania na kity, więc doszło E6.12. Twoje testy na LXR i wydania są w nowym epiku E8 (E8.1–E8.5) jako osobne zadania: widać, co czeka na Ciebie i co blokuje H12 i CI. Wynik: 69/79, nic w toku."
     }
   ]
 }
