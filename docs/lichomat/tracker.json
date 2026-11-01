@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-01 08:08",
+    "updated": "2026-11-01 08:18",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Kity PULS/HUSTAWKA/PROSTO/PRZESTER gotowe; czekają na Twój odsłuch",
     "branch": "timing-core",
-    "head": "0bfb283",
+    "head": "57f95ee",
     "next": "Odsłuch nowych kitów (kits/demo/puls, hustawka, prosto, przester); ASan w zwykłym Terminalu; H12",
-    "updated_at": "2026-11-01T08:08:00+01:00",
-    "now": "Przebudowa drzew testów v0.5 kompilatorem z CLT 26.6 i przebieg ASan"
+    "updated_at": "2026-11-01T08:18:00+01:00",
+    "now": "Ponowne testy emulatora v0.5 (UBSan i ASan) po zmianie nazwy dla M21"
   },
   "epics": [
     {
@@ -3385,6 +3385,11 @@
       "n": 488,
       "at": "2026-11-01 08:08",
       "text": "Command Line Tools zaktualizowane do 26.6 (Apple clang 21.0.0). Biblioteka ASan startuje, także w sandboxie: próbny program łapie przepełnienie bufora. Buduję od nowa drzewa testów v0.5 (host i emulator, UBSan i ASan) nowym kompilatorem; najpierw ostrzeżenia i nagrania wzorcowe, potem ASan. Testy puszczam sam."
+    },
+    {
+      "n": 489,
+      "at": "2026-11-01 08:18",
+      "text": "ASan na v0.5 nowym kompilatorem: host 114/114, emulator 299/301, zero błędów pamięci i zero UB. Testy pod UBSan: host 114/114, emulator 329/329, nagrania wzorcowe bez zmian, 0 ostrzeżeń w czterech drzewach. Dwa testy, które padły, to bramka licencyjna M21: ASan zostawia w binarce nazwy zmiennych globalnych, a nasza zmiana nazwy time z graphic.c na lxr_graphic_time ma w sobie „lxr”. Zmieniam ją na fw_graphic_time i poprawiam komentarz w emu/CMakeLists.txt (to nie sandbox, tylko CLT 16.4 na macOS 26); testy obu drzew emulatora lecą jeszcze raz."
     }
   ]
 }
