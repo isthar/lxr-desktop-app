@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-01 07:32",
+    "updated": "2026-11-01 07:35",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Kity w stylu BCCO / Mutual Rytm: projekt według pomiaru albumu",
     "branch": "timing-core",
-    "head": "0210928",
+    "head": "0c749bf",
     "next": "E8.1: sesja na v0.3 z H12 na początku; odsłuch kitów i dem v0.5; ASan (run_asan.sh); A1–A12 w aplikacji",
-    "updated_at": "2026-11-01T07:32:00+01:00",
+    "updated_at": "2026-11-01T07:35:00+01:00",
     "now": "Agent projektuje i dopasowuje 4 kity w stylu BCCO / Mutual Rytm (gałąź kits)"
   },
   "epics": [
@@ -3338,6 +3338,16 @@
       "n": 480,
       "at": "2026-11-01 07:32",
       "text": "kits 0210928: kit PULS w slocie 56, mediana albumu. Stopa dopasowana pomiarem: 262 Hz opada ze stałą 33 ms do 49 Hz, −6 dB przy 214 ms, THD 6% (cel: 263 Hz, 32 ms, 50,6 Hz, 150–235 ms, 3–8%). Bed to Drum 2: sinus 47 Hz na offbeatowych ósemkach, gaśnie przy następnej stopie; 4,2 dB pod stopą, wraca po 255 ms (cel 245), −23 dB 50 ms po brakującej stopie. Haty z szumu z akcentami na offbeatach, duchy na Cymbalu, shuffle 18 = 10 ms. Figura D4 na Drum 3, cichy szum na 2 i 4. Demo 142 BPM w kits/demo/puls.wav."
+    },
+    {
+      "n": 481,
+      "at": "2026-11-01 07:45",
+      "text": "ASan: testy wiszą przy starcie, bo uruchomione przez ! działają w sandboxie Claude Code. Runtime ASan blokuje się na własnej blokadzie przy inicjalizacji pamięci cienia, zanim ruszy nasz kod; komentarz w emu/CMakeLists.txt to opisuje, a ja i tak podałem złe polecenie. Właściciel zatrzymuje przebieg i puszcza skrypt w zwykłym Terminalu. UBSan był już w każdym zwykłym przebiegu testów."
+    },
+    {
+      "n": 482,
+      "at": "2026-11-01 07:35",
+      "text": "kits 0c749bf: kit HUSTAWKA w slocie 57, strona albumu z mocnym shuffle. Shuffle 45 przy 143 BPM: parzyste szesnastki 25 ms później (cel 23–26 ms). Stopa jak w PULS: 242 Hz do 47 Hz, stała 33 ms. Bed: bramkowany sinus Drum 2 48,4 Hz plus ciemny pogłos duckowany przez Drum 1; wraca później (310 ms) i trwa, gdy stopa milknie, jak w utworach 5 i 7. Szeroka góra z losowej panoramy hatów i duchów (side 3,9 dB pod mid). Figura G4 na Drum 3."
     }
   ]
 }
