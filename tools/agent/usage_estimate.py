@@ -5,8 +5,8 @@
 The meter itself can't be read from here. The script sums an API-price-weighted cost of every
 assistant message (deduplicated by message id) in ~/.claude/projects/**/*.jsonl since the weekly
 reset. The owner's readings of the meter calibrate it: the cost between the last reading and the
-latest earlier one with a lower percent gives the cost of one percent, and the estimate is the last
-reading plus the cost since it.
+latest earlier one at least 5 percent lower gives the cost of one percent, and the estimate is the
+last reading plus the cost since it.
 The cost before the first reading does not scale the same way (2026-10-27: 19% at 161M units,
 then 15 more points for 44M), so only the latest stretch is used. Usage outside Claude Code on
 this Mac makes the estimate run high, which errs on the safe side.
@@ -30,6 +30,7 @@ READINGS = [                     # the owner's readings of the weekly meter
     ("2026-10-31T10:49:00Z", 65.0),
     ("2026-10-31T21:29:00Z", 74.0),
     ("2026-11-01T04:30:00Z", 74.0),
+    ("2026-11-01T05:43:00Z", 75.0),
 ]
 for a in sys.argv[1:]:
     if a.startswith("--reading="):
@@ -85,16 +86,17 @@ def cost_until(t):
 
 
 total = sum(c for _, c in seen.values())
-# The rate comes from the last reading and the latest earlier one with a lower percent: the meter
-# shows whole percents, so two readings can be equal with work done between them.
+# The rate comes from the last reading and the latest earlier one at least MIN_SPAN percent lower
+# (else the lowest): the meter shows whole percents, so over one or two points its rounding alone
+# can halve or double the rate (74% then 75% 73 minutes later gave 4.1M a percent, not about 8M).
+MIN_SPAN = 5
 t1, p1 = READINGS[-1]
 c1 = cost_until(ts(t1))
-for t0, p0 in reversed(READINGS[:-1]):
-    c0 = cost_until(ts(t0))
-    if p0 < p1 and c0 < c1:
-        break
-else:
+earlier = [(t0, p0) for t0, p0 in READINGS[:-1] if p0 < p1 and cost_until(ts(t0)) < c1]
+if not earlier:
     sys.exit("no earlier reading gives a rate")
+t0, p0 = next((r for r in reversed(earlier) if r[1] <= p1 - MIN_SPAN), earlier[0])
+c0 = cost_until(ts(t0))
 per_pct = (c1 - c0) / (p1 - p0)
 print(f"cost units since the reset: {total / 1e6:.1f}M ({len(seen)} messages)")
 print(f"one percent is about {per_pct / 1e6:.2f}M cost units (between the readings of {t0} and {t1})")
