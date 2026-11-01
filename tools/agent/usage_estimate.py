@@ -4,8 +4,9 @@
 
 The meter itself can't be read from here. The script sums an API-price-weighted cost of every
 assistant message (deduplicated by message id) in ~/.claude/projects/**/*.jsonl since the weekly
-reset. The owner's readings of the meter calibrate it: the cost between the last two readings
-gives the cost of one percent, and the estimate is the last reading plus the cost since it.
+reset. The owner's readings of the meter calibrate it: the cost between the last reading and the
+latest earlier one with a lower percent gives the cost of one percent, and the estimate is the last
+reading plus the cost since it.
 The cost before the first reading does not scale the same way (2026-10-27: 19% at 161M units,
 then 15 more points for 44M), so only the latest stretch is used. Usage outside Claude Code on
 this Mac makes the estimate run high, which errs on the safe side.
@@ -84,10 +85,16 @@ def cost_until(t):
 
 
 total = sum(c for _, c in seen.values())
-(t0, p0), (t1, p1) = READINGS[-2], READINGS[-1]
-c0, c1 = cost_until(ts(t0)), cost_until(ts(t1))
-if p1 <= p0 or c1 <= c0:
-    sys.exit("the last two readings give no rate")
+# The rate comes from the last reading and the latest earlier one with a lower percent: the meter
+# shows whole percents, so two readings can be equal with work done between them.
+t1, p1 = READINGS[-1]
+c1 = cost_until(ts(t1))
+for t0, p0 in reversed(READINGS[:-1]):
+    c0 = cost_until(ts(t0))
+    if p0 < p1 and c0 < c1:
+        break
+else:
+    sys.exit("no earlier reading gives a rate")
 per_pct = (c1 - c0) / (p1 - p0)
 print(f"cost units since the reset: {total / 1e6:.1f}M ({len(seen)} messages)")
 print(f"one percent is about {per_pct / 1e6:.2f}M cost units (between the readings of {t0} and {t1})")
