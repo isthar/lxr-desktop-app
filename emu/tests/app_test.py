@@ -226,7 +226,7 @@ def R4_gui_clash(t):
     firmware, rest = listed(t.a.firmware), listed(t.a.objects)
     check(len(firmware) >= 50 and len(rest) >= 20, 'the object lists are short: %d firmware, %d others' % (len(firmware), len(rest)))
     defined = nm(firmware, '-g', '-U')
-    check('_lxr_graphic_time' in defined, 'the firmware does not define _lxr_graphic_time: the rename of graphic.c\'s time is gone')
+    check('_fw_graphic_time' in defined, 'the firmware does not define _fw_graphic_time: the rename of graphic.c\'s time is gone')
     check('_time' not in defined, 'the firmware defines _time, which libc\'s time() would bind to')
     clash = sorted(nm(rest, '-u') & defined)
     check(not clash, 'the app refers to names that the firmware defines: ' + ', '.join(clash))
