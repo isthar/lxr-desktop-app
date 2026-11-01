@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-01 05:35",
+    "updated": "2026-11-01 05:56",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Kity w stylu BCCO / Mutual Rytm: pomiar albumu referencyjnego",
     "branch": "timing-core",
-    "head": "7fbc723",
+    "head": "c61e78d",
     "next": "E8.1: sesja na v0.3 z H12 na początku; odsłuch kitów i dem v0.5; ASan (run_asan.sh); A1–A12 w aplikacji",
-    "updated_at": "2026-11-01T05:35:00+01:00",
+    "updated_at": "2026-11-01T05:56:00+01:00",
     "now": "Agent mierzy album Disguised – Nightrun (perkusja i groove)"
   },
   "epics": [
@@ -454,13 +454,6 @@
       "updated": "2026-11-01"
     },
     {
-      "id": "E5.6",
-      "epic": "E5",
-      "status": "do zrobienia",
-      "title": "Wydanie firmware v0.2 ze zmianami F1–F12 i F6b, po Twoich testach v0.1 (R6)",
-      "updated": "2026-10-29"
-    },
-    {
       "id": "E5.7",
       "epic": "E5",
       "status": "zrobione",
@@ -478,8 +471,8 @@
       "id": "E6.2",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Odłożone: szablony swingu (wystarczy shuffle i lekki humanize)",
-      "updated": "2026-10-29"
+      "title": "v0.6: szablony groove (przesunięcie każdego kroku) z pomiaru albumu referencyjnego; po resecie limitu (2.11, 22:00)",
+      "updated": "2026-11-01"
     },
     {
       "id": "E6.3",
@@ -492,15 +485,15 @@
       "id": "E6.4",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Odłożone: pełny mikrotiming i format PatV04",
-      "updated": "2026-10-29"
+      "title": "v0.6: pełny mikrotiming kroku i format PatV04; najpierw budżet pamięci (v0.5 zostawia 1 860 B DTCM+RAM); po resecie limitu",
+      "updated": "2026-11-01"
     },
     {
       "id": "E6.5",
       "epic": "E6",
       "status": "do zrobienia",
-      "title": "Odłożone: nagrywanie z zachowaniem mikrotimingu",
-      "updated": "2026-10-29"
+      "title": "v0.6: nagrywanie z zachowaniem mikrotimingu, po E6.4",
+      "updated": "2026-11-01"
     },
     {
       "id": "E6.6",
@@ -597,7 +590,7 @@
       "id": "E8.1",
       "epic": "E8",
       "status": "do zrobienia",
-      "title": "Ty: sesja testowa na v0.3, H12 najpierw, potem H1–H13 i U1–U19 (kolejność w docs/lichomat/test-session-v0.3.md)",
+      "title": "Ty: sesja testowa na v0.3, H12 najpierw, potem H1–H13 i U1–U19 (kolejność w docs/lichomat/test-session-v0.3.md); potem wydanie v0.3, które zawiera v0.1 i v0.2 (zamiast osobnego wydania v0.2, dawne E5.6)",
       "updated": "2026-11-01"
     },
     {
@@ -3320,6 +3313,11 @@
       "n": 475,
       "at": "2026-11-01 05:35",
       "text": "Twoja ocena kitów: naiwne, ale zostają. Nowe kity w stylu BCCO / Mutual Rytm według albumu Disguised – Nightrun. Pierwszy krok: agent mierzy album (stopa: wysokość i jej spadek, wybrzmienie, klik; rumble między stopami; hi-haty na siatce 16 kroków z shuffle; perkusja; miks). Pracuje tylko w scratchpadzie: nic z albumu nie trafia do publicznego repo. Potem projekt kitów w nowych slotach 56–59, WIR/MGLA/RDZA/IGLA zostają w 60–63. Usage 74%."
+    },
+    {
+      "n": 476,
+      "at": "2026-11-01 05:56",
+      "text": "Plan na resztę E5–E7. E5: zostało tylko wydanie v0.2 (E5.6). Proponuję zamiast niego wydać od razu v0.3, bo zawiera v0.1 i v0.2, a jedna sesja na v0.3 sprawdza wszystko; wydanie jest teraz w E8.1. E7: zostało tylko H12 (E7.1), Twój odczyt; reszta jest w kodzie, częstotliwość pogłosu ustawię po H12. E6: szablony groove, pełny mikrotiming z PatV04 i nagrywanie z mikrotimingiem odłożyłem 29.10. Wracają jako v0.6 po resecie limitu (poniedziałek 2.11, 22:00): v0.5 gra już każde przesunięcie w jego próbce, a pomiar albumu da prawdziwe szablony. Do 80% w tym tygodniu robię kity."
     }
   ]
 }
