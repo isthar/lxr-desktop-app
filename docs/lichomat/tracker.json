@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-01 07:39",
+    "updated": "2026-11-01 07:41",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Kity w stylu BCCO / Mutual Rytm: projekt według pomiaru albumu",
     "branch": "timing-core",
-    "head": "ef5fb1a",
+    "head": "5f850e0",
     "next": "E8.1: sesja na v0.3 z H12 na początku; odsłuch kitów i dem v0.5; ASan (run_asan.sh); A1–A12 w aplikacji",
-    "updated_at": "2026-11-01T07:39:00+01:00",
+    "updated_at": "2026-11-01T07:41:00+01:00",
     "now": "Agent projektuje i dopasowuje 4 kity w stylu BCCO / Mutual Rytm (gałąź kits)"
   },
   "epics": [
@@ -3353,6 +3353,11 @@
       "n": 483,
       "at": "2026-11-01 07:39",
       "text": "kits ef5fb1a: kit PROSTO w slocie 58, prosta strona albumu. Haty bez shuffle przy 143 BPM. Stopa dopasowana do wyższych i krótszych stóp: 268 Hz opada ze stałą 34 ms do 49 Hz, −6 dB przy 161 ms. Bed jak nuta basu: piła na E2 (83 Hz) przez filtr dolnoprzepustowy, na offbeatowych ósemkach, 5,9 dB pod stopą, ucięta przed każdą stopą, −22 dB 50 ms po brakującej stopie. Figura B3 na Drum 3."
+    },
+    {
+      "n": 484,
+      "at": "2026-11-01 07:41",
+      "text": "kits 5f850e0: kit PRZESTER w slocie 59, przesterowana strona albumu. Stopa: 277 Hz opada ze stałą 35 ms do 46 Hz, przester do THD 14% (cel ok. 14%), −6 dB przy 201 ms. Ciemny bed 45,8 Hz na offbeatowych ósemkach, 4,8 dB pod stopą. Węższa góra (side 9,5 dB pod mid, cel 9–12 dB), shuffle 24 = 13 ms przy 142 BPM, figura A3 na Drum 3. Wszystkie 4 nowe kity gotowe; agent kończy README."
     }
   ]
 }
