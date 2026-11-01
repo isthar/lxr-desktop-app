@@ -7,6 +7,9 @@ KIT is a spec kits/KIT.txt; without KITs, every kits/*.txt. A spec holds lines
 NAME = VALUE, a '#' starts a comment:
 - 'name' is the kit's name on the display, 1-8 characters A-Z 0-9 _;
 - 'slot' is the kit slot 0-63 the file is for;
+- 'bpm', 'shuffle' and 'pattern' set the demo, not the kit: its tempo (default 128),
+  the sequencer's shuffle 0-127 (PAR_SHUFFLE, a pattern setting; default: not set),
+  and its pattern, 'classic' (PATTERN, the default) or 'album' (ALBUM_PATTERN);
 - every other NAME is a parameter of lichomat-render --param (emu/render/
   render_params.h), VALUE 0-255 as the menu stores it (the menu clamps it).
 
@@ -23,12 +26,14 @@ For each kit:
    project again: the firmware's kit 0 must equal the file byte for byte, and
    every parameter of the spec must read back at its place in the file.
 3. the demo (unless --no-demo): the demo card's pattern 0 with kit 0, 8 bars at
-   128 BPM, trg smp, out 1 as a stereo WAV in kits/demo/KIT.wav; then the
+   the spec's tempo (128 BPM) and shuffle, trg smp, out 1 as a stereo WAV in
+   kits/demo/KIT.wav; then the
    measurements of the demo and of each voice alone (the faders of the others
    at 0), in plain Python: peak, RMS, the kick's fundamental, each voice's decay.
 
-The pattern card is made once per run: an init card with the demo pattern
-(PATTERN below) put in by the step buttons and saved as pattern 0.
+A pattern card is made once per run and pattern: an init card with the demo
+pattern (PATTERN or ALBUM_PATTERN below) put in by the step buttons and saved as
+pattern 0.
 
 Copyright (C) 2026 Tomasz Krzywicki
 SPDX-License-Identifier: GPL-3.0-only
@@ -52,9 +57,8 @@ import wave
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KITS = os.path.join(ROOT, 'kits')
-BPM = 128
+BPM = 128				# the demo's default tempo
 BARS = 8
-STEP_S = 60.0 / BPM / 4			# one 16th
 
 # The demo pattern, 16 steps: voice -> [(step, volume, condition)]. Volume 0-127 (None: the
 # step's default); condition 101..115 as in Core/Inc/Preset/SeqStepTypes.h (102 2:2, 109 4:4).
@@ -70,6 +74,25 @@ PATTERN = {
         (16, 55, None)],
     7: [(3, 100, None), (7, 90, None), (11, 100, None), (15, 90, None)],			# open hat, off-beats
 }
+# The album-style demo pattern ('pattern = album'), from the step tables of the reference
+# measurements: the kick 4/4; the bed (Drum 2) on the off-beat 8ths; a tonal 16th figure (Drum 3)
+# with accents on the last 16th of each beat; a quiet noise hit on 2 and 4 (Snare); the hats on
+# every 16th: the closed hat (track 6) on the quarters at 40 (-10 dB re 127), the open hat (track
+# 7) on the off-beat 8ths at 127, and the even 16ths, the swung ghosts, on the Cymbal at 20 and 28
+# (-16 and -13 dB). The volumes need the voice's volume_mod_on_off at 1.
+ALBUM_PATTERN = {
+    1: [(1, None, None), (5, None, None), (9, None, None), (13, None, None)],			# kick 4/4
+    2: [(3, None, None), (7, None, None), (11, None, None), (15, None, None)],			# the bed
+    3: [(3, 70, None), (4, 110, None), (7, 64, None), (8, 110, None), (11, 70, None),	# the figure
+        (12, 110, None), (14, 64, None), (16, 110, None)],
+    4: [(5, None, None), (13, None, None)],											# noise on 2 and 4
+    5: [(2, 20, None), (4, 28, None), (6, 20, None), (8, 28, None), (10, 20, None),	# the ghosts,
+        (12, 28, None), (14, 20, None), (16, 28, None)],								# even 16ths
+    6: [(1, 40, None), (5, 40, None), (9, 40, None), (13, 40, None)],				# closed hat
+    7: [(3, 127, None), (7, 127, None), (11, 127, None), (15, 127, None)],			# open hat
+}
+PATTERNS = {'classic': PATTERN, 'album': ALBUM_PATTERN}
+DEMO_KEYS = {'bpm': (40, 255), 'shuffle': (0, 127)}
 VOICE_NAMES = {1: 'Drum 1', 2: 'Drum 2', 3: 'Drum 3', 4: 'Snare', 5: 'Cymbal', 6: 'Hihat'}
 
 NAME = re.compile(r'^[A-Z0-9_]{1,8}$')
@@ -83,8 +106,9 @@ def fail(what):
 
 
 def read_spec(path):
-    """(name, slot, [(param, value)]) of a spec"""
+    """(name, slot, [(param, value)], demo) of a spec; demo: {'bpm', 'shuffle', 'pattern'}"""
     name, slot, params = None, None, []
+    demo = {'bpm': BPM, 'shuffle': None, 'pattern': 'classic'}
     with open(path) as f:
         for n, line in enumerate(f, 1):
             line = line.split('#', 1)[0].strip()
@@ -98,6 +122,15 @@ def read_spec(path):
                 if not NAME.match(value):
                     fail('%s:%d: the name %s is not 1-8 of A-Z 0-9 _' % (path, n, value))
                 name = value
+            elif key == 'pattern':
+                if value not in PATTERNS:
+                    fail('%s:%d: the pattern %s is not one of %s' % (path, n, value, ', '.join(sorted(PATTERNS))))
+                demo['pattern'] = value
+            elif key in DEMO_KEYS:
+                lo, hi = DEMO_KEYS[key]
+                if not value.isdigit() or not lo <= int(value) <= hi:
+                    fail('%s:%d: %s is not a number %d-%d' % (path, n, value, lo, hi))
+                demo[key] = int(value)
             elif not value.isdigit() or int(value) > (63 if key == 'slot' else 255):
                 fail('%s:%d: %s is not a number 0-%d' % (path, n, value, 63 if key == 'slot' else 255))
             elif key == 'slot':
@@ -106,7 +139,7 @@ def read_spec(path):
                 params.append((key, int(value)))
     if name is None or slot is None:
         fail('%s: no name or no slot' % path)
-    return name, slot, params
+    return name, slot, params, demo
 
 
 class Renderer:
@@ -148,10 +181,11 @@ def one(pattern):
     return found[0]
 
 
-def pattern_card(r):
-    """an init card whose pattern 0 is PATTERN"""
+def pattern_card(r, pattern=None, tag='pattern'):
+    """an init card whose pattern 0 is pattern (default PATTERN)"""
+    pattern = PATTERN if pattern is None else pattern
     lines = ['0ms mark begin']
-    for voice, steps in sorted(PATTERN.items()):
+    for voice, steps in sorted(pattern.items()):
         lines.append('+100ms press voice%d' % voice)
         for step, _, _ in steps:
             lines.append('+100ms press step%d' % step)
@@ -164,7 +198,7 @@ def pattern_card(r):
                 lines.append('+100ms param step_prob=%d' % cond)
     lines += ['+200ms save-pattern 0', '+200ms save-project 0', '+100ms mark saved']
     seconds = 0.1 * len(lines) + 1
-    return r.keep(r.seed('pattern-seed'), 'pattern', lines, seconds)
+    return r.keep(r.seed(tag + '-seed'), tag, lines, seconds)
 
 
 def build_kit(r, kit, name, slot, params, out_dir):
@@ -308,39 +342,49 @@ def decay_ms(x, rate, start, limit_s, drop_db=40.0):
     return (len(env) - k) * 2.0, False
 
 
-def hit_and_gap(voice):
-    """the first step of a voice (track 6 and 7 share the hat) and the time to the voice's next step"""
-    steps = sorted(s for s, _, _ in PATTERN[voice] + (PATTERN[7] if voice == 6 else []))
-    s0 = PATTERN[voice][0][0]
+def hit_and_gap(pattern, voice, step_s):
+    """the first step of a voice (track 6 and 7 share the hat; the first of either) and the time to
+    the voice's next step"""
+    own = pattern.get(voice, []) + (pattern.get(7, []) if voice == 6 else [])
+    steps = sorted(s for s, _, _ in own)
+    s0 = (pattern[voice] if pattern.get(voice) else own)[0][0]
     nxt = [s for s in steps if s > s0]
-    return s0, ((nxt[0] if nxt else 17) - s0) * STEP_S
+    return s0, ((nxt[0] if nxt else 17) - s0) * step_s
 
 
-def solo(r, card, kit, voice, dry):
+def demo_args(demo):
+    """the renderer's tempo and shuffle options of a demo"""
+    return ['--bpm', str(demo['bpm'])] + ([] if demo['shuffle'] is None else ['--param', 'shuffle=%d' % demo['shuffle']])
+
+
+def solo(r, card, kit, voice, dry, demo):
     """one bar of the pattern with only this voice's fader up; dry: the slot and the reverb off"""
     wav = os.path.join(r.work, '%s-solo%d%s.wav' % (kit, voice, '-dry' if dry else ''))
     faders = ','.join('1' if i == voice else '0' for i in range(1, 7))
     extra = ['--param', 'fx_type=0', '--param', 'rev_level=0'] if dry else []
-    r.run(['--card', card, '--out', wav, '--pattern', '0', '--bpm', str(BPM), '--bars', '2',
+    r.run(['--card', card, '--out', wav, '--pattern', '0'] + demo_args(demo) + ['--bars', '2',
            '--param', 'trig_timing=0', '--stereo', 'out1', '--faders', faders] + extra)
     return wav
 
 
-def measure(r, card, kit, demo):
+def measure(r, card, kit, wav, demo):
     """the demo's peak and RMS; each voice alone: its peak and RMS with the FX (the second bar),
     its decay to -40 dB without them (Drum 1: the fundamental too)"""
-    peak, rms = level(demo)
-    print('  demo %s: peak %.1f dBFS, RMS %.1f dBFS%s' % (os.path.relpath(demo, ROOT), peak, rms,
+    pattern, step_s = PATTERNS[demo['pattern']], 60.0 / demo['bpm'] / 4
+    peak, rms = level(wav)
+    print('  demo %s: peak %.1f dBFS, RMS %.1f dBFS%s' % (os.path.relpath(wav, ROOT), peak, rms,
           '' if peak <= -1.0 else '  CLIPPING (peak above -1 dBFS)'))
     out = {'peak': round(peak, 2), 'rms': round(rms, 2), 'voices': {}}
     for v in range(1, 7):
-        rate, x = mono(solo(r, card, kit, v, False))
-        bar2 = x[int(16 * STEP_S * rate):]
+        if not pattern.get(v) and not (v == 6 and pattern.get(7)):
+            continue
+        rate, x = mono(solo(r, card, kit, v, False, demo))
+        bar2 = x[int(16 * step_s * rate):]
         pk = db(max(abs(t) for t in bar2))
         vr = db(math.sqrt(sum(t * t for t in bar2) / len(bar2)))
-        rate, x = mono(solo(r, card, kit, v, True))
-        s0, gap = hit_and_gap(v)
-        i = onset_after(x, rate, (s0 - 1) * STEP_S)
+        rate, x = mono(solo(r, card, kit, v, True, demo))
+        s0, gap = hit_and_gap(pattern, v, step_s)
+        i = onset_after(x, rate, (s0 - 1) * step_s)
         if i is None:
             print('  %-7s silent' % VOICE_NAMES[v])
             continue
@@ -348,10 +392,10 @@ def measure(r, card, kit, demo):
         line = '  %-7s peak %6.1f, RMS %6.1f dBFS; decay to -40 dB %s%.0f ms' % (
             VOICE_NAMES[v], pk, vr, '' if done else '>', d)
         info = {'peak': round(pk, 1), 'rms': round(vr, 1), 'decay40_ms': d, 'decay_complete': done}
-        if v == 6:		# the open hat on track 7, until the next hat
-            o = PATTERN[7][0][0]
-            nxt = [s for s, _, _ in sorted(PATTERN[6] + PATTERN[7]) if s > o]
-            d7, done7 = decay_ms(x, rate, onset_after(x, rate, (o - 1) * STEP_S), ((nxt[0] if nxt else 17) - o) * STEP_S)
+        if v == 6 and pattern.get(7):		# the open hat on track 7, until the next hat
+            o = pattern[7][0][0]
+            nxt = [s for s, _, _ in sorted(pattern.get(6, []) + pattern[7]) if s > o]
+            d7, done7 = decay_ms(x, rate, onset_after(x, rate, (o - 1) * step_s), ((nxt[0] if nxt else 17) - o) * step_s)
             line += ', open %s%.0f ms' % ('' if done7 else '>', d7)
             info['open_decay40_ms'] = d7
         if v == 1:
@@ -387,11 +431,14 @@ def main():
     os.makedirs(demo_dir, exist_ok=True)
     r = Renderer(a.renderer, work)
     try:
-        pat = pattern_card(r)
+        pats = {}
         results = {}
         slots = {}
         for kit in kits:
-            name, slot, params = read_spec(os.path.join(KITS, kit + '.txt'))
+            name, slot, params, demo = read_spec(os.path.join(KITS, kit + '.txt'))
+            if demo['pattern'] not in pats:
+                pats[demo['pattern']] = pattern_card(r, PATTERNS[demo['pattern']], 'pattern-' + demo['pattern'])
+            pat = pats[demo['pattern']]
             if slot in slots:
                 fail('%s and %s both take slot %d' % (slots[slot], kit, slot))
             slots[slot] = kit
@@ -401,10 +448,10 @@ def main():
             n = readback(r, card, kit, kit_file, name, numbers, values)
             print('%s: %s, %d parameters read back' % (kit, os.path.relpath(kit_file, ROOT), n))
             if not a.no_demo:
-                demo = os.path.join(demo_dir, kit + '.wav')
-                r.run(['--card', card, '--out', demo, '--pattern', '0', '--bpm', str(BPM), '--bars', str(BARS),
+                wav = os.path.join(demo_dir, kit + '.wav')
+                r.run(['--card', card, '--out', wav, '--pattern', '0'] + demo_args(demo) + ['--bars', str(BARS),
                        '--param', 'trig_timing=0', '--stereo', 'out1'])
-                results[kit] = measure(r, card, kit, demo)
+                results[kit] = measure(r, card, kit, wav, demo)
         if results:
             with open(os.path.join(work, 'measurements.json'), 'w') as f:
                 json.dump(results, f, indent=1)
