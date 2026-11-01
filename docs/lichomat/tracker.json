@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-01 07:47",
+    "updated": "2026-11-01 07:48",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Kity w stylu BCCO / Mutual Rytm: projekt według pomiaru albumu",
+    "focus": "Kity PULS/HUSTAWKA/PROSTO/PRZESTER gotowe; czekają na Twój odsłuch",
     "branch": "timing-core",
     "head": "f7034b0",
-    "next": "E8.1: sesja na v0.3 z H12 na początku; odsłuch kitów i dem v0.5; ASan (run_asan.sh); A1–A12 w aplikacji",
-    "updated_at": "2026-11-01T07:47:00+01:00",
-    "now": "Agent projektuje i dopasowuje 4 kity w stylu BCCO / Mutual Rytm (gałąź kits)"
+    "next": "Odsłuch nowych kitów (kits/demo/puls, hustawka, prosto, przester); ASan w zwykłym Terminalu; H12",
+    "updated_at": "2026-11-01T07:48:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -543,6 +543,13 @@
       "status": "zrobione",
       "title": "Kity WIR, MGLA, RDZA i IGLA z modulacją LFO i velocity (gałąź kits, 6a5a723, bc606f6); renderer ustawia cele LFO i velocity (2938dbf); czekają na Twój odsłuch",
       "updated": "2026-10-31"
+    },
+    {
+      "id": "E6.13",
+      "epic": "E6",
+      "status": "zrobione",
+      "title": "Kity PULS, HUSTAWKA, PROSTO i PRZESTER (sloty 56–59) w stylu BCCO / Mutual Rytm, dopasowane pomiarem do albumu referencyjnego (gałąź kits, f7034b0); czekają na Twój odsłuch",
+      "updated": "2026-11-01"
     },
     {
       "id": "E7.1",
@@ -3363,6 +3370,11 @@
       "n": 485,
       "at": "2026-11-01 07:47",
       "text": "kits f7034b0: polska sekcja README dla PULS, HUSTAWKA, PROSTO i PRZESTER: jak dopasowano stopę i bed, wzór dema, shuffle, które każdy kit potrzebuje na swoim patternie, tabela cel/wynik, przepis i czego nie udało się trafić. Instalacja: sloty 56–59 obok niezmienionych 60–63. W repo nie ma nazwy albumu ani niczego z niego (sprawdzone grep)."
+    },
+    {
+      "n": 486,
+      "at": "2026-11-01 07:48",
+      "text": "Raport agenta kitów. Każda liczba zmierzona tym samym analizatorem co album, na 32 taktach dema. Stopa w każdym kicie w granicach celu: wysokość na 10–150 ms co do kilku Hz, −6 dB, THD. Bed: wygrał osobny głos Drum 2 na offbeatowych ósemkach (kształt w 1,0–1,5 dB RMS od mediany); pogłos duckowany był 16–21 dB za cichy i za wolno gasł, został tylko w HUSTAWCE, gdzie warstwa ma trwać. Shuffle 18/24/45 = 9,9/13,2/25,1 ms; shuffle należy do patternu, README mówi, co ustawić. Nie trafione: góra ok. 28 dB cichsza względem stopy niż na albumie (hat LXR ma maks. ok. −17 dBFS), szum na 2 i 4 za cichy, PROSTO: bas wraca po 220 ms zamiast 175–190 (przesunięcie kroku −3 to poprawia), PRZESTER: zła proporcja harmonicznych przy dobrym THD. Stare kity bez zmian (sprawdzone diffem). Nowe zadanie E6.13 zrobione, czeka na Twój odsłuch."
     }
   ]
 }
