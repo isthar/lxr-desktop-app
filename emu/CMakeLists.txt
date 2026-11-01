@@ -39,8 +39,8 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)	# gnu11, the firmware's dialect (spec 8.2)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Sanitizers, as for -fsanitize=. The Debug default leaves out ASan, because ASan
-# binaries hang inside the sandbox used for development; CI uses address,undefined.
+# Sanitizers, as for -fsanitize=. The Debug default leaves out ASan, because the ASan runtime of the
+# Command Line Tools 16.4 hangs at start on macOS 26 (those of 26.6 work); CI uses address,undefined.
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(lichomat_emu_sanitize_default "")
 else()
@@ -120,8 +120,9 @@ set_source_files_properties("${EMU_SRC}/appMain.c" PROPERTIES COMPILE_DEFINITION
     "FIRMWARE_NAME=\"${EMU_FIRMWARE_NAME}\";FIRMWARE_VERSION=\"${EMU_FIRMWARE_VERSION}\"")
 # graphic.c's global `float time` would be what libc's time() binds to in an executable that has both; Dear ImGui calls it
 # at CreateContext(). The name is changed for this one file, as the firmware's other uses of `time` are its own locals
-# and parameters (R4_gui_clash). The image of the device is built from the file as it is.
-set_source_files_properties("${EMU_SRC}/graphic.c" PROPERTIES COMPILE_DEFINITIONS "time=lxr_graphic_time")
+# and parameters (R4_gui_clash). The image of the device is built from the file as it is. ASan keeps the names of
+# globals as strings in the binary, so the new name must pass M21's name scan.
+set_source_files_properties("${EMU_SRC}/graphic.c" PROPERTIES COMPILE_DEFINITIONS "time=fw_graphic_time")
 # the probability draw takes the sequencer stream (spec 4.9, firmware change F5)
 set_source_files_properties("${EMU_SRC}/Soundengine/Sequencer/sequencer.c" PROPERTIES
     COMPILE_OPTIONS "-include;${EMU_DIR}/stubs/emu_seq_random.h")
