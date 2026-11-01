@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-01 06:53",
+    "updated": "2026-11-01 07:10",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Kity w stylu BCCO / Mutual Rytm: projekt według pomiaru albumu",
     "branch": "timing-core",
-    "head": "d130e87",
+    "head": "99a810b",
     "next": "E8.1: sesja na v0.3 z H12 na początku; odsłuch kitów i dem v0.5; ASan (run_asan.sh); A1–A12 w aplikacji",
-    "updated_at": "2026-11-01T06:53:00+01:00",
+    "updated_at": "2026-11-01T07:10:00+01:00",
     "now": "Agent projektuje i dopasowuje 4 kity w stylu BCCO / Mutual Rytm (gałąź kits)"
   },
   "epics": [
@@ -3328,6 +3328,11 @@
       "n": 478,
       "at": "2026-11-01 06:53",
       "text": "Start agenta projektu kitów (gałąź kits): 4 kity w slotach 56–59 (mediana albumu; mocny shuffle i szeroka góra; proste haty z basowym bedem; przesterowana stopa). Stopa dopasowywana renderem firmware do szablonów z albumu. Bed na dwa sposoby: pogłos v0.4 duckowany stopą albo osobny głos; wybór według dopasowania. Dema w tempie i groovie albumu. Stare kity w 60–63 bez zmian."
+    },
+    {
+      "n": 479,
+      "at": "2026-11-01 07:10",
+      "text": "kits 99a810b: kit_build.py bierze z opisu kitu tempo dema, shuffle i wzór (classic albo album). Wzór album: stopa 4/4, bed na offbeatowych ósemkach, tonalna figura w szesnastkach, cichy szum na 2 i 4, haty na każdej szesnastce z akcentami i duchami z pomiaru. Stare kity budują się bit w bit tak samo."
     }
   ]
 }
