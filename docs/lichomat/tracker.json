@@ -3341,7 +3341,7 @@
     },
     {
       "n": 481,
-      "at": "2026-11-01 07:45",
+      "at": "2026-11-01 07:33",
       "text": "ASan: testy wiszą przy starcie, bo uruchomione przez ! działają w sandboxie Claude Code. Runtime ASan blokuje się na własnej blokadzie przy inicjalizacji pamięci cienia, zanim ruszy nasz kod; komentarz w emu/CMakeLists.txt to opisuje, a ja i tak podałem złe polecenie. Właściciel zatrzymuje przebieg i puszcza skrypt w zwykłym Terminalu. UBSan był już w każdym zwykłym przebiegu testów."
     },
     {
