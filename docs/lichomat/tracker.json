@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-01 05:56",
+    "updated": "2026-11-01 06:53",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Kity w stylu BCCO / Mutual Rytm: pomiar albumu referencyjnego",
+    "focus": "Kity w stylu BCCO / Mutual Rytm: projekt według pomiaru albumu",
     "branch": "timing-core",
-    "head": "c61e78d",
+    "head": "d130e87",
     "next": "E8.1: sesja na v0.3 z H12 na początku; odsłuch kitów i dem v0.5; ASan (run_asan.sh); A1–A12 w aplikacji",
-    "updated_at": "2026-11-01T05:56:00+01:00",
-    "now": "Agent mierzy album Disguised – Nightrun (perkusja i groove)"
+    "updated_at": "2026-11-01T06:53:00+01:00",
+    "now": "Agent projektuje i dopasowuje 4 kity w stylu BCCO / Mutual Rytm (gałąź kits)"
   },
   "epics": [
     {
@@ -3318,6 +3318,16 @@
       "n": 476,
       "at": "2026-11-01 05:56",
       "text": "Plan na resztę E5–E7. E5: zostało tylko wydanie v0.2 (E5.6). Proponuję zamiast niego wydać od razu v0.3, bo zawiera v0.1 i v0.2, a jedna sesja na v0.3 sprawdza wszystko; wydanie jest teraz w E8.1. E7: zostało tylko H12 (E7.1), Twój odczyt; reszta jest w kodzie, częstotliwość pogłosu ustawię po H12. E6: szablony groove, pełny mikrotiming z PatV04 i nagrywanie z mikrotimingiem odłożyłem 29.10. Wracają jako v0.6 po resecie limitu (poniedziałek 2.11, 22:00): v0.5 gra już każde przesunięcie w jego próbce, a pomiar albumu da prawdziwe szablony. Do 80% w tym tygodniu robię kity."
+    },
+    {
+      "n": 477,
+      "at": "2026-11-01 07:05",
+      "text": "Pomiar albumu gotowy (8 utworów, raport i szablony w scratchpadzie, nic w repo). Sygnatura: 142–144 BPM. Stopa prawie sinusoidalna, wysokość spada od ok. 263 Hz ze stałą 32 ms do ok. 50,6 Hz, długie ciało (−6 dB przy 150–235 ms), prawie bez kliku. Rumble to ciemna, mono warstwa 44–49 Hz tylko 4–6,5 dB pod stopą, duckowana: wraca ok. 245 ms po stopie i trzyma do następnej. Hi-haty w szesnastkach z akcentem na offbeatach, shuffle od prostego do 26 ms (mediana 10 ms). Perkusja: tonalne figury szesnastkowe 220–590 Hz, bez mocnego backbeatu."
+    },
+    {
+      "n": 478,
+      "at": "2026-11-01 06:53",
+      "text": "Start agenta projektu kitów (gałąź kits): 4 kity w slotach 56–59 (mediana albumu; mocny shuffle i szeroka góra; proste haty z basowym bedem; przesterowana stopa). Stopa dopasowywana renderem firmware do szablonów z albumu. Bed na dwa sposoby: pogłos v0.4 duckowany stopą albo osobny głos; wybór według dopasowania. Dema w tempie i grooveie albumu. Stare kity w 60–63 bez zmian."
     }
   ]
 }
