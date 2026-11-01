@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-01 07:48",
+    "updated": "2026-11-01 08:01",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Kity PULS/HUSTAWKA/PROSTO/PRZESTER gotowe; czekają na Twój odsłuch",
     "branch": "timing-core",
-    "head": "f7034b0",
+    "head": "dc1c50c",
     "next": "Odsłuch nowych kitów (kits/demo/puls, hustawka, prosto, przester); ASan w zwykłym Terminalu; H12",
-    "updated_at": "2026-11-01T07:48:00+01:00",
+    "updated_at": "2026-11-01T08:01:00+01:00",
     "now": ""
   },
   "epics": [
@@ -3375,6 +3375,11 @@
       "n": 486,
       "at": "2026-11-01 07:48",
       "text": "Raport agenta kitów. Każda liczba zmierzona tym samym analizatorem co album, na 32 taktach dema. Stopa w każdym kicie w granicach celu: wysokość na 10–150 ms co do kilku Hz, −6 dB, THD. Bed: wygrał osobny głos Drum 2 na offbeatowych ósemkach (kształt w 1,0–1,5 dB RMS od mediany); pogłos duckowany był 16–21 dB za cichy i za wolno gasł, został tylko w HUSTAWCE, gdzie warstwa ma trwać. Shuffle 18/24/45 = 9,9/13,2/25,1 ms; shuffle należy do patternu, README mówi, co ustawić. Nie trafione: góra ok. 28 dB cichsza względem stopy niż na albumie (hat LXR ma maks. ok. −17 dBFS), szum na 2 i 4 za cichy, PROSTO: bas wraca po 220 ms zamiast 175–190 (przesunięcie kroku −3 to poprawia), PRZESTER: zła proporcja harmonicznych przy dobrym THD. Stare kity bez zmian (sprawdzone diffem). Nowe zadanie E6.13 zrobione, czeka na Twój odsłuch."
+    },
+    {
+      "n": 487,
+      "at": "2026-11-01 08:01",
+      "text": "Poprawka mojej diagnozy ASan: w zwykłym iTerm, poza sandboxem, testy wiszą tak samo, na tej samej blokadzie runtime'u ASan przy starcie. To nie sandbox, tylko Command Line Tools 16.4 (Apple clang 17.0.0, maj 2025) na macOS 26.7.1: ich biblioteka ASan nie pasuje do dyld nowego systemu. Do wyboru: aktualizacja Command Line Tools do wersji 26.x (Twoja decyzja, to zmiana systemu), potem przebuduję drzewa ASan; albo ASan dopiero w CI na Linuksie, które stoi (E8.5)."
     }
   ]
 }
