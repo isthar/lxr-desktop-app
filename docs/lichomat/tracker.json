@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-01 05:24",
+    "updated": "2026-11-01 05:35",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Przerwa: kod v0.4, v0.5 i kity gotowy; czeka na Twoje testy (E8)",
+    "focus": "Kity w stylu BCCO / Mutual Rytm: pomiar albumu referencyjnego",
     "branch": "timing-core",
-    "head": "0dd486d",
+    "head": "7fbc723",
     "next": "E8.1: sesja na v0.3 z H12 na początku; odsłuch kitów i dem v0.5; ASan (run_asan.sh); A1–A12 w aplikacji",
-    "updated_at": "2026-11-01T05:24:00+01:00",
-    "now": ""
+    "updated_at": "2026-11-01T05:35:00+01:00",
+    "now": "Agent mierzy album Disguised – Nightrun (perkusja i groove)"
   },
   "epics": [
     {
@@ -3315,6 +3315,11 @@
       "n": 474,
       "at": "2026-11-01 05:24",
       "text": "Zadania uporządkowane po Twoim pytaniu o 60/73. „Zrobione” znaczy teraz wszędzie to samo: kod gotowy i sprawdzony w emulatorze, tak jak już było przy E6.3, E6.6 i E6.7. Dlatego E5.5, E6.1, E6.9, E6.10 i E7.3–E7.6 są zrobione. Brakowało zadania na kity, więc doszło E6.12. Twoje testy na LXR i wydania są w nowym epiku E8 (E8.1–E8.5) jako osobne zadania: widać, co czeka na Ciebie i co blokuje H12 i CI. Wynik: 69/79, nic w toku."
+    },
+    {
+      "n": 475,
+      "at": "2026-11-01 05:35",
+      "text": "Twoja ocena kitów: naiwne, ale zostają. Nowe kity w stylu BCCO / Mutual Rytm według albumu Disguised – Nightrun. Pierwszy krok: agent mierzy album (stopa: wysokość i jej spadek, wybrzmienie, klik; rumble między stopami; hi-haty na siatce 16 kroków z shuffle; perkusja; miks). Pracuje tylko w scratchpadzie: nic z albumu nie trafia do publicznego repo. Potem projekt kitów w nowych slotach 56–59, WIR/MGLA/RDZA/IGLA zostają w 60–63. Usage 74%."
     }
   ]
 }
