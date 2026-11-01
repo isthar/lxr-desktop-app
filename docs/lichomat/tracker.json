@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-01 08:01",
+    "updated": "2026-11-01 08:08",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Kity PULS/HUSTAWKA/PROSTO/PRZESTER gotowe; czekają na Twój odsłuch",
     "branch": "timing-core",
-    "head": "dc1c50c",
+    "head": "0bfb283",
     "next": "Odsłuch nowych kitów (kits/demo/puls, hustawka, prosto, przester); ASan w zwykłym Terminalu; H12",
-    "updated_at": "2026-11-01T08:01:00+01:00",
-    "now": ""
+    "updated_at": "2026-11-01T08:08:00+01:00",
+    "now": "Przebudowa drzew testów v0.5 kompilatorem z CLT 26.6 i przebieg ASan"
   },
   "epics": [
     {
@@ -3380,6 +3380,11 @@
       "n": 487,
       "at": "2026-11-01 08:01",
       "text": "Poprawka mojej diagnozy ASan: w zwykłym iTerm, poza sandboxem, testy wiszą tak samo, na tej samej blokadzie runtime'u ASan przy starcie. To nie sandbox, tylko Command Line Tools 16.4 (Apple clang 17.0.0, maj 2025) na macOS 26.7.1: ich biblioteka ASan nie pasuje do dyld nowego systemu. Do wyboru: aktualizacja Command Line Tools do wersji 26.x (Twoja decyzja, to zmiana systemu), potem przebuduję drzewa ASan; albo ASan dopiero w CI na Linuksie, które stoi (E8.5)."
+    },
+    {
+      "n": 488,
+      "at": "2026-11-01 08:08",
+      "text": "Command Line Tools zaktualizowane do 26.6 (Apple clang 21.0.0). Biblioteka ASan startuje, także w sandboxie: próbny program łapie przepełnienie bufora. Buduję od nowa drzewa testów v0.5 (host i emulator, UBSan i ASan) nowym kompilatorem; najpierw ostrzeżenia i nagrania wzorcowe, potem ASan. Testy puszczam sam."
     }
   ]
 }
