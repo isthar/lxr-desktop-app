@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-01 08:18",
+    "updated": "2026-11-01 08:25",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Kity PULS/HUSTAWKA/PROSTO/PRZESTER gotowe; czekają na Twój odsłuch",
     "branch": "timing-core",
-    "head": "57f95ee",
-    "next": "Odsłuch nowych kitów (kits/demo/puls, hustawka, prosto, przester); ASan w zwykłym Terminalu; H12",
-    "updated_at": "2026-11-01T08:18:00+01:00",
-    "now": "Ponowne testy emulatora v0.5 (UBSan i ASan) po zmianie nazwy dla M21"
+    "head": "a213a5d",
+    "next": "Odsłuch nowych kitów (kits/demo/puls, hustawka, prosto, przester); H12; v0.6 po resecie limitu",
+    "updated_at": "2026-11-01T08:25:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -3390,6 +3390,11 @@
       "n": 489,
       "at": "2026-11-01 08:18",
       "text": "ASan na v0.5 nowym kompilatorem: host 114/114, emulator 299/301, zero błędów pamięci i zero UB. Testy pod UBSan: host 114/114, emulator 329/329, nagrania wzorcowe bez zmian, 0 ostrzeżeń w czterech drzewach. Dwa testy, które padły, to bramka licencyjna M21: ASan zostawia w binarce nazwy zmiennych globalnych, a nasza zmiana nazwy time z graphic.c na lxr_graphic_time ma w sobie „lxr”. Zmieniam ją na fw_graphic_time i poprawiam komentarz w emu/CMakeLists.txt (to nie sandbox, tylko CLT 16.4 na macOS 26); testy obu drzew emulatora lecą jeszcze raz."
+    },
+    {
+      "n": 490,
+      "at": "2026-11-01 08:25",
+      "text": "v0.5 a213a5d: nazwa time z graphic.c to teraz fw_graphic_time, M21 przechodzi pod ASan; komentarz w emu/CMakeLists.txt podaje prawdziwą przyczynę zawieszeń. Weryfikacja v0.5 kompletna z CLT 26.6: host 114/114 (UBSan) i 114/114 (ASan), emulator 329/329 (UBSan) i 301/301 (ASan), 0 ostrzeżeń, nagrania wzorcowe bez zmian. Zadanie ASan zamknięte."
     }
   ]
 }
