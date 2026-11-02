@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-02 20:11",
+    "updated": "2026-11-02 20:20",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6: specyfikacja mikrotimingu i szablonów groove",
     "branch": "timing-core",
-    "head": "0701f58",
+    "head": "cb9dc42",
     "next": "Twój odsłuch kitów PULS/HUSTAWKA/PROSTO/PRZESTER; H12; po resecie limitu (pn 2.11, 22:00) v0.6: szablony groove, mikrotiming PatV04",
-    "updated_at": "2026-11-02T20:11:00+01:00",
-    "now": "Agent pisze specyfikację v0.6 (E6.2, E6.4, E6.5)"
+    "updated_at": "2026-11-02T20:20:00+01:00",
+    "now": "Pisanie planu v0.6"
   },
   "epics": [
     {
@@ -3319,7 +3319,7 @@
     {
       "n": 475,
       "at": "2026-11-01 05:35",
-      "text": "Twoja ocena kitów: naiwne, ale zostają. Nowe kity w stylu BCCO / Mutual Rytm według albumu Disguised – Nightrun. Pierwszy krok: agent mierzy album (stopa: wysokość i jej spadek, wybrzmienie, klik; rumble między stopami; hi-haty na siatce 16 kroków z shuffle; perkusja; miks). Pracuje tylko w scratchpadzie: nic z albumu nie trafia do publicznego repo. Potem projekt kitów w nowych slotach 56–59, WIR/MGLA/RDZA/IGLA zostają w 60–63. Usage 74%."
+      "text": "Twoja ocena kitów: naiwne, ale zostają. Nowe kity w stylu BCCO / Mutual Rytm według Twojego albumu referencyjnego. Pierwszy krok: agent mierzy album (stopa: wysokość i jej spadek, wybrzmienie, klik; rumble między stopami; hi-haty na siatce 16 kroków z shuffle; perkusja; miks). Pracuje tylko w scratchpadzie: nic z albumu nie trafia do publicznego repo. Potem projekt kitów w nowych slotach 56–59, WIR/MGLA/RDZA/IGLA zostają w 60–63. Usage 74%."
     },
     {
       "n": 476,
@@ -3415,6 +3415,11 @@
       "n": 494,
       "at": "2026-11-02 20:11",
       "text": "Zadania E6.2, E6.4 i E6.5 przestawione na „w toku”: specyfikacja v0.6 trwa od 19:50, a tablica pokazywała 0 zadań w toku. Mój błąd: zaktualizowałem dziennik i stan, ale nie statusy zadań."
+    },
+    {
+      "n": 495,
+      "at": "2026-11-02 20:20",
+      "text": "Specyfikacja v0.6 gotowa i przyjęta (M1–M28): mikrotiming kroku co 1 tick (1/96 kroku, ok. 1,1 ms przy 142 BPM, zakres ±84), zapisany jako stare przesunięcie plus nowa 4-bitowa część dokładna (fw 1.7 i v0.5 grają najbliższą 1/8 kroku); 7 szablonów groove per tor z ilością 0–200% (lay, lyb, rlx, 2bt z pomiaru albumu; swg, psh, drg ogólne); nagrywanie zapisuje zagrane przesunięcie minus szablon, przełącznik rqn; drugi blok w plikach wzorców tylko gdy są dane, więc stare nagrania wzorcowe muszą przejść bez zmian. RAM +15 472 B (zostaje 27 360 B), DTCM bez zmian, CPU do ok. 0,56% bloku. Przy przeglądzie usunąłem nazwę albumu z publicznych plików (ścieżka build/reference/album, wpis #475 dziennika); w historii gita zostaje w ba2998f i 6698f4b."
     }
   ]
 }
