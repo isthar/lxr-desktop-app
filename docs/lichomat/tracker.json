@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-02 20:21",
+    "updated": "2026-11-02 20:37",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6: specyfikacja mikrotimingu i szablonów groove",
     "branch": "timing-core",
-    "head": "3125c95",
+    "head": "cb71170",
     "next": "Twój odsłuch kitów PULS/HUSTAWKA/PROSTO/PRZESTER; H12; po resecie limitu (pn 2.11, 22:00) v0.6: szablony groove, mikrotiming PatV04",
-    "updated_at": "2026-11-02T20:21:00+01:00",
-    "now": "Agent pisze plan v0.6"
+    "updated_at": "2026-11-02T20:37:00+01:00",
+    "now": "Plan v0.6 (agent) i pomiar bazowy v0.6"
   },
   "epics": [
     {
@@ -3425,6 +3425,11 @@
       "n": 496,
       "at": "2026-11-02 20:21",
       "text": "Start agenta planu v0.6: zadania według §11 specyfikacji, najbardziej ryzykowny kod (przesunięcie z §4.1, podział na część zgrubną i dokładną, blok 2 plików) sprawdzony w kompilacji przed zapisem do planu; jeden wykonawca na 2–3 zadania, pełny przegląd rdzenia i formatu plików."
+    },
+    {
+      "n": 497,
+      "at": "2026-11-02 20:37",
+      "text": "Gałąź v0.6 założona od v0.5 (a213a5d), worktree build/wt-v06, wypchnięta. Pomiar bazowy leci w tle (check.sh i cztery drzewa testów), żeby wykonawcy ruszyli zaraz po planie. Plan: agent pracuje od 20:21, specyfikacja zajęła mu 29 min, plan z kompilacją kodu potrwa ok. 30–45 min."
     }
   ]
 }
