@@ -20,7 +20,7 @@ if(NOT CMAKE_TOOLCHAIN_FILE)
 endif()
 
 project(LXR_V2_STM32F765
-    VERSION 0.5
+    VERSION 0.6
     DESCRIPTION "LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02"
     LANGUAGES C ASM
 )
