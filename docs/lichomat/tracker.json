@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-02 20:37",
+    "updated": "2026-11-02 20:49",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6: specyfikacja mikrotimingu i szablonów groove",
     "branch": "timing-core",
-    "head": "cb71170",
+    "head": "9657fd6",
     "next": "Twój odsłuch kitów PULS/HUSTAWKA/PROSTO/PRZESTER; H12; po resecie limitu (pn 2.11, 22:00) v0.6: szablony groove, mikrotiming PatV04",
-    "updated_at": "2026-11-02T20:37:00+01:00",
+    "updated_at": "2026-11-02T20:49:00+01:00",
     "now": "Plan v0.6 (agent) i pomiar bazowy v0.6"
   },
   "epics": [
@@ -3430,6 +3430,11 @@
       "n": 497,
       "at": "2026-11-02 20:37",
       "text": "Gałąź v0.6 założona od v0.5 (a213a5d), worktree build/wt-v06, wypchnięta. Pomiar bazowy leci w tle (check.sh i cztery drzewa testów), żeby wykonawcy ruszyli zaraz po planie. Plan: agent pracuje od 20:21, specyfikacja zajęła mu 29 min, plan z kompilacją kodu potrwa ok. 30–45 min."
+    },
+    {
+      "n": 498,
+      "at": "2026-11-02 20:49",
+      "text": "Pomiar bazowy v0.6 (a213a5d) czysty: check.sh 0 ostrzeżeń, budżet OK (DTCM+RAM 453 684, RAM 346 288 B); host 114/114 (UBSan) i 114/114 (ASan), emulator 329/329 (UBSan) i 301/301 (ASan)."
     }
   ]
 }
