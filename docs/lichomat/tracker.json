@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-02 21:45",
+    "updated": "2026-11-02 21:55",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6: specyfikacja mikrotimingu i szablonów groove",
     "branch": "timing-core",
-    "head": "9902fc4",
+    "head": "d84b48c",
     "next": "Twój odsłuch kitów PULS/HUSTAWKA/PROSTO/PRZESTER; H12; po resecie limitu (pn 2.11, 22:00) v0.6: szablony groove, mikrotiming PatV04",
-    "updated_at": "2026-11-02T21:45:00+01:00",
+    "updated_at": "2026-11-02T21:55:00+01:00",
     "now": "Wykonawca grupy A v0.6: zadania 1–3"
   },
   "epics": [
@@ -3440,6 +3440,11 @@
       "n": 499,
       "at": "2026-11-02 21:45",
       "text": "Plan v0.6 gotowy (10 zadań w 4 grupach). Najbardziej ryzykowny kod sprawdzony przed zapisem: 125/125 testów hosta pod UBSan i ASan, mutacje łapane przez testy, jeden prawdziwy błąd (UB przy starym znaczniku MIDI w nagrywaniu) poprawiony w planie. Odstępstwa od specyfikacji opisane w planie, m.in. koszt CPU w najgorszym bloku ok. 1,45%, nie 0,56% (dalej daleko od 95). Start wykonawcy grupy A: zadania 1–3 (wersja 0.6, typy i podział, rdzeń z szablonami i §4.1), potem pełny przegląd."
+    },
+    {
+      "n": 500,
+      "at": "2026-11-02 21:55",
+      "text": "v0.6 d84b48c (zadanie 1): wersja 0.6, obraz LXR_V2_LICHOMAT_0.6.img z ekranem „v0.6 unofficial”. Baza sprawdzona: wszystkie testy (UBSan i ASan), fw_checks 10 PASS, 32 nagrania wzorcowe bez zmian, seqc_generate() 676 instrukcji jak w planie."
     }
   ]
 }
