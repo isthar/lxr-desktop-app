@@ -28,6 +28,7 @@
  * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
  * the repository.
  */
+#include <math.h>
 #include "seqc_test.h"
 
 #include <stddef.h>
@@ -1377,6 +1378,217 @@ TEST(presets_glo_cfg_byte_9_is_the_trigger_timing)
 	card[g].data[9] = 0;					/* a glo.cfg of fw 1.7 */
 	ASSERT_EQ(preset_loadGlobals(), 1);
 	ASSERT_EQ(activeParameters[PAR_TRIG_TIMING], 0);
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT v0.6 (plan v0.6 Task 5, spec 10.1 pattern_block2): block 2, the templates and the
+// fine microtiming, after block 1
+//------------------------------------------------------------------------------
+#define PAT_BLOCK2_SIZE 244	/* "LCHM", 2, 7, 7 x 2 template bytes, 7 x 32 nibble bytes */
+#define PAT_TIMING_AT(t, s) (14 + (t) * (448 + 64) + 448 + (s))	/* a step's StepTiming byte, as fw 1.7 reads it */
+
+typedef struct {
+	StepTiming timing[NUM_TRACKS][NUM_STEPS];
+	uint8_t fine[NUM_TRACKS][STEP_FINE_BYTES];
+	TrackTemplate tmpl[NUM_TRACKS];
+} TimingSlot;
+
+static void snapTiming(uint8_t p, TimingSlot *s)
+{
+	memcpy(s->timing, seq_patternSet.seq_stepTiming[p], sizeof s->timing);
+	memcpy(s->fine, seq_patternSet.seq_stepFine[p], sizeof s->fine);
+	memcpy(s->tmpl, seq_patternSet.tmpl[p], sizeof s->tmpl);
+}
+
+/** T of step s of track t in fillTiming(): every value -84..+84 occurs */
+static int fillMicro(uint8_t t, uint8_t s, uint8_t salt)
+{
+	return ((t * NUM_STEPS + s) * 7 + salt) % 169 - 84;
+}
+
+/** pattern p's templates (ids 0..6, amounts -90..+90) and every step's microtiming,
+ * canonically split, over fillPattern()'s flams */
+static void fillTiming(uint8_t p, uint8_t salt)
+{
+	for (uint8_t t = 0; t < NUM_TRACKS; t++)
+	{
+		seq_patternSet.tmpl[p][t] = (TrackTemplate){ .id = (uint8_t)((t + salt) % TEMPLATE_COUNT),
+			.amount = (int8_t)(30 * t - 90) };
+		for (uint8_t s = 0; s < NUM_STEPS; s++)
+			stepFine_set(seq_patternSet.seq_stepFine[p][t], s,
+					stepMicro_split(fillMicro(t, s, salt), &seq_patternSet.seq_stepTiming[p][t][s]));
+	}
+}
+
+/** a fresh card with /proj00 as the current folder and pattern 5 saved with fillPattern() and
+ * fillTiming(); its file, or NULL */
+static CardEntry *savedTiming5(uint8_t salt)
+{
+	reset();
+	if (f_mkdir("/proj00") != FR_OK || f_chdir("/proj00") != FR_OK)
+		return NULL;
+	fillPattern(5, salt);
+	fillTiming(5, salt);
+	if (preset_savePatternSD(5) != FR_OK)
+		return NULL;
+	return fileStarting("/proj00/05-");
+}
+
+TEST(pattern_block2_round_trip)
+{
+	CardEntry *e = savedTiming5(3);
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE);
+	static const uint8_t head[6] = { 'L', 'C', 'H', 'M', 2, 7 };
+	const uint8_t *b2 = e->data + PAT_V03_SIZE + PAT_EXT_SIZE;
+	ASSERT_EQ(memcmp(b2, head, sizeof head), 0);
+	ASSERT_EQ(memcmp(b2 + 6, seq_patternSet.tmpl[5], 14), 0);
+	ASSERT_EQ(memcmp(b2 + 20, seq_patternSet.seq_stepFine[5], 224), 0);
+	static TimingSlot saved, loaded;
+	static Slot savedRest, loadedRest;
+	snapTiming(5, &saved);
+	snap(5, &savedRest);
+	memset(&seq_patternSet, 0x5A, sizeof seq_patternSet);
+	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+	snapTiming(5, &loaded);
+	snap(5, &loadedRest);
+	ASSERT_EQ(memcmp(&loaded, &saved, sizeof saved), 0);
+	ASSERT_EQ(memcmp(&loadedRest, &savedRest, sizeof savedRest), 0);
+	for (uint8_t t = 0; t < NUM_TRACKS; t++)
+		for (uint8_t s = 0; s < NUM_STEPS; s++)
+			ASSERT_EQ(stepMicro(seq_patternSet.seq_stepTiming[5][t][s], stepFine_get(seq_patternSet.seq_stepFine[5][t], s)),
+					fillMicro(t, s, 3));
+}
+
+TEST(pattern_block2_absent_without_data)
+{
+	/* fine 0 and every template off: block 1 only, v0.5's 3,697 bytes; its load sets the
+	 * defaults over stale values */
+	CardEntry *e = savedPattern5(1);
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE);
+	memset(&seq_patternSet, 0x5A, sizeof seq_patternSet);
+	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+	static const uint8_t zero[NUM_TRACKS * STEP_FINE_BYTES];
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[5], zero, sizeof zero), 0);
+	ASSERT_EQ(memcmp(seq_patternSet.tmpl[5], zero, sizeof seq_patternSet.tmpl[5]), 0);
+	/* one template on is enough for block 2 */
+	fillPattern(5, 1);
+	memset(seq_patternSet.seq_stepFine[5], 0, sizeof zero);
+	memset(seq_patternSet.tmpl[5], 0, sizeof seq_patternSet.tmpl[5]);
+	seq_patternSet.tmpl[5][6].id = 1;
+	ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+	e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE);
+}
+
+TEST(pattern_block2_tmp_pat_round_trip)
+{
+	reset();
+	ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+	menu_playedPattern = 3;
+	fillPattern(3, 2);
+	fillTiming(3, 2);
+	static TimingSlot saved, loaded;
+	snapTiming(3, &saved);
+	ASSERT_EQ(preset_saveTmpPat(), FR_OK);
+	const int i = find("/tmp/tmp.pat");
+	ASSERT_TRUE(i >= 0);
+	ASSERT_EQ(card[i].len, 1 + PAT_V03_SIZE - 14 + PAT_EXT_SIZE + PAT_BLOCK2_SIZE);
+	memset(seq_patternSet.seq_stepFine[3], 0x11, sizeof saved.fine);
+	memset(seq_patternSet.tmpl[3], 0x11, sizeof saved.tmpl);
+	ASSERT_EQ(preset_LoadTmpPat(), FR_OK);
+	snapTiming(3, &loaded);
+	ASSERT_EQ(memcmp(&loaded, &saved, sizeof saved), 0);
+	/* a tmp.pat of v0.5, block 1 only: the defaults */
+	static uint8_t v05[1 + PAT_V03_SIZE - 14 + PAT_EXT_SIZE];
+	memcpy(v05, card[i].data, sizeof v05);
+	cardPut("/tmp/tmp.pat", v05, sizeof v05);
+	memset(seq_patternSet.tmpl[3], 0x11, sizeof saved.tmpl);
+	ASSERT_EQ(preset_LoadTmpPat(), FR_OK);
+	static const uint8_t zero[sizeof saved.fine];
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[3], zero, sizeof zero), 0);
+	ASSERT_EQ(memcmp(seq_patternSet.tmpl[3], zero, sizeof saved.tmpl), 0);
+}
+
+TEST(pattern_block2_left_out_keeps_the_defaults)
+{
+	CardEntry *e = savedTiming5(0);
+	ASSERT_TRUE(e != NULL);
+	static uint8_t file[PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE], f[sizeof file];
+	memcpy(file, e->data, sizeof file);
+	/* v0.5's file (block 1 only), fw 1.7's (no block), an invalid block 1 before a valid
+	 * block 2, a short block 2, block number 3, a track count of 6 */
+	static const struct { int at; uint8_t value; UINT len; } cases[6] = {
+		{ -1, 0, PAT_V03_SIZE + PAT_EXT_SIZE }, { -1, 0, PAT_V03_SIZE },
+		{ PAT_V03_SIZE + 4, 9, sizeof file }, { -1, 0, sizeof file - 1 },
+		{ PAT_V03_SIZE + PAT_EXT_SIZE + 4, 3, sizeof file }, { PAT_V03_SIZE + PAT_EXT_SIZE + 5, 6, sizeof file },
+	};
+	static const uint8_t zero[NUM_TRACKS * STEP_FINE_BYTES];
+	for (unsigned k = 0; k < 6; k++)
+	{
+		memcpy(f, file, sizeof f);
+		if (cases[k].at >= 0)
+			f[cases[k].at] = cases[k].value;
+		cardPut(e->path, f, cases[k].len);
+		fillTiming(5, 1);			/* stale values */
+		ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+		ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[5], zero, sizeof zero), 0);
+		ASSERT_EQ(memcmp(seq_patternSet.tmpl[5], zero, sizeof seq_patternSet.tmpl[5]), 0);
+	}
+}
+
+TEST(pattern_block2_values_out_of_range)
+{
+	CardEntry *e = savedTiming5(0);
+	ASSERT_TRUE(e != NULL);
+	static uint8_t f[PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE];
+	memcpy(f, e->data, sizeof f);
+	uint8_t *b2 = f + PAT_V03_SIZE + PAT_EXT_SIZE;
+	b2[6 + 0] = 8;				/* track 0: template id 8 */
+	b2[6 + 3] = 101;			/* track 1: amount +101 */
+	b2[6 + 5] = (uint8_t)-101;		/* track 2: amount -101 */
+	b2[20 + 0] = 0x96;			/* track 0: step 0 nibble +6 (6), step 1 -7 (9) */
+	b2[20 + 1] = 0x87;			/* steps 2 and 3: +7 and -8 */
+	f[PAT_TIMING_AT(1, 4)] = (uint8_t)((f[PAT_TIMING_AT(1, 4)] & 0x0F) | (14 << 4));
+	b2[20 + 32 + 2] = (uint8_t)((b2[20 + 32 + 2] & 0xF0) | 5);	/* track 1 step 4: shift +7, fine +5: 89 */
+	f[PAT_TIMING_AT(1, 5)] = (uint8_t)((f[PAT_TIMING_AT(1, 5)] & 0x0F) | (0 << 4));
+	b2[20 + 32 + 2] = (uint8_t)((b2[20 + 32 + 2] & 0x0F) | (0x0A << 4));	/* step 5: shift -7, fine -6: -90 */
+	cardPut(e->path, f, sizeof f);
+	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+	ASSERT_EQ(seq_patternSet.tmpl[5][0].id, 0);
+	ASSERT_EQ(seq_patternSet.tmpl[5][1].amount, 0);
+	ASSERT_EQ(seq_patternSet.tmpl[5][2].amount, 0);
+	ASSERT_EQ(seq_patternSet.tmpl[5][3].id, 3);		/* the others stay */
+	ASSERT_EQ(seq_patternSet.tmpl[5][3].amount, 0);
+	ASSERT_EQ(seq_patternSet.tmpl[5][4].amount, 30);
+	for (uint8_t s = 0; s < 4; s++)
+		ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[5][0], s), 0);
+	ASSERT_EQ(seq_patternSet.seq_stepFine[5][0][0], 0);	/* the nibbles themselves are 0 */
+	ASSERT_EQ(seq_patternSet.seq_stepFine[5][0][1], 0);
+	ASSERT_EQ(seq_patternSet.seq_stepTiming[5][1][4].shift, 14);	/* 89 clamped to 84: +7, fine 0 */
+	ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[5][1], 4), 0);
+	ASSERT_EQ(seq_patternSet.seq_stepTiming[5][1][5].shift, 0);	/* -90 clamped to -84 */
+	ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[5][1], 5), 0);
+	ASSERT_EQ(stepMicro(seq_patternSet.seq_stepTiming[5][2][9], stepFine_get(seq_patternSet.seq_stepFine[5][2], 9)),
+			fillMicro(2, 9, 0));				/* a valid step stays */
+}
+
+TEST(pattern_block2_fw17_reads_the_coarse_shift)
+{
+	/* fw 1.7 reads the StepTiming bytes at their fixed places and stops at the kit number:
+	 * each step's shift there is T's nearest unit, ties upwards, and the flam is fillPattern()'s */
+	CardEntry *e = savedTiming5(4);
+	ASSERT_TRUE(e != NULL);
+	for (uint8_t t = 0; t < NUM_TRACKS; t++)
+		for (uint8_t s = 0; s < NUM_STEPS; s++)
+		{
+			const int micro = fillMicro(t, s, 4);
+			const uint8_t b = e->data[PAT_TIMING_AT(t, s)];
+			ASSERT_EQ((b >> 4) - 7, (int)floor((micro + 6) / 12.0));
+			ASSERT_EQ(b & 0x0F, (uint8_t)((t * NUM_STEPS + s) * 3 + 4) & 0x0F);
+		}
 }
 
 TEST_MAIN()

@@ -335,12 +335,77 @@ FRESULT preset_LoadTmpKit()
 //----------------------------------------------------
 #define PATTERN_EXT_VERSION 1
 
+//----------------------------------------------------
+// LICHOMAT v0.6: block 2 after block 1 (spec v0.6 5.2), 244 bytes: "LCHM", the block number
+// 2, the track count 7, the 7 TrackTemplates (id, amount - 100), then the 7 tracks' fine
+// microtiming, 32 bytes of nibbles each, as in RAM. It is written only when one of its 238
+// data bytes is not 0, so a pattern without microtiming or templates is v0.5's file byte for
+// byte (M11). v0.2-v0.5 stop reading after block 1 and fw 1.7 after the kit number. Loading
+// sets the defaults first and reads block 2 only after a complete, valid block 1; a block of
+// another number or track count, or a short one, leaves the defaults; a template out of
+// range takes its default, a nibble of -8, -7, +6 or +7 reads 0, and a step's T past +-84
+// is clamped and split again (M3, M12).
+//----------------------------------------------------
+#define PATTERN_BLOCK2 2
+
+static uint8_t preset_patternTimingUsed(uint8_t patternNr)
+{
+	const uint8_t *f = &seq_patternSet.seq_stepFine[patternNr][0][0];
+	const uint8_t *t = (const uint8_t *)seq_patternSet.tmpl[patternNr];
+	for(uint16_t i=0; i<sizeof seq_patternSet.seq_stepFine[patternNr]; i++)
+		if(f[i]) return 1;
+	for(uint16_t i=0; i<sizeof seq_patternSet.tmpl[patternNr]; i++)
+		if(t[i]) return 1;
+	return 0;
+}
+
+static void preset_writePatternTiming(uint8_t patternNr)
+{
+	UINT bytesWritten;
+	const uint8_t head[6] = { 'L', 'C', 'H', 'M', PATTERN_BLOCK2, NUM_TRACKS };
+	if(!preset_patternTimingUsed(patternNr))
+		return;
+	f_write((FIL*)&SDFile, head, sizeof head, &bytesWritten);
+	f_write((FIL*)&SDFile, seq_patternSet.tmpl[patternNr], sizeof seq_patternSet.tmpl[patternNr], &bytesWritten);
+	f_write((FIL*)&SDFile, seq_patternSet.seq_stepFine[patternNr], sizeof seq_patternSet.seq_stepFine[patternNr], &bytesWritten);
+}
+
+static void preset_readPatternTiming(uint8_t patternNr)
+{
+	UINT bytesRead = 0;
+	uint8_t head[6];
+	TrackTemplate tp[NUM_TRACKS];
+	uint8_t fine[NUM_TRACKS][STEP_FINE_BYTES];
+
+	if((f_read((FIL*)&SDFile, head, sizeof head, &bytesRead) != FR_OK) || (bytesRead != sizeof head))
+		return;
+	if((memcmp(head, "LCHM", 4) != 0) || (head[4] != PATTERN_BLOCK2) || (head[5] != NUM_TRACKS))
+		return;
+	if((f_read((FIL*)&SDFile, tp, sizeof tp, &bytesRead) != FR_OK) || (bytesRead != sizeof tp))
+		return;
+	if((f_read((FIL*)&SDFile, fine, sizeof fine, &bytesRead) != FR_OK) || (bytesRead != sizeof fine))
+		return;
+	for(uint8_t t=0; t<NUM_TRACKS; t++)
+	{
+		seq_patternSet.tmpl[patternNr][t] = trackTemplate_checked(tp[t]);
+		for(uint8_t s=0; s<NUM_STEPS; s++)
+		{
+			const int8_t f = stepFine_get(fine[t], s);
+			StepTiming *st = &seq_patternSet.seq_stepTiming[patternNr][t][s];
+			//a step with a fine part: its T clamped to +-84 and split again; one without stays
+			//as it is (also a shift of 15, which plays as 0)
+			stepFine_set(seq_patternSet.seq_stepFine[patternNr][t], s, f ? stepMicro_split(stepMicro(*st, f), st) : 0);
+		}
+	}
+}
+
 static void preset_writePatternExt(uint8_t patternNr)
 {
 	UINT bytesWritten;
 	const uint8_t head[6] = { 'L', 'C', 'H', 'M', PATTERN_EXT_VERSION, NUM_TRACKS };
 	f_write((FIL*)&SDFile, head, sizeof head, &bytesWritten);
 	f_write((FIL*)&SDFile, seq_patternSet.groove[patternNr], sizeof seq_patternSet.groove[patternNr], &bytesWritten);
+	preset_writePatternTiming(patternNr);	//LICHOMAT v0.6: block 2, if used
 }
 
 static void preset_readPatternExt(uint8_t patternNr)
@@ -350,6 +415,8 @@ static void preset_readPatternExt(uint8_t patternNr)
 	TrackGroove g[NUM_TRACKS];
 
 	memset(seq_patternSet.groove[patternNr], 0, sizeof seq_patternSet.groove[patternNr]);
+	memset(seq_patternSet.seq_stepFine[patternNr], 0, sizeof seq_patternSet.seq_stepFine[patternNr]);	//LICHOMAT v0.6: block 2's defaults
+	memset(seq_patternSet.tmpl[patternNr], 0, sizeof seq_patternSet.tmpl[patternNr]);
 	if((f_read((FIL*)&SDFile, head, sizeof head, &bytesRead) != FR_OK) || (bytesRead != sizeof head))
 		return;
 	if((memcmp(head, "LCHM", 4) != 0) || (head[4] != PATTERN_EXT_VERSION) || (head[5] != NUM_TRACKS))
@@ -358,6 +425,7 @@ static void preset_readPatternExt(uint8_t patternNr)
 		return;
 	for(uint8_t t=0; t<NUM_TRACKS; t++)
 		seq_patternSet.groove[patternNr][t] = trackGroove_checked(g[t]);
+	preset_readPatternTiming(patternNr);	//LICHOMAT v0.6: block 2, after a complete block 1
 }
 
 //----------------------------------------------------
