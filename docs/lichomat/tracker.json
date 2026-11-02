@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-02 19:51",
+    "updated": "2026-11-02 20:11",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6: specyfikacja mikrotimingu i szablonów groove",
     "branch": "timing-core",
-    "head": "db45b22",
+    "head": "0701f58",
     "next": "Twój odsłuch kitów PULS/HUSTAWKA/PROSTO/PRZESTER; H12; po resecie limitu (pn 2.11, 22:00) v0.6: szablony groove, mikrotiming PatV04",
-    "updated_at": "2026-11-02T19:51:00+01:00",
+    "updated_at": "2026-11-02T20:11:00+01:00",
     "now": "Agent pisze specyfikację v0.6 (E6.2, E6.4, E6.5)"
   },
   "epics": [
@@ -470,9 +470,9 @@
     {
       "id": "E6.2",
       "epic": "E6",
-      "status": "do zrobienia",
-      "title": "v0.6: szablony groove (przesunięcie każdego kroku) z pomiaru albumu referencyjnego; po resecie limitu (2.11, 22:00)",
-      "updated": "2026-11-01"
+      "status": "w toku",
+      "title": "v0.6: szablony groove (przesunięcie każdego z 16 kroków) z pomiaru albumu referencyjnego; specyfikacja w toku (od 2.11)",
+      "updated": "2026-11-02"
     },
     {
       "id": "E6.3",
@@ -484,16 +484,16 @@
     {
       "id": "E6.4",
       "epic": "E6",
-      "status": "do zrobienia",
-      "title": "v0.6: pełny mikrotiming kroku i format PatV04; najpierw budżet pamięci (v0.5 zostawia 1 860 B DTCM+RAM); po resecie limitu",
-      "updated": "2026-11-01"
+      "status": "w toku",
+      "title": "v0.6: pełny mikrotiming kroku i nowy format wzorca; specyfikacja w toku (od 2.11), RAM ma ok. 42,8 KB fizycznego zapasu",
+      "updated": "2026-11-02"
     },
     {
       "id": "E6.5",
       "epic": "E6",
-      "status": "do zrobienia",
-      "title": "v0.6: nagrywanie z zachowaniem mikrotimingu, po E6.4",
-      "updated": "2026-11-01"
+      "status": "w toku",
+      "title": "v0.6: nagrywanie z zachowaniem mikrotimingu; specyfikacja w toku (od 2.11)",
+      "updated": "2026-11-02"
     },
     {
       "id": "E6.6",
@@ -3410,6 +3410,11 @@
       "n": 493,
       "at": "2026-11-02 19:51",
       "text": "Budżet pamięci dla v0.6: limit sumy DTCM+RAM (455 544 B) to według planu v0.4 (D30) reguła księgowa, nie limit fizyczny. Fizycznie RAM ma ok. 42,8 KB zapasu (346 288 z 389 120 B), DTCM 504 B. v0.6 może więc wziąć RAM na mikrotiming jako nazwany dodatek do limitu sumy; przekazane agentowi specyfikacji. Licznik usage liczy teraz tydzień od ostatniego resetu sam (db45b22)."
+    },
+    {
+      "n": 494,
+      "at": "2026-11-02 20:11",
+      "text": "Zadania E6.2, E6.4 i E6.5 przestawione na „w toku”: specyfikacja v0.6 trwa od 19:50, a tablica pokazywała 0 zadań w toku. Mój błąd: zaktualizowałem dziennik i stan, ale nie statusy zadań."
     }
   ]
 }
