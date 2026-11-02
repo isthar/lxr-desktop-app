@@ -1,15 +1,18 @@
 """Estimate the share of the weekly usage limit spent so far, from local Claude Code transcripts:
 
-    python3 -I usage_estimate.py [--reading=<UTC ISO>@<percent> ...]
+    python3 -I usage_estimate.py [--reading=<UTC ISO>@<percent> ...] [--now=<UTC ISO>]
 
 The meter itself can't be read from here. The script sums an API-price-weighted cost of every
 assistant message (deduplicated by message id) in ~/.claude/projects/**/*.jsonl since the weekly
-reset. The owner's readings of the meter calibrate it: the cost between the last reading and the
-latest earlier one at least 5 percent lower gives the cost of one percent, and the estimate is the
-last reading plus the cost since it.
+reset, which it finds from the first one (Monday 22:00 CET) and the time now. The owner's readings
+of the meter in this week calibrate it: the cost between the last reading and the latest earlier one
+at least 5 percent lower gives the cost of one percent, and the estimate is the last reading plus
+the cost since it. With fewer readings the cost of one percent is DEFAULT_PER_PCT, and the estimate
+starts from the last reading, or from 0 at the reset.
 The cost before the first reading does not scale the same way (2026-10-27: 19% at 161M units,
 then 15 more points for 44M), so only the latest stretch is used. Usage outside Claude Code on
-this Mac makes the estimate run high, which errs on the safe side.
+this Mac is not seen at all (2026-11-01 05:43 to 11-02 18:48: 7 points for about 10M local units),
+so a reading from the owner beats the estimate.
 """
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
@@ -18,9 +21,10 @@ this Mac makes the estimate run high, which errs on the safe side.
 # permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
 # the repository.
 import glob, json, os, sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
-RESET = "2026-10-26T21:00:00Z"   # Monday 22:00 CET
+FIRST_RESET = "2026-10-26T21:00:00Z"   # Monday 22:00 CET; the meter resets every 7 days from it
+DEFAULT_PER_PCT = 7.9e6                # one percent of the week of 2026-10-26, 10:49 to 05:43
 READINGS = [                     # the owner's readings of the weekly meter
     ("2026-10-27T04:50:00Z", 19.0),
     ("2026-10-28T23:29:00Z", 34.0),
@@ -33,20 +37,25 @@ READINGS = [                     # the owner's readings of the weekly meter
     ("2026-11-01T05:43:00Z", 75.0),
     ("2026-11-02T18:48:00Z", 82.0),
 ]
-for a in sys.argv[1:]:
-    if a.startswith("--reading="):
-        t, p = a.split("=", 1)[1].rsplit("@", 1)
-        READINGS.append((t, float(p)))
-    else:
-        sys.exit(__doc__)
-READINGS.sort()
 
 
 def ts(s):
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
-reset = ts(RESET)
+now = datetime.now(timezone.utc)
+for a in sys.argv[1:]:
+    if a.startswith("--reading="):
+        t, p = a.split("=", 1)[1].rsplit("@", 1)
+        READINGS.append((t, float(p)))
+    elif a.startswith("--now="):
+        now = ts(a.split("=", 1)[1])
+    else:
+        sys.exit(__doc__)
+READINGS.sort()
+first = ts(FIRST_RESET)
+reset = first + timedelta(days=7) * ((now - first) // timedelta(days=7))
+READINGS = [(t, p) for t, p in READINGS if reset <= ts(t) <= now]
 TOKEN_WEIGHT = {"input_tokens": 1.0, "cache_creation_input_tokens": 1.25,
                 "cache_read_input_tokens": 0.1, "output_tokens": 5.0}
 MODEL_WEIGHT = {"sonnet": 0.6, "haiku": 0.2}  # relative to Opus; anything else counts as 1
@@ -72,7 +81,7 @@ for f in glob.glob(os.path.expanduser("~/.claude/projects/**/*.jsonl"), recursiv
             if not isinstance(u, dict) or "timestamp" not in e:
                 continue
             t = ts(e["timestamp"])
-            if t < reset:
+            if t < reset or t > now:
                 continue
             model = (m.get("model") or "").lower()
             mw = next((v for k, v in MODEL_WEIGHT.items() if k in model), 1.0)
@@ -91,14 +100,16 @@ total = sum(c for _, c in seen.values())
 # (else the lowest): the meter shows whole percents, so over one or two points its rounding alone
 # can halve or double the rate (74% then 75% 73 minutes later gave 4.1M a percent, not about 8M).
 MIN_SPAN = 5
-t1, p1 = READINGS[-1]
-c1 = cost_until(ts(t1))
-earlier = [(t0, p0) for t0, p0 in READINGS[:-1] if p0 < p1 and cost_until(ts(t0)) < c1]
-if not earlier:
-    sys.exit("no earlier reading gives a rate")
-t0, p0 = next((r for r in reversed(earlier) if r[1] <= p1 - MIN_SPAN), earlier[0])
-c0 = cost_until(ts(t0))
-per_pct = (c1 - c0) / (p1 - p0)
-print(f"cost units since the reset: {total / 1e6:.1f}M ({len(seen)} messages)")
-print(f"one percent is about {per_pct / 1e6:.2f}M cost units (between the readings of {t0} and {t1})")
+t1, p1, c1 = reset.isoformat(), 0.0, 0.0
+per_pct, source = DEFAULT_PER_PCT, "the default"
+if READINGS:
+    t1, p1 = READINGS[-1]
+    c1 = cost_until(ts(t1))
+    earlier = [(t0, p0) for t0, p0 in READINGS[:-1] if p0 < p1 and cost_until(ts(t0)) < c1]
+    if earlier:
+        t0, p0 = next((r for r in reversed(earlier) if r[1] <= p1 - MIN_SPAN), earlier[0])
+        per_pct = (c1 - cost_until(ts(t0))) / (p1 - p0)
+        source = f"between the readings of {t0} and {t1}"
+print(f"week from {reset.isoformat()}; cost units since: {total / 1e6:.1f}M ({len(seen)} messages)")
+print(f"one percent is about {per_pct / 1e6:.2f}M cost units ({source})")
 print(f"estimated weekly share: {p1 + (total - c1) / per_pct:.1f}%")
