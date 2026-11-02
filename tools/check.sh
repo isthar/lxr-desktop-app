@@ -63,7 +63,9 @@ if cmake --preset release -DARM_TOOLCHAIN_DIR="$ARM_TOOLCHAIN_DIR" -S "$ROOT" >>
   # LICHOMAT v0.4 memory budget (plan D30): DTCM + RAM at most 394104 + 57344 + 4096 B (v0.3,
   # the reverb's own buffer, state); DTCM at most 107388 + 512 B (DTCM also holds the stack);
   # RAM at most 393216 - 4096 B (the vector table's stack pointer is the end of RAM)
-  arm-none-eabi-size -A "$B/LXR_V2_STM32F765.elf" | awk -v maxsum=455544 -v maxdtcm=107900 -v maxram=389120 '
+  # LICHOMAT v0.6 (plan v0.6 V6-2, spec M24): + 15488 B "E6.2/E6.4 pattern timing" (the fine
+  # nibbles 14336, the templates 896, the backup buffer 238, two parameters), sum 471032
+  arm-none-eabi-size -A "$B/LXR_V2_STM32F765.elf" | awk -v maxsum=471032 -v maxdtcm=107900 -v maxram=389120 '
     $1==".dtcm"||$1==".dtcmz"{dtcm+=$2} $1==".data"||$1==".bss"||$1=="._user_heap"{ram+=$2}
     END{ok = (dtcm+ram <= maxsum && dtcm <= maxdtcm && ram <= maxram)
         printf "budget: DTCM+RAM %d/%d B, DTCM %d/%d B, RAM %d/%d B %s\n", dtcm+ram, maxsum, dtcm, maxdtcm, ram, maxram, ok ? "OK" : "OVER"

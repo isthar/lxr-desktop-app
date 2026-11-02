@@ -811,4 +811,52 @@ TEST(sequencer_smp_oneshot_roll_posts_an_untimed_record)
 	ASSERT_EQ(posted[0].note, SEQ_DEFAULT_NOTE);
 }
 
+//------------------------------------------------------------------------------
+// LICHOMAT v0.6 (plan v0.6 Task 4): the fine microtiming and the template follow the
+// pattern operations (M13)
+//------------------------------------------------------------------------------
+TEST(sequencer_micro_follows_copy_clear_rotate_and_backup)
+{
+	reset();
+	static const uint8_t none[STEP_FINE_BYTES];
+	const TrackTemplate tp = { .id = 3, .amount = -40 };
+	for (uint8_t s = 0; s < NUM_STEPS; s++)
+		stepFine_set(seq_patternSet.seq_stepFine[3][2], s, (int8_t)(s % 12 - 6));
+	seq_patternSet.tmpl[3][2] = tp;
+	seq_copyTrack(2, 5, 3);
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[3][5], seq_patternSet.seq_stepFine[3][2], STEP_FINE_BYTES), 0);
+	ASSERT_EQ(memcmp(&seq_patternSet.tmpl[3][5], &tp, sizeof tp), 0);
+	seq_copyPattern(3, 7);
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[7], seq_patternSet.seq_stepFine[3], sizeof seq_patternSet.seq_stepFine[3]), 0);
+	ASSERT_EQ(memcmp(seq_patternSet.tmpl[7], seq_patternSet.tmpl[3], sizeof seq_patternSet.tmpl[3]), 0);
+	seq_copyPatternToBackupBuffer(3);
+	memset(seq_patternSet.seq_stepFine[3], 0, sizeof seq_patternSet.seq_stepFine[3]);
+	memset(seq_patternSet.tmpl[3], 0, sizeof seq_patternSet.tmpl[3]);
+	seq_copyBackupBufferToPattern(3);
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[3], seq_patternSet.seq_stepFine[7], sizeof seq_patternSet.seq_stepFine[3]), 0);
+	ASSERT_EQ(memcmp(&seq_patternSet.tmpl[3][2], &tp, sizeof tp), 0);
+	seq_clearTrack(2, 3);
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[3][2], none, STEP_FINE_BYTES), 0);
+	ASSERT_EQ(seq_patternSet.tmpl[3][2].id, 0);
+	ASSERT_EQ(seq_patternSet.tmpl[3][2].amount, 0);
+	ASSERT_EQ(memcmp(&seq_patternSet.tmpl[3][5], &tp, sizeof tp), 0);	/* the other track stays */
+	seq_clearPattern(7);
+	for (uint8_t t = 0; t < NUM_TRACKS; t++)
+	{
+		ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[7][t], none, STEP_FINE_BYTES), 0);
+		ASSERT_EQ(seq_patternSet.tmpl[7][t].id, 0);
+	}
+	/* a rotation within the length 5 moves each fine part with its step */
+	seq_patternSet.length[4][2] = 5;
+	for (uint8_t s = 0; s < NUM_STEPS; s++)
+		stepFine_set(seq_patternSet.seq_stepFine[4][2], s, (int8_t)(s % 12 - 6));
+	seq_rotateTrack(2, 4, 1);
+	static const int8_t right[6] = { -2, -6, -5, -4, -3, -1 };
+	for (uint8_t s = 0; s < 6; s++)
+		ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[4][2], s), right[s]);
+	seq_rotateTrack(2, 4, -1);
+	for (uint8_t s = 0; s < NUM_STEPS; s++)
+		ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[4][2], s), s % 12 - 6);
+}
+
 TEST_MAIN()

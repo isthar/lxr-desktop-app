@@ -104,6 +104,8 @@ typedef struct PatternSetStruct
 	uint8_t shuffle[NUM_PATTERN];
 	uint8_t kitNr[NUM_PATTERN];
 	TrackGroove groove[NUM_PATTERN][NUM_TRACKS];	//LICHOMAT v0.2: tempo, humanize, delay (file extension block)
+	uint8_t seq_stepFine[NUM_PATTERN][NUM_TRACKS][STEP_FINE_BYTES];	//LICHOMAT v0.6: the steps' fine microtiming, a nibble each (SeqStepTypes.h, block 2)
+	TrackTemplate tmpl[NUM_PATTERN][NUM_TRACKS];	//LICHOMAT v0.6: groove template and amount (block 2)
 }PatternSet;
 
 typedef struct PatternBackupBufferStruct
@@ -116,6 +118,8 @@ typedef struct PatternBackupBufferStruct
 	uint8_t shuffle;
 	uint8_t kitNr;
 	TrackGroove groove[NUM_TRACKS];
+	uint8_t seq_stepFine[NUM_TRACKS][STEP_FINE_BYTES];	//LICHOMAT v0.6
+	TrackTemplate tmpl[NUM_TRACKS];
 }PatternBackupBuffer;
 
 /*

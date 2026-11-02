@@ -316,6 +316,8 @@ void seq_copyPatternToBackupBuffer(uint8_t patternNr)
 	patternBackupBuffer.shuffle = seq_patternSet.shuffle[patternNr];;
 	patternBackupBuffer.kitNr = seq_patternSet.kitNr[patternNr];
 	memcpy(patternBackupBuffer.groove, seq_patternSet.groove[patternNr], sizeof patternBackupBuffer.groove); //LICHOMAT v0.2: the per-track settings
+	memcpy(patternBackupBuffer.seq_stepFine, seq_patternSet.seq_stepFine[patternNr], sizeof patternBackupBuffer.seq_stepFine); //LICHOMAT v0.6: fine microtiming, templates (M13)
+	memcpy(patternBackupBuffer.tmpl, seq_patternSet.tmpl[patternNr], sizeof patternBackupBuffer.tmpl);
 
 }
 //------------------------------------------------------------------------------
@@ -332,6 +334,8 @@ void seq_copyBackupBufferToPattern(uint8_t patternNr)
 	seq_patternSet.shuffle[patternNr] = patternBackupBuffer.shuffle;
 	seq_patternSet.kitNr[patternNr] = patternBackupBuffer.kitNr;
 	memcpy(seq_patternSet.groove[patternNr], patternBackupBuffer.groove, sizeof patternBackupBuffer.groove); //LICHOMAT v0.2: the per-track settings
+	memcpy(seq_patternSet.seq_stepFine[patternNr], patternBackupBuffer.seq_stepFine, sizeof patternBackupBuffer.seq_stepFine); //LICHOMAT v0.6: fine microtiming, templates (M13)
+	memcpy(seq_patternSet.tmpl[patternNr], patternBackupBuffer.tmpl, sizeof patternBackupBuffer.tmpl);
 }
 /*
 //------------------------------------------------------------------------------
@@ -1511,6 +1515,8 @@ void seq_clearTrack(uint8_t trackNr, uint8_t pattern)
 	//**PATROT all pattern rotations off and all patterns set to length 16
 	seq_patternSet.length[pattern][trackNr]=16;
 	memset(&seq_patternSet.groove[pattern][trackNr], 0, sizeof(TrackGroove)); //LICHOMAT v0.2: the defaults
+	memset(seq_patternSet.seq_stepFine[pattern][trackNr], 0, STEP_FINE_BYTES); //LICHOMAT v0.6: fine 0, template off (M13)
+	memset(&seq_patternSet.tmpl[pattern][trackNr], 0, sizeof(TrackTemplate));
 
 }
 //------------------------------------------------------------------------------
@@ -1569,6 +1575,8 @@ void seq_copyTrack(uint8_t srcNr, uint8_t dstNr, uint8_t pattern)
 	// copy length and rotation offset from source track
 	seq_patternSet.length[pattern][dstNr] = seq_patternSet.length[pattern][srcNr];
 	seq_patternSet.groove[pattern][dstNr] = seq_patternSet.groove[pattern][srcNr]; //LICHOMAT v0.2: the per-track settings
+	memmove(seq_patternSet.seq_stepFine[pattern][dstNr], seq_patternSet.seq_stepFine[pattern][srcNr], STEP_FINE_BYTES); //LICHOMAT v0.6 (M13)
+	seq_patternSet.tmpl[pattern][dstNr] = seq_patternSet.tmpl[pattern][srcNr];
 
 
 }
@@ -1602,6 +1610,8 @@ void seq_copyPattern(uint8_t src, uint8_t dst)
 		// copy length and rotation offset from source pattern for the track
 		seq_patternSet.length[dst][j] = seq_patternSet.length[src][j];
 		seq_patternSet.groove[dst][j] = seq_patternSet.groove[src][j]; //LICHOMAT v0.2: the per-track settings
+		memmove(seq_patternSet.seq_stepFine[dst][j], seq_patternSet.seq_stepFine[src][j], STEP_FINE_BYTES); //LICHOMAT v0.6 (M13)
+		seq_patternSet.tmpl[dst][j] = seq_patternSet.tmpl[src][j];
 
 		seq_patternSet.shuffle[dst] = seq_patternSet.shuffle[src];
 		seq_patternSet.kitNr[dst] = seq_patternSet.kitNr[src];
@@ -2278,6 +2288,20 @@ static TrackGroove seq_cbGroove(void *ctx, uint8_t pattern, uint8_t track)
 	return seq_patternSet.groove[pattern][track];
 }
 //------------------------------------------------------------------------------
+/** LICHOMAT v0.6: the step's fine microtiming (spec v0.6 M1, M28) */
+static int8_t seq_cbFine(void *ctx, uint8_t pattern, uint8_t track, uint8_t step)
+{
+	(void)ctx;
+	return stepFine_get(seq_patternSet.seq_stepFine[pattern][track], step);
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.6: the track's groove template in the pattern (M5, M28) */
+static TrackTemplate seq_cbTmpl(void *ctx, uint8_t pattern, uint8_t track)
+{
+	(void)ctx;
+	return seq_patternSet.tmpl[pattern][track];
+}
+//------------------------------------------------------------------------------
 static const seqc_host_t seq_host =
 {
 	.ctx = NULL,
@@ -2302,6 +2326,8 @@ static const seqc_host_t seq_host =
 	.random = seq_cbRandom,
 	.groove = seq_cbGroove,
 	.trackStep = seq_cbTrackStep,
+	.fine = seq_cbFine,
+	.tmpl = seq_cbTmpl,
 };
 //------------------------------------------------------------------------------
 static void seq_initCore(void)
@@ -2560,8 +2586,9 @@ void seq_setStepProbKeepSlide(uint8_t pattern, uint8_t track, uint8_t step, uint
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.2: move every step of the track in pattern one step later (dir +1) or
  * earlier (-1) within the track length: the step data (volume, probability or condition,
- * note, p-locks), the step timing (flam, shift) and the main-step bit move together, the
- * step at one end wraps to the other, and the steps past the length stay */
+ * note, p-locks), the step timing (flam, shift) and, v0.6, the fine part and the main-step
+ * bit move together, the step at one end wraps to the other, and the steps past the length
+ * stay */
 void seq_rotateTrack(uint8_t trackNr, uint8_t pattern, int8_t dir)
 {
 	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN) || ((dir != 1) && (dir != -1))) return;
@@ -2571,9 +2598,11 @@ void seq_rotateTrack(uint8_t trackNr, uint8_t pattern, int8_t dir)
 	if(len < 2) return;
 	Step *s = seq_patternSet.seq_subStepPattern[pattern][trackNr];
 	StepTiming *tm = seq_patternSet.seq_stepTiming[pattern][trackNr];
+	uint8_t *fine = seq_patternSet.seq_stepFine[pattern][trackNr];	//LICHOMAT v0.6: the fine part moves with its step (M13)
 	const uint8_t wrap = (dir > 0) ? (uint8_t)(len - 1) : 0;
 	const Step keep = s[wrap];
 	const StepTiming keepTiming = tm[wrap];
+	const int8_t keepFine = stepFine_get(fine, wrap);
 	const uint8_t keepOn = seq_intIsMainStepActive(trackNr, wrap, pattern);
 	if(dir > 0)
 	{
@@ -2581,10 +2610,12 @@ void seq_rotateTrack(uint8_t trackNr, uint8_t pattern, int8_t dir)
 		{
 			s[i] = s[i-1];
 			tm[i] = tm[i-1];
+			stepFine_set(fine, i, stepFine_get(fine, (uint8_t)(i-1)));
 			seq_setMainStep(pattern, trackNr, i, seq_intIsMainStepActive(trackNr, (uint8_t)(i-1), pattern));
 		}
 		s[0] = keep;
 		tm[0] = keepTiming;
+		stepFine_set(fine, 0, keepFine);
 		seq_setMainStep(pattern, trackNr, 0, keepOn);
 	}
 	else
@@ -2593,10 +2624,12 @@ void seq_rotateTrack(uint8_t trackNr, uint8_t pattern, int8_t dir)
 		{
 			s[i] = s[i+1];
 			tm[i] = tm[i+1];
+			stepFine_set(fine, i, stepFine_get(fine, (uint8_t)(i+1)));
 			seq_setMainStep(pattern, trackNr, i, seq_intIsMainStepActive(trackNr, (uint8_t)(i+1), pattern));
 		}
 		s[len-1] = keep;
 		tm[len-1] = keepTiming;
+		stepFine_set(fine, (uint8_t)(len - 1), keepFine);
 		seq_setMainStep(pattern, trackNr, (uint8_t)(len - 1), keepOn);
 	}
 }
