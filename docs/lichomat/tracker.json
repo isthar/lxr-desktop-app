@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-02 22:43",
+    "updated": "2026-11-02 22:57",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "v0.6 w wykonaniu: E6.14–E6.23 (mikrotiming i szablony groove)",
+    "focus": "Przerwa: v0.6 w połowie (E6.14–E6.19 zrobione)",
     "branch": "timing-core",
-    "head": "edfe8e6",
-    "next": "E6.16, potem pełny przegląd E6.14–E6.16; dalej E6.17–E6.18 (RAM i blok 2 w plikach)",
-    "updated_at": "2026-11-02T22:43:00+01:00",
-    "now": "E6.19–E6.20: wykonawca grupy C; przegląd E6.17–E6.18 równolegle"
+    "head": "e270f44",
+    "next": "E6.20 (nagrywanie) i jego przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
+    "updated_at": "2026-11-02T22:57:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -589,8 +589,8 @@
     {
       "id": "E6.19",
       "epic": "E6",
-      "status": "w toku",
-      "title": "v0.6 zad. 6: interfejs: mic na stronie kroku, tpl i amt na stronie toru, rqn na stronie nagrywania",
+      "status": "zrobione",
+      "title": "v0.6 zad. 6: interfejs: mic na stronie kroku, tpl i amt na stronie toru, rqn na stronie nagrywania (e270f44)",
       "updated": "2026-11-02"
     },
     {
@@ -3578,6 +3578,16 @@
       "n": 510,
       "at": "2026-11-02 22:43",
       "text": "Przegląd E6.17–E6.18 gotowy: żadnego błędu w kodzie (odczyt i zapis bloku 2, domyślne wartości, kopiowanie, rotacja co pół bajtu, pamięć dokładnie jak w specyfikacji; 26 z 32 mutacji zabitych). Cztery luki w testach: zapis samego mikrotimingu bez szablonu (ważne: taki błąd przeszedłby wszystkie testy, a wzór traciłby mikrotiming przy zapisie), połączenie z hostem, przesunięcie 15, blok 2 zależny od bloku 1. Testy dopisze wykonawca grupy C po E6.20."
+    },
+    {
+      "n": 511,
+      "at": "2026-11-02 22:57",
+      "text": "E6.19 (v0.6 zad. 6) zrobione, e270f44: mic na stronie kroku, tpl i amt na trzecim ekranie strony toru, rqn na stronie nagrywania, przez bezpośrednie wywołania (wartości powyżej 127). Host 122/122 (UBSan i ASan), emulator 331/331 i 303/303, 32 nagrania wzorcowe bez zmian, 0 ostrzeżeń; dwie drobne poprawki kompilacji opisane w commicie."
+    },
+    {
+      "n": 512,
+      "at": "2026-11-02 22:57",
+      "text": "Przerwa na noc. Stan: E6.14–E6.19 zrobione i wypchnięte (gałąź v0.6, e270f44), worktree build/wt-v06 czysty. Dalej: E6.20 (nagrywanie) z pełnym przeglądem, testy z przeglądu E6.17–E6.18 (zapisane w planie, „Changes during execution”), potem E6.21–E6.23. Notatki: HANDOFF.md (wiersz v0.6), plan, pamięć projektu. Usage nowego tygodnia ok. 0,9%."
     }
   ]
 }
