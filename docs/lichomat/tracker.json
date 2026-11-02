@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-01 08:27",
+    "updated": "2026-11-02 19:50",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Przerwa: v0.5 sprawdzone pod ASan, 4 nowe kity czekają na Twój odsłuch",
+    "focus": "v0.6: specyfikacja mikrotimingu i szablonów groove",
     "branch": "timing-core",
-    "head": "a1fe7b1",
+    "head": "6698f4b",
     "next": "Twój odsłuch kitów PULS/HUSTAWKA/PROSTO/PRZESTER; H12; po resecie limitu (pn 2.11, 22:00) v0.6: szablony groove, mikrotiming PatV04",
-    "updated_at": "2026-11-01T08:27:00+01:00",
-    "now": ""
+    "updated_at": "2026-11-02T19:50:00+01:00",
+    "now": "Agent pisze specyfikację v0.6 (E6.2, E6.4, E6.5)"
   },
   "epics": [
     {
@@ -3400,6 +3400,11 @@
       "n": 491,
       "at": "2026-11-01 08:27",
       "text": "Przerwa: właściciel wyszedł. Notatki zapisane: HANDOFF.md (v0.5 a213a5d, kity, pomiary albumu, kompilator), pamięć projektu. Pomiary albumu i narzędzia dopasowania przeniesione ze scratchpada do build/reference/ (na Twoim Macu, poza gitem), bo posłużą do szablonów groove w v0.6. Nic nie pracuje w tle. Usage ok. 76,2%."
+    },
+    {
+      "n": 492,
+      "at": "2026-11-02 19:50",
+      "text": "Wracamy. Twój odczyt: 82%, reset limitu za ok. 1 h 15 min, potem tydzień do 50%. (Z 75% na 82% od wczoraj rano, a tutaj zużyłem tylko ok. 10M jednostek: reszta poszła poza tym Makiem.) Start v0.6: agent pisze specyfikację (szablony groove E6.2, pełny mikrotiming kroku i nowy format wzorca E6.4, nagrywanie z mikrotimingiem E6.5), zaczynając od budżetu pamięci (1 860 B wolnego). Szablony z pomiaru albumu: np. w utworze 5 szesnastki zaraz po ćwierćnucie są 16–26 ms później, te przed ćwierćnutą 0–12 ms, więc to groove per pozycja, nie zwykły swing."
     }
   ]
 }
