@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-02 22:01",
+    "updated": "2026-11-02 22:04",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "v0.6: specyfikacja mikrotimingu i szablonów groove",
+    "focus": "v0.6 w wykonaniu: E6.14–E6.23 (mikrotiming i szablony groove)",
     "branch": "timing-core",
-    "head": "8f03272",
-    "next": "Twój odsłuch kitów PULS/HUSTAWKA/PROSTO/PRZESTER; H12; po resecie limitu (pn 2.11, 22:00) v0.6: szablony groove, mikrotiming PatV04",
-    "updated_at": "2026-11-02T22:01:00+01:00",
-    "now": "Wykonawca grupy A v0.6: zadania 1–3"
+    "head": "9fd45dc",
+    "next": "E6.16, potem pełny przegląd E6.14–E6.16; dalej E6.17–E6.18 (RAM i blok 2 w plikach)",
+    "updated_at": "2026-11-02T22:04:00+01:00",
+    "now": "E6.16 (v0.6 zad. 3): rdzeń z szablonami i przesunięciem §4.1, wykonawca grupy A"
   },
   "epics": [
     {
@@ -471,7 +471,7 @@
       "id": "E6.2",
       "epic": "E6",
       "status": "w toku",
-      "title": "v0.6: szablony groove (przesunięcie każdego z 16 kroków) z pomiaru albumu referencyjnego; specyfikacja i plan gotowe (2.11), wykonanie w toku na gałęzi v0.6",
+      "title": "v0.6: szablony groove (przesunięcie każdego z 16 kroków) z pomiaru albumu referencyjnego; specyfikacja i plan gotowe (2.11), wykonanie w toku na gałęzi v0.6 (E6.14–E6.23)",
       "updated": "2026-11-02"
     },
     {
@@ -485,14 +485,14 @@
       "id": "E6.4",
       "epic": "E6",
       "status": "w toku",
-      "title": "v0.6: pełny mikrotiming kroku i nowy format wzorca; specyfikacja i plan gotowe (2.11), wykonanie w toku na gałęzi v0.6, RAM ma ok. 42,8 KB fizycznego zapasu",
+      "title": "v0.6: pełny mikrotiming kroku i nowy format wzorca; specyfikacja i plan gotowe (2.11), wykonanie w toku na gałęzi v0.6 (E6.14–E6.23), RAM ma ok. 42,8 KB fizycznego zapasu",
       "updated": "2026-11-02"
     },
     {
       "id": "E6.5",
       "epic": "E6",
       "status": "w toku",
-      "title": "v0.6: nagrywanie z zachowaniem mikrotimingu; specyfikacja i plan gotowe (2.11), wykonanie w toku na gałęzi v0.6",
+      "title": "v0.6: nagrywanie z zachowaniem mikrotimingu; specyfikacja i plan gotowe (2.11), wykonanie w toku na gałęzi v0.6 (E6.14–E6.23)",
       "updated": "2026-11-02"
     },
     {
@@ -550,6 +550,76 @@
       "status": "zrobione",
       "title": "Kity PULS, HUSTAWKA, PROSTO i PRZESTER (sloty 56–59) w stylu BCCO / Mutual Rytm, dopasowane pomiarem do albumu referencyjnego (gałąź kits, f7034b0); czekają na Twój odsłuch",
       "updated": "2026-11-01"
+    },
+    {
+      "id": "E6.14",
+      "epic": "E6",
+      "status": "zrobione",
+      "title": "v0.6 zad. 1: wersja 0.6 i pomiar bazowy (d84b48c)",
+      "updated": "2026-11-02"
+    },
+    {
+      "id": "E6.15",
+      "epic": "E6",
+      "status": "zrobione",
+      "title": "v0.6 zad. 2: typy mikrotimingu i podział na część zgrubną i dokładną, test step_micro (8f03272)",
+      "updated": "2026-11-02"
+    },
+    {
+      "id": "E6.16",
+      "epic": "E6",
+      "status": "w toku",
+      "title": "v0.6 zad. 3: rdzeń: szablony groove i przesunięcie kroku (§4.1), testy micro_offsets, templates, micro_choke; potem pełny przegląd zadań 1–3",
+      "updated": "2026-11-02"
+    },
+    {
+      "id": "E6.17",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.6 zad. 4: tablice w RAM (+15,5 KB), kopiowanie, czyszczenie i rotacja z mikrotimingiem, nowa linia budżetu",
+      "updated": "2026-11-02"
+    },
+    {
+      "id": "E6.18",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.6 zad. 5: blok 2 w plikach wzorców (odczyt i zapis), test pattern_block2; potem pełny przegląd zadań 4–5",
+      "updated": "2026-11-02"
+    },
+    {
+      "id": "E6.19",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.6 zad. 6: interfejs: mic na stronie kroku, tpl i amt na stronie toru, rqn na stronie nagrywania",
+      "updated": "2026-11-02"
+    },
+    {
+      "id": "E6.20",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.6 zad. 7: nagrywanie z mikrotimingiem (seqc_recordPlace), testy record_place i record_micro; pełny przegląd",
+      "updated": "2026-11-02"
+    },
+    {
+      "id": "E6.21",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.6 zad. 8: emulator: pomiar onsetów w tickach, karta groove, nagrania wzorcowe G20–G22",
+      "updated": "2026-11-02"
+    },
+    {
+      "id": "E6.22",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.6 zad. 9: README, fuzzing, dema demo_v06.sh, odbiór",
+      "updated": "2026-11-02"
+    },
+    {
+      "id": "E6.23",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.6 zad. 10: dokumenty dla Ciebie (U33–U37, notatki wydania, przepisy groove) i raport M18",
+      "updated": "2026-11-02"
     },
     {
       "id": "E7.1",
@@ -627,6 +697,13 @@
       "status": "zablokowane",
       "title": "CI na GitHubie: build v0.4 w kolejce od 31.10, 00:11 UTC, bez nowych przebiegów; bez CI nie ma obrazów .img v0.4 i v0.5",
       "updated": "2026-11-01"
+    },
+    {
+      "id": "E8.6",
+      "epic": "E8",
+      "status": "do zrobienia",
+      "title": "Ty: v0.6 na LXR (U33–U37) i wydanie, po kodzie v0.6 (E6.14–E6.23) i po wydaniu v0.5 (E8.3)",
+      "updated": "2026-11-02"
     }
   ],
   "milestones": [
@@ -725,6 +802,12 @@
       "date": "2026-10-31",
       "title": "v0.5: wyzwalanie z dokładnością do próbki (E6.10)",
       "summary": "Każdy głos startuje w próbce swojego zdarzenia, stale 2,9 ms po nim (sekwencer, MIDI z DIN i USB, slave na zegarze); trg smp/blk w menu globalnym, blk = v0.4 bit w bit. W emulatorze onsety ±1 próbka (G16–G19), stopa 4/4 identyczna przy każdym uderzeniu (stała faza nuty), logi MIDI/zegara/panelu identyczne z v0.4, głośność wobec v0.4 w 46 z 48 kanałów < 0,1 dB. 114 testów hosta, 329 emulatora, fuzz 2400 renderów bez znalezisk. CPU: średnio ok. 1,24% przy 6 brzmiących głosach, najgorszy blok 3,64% (4,64% z LFO). Dwa przeglądy kodu i pomiar stopy: wszystkie uwagi poprawione. Czeka na H12 i U27–U32. Raport: docs/lichomat/reports/M16-v0.5-sample-accurate.md"
+    },
+    {
+      "id": "M17",
+      "date": "2026-11-01",
+      "title": "Kity: WIR, MGLA, RDZA, IGLA i cztery kity dopasowane do albumu referencyjnego (E6.12, E6.13)",
+      "summary": "Kity budowane przez firmware (tools/kit_build.py), sloty 56–63, gałąź kits (f7034b0). Nowe kity PULS, HUSTAWKA, PROSTO i PRZESTER dopasowane pomiarem do albumu referencyjnego; tabele cel/wynik w kits/README.md. Czekają na Twój odsłuch."
     }
   ],
   "questions": [
@@ -3444,12 +3527,17 @@
     {
       "n": 500,
       "at": "2026-11-02 21:55",
-      "text": "v0.6 d84b48c (zadanie 1): wersja 0.6, obraz LXR_V2_LICHOMAT_0.6.img z ekranem „v0.6 unofficial”. Baza sprawdzona: wszystkie testy (UBSan i ASan), fw_checks 10 PASS, 32 nagrania wzorcowe bez zmian, seqc_generate() 676 instrukcji jak w planie."
+      "text": "E6.14 (v0.6 zad. 1) zrobione, d84b48c: wersja 0.6, obraz LXR_V2_LICHOMAT_0.6.img z ekranem „v0.6 unofficial”. Baza sprawdzona: wszystkie testy (UBSan i ASan), fw_checks 10 PASS, 32 nagrania wzorcowe bez zmian, seqc_generate() 676 instrukcji jak w planie."
     },
     {
       "n": 501,
       "at": "2026-11-02 22:01",
-      "text": "v0.6 8f03272 (zadanie 2): typy mikrotimingu w SeqStepTypes.h: kanoniczny podział na część zgrubną (stare przesunięcie) i dokładną (4 bity), ustawienia szablonu toru (2 B), nowy test step_micro. Host 115/115 (UBSan i ASan), emulator bez zmian, 0 ostrzeżeń, obraz firmware'u równoważny (nic go jeszcze nie używa)."
+      "text": "E6.15 (v0.6 zad. 2) zrobione, 8f03272: typy mikrotimingu w SeqStepTypes.h: kanoniczny podział na część zgrubną (stare przesunięcie) i dokładną (4 bity), ustawienia szablonu toru (2 B), nowy test step_micro. Host 115/115 (UBSan i ASan), emulator bez zmian, 0 ostrzeżeń, obraz firmware'u równoważny (nic go jeszcze nie używa)."
+    },
+    {
+      "n": 502,
+      "at": "2026-11-02 22:04",
+      "text": "Porządek w trackerze po Twojej uwadze. Jedna numeracja: każde zadanie planu v0.6 ma teraz własny wiersz (zadanie N = E6.(13+N): E6.14 i E6.15 zrobione, E6.16 w toku, E6.17–E6.23 do zrobienia), Twoje testy v0.6 i wydanie to E8.6. Wpisy dziennika zaczynają się od numeru wiersza, a w czacie używam tylko tych numerów. Kamienie milowe to skończone dostawy: doszedł M17 (kity, E6.12 i E6.13), v0.6 będzie M18. Zasady zapisane w HANDOFF.md. Licznik: 72/90."
     }
   ]
 }

@@ -67,6 +67,19 @@ the Arm GCC in the same mode (newlib hides `M_PI` the same way), for example:
 The owner watches this page, so it must move with the work, not only when a task closes. Add a
 log entry for every finished agent step, every commit and every phase change.
 
+**One numbering (the owner, 2026-11-02).** The tracker task ids are the only names for work, in
+the tracker, the log and the chat alike.
+- Every task of a plan gets its own tracker row before its execution starts (v0.6: plan Task N is
+  E6.(13+N), titled "v0.6 zad. N: …"). A feature row (E6.2, E6.4, E6.5) stays `w toku` until all its
+  plan rows are done.
+- A row changes status in the same update in which work on it starts (`w toku`) or ends
+  (`zrobione`). Saying "done" in the chat without the row flipped is a bug.
+- Every log entry starts with the row ids it concerns, then the commit: `E6.15 (v0.6 zad. 2)
+  zrobione, 8f03272: …`.
+- Milestones are finished deliveries with a report (a version, the kits, an emulator stage), added
+  when the delivery is done.
+- Each update uploads every file that `tracker_export.py` reports as changed, not only the log.
+
 1. Log what happened and refresh the status in one go:
    `python3 tools/tracker_note.py "text" [--focus …] [--next …] [--phase …] [--now …]`.
    It stamps the entry with the local time and sets `status.updated`, `status.updated_at` and `status.head`.
