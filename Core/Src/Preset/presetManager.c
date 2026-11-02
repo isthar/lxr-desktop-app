@@ -1289,7 +1289,7 @@ void preset_loadDefaultGlobals()
 	activeParameters[PAR_PRESCALER_CLOCK_IN] = 0; //all
 	activeParameters[PAR_PRESCALER_CLOCK_OUT1] = 0; //all
 	activeParameters[PAR_PRESCALER_CLOCK_OUT2] = 0; //all
-	activeParameters[PAR_TRIG_GATE_MODE] = 0; //all
+	activeParameters[PAR_REC_QUANT] = 0;	//LICHOMAT v0.6: rqn off, recording keeps the microtiming (plan v0.6, M22)
 
 	activeParameters[PAR_BAR_RESET_MODE] = 1; //all
 	activeParameters[PAR_MIDI_CHAN_GLOBAL] = 0; //all

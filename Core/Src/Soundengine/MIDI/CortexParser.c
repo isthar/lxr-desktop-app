@@ -747,7 +747,7 @@ static void frontParser_handleSeqCC()
 		break;
 
 	case FRONT_SEQ_SHIFT:
-		seq_patternSet.seq_stepTiming[frontParser_shownPattern][frontParser_activeTrack][frontParser_activeStep].shift = (cortex_midiMsg.data2);
+		seq_setStepShift(frontParser_shownPattern, frontParser_activeTrack, frontParser_activeStep, cortex_midiMsg.data2);	//LICHOMAT v0.6: the fine part kept (M14)
 		break;
 
 	case FRONT_SEQ_PROB:
@@ -1003,6 +1003,7 @@ static void frontParser_handleSeqCC()
 
 
 		frontParser_activeStep = cortex_midiMsg.data2;
+		seq_loadStepMicro(frontParser_shownPattern, frontParser_activeTrack, frontParser_activeStep);	//LICHOMAT v0.6: mic (spec v0.6 6.1)
 	}
 		break;
 

@@ -859,4 +859,82 @@ TEST(sequencer_micro_follows_copy_clear_rotate_and_backup)
 		ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[4][2], s), s % 12 - 6);
 }
 
+//------------------------------------------------------------------------------
+// LICHOMAT v0.6 (plan v0.6 Task 6): the step page's mic and shf, the track page's tpl and amt
+// through their direct calls (M14, M16, M17)
+//------------------------------------------------------------------------------
+static int microOf(uint8_t p, uint8_t t, uint8_t s)
+{
+	return stepMicro(seq_patternSet.seq_stepTiming[p][t][s], stepFine_get(seq_patternSet.seq_stepFine[p][t], s));
+}
+
+TEST(sequencer_micro_step_page)
+{
+	reset();
+	StepTiming *t = &seq_patternSet.seq_stepTiming[2][1][9];
+	*t = (StepTiming){ .flam = 4, .shift = 7 };
+	seq_setStepMicro(2, 1, 9, 84 + 19);		/* mic +19: shf +2, fine -5 */
+	ASSERT_EQ(t->shift, 9);
+	ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[2][1], 9), -5);
+	ASSERT_EQ(activeParameters[PAR_STEP_SHIFT], 9);
+	ASSERT_EQ(activeParameters[PAR_STEP_MICRO], 84 + 19);
+	/* spec 6.1: mic +14, then shf +1 -> +2: mic +26 */
+	seq_setStepMicro(2, 1, 9, 84 + 14);
+	ASSERT_EQ(t->shift, 8);
+	seq_setStepShift(2, 1, 9, 9);
+	seq_loadStepMicro(2, 1, 9);
+	ASSERT_EQ(activeParameters[PAR_STEP_MICRO], 84 + 26);
+	/* U33 step 2: on mic +6, shf +1 -> +2 -> +1 reads +18, then +6 */
+	seq_setStepMicro(2, 1, 9, 84 + 6);
+	ASSERT_EQ(t->shift, 8);
+	seq_setStepShift(2, 1, 9, 9);
+	ASSERT_EQ(microOf(2, 1, 9), 18);
+	seq_setStepShift(2, 1, 9, 8);
+	ASSERT_EQ(microOf(2, 1, 9), 6);
+	/* a shf edit past the reach stops mic at +-84 */
+	seq_setStepMicro(2, 1, 9, 84 + 77);		/* +6 units, fine +5 */
+	seq_setStepShift(2, 1, 9, 14);
+	ASSERT_EQ(microOf(2, 1, 9), 84);
+	ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[2][1], 9), 0);
+	seq_setStepMicro(2, 1, 9, 84 - 78);		/* -6 units, fine -6 */
+	seq_setStepShift(2, 1, 9, 0);
+	ASSERT_EQ(microOf(2, 1, 9), -84);
+	/* a menu value past 168 is 0; the flam stayed throughout */
+	seq_setStepMicro(2, 1, 9, 200);
+	ASSERT_EQ(microOf(2, 1, 9), 0);
+	ASSERT_EQ(t->shift, 7);
+	ASSERT_EQ(t->flam, 4);
+	/* tpl and amt: the direct calls take values past 127, and out-of-range values are the defaults */
+	seq_setGrooveParam(1, 2, PAR_TRACK_TPL, 7);
+	seq_setGrooveParam(1, 2, PAR_TRACK_TPL_AMT, 200);
+	ASSERT_EQ(seq_patternSet.tmpl[2][1].id, 7);
+	ASSERT_EQ(seq_patternSet.tmpl[2][1].amount, 100);
+	seq_loadGrooveParams(1, 2);
+	ASSERT_EQ(activeParameters[PAR_TRACK_TPL], 7);
+	ASSERT_EQ(activeParameters[PAR_TRACK_TPL_AMT], 200);
+	seq_setGrooveParam(1, 2, PAR_TRACK_TPL, 8);
+	seq_setGrooveParam(1, 2, PAR_TRACK_TPL_AMT, 201);
+	seq_loadGrooveParams(1, 2);
+	ASSERT_EQ(activeParameters[PAR_TRACK_TPL], 0);
+	ASSERT_EQ(activeParameters[PAR_TRACK_TPL_AMT], 100);
+	/* M16: +19 at 120 BPM and x1 is 24.7 ms, at 142 BPM 20.9; -18 at 120 is -23.4; +19 at x3/4
+	 * and 142 BPM is 27.9 */
+	seq_setBpm(120);
+	ASSERT_EQ(seq_stepMicroTenthsMs(1, 2, 84 + 19), 247);
+	ASSERT_EQ(seq_stepMicroTenthsMs(1, 2, 84 - 18), -234);
+	seq_setBpm(142);
+	ASSERT_EQ(seq_stepMicroTenthsMs(1, 2, 84 + 19), 209);
+	seq_patternSet.groove[2][1].tempo = -1;
+	ASSERT_EQ(seq_stepMicroTenthsMs(1, 2, 84 + 19), 279);
+	seq_patternSet.groove[2][1].tempo = -5;		/* x1/4: +84 at 120 BPM is 437.5 ms */
+	seq_setBpm(120);
+	ASSERT_EQ(seq_stepMicroTenthsMs(1, 2, 168), 4375);
+	seq_patternSet.groove[2][1].tempo = 0;
+	seq_setBpm(125);				/* +-1 tick is +-1.25 ms: the half away from zero */
+	ASSERT_EQ(seq_stepMicroTenthsMs(1, 2, 85), 13);
+	ASSERT_EQ(seq_stepMicroTenthsMs(1, 2, 83), -13);
+	seq_setBpm(120);
+	run(1);
+}
+
 TEST_MAIN()

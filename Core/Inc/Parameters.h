@@ -367,7 +367,7 @@ enum ParamEnums
 	
 	PAR_TRACK_LENGTH,
 	
-	UNUSED_PAR_GLO_SAT,						//  - global saturation
+	PAR_STEP_MICRO,					// LICHOMAT v0.6: the selected step's microtiming, T + 84 (menu only, was fw 1.7's unused global saturation; plan v0.6, M18)
 	PAR_HUMAN_TIME,					// LICHOMAT v0.2: the selected track's humanize time (menu only, saved in the pattern)
 	PAR_HUMAN_VOL,					// LICHOMAT v0.2: the selected track's humanize volume (menu only, saved in the pattern)
 	PAR_TRACK_DELAY,				// LICHOMAT v0.2: the selected track's delay (menu only, saved in the pattern)
@@ -409,7 +409,7 @@ enum ParamEnums
 	PAR_PRESCALER_CLOCK_IN,
 	PAR_PRESCALER_CLOCK_OUT1,
 	PAR_PRESCALER_CLOCK_OUT2,			//  - UNUSED
-	PAR_TRIG_GATE_MODE,					//  - UNUSED
+	PAR_REC_QUANT,						// LICHOMAT v0.6: rqn, record quantize off (0) or on (1), glo.cfg byte 19, fw 1.7's unused trigger gate mode (plan v0.6, M22)
 
 	PAR_BAR_RESET_MODE,					// bool 0 or 1   /*270*/
 	PAR_MIDI_CHAN_GLOBAL,				// global midi channel
@@ -439,7 +439,10 @@ enum ParamEnums
 	PAR_REV_DUCK_DEPTH,
 	PAR_FX_DELAY_SYNC,
 	END_OF_KIT_BLOCK,
-	NUM_PARAMS = END_OF_KIT_BLOCK	/*309*/
+	// LICHOMAT v0.6: the track page's third screen, menu only, saved in the pattern's block 2 (plan v0.6, M18)
+	PAR_TRACK_TPL = END_OF_KIT_BLOCK,	/*309*/
+	PAR_TRACK_TPL_AMT,
+	NUM_PARAMS	/*311*/
 };
 
 extern uint8_t parameterOrder[END_OF_SOUND_PARAMETERS];

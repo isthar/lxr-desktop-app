@@ -21,6 +21,7 @@
 
 extern uint8_t frontParser_activeTrack;
 extern uint8_t frontParser_shownPattern;
+extern uint8_t frontParser_activeStep;	//LICHOMAT v0.6: the step of the step page's edits (menu.c)
 extern uint8_t frontParser_sysexActive;
 
 extern uint8_t frontParser_activeFrontTrack;

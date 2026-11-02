@@ -52,6 +52,9 @@
 #define MENU_DUCK_SRC		33	// LICHOMAT v0.4 (plan D40)
 #define MENU_DELAY_SYNC		34	// LICHOMAT v0.4 (plan D38)
 #define MENU_TRIG_TIMING	35	// LICHOMAT v0.5
+#define MENU_STEP_MICRO	36	// LICHOMAT v0.6
+#define MENU_TRK_TPL		37
+#define MENU_TPL_AMT		38
 
 //-----------------------------------------------------------------
 // Shared texts. Reduce mem usage by pooling common text
@@ -134,6 +137,17 @@ const char trigTimingNames[][4] =
 {
 	{2},		//number of entries
 	{"smp"}, {"blk"},
+};
+//-----------------------------------------------------------------
+// LICHOMAT v0.6: the groove templates (PAR_TRACK_TPL), and their long names for edit mode
+const char trackTplNames[][4] =
+{
+	{8},		//number of entries
+	{"off"}, {"swg"}, {"lay"}, {"lyb"}, {"rlx"}, {"2bt"}, {"psh"}, {"drg"},
+};
+const char trackTplLongNames[][12] =
+{
+	{"off"}, {"even swing"}, {"lay back"}, {"lay bar"}, {"relax bar"}, {"two beat"}, {"push off"}, {"drag off"},
 };
 //-----------------------------------------------------------------
 // LICHOMAT v0.2: the trig conditions of PAR_STEP_PROB 101..115 (SeqStepTypes.h)
@@ -533,6 +547,7 @@ const char shortNames[][4]  =
 	{"slt"}, {"sld"}, {"scn"},	// LICHOMAT v0.3
 	{"lvl"}, {"siz"}, {"mod"}, {"frz"}, {"syn"}, {"dck"}, {"ddp"}, {"djf"}, {"djr"},	// LICHOMAT v0.4
 	{"trg"},	// LICHOMAT v0.5
+	{"mic"}, {"tpl"}, {"amt"}, {"rqn"},	// LICHOMAT v0.6
 
 };
 //-----------------------------------------------------------------
@@ -668,6 +683,7 @@ const char longNames[][16] =
 	{"rev level"}, {"rev size"}, {"rev modul"}, {"rev freeze"}, {"delay sync"},	// LICHOMAT v0.4
 	{"duck src"}, {"duck depth"}, {"DJ filter"}, {"DJ reso"},
 	{"Trig timing"},	// LICHOMAT v0.5
+	{"Micro"}, {"Template"}, {"Tpl amt"}, {"RecQuant"},	// LICHOMAT v0.6
 };
 
 

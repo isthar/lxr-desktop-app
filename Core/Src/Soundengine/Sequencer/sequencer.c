@@ -2549,6 +2549,10 @@ void seq_loadGrooveParams(uint8_t trackNr, uint8_t pattern)
 	activeParameters[PAR_HUMAN_TIME] = g.humTime;
 	activeParameters[PAR_HUMAN_VOL] = g.humVol;
 	activeParameters[PAR_TRACK_DELAY] = (uint8_t)(g.delay - GROOVE_DELAY_MIN);
+	//LICHOMAT v0.6: the third screen, the template and its amount in percent (spec v0.6 6.2)
+	const TrackTemplate tp = trackTemplate_checked(seq_patternSet.tmpl[pattern][trackNr]);
+	activeParameters[PAR_TRACK_TPL] = tp.id;
+	activeParameters[PAR_TRACK_TPL_AMT] = (uint8_t)(tp.amount + 100);
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.2: a track page parameter edited, as its menu value */
@@ -2562,6 +2566,9 @@ void seq_setGrooveParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 	case PAR_HUMAN_TIME:	g->humTime = value <= GROOVE_HUM_TIME_MAX ? value : 0; break;
 	case PAR_HUMAN_VOL:	g->humVol = value <= GROOVE_HUM_VOL_MAX ? value : 0; break;
 	case PAR_TRACK_DELAY:	g->delay = (int8_t)(value <= GROOVE_DELAY_MAX - GROOVE_DELAY_MIN ? value + GROOVE_DELAY_MIN : 0); break;
+	//LICHOMAT v0.6: direct calls, the values pass 127 (M17)
+	case PAR_TRACK_TPL:	seq_patternSet.tmpl[pattern][trackNr].id = (value < TEMPLATE_COUNT) ? value : 0; break;
+	case PAR_TRACK_TPL_AMT:	seq_patternSet.tmpl[pattern][trackNr].amount = (int8_t)((value <= TEMPLATE_AMOUNT_MAX - TEMPLATE_AMOUNT_MIN) ? (int)value - 100 : 0); break;
 	default: break;
 	}
 }
@@ -2582,6 +2589,54 @@ void seq_setStepProbKeepSlide(uint8_t pattern, uint8_t track, uint8_t step, uint
 			|| (step >= sizeof seq_patternSet.seq_subStepPattern[0][0] / sizeof(Step))) return;
 	Step *s = &seq_patternSet.seq_subStepPattern[pattern][track][step];
 	s->prob = (uint8_t)((s->prob & STEP_SLIDE_FLAG) | (prob & STEP_PROB_MASK));
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.6: the step page's mic (PAR_STEP_MICRO = T + 84) from the step's microtiming
+ * (spec v0.6 6.1); called with the step's other values when a step is selected */
+void seq_loadStepMicro(uint8_t pattern, uint8_t track, uint8_t step)
+{
+	if((pattern >= NUM_PATTERN) || (track >= NUM_TRACKS) || (step >= NUM_STEPS)) return;
+	const int micro = stepMicro(seq_patternSet.seq_stepTiming[pattern][track][step],
+			stepFine_get(seq_patternSet.seq_stepFine[pattern][track], step));
+	activeParameters[PAR_STEP_MICRO] = (uint8_t)(micro + STEP_MICRO_MAX);
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.6: mic edited, its menu value T + 84 (M14, M17): the canonical split, the
+ * flam kept, and shf shows the new coarse part */
+void seq_setStepMicro(uint8_t pattern, uint8_t track, uint8_t step, uint8_t value)
+{
+	if((pattern >= NUM_PATTERN) || (track >= NUM_TRACKS) || (step >= NUM_STEPS)) return;
+	StepTiming *t = &seq_patternSet.seq_stepTiming[pattern][track][step];
+	const int micro = (value <= 2 * STEP_MICRO_MAX) ? (int)value - STEP_MICRO_MAX : 0;
+	stepFine_set(seq_patternSet.seq_stepFine[pattern][track], step, stepMicro_split(micro, t));
+	activeParameters[PAR_STEP_MICRO] = (uint8_t)(micro + STEP_MICRO_MAX);
+	activeParameters[PAR_STEP_SHIFT] = t->shift;
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.6: shf edited (the menu's message, CortexParser.c): coarse part shift - 7, the
+ * fine part kept, T clamped to +-84 and split again (M14); a shift past 14 counts as 0, as
+ * the core plays it */
+void seq_setStepShift(uint8_t pattern, uint8_t track, uint8_t step, uint8_t shift)
+{
+	if((pattern >= NUM_PATTERN) || (track >= NUM_TRACKS) || (step >= NUM_STEPS)) return;
+	StepTiming *t = &seq_patternSet.seq_stepTiming[pattern][track][step];
+	uint8_t *fine = seq_patternSet.seq_stepFine[pattern][track];
+	const int coarse = (shift > 14) ? 0 : (int)shift - 7;
+	stepFine_set(fine, step, stepMicro_split(STEP_SHIFT_UNIT * coarse + stepFine_get(fine, step), t));
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.6: mic's value (T + 84) of a step of track in pattern as tenths of a ms at the
+ * tempo seq_getBpm() and the track's tempo, rounded half away from zero (spec v0.6 M16) */
+int32_t seq_stepMicroTenthsMs(uint8_t track, uint8_t pattern, uint8_t value)
+{
+	static const uint16_t ticks[GROOVE_TEMPO_COUNT] = { 384, 288, 192, 144, 128, 96, 72, 64, 48, 32, 24 };
+	const uint16_t bpm = seq_getBpm();
+	if((track >= NUM_TRACKS) || (pattern >= NUM_PATTERN) || (bpm == 0)) return 0;
+	const TrackGroove g = trackGroove_checked(seq_patternSet.groove[pattern][track]);
+	//T/96 of a step of L/96 sixteenths of 15,000/bpm ms: T L 15625 / (bpm 960) tenths
+	const int32_t num = ((int32_t)value - STEP_MICRO_MAX) * (int32_t)ticks[g.tempo + GROOVE_TEMPO_X1] * 15625;
+	const int32_t den = (int32_t)bpm * 960;
+	return num >= 0 ? (2 * num + den) / (2 * den) : -((-2 * num + den) / (2 * den));
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.2: move every step of the track in pattern one step later (dir +1) or

@@ -278,6 +278,7 @@ static const struct { const char *name; uint16_t par; } render_params[] = {
 	{ "track_tempo", PAR_TRACK_TEMPO },
 	{ "step_slide", PAR_STEP_SLIDE },
 	{ "track_length", PAR_TRACK_LENGTH },
+	{ "step_micro", PAR_STEP_MICRO },
 	{ "human_time", PAR_HUMAN_TIME },
 	{ "human_vol", PAR_HUMAN_VOL },
 	{ "track_delay", PAR_TRACK_DELAY },
@@ -304,7 +305,7 @@ static const struct { const char *name; uint16_t par; } render_params[] = {
 	{ "prescaler_clock_in", PAR_PRESCALER_CLOCK_IN },
 	{ "prescaler_clock_out1", PAR_PRESCALER_CLOCK_OUT1 },
 	{ "prescaler_clock_out2", PAR_PRESCALER_CLOCK_OUT2 },
-	{ "trig_gate_mode", PAR_TRIG_GATE_MODE },
+	{ "rec_quant", PAR_REC_QUANT },
 	{ "bar_reset_mode", PAR_BAR_RESET_MODE },
 	{ "midi_chan_global", PAR_MIDI_CHAN_GLOBAL },
 	{ "midi_note1", PAR_MIDI_NOTE1 },
@@ -322,4 +323,6 @@ static const struct { const char *name; uint16_t par; } render_params[] = {
 	{ "rev_duck_src", PAR_REV_DUCK_SRC },
 	{ "rev_duck_depth", PAR_REV_DUCK_DEPTH },
 	{ "fx_delay_sync", PAR_FX_DELAY_SYNC },
+	{ "track_tpl", PAR_TRACK_TPL },
+	{ "track_tpl_amt", PAR_TRACK_TPL_AMT },
 };

@@ -1380,6 +1380,29 @@ TEST(presets_glo_cfg_byte_9_is_the_trigger_timing)
 	ASSERT_EQ(activeParameters[PAR_TRIG_TIMING], 0);
 }
 
+TEST(presets_glo_cfg_byte_19_is_rec_quant)
+{
+	/* LICHOMAT v0.6 (plan Task 6, M22): glo.cfg's byte 19, fw 1.7's unused trigger gate mode,
+	 * holds rqn: 0 off (fw 1.7 writes 0 there), 1 on; the file stays 30 bytes */
+	reset();
+	ASSERT_EQ(f_chdir("/"), FR_OK);
+	ASSERT_EQ(PAR_REC_QUANT - PAR_BEGINNING_OF_GLOBALS, 19);
+	preset_loadDefaultGlobals();
+	ASSERT_EQ(activeParameters[PAR_REC_QUANT], 0);
+	activeParameters[PAR_REC_QUANT] = 1;
+	ASSERT_EQ(preset_saveGlobals(), FR_OK);
+	const int g = find("/glo.cfg");
+	ASSERT_TRUE(g >= 0);
+	ASSERT_EQ(card[g].len, 30);
+	ASSERT_EQ(card[g].data[19], 1);
+	activeParameters[PAR_REC_QUANT] = 0;
+	ASSERT_EQ(preset_loadGlobals(), 1);
+	ASSERT_EQ(activeParameters[PAR_REC_QUANT], 1);
+	card[g].data[19] = 0;					/* a glo.cfg of fw 1.7 */
+	ASSERT_EQ(preset_loadGlobals(), 1);
+	ASSERT_EQ(activeParameters[PAR_REC_QUANT], 0);
+}
+
 //------------------------------------------------------------------------------
 // LICHOMAT v0.6 (plan v0.6 Task 5, spec 10.1 pattern_block2): block 2, the templates and the
 // fine microtiming, after block 1

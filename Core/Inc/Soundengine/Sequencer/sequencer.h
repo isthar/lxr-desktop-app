@@ -192,6 +192,10 @@ float seq_getElapsedStepTimePercent(uint8_t trackNr);
 void seq_loadGrooveParams(uint8_t trackNr, uint8_t pattern);	//LICHOMAT v0.2: the track page's second screen
 void seq_setGrooveParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint8_t value);
 void seq_rotateTrack(uint8_t trackNr, uint8_t pattern, int8_t dir);	//LICHOMAT v0.2: SHIFT + step 1/2
+void seq_loadStepMicro(uint8_t pattern, uint8_t track, uint8_t step);	//LICHOMAT v0.6: the step page's mic (spec v0.6 6.1)
+void seq_setStepMicro(uint8_t pattern, uint8_t track, uint8_t step, uint8_t value);
+void seq_setStepShift(uint8_t pattern, uint8_t track, uint8_t step, uint8_t shift);
+int32_t seq_stepMicroTenthsMs(uint8_t track, uint8_t pattern, uint8_t value);
 //LICHOMAT v0.3: the step page's slide flag and probability, each keeping the other (plan D23, D26)
 void seq_setStepSlide(uint8_t pattern, uint8_t track, uint8_t step, uint8_t on);
 void seq_setStepProbKeepSlide(uint8_t pattern, uint8_t track, uint8_t step, uint8_t prob);

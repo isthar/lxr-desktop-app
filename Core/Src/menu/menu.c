@@ -31,6 +31,7 @@
 #include "front.h"
 
 #include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/MIDI/CortexParser.h"	// LICHOMAT v0.6: frontParser_activeStep
 #include "Soundengine/Soundengine.h"
 #include "Soundengine/cpuMeter.h"
 
@@ -269,6 +270,10 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_DJ_FILTER, CAT_FX, LONG_DJ_FILTER},/*TEXT_DJ_FILTER*/
 		{SHORT_DJ_RESO, CAT_FX, LONG_DJ_RESO},/*TEXT_DJ_RESO*/
 		{SHORT_TRIG_TIMING, CAT_SEQUENCER, LONG_TRIG_TIMING},/*TEXT_TRIG_TIMING, LICHOMAT v0.5*/
+		{SHORT_STEP_MICRO, CAT_STEP, LONG_STEP_MICRO},/*TEXT_STEP_MICRO, LICHOMAT v0.6*/
+		{SHORT_TRACK_TPL, CAT_PATTERN, LONG_TRACK_TPL},/*TEXT_TRACK_TPL*/
+		{SHORT_TRACK_TPL_AMT, CAT_PATTERN, LONG_TRACK_TPL_AMT},/*TEXT_TRACK_TPL_AMT*/
+		{SHORT_REC_QUANT, CAT_SEQUENCER, LONG_REC_QUANT},/*TEXT_REC_QUANT*/
 
 
 };
@@ -547,7 +552,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_TRACK_TEMPO*/ 	DTYPE_MENU | (MENU_TRK_TEMPO<<8),	// LICHOMAT v0.2
 	    /*PAR_STEP_SLIDE*/ 	DTYPE_ON_OFF,	// LICHOMAT v0.3: the step page's sld (plan D26)
 	    /*PAR_TRACK_LENGTH*/ 	DTYPE_1B64,
-	    /*PAR_GLO_SAT*/			DTYPE_0B127,
+	    /*PAR_STEP_MICRO*/		DTYPE_MENU | (MENU_STEP_MICRO<<8),	// LICHOMAT v0.6: mic, T + 84
 	    /*PAR_HUMAN_TIME*/ 		DTYPE_MENU | (MENU_HUM_TIME<<8),	// LICHOMAT v0.2
 	    /*PAR_HUMAN_VOL*/ 		DTYPE_MENU | (MENU_HUM_VOL<<8),
 	    /*PAR_TRACK_DELAY*/ 	DTYPE_MENU | (MENU_TRK_DELAY<<8),
@@ -573,7 +578,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 		/*PAR_PRESCALER_CLOCK_IN*/		DTYPE_MENU | (MENU_PPQ_IN<<8),
 		/*PAR_PRESCALER_CLOCK_OUT1*/	DTYPE_MENU | (MENU_PPQ_OUT<<8),
 		/*PAR_PRESCALER_CLOCK_OUT2*/	DTYPE_MENU | (MENU_PPQ_OUT<<8),
-		/*PAR_TRIGGER_GATE_MODE*/	DTYPE_ON_OFF,
+		/*PAR_REC_QUANT*/	DTYPE_ON_OFF,	// LICHOMAT v0.6: rqn
 	    /*PAR_BAR_RESET_MODE*/  DTYPE_ON_OFF,
 	    /*PAR_MIDI_CHAN_GLOBAL*/DTYPE_1B16,		// global midi channel
 
@@ -593,6 +598,8 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 		/*PAR_REV_DUCK_SRC*/	DTYPE_MENU | (MENU_DUCK_SRC<<8),
 		/*PAR_REV_DUCK_DEPTH*/	DTYPE_0B127,
 		/*PAR_FX_DELAY_SYNC*/	DTYPE_MENU | (MENU_DELAY_SYNC<<8),
+		/*PAR_TRACK_TPL*/	DTYPE_MENU | (MENU_TRK_TPL<<8),	// LICHOMAT v0.6
+		/*PAR_TRACK_TPL_AMT*/	DTYPE_MENU | (MENU_TPL_AMT<<8),
 };
 
 
@@ -1561,6 +1568,28 @@ static void menu_displayModTargetShort(uint8_t curParmVal, char *valueAsText, ch
 }
 
 //-----------------------------------------------------------------
+/** LICHOMAT v0.6 (spec v0.6 M16): mic's offset in ms at the current BPM and the track's tempo,
+ * "-24.7ms", ending at column 11 of the edit display's bottom row; past 999.9 ms "----ms" */
+static void menu_showMicroMs(uint8_t value)
+{
+	const int32_t tenths = seq_stepMicroTenthsMs(menu_getActiveVoice(), menu_getViewedPattern(), value);
+	const int32_t a = tenths < 0 ? -tenths : tenths;
+	char *row = editDisplayBuffer[1];
+	int c = 11;
+	row[c--] = 's';
+	row[c--] = 'm';
+	if(a > 9999)
+	{
+		memcpy(&row[c - 3], "----", 4);
+		return;
+	}
+	row[c--] = (char)('0' + a % 10);
+	row[c--] = '.';
+	int32_t w = a / 10;
+	do { row[c--] = (char)('0' + w % 10); w /= 10; } while(w > 0);
+	if(tenths < 0) row[c] = '-';
+}
+//-----------------------------------------------------------------
 // paint the screen when in normal parameter edit mode
 // (as opposed to repainting the load save screen)
 void menu_repaintGeneric()
@@ -1647,6 +1676,13 @@ void menu_repaintGeneric()
 				const uint8_t menuId = (parameter_dtypes[parNr] >> 8);
 				// get the value name
 				getMenuItemNameForValue(menuId, curParmVal, &editDisplayBuffer[1][13]);
+				if(menuId == MENU_STEP_MICRO)		// LICHOMAT v0.6: and the offset in ms (M16)
+					menu_showMicroMs(curParmVal);
+				else if(menuId == MENU_TRK_TPL)		// LICHOMAT v0.6: the template's long name
+				{
+					const char *n = trackTplLongNames[(curParmVal < trackTplNames[0][0]) ? curParmVal : 0];
+					memcpy(&editDisplayBuffer[1][0], n, strlen(n));
+				}
 			}
 				break; // switch(parameters[parNr].dtype&0x0F) case DTYPE_MENU
 
@@ -2713,6 +2749,9 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 	case MENU_DELAY_SYNC:		// LICHOMAT v0.4 (plan D38)
 		return delaySyncNames[0][0];
 	case MENU_TRIG_TIMING: return trigTimingNames[0][0];	// LICHOMAT v0.5
+	case MENU_STEP_MICRO: return 2 * STEP_MICRO_MAX + 1;	// LICHOMAT v0.6: -84..+84
+	case MENU_TRK_TPL: return trackTplNames[0][0];
+	case MENU_TPL_AMT: return TEMPLATE_AMOUNT_MAX - TEMPLATE_AMOUNT_MIN + 1;	// 0..200 %
 
 	default:
 		return 0;
@@ -2856,6 +2895,22 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 			return;
 		}
 		break;
+	case MENU_STEP_MICRO:		// LICHOMAT v0.6: T = value - 84, " +5", "+19", "-84"
+	{
+		const int t = (curParmVal <= 2 * STEP_MICRO_MAX) ? (int)curParmVal - STEP_MICRO_MAX : 0;
+		const int a = t < 0 ? -t : t;
+		const char sign = t < 0 ? '-' : (t > 0 ? '+' : ' ');
+		buf[0] = (a > 9) ? sign : ' ';
+		buf[1] = (a > 9) ? (char)('0' + a / 10) : sign;
+		buf[2] = (char)('0' + a % 10);
+		return;
+	}
+	case MENU_TRK_TPL:			// LICHOMAT v0.6: a value past the list reads "off", as trackTemplate_checked()
+		p=trackTplNames[((curParmVal < trackTplNames[0][0]) ? curParmVal : 0) + 1];
+		break;
+	case MENU_TPL_AMT:
+		numtostrpu(buf, curParmVal, ' ');
+		return;
 
 
 	default:
@@ -3196,7 +3251,7 @@ checkvalid:
 		if(activeParameter == 4) { // move to 2nd section of sub-page
 
 		} else if(activeParameter == 8) { // moved past end of 2nd sub-page
-			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)){ // in global menu, we can move to next sub-page
+			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==EUKLID_PAGE)){ // in global menu, we can move to next sub-page; LICHOMAT v0.6: the track page's third screen (M15)
 
 				activeParameter=0; // set to par 0 of next sub page
 				activePage++; // and change page
@@ -3209,7 +3264,7 @@ checkvalid:
 		if(activeParameter == 3) { // move to first section of sub-page
 
 		} else if(activeParameter==-1) { // if we went past 0
-			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)) { // in global menu, we can move to previous sub-page
+			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==EUKLID_PAGE)) { // in global menu, we can move to previous sub-page; LICHOMAT v0.6: the track page's third screen (M15)
 
 				activeParameter=7; // put us on the last param of the previous sub-page
 				activePage--; // and change page
@@ -3596,14 +3651,16 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	break;
 
 
-	case UNUSED_PAR_GLO_SAT:
-
+	case PAR_STEP_MICRO:	// LICHOMAT v0.6: a direct call (M17)
+		seq_setStepMicro(frontParser_shownPattern, frontParser_activeTrack, frontParser_activeStep, value);
 		break;
 
 	case PAR_TRACK_TEMPO:	// LICHOMAT v0.2: the selected track in the shown pattern
 	case PAR_HUMAN_TIME:
 	case PAR_HUMAN_VOL:
 	case PAR_TRACK_DELAY:
+	case PAR_TRACK_TPL:	// LICHOMAT v0.6: the third screen (M17)
+	case PAR_TRACK_TPL_AMT:
 		seq_setGrooveParam(menu_getActiveVoice(), menu_getViewedPattern(), paramNr, value);
 		break;
 
@@ -3806,6 +3863,7 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 
 	case PAR_STEP_SHIFT:
 		frontPanel_sendData(SEQ_CC,SEQ_SHIFT,value);
+		seq_loadStepMicro(frontParser_shownPattern, frontParser_activeTrack, frontParser_activeStep);	// LICHOMAT v0.6: mic shows the new T (M14)
 		break;
 
 	case PAR_STEP_VOLUME:
@@ -3829,8 +3887,7 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	case PAR_PRESCALER_CLOCK_OUT2:
 			frontPanel_sendData(SEQ_CC, SEQ_TRIGGER_OUT2_PPQ, value);
 			break;
-	case PAR_TRIG_GATE_MODE:
-			frontPanel_sendData(SEQ_CC, SEQ_TRIGGER_GATE_MODE, value);
+	case PAR_REC_QUANT:	// LICHOMAT v0.6: recording reads it at each note (M22)
 			break;
 	case PAR_BAR_RESET_MODE:
 		frontPanel_sendData(SEQ_CC, SEQ_BAR_RESET_MODE, value);

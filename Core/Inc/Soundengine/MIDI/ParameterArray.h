@@ -369,7 +369,10 @@ enum ParamEnums
 	PAR_REV_DUCK_DEPTH,
 	PAR_FX_DELAY_SYNC,
 	END_OF_KIT_BLOCK,
-	NUM_PARAMS = END_OF_KIT_BLOCK
+	// LICHOMAT v0.6: the track page's third screen, menu only, saved in the pattern's block 2 (plan v0.6, M18)
+	PAR_TRACK_TPL = END_OF_KIT_BLOCK,	// 309
+	PAR_TRACK_TPL_AMT,
+	NUM_PARAMS
 */
 };
 #endif

@@ -1333,6 +1333,39 @@ def V05_trig_setting(t):
     check(len(glo) == 30 and glo[9] == 1, 'GLO.CFG: %d bytes, byte 9 %r' % (len(glo), glo[9:10]))
     no_copies_left()
 
+@case
+def V06_rec_setting(t):
+    # rqn (PAR_REC_QUANT, plan v0.6 Task 6, M22): 0 off and 1 on, the menu's clamp makes 9 a 1;
+    # a project save writes it as glo.cfg's byte 19, and glo.cfg stays 30 bytes
+    seed = t.seed()
+    for v, want in ((0, 0), (1, 1), (9, 1)):
+        s, _, _ = t.render(seed, ['--no-start', '--seconds', '0.2', '--param', 'rec_quant=%d' % v])
+        check(s['params'] == {'rec_quant': want}, 'rec_quant=%d: params %r' % (v, s['params']))
+    keep = t.path('K')
+    t.render(seed, ['--no-start', '--seconds', '1', '--param', 'rec_quant=1', '--keep-card', keep,
+                    '--events', t.script('+100ms save-project 0\n')])
+    glo = one_file(keep, 'GLO.CFG')
+    check(len(glo) == 30 and glo[19] == 1, 'GLO.CFG: %d bytes, byte 19 %r' % (len(glo), glo[19:20]))
+    no_copies_left()
+
+@case
+def V06_ui(t):
+    # the track page's third screen (M15, V6-18): the encoder past dly shows tpl and amt with the
+    # voice's values and stops at amt; back left to dly; the recording page shows rqn
+    seed, log = t.seed(), t.path('panel.log')
+    script = t.script('0ms press voice2\n+100ms param track_tpl=3\n+100ms param track_tpl_amt=150\n'
+                      '+100ms down shift\n+20ms press mode2\n+100ms up shift\n+200ms mark euklid\n'
+                      '+100ms encoder +8\n+200ms mark tpl\n+100ms encoder +3\n+200ms mark amt\n'
+                      '+100ms encoder -2\n+200ms mark back\n'
+                      '+100ms down shift\n+20ms press rec\n+100ms up shift\n+200ms mark rec\n')
+    t.render(seed, ['--no-start', '--seconds', '3', '--param', 'rec_quant=1', '--panel-log', log,
+                    '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'TPL.amt', rows['tpl'][0]) and re.match(r'lyb.150', rows['tpl'][1]), 'tpl: %r' % rows['tpl'])
+    check(re.match(r'tpl.AMT', rows['amt'][0]), 'amt, where the encoder stops: %r' % rows['amt'])
+    check(re.match(r'tmp.hmt.hmv.DLY', rows['back'][0]), 'back to dly: %r' % rows['back'])
+    check(re.search(r'rqn', rows['rec'][0], re.I) and re.search(r'on', rows['rec'][1]), 'rec: %r' % rows['rec'])
+
 def onsets(t, *args):
     """emu_onsets.py's exit code, spread and output"""
     p = subprocess.run([sys.executable, os.path.join(t.root, 'tools', 'emu_onsets.py')] + [str(a) for a in args],
