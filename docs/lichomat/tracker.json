@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-02 19:50",
+    "updated": "2026-11-02 19:51",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6: specyfikacja mikrotimingu i szablonów groove",
     "branch": "timing-core",
-    "head": "6698f4b",
+    "head": "db45b22",
     "next": "Twój odsłuch kitów PULS/HUSTAWKA/PROSTO/PRZESTER; H12; po resecie limitu (pn 2.11, 22:00) v0.6: szablony groove, mikrotiming PatV04",
-    "updated_at": "2026-11-02T19:50:00+01:00",
+    "updated_at": "2026-11-02T19:51:00+01:00",
     "now": "Agent pisze specyfikację v0.6 (E6.2, E6.4, E6.5)"
   },
   "epics": [
@@ -3405,6 +3405,11 @@
       "n": 492,
       "at": "2026-11-02 19:50",
       "text": "Wracamy. Twój odczyt: 82%, reset limitu za ok. 1 h 15 min, potem tydzień do 50%. (Z 75% na 82% od wczoraj rano, a tutaj zużyłem tylko ok. 10M jednostek: reszta poszła poza tym Makiem.) Start v0.6: agent pisze specyfikację (szablony groove E6.2, pełny mikrotiming kroku i nowy format wzorca E6.4, nagrywanie z mikrotimingiem E6.5), zaczynając od budżetu pamięci (1 860 B wolnego). Szablony z pomiaru albumu: np. w utworze 5 szesnastki zaraz po ćwierćnucie są 16–26 ms później, te przed ćwierćnutą 0–12 ms, więc to groove per pozycja, nie zwykły swing."
+    },
+    {
+      "n": 493,
+      "at": "2026-11-02 19:51",
+      "text": "Budżet pamięci dla v0.6: limit sumy DTCM+RAM (455 544 B) to według planu v0.4 (D30) reguła księgowa, nie limit fizyczny. Fizycznie RAM ma ok. 42,8 KB zapasu (346 288 z 389 120 B), DTCM 504 B. v0.6 może więc wziąć RAM na mikrotiming jako nazwany dodatek do limitu sumy; przekazane agentowi specyfikacji. Licznik usage liczy teraz tydzień od ostatniego resetu sam (db45b22)."
     }
   ]
 }
