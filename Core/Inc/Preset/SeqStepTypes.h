@@ -99,4 +99,78 @@ static inline TrackGroove trackGroove_checked(TrackGroove g)
 #define STEP_SLIDE_FLAG		0x80u
 #define STEP_PROB_MASK		0x7Fu
 
+/* LICHOMAT v0.6: a step's microtiming T (spec v0.6 M1-M3), in ticks of 1/96 of the track's
+ * step, -84..+84. The coarse part is StepTiming.shift (units of 12 ticks), the fine part a
+ * signed nibble -6..+5 in PatternSet.seq_stepFine, 32 bytes a track: byte i holds step 2i in
+ * bits 0-3 and step 2i+1 in bits 4-7. The split is canonical: coarse = floor((T + 6) / 12),
+ * the nearest unit with ties upwards, which fw 1.7 and v0.2-v0.5 play; fine = T - 12 coarse.
+ * A nibble of -8, -7, +6 or +7 counts as 0. Zero bytes are the default. */
+#define STEP_MICRO_MAX		84	// ticks: the shift's reach, 7/8 of a step
+#define STEP_SHIFT_UNIT		12	// ticks of a shift unit at x1
+#define STEP_FINE_MIN		(-6)
+#define STEP_FINE_MAX		5
+#define STEP_FINE_BYTES		32	// a track's nibbles: 64 steps / 2
+
+/** the fine part of a stored nibble (the low 4 bits of n): -6..+5, any other value 0 */
+static inline int8_t stepFine_decode(uint8_t n)
+{
+	const int f = (n & 0x08u) ? (int)(n & 0x0Fu) - 16 : (int)(n & 0x0Fu);
+	return (int8_t)((f < STEP_FINE_MIN || f > STEP_FINE_MAX) ? 0 : f);
+}
+
+/** step s's fine part in a track's STEP_FINE_BYTES */
+static inline int8_t stepFine_get(const uint8_t *track, uint8_t s)
+{
+	return stepFine_decode((uint8_t)(track[(s >> 1) & 31u] >> ((s & 1u) * 4u)));
+}
+
+/** set step s's fine part (its low 4 bits) in a track's STEP_FINE_BYTES */
+static inline void stepFine_set(uint8_t *track, uint8_t s, int8_t fine)
+{
+	const unsigned sh = (s & 1u) * 4u;
+	uint8_t *b = &track[(s >> 1) & 31u];
+	*b = (uint8_t)((*b & ~(0x0Fu << sh)) | (((unsigned)fine & 0x0Fu) << sh));
+}
+
+/** T of a step: 12 x (shift - 7) + fine; a shift of 15 counts as 0, a fine part out of range as 0 */
+static inline int stepMicro(StepTiming t, int8_t fine)
+{
+	const int c = (t.shift > 14) ? 0 : (int)t.shift - 7;
+	if((fine < STEP_FINE_MIN) || (fine > STEP_FINE_MAX)) fine = 0;
+	return STEP_SHIFT_UNIT * c + fine;
+}
+
+/** the canonical split of T, clamped to +-84 first: the coarse part into t->shift (the flam
+ * stays), the fine part returned */
+static inline int8_t stepMicro_split(int micro, StepTiming *t)
+{
+	if(micro > STEP_MICRO_MAX) micro = STEP_MICRO_MAX;
+	if(micro < -STEP_MICRO_MAX) micro = -STEP_MICRO_MAX;
+	const int c = (micro + 6 + 8 * STEP_SHIFT_UNIT) / STEP_SHIFT_UNIT - 8;	// floor((T + 6) / 12), the numerator kept positive
+	t->shift = (uint8_t)(c + 7);
+	return (int8_t)(micro - STEP_SHIFT_UNIT * c);
+}
+
+/* LICHOMAT v0.6: a track's groove template in a pattern (spec v0.6 M4, M5), stored raw in
+ * block 2 of the pattern file. Zero bytes are the default: off, 100 %. */
+typedef struct TrackTemplate
+{
+	uint8_t		id;		// 0 off, 1..7 swg lay lyb rlx 2bt psh drg (the table in seq_core.c)
+	int8_t		amount;		// percent - 100: -100..+100 = 0..200 %
+}TrackTemplate;
+_Static_assert(sizeof(TrackTemplate) == 2, "TrackTemplate is stored raw in block 2 (2 bytes)");
+
+#define TEMPLATE_COUNT		8	// ids 0..7
+#define TEMPLATE_STEPS		16	// positions: a bar of 16ths
+#define TEMPLATE_AMOUNT_MIN	(-100)
+#define TEMPLATE_AMOUNT_MAX	100
+
+/** t with every field out of range set to its default (a file or a host from elsewhere) */
+static inline TrackTemplate trackTemplate_checked(TrackTemplate t)
+{
+	if(t.id >= TEMPLATE_COUNT) t.id = 0;
+	if((t.amount < TEMPLATE_AMOUNT_MIN) || (t.amount > TEMPLATE_AMOUNT_MAX)) t.amount = 0;
+	return t;
+}
+
 #endif /* SEQSTEPTYPES_H_ */

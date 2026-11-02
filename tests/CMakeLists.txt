@@ -159,7 +159,7 @@ if(TARGET test_harness)
     # a "FAIL harness_..." line fails the test even if the exit status were broken
     set_tests_properties(harness PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL harness_")
 endif()
-seqc_add_test(test_layout    IDS layout)             # E1.2  Step and StepTiming layout
+seqc_add_test(test_layout    IDS layout step_micro)  # E1.2  Step and StepTiming layout; v0.6 the microtiming split, TrackTemplate
 seqc_add_test(test_clock     IDS T1 STRICT_CORE seq_core_strict)                 # E1.3  master clock accuracy
 seqc_add_test(test_tracks    IDS T10 STRICT_CORE seq_core_strict)                # E1.4  track counters, master wrap, pattern end
 seqc_add_test(test_generate  IDS T2 T3 T4 T8 STRICT_CORE seq_core_strict)        # E1.5  grid, swing, shift, ratchet, probability
