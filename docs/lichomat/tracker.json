@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-02 22:21",
+    "updated": "2026-11-02 22:31",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 w wykonaniu: E6.14–E6.23 (mikrotiming i szablony groove)",
     "branch": "timing-core",
-    "head": "376cc2c",
+    "head": "871fd97",
     "next": "E6.16, potem pełny przegląd E6.14–E6.16; dalej E6.17–E6.18 (RAM i blok 2 w plikach)",
-    "updated_at": "2026-11-02T22:21:00+01:00",
-    "now": "E6.18 (v0.6 zad. 5): blok 2 w plikach wzorców, wykonawca grupy B"
+    "updated_at": "2026-11-02T22:31:00+01:00",
+    "now": "Przegląd E6.17–E6.18; testy z przeglądu E6.14–E6.16 (wykonawca grupy B)"
   },
   "epics": [
     {
@@ -582,8 +582,8 @@
     {
       "id": "E6.18",
       "epic": "E6",
-      "status": "w toku",
-      "title": "v0.6 zad. 5: blok 2 w plikach wzorców (odczyt i zapis), test pattern_block2; potem pełny przegląd zadań 4–5",
+      "status": "zrobione",
+      "title": "v0.6 zad. 5: blok 2 w plikach wzorców (odczyt i zapis), test pattern_block2 (871fd97); przegląd E6.17–E6.18 w toku",
       "updated": "2026-11-02"
     },
     {
@@ -3558,6 +3558,11 @@
       "n": 506,
       "at": "2026-11-02 22:21",
       "text": "E6.17 (v0.6 zad. 4) zrobione, 376cc2c: część dokładna mikrotimingu i szablony w RAM, kopiowanie, czyszczenie, rotacja i bufor kopii zapasowej je przenoszą. RAM 361 760 z 389 120 B (dokładnie jak w specyfikacji, zostaje 27 360 B), limit sumy 471 032 B z nazwanym dodatkiem; testy jak wcześniej, 32 nagrania wzorcowe bez zmian. E6.18 (v0.6 zad. 5, blok 2 w plikach) w toku."
+    },
+    {
+      "n": 507,
+      "at": "2026-11-02 22:31",
+      "text": "E6.18 (v0.6 zad. 5) zrobione, 871fd97: blok 2 w .pat i tmp.pat, zapisywany tylko gdy są dane mikrotimingu. Host 122/122 (UBSan i ASan), emulator 329/329 i 301/301, 32 nagrania wzorcowe i karta M17_seed_card bez zmian (wzór bez danych daje plik identyczny z v0.5). Start przeglądu E6.17–E6.18 (tylko odczyt). Wykonawca grupy B dopisuje teraz testy z przeglądu E6.14–E6.16."
     }
   ]
 }
