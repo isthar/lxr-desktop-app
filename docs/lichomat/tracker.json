@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-02 20:20",
+    "updated": "2026-11-02 20:21",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6: specyfikacja mikrotimingu i szablonów groove",
     "branch": "timing-core",
-    "head": "cb9dc42",
+    "head": "3125c95",
     "next": "Twój odsłuch kitów PULS/HUSTAWKA/PROSTO/PRZESTER; H12; po resecie limitu (pn 2.11, 22:00) v0.6: szablony groove, mikrotiming PatV04",
-    "updated_at": "2026-11-02T20:20:00+01:00",
-    "now": "Pisanie planu v0.6"
+    "updated_at": "2026-11-02T20:21:00+01:00",
+    "now": "Agent pisze plan v0.6"
   },
   "epics": [
     {
@@ -3420,6 +3420,11 @@
       "n": 495,
       "at": "2026-11-02 20:20",
       "text": "Specyfikacja v0.6 gotowa i przyjęta (M1–M28): mikrotiming kroku co 1 tick (1/96 kroku, ok. 1,1 ms przy 142 BPM, zakres ±84), zapisany jako stare przesunięcie plus nowa 4-bitowa część dokładna (fw 1.7 i v0.5 grają najbliższą 1/8 kroku); 7 szablonów groove per tor z ilością 0–200% (lay, lyb, rlx, 2bt z pomiaru albumu; swg, psh, drg ogólne); nagrywanie zapisuje zagrane przesunięcie minus szablon, przełącznik rqn; drugi blok w plikach wzorców tylko gdy są dane, więc stare nagrania wzorcowe muszą przejść bez zmian. RAM +15 472 B (zostaje 27 360 B), DTCM bez zmian, CPU do ok. 0,56% bloku. Przy przeglądzie usunąłem nazwę albumu z publicznych plików (ścieżka build/reference/album, wpis #475 dziennika); w historii gita zostaje w ba2998f i 6698f4b."
+    },
+    {
+      "n": 496,
+      "at": "2026-11-02 20:21",
+      "text": "Start agenta planu v0.6: zadania według §11 specyfikacji, najbardziej ryzykowny kod (przesunięcie z §4.1, podział na część zgrubną i dokładną, blok 2 plików) sprawdzony w kompilacji przed zapisem do planu; jeden wykonawca na 2–3 zadania, pełny przegląd rdzenia i formatu plików."
     }
   ]
 }
