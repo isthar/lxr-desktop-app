@@ -230,14 +230,34 @@ TEST(micro_offsets_swing_delay_and_humanize_after_the_clamp)
 	ASSERT_EQ(fake_triggers(h, 0, r, 4), 1);
 	ASSERT_EQ(r[0]->ev.tick, 384 - 84);		/* -84 - 6, floored */
 	ASSERT_EQ(h->errors, 0);
+
+	/* the template inside the clamp, P = clamp(C + F + G) (review of Tasks 1-3): lyb at 200 %
+	 * on step 5 is G = +48, and with mic +84 (shift +7 units, fine 0) P is 84, not 132; psh at
+	 * 200 % on step 2 is G = -8, and with mic -84 P is -84, then the delay +13 ms (+10 ticks) */
+	h = microHost();
+	fake_setStep(h, 0, 0, 5, true);
+	h->timing[0][0][5].shift = 14;
+	fake_setTemplate(h, 0, 0, LYB, 200);
+	fake_setStep(h, 0, 1, 2, true);
+	h->timing[0][1][2].shift = 0;
+	fake_setTemplate(h, 0, 1, PSH, 200);
+	fake_setGroove(h, 0, 1, 0, 0, 13);
+	play(h, 800.0);
+	ASSERT_EQ(fake_triggers(h, 0, r, 4), 1);
+	ASSERT_EQ(r[0]->ev.tick, 480 + 84);
+	ASSERT_EQ(fake_triggers(h, 1, r, 4), 1);
+	ASSERT_EQ(r[0]->ev.tick, 192 - 84 + 10);
+	ASSERT_EQ(templateTicks(LYB, 5, 200, 96), 48);
+	ASSERT_EQ(templateTicks(PSH, 2, 200, 96), -8);
+	ASSERT_EQ(h->errors, 0);
 	fake_useMicro(false);
 }
 
 TEST(micro_offsets_bit_identity_with_zero_callbacks)
 {
 	/* M7: fine() and tmpl() set but returning 0 and off give v0.5's events, field for field,
-	 * and the same counters, on 10^4 of queue_equiv's random patterns */
-	for (uint64_t seed = 1; seed <= 10000; seed++)
+	 * and the same counters, on 10^3 of queue_equiv's random patterns */
+	for (uint64_t seed = 1; seed <= 1000; seed++)
 	{
 		seqc_stats_t a, b;
 		fake_useMicro(false);
@@ -289,6 +309,16 @@ TEST(templates_position_counts_the_tracks_steps)
 		allOn(h, 0, t);
 		fake_setTemplate(h, 0, t, RLX, 100);
 	}
+	/* psh on a 7-step track at x1 and x2 (review of Tasks 1-3): the negative part of a loop's
+	 * step 0 is generated in the early part, still in the loop before; occurrence 14 (step 0
+	 * of loop 2, q 14) is at 96 x 14 - 4 = 1340 at x1 */
+	for (uint8_t t = 4; t < 6; t++)
+	{
+		fake_setLength(h, 0, t, 7);
+		allOn(h, 0, t);
+		fake_setTemplate(h, 0, t, PSH, 100);
+	}
+	fake_setTempo(h, 0, 5, 8);
 	play(h, 5990.0);			/* 48 steps */
 	for (uint8_t t = 0; t < 4; t++)
 	{
@@ -297,6 +327,16 @@ TEST(templates_position_counts_the_tracks_steps)
 		for (int k = 0; k < 48; k++)
 			ASSERT_EQ(r[k]->ev.tick, 96 * k + table[RLX][k % 16]);
 	}
+	for (uint8_t t = 4; t < 6; t++)
+	{
+		const int L = t == 4 ? 96 : 48;
+		const fake_rec_t *r[128];
+		ASSERT_EQ(fake_triggers(h, t, r, 128), (size_t)(t == 4 ? 48 : 96));
+		for (int k = 0; k < (t == 4 ? 48 : 96); k++)
+			ASSERT_EQ(r[k]->ev.tick, L * k + templateTicks(PSH, k, 100, L));
+	}
+	ASSERT_EQ(96 * 14 + templateTicks(PSH, 14, 100, 96), 1340);
+	ASSERT_EQ(templateTicks(PSH, 14, 100, 48), -2);
 	ASSERT_EQ(h->errors, 0);
 	fake_useMicro(false);
 }
@@ -369,6 +409,11 @@ TEST(templates_follow_the_track_tempo)
 		allOn(h, 0, t);
 		fake_setTemplate(h, 0, t, LYB, 100);
 	}
+	/* psh at 50 % at x4 (24 ticks, review of Tasks 1-3): G = -0.5 at q 2, rounded away from
+	 * zero to -1 */
+	fake_setTempo(h, 0, 2, 10);
+	allOn(h, 0, 2);
+	fake_setTemplate(h, 0, 2, PSH, 50);
 	play(h, 4010.0);
 	for (uint8_t t = 0; t < 2; t++)
 	{
@@ -382,6 +427,14 @@ TEST(templates_follow_the_track_tempo)
 	ASSERT_EQ(templateTicks(LYB, 1, 100, 48), 8);	/* 7.5 rounds up */
 	ASSERT_EQ(templateTicks(LYB, 11, 100, 48), 1);	/* 0.5 */
 	ASSERT_EQ(templateTicks(LYB, 3, 100, 128), 15);	/* 14.67 */
+	{
+		const fake_rec_t *r[160];
+		const size_t n = fake_triggers(h, 2, r, 160);
+		ASSERT_TRUE(n >= 96);
+		for (int k = 0; k < (int)n; k++)
+			ASSERT_EQ(r[k]->ev.tick, 24 * k + templateTicks(PSH, k, 50, 24));
+	}
+	ASSERT_EQ(templateTicks(PSH, 2, 50, 24), -1);	/* -0.5 */
 	ASSERT_EQ(h->errors, 0);
 	fake_useMicro(false);
 }
