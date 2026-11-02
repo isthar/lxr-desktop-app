@@ -223,6 +223,24 @@
  * shift alone reaches. The humanize volume (+-humVol %) scales the hits' velocity,
  * rounded, at most 127. The draws are made once per occurrence with its main step on,
  * after r: the time if humTime > 0, then the volume if humVol > 0. Roll events get none.
+ *
+ * Microtiming and groove templates (v0.6)
+ * ---------------------------------------
+ * A step's own position P comes from its coarse shift C, its fine part F (fine(), -6..+5
+ * ticks of a step at x1) and the track's template G (tmpl(): an id and an amount), in a
+ * track step of L ticks, for occurrence n of track step s in loop l of a track of length N:
+ *     C = (StepTiming.shift - 7) * L / 8                    (15 counts as 0)
+ *     F = rha(fine * L / 96)
+ *     q = (l * N + s) mod 16                                 (the track's step count since its start)
+ *     G = rha(table[id][q] * (amount + 100) * L / 9600)      (0 for id 0)
+ *     P = clamp(C + F + G, -7L/8, +7L/8)
+ *     offset = max(swing + P + min(delay + humanize, L), -7L/8)
+ * rha() rounds half away from zero; the table is seqc_templates in seq_core.c (spec v0.6 4.2).
+ * With fine 0 and the template off, P = C: the hits are v0.5's, tick for tick. The early
+ * part keeps its offset for the late part as for the shift (N3), so a fine or template edit
+ * between the two boundaries plays no hit twice. Roll events take neither (they stay at the
+ * boundary plus the swing). seqc_recordPlace() places a recorded note against the same
+ * reference: the grid plus swing, template and delay.
  */
 
 //------------------------------------------------------------------------------
@@ -390,7 +408,8 @@ typedef struct seqc_stats
 #define SEQC_ROLL_HITS(r)	((uint8_t)(((unsigned)(r) >> 5) + 1u))
 
 /** The host: pattern data, pattern sequencing and outputs (N5). Every pointer
- * but groove and trackStep must be set. ctx is passed back to each callback unchanged. */
+ * but groove, trackStep, fine and tmpl must be set. ctx is passed back to each
+ * callback unchanged. */
 typedef struct seqc_host
 {
 	void *ctx;
@@ -496,6 +515,14 @@ typedef struct seqc_host
 	 * track's tempo is read and its step generated, as stepBoundary() is for the tracks
 	 * on the master grid. NULL: not called */
 	void		(*trackStep)(void *ctx, uint8_t track);
+	/* -- v0.6 (spec v0.6 M28); both may be NULL -- */
+	/** the step's fine microtiming, -6..+5 ticks of a step at x1 (stepFine_get(),
+	 * SeqStepTypes.h); any other value counts as 0. Read with timing(). NULL: 0 */
+	int8_t		(*fine)(void *ctx, uint8_t pattern, uint8_t track, uint8_t step);
+	/** the track's groove template in the pattern (TrackTemplate, SeqStepTypes.h), checked
+	 * with trackTemplate_checked(). Read for each step occurrence and by
+	 * seqc_recordPlace(). NULL: off */
+	TrackTemplate	(*tmpl)(void *ctx, uint8_t pattern, uint8_t track);
 } seqc_host_t;
 
 //------------------------------------------------------------------------------

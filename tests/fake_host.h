@@ -98,6 +98,8 @@ typedef enum
 	FAKE_READ_ACTIVE_PATTERN,
 	FAKE_READ_RANDOM,
 	FAKE_READ_GROOVE,
+	FAKE_READ_FINE,		/**< v0.6 */
+	FAKE_READ_TMPL,
 	FAKE_NUM_READS
 } fake_read_t;
 
@@ -139,6 +141,8 @@ typedef struct fake_host
 	bool		muted[FAKE_NUM_TRACKS];
 	uint8_t		rollRate[FAKE_NUM_TRACKS];			/**< what rollRate() returns: 0, or SEQC_ROLL(span, hits) (16/8/4/2/1 = one hit) */
 	TrackGroove	groove[FAKE_NUM_PATTERNS][FAKE_NUM_TRACKS];	/**< v0.2; zero bytes are the defaults */
+	int8_t		fine[FAKE_NUM_PATTERNS][FAKE_NUM_TRACKS][FAKE_NUM_STEPS];	/**< v0.6: what fine() returns */
+	TrackTemplate	tmpl[FAKE_NUM_PATTERNS][FAKE_NUM_TRACKS];	/**< v0.6: what tmpl() returns */
 
 	/* pattern sequencing (sequencer.c) */
 	uint8_t		activePattern;			/**< seq_activePattern */
@@ -218,6 +222,15 @@ uint8_t fake_effectiveLength(uint8_t rawLength);
 void fake_setTempo(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t index);
 /** v0.2: humanize time (ms), humanize volume (%) and delay (ms) */
 void fake_setGroove(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t humTime, uint8_t humVol, int8_t delay);
+/** v0.6 (spec v0.6 M28): from the next fake_init() on, the host table has fine() and tmpl(),
+ * which return h->fine and h->tmpl, or not (the default: NULL, v0.5's path). The setting
+ * outlives fake_init() and fake_reset() */
+void fake_useMicro(bool on);
+/** v0.6: the step's microtiming T, -84..+84 ticks, as the firmware stores it: the canonical
+ * split (stepMicro_split()) into timing[].shift, the flam kept, and fine[] */
+void fake_setMicro(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step, int micro);
+/** v0.6: the track's template, id 0..7, and its amount in percent, 0..200 */
+void fake_setTemplate(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t id, int percent);
 /** the master track of a pattern: the largest raw length, lowest track on a tie */
 uint8_t fake_masterTrack(const fake_host_t *h, uint8_t pattern);
 

@@ -20,6 +20,7 @@
 #include <string.h>
 
 static fake_host_t fake_instance;
+static bool fake_micro;			/* v0.6: fake_useMicro() */
 
 //------------------------------------------------------------------------------
 // Helpers
@@ -478,6 +479,24 @@ static TrackGroove cb_groove(void *ctx, uint8_t pattern, uint8_t track)
 	return h->groove[pattern][track];
 }
 //------------------------------------------------------------------------------
+static int8_t cb_fine(void *ctx, uint8_t pattern, uint8_t track, uint8_t step)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_FINE]++;
+	if (!fake_validStep(h, "fine", pattern, track, step))
+		return 0;
+	return h->fine[pattern][track][step];
+}
+//------------------------------------------------------------------------------
+static TrackTemplate cb_tmpl(void *ctx, uint8_t pattern, uint8_t track)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_TMPL]++;
+	if (!fake_validStep(h, "tmpl", pattern, track, 0))
+		return (TrackTemplate){ 0, 0 };
+	return h->tmpl[pattern][track];
+}
+//------------------------------------------------------------------------------
 static void cb_trackStep(void *ctx, uint8_t track)
 {
 	fake_host_t *h = ctx;
@@ -542,6 +561,8 @@ void fake_reset(fake_host_t *h)
 		.random = cb_random,
 		.groove = cb_groove,
 		.trackStep = cb_trackStep,
+		.fine = fake_micro ? cb_fine : NULL,
+		.tmpl = fake_micro ? cb_tmpl : NULL,
 	};
 }
 //------------------------------------------------------------------------------
@@ -637,6 +658,35 @@ void fake_setGroove(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t humT
 	h->groove[pattern][track].humTime = humTime;
 	h->groove[pattern][track].humVol = humVol;
 	h->groove[pattern][track].delay = delay;
+}
+//------------------------------------------------------------------------------
+void fake_useMicro(bool on)
+{
+	fake_micro = on;
+}
+//------------------------------------------------------------------------------
+void fake_setMicro(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step, int micro)
+{
+	if (!fake_validStep(h, "fake_setMicro", pattern, track, step))
+		return;
+	if (micro < -STEP_MICRO_MAX || micro > STEP_MICRO_MAX)
+	{
+		fake_error(h, "fake_setMicro(%d): out of range", micro);
+		return;
+	}
+	h->fine[pattern][track][step] = stepMicro_split(micro, &h->timing[pattern][track][step]);
+}
+//------------------------------------------------------------------------------
+void fake_setTemplate(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t id, int percent)
+{
+	if (!fake_validStep(h, "fake_setTemplate", pattern, track, 0))
+		return;
+	if (id >= TEMPLATE_COUNT || percent < 0 || percent > 200)
+	{
+		fake_error(h, "fake_setTemplate(%u, %d %%): out of range", id, percent);
+		return;
+	}
+	h->tmpl[pattern][track] = (TrackTemplate){ .id = id, .amount = (int8_t)(percent - 100) };
 }
 
 //------------------------------------------------------------------------------

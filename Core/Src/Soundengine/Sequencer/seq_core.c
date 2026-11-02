@@ -1099,16 +1099,71 @@ static void seqc_noTrig(seqc_draw_t *d)
 	d->preOut = d->preIn;
 }
 //------------------------------------------------------------------------------
-/** the first hit's offset from the grid tick: swing on an odd occurrence, shift, and
- * v0.2's delay + humanize time, at most one track step later; the sum at least 7/8 of a
- * track step earlier (-84 at x1), so the lookahead holds at every tempo */
-static int seqc_offset(const seqc_draw_t *d, const TrackGroove *g, StepTiming timing, uint32_t absStep,
+/** v0.6 (spec v0.6 4.2, M4): the groove templates 1..7 (swg lay lyb rlx 2bt psh drg), the
+ * offset in ticks at 100 % of each 16th of the bar from the downbeat; id 0 is off */
+static const int8_t seqc_templates[TEMPLATE_COUNT - 1][TEMPLATE_STEPS] = {
+	{ 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16 },	/* swg: even 16ths late */
+	{ 0, 18, 0,  5, 0, 18, 0,  5, 0, 18, 0,  5, 0, 18, 0,  5 },	/* lay: the reference's track 5, by beat */
+	{ 0, 15, 0, 11, 0, 24, 0,  5, 0, 17, 0,  1, 0, 16, 0,  3 },	/* lyb: track 5, the whole bar */
+	{ 0, 15, 1,  3, 0, 16, 2, 22, 0, 14, 2, 16, 0,  9, 2, 18 },	/* rlx: track 7, the whole bar */
+	{ 0,  7, 3,  8, 0,  1, 2,  1, 0,  7, 3,  8, 0,  1, 2,  1 },	/* 2bt: track 6, beats 1 and 3 swung */
+	{ 0,  0, -4, 0, 0,  0, -4, 0, 0,  0, -4, 0, 0,  0, -4, 0 },	/* psh: the offbeat 8ths early */
+	{ 0,  0, 6,  0, 0,  0, 6,  0, 0,  0, 6,  0, 0,  0, 6,  0 },	/* drg: the offbeat 8ths late */
+};
+//------------------------------------------------------------------------------
+/** v0.6: a / b rounded half away from zero (b > 0), as seqc_msTicks() rounds */
+static int seqc_rhaDiv(int a, int b)
+{
+	return a >= 0 ? (2 * a + b) / (2 * b) : -((-2 * a + b) / (2 * b));
+}
+//------------------------------------------------------------------------------
+/** v0.6 (spec v0.6 4.1): F, the step's fine part in ticks of its track step of len ticks */
+static int seqc_fineTicks(uint8_t pattern, uint8_t track, uint8_t step, uint16_t len)
+{
+	if (seqc.host.fine == NULL)
+		return 0;
+	const int f = seqc.host.fine(seqc.host.ctx, pattern, track, step);
+	if (f < STEP_FINE_MIN || f > STEP_FINE_MAX)
+		return 0;
+	return seqc_rhaDiv(f * (int)len, (int)SEQC_TICKS_PER_STEP);
+}
+//------------------------------------------------------------------------------
+/** v0.6 (spec v0.6 4.1, M5, M6): G, the track's template at the occurrence at pl of track
+ * step s: position q = (loop * length + s) mod 16, scaled by the amount and the track step */
+static int seqc_templateTicks(uint8_t pattern, uint8_t track, uint8_t step, const seqc_place_t *pl)
+{
+	if (seqc.host.tmpl == NULL)
+		return 0;
+	const TrackTemplate tp = trackTemplate_checked(seqc.host.tmpl(seqc.host.ctx, pattern, track));
+	if (tp.id == 0)
+		return 0;
+	const uint32_t q = (pl->loop * seqc_trackLength(pattern, track) + step) % TEMPLATE_STEPS;
+	const int v = seqc_templates[tp.id - 1u][q];
+	return seqc_rhaDiv(v * ((int)tp.amount + 100) * (int)pl->len, 100 * (int)SEQC_TICKS_PER_STEP);
+}
+//------------------------------------------------------------------------------
+/** v0.6 (spec v0.6 4.1, M7): the step's own position P = clamp(C + F + G) to the shift's
+ * reach, 7/8 of a track step of len ticks; with F = G = 0 it is C, v0.5's shift */
+static int seqc_stepPos(int c, int f, int g, uint16_t len)
+{
+	if (f == 0 && g == 0)
+		return c;
+	const int reach = (int)(len - len / 8u);
+	const int p = c + f + g;
+	return p < -reach ? -reach : (p > reach ? reach : p);
+}
+//------------------------------------------------------------------------------
+/** the first hit's offset from the grid tick: swing on an odd occurrence, the step's own
+ * position pos (v0.6: shift, fine part and template, seqc_stepPos()), and v0.2's delay +
+ * humanize time, at most one track step later; the sum at least 7/8 of a track step
+ * earlier (-84 at x1), so the lookahead holds at every tempo */
+static int seqc_offset(const seqc_draw_t *d, const TrackGroove *g, int pos, uint32_t absStep,
 		const seqc_place_t *pl)
 {
 	int groove = seqc_msTicks(g->delay) + d->jitter;
 	if (groove > (int)pl->len)
 		groove = (int)pl->len;
-	const int offset = ((absStep & 1u) ? (int)pl->swing : 0) + seqc_shiftFor(timing.shift, pl->len) + groove;
+	const int offset = ((absStep & 1u) ? (int)pl->swing : 0) + pos + groove;
 	const int earliest = -(int)(pl->len - pl->len / 8u);
 	return offset < earliest ? earliest : offset;
 }
@@ -1162,7 +1217,9 @@ static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint
 	const StepTiming timing = seqc.host.timing(seqc.host.ctx, pattern, track, step);
 	uint8_t hits = seqc_hitCount(timing.flam);
 	uint16_t len = pl->len;
-	int offset = seqc_offset(d, &g, timing, absStep, pl);
+	const int pos = seqc_stepPos(seqc_shiftFor(timing.shift, len), seqc_fineTicks(pattern, track, step, len),
+			seqc_templateTicks(pattern, track, step, pl), len);
+	int offset = seqc_offset(d, &g, pos, absStep, pl);
 	if (early)
 	{
 		d->timed = true;
