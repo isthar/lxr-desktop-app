@@ -810,4 +810,82 @@ TEST(RV5_tone_64_after_a_side_leaves_no_offset)
 	}
 }
 
+/* E7.7 (tracker Q32): an input with an offset, then silence. fw 1.7's input EQ at tone 64's
+ * setting, which v0.4 kept at every tone, is a 0.01 Hz high-pass whose state is the mean of the
+ * last 49 s of the input (24 s at full rate). When the input stopped, that state came back into
+ * the tank as a step and stayed on the bus (the fx card's +54 LSB bus left +35 LSB); frozen, the
+ * tank integrated it without end (+1,123 LSB after 60 s). Now the input EQ is a 5 Hz DC blocker,
+ * and so are the outputs at tone 64. Here: 20 s of noise (+-512 LSB) with an offset of 300 LSB
+ * at the showcase's settings (level 112, size 90, decay 76) and tone t, then 10 s of silence:
+ * returns the larger |mean| of L and R over the last second, in LSB. Frozen at the end of the
+ * input, 20 s frozen: returns how much the |mean| of 15-20 s after the input grew over the |mean|
+ * of 5-10 s, the larger of L and R (the blocker's own transient at the stop leaves a bounded
+ * offset in the frozen tank, about 17 LSB here at tone 5, report E7.7; it must not grow) */
+static double rv_dcAfter(uint8_t tone, uint8_t frozen)
+{
+	int16_t bus[128];
+	uint32_t seed = 17007u + tone;
+	const uint32_t perSec = (uint32_t)(REAL_FS / 64.f + 0.5f);
+	const uint32_t play = 20 * perSec, quiet = (frozen ? 20 : 10) * perSec;
+	double early[2] = {0}, late[2] = {0};
+	atmo_init();
+	activeParameters[PAR_REV_FREEZE] = 0;
+	atmo_setParam(PAR_REV_FREEZE, 0.f);
+	atmo_setParam(PAR_REV_SIZE, 90 / 127.f);
+	atmo_setParam(PAR_REV_DECAY, 76 / 127.f);
+	atmo_setParam(PAR_REV_TONE, tone / 127.f);
+	atmo_setParam(PAR_REV_LEVEL, 112 / 127.f);
+	for(uint32_t b = 0; b < play + quiet; b++)
+	{
+		if(b < play)
+			for(int i = 0; i < 128; i++)
+			{
+				seed = seed * 1664525u + 1013904223u;
+				bus[i] = (int16_t)(300 + ((int32_t)(seed >> 16) - 32768) / 64);
+			}
+		else
+			memset(bus, 0, sizeof bus);
+		if(frozen && (b == play - 1))
+			atmo_toggleFreeze();
+		atmo_process(bus, 64);
+		const uint32_t t = b - play;	/* blocks after the input, when b >= play */
+		for(int i = 0; i < 128; i++)
+		{
+			if(frozen && (b >= play) && (t >= 5 * perSec) && (t < 10 * perSec))
+				early[i & 1] += bus[i];
+			if(b >= play + quiet - (frozen ? 5 : 1) * perSec)
+				late[i & 1] += bus[i];
+		}
+	}
+	if(frozen)
+		atmo_toggleFreeze();
+	atmo_setParam(PAR_REV_LEVEL, 0.f);
+	atmo_process(bus, 64);
+	double top = -1e9;
+	for(int c = 0; c < 2; c++)
+	{
+		const double v = frozen ? (fabs(late[c]) - fabs(early[c])) / (64. * 5 * perSec) : fabs(late[c] / (64. * perSec));
+		top = (v > top) ? v : top;
+	}
+	return top;
+}
+
+TEST(RV6_an_input_offset_leaves_no_offset)
+{
+	static const uint8_t tones[] = { 5, 64 };
+	double after[2];
+	for(unsigned k = 0; k < sizeof tones; k++)
+	{
+		after[k] = rv_dcAfter(tones[k], 0);
+		printf("RV6: decim %d lean %d, tone %3u: 20 s with +300 LSB, 10 s later bus mean %.2f LSB\n",
+				ATMO_REVERB_DECIM, ATMO_REVERB_LEAN, tones[k], after[k]);
+	}
+	const double grew = rv_dcAfter(5, 1);
+	printf("RV6: decim %d lean %d, tone   5: frozen, |bus mean| 15-20 s after the input less 5-10 s: %+.2f LSB\n",
+			ATMO_REVERB_DECIM, ATMO_REVERB_LEAN, grew);
+	for(unsigned k = 0; k < sizeof tones; k++)
+		ASSERT_TRUE(after[k] < 0.5);
+	ASSERT_TRUE(grew < 1.0);
+}
+
 TEST_MAIN()
