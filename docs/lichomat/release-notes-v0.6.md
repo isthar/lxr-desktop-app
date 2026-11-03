@@ -109,13 +109,15 @@ Koszt policzony statycznie, metodą notatek 0.5 (instrukcje, 13 cykli na dzielen
 - Strona nagrywania (SHIFT + REC) ma `rqn` po `aut`.
 - Bajt 19 `glo.cfg` to `rqn`.
 - Ekran startowy pokazuje `LICHOMAT` i `v0.6 unofficial`.
+- Długie nazwy w trybie edycji mają najwyżej 8 znaków: `Slide tm`, `SceneChg`, `rev lvl`, `rev mod`, `rev frz`, `dly sync`, `duck dpt`, `DJ filtr`, `Trig tmg`. Dłuższe nazwy z fw 1.7, 0.4 i 0.5 pisały poza górną linię LCD (poprawka E4.10).
+- Oscylator PWM nie czyta już tablicy piły o jeden za wierszem (błąd fw 1.7 B14, poprawka E4.11). Poniżej 14 080 Hz dźwięk jest bit w bit ten sam; zmienia się tylko najwyższy wiersz tablicy (od 14 080 Hz). Nasycenie fazy PWM (B13) zostaje, bo jego poprawka zmienia brzmienie PWM i czeka na Twój odsłuch.
 
 ## Bez zmian
 
 - Wszystko z v0.1–v0.5. Bez mikrotimingu i szablonów `trg` `smp` gra bit w bit jak v0.5, a `trg` `blk` jak v0.4: w emulatorze wszystkie 32 złote rendery v0.5 są bez zmian.
 - Shuffle (jeden na wzorzec, na nieparzystych krokach), humanize, opóźnienie ścieżki, własne tempo ścieżki, ratchety i rolle liczą się jak wcześniej, a reguła choke ścieżki jest ta sama.
 - Formaty kitów, projektów i piosenek, 30 bajtów `glo.cfg`, MIDI CC i NRPN.
-- Pamięć: DTCM + RAM 469 132 z 471 032 B budżetu (budżet rośnie o 15 488 B na mikrotiming i szablony 64 wzorców w RAM), DTCM 107 396 z 107 900 B (bez zmian), RAM 361 736 z 389 120 B, ITCM 13 728 z 16 384 B (bez zmian).
+- Pamięć: DTCM + RAM 469 132 z 471 032 B budżetu (budżet rośnie o 15 488 B na mikrotiming i szablony 64 wzorców w RAM), DTCM 107 396 z 107 900 B (bez zmian), RAM 361 736 z 389 120 B, ITCM 13 744 z 16 384 B (+16 B na poprawkę PWM).
 
 ## Znane ograniczenia
 
