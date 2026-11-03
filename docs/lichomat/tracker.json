@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 18:27",
+    "updated": "2026-11-03 18:32",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 gotowe w kodzie (M18); czekają Twoje testy na LXR",
     "branch": "timing-core",
-    "head": "6a822ed",
+    "head": "5a10441",
     "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T18:27:00+01:00",
-    "now": ""
+    "updated_at": "2026-11-03T18:32:00+01:00",
+    "now": "E4.10 i E4.11 (B14): wykonawca na v0.6; E5.8: build aplikacji emulatora v0.6"
   },
   "epics": [
     {
@@ -421,15 +421,15 @@
     {
       "id": "E4.10",
       "epic": "E4",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Błąd fw 1.7: długie nazwy parametrów (np. „Slide time”, 10 znaków) w trybie edycji piszą poza bufor górnej linii LCD (editDisplayBuffer[0]); UBSan w emulatorze się zatrzymuje. Poprawka: nazwy do 8 znaków",
       "updated": "2026-11-03"
     },
     {
       "id": "E4.11",
       "epic": "E4",
-      "status": "do zrobienia",
-      "title": "Błędy fw 1.7 B13–B14 w oscylatorze PWM (raport sanitizer-sweep-2026-10-27): odczyt sawTable o jeden za wierszem (Oscillator.c calcPwmBlock, calcPwmFmBlock; potwierdzony przez ASan w fuzzingu v0.6) i nasycenie fazy. Poprawka B14 bit w bit taka sama poniżej 14 kHz; B13 zmienia brzmienie PWM, więc najpierw Twój odsłuch",
+      "status": "w toku",
+      "title": "Błędy fw 1.7 B13–B14 w oscylatorze PWM (raport sanitizer-sweep-2026-10-27): B14, odczyt sawTable o jeden za wierszem (calcPwmBlock, calcPwmFmBlock), w toku na v0.6, bit w bit to samo poniżej 14 kHz; B13 (nasycenie fazy, zmienia brzmienie PWM) czeka na Twój odsłuch",
       "updated": "2026-11-03"
     },
     {
@@ -473,6 +473,13 @@
       "status": "zrobione",
       "title": "Poprawki błędów fw 1.7 znalezionych przez emulator: F12 (7f5732f, Q23), F11 (7399c7d, Q21), F6b (cf8fb4d, Q22), z testami; test U9 na LXR w v0.2",
       "updated": "2026-10-29"
+    },
+    {
+      "id": "E5.8",
+      "epic": "E5",
+      "status": "w toku",
+      "title": "Aplikacja LICHOMAT Emu z v0.6 (6a822ed) do wypróbowania mic, tpl i amt na wirtualnym panelu, z kopią Twojej karty",
+      "updated": "2026-11-03"
     },
     {
       "id": "E6.1",
@@ -3668,6 +3675,11 @@
       "n": 524,
       "at": "2026-11-03 18:27",
       "text": "E6.23 (v0.6 zad. 10) zrobione: U33–U37 w liście kontroli sprzętu, szkic notatek wydania v0.6, przepisy groove (stopa prosto, haty lay, perkusja rlx 80%), raport M18. v0.6 skończone w kodzie: E6.2, E6.4 i E6.5 zrobione, kamień milowy M18. Czekają Twoje U33–U37 i wydanie (E8.6), po wydaniu v0.5 (E8.3)."
+    },
+    {
+      "n": 525,
+      "at": "2026-11-03 18:32",
+      "text": "Lecimy dalej. E4.10 i E4.11 (część B14) w toku na v0.6: wykonawca poprawia długie nazwy w trybie edycji LCD i odczyt tablicy PWM poza wierszem, z testami; B13 (zmienia brzmienie PWM) zostaje do Twojego odsłuchu. Nowy wiersz E5.8 w toku: buduję aplikację LICHOMAT Emu z v0.6 z czystej kopii (6a822ed), żebyś mógł pokręcić mic, tpl i amt."
     }
   ]
 }
