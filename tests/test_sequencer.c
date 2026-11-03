@@ -937,6 +937,55 @@ TEST(sequencer_micro_step_page)
 	run(1);
 }
 
+TEST(sequencer_micro_host_callbacks_reach_the_core)
+{
+	/* review of Tasks 4-5: the glue's fine() and tmpl() (seq_cbFine(), seq_cbTmpl()). Track 0,
+	 * steps 0 and 2 in smp: fine +5 on step 0 (shift 7) posts them 192 - 5 = 187 ticks apart;
+	 * with drg at 100 % (+6 on step 2) 187 + 6 = 193. 281,250 cycles a tick at 120 BPM */
+	static const uint32_t want[2] = { 187u * 281250u, 193u * 281250u };
+	for (int k = 0; k < 2; k++)
+	{
+		reset();
+		activeParameters[PAR_TRIG_TIMING] = 0;
+		Step *s0 = &seq_patternSet.seq_subStepPattern[0][0][0], *s2 = &seq_patternSet.seq_subStepPattern[0][0][2];
+		const Step old0 = *s0, old2 = *s2;
+		StepTiming *t0 = &seq_patternSet.seq_stepTiming[0][0][0], *t2 = &seq_patternSet.seq_stepTiming[0][0][2];
+		const StepTiming oldT0 = *t0, oldT2 = *t2;
+		const uint8_t oldFine = seq_patternSet.seq_stepFine[0][0][0];
+		const TrackTemplate oldTmpl = seq_patternSet.tmpl[0][0];
+		seq_setMainStep(0, 0, 0, 1);
+		seq_setMainStep(0, 0, 2, 1);
+		s0->volume |= STEP_ACTIVE_MASK;
+		s2->volume |= STEP_ACTIVE_MASK;
+		*t0 = (StepTiming){ .flam = 0, .shift = 7 };
+		*t2 = (StepTiming){ .flam = 0, .shift = 7 };
+		seq_patternSet.seq_stepFine[0][0][0] = 0;
+		stepFine_set(seq_patternSet.seq_stepFine[0][0], 0, 5);
+		seq_patternSet.tmpl[0][0] = (TrackTemplate){ .id = (uint8_t)(k ? 7 : 0), .amount = 0 };
+		posts = 0;
+		seq_setRunning(1);
+		run(400);
+		seq_setRunning(0);
+		run(1);
+		int on[2], n = 0;
+		for (int i = 0; i < posts && i < 64; i++)
+			if (posted[i].track == 0 && n < 2)
+				on[n++] = i;
+		ASSERT_EQ(n, 2);
+		const uint32_t d = posted[on[1]].time - posted[on[0]].time;
+		ASSERT_TRUE(d >= want[k] - 1u && d <= want[k] + 1u);
+		seq_setMainStep(0, 0, 0, 0);
+		seq_setMainStep(0, 0, 2, 0);
+		*s0 = old0;
+		*s2 = old2;
+		*t0 = oldT0;
+		*t2 = oldT2;
+		seq_patternSet.seq_stepFine[0][0][0] = oldFine;
+		seq_patternSet.tmpl[0][0] = oldTmpl;
+	}
+	activeParameters[PAR_TRIG_TIMING] = 1;
+}
+
 //------------------------------------------------------------------------------
 // LICHOMAT v0.6 (plan v0.6 Task 7, spec 10.1 record_micro): recording keeps the played offset
 //------------------------------------------------------------------------------

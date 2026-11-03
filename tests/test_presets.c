@@ -1506,6 +1506,33 @@ TEST(pattern_block2_absent_without_data)
 	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE);
 }
 
+TEST(pattern_block2_written_for_microtiming_alone)
+{
+	/* review of Tasks 4-5: every template off and one fine part, the last nibble of the last
+	 * byte (track 6, step 63, -1 over shift 7: T = -1): block 2 is written, the nibble comes back */
+	CardEntry *e = savedPattern5(1);
+	ASSERT_TRUE(e != NULL);
+	static uint8_t want[NUM_TRACKS][STEP_FINE_BYTES];
+	memset(seq_patternSet.seq_stepFine[5], 0, sizeof want);
+	memset(seq_patternSet.tmpl[5], 0, sizeof seq_patternSet.tmpl[5]);
+	seq_patternSet.seq_stepTiming[5][6][63].shift = 7;
+	stepFine_set(seq_patternSet.seq_stepFine[5][6], 63, -1);
+	stepFine_set(want[6], 63, -1);
+	ASSERT_EQ(seq_patternSet.seq_stepFine[5][6][31], 0xF0);
+	ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+	e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE);
+	memset(seq_patternSet.seq_stepFine[5], 0x11, sizeof want);	/* stale values */
+	memset(seq_patternSet.tmpl[5], 0x11, sizeof seq_patternSet.tmpl[5]);
+	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[5], want, sizeof want), 0);
+	ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[5][6], 63), -1);
+	ASSERT_EQ(seq_patternSet.seq_stepTiming[5][6][63].shift, 7);
+	static const uint8_t zero[sizeof seq_patternSet.tmpl[5]];
+	ASSERT_EQ(memcmp(seq_patternSet.tmpl[5], zero, sizeof zero), 0);
+}
+
 TEST(pattern_block2_tmp_pat_round_trip)
 {
 	reset();
@@ -1562,6 +1589,31 @@ TEST(pattern_block2_left_out_keeps_the_defaults)
 	}
 }
 
+TEST(pattern_block2_gated_on_block_1)
+{
+	/* review of Tasks 4-5: the v0.3 part, block 1's head with version 9 (no body), then a valid
+	 * block 2 right where a reader past that head would look: block 2 is not read */
+	CardEntry *e = savedTiming5(2);
+	ASSERT_TRUE(e != NULL);
+	static uint8_t f[PAT_V03_SIZE + 6 + PAT_BLOCK2_SIZE];
+	static const uint8_t head1[6] = { 'L', 'C', 'H', 'M', 9, 7 };
+	memcpy(f, e->data, PAT_V03_SIZE);
+	memcpy(f + PAT_V03_SIZE, head1, sizeof head1);
+	memcpy(f + PAT_V03_SIZE + 6, e->data + PAT_V03_SIZE + PAT_EXT_SIZE, PAT_BLOCK2_SIZE);
+	ASSERT_EQ(memcmp(f + PAT_V03_SIZE + 6, "LCHM\x02\x07", 6), 0);
+	uint8_t tmplOn = 0;
+	for (uint8_t t = 0; t < NUM_TRACKS; t++)
+		tmplOn |= seq_patternSet.tmpl[5][t].id;
+	ASSERT_TRUE(tmplOn != 0);			/* the block holds templates */
+	cardPut(e->path, f, sizeof f);
+	fillTiming(5, 1);				/* stale values */
+	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+	static const uint8_t zero[NUM_TRACKS * STEP_FINE_BYTES];
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[5], zero, sizeof zero), 0);
+	ASSERT_EQ(memcmp(seq_patternSet.tmpl[5], zero, sizeof seq_patternSet.tmpl[5]), 0);
+	ASSERT_EQ(memcmp(seq_patternSet.groove[5], zero, sizeof seq_patternSet.groove[5]), 0);
+}
+
 TEST(pattern_block2_values_out_of_range)
 {
 	CardEntry *e = savedTiming5(0);
@@ -1578,6 +1630,12 @@ TEST(pattern_block2_values_out_of_range)
 	b2[20 + 32 + 2] = (uint8_t)((b2[20 + 32 + 2] & 0xF0) | 5);	/* track 1 step 4: shift +7, fine +5: 89 */
 	f[PAT_TIMING_AT(1, 5)] = (uint8_t)((f[PAT_TIMING_AT(1, 5)] & 0x0F) | (0 << 4));
 	b2[20 + 32 + 2] = (uint8_t)((b2[20 + 32 + 2] & 0x0F) | (0x0A << 4));	/* step 5: shift -7, fine -6: -90 */
+	/* deviation 9 (review of Tasks 4-5): track 3 step 6 shift 15 and fine 0 stays as stored;
+	 * step 7 shift 15 (played as 0) and fine +3 is T = 3, split again: shift 7, fine 3 */
+	f[PAT_TIMING_AT(3, 6)] = (uint8_t)((f[PAT_TIMING_AT(3, 6)] & 0x0F) | (15 << 4));
+	f[PAT_TIMING_AT(3, 7)] = (uint8_t)((f[PAT_TIMING_AT(3, 7)] & 0x0F) | (15 << 4));
+	b2[20 + 3 * 32 + 3] = 0x30;		/* step 6 nibble 0, step 7 nibble +3 */
+	const uint8_t flam6 = f[PAT_TIMING_AT(3, 6)] & 0x0F, flam7 = f[PAT_TIMING_AT(3, 7)] & 0x0F;
 	cardPut(e->path, f, sizeof f);
 	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
 	ASSERT_EQ(seq_patternSet.tmpl[5][0].id, 0);
@@ -1596,6 +1654,12 @@ TEST(pattern_block2_values_out_of_range)
 	ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[5][1], 5), 0);
 	ASSERT_EQ(stepMicro(seq_patternSet.seq_stepTiming[5][2][9], stepFine_get(seq_patternSet.seq_stepFine[5][2], 9)),
 			fillMicro(2, 9, 0));				/* a valid step stays */
+	ASSERT_EQ(seq_patternSet.seq_stepTiming[5][3][6].shift, 15);	/* fine 0: left as stored */
+	ASSERT_EQ(seq_patternSet.seq_stepTiming[5][3][6].flam, flam6);
+	ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[5][3], 6), 0);
+	ASSERT_EQ(seq_patternSet.seq_stepTiming[5][3][7].shift, 7);	/* fine +3 over 15: T = 3 */
+	ASSERT_EQ(seq_patternSet.seq_stepTiming[5][3][7].flam, flam7);
+	ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[5][3], 7), 3);
 }
 
 TEST(pattern_block2_fw17_reads_the_coarse_shift)
