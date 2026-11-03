@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 18:05",
+    "updated": "2026-11-03 18:13",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 w wykonaniu: E6.20 (nagrywanie), potem E6.21–E6.23",
     "branch": "timing-core",
-    "head": "18d566e",
+    "head": "6a822ed",
     "next": "E6.20 i jego pełny przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
-    "updated_at": "2026-11-03T18:05:00+01:00",
-    "now": "E6.22 (v0.6 zad. 9): README, fuzzing, dema demo_v06.sh"
+    "updated_at": "2026-11-03T18:13:00+01:00",
+    "now": "E6.23 (v0.6 zad. 10): dokumenty i raport M18"
   },
   "epics": [
     {
@@ -426,6 +426,13 @@
       "updated": "2026-11-03"
     },
     {
+      "id": "E4.11",
+      "epic": "E4",
+      "status": "do zrobienia",
+      "title": "Błędy fw 1.7 B13–B14 w oscylatorze PWM (raport sanitizer-sweep-2026-10-27): odczyt sawTable o jeden za wierszem (Oscillator.c calcPwmBlock, calcPwmFmBlock; potwierdzony przez ASan w fuzzingu v0.6) i nasycenie fazy. Poprawka B14 bit w bit taka sama poniżej 14 kHz; B13 zmienia brzmienie PWM, więc najpierw Twój odsłuch",
+      "updated": "2026-11-03"
+    },
+    {
       "id": "E5.1",
       "epic": "E5",
       "status": "zrobione",
@@ -617,16 +624,16 @@
     {
       "id": "E6.22",
       "epic": "E6",
-      "status": "w toku",
-      "title": "v0.6 zad. 9: README, fuzzing, dema demo_v06.sh, odbiór",
+      "status": "zrobione",
+      "title": "v0.6 zad. 9: README, fuzzing z mic, tpl i amt, dema demo_v06.sh (6a822ed)",
       "updated": "2026-11-03"
     },
     {
       "id": "E6.23",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "v0.6 zad. 10: dokumenty dla Ciebie (U33–U37, notatki wydania, przepisy groove) i raport M18",
-      "updated": "2026-11-02"
+      "updated": "2026-11-03"
     },
     {
       "id": "E7.1",
@@ -3640,6 +3647,11 @@
       "n": 521,
       "at": "2026-11-03 18:05",
       "text": "E6.21 (v0.6 zad. 8) zrobione, 18d566e: nagrania wzorcowe G20–G22 i testy V06_micro, V06_template, V06_record. Każdy onset zgadza się z tickami policzonymi poza firmware'em z dokładnością do ok. 2 próbek: mikrotiming G20 (także przy tempie ×3/4) 1,97, szablony G21 1,96–1,97, nagrany take G22 odtworzony 1,95; z rqn on na siatce 1,90; z szablonem lay ten sam dźwięk co bez (szablon odjęty przy nagrywaniu i dodany przy odtwarzaniu). Przekroczenie kroku: 8 nut zduszonych, jak w modelu. 32 stare nagrania wzorcowe bez zmian. E6.22 (v0.6 zad. 9: README, fuzzing, dema) w toku."
+    },
+    {
+      "n": 522,
+      "at": "2026-11-03 18:13",
+      "text": "E6.22 (v0.6 zad. 9) zrobione, 6a822ed: README, fuzzing z losowymi mic, tpl i amt (1 800 renderów pod UBSan: 0 znalezisk; pod ASan dźwięk pokazał tylko stary odczyt tablicy PWM z fw 1.7, nowy wiersz E4.11), dema w build/wt-v06/build/demo/ (każdy szablon na hi-hacie przy 142 BPM, lay przy 50/100/150%, nagrany take). E6.23 (v0.6 zad. 10: dokumenty dla Ciebie i raport M18) w toku."
     }
   ]
 }
