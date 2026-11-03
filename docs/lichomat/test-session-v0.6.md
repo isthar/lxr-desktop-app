@@ -17,7 +17,7 @@ dowolnym.
 
 ## Przygotowanie (dzień wcześniej, ok. 20 min)
 
-- [ ] `cd /Users/tk/Code/lxr/build/images && shasum -a 256 -c SHA256SUMS`: siedem razy `OK`.
+- [ ] `cd /Users/tk/Code/lxr/build/images && shasum -a 256 -c SHA256SUMS`: jedenaście razy `OK`.
 - [ ] Zainstaluj SendMIDI (github.com/gbevin/SendMIDI) i MIDI Monitor (snoize.com/MIDIMonitor): na
       tym Macu ich nie ma. SendMIDI potrzebują H6, H7, U2, U3 i X4, a MIDI Monitora H5, H6, H8–H11,
       U10, U11, U18 i X4.
@@ -195,10 +195,11 @@ Z powrotem na 0.6 (zainstaluj `LXR_V2_LICHOMAT_0.6.img`):
 ## Osobna, późniejsza sesja (po H12)
 
 Te sprawdzenia zależą od ostatecznej wersji pogłosu, więc na dzisiejszym 0.6 nic nie znaczą: 0.6 nie ma
-jeszcze poprawki offsetu DC pogłosu (E7.7). Pliki 0.4 ją mają i są gotowe już teraz, więc tę część
-możesz zrobić od razu po H12, tego samego wieczoru, albo kiedy indziej. Nie czekasz na mnie ani na CI.
+jeszcze poprawki offsetu DC pogłosu (E7.7). Pliki 0.4, 0.5 i 0.6 w `build/images/po-H12/` ją mają i są
+gotowe już teraz, w folderze `polowa/` albo `lean/`, który wskazało P. Tę część możesz więc zrobić od
+razu po H12, tego samego wieczoru, albo kiedy indziej. Nie czekasz na mnie ani na CI.
 
-- **Na pliku 0.4 z `build/images/po-H12/`, tym, który wskazało P (`build/images/README.txt`, punkt 5):**
+- **Na 0.4 z tego folderu (`build/images/README.txt`, punkt 5):**
   - U20: CPU z pogłosem, na ciężkim wzorcu i kicie zapisanym w części 1;
   - U21: pogłos i freeze;
   - U22: rumble;
@@ -206,11 +207,11 @@ możesz zrobić od razu po H12, tego samego wieczoru, albo kiedy indziej. Nie cz
     buildzie z ustaloną częstotliwością;
   - U25: zgodność kitu z 1.7, druga wycieczka do 1.7;
   - U26: przepisy kitów 0.4 (pogłos w trzech z czterech).
-- **Na 0.5:**
+- **Na 0.5 z tego folderu:**
   - U30: CPU z pogłosem w ostatecznej częstotliwości;
-  - U36 krok 3: wzorzec z 0.6 czytany przez 0.5. Dziś nie ma pliku 0.5. Przed tą sesją zapisz na 0.6
-    świeży wzorzec z `mic`, bo wzorce w P zapisał już 1.7.
-- **Na ostatecznym 0.6:** U37 (CPU z szablonami i `mic`, z pogłosem w ostatecznej częstotliwości).
+  - U36 krok 3: wzorzec z 0.6 czytany przez 0.5. Przed tą sesją zapisz na 0.6 świeży wzorzec z `mic`,
+    bo wzorce w P zapisał już 1.7.
+- **Na 0.6 z tego folderu:** U37 (CPU z szablonami i `mic`, z pogłosem w ostatecznej częstotliwości).
 - Do tego powtórka wszystkiego, co dziś nie przeszło.
 
 ## Co zapisać

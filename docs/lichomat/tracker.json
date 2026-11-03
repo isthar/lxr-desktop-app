@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 00:25",
+    "updated": "2026-11-04 00:35",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Noc: E7.9 (warianty 0.4 na wynik H12) i E4.12 (fuzzing)",
+    "focus": "Czeka na Ciebie: H12 (wybiera folder polowa/ albo lean/), testy na LXR, wybór B13, odsłuch kitów",
     "branch": "timing-core",
-    "head": "7f830b7",
-    "next": "E7.9: obrazy i README po H12, plan sesji; potem v0.5-half i v0.6-half (scalenie E7.7 dalej)",
-    "updated_at": "2026-11-04T00:25:00+01:00",
-    "now": "E7.10: bramki v0.5-half i v0.6-half; E4.12: fuzzing sekwencera w tle"
+    "head": "95f5af1",
+    "next": "H12 na 0.3 z CI, potem pliki z build/images/po-H12/; strona odsłuchu: kity, B13, pogłos",
+    "updated_at": "2026-11-04T00:35:00+01:00",
+    "now": "E4.12: fuzzing sekwencera v0.6 pod ASan w tle (dźwięk i MIDI: 16 000 renderów, 0 znalezisk)"
   },
   "epics": [
     {
@@ -708,9 +708,9 @@
     {
       "id": "E7.7",
       "epic": "E7",
-      "status": "zablokowane",
-      "title": "Offset DC pogłosu v0.4 (filtr wejściowy 0,01 Hz przy tonie 64; po freeze do +1 123 LSB): przyczyna znaleziona, poprawka gotowa i sprawdzona (górnoprzepustowy 5 Hz, Q32; build/reference/e77/). Wchodzi do v0.4 razem ze zmianą częstotliwości po H12 (jeden zapis G13–G15 od nowa). Pogłos w slocie FX z fw 1.7 nieosiągalny (USE_REVERB 0), sprawdzone w E7.8",
-      "updated": "2026-11-03"
+      "status": "zrobione",
+      "title": "Offset DC pogłosu v0.4 (filtr wejściowy 0,01 Hz przy tonie 64; po freeze do +1 123 LSB): poprawka 5 Hz (Q32) na gałęziach v0.4-half i v0.4-lean (07dd737, test RV6) i dalej w v0.5/v0.6 -half i -lean; wchodzi do wydań po H12",
+      "updated": "2026-11-04"
     },
     {
       "id": "E7.8",
@@ -722,15 +722,15 @@
     {
       "id": "E7.9",
       "epic": "E7",
-      "status": "w toku",
-      "title": "Gotowe warianty 0.4 na każdy wynik H12 (pełna częstotliwość, połowa, lean), każdy z poprawką E7.7 i nowym zapisem G13–G15, testy i obrazy w build/images/: po H12 wgrywasz od razu ten, który wskaże reguła, i robisz U20–U26 tego samego wieczoru",
-      "updated": "2026-11-03"
+      "status": "zrobione",
+      "title": "Gotowe warianty 0.4 na każdy wynik H12, każdy z poprawką E7.7 (07dd737, test RV6) i nowym zapisem G13–G15: v0.4-half (cfba932), v0.4-lean (7bb00da), v0.4-full (559a6b1, tylko na próbę, Q34); wszystkie bramki zielone, obrazy w build/images/po-H12/ (M19)",
+      "updated": "2026-11-04"
     },
     {
       "id": "E7.10",
       "epic": "E7",
-      "status": "w toku",
-      "title": "E7.7 i połowa częstotliwości (Q34) scalone dalej: gałęzie v0.5-half (0136df1) i v0.6-half, bramki i obrazy 0.5 i 0.6 do U30 i U37 po H12; wariant lean tak samo",
+      "status": "zrobione",
+      "title": "E7.7 i połowa częstotliwości (Q34) scalone dalej: v0.5-half (0136df1), v0.5-lean (262dd1d), v0.6-half (cb9c040), v0.6-lean (35b18fb); bramki zielone, obrazy 0.5 i 0.6 do U30 i U37 w build/images/po-H12/ (M19)",
       "updated": "2026-11-04"
     },
     {
@@ -891,6 +891,12 @@
       "date": "2026-11-03",
       "title": "v0.6: mikrotiming kroku, szablony groove i nagrywanie z mikrotimingiem (E6.2, E6.4, E6.5; E6.14–E6.23)",
       "summary": "Gałąź v0.6 (6a822ed). Mikrotiming co 1 tick (±84), 7 szablonów groove z ilością na tor, nagrywanie zapisuje zagrane przesunięcie (rqn). Wszystkie testy pod UBSan i ASan, 32 stare nagrania wzorcowe bez zmian, 6 nowych; onsety w 2 próbkach od ticków liczonych poza firmware'em. Raport: docs/lichomat/reports/M18-v0.6-microtiming-groove.md. Czekają Twoje U33–U37 i wydanie (E8.6)."
+    },
+    {
+      "id": "M19",
+      "date": "2026-11-04",
+      "title": "0.4, 0.5 i 0.6 gotowe na każdy wynik H12 (E7.7, E7.9, E7.10, Q34)",
+      "summary": "Po H12 nie czekasz na mnie: w build/images/po-H12/ są przetestowane pliki 0.4, 0.5 i 0.6 w folderze polowa/ (P ≤ 63,28) i lean/ (P > 63,28), wszystkie z poprawką offsetu DC pogłosu (E7.7). Decyzja Q34: pogłos zostaje w połowie częstotliwości, bo przy pełnej ogon basu przechyla się w lewo (pary A/B na stronie odsłuchu). Lean nigdy wcześniej nie był budowany na LXR i miał ostrzeżenie kompilatora; poprawione. Raport: docs/lichomat/reports/M19-po-H12.md."
     }
   ],
   "questions": [
@@ -3892,6 +3898,11 @@
       "n": 552,
       "at": "2026-11-04 00:25",
       "text": "Strona odsłuchu, wersja 6: nowa sekcja „Osiem kitów” z demami kitów 56–63 (M17, czekają na Twój odsłuch). Wystarczy krótko: który zostaje, który poprawić i co przeszkadza."
+    },
+    {
+      "n": 553,
+      "at": "2026-11-04 00:35",
+      "text": "E7.9, E7.10 i E7.7 zrobione, kamień M19: wszystkie siedem gałęzi zielone (v0.4-half/-lean/-full; v0.5-half i -lean: 114 testów hosta, 329 emulatora, ASan 114 i 301; v0.6-half i -lean: 125, 344, ASan 125 i 316; 0 ostrzeżeń). W build/images/po-H12/ są pliki 0.4, 0.5 i 0.6 w folderach polowa/ i lean/, 11 sum w SHA256SUMS. Po H12 robisz U20–U26, U30 i U37 bez czekania na mnie. Raport: docs/lichomat/reports/M19-po-H12.md."
     }
   ]
 }
