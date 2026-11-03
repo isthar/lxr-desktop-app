@@ -1557,10 +1557,11 @@ LXR, and its offset is measured from where its step plays: the grid with the swi
    (the closed hat) once per press.
 
 **Expected:**
-- 1: `mic` reads +11 on the late steps and −5 on the early ones (12.10 ms and −5.50 ms). The playback
-  reproduces the clip within 0.7 ms plus the interface's MIDI jitter.
+- 1: `mic` reads +11 on the late steps and −5 on the early ones (12.10 ms and −5.50 ms), each ±1 tick:
+  at 142 BPM 12 ms is 10.9 ticks and 6 ms is 5.45, close to the rounding boundary, and a DIN Note On takes
+  about 1 ms to arrive. The playback reproduces the clip within 0.7 ms plus the interface's MIDI jitter.
 - 2: the steps on the grid, with `mic` 0.
-- 3: `mic` −7 and −10 (the played offset less `lay`'s 18 and 5 ticks), and the playback still
+- 3: `mic` −7 and −10, each ±1 tick (the played offset less `lay`'s 18 and 5 ticks), and the playback still
   matches the clip.
 - 4: the take sounds as played.
 
