@@ -83,6 +83,8 @@ poprawką ping-ponga E7.8; starszy plik `975abbd1…` zastąp tym).
 - Z `trg smp` (domyślne) każde uderzenie jest stałe 2,90 ms po swoim czasie. Pomiary względne (od
   uderzenia odniesienia) się nie zmieniają; stałe ~3 ms wobec siatki DAW to właśnie to.
 - `shf` jest zgrubnym widokiem `mic`: shift +3 z H4 pokazuje też `mic` +36. To normalne.
+- Zanim wybierzesz krok, strona kroku pokazuje `shf` −7 i `mic` −84 (1.7 też pokazuje tam `shf` −7). To
+  znaczy „żaden krok”, nie przesunięcie: najpierw naciśnij krok.
 - U7 (powtórka H1 i H2) załatwiają H1 i H2 na 0.6.
 
 ### 2.1 Instalacja i Twoje projekty (15 min) ★

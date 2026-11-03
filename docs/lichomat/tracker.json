@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 00:40",
+    "updated": "2026-11-04 00:43",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Czeka na Ciebie: H12 (wybiera folder polowa/ albo lean/), testy na LXR, wybór B13, odsłuch kitów",
     "branch": "timing-core",
-    "head": "62eb6be",
+    "head": "3a50052",
     "next": "H12 na 0.3 z CI, potem pliki z build/images/po-H12/; strona odsłuchu: kity, B13, pogłos",
-    "updated_at": "2026-11-04T00:40:00+01:00",
-    "now": "E8.8: ścieżki ★ w emulatorze; E4.12: fuzzing sekwencera i pogłosu w tle"
+    "updated_at": "2026-11-04T00:43:00+01:00",
+    "now": "E4.12: fuzzing pogłosu (7 500 renderów) pod ASan na v0.6-half i v0.4-lean"
   },
   "epics": [
     {
@@ -785,8 +785,8 @@
     {
       "id": "E8.8",
       "epic": "E8",
-      "status": "w toku",
-      "title": "Ścieżki przycisków z sesji testowej (★) przechodzone w emulatorze na v0.6: czy LCD pokazuje to, co mówią lista sprawdzeń i notatki; błędy w dokumentach poprawione przed Twoją sesją",
+      "status": "zrobione",
+      "title": "Ścieżki przycisków z sesji testowej (★) przechodzone w emulatorze (v0.6-half, v0.4-half): strona CPU, trg, podstrona i drugi ekran pogłosu, freeze, djf, strona toru z dly i tpl amt, strona kroku z mic, U33 krok 2 (+18, potem +6) zgodne z listą; jeden błąd w dokumentach poprawiony: strona nagrywania to trk rqn, nie aut rqn (3a50052)",
       "updated": "2026-11-04"
     }
   ],
@@ -3915,6 +3915,11 @@
       "n": 554,
       "at": "2026-11-04 00:40",
       "text": "E8.8 w toku: przechodzę w emulatorze ścieżki przycisków z sesji ★ (v0.6-half). Zgodne: strona CPU (4× SHIFT + krok 12, po kcm cki cko trg), podstrona pogłosu (lvl siz dec ton), strona toru (len stp rot mrp → tmp hmt hmv dly → tpl amt). Błąd w dokumentach: strona nagrywania pokazuje trk rqn, nie aut rqn; poprawione w liście sprawdzeń, notatkach 0.6, M18, specyfikacji i na stronie odsłuchu. E4.12: dodatkowo 7 500 renderów samego pogłosu (wszystkie gałki, freeze, ton w trakcie ogona) pod ASan na v0.6-half i v0.4-lean."
+    },
+    {
+      "n": 555,
+      "at": "2026-11-04 00:43",
+      "text": "E8.8 zrobione: w emulatorze zgodne z listą sprawdzeń: strona kroku (vel nte prb sld, potem flm shf mic), U33 krok 2 (mic +6 daje shf +1, shf +2 daje mic +18, z powrotem +6; +6 ticków to 7,8 ms przy 120 BPM), freeze przez SHIFT + krok 3 w trybie wykonawczym (frz on), drugi ekran pogłosu pre mod frz syn, filtr DJ shu scn djf djr. Uwaga z fw 1.7: zanim wybierzesz krok, strona kroku pokazuje shf −7 i mic −84; to brak kroku, nie wartość. E4.12: 24 000 renderów dźwięku, MIDI i sekwencera pod ASan i UBSan, 0 znalezisk; fuzzing samego pogłosu jeszcze trwa."
     }
   ]
 }
