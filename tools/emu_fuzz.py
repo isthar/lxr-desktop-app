@@ -12,7 +12,7 @@ midi:  40-200 random DIN messages per render: CC, NRPN, notes, Program Change, p
        bend, aftertouch, SPP, song select and random bytes, mostly on channel 1.
 seq:   30-120 random edits per render: voices, steps, step parameters of steps 0-63
        (the step buttons' range), track settings, rolls, the performance mode, mute
-       scenes, rotation, start and stop.
+       scenes, rotation, start and stop; v0.6: mic, tpl and amt with values over 0-255.
 
 Each finding (a different source line, or a different exit message) is printed once
 with its seed; render N uses seed S + N, so `--count 1 --seed <seed>` repeats one.
@@ -64,6 +64,19 @@ def value(rnd):
     return rnd.choice([0, 1, 63, 64, 100, 101, 115, 116, 126, 127, rnd.randrange(128)])
 
 
+# LICHOMAT v0.6 (plan v0.6 V6-21): mic (0-168), tpl (0-7) and amt (0-200) pass 127; the edges of
+# their ranges and of the menu's clamp
+WIDE = ('step_micro', 'track_tpl', 'track_tpl_amt')
+
+
+def wide(rnd):
+    return rnd.choice([0, 83, 84, 85, 167, 168, 169, 200, 201, 255, rnd.randrange(256)])
+
+
+def value_for(rnd, name):
+    return wide(rnd) if name in WIDE else value(rnd)
+
+
 def sound_case(rnd, names):
     args = ['--pattern', str(rnd.randrange(2)), '--seconds', '2']
     for n in rnd.sample(names, min(40, len(names))):
@@ -102,10 +115,11 @@ def midi_case(rnd, names):
     return ['--pattern', '0', '--seconds', '%.3f' % (t / 1000 + 0.5)], lines
 
 
-STEP_PARAMETERS = ['step_volume', 'step_prob', 'step_note', 'step_slide', 'step_flam', 'step_shift']
+STEP_PARAMETERS = ['step_volume', 'step_prob', 'step_note', 'step_slide', 'step_flam', 'step_shift',
+                   'step_micro']
 TRACK_PARAMETERS = ['track_tempo', 'human_time', 'human_vol', 'track_delay', 'track_length',
                     'track_rotation', 'shuffle', 'roll', 'scene_quant', 'euklid_length',
-                    'euklid_steps', 'euklid_rotation', 'bpm']
+                    'euklid_steps', 'euklid_rotation', 'bpm', 'track_tpl', 'track_tpl_amt']
 
 
 def seq_case(rnd, names):
@@ -126,9 +140,11 @@ def seq_case(rnd, names):
             at('press step%d' % rnd.randrange(1, 17))
         elif r < 0.55:
             at('param active_step=%d' % rnd.randrange(64))
-            at('param %s=%d' % (rnd.choice(steps), value(rnd)))
+            n = rnd.choice(steps)
+            at('param %s=%d' % (n, value_for(rnd, n)))
         elif r < 0.72:
-            at('param %s=%d' % (rnd.choice(tracks), value(rnd)))
+            n = rnd.choice(tracks)
+            at('param %s=%d' % (n, value_for(rnd, n)))
         elif r < 0.80:
             at('press 25')
         elif r < 0.86:
@@ -183,10 +199,17 @@ def main():
         if r.returncode == 0:
             continue
         m = re.search(r'((?:Core/Src|emu)/[^:]+:\d+):\d+: runtime error: (.*)', r.stderr)
-        key = m.group(1) if m else 'exit %d: %s' % (r.returncode, (r.stderr.strip().splitlines() or [''])[-1][:140])
+        # LICHOMAT v0.6: an ASan report by its summary; its last line names the kept card copy, a new
+        # folder each time, so it would make every report a finding of its own
+        asan = re.search(r'SUMMARY: AddressSanitizer: (\S+) (\S+:\d+) in (\S+)', r.stderr)
+        if m:
+            key, message = m.group(1), m.group(2)[:200]
+        elif asan:
+            key, message = '%s %s' % (asan.group(2), asan.group(3)), asan.group(1)
+        else:
+            key, message = 'exit %d: %s' % (r.returncode, (r.stderr.strip().splitlines() or [''])[-1][:140]), ''
         if key not in found:
-            found[key] = {'seed': seed, 'message': m.group(2)[:200] if m else '', 'exit': r.returncode,
-                          'args': args, 'script': script}
+            found[key] = {'seed': seed, 'message': message, 'exit': r.returncode, 'args': args, 'script': script}
             print('%s: %s (seed %d)' % (key, found[key]['message'] or 'see found.json', seed), flush=True)
     with open(os.path.join(out, 'found.json'), 'w') as f:
         json.dump(found, f, indent=1)

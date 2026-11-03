@@ -49,11 +49,44 @@ saved in byte 9 of `glo.cfg`, which 1.7 ignores. If `trg` is switched from `smp`
 playing, the hits already scheduled in `smp` (about 1.5 blocks, 2 ms) still start after the first
 `blk` hits, so for that moment an older hit can restart a voice over its newer one.
 
-It keeps everything of 0.3, which added tools for playing live and for acid lines. In the
-performance mode (the second mode button) holding step 8 turns the fill mode on, steps 9–16 recall
-eight mute scenes and COPY + a step stores one; the scenes are saved with the project. Rolls go from
-a whole bar to 1/32, triplets included, on each track's own tempo. Drum 1–3 can slide: `sld` on the
-step page marks a step, and `slt` on the voice's first page sets the slide time.
+Version 0.6 adds microtiming and groove templates. Each step has its own timing `mic`, in ticks of
+1/96 of the track's step: on the step page's second screen (`flm shf mic`, after `shf`), `-84` …
+`+84`, 0 on the grid. The encoder and the knob step it one tick at a time; in edit mode the top row
+reads `Step` and `Micro`, and the bottom row shows the offset in ms at the current tempo and the
+track's own tempo. `shf` is now the coarse view of `mic` (a unit of `shf` is 1/8 step, 12 ticks):
+a v0.5 step with `shf` +2 shows `mic` +24, and a `shf` edit keeps the fine part. Each voice of a pattern
+can also follow a groove template, on the third screen of the track page (select a voice, SHIFT +
+the second mode button, then the encoder past `dly`): `tpl` and `amt`, 0–200 % of the template.
+The templates move the sixteen 16ths of a bar, the quarters stay on the grid:
+
+- `swg` (even swing): every second 16th 16 ticks late; at 56 % about 10 ms at 142 BPM;
+- `lay` (lay back): the 16ths after each quarter 18 ticks late, the ones before it 5;
+- `lyb` (lay bar): the same feel over the whole bar, each position its own value;
+- `rlx` (relax bar): a relaxed bar with the "&" a little late too;
+- `2bt` (two beat): beats 1 and 3 swung, beats 2 and 4 nearly straight;
+- `psh` (push off): the offbeat 8ths 4 ticks early, a pushing hat;
+- `drg` (drag off): the offbeat 8ths 6 ticks late, a laid-back hat.
+
+`lay`, `lyb`, `rlx` and `2bt` are measured from reference tracks at 142–143 BPM. The step's
+`mic`, its `shf` and the template add up and stop at 7/8 of a step either way; the shuffle, the
+track delay and humanize come on top, as before. A step that would sound after the next step's first
+hit on its track is cut by it. Recording places each note with its microtiming, less the track's
+template, so the take plays back as it was played; `rqn` on the recording page (SHIFT + REC, after
+`aut`) records onto the grid as 0.5 did. `rqn` is saved in byte 19 of `glo.cfg`. The template's
+position restarts with the pattern, while the swing flips at each loop of a pattern of odd length, so
+there the two can disagree.
+
+Patterns saved with 0.6 carry the fine parts and the templates in a second block after 0.2's block,
+only when they are used, so a pattern without them is the file of 0.5 byte for byte. 0.2–0.5 read
+the first block and play each step at its coarse `shf`, the nearest 1/8 step; 1.7 plays the coarse
+`shf` only and loses the tempo, humanize, delay, fine parts and templates. Files from 1.7 and from
+0.2–0.5 load in 0.6 as they played there. Kits, projects, songs and `glo.cfg` keep their sizes.
+
+It keeps everything of 0.5 and 0.4, and of 0.3, which added tools for playing live and for acid
+lines. In the performance mode (the second mode button) holding step 8 turns the fill mode on, steps
+9–16 recall eight mute scenes and COPY + a step stores one; the scenes are saved with the project.
+Rolls go from a whole bar to 1/32, triplets included, on each track's own tempo. Drum 1–3 can slide:
+`sld` on the step page marks a step, and `slt` on the voice's first page sets the slide time.
 
 It keeps everything of 0.2, which added groove per track: a tempo of its own for each track
 (polyrhythm), humanize and track delay, trig conditions and track rotation, together with the fixes
