@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 19:59",
+    "updated": "2026-11-03 20:15",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 gotowe w kodzie (M18); utwór pokazowy do odsłuchu",
     "branch": "timing-core",
-    "head": "7f58635",
+    "head": "e971801",
     "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T19:59:00+01:00",
-    "now": "E7.8: poprawka ping-pongu na v0.6 (wykonawca)"
+    "updated_at": "2026-11-03T20:15:00+01:00",
+    "now": "Ponowny render obu utworów pokazowych z v0.6 (e971801)"
   },
   "epics": [
     {
@@ -708,8 +708,8 @@
     {
       "id": "E7.8",
       "epic": "E7",
-      "status": "w toku",
-      "title": "Delay ping-pong z fw 1.7 nie odbijał ech głosu ze środka panoramy (oba tory dostawały to samo); przyczyna w Delay_processPingPong (Delay.c ~:173, :180), poprawka na v0.6 w toku (Q33: suma L+R ze skalowaniem 1/√2 do jednego toru). Pogłos w slocie FX z fw 1.7 nieosiągalny (USE_REVERB 0), więc bez offsetu DC",
+      "status": "zrobione",
+      "title": "Delay ping-pong odbija teraz echa głosu ze środka panoramy (R, L, R…), z tą samą głośnością ech co fw 1.7 (Q33); test E78_pingpong, G2_pingpong zapisane od nowa z nowym warunkiem (v0.6, e971801)",
       "updated": "2026-11-03"
     },
     {
@@ -3789,6 +3789,11 @@
       "n": 537,
       "at": "2026-11-03 19:59",
       "text": "E7.8: przyczyna znaleziona. Delay ping-pong z fw 1.7 wpisuje L do jednego toru, a R do drugiego, więc przy głosie ze środka panoramy (L = R, czyli prawie wszystkie głosy w kitach) oba tory są takie same i echa nie odbijają się między stronami; głos w skrajnym lewym działa poprawnie. To nie regres LICHOMAT ani emulatora. Decyzja Q33: na wyjściu stereo suma L+R (ze skalowaniem 1/√2, ta sama głośność ech jak w fw 1.7) do jednego toru; wykonawca robi to na v0.6 z testem, zmieni się tylko nagranie wzorcowe G2_pingpong. Pogłos w slocie FX z fw 1.7 nieosiągalny (USE_REVERB 0), więc bez problemu z E7.7."
+    },
+    {
+      "n": 538,
+      "at": "2026-11-03 20:15",
+      "text": "E7.8 zrobione (v0.6, e971801): ping-pong przerzuca echa głosu ze środka panoramy na przemian R, L, R; pierwsze echo ma tę samą głośność co w fw 1.7 (−19,17 dB łącznie przed i po), głos skrajnie w lewo 3 dB ciszej. Test E78_pingpong pada na starym kodzie; zmieniło się tylko G2_pingpong (zapisane od nowa, z warunkiem energii echa), pozostałe 37 nagrań wzorcowych bit w bit. Koszt: 2 cykle na próbkę. Teraz przerenderowuję oba utwory pokazowe z poprawkami v0.6."
     }
   ]
 }

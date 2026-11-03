@@ -111,6 +111,7 @@ Koszt policzony statycznie, metodą notatek 0.5 (instrukcje, 13 cykli na dzielen
 - Ekran startowy pokazuje `LICHOMAT` i `v0.6 unofficial`.
 - Długie nazwy w trybie edycji mają najwyżej 8 znaków: `Slide tm`, `SceneChg`, `rev lvl`, `rev mod`, `rev frz`, `dly sync`, `duck dpt`, `DJ filtr`, `Trig tmg`. Dłuższe nazwy z fw 1.7, 0.4 i 0.5 pisały poza górną linię LCD (poprawka E4.10).
 - Oscylator PWM nie czyta już tablicy piły o jeden za wierszem (błąd fw 1.7 B14, poprawka E4.11). Poniżej 14 080 Hz dźwięk jest bit w bit ten sam; zmienia się tylko najwyższy wiersz tablicy (od 14 080 Hz). Nasycenie fazy PWM (B13) zostaje, bo jego poprawka zmienia brzmienie PWM i czeka na Twój odsłuch.
+- Delay ping-pong (`Pp`) przerzuca echa na przemian także dla głosów w centrum: pierwsze echo po prawej, drugie po lewej i tak dalej. W fw 1.7 echa głosu z centrum brzmiały tak samo po obu stronach (poprawka E7.8). Echa głosu z centrum są tak samo głośne jak w fw 1.7, a głosu spanoramowanego do końca o 3 dB cichsze. Głos skrajnie w prawo ma teraz pierwsze echo po prawej, tak jak dźwięk suchy (w fw 1.7 po lewej).
 
 ## Bez zmian
 
