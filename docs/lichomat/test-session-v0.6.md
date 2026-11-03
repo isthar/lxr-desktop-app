@@ -17,7 +17,7 @@ dowolnym.
 
 ## Przygotowanie (dzień wcześniej, ok. 20 min)
 
-- [ ] `cd /Users/tk/Code/lxr/build/images && shasum -a 256 -c SHA256SUMS`: cztery razy `OK`.
+- [ ] `cd /Users/tk/Code/lxr/build/images && shasum -a 256 -c SHA256SUMS`: siedem razy `OK`.
 - [ ] Zainstaluj SendMIDI (github.com/gbevin/SendMIDI) i MIDI Monitor (snoize.com/MIDIMonitor): na
       tym Macu ich nie ma. SendMIDI potrzebują H6, H7, U2, U3 i X4, a MIDI Monitora H5, H6, H8–H11,
       U10, U11, U18 i X4.
@@ -60,19 +60,23 @@ sam co na końcu gałęzi `v0.3`).
     `LEN` 16 i `stp` 16.
 - [ ] Zapisz ciężki wzorzec i kit z kroku 3 w tej kopii (SAVE `Pattern`, SAVE `Kit`) i zanotuj numer
       projektu, wzorca i kitu. Potrzebują ich U20, U30 i U37.
-- [ ] **Od razu wyślij mi `pk` z kroku 3** (to liczba P). Od niej zależy build 0.4:
+- [ ] **Od razu wyślij mi `pk` z kroku 3** (to liczba P). Od niej zależy, który plik 0.4 wgrasz po
+      H12. Oba są już gotowe, z poprawką offsetu DC pogłosu (E7.7):
 
-| P (`pk`, H12 krok 3) | pogłos w 0.4 |
-|---|---|
-| ≤ 46,24 | pełna częstotliwość |
-| ≤ 63,28 | połowa (tak jak gra teraz) |
-| więcej | połowa, wariant oszczędny |
+| P (`pk`, H12 krok 3) | pogłos w 0.4 | plik |
+|---|---|---|
+| ≤ 63,28 | połowa (tak jak gra teraz) | `build/images/po-H12/polowa/` (`67ca9833…`) |
+| więcej | połowa, wariant oszczędny | `build/images/po-H12/lean/` (`e44de0b6…`) |
+
+Pełnej częstotliwości nie ma w tabeli: przy niej ogon basu w pogłosie przechyla się w lewo (decyzja
+Q34, porównanie na stronie odsłuchu).
 
 Więcej na 0.3 nie rób: wszystko inne z 0.1–0.3 jest w 0.6, więc na 0.3 robiłbyś to dwa razy.
 
 ## Część 2: v0.6
 
-Plik: `build/images/LXR_V2_LICHOMAT_0.6.img` (`975abbd1…`, lokalny build gałęzi `v0.6` @ `9f04341`).
+Plik: `build/images/LXR_V2_LICHOMAT_0.6.img` (`beefc513…`, lokalny build gałęzi `v0.6` @ `e971801`, z
+poprawką ping-ponga E7.8; starszy plik `975abbd1…` zastąp tym).
 
 **Różnice wobec tekstu listy sprawdzeń na 0.6:**
 - Gdzie lista każe „install 0.1/0.2/0.3/0.5 again”, instalujesz 0.6.
@@ -190,11 +194,11 @@ Z powrotem na 0.6 (zainstaluj `LXR_V2_LICHOMAT_0.6.img`):
 
 ## Osobna, późniejsza sesja (po H12)
 
-Te sprawdzenia zależą od ostatecznej częstotliwości pogłosu, więc na dzisiejszym 0.6 nic nie znaczą. Ten
-build ma jeszcze tymczasową połowę i nie ma poprawki offsetu DC pogłosu (E7.7), która wejdzie razem ze
-zmianą częstotliwości.
+Te sprawdzenia zależą od ostatecznej wersji pogłosu, więc na dzisiejszym 0.6 nic nie znaczą: 0.6 nie ma
+jeszcze poprawki offsetu DC pogłosu (E7.7). Pliki 0.4 ją mają i są gotowe już teraz, więc tę część
+możesz zrobić od razu po H12, tego samego wieczoru, albo kiedy indziej. Nie czekasz na mnie ani na CI.
 
-- **Na pliku 0.4 z CI, zbudowanym po H12:**
+- **Na pliku 0.4 z `build/images/po-H12/`, tym, który wskazało P (`build/images/README.txt`, punkt 5):**
   - U20: CPU z pogłosem, na ciężkim wzorcu i kicie zapisanym w części 1;
   - U21: pogłos i freeze;
   - U22: rumble;
@@ -213,7 +217,7 @@ zmianą częstotliwości.
 
 - Wpisz każde sprawdzenie do run sheet na końcu listy (wystarczy też wiadomość albo zdjęcie): PASS, FAIL
   albo SKIPPED, data i wartości z **Record**. Przy każdym wyniku dopisz plik: 0.3 CI `d630eabc` albo 0.6
-  lokalny `975abbd1`.
+  lokalny `beefc513`, 0.4 `67ca9833` albo `e44de0b6`.
 - H12: zdjęcie ekranu CPU w każdym kroku 2–5, z nazwą kitu, efektem i BPM; P wyślij od razu.
 - **Nie musisz mierzyć w DAW.** Wyeksportuj nagranie każdego sprawdzenia z pomiarem czasu jako WAV
   (bez normalizacji, z częstotliwością nagrania) i nazwij je ID sprawdzenia (`H3.wav`, `U27-smp.wav`,
