@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 20:17",
+    "updated": "2026-11-03 23:43",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Czeka na Ciebie: H12, testy na LXR, wybór B13",
+    "focus": "Noc: E7.9 (warianty 0.4 na wynik H12) i E4.12 (fuzzing)",
     "branch": "timing-core",
-    "head": "ff779aa",
-    "next": "H12 na 0.3 z CI (30 min), potem sesja ★ na 0.6; odsłuch utworów pokazowych i B13 na stronie odsłuchu",
-    "updated_at": "2026-11-03T20:17:00+01:00",
-    "now": ""
+    "head": "41997dd",
+    "next": "E7.9: wariant połowa (obecna częstotliwość + E7.7), potem pełna i lean; E4.12 w tle",
+    "updated_at": "2026-11-03T23:43:00+01:00",
+    "now": "E7.9: nakładam poprawkę E7.7 na v0.4 (91a61b5), od 23:50"
   },
   "epics": [
     {
@@ -433,6 +433,13 @@
       "updated": "2026-11-03"
     },
     {
+      "id": "E4.12",
+      "epic": "E4",
+      "status": "do zrobienia",
+      "title": "Nocny fuzzing v0.6 pod ASan i UBSan: dłuższy przebieg niż 1 800 renderów (dźwięk, MIDI, sekwencer, oba tryby trg); każdy znaleziony błąd fw 1.7 poprawiony z testem",
+      "updated": "2026-11-03"
+    },
+    {
       "id": "E5.1",
       "epic": "E5",
       "status": "zrobione",
@@ -710,6 +717,13 @@
       "epic": "E7",
       "status": "zrobione",
       "title": "Delay ping-pong odbija teraz echa głosu ze środka panoramy (R, L, R…), z tą samą głośnością ech co fw 1.7 (Q33); test E78_pingpong, G2_pingpong zapisane od nowa z nowym warunkiem (v0.6, e971801)",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "E7.9",
+      "epic": "E7",
+      "status": "w toku",
+      "title": "Gotowe warianty 0.4 na każdy wynik H12 (pełna częstotliwość, połowa, lean), każdy z poprawką E7.7 i nowym zapisem G13–G15, testy i obrazy w build/images/: po H12 wgrywasz od razu ten, który wskaże reguła, i robisz U20–U26 tego samego wieczoru",
       "updated": "2026-11-03"
     },
     {
@@ -3804,6 +3818,11 @@
       "n": 540,
       "at": "2026-11-03 20:17",
       "text": "Koniec wieczornej roboty. Wszystko, co zostało otwarte, czeka na Ciebie: H12 i testy według test-session-v0.6.md (E8.1), wybór A/B dla B13 na stronie odsłuchu (E4.11), zgoda na ponowienie CI (E8.5), A1–A12 w aplikacji (E8.4). Poprawka offsetu DC pogłosu (E7.7) jest gotowa i wejdzie razem ze zmianą częstotliwości po H12. Usage ok. 5,3%."
+    },
+    {
+      "n": 541,
+      "at": "2026-11-03 23:43",
+      "text": "E7.9 zaczęte, E4.12 założone: przez noc przygotowuję trzy warianty 0.4 na każdy wynik H12 (pełna częstotliwość, połowa, lean), każdy z poprawką E7.7 i nowym zapisem G13–G15, z obrazami do U20–U26. Obok nocny fuzzing v0.6 pod ASan i UBSan (E4.12). Do ok. 03:40."
     }
   ]
 }
