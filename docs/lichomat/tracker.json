@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 17:27",
+    "updated": "2026-11-03 17:42",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 w wykonaniu: E6.20 (nagrywanie), potem E6.21–E6.23",
     "branch": "timing-core",
-    "head": "2f3df5c",
+    "head": "0e4559c",
     "next": "E6.20 i jego pełny przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
-    "updated_at": "2026-11-03T17:27:00+01:00",
-    "now": "Przegląd E6.20; testy z przeglądu E6.17–E6.18 (wykonawca)"
+    "updated_at": "2026-11-03T17:42:00+01:00",
+    "now": "E6.21–E6.22 (v0.6 zad. 8–9): wykonawca grupy D"
   },
   "epics": [
     {
@@ -419,6 +419,13 @@
       "updated": "2026-10-27"
     },
     {
+      "id": "E4.10",
+      "epic": "E4",
+      "status": "do zrobienia",
+      "title": "Błąd fw 1.7: długie nazwy parametrów (np. „Slide time”, 10 znaków) w trybie edycji piszą poza bufor górnej linii LCD (editDisplayBuffer[0]); UBSan w emulatorze się zatrzymuje. Poprawka: nazwy do 8 znaków",
+      "updated": "2026-11-03"
+    },
+    {
       "id": "E5.1",
       "epic": "E5",
       "status": "zrobione",
@@ -597,15 +604,15 @@
       "id": "E6.20",
       "epic": "E6",
       "status": "zrobione",
-      "title": "v0.6 zad. 7: nagrywanie z mikrotimingiem (seqc_recordPlace, seq_addNoteAt), testy record_place i record_micro (c82febf); pełny przegląd w toku",
+      "title": "v0.6 zad. 7: nagrywanie z mikrotimingiem (seqc_recordPlace, seq_addNoteAt), testy record_place i record_micro (c82febf); poprawki z pełnego przeglądu (0e4559c)",
       "updated": "2026-11-03"
     },
     {
       "id": "E6.21",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "v0.6 zad. 8: emulator: pomiar onsetów w tickach, karta groove, nagrania wzorcowe G20–G22",
-      "updated": "2026-11-02"
+      "updated": "2026-11-03"
     },
     {
       "id": "E6.22",
@@ -3618,6 +3625,11 @@
       "n": 518,
       "at": "2026-11-03 17:27",
       "text": "E6.19, poprawki z lekkiego przeglądu, 2f3df5c: strzałka na ekranie toru, SHIFT+mode2 przechodzi 1→2→3, wyjście z tpl amt wraca na pierwszą podstronę, rqn > 1 czytane jako off, test ścieżki mic z menu w V06_ui (każdy test pada na swojej mutacji). Host 125/125, emulator 331/331 i 303/303, 32 nagrania wzorcowe bez zmian. Teraz poprawki z przeglądu E6.20."
+    },
+    {
+      "n": 519,
+      "at": "2026-11-03 17:42",
+      "text": "E6.20, poprawki z pełnego przeglądu, 0e4559c: testy (ARMED, zawinięcie pętli, slave, rqn 2), strażnik „tylko w seq_tick()”, blokada przy edycji bajtów timingu z menu (także flam), przesunięcie zapisane w zakresie, który da się zagrać, komentarze. Host 125/125, emulator 331/331 i 303/303, 32 nagrania wzorcowe bez zmian; każda poprawka z mutacją, która pada. Grupa C skończona. Nowy wiersz E4.10: stary błąd fw 1.7 znaleziony przy okazji (długie nazwy piszą poza bufor LCD w trybie edycji). E6.21 (v0.6 zad. 8) w toku: wykonawca grupy D robi E6.21–E6.22 (nagrania wzorcowe G20–G22, fuzzing, dema)."
     }
   ]
 }
