@@ -334,6 +334,8 @@ emu_render_tests(V04_kit_file V04_kit_fw17)
 emu_render_tests(V05_trig_setting V05_onsets_tool V05_onsets V05_midi_in V05_slave_onsets V05_save_onsets
     V05_plocks)
 emu_render_tests(V06_rec_setting V06_ui V06_onsets_ticks V06_card V06_micro V06_template V06_record)
+# fw 1.7 fixes: the long names in edit mode (tracker E4.10)
+emu_render_tests(E410_long_names)
 # M23: emu/tests/cards/make.sh gives the committed card fixtures (spec 5.6)
 emu_render_tests(M23)
 

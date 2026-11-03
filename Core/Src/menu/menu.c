@@ -1523,6 +1523,18 @@ void menu_setNumSamples(uint8_t num)
 	menu_numSamples = num;
 }
 //-----------------------------------------------------------------
+/** LICHOMAT v0.6: a long name into an edit-mode row from column 8, as strcpy() did, but cut to
+ *  the 8 columns left and its NUL at column 16 at the latest (E4.10): fw 1.7 copied a longer
+ *  name on into the next row, and from row 1 past editDisplayBuffer */
+static void menu_putLongName(char *row, uint8_t nameIdx)
+{
+	const char *name = (const char PROGMEM *)(&longNames[nameIdx]);
+	uint8_t i;
+	for(i = 0; i < sizeof editDisplayBuffer[0] - 9 && name[i]; i++)
+		row[8 + i] = name[i];
+	row[8 + i] = 0;
+}
+//-----------------------------------------------------------------
 
 static void menu_displayModTargetFull(uint8_t curParmVal)
 {
@@ -1541,10 +1553,7 @@ static void menu_displayModTargetFull(uint8_t curParmVal)
 		(const char PROGMEM *)(&catNames[
 					 pgm_read_byte(&valueNames[nameidx].category)
 										]));
-	strcpy(&editDisplayBuffer[1][8],
-		(const char PROGMEM *)(&longNames[
-					pgm_read_byte(&valueNames[nameidx].longName)
-										 ]));
+	menu_putLongName(editDisplayBuffer[1], pgm_read_byte(&valueNames[nameidx].longName));
 }
 
 static void menu_displayModTargetShort(uint8_t curParmVal, char *valueAsText, char inclVoice)
@@ -1643,8 +1652,7 @@ void menu_repaintGeneric()
 			strcpy(&editDisplayBuffer[0][0],
 				(const char PROGMEM *)(&catNames[pgm_read_byte(&valueNames[parName].category)]));
 			//Top row right -> long name
-			strcpy(&editDisplayBuffer[0][8],
-				(const char PROGMEM *)(&longNames[pgm_read_byte(&valueNames[parName].longName)]));
+			menu_putLongName(editDisplayBuffer[0], pgm_read_byte(&valueNames[parName].longName));
 
 			//Bottom row -> parameter value (set below)
 			switch(parameter_dtypes[parNr] & 0xFF)

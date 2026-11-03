@@ -1406,6 +1406,42 @@ def V06_ui(t):
           'edit mode on mic: %r' % rows['micedit'])
     check(re.match(r'off \+7 +\+84 ', rows['shf'][1]), 'shf +1: %r' % rows['shf'])
 
+def name_table(text, table):
+    """the strings of a name table of MenuText.h, without its #if USE_CODEC_EQ entries (off in the build)"""
+    body = text.split('const char %s[][16] =' % table, 1)[1].split('};', 1)[0]
+    body = re.sub(r'#if USE_CODEC_EQ.*?#endif', '', body, flags=re.S)
+    return re.findall(r'\{"([^"]*)"\s*\}', body)
+
+@case
+def E410_long_names(t):
+    # fw 1.7 fix E4.10: edit mode writes the category at column 0 and the long name at column 8
+    # of row 0, which leaves 8 columns. A longer name ran on into row 1 (UBSan stopped the render
+    # at the push on slt). Every long name fits the 8 columns; slt (v0.3) and trg (v0.5) in edit mode
+    with open(os.path.join(t.root, 'Core', 'Inc', 'menu', 'MenuText.h')) as f:
+        text = f.read()
+    for table in ('catNames', 'longNames'):
+        names = name_table(text, table)
+        check(len(names) > 20, '%s: %d names read' % (table, len(names)))
+        long = [n for n in names if len(n) > 8]
+        check(not long, '%s longer than 8 characters: %r' % (table, long))
+        check(table == 'catNames' or len(set(names)) == len(names), 'long names twice: %r' % names)
+    # from the boot: voice 1, mode 1 twice (the step page, then the voice page's second screen);
+    # SHIFT + step 12 three times (the global page's second sub-page) and the encoder to trg
+    seed, rows = t.seed(), {}
+    glo = '+100ms down shift\n+20ms press step12\n+100ms up shift\n+300ms mark g\n'
+    for name, text in (('slt', '0ms press voice1\n+300ms press mode1\n+200ms press mode1\n+300ms mark slt\n'),
+                       ('trg', glo * 3 + '+100ms encoder +3\n+300ms mark trg\n')):
+        log = t.path(name + '.log')
+        t.render(seed, ['--no-start', '--seconds', '3', '--panel-log', log, '--events',
+                        t.script(text + '+100ms push\n+300ms mark %sedit\n' % name)])
+        rows.update({x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)})
+    check(rows['slt'][0].startswith('SLT'), 'the voice page with slt: %r' % rows['slt'])
+    check(rows['sltedit'][0] == 'OscilltrSlide tm' and rows['sltedit'][1][:13] == ' ' * 13,
+          'edit mode on slt: %r' % rows['sltedit'])
+    check(re.match(r'kcm cki cko TRG', rows['trg'][0]), 'the global page with trg: %r' % rows['trg'])
+    check(rows['trgedit'][0] == 'SequencrTrig tmg' and rows['trgedit'][1] == ' ' * 13 + 'smp',
+          'edit mode on trg: %r' % rows['trgedit'])
+
 def onsets(t, *args):
     """emu_onsets.py's exit code, spread and output"""
     p = subprocess.run([sys.executable, os.path.join(t.root, 'tools', 'emu_onsets.py')] + [str(a) for a in args],
