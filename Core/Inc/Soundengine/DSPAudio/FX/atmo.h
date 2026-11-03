@@ -17,11 +17,11 @@
 
 #include <stdint.h>
 
-/* LICHOMAT v0.4: the reverb's rate by plan D41, PROVISIONAL until the owner's reading H12
- * (tracker Q30): H12 pk not read yet, R*_full 35.07 %, R*_half 18.03 %, R_dj 3.69 %
- * -> full rate if P + F + D <= 85 (pk <= 46.24), else half rate if P + H + D <= 85
- * (pk <= 63.28), else half rate and lean. Half rate until then; both rates are built and
- * tested (RV2, RV4), so the reading changes only these two lines. */
+/* LICHOMAT v0.4: the reverb's rate by plan D41 as amended by tracker Q34: R*_half 18.03 %,
+ * R_dj 3.69 % -> half rate if P + H + D <= 85 (pk <= 63.28), else half rate and lean. D41's
+ * full rate (R*_full 35.07 %, pk <= 46.24) is not used: there the tank's bass tail leans left
+ * (branch v0.4-full keeps it). Branch v0.4-half (tracker E7.9): half rate. H12 pk not read
+ * yet; the release commit fills it in. Both rates are built and tested (RV2, RV4). */
 #ifndef ATMO_REVERB_DECIM
 #define ATMO_REVERB_DECIM	2	/* 1 full rate, 2 half rate (plan D42) */
 #endif
