@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-03 19:23",
+    "updated": "2026-11-03 19:24",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 gotowe w kodzie (M18); utwór pokazowy do odsłuchu",
     "branch": "timing-core",
-    "head": "a4f6c75",
+    "head": "e5ffe62",
     "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T19:23:00+01:00",
+    "updated_at": "2026-11-03T19:24:00+01:00",
     "now": "E7.7: badanie offsetu DC pogłosu; E4.11 (B13): pary A/B do odsłuchu PWM"
   },
   "epics": [
@@ -694,8 +694,8 @@
     {
       "id": "E7.7",
       "epic": "E7",
-      "status": "w toku",
-      "title": "Pogłos v0.4 zostawia po wybrzmieniu stały offset DC (+95 LSB, ok. −50 dBFS) na wyjściu, dopóki poziom pogłosu nie spadnie do 0; znalezione przy utworze pokazowym (E6.24). Zbadać źródło (filtr tonu, freeze, zaokrąglenia) i usunąć bez zmiany 38 nagrań wzorcowych, jeśli się da",
+      "status": "zablokowane",
+      "title": "Offset DC pogłosu v0.4 (filtr wejściowy 0,01 Hz przy tonie 64; po freeze do +1 123 LSB): przyczyna znaleziona, poprawka gotowa i sprawdzona (górnoprzepustowy 5 Hz, Q32; build/reference/e77/). Wchodzi do v0.4 razem ze zmianą częstotliwości po H12 (jeden zapis G13–G15 od nowa). Do sprawdzenia też pogłos w slocie FX z fw 1.7",
       "updated": "2026-11-03"
     },
     {
@@ -1067,6 +1067,13 @@
       "question": "Gałka barwy pogłosu (ton) według fw 1.7 jest prawie cicha na końcach (1 = ciemny low-pass ok. 930 Hz, 127 = high-pass przy 20 kHz). Przemapować?",
       "assumption": "Tak, na muzyczny zakres, 64 bez zmian.",
       "answer": "Moja decyzja według Twojej reguły z 29.10, 05:19, 31.10, 04:34: ton przemapowany tak, żeby każda pozycja była słyszalna: od ciemnego low-passa ok. 1,5 kHz przy 0, przez płaską środkową 64 (bit w bit jak teraz), do łagodnego high-passa ok. 400 Hz przy 127; test pilnuje głośności na końcach."
+    },
+    {
+      "id": "Q32",
+      "status": "zamknięte",
+      "question": "Pogłos v0.4 zbiera stały offset DC: filtr wejściowy przy tonie 64 to górnoprzepustowy 0,01 Hz (stała czasowa 24–49 s), więc po zatrzymaniu wejścia oddaje do pętli skok średniej. Po wybrzmieniu zostaje +35 LSB przy typowych ustawieniach, a przy freeze rośnie do +1 123 LSB po 60 s (+2 542 przy pełnej częstotliwości). Poprawić?",
+      "assumption": "Tak, w v0.4 razem ze zmianą częstotliwości po H12.",
+      "answer": "Moja decyzja według Twojej reguły z 29.10: tak. Filtr wejściowy pogłosu to jednobiegunowy górnoprzepustowy 5 Hz przy każdym tonie (ok. 12 linii w Reverb_setTone(), pogłos w slocie FX z fw 1.7 bez zmian). Po poprawce 0,00 LSB we wszystkich pomiarach i przy obu częstotliwościach, freeze ograniczony (−0,1 LSB). Zero kosztu CPU. Zmienia tylko nagrania wzorcowe pogłosu G13–G15 (i G13_reverb_blk), które i tak zapisujemy od nowa ze zmianą częstotliwości po H12, więc poprawka jedzie razem z nią w v0.4, potem do v0.5 i v0.6. Nadpisuje zdanie z Q31, że ton 64 zostaje bit w bit; płaska barwa przy 64 zostaje. Utwór pokazowy wyrenderuję po scaleniu od nowa."
     }
   ],
   "log": [
@@ -3724,6 +3731,11 @@
       "n": 531,
       "at": "2026-11-03 19:23",
       "text": "E4.11 (B13): pięć par A/B do odsłuchu jest na stronie odsłuchu (sekcja „PWM: A czy B”): 55, 220 i 880 Hz z przejazdem PWM, staby 142 BPM ze stopą i bas z PWM na LFO. Do połowy PWM prawie to samo; przy pełnym PWM A (fw 1.7) to hybryda prostokąta i piły z aliasingiem, B czysty prostokąt, 1–2 dB głośniej. Żaden z ośmiu kitów nie używa PWM. Rekomendacja: B. Pliki i notatki także w build/reference/b13/."
+    },
+    {
+      "n": 532,
+      "at": "2026-11-03 19:24",
+      "text": "E7.7: przyczyna offsetu DC pogłosu znaleziona. Filtr wejściowy przy tonie 64 to górnoprzepustowy 0,01 Hz, który trzyma średnią sygnału i po zatrzymaniu wejścia wpuszcza do pętli jej skok; pętla go wzmacnia. Typowo +35 LSB, a przy freeze rośnie do +1 123 LSB po 60 s (−29 dBFS stałej składowej). Poprawka: górnoprzepustowy 5 Hz przy każdym tonie, 0,00 LSB po niej, zero CPU (decyzja Q32). Wchodzi do v0.4 razem ze zmianą częstotliwości po H12, bo zmienia te same nagrania wzorcowe G13–G15. Raport i łatka w build/reference/e77/."
     }
   ]
 }
