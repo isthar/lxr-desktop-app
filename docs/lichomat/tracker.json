@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 18:33",
+    "updated": "2026-11-03 18:47",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "v0.6 gotowe w kodzie (M18); czekają Twoje testy na LXR",
+    "focus": "Utwór pokazowy LICHOMAT (E6.24); poprawki fw 1.7 (E4.10, E4.11)",
     "branch": "timing-core",
-    "head": "b21ccd2",
+    "head": "731cbc8",
     "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T18:33:00+01:00",
-    "now": "E4.10 i E4.11 (B14): wykonawca na v0.6"
+    "updated_at": "2026-11-03T18:47:00+01:00",
+    "now": "E6.24: agent komponuje i renderuje utwór pokazowy; E4.10/E4.11: wykonawca na v0.6"
   },
   "epics": [
     {
@@ -640,6 +640,13 @@
       "epic": "E6",
       "status": "zrobione",
       "title": "v0.6 zad. 10: dokumenty dla Ciebie (U33–U37, szkic notatek wydania, przepisy groove) i raport M18",
+      "updated": "2026-11-03"
+    },
+    {
+      "id": "E6.24",
+      "epic": "E6",
+      "status": "w toku",
+      "title": "Utwór pokazowy: 2,5–3 min groove techno 142 BPM wyrenderowane przez firmware w emulatorze, z nowymi kitami, szablonami v0.6, rumble, freeze i filtrem DJ (gałąź showcase)",
       "updated": "2026-11-03"
     },
     {
@@ -3685,6 +3692,11 @@
       "n": 526,
       "at": "2026-11-03 18:33",
       "text": "E5.8 zrobione: aplikacja LICHOMAT Emu z v0.6 (build Release z czystej kopii 6a822ed, 0 ostrzeżeń) w build/emu-show/v06, z kopią Twojej karty DLC i ośmioma kitami w slotach 56–63 (PULS, HUSTAWKA, PROSTO, PRZESTER, WIR, MGLA, RDZA, IGLA). Twoja prawdziwa karta i ustawienia aplikacji nietknięte."
+    },
+    {
+      "n": 527,
+      "at": "2026-11-03 18:47",
+      "text": "Jesteś na winie, ja mam ok. 4 h. Nowy wiersz E6.24 w toku: utwór pokazowy, 2,5–3 min groove techno przy 142 BPM, w całości wyrenderowany przez firmware LICHOMAT w emulatorze (kity PULS/HUSTAWKA, haty z szablonem lay, perkusja rlx lub polirytmia, rumble, breakdown z freeze i filtrem DJ, fill albo roll przed dropem). Gałąź showcase od v0.6. Równolegle E4.10 i E4.11 (B14) na v0.6."
     }
   ]
 }
