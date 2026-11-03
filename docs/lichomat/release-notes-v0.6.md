@@ -131,7 +131,7 @@ Koszt policzony statycznie, metodą notatek 0.5 (instrukcje, 13 cykli na dzielen
 - Nagrywanie: tuż po powrocie ścieżki z własnego tempa do ×1 jeden krok może mieć źle policzony początek, więc nuta nagrana w tym jednym kroku może trafić na następny (jak w 0.5).
 - Nagrywanie: gdy nagrywany krok ma już w kolejce uderzenie z dodatnim przesunięciem, które jeszcze nie zabrzmiało, brzmi i nuta na żywo, i to uderzenie, raz (jak w 0.5).
 - Nie ma własnych szablonów, szablonów velocity, kwantyzowanego MIDI out obok przesuniętego ani funkcji, która zeruje mikrotiming ścieżki.
-- Pogłos gra w tymczasowej częstotliwości szkicu 0.4 (połowa), dopóki wydanie 0.4 jej nie ustali (H12, U20) i nie trafi do 0.5 i 0.6.
+- Pogłos gra w połowie częstotliwości, jak 0.4 (decyzja Q34); wersję oszczędną wybiera H12 i U20. Gałęzie `v0.6-half` i `v0.6-lean` mają już obie wersje z poprawką offsetu DC pogłosu z 0.4 (E7.7); zob. notatki 0.4.
 - Ograniczenia v0.1–v0.5 zostają.
 
 ## Pliki

@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-04 00:18",
+    "updated": "2026-11-04 00:25",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Noc: E7.9 (warianty 0.4 na wynik H12) i E4.12 (fuzzing)",
     "branch": "timing-core",
-    "head": "acef557",
+    "head": "7f830b7",
     "next": "E7.9: obrazy i README po H12, plan sesji; potem v0.5-half i v0.6-half (scalenie E7.7 dalej)",
-    "updated_at": "2026-11-04T00:18:00+01:00",
+    "updated_at": "2026-11-04T00:25:00+01:00",
     "now": "E7.10: bramki v0.5-half i v0.6-half; E4.12: fuzzing sekwencera w tle"
   },
   "epics": [
@@ -3882,6 +3882,16 @@
       "n": 550,
       "at": "2026-11-04 00:18",
       "text": "E7.10 w toku: v0.4-half scalone do v0.5-half (0136df1): konflikt tylko w goldens.json; G13_reverb, G14_freeze i G15_rumble zapisane od nowa, G13_reverb_blk skopiowane z v0.4-half (P17: blk = v0.4 bit w bit) i renderuje się jak skopiowane; pozostałe 28 bez zmian. v0.6-half (cb9c040): wszystkie 38 nagrań przechodzi bez zmian. Bramki obu w toku."
+    },
+    {
+      "n": 551,
+      "at": "2026-11-04 00:21",
+      "text": "E7.10: v0.5-half (0136df1) cały zielony: 114 testów hosta i 329 emulatora, 0 ostrzeżeń, budżet OK, ASan 114 i 301. v0.5-lean (262dd1d) i v0.6-lean (35b18fb) scalone tak samo: G13–G15 od nowa, G13_reverb_blk skopiowane z v0.4-lean, 32 i 38 nagrań przechodzi. Wszystkie gałęzie na forku; bramki v0.6-half i obu lean w toku."
+    },
+    {
+      "n": 552,
+      "at": "2026-11-04 00:25",
+      "text": "Strona odsłuchu, wersja 6: nowa sekcja „Osiem kitów” z demami kitów 56–63 (M17, czekają na Twój odsłuch). Wystarczy krótko: który zostaje, który poprawić i co przeszkadza."
     }
   ]
 }

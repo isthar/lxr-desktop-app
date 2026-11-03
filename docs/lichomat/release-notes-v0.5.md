@@ -84,7 +84,7 @@ Koszt policzony statycznie, metodą raportu `docs/lichomat/reports/v0.4-reverb-c
 - Nuty MIDI przez USB mają ziarnistość ramek USB 1 ms: wszystkie nuty jednego transferu dzielą jeden znacznik czasu.
 - Przełączenie `trg` z `smp` na `blk` w trakcie grania zostawia uderzenia już zaplanowane: przez ok. 1,5 bloku starsze uderzenie z `smp` może jeszcze raz uruchomić głos po nowszym uderzeniu z `blk` tego samego głosu. Dzieje się to raz, przy przełączeniu.
 - W rzadkich blokach głos startuje jak w 0.4, na początku bloku: przy wczytywaniu kitu (kit autoload przy zmianie wzorca), po pominiętym bloku, gdy bajt MIDI czekał dłużej niż blok, i gdy przerwanie DMA przyjdzie o ponad pół bloku za późno (np. przy dostępie do karty). Takie uderzenie nigdy nie jest gorsze niż w 0.4.
-- Pogłos gra w tymczasowej częstotliwości szkicu 0.4 (połowa), dopóki wydanie 0.4 jej nie ustali (H12, U20) i nie trafi do 0.5.
+- Pogłos gra w połowie częstotliwości, jak 0.4 (decyzja Q34); wersję oszczędną wybiera H12 i U20. Gałęzie `v0.5-half` i `v0.5-lean` mają już obie wersje z poprawką offsetu DC pogłosu z 0.4 (E7.7); zob. notatki 0.4.
 - Ograniczenia v0.1–v0.4 zostają, poza jednym: w `smp` głos nie startuje już na początku bloku audio (±1,45 ms).
 
 ## Pliki
