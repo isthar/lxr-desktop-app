@@ -1346,25 +1346,65 @@ def V06_rec_setting(t):
                     '--events', t.script('+100ms save-project 0\n')])
     glo = one_file(keep, 'GLO.CFG')
     check(len(glo) == 30 and glo[19] == 1, 'GLO.CFG: %d bytes, byte 19 %r' % (len(glo), glo[19:20]))
+    # a stored value above 1 is off (review of Task 6): the boot's menu_sendAllGlobals() makes 2 a 0,
+    # which the next project save writes
+    found = glob.glob(os.path.join(keep, 'PROJ00', 'GLO.CFG'))
+    check(len(found) == 1, 'GLO.CFG of the kept card: %r' % found)
+    with open(found[0], 'wb') as g:
+        g.write(glo[:19] + bytes([2]) + glo[20:])
+    again = t.path('K2')
+    t.render(keep, ['--no-start', '--seconds', '1', '--keep-card', again, '--events', t.script('+100ms save-project 0\n')])
+    glo = one_file(again, 'GLO.CFG')
+    check(len(glo) == 30 and glo[19] == 0, 'a stored 2: GLO.CFG byte 19 %r after the boot' % glo[19:20])
     no_copies_left()
 
 @case
 def V06_ui(t):
     # the track page's third screen (M15, V6-18): the encoder past dly shows tpl and amt with the
-    # voice's values and stops at amt; back left to dly; the recording page shows rqn
+    # voice's values and stops at amt; back left to dly; the recording page shows rqn. Review of
+    # Task 6: the scroll signs >, * and <; edit mode on tpl shows the template's long name; the
+    # voice mode button from the third screen opens the voice page's first sub-page; SHIFT + mode2
+    # steps through the three screens and back to the first
     seed, log = t.seed(), t.path('panel.log')
+    mode2 = '+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
     script = t.script('0ms press voice2\n+100ms param track_tpl=3\n+100ms param track_tpl_amt=150\n'
-                      '+100ms down shift\n+20ms press mode2\n+100ms up shift\n+200ms mark euklid\n'
-                      '+100ms encoder +8\n+200ms mark tpl\n+100ms encoder +3\n+200ms mark amt\n'
-                      '+100ms encoder -2\n+200ms mark back\n'
+                      + mode2 + '+200ms mark euklid\n'
+                      '+100ms encoder +4\n+200ms mark track\n+100ms encoder +4\n+200ms mark tpl\n'
+                      '+100ms push\n+200ms mark tpledit\n+100ms push\n+100ms encoder +3\n+200ms mark amt\n'
+                      '+100ms encoder -2\n+200ms mark back\n+100ms encoder +1\n+100ms press mode1\n+200ms mark voice\n'
+                      + mode2 + '+200ms mark c1\n' + mode2 + '+200ms mark c2\n' + mode2 + '+200ms mark c3\n'
+                      + mode2 + '+200ms mark c4\n'
                       '+100ms down shift\n+20ms press rec\n+100ms up shift\n+200ms mark rec\n')
-    t.render(seed, ['--no-start', '--seconds', '3', '--param', 'rec_quant=1', '--panel-log', log,
+    t.render(seed, ['--no-start', '--seconds', '5', '--param', 'rec_quant=1', '--panel-log', log,
                     '--events', script])
     rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
-    check(re.match(r'TPL.amt', rows['tpl'][0]) and re.match(r'lyb.150', rows['tpl'][1]), 'tpl: %r' % rows['tpl'])
+    check(re.match(r'LEN.stp.rot.mrp>', rows['euklid'][0]), 'the first screen, sign >: %r' % rows['euklid'])
+    check(re.match(r'TMP.hmt.hmv.dly\*', rows['track'][0]), 'the second screen, sign *: %r' % rows['track'])
+    check(re.match(r'TPL.amt.{8}<', rows['tpl'][0]) and re.match(r'lyb.150', rows['tpl'][1]), 'tpl: %r' % rows['tpl'])
+    check(rows['tpledit'][1].startswith('lay bar'), 'edit mode on tpl 3: %r' % rows['tpledit'])
     check(re.match(r'tpl.AMT', rows['amt'][0]), 'amt, where the encoder stops: %r' % rows['amt'])
     check(re.match(r'tmp.hmt.hmv.DLY', rows['back'][0]), 'back to dly: %r' % rows['back'])
+    check(re.match(r'COA.fin.wav.pwm>', rows['voice'][0]), 'the voice page from tpl: %r' % rows['voice'])
+    for m, want in (('c1', r'LEN.stp'), ('c2', r'TMP.hmt'), ('c3', r'TPL.amt'), ('c4', r'LEN.stp')):
+        check(re.match(want, rows[m][0]), 'SHIFT + mode2, %s: %r' % (m, rows[m]))
     check(re.search(r'rqn', rows['rec'][0], re.I) and re.search(r'on', rows['rec'][1]), 'rec: %r' % rows['rec'])
+    # the step page's mic (review of Task 6): loaded on step select (seq_loadStepMicro() in
+    # FRONT_SEQ_REQUEST_STEP_PARAMS), its ms in edit mode at 120 BPM (+76 ticks: 98.96 ms), and
+    # refreshed by shf: +6 to +7 keeps the fine part +4, 88 clamped to +84
+    log = t.path('panel2.log')
+    script = t.script('0ms press voice1\n+300ms press mode1\n+200ms param active_step=2\n'
+                      '+100ms param step_micro=160\n+100ms param active_step=0\n+300ms mark step0\n'
+                      '+100ms param active_step=2\n+300ms mark step2\n'
+                      '+100ms encoder +2\n+100ms push\n+300ms mark micedit\n+100ms push\n'
+                      '+100ms encoder -1\n+100ms push\n+100ms encoder +1\n+100ms push\n+300ms mark shf\n')
+    t.render(seed, ['--no-start', '--seconds', '4', '--panel-log', log, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'FLM.shf.mic', rows['step0'][0]) and re.match(r'off 0 +0 ', rows['step0'][1]),
+          'step 0: %r' % rows['step0'])
+    check(re.match(r'off \+6 +\+76 ', rows['step2'][1]), 'step 2 selected again: %r' % rows['step2'])
+    check(re.match(r'Step +Micro', rows['micedit'][0]) and rows['micedit'][1].endswith('99.0ms +76'),
+          'edit mode on mic: %r' % rows['micedit'])
+    check(re.match(r'off \+7 +\+84 ', rows['shf'][1]), 'shf +1: %r' % rows['shf'])
 
 def onsets(t, *args):
     """emu_onsets.py's exit code, spread and output"""

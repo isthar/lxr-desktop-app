@@ -1487,10 +1487,10 @@ static uint8_t checkScrollSign(uint8_t activePage, uint8_t activeParameter)
 			}
 		}
 	}
-	else if(menu_activePage==SEQ_PAGE) {
+	else if(menu_activePage==SEQ_PAGE || menu_activePage==EUKLID_PAGE) {	// LICHOMAT v0.6: the track page's third screen (M15)
 		if(is2ndPage) {
 			//if we are on 2nd screen, and there are more sub-pages after this show "*" to signify both ways are available
-			if((activePage < NUM_SUB_PAGES-1) && (pgm_read_byte(&menuPages[SEQ_PAGE][activePage+1].top1) != TEXT_EMPTY))
+			if((activePage < NUM_SUB_PAGES-1) && (pgm_read_byte(&menuPages[menu_activePage][activePage+1].top1) != TEXT_EMPTY))
 				return '*';
 			else // on 2nd screen, no sub-pages after this
 				return '<';
@@ -3367,7 +3367,7 @@ void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle)
 			// toggle to next if possible
 			if(has2ndPage(activePage))
 				activeParameter=4;
-			else if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)){ // special case for global - next sub-page, or wrap around to first
+			else if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==EUKLID_PAGE)){ // special case for global - next sub-page, or wrap around to first; LICHOMAT v0.6: the track page's third screen (M15)
 				// LICHOMAT: fw 1.7 always wrapped here, so a sub-page after one without a 2nd screen was unreachable
 				if(activePage < NUM_SUB_PAGES-1 &&
 				   pgm_read_byte(&menuPages[menu_activePage][activePage+1].top1) != TEXT_EMPTY) {
@@ -3379,7 +3379,7 @@ void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle)
 			}
 		} else { // we are on 2nd screen
 
-			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE)){
+			if((menu_activePage==MENU_MIDI_PAGE) || (menu_activePage==SEQ_PAGE) || (menu_activePage==EUKLID_PAGE)){	// LICHOMAT v0.6: the track page's third screen (M15)
 				// in global mode, we move to next page if possible (or wrap to first)
 				if(activePage < NUM_SUB_PAGES-1 &&
 				   pgm_read_byte(&menuPages[menu_activePage][activePage+1].top1) != TEXT_EMPTY) {
@@ -3434,6 +3434,11 @@ void menu_switchPage(uint8_t pageNr)
 
 	//clear all sequencer buttons
 	led_clearSequencerLeds();
+
+	//LICHOMAT v0.6: the track page's third screen is its sub-page 1; the page opened from there
+	//starts on its first sub-page, as from the track page's first two screens (M15)
+	if((menu_activePage == EUKLID_PAGE) && (pageNr != EUKLID_PAGE) && (menu_getSubPage() != 0))
+		menu_switchSubPage(0,0);
 
 	switch(pageNr) {
 	case MENU_MIDI_PAGE:
@@ -3887,7 +3892,8 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	case PAR_PRESCALER_CLOCK_OUT2:
 			frontPanel_sendData(SEQ_CC, SEQ_TRIGGER_OUT2_PPQ, value);
 			break;
-	case PAR_REC_QUANT:	// LICHOMAT v0.6: recording reads it at each note (M22)
+	case PAR_REC_QUANT:	// LICHOMAT v0.6: recording reads it at each note (M22); a stored value above 1 is off
+			if(value != 1) activeParameters[PAR_REC_QUANT] = 0;
 			break;
 	case PAR_BAR_RESET_MODE:
 		frontPanel_sendData(SEQ_CC, SEQ_BAR_RESET_MODE, value);
