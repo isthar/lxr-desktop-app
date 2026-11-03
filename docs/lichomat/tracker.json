@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 18:32",
+    "updated": "2026-11-03 18:33",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 gotowe w kodzie (M18); czekają Twoje testy na LXR",
     "branch": "timing-core",
-    "head": "5a10441",
+    "head": "b21ccd2",
     "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T18:32:00+01:00",
-    "now": "E4.10 i E4.11 (B14): wykonawca na v0.6; E5.8: build aplikacji emulatora v0.6"
+    "updated_at": "2026-11-03T18:33:00+01:00",
+    "now": "E4.10 i E4.11 (B14): wykonawca na v0.6"
   },
   "epics": [
     {
@@ -477,8 +477,8 @@
     {
       "id": "E5.8",
       "epic": "E5",
-      "status": "w toku",
-      "title": "Aplikacja LICHOMAT Emu z v0.6 (6a822ed) do wypróbowania mic, tpl i amt na wirtualnym panelu, z kopią Twojej karty",
+      "status": "zrobione",
+      "title": "Aplikacja LICHOMAT Emu z v0.6 (6a822ed) do wypróbowania mic, tpl i amt: build/emu-show/v06, z kopią Twojej karty i ośmioma kitami w slotach 56–63",
       "updated": "2026-11-03"
     },
     {
@@ -3680,6 +3680,11 @@
       "n": 525,
       "at": "2026-11-03 18:32",
       "text": "Lecimy dalej. E4.10 i E4.11 (część B14) w toku na v0.6: wykonawca poprawia długie nazwy w trybie edycji LCD i odczyt tablicy PWM poza wierszem, z testami; B13 (zmienia brzmienie PWM) zostaje do Twojego odsłuchu. Nowy wiersz E5.8 w toku: buduję aplikację LICHOMAT Emu z v0.6 z czystej kopii (6a822ed), żebyś mógł pokręcić mic, tpl i amt."
+    },
+    {
+      "n": 526,
+      "at": "2026-11-03 18:33",
+      "text": "E5.8 zrobione: aplikacja LICHOMAT Emu z v0.6 (build Release z czystej kopii 6a822ed, 0 ostrzeżeń) w build/emu-show/v06, z kopią Twojej karty DLC i ośmioma kitami w slotach 56–63 (PULS, HUSTAWKA, PROSTO, PRZESTER, WIR, MGLA, RDZA, IGLA). Twoja prawdziwa karta i ustawienia aplikacji nietknięte."
     }
   ]
 }
