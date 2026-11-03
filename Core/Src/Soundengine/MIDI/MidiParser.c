@@ -1527,13 +1527,15 @@ static void midiParser_noteOn(uint8_t voice, uint8_t note, uint8_t vel, uint8_t 
 				return; // note does not match. Do nothing
 		}
 
+		const uint32_t arrival = vsched_stampTime(seqp_stamp(), midiParser_rxStamp);	//LICHOMAT v0.6: also recording's time, in both modes (M21)
+
 		//LICHOMAT v0.5: in smp the voice starts at the arrival of the message's last byte (DIN) or
 		//its transfer (USB): the LED now, the trigger as a record of that time (S9); blk: v0.4
 		if(activeParameters[PAR_TRIG_TIMING] == 1)
 			voiceControl_noteOn(voice,note,vel);
 		else
 		{
-			const vsched_rec_t r = { .time = vsched_stampTime(seqp_stamp(), midiParser_rxStamp), .track = voice,
+			const vsched_rec_t r = { .time = arrival, .track = voice,
 				.note = note, .vel = vel, .flags = VS_TIMED | VS_SRC_MIDI };
 			voiceControl_noteOnEvent(voice);
 			vsched_post(&r);
@@ -1543,7 +1545,7 @@ static void midiParser_noteOn(uint8_t voice, uint8_t note, uint8_t vel, uint8_t 
 		// (we'd want to hear what's being recorded)
 		if(do_rec) {
 			// record note if rec is on
-			seq_addNote(voice,vel, note);
+			seq_addNoteAt(voice, vel, note, seq_noteTime(arrival));	//LICHOMAT v0.6: at its arrival (spec v0.6 7.1)
 
 			//echo the note on the voice's channel, once in play and in record mode (D4):
 			//the voice's last note gets its Note Off first, then the new Note On is sent

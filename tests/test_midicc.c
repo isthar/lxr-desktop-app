@@ -363,6 +363,8 @@ void menu_repaint(void) {}
 void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle) { (void)subPageNr; (void)toggle; }
 void osc_recalcFreq(OscInfo *osc) { (void)osc; }
 void seq_addNote(uint8_t trackNr, uint8_t vel, uint8_t note) { (void)trackNr; (void)vel; (void)note; }
+void seq_addNoteAt(uint8_t trackNr, uint8_t vel, uint8_t note, uint64_t t) { (void)trackNr; (void)vel; (void)note; (void)t; }	/* LICHOMAT v0.6 */
+uint64_t seq_noteTime(uint32_t stamp) { return stamp; }
 uint8_t seq_getExtSync(void) { return 0; }
 uint8_t seq_isRunning(void) { return 0; }
 uint8_t seq_isTrackMuted(uint8_t trackNr) { (void)trackNr; return 0; }

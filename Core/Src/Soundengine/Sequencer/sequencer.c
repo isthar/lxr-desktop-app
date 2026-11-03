@@ -169,7 +169,6 @@ static SeqMailbox seq_mailbox;
 static volatile uint8_t seq_mailboxPosted;          /**< a post waits; seq_tick() reads this without masking */
 
 static volatile uint8_t seq_stepCopy[NUM_TRACKS];   /**< seqc_trackStep(); SEQC_NO_STEP before the first step */
-static volatile float seq_phaseCopy[NUM_TRACKS];    /**< LICHOMAT v0.2: seqc_trackPhase() of each track, while recording */
 static volatile uint8_t seq_inTick;                 /**< seq_tick() is running */
 static volatile uint8_t seq_coreReady;              /**< seq_init() has set up the core */
 static uint8_t seq_coreSyncMode = SEQC_SYNC_INTERNAL; /**< the sync mode applied to the core; seq_isSyncExternal changes one seq_tick() earlier */
@@ -834,19 +833,6 @@ void seq_armAutomationStep(uint8_t stepNr, uint8_t track,uint8_t isArmed)
 }
 
 //------------------------------------------------------------------------------
-//returns how many % [0:100) of the track's current step have elapsed, for the MIDI
-//record quantisation: from 50% on, a note goes to the next step (spec 6.7).
-//It is seqc_trackPhase() x 100 (LICHOMAT v0.2: of the track's own step), which
-//reaches 50 halfway between the swung grid times of this step and the next one.
-//0 while stopped, before the first step and for trackNr >= NUM_TRACKS.
-//Valid only while recording (seq_recordActive): seq_tick() refreshes the copy only
-//then, so with recording off, and until the first seq_tick() after REC is switched
-//on, it holds the phase of the last tick that ran while recording.
-float seq_getElapsedStepTimePercent(uint8_t trackNr)
-{
-	return (trackNr < NUM_TRACKS ? seq_phaseCopy[trackNr] : 0.f) * 100.f;
-}
-//------------------------------------------------------------------------------
 void seq_setQuantisation(uint8_t value)
 {
 	seq_quantisation = value;
@@ -1331,34 +1317,48 @@ PatternSet* get_seq_patternSet_p(void)
 }
 
 //------------------------------------------------------------------------
-void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note)
+/** LICHOMAT v0.6: a MIDI note's arrival time from its 32-bit DWT stamp (vsched_stampTime()),
+ * on the core's 64-bit time base: the stamp within 2^31 cycles (9.9 s) of the core's time */
+seqc_time_t seq_noteTime(uint32_t stamp)
+{
+	const seqc_time_t now = seqc_itemTime();
+	return now + (seqc_time_t)(int64_t)(int32_t)(stamp - (uint32_t)now);
+}
+//------------------------------------------------------------------------
+/** LICHOMAT v0.6 (spec v0.6 7.1, 7.2): record a note played at time t on the nearer of its
+ * track's current and next step (seqc_recordPlace()); a note for the next step sets that
+ * step's skip-once marker (D6). With rqn off (PAR_REC_QUANT not 1) the step also takes the
+ * played offset as its microtiming, its flam, p-locks and other bits kept (M19, M22).
+ * seq_tick() context, as both callers: the MIDI parser and the one-shot roll */
+void seq_addNoteAt(uint8_t trackNr, uint8_t vel, uint8_t note, seqc_time_t t)
 {
 	//only record notes when seq is running and recording
 	if(!(seq_running && seq_recordActive) || (trackNr >= NUM_TRACKS))
 		return;
 
-	//nothing is recorded before the first step (fw 1.7 wrote step 255)
-	const uint8_t current = seq_stepCopy[trackNr];
-	if(current >= NUM_STEPS)
+	//nothing is recorded while stopped or before the first step (fw 1.7 wrote step 255)
+	seqc_recPlace_t place;
+	if(!seqc_recordPlace(trackNr, t, &place))
 		return;
 
-	//the effective track length: raw 0 means 16 (fw 1.7 divided by the raw length)
-	uint8_t len = seq_patternSet.length[seq_activePattern][trackNr];
-	if(len == 0)
-		len = 16;
-	else if(len > NUM_STEPS)
-		len = NUM_STEPS;
+	//the sequencer must not play the next step again when it gets there (D6)
+	if(place.ahead)
+		seq_postSkipOnce(trackNr, place.step);
 
-	//from half the step on, the note belongs to the next step, and the sequencer
-	//must not play that step again when it gets there (D6)
-	uint8_t step = current;
-	if(seq_getElapsedStepTimePercent(trackNr) >= 50.f)
+	seq_recordNoteAtStep(seq_activePattern, trackNr, place.step, vel, note);
+	if(activeParameters[PAR_REC_QUANT] != 1)
 	{
-		step = (uint8_t)((current + 1) % len);
-		seq_postSkipOnce(trackNr, step);
+		StepTiming *st = &seq_patternSet.seq_stepTiming[seq_activePattern][trackNr][place.step];
+		stepFine_set(seq_patternSet.seq_stepFine[seq_activePattern][trackNr], place.step,
+				stepMicro_split(place.micro, st));
 	}
-
-	seq_recordNoteAtStep(seq_activePattern, trackNr, step, vel, note);
+}
+//------------------------------------------------------------------------
+void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note)
+{
+	//LICHOMAT v0.6: a note without a stamp (the one-shot roll) at the time seq_tick() applies
+	//it: outside a callback, the core's time (spec v0.6 M21)
+	seq_addNoteAt(trackNr, vel, note, seqc_itemTime());
 }
 //------------------------------------------------------------------------
 void seq_recordNoteAtStep(uint8_t targetPattern, uint8_t trackNr, uint8_t step, uint8_t vel, uint8_t note)
@@ -2335,7 +2335,6 @@ static void seq_initCore(void)
 	for(uint8_t i=0;i<NUM_TRACKS;i++)
 	{
 		seq_stepCopy[i] = SEQC_NO_STEP;
-		seq_phaseCopy[i] = 0.f;
 	}
 
 	seqp_init();
@@ -2456,7 +2455,6 @@ static uint8_t seq_drainSyncQueues(seqc_time_t *now)
  * - the step indices change at a step boundary or through a post or a sync event (a
  *   rewind, a song position); LICHOMAT v0.2: each of them changes seqc_stepSerial(),
  *   also a boundary of a track at another tempo;
- * - the phases, the costly ones, are read only by recording (seq_addNote());
  * - in the slave modes seq_getBpm() shows the incoming tempo, rounded, and the
  *   LFOs follow it (N9); it changes only with a clock. */
 static void seq_refreshCopies(uint8_t changed)
@@ -2471,9 +2469,6 @@ static void seq_refreshCopies(uint8_t changed)
 		for(uint8_t i=0;i<NUM_TRACKS;i++)
 			seq_stepCopy[i] = seqc_trackStep(i);
 	}
-	if(seq_recordActive)
-		for(uint8_t i=0;i<NUM_TRACKS;i++)
-			seq_phaseCopy[i] = seqc_trackPhase(i);   //LICHOMAT v0.2: each track's own step
 
 	if(changed && seq_isSyncExternal)
 	{

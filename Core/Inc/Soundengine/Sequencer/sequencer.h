@@ -187,8 +187,6 @@ uint8_t seq_getTrackLength(uint8_t trackNr);
 //------------------------------------------------------------------------------
 void seq_init();
 //------------------------------------------------------------------------------
-/** LICHOMAT v0.2: % [0:100) elapsed of the track's own step, while recording */
-float seq_getElapsedStepTimePercent(uint8_t trackNr);
 void seq_loadGrooveParams(uint8_t trackNr, uint8_t pattern);	//LICHOMAT v0.2: the track page's second screen
 void seq_setGrooveParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint8_t value);
 void seq_rotateTrack(uint8_t trackNr, uint8_t pattern, int8_t dir);	//LICHOMAT v0.2: SHIFT + step 1/2
@@ -289,6 +287,8 @@ void seq_setFill(uint8_t on);
 //------------------------------------------------------------------------------
 /** add a note to the current pattern position*/
 void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note);
+void seq_addNoteAt(uint8_t trackNr, uint8_t vel, uint8_t note, uint64_t t);	//LICHOMAT v0.6: at the note's time t, a seqc_time_t (spec v0.6 7.1)
+uint64_t seq_noteTime(uint32_t stamp);	//LICHOMAT v0.6: a MIDI stamp on the core's time base (seqc_time_t)
 //------------------------------------------------------------------------------
 /** write a recorded note into a step: note, velocity, probability 100, main step on (N11) */
 void seq_recordNoteAtStep(uint8_t targetPattern, uint8_t trackNr, uint8_t step, uint8_t vel, uint8_t note);

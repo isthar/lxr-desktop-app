@@ -3118,6 +3118,59 @@ float seqc_trackPhase(uint8_t track)
 	return f < 1.0f ? f : 0.99999994f;
 }
 //------------------------------------------------------------------------------
+/** v0.6: the position at time t for recording: the internal timeline, or the slave
+ * interpolation from the last clock at most to the next clock, neither held at seqc.pos */
+static double seqc_recordPos(seqc_time_t t)
+{
+	if (seqc.mode == SEQC_SYNC_INTERNAL)
+		return seqc.anchorTick + (double)(int64_t)(t - seqc.anchorTime) * seqc.ticksPerCycle;
+	if (seqc_sl.droppedOut)
+		return seqc.pos;
+	const double limit = seqc_sl.lastClockPos + seqc_ticksPerClock();
+	const double p = seqc_sl.lastClockPos + (double)(int64_t)(t - seqc_sl.lastClockTime) * seqc_sl.ticksPerCycle;
+	return p < limit ? p : limit;
+}
+//------------------------------------------------------------------------------
+/** v0.6 (spec v0.6 7.1): the reference tick of track's occurrence abs of track step s in
+ * loop, at grid tick base in a track step of len ticks: 4.1 with the swing, the template
+ * and the delay, and neither shift, fine part nor humanize */
+static seqc_tick_t seqc_recordRef(uint8_t track, uint8_t pattern, uint8_t step, uint32_t abs, uint32_t loop,
+		seqc_tick_t base, uint16_t len, const TrackGroove *g)
+{
+	static const seqc_draw_t still;			/* jitter 0 */
+	const seqc_place_t pl = seqc_place(base, base, len, loop, false);
+	const int pos = seqc_stepPos(0, 0, seqc_templateTicks(pattern, track, step, &pl), len);
+	return base + seqc_offset(&still, g, pos, abs, &pl);
+}
+//------------------------------------------------------------------------------
+bool seqc_recordPlace(uint8_t track, seqc_time_t t, seqc_recPlace_t *out)
+{
+	if (track >= SEQC_NUM_TRACKS || out == NULL || seqc.busy || seqc.state != SEQC_RUNNING
+			|| seqc_trk.index[track] < 0)
+		return false;
+	const uint8_t pattern = seqc.host.activePattern(seqc.host.ctx);
+	const uint16_t len = seqc_trk.len[track];
+	const uint8_t c = (uint8_t)seqc_trk.index[track];
+	const uint8_t n = (uint8_t)seqc_nextIndex(seqc_trk.index[track], seqc_trackLength(pattern, track));
+	const seqc_tick_t base = seqc_trackOnMasterGrid(track) ? (seqc_tick_t)seqc.absStep * SEQC_TICKS_PER_STEP
+			: seqc_trk.next[track] - (seqc_tick_t)len;
+	const uint32_t abs = (uint32_t)seqc_trk.abs[track];
+	const TrackGroove g = seqc_groove(pattern, track);
+	const double x = seqc_recordPos(t);
+	const double r0 = (double)seqc_recordRef(track, pattern, c, abs, seqc_trk.loop[track], base, len, &g);
+	const double r1 = (double)seqc_recordRef(track, pattern, n, abs + 1u, seqc_nextLoop(track, n),
+			base + (seqc_tick_t)len, len, &g);
+	const bool ahead = x - r0 >= r1 - x;		/* a tie goes to the next step (M20) */
+	const double d = (x - (ahead ? r1 : r0)) * (double)SEQC_TICKS_PER_STEP / (double)len;
+	/* clamped before the conversion: a stamp far from the core's time gives any d */
+	const int micro = d >= STEP_MICRO_MAX ? STEP_MICRO_MAX : (d <= -STEP_MICRO_MAX ? -STEP_MICRO_MAX
+			: (d >= 0.0 ? (int)(d + 0.5) : -(int)(0.5 - d)));
+	out->step = ahead ? n : c;
+	out->ahead = ahead;
+	out->micro = (int8_t)micro;
+	return true;
+}
+//------------------------------------------------------------------------------
 uint32_t seqc_stepSerial(void)
 {
 	return seqc_trk.serial;

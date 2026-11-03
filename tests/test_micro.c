@@ -643,4 +643,252 @@ TEST(micro_choke_shared_hihat_order_is_the_tick_order)
 	fake_useMicro(false);
 }
 
+//------------------------------------------------------------------------------
+// record_place: seqc_recordPlace()
+//------------------------------------------------------------------------------
+/** the reference tick of step s at x1 (spec 7.1): grid, swing on odd s, template, delay */
+static int refTick(int s, int swing, int id, int percent, int delayTicks)
+{
+	const int g = id ? templateTicks(id, s, percent, 96) : 0;
+	return 96 * s + ((s & 1) ? swing : 0) + g + delayTicks;
+}
+
+TEST(record_place_sweep_around_a_boundary)
+{
+	/* 120 BPM: a note 1000 cycles after each tick from 60 before to 60 after step 4's grid
+	 * tick; the target is the nearer of the current and the next step, the offset rounded */
+	static const uint8_t shuffles[2] = { 0, 40 };
+	for (int sh = 0; sh < 2; sh++)
+	{
+		const int swing = sh ? 20 : 0;		/* round(40 x 64 / 127) */
+		fake_host_t *h = fake_init();
+		h->logMask = 0;
+		h->shuffle = shuffles[sh];
+		play(h, 400.0);
+		for (int k = -60; k <= 60; k++)
+		{
+			const seqc_time_t t = (seqc_time_t)(384 + k) * CYCLES_PER_TICK_120 + 1000u;
+			fake_process(h, t);
+			seqc_recPlace_t p;
+			ASSERT_TRUE(seqc_recordPlace(0, t, &p));
+			const double x = 384 + k + 1000.0 / CYCLES_PER_TICK_120;
+			const int c = k < 0 ? 3 : 4;
+			const int r0 = refTick(c, swing, 0, 0, 0), r1 = refTick(c + 1, swing, 0, 0, 0);
+			const bool ahead = x - r0 >= r1 - x;
+			const double d = x - (ahead ? r1 : r0);
+			ASSERT_EQ(p.ahead, ahead);
+			ASSERT_EQ(p.step, ahead ? c + 1 : c);
+			ASSERT_EQ(p.micro, d >= 0 ? (int)floor(d + 0.5) : -(int)floor(-d + 0.5));
+		}
+	}
+}
+
+TEST(record_place_tie_goes_to_the_next_step)
+{
+	/* at 33,750,000 / 2^18 BPM a tick is 2^18 cycles, so the position of a cycle count is
+	 * exact: halfway between the reference ticks of steps 4 and 5 is a tie, and goes to 5 */
+	static const uint8_t shuffles[2] = { 0, 40 };
+	for (int sh = 0; sh < 2; sh++)
+	{
+		fake_host_t *h = fake_init();
+		h->logMask = 0;
+		h->shuffle = shuffles[sh];
+		seqc_setTempo(128.74603271484375f);
+		play(h, 100.0);
+		/* the rounding: 2.5 ticks after step 4 is +3 */
+		seqc_recPlace_t p;
+		const seqc_time_t late = ((seqc_time_t)386 << 18) + (1u << 17);
+		fake_process(h, late);
+		ASSERT_TRUE(seqc_recordPlace(0, late, &p));
+		ASSERT_FALSE(p.ahead);
+		ASSERT_EQ(p.micro, 3);
+		const seqc_tick_t mid = sh ? 442 : 432;	/* (384 + 480 + swing 20) / 2 */
+		const seqc_time_t t = (seqc_time_t)mid << 18;
+		fake_process(h, t);
+		ASSERT_TRUE(seqc_recordPlace(0, t, &p));
+		ASSERT_TRUE(p.ahead);
+		ASSERT_EQ(p.step, 5);
+		ASSERT_EQ(p.micro, sh ? -58 : -48);
+		/* 2.5 before step 5's grid tick: -3, or -22.5 before its swung reference: -23 */
+		const seqc_time_t early = ((seqc_time_t)477 << 18) + (1u << 17);
+		fake_process(h, early);
+		ASSERT_TRUE(seqc_recordPlace(0, early, &p));
+		ASSERT_TRUE(p.ahead);
+		ASSERT_EQ(p.micro, sh ? -23 : -3);
+	}
+}
+
+TEST(record_place_leaves_out_template_and_delay)
+{
+	/* lay at 100 and 150 %, delay +10 ms (8 ticks at 120 BPM): a note played at a step's
+	 * reference + d stores rha(d); written back as the step's microtiming, the next loop
+	 * plays it within half a tick of where it was played */
+	static const double d[16] = { 3.4, -7.6, 12.2, -0.5, 30.0, -25.3, 0.49, 40.0,
+				      -40.0, 17.7, -12.5, 6.6, -33.3, 22.0, -1.2, 9.9 };
+	static const int pct[2] = { 100, 150 };
+	for (int a = 0; a < 2; a++)
+	{
+		fake_host_t *h = microHost();
+		fake_setTemplate(h, 0, 0, LAY, pct[a]);
+		fake_setGroove(h, 0, 0, 0, 0, 10);
+		fake_process(h, 0);
+		seqc_start();
+		fake_process(h, 0);
+		double played[16];
+		for (int s = 0; s < 16; s++)
+		{
+			const double x = refTick(s, 0, LAY, pct[a], 8) + d[s];
+			const seqc_time_t t = (seqc_time_t)(x * CYCLES_PER_TICK_120);
+			fake_runUntil(h, t, fake_msToCycles(0.5));
+			seqc_recPlace_t p;
+			ASSERT_TRUE(seqc_recordPlace(0, t, &p));
+			ASSERT_EQ(p.step, s);
+			ASSERT_EQ(p.micro, rha((int)lround(d[s] * 1000.0), 1000));
+			played[p.step] = (double)t / CYCLES_PER_TICK_120;
+			fake_setMicro(h, 0, 0, p.step, p.micro);
+			fake_setStep(h, 0, 0, p.step, true);
+		}
+		fake_runUntil(h, fake_msToCycles(4100.0), fake_msToCycles(0.5));
+		const fake_rec_t *r[64];
+		const size_t n = fake_triggers(h, 0, r, 64);
+		int replayed = 0;
+		for (size_t i = 0; i < n; i++)
+		{
+			if (r[i]->ev.tick < 1536 || r[i]->ev.tick >= 3072)
+				continue;
+			const double back = (double)(r[i]->ev.tick - 1536);
+			ASSERT_TRUE(fabs(back - played[r[i]->ev.step]) <= 0.5 + 1e-6);
+			replayed++;
+		}
+		ASSERT_EQ(replayed, 16);
+		ASSERT_EQ(h->errors, 0);
+	}
+	fake_useMicro(false);
+}
+
+TEST(record_place_in_the_tracks_own_step)
+{
+	/* x3/4 (128 ticks) and x2 (48): the offset in 1/96 of the track's step */
+	static const struct { uint8_t tempo; int at, step, micro; bool ahead; } want[] = {
+		{ 4, 4 * 128 + 20, 4, 15, false },	/* 20 x 96 / 128 */
+		{ 4, 4 * 128 - 10, 4, -8, true },	/* -7.5: away from zero; still step 3's boundary */
+		{ 4, 4 * 128 + 70, 5, -44, true },	/* 58 before step 5: -43.5 */
+		{ 8, 4 * 48 + 10, 4, 20, false },
+		{ 8, 4 * 48 - 13, 4, -26, true },
+	};
+	for (unsigned k = 0; k < sizeof want / sizeof want[0]; k++)
+	{
+		fake_host_t *h = fake_init();
+		h->logMask = 0;
+		fake_setTempo(h, 0, 0, want[k].tempo);
+		play(h, 1.0);
+		const seqc_time_t t = (seqc_time_t)want[k].at * CYCLES_PER_TICK_120;
+		fake_runUntil(h, t, fake_msToCycles(0.5));
+		seqc_recPlace_t p;
+		ASSERT_TRUE(seqc_recordPlace(0, t, &p));
+		ASSERT_EQ(p.step, want[k].step);
+		ASSERT_EQ(p.ahead, want[k].ahead);
+		ASSERT_EQ(p.micro, want[k].micro);
+	}
+}
+
+TEST(record_place_clamps_at_the_reach)
+{
+	/* shuffle 127 (swing 64), lyb at 200 % and delay -15 ms (-12 ticks): step 4's reference
+	 * is 384 - 12 = 372, step 5's 480 + 64 + 48 - 12 = 580. A note at 470 is step 4's, 98
+	 * late; one at 478 (still before step 5's boundary) is step 5's, 102 early */
+	fake_host_t *h = microHost();
+	h->logMask = 0;
+	h->shuffle = 127;
+	fake_setTemplate(h, 0, 0, LYB, 200);
+	fake_setGroove(h, 0, 0, 0, 0, -15);
+	play(h, 1.0);
+	seqc_recPlace_t p;
+	seqc_time_t t = (seqc_time_t)470 * CYCLES_PER_TICK_120;
+	fake_runUntil(h, t, fake_msToCycles(0.5));
+	ASSERT_TRUE(seqc_recordPlace(0, t, &p));
+	ASSERT_EQ(p.step, 4);
+	ASSERT_FALSE(p.ahead);
+	ASSERT_EQ(p.micro, 84);
+	t = (seqc_time_t)478 * CYCLES_PER_TICK_120;
+	fake_runUntil(h, t, fake_msToCycles(0.5));
+	ASSERT_TRUE(seqc_recordPlace(0, t, &p));
+	ASSERT_EQ(p.step, 5);
+	ASSERT_TRUE(p.ahead);
+	ASSERT_EQ(p.micro, -84);
+	fake_useMicro(false);
+}
+
+TEST(record_place_stamp_before_the_boundary)
+{
+	/* the core is past step 4's boundary; a note stamped 2 ms (1.536 ticks) before it is
+	 * step 4's, early by 2 ticks, not step 3's and not held at the core's position */
+	fake_host_t *h = fake_init();
+	h->logMask = 0;
+	play(h, 1.0);
+	fake_runUntil(h, (seqc_time_t)389 * CYCLES_PER_TICK_120, fake_msToCycles(0.5));
+	ASSERT_EQ(seqc_trackStep(0), 4);
+	seqc_setTempo(120.0f);			/* re-anchors the timeline now: the stamp lies before the anchor */
+	seqc_recPlace_t p;
+	ASSERT_TRUE(seqc_recordPlace(0, (seqc_time_t)384 * CYCLES_PER_TICK_120 - fake_msToCycles(2.0), &p));
+	ASSERT_EQ(p.step, 4);
+	ASSERT_FALSE(p.ahead);
+	ASSERT_EQ(p.micro, -2);
+}
+
+TEST(record_place_follows_the_slave_interpolation)
+{
+	/* MIDI clock at 120 BPM: clock m is at tick 16 m. After clock 30 (tick 480, step 5) a
+	 * note 0.4 clocks later is +6.4 ticks, one 0.3 clocks before clock 30 is -4.8 */
+	fake_host_t *h = fake_init();
+	h->logMask = 0;
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	fake_process(h, fake_msToCycles(1.0));
+	fake_sync(h, SEQC_EV_START, h->now + 100);
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t first = h->now + (seqc_time_t)per;
+	fake_runClocks(h, SEQC_EV_CLOCK, first, per, 31, fake_msToCycles(0.1));
+	const seqc_time_t clock30 = first + (seqc_time_t)(30.0 * per + 0.5);
+	ASSERT_EQ(seqc_trackStep(0), 5);
+	seqc_recPlace_t p;
+	ASSERT_TRUE(seqc_recordPlace(0, clock30 + (seqc_time_t)(0.4 * per), &p));
+	ASSERT_EQ(p.step, 5);
+	ASSERT_EQ(p.micro, 6);
+	ASSERT_TRUE(seqc_recordPlace(0, clock30 - (seqc_time_t)(0.3 * per), &p));
+	ASSERT_EQ(p.step, 5);
+	ASSERT_EQ(p.micro, -5);
+}
+
+static bool placedInCallback;
+static void tryPlace(fake_host_t *h, const seqc_event_t *ev)
+{
+	(void)ev;
+	seqc_recPlace_t p;
+	placedInCallback |= seqc_recordPlace(0, h->now, &p);
+}
+
+TEST(record_place_false_when_it_cannot_place)
+{
+	fake_host_t *h = fake_init();
+	h->logMask = 0;
+	seqc_recPlace_t p = { .step = 77, .ahead = true, .micro = 33 };
+	fake_process(h, 0);
+	ASSERT_FALSE(seqc_recordPlace(0, 0, &p));	/* stopped */
+	seqc_start();
+	ASSERT_FALSE(seqc_recordPlace(0, 0, &p));	/* no step yet */
+	ASSERT_EQ(p.step, 77);
+	ASSERT_EQ(p.micro, 33);				/* *out not written */
+	fake_process(h, 0);
+	ASSERT_TRUE(seqc_recordPlace(0, 0, &p));
+	ASSERT_EQ(p.step, 0);
+	ASSERT_FALSE(seqc_recordPlace(7, 0, &p));	/* no such track */
+	ASSERT_FALSE(seqc_recordPlace(0, 0, NULL));
+	fake_setStep(h, 0, 0, 2, true);
+	placedInCallback = false;
+	h->onTrigger = tryPlace;
+	fake_runUntil(h, fake_msToCycles(400.0), fake_msToCycles(0.5));
+	ASSERT_EQ(h->calls[FAKE_TRIGGER], 1);
+	ASSERT_FALSE(placedInCallback);			/* inside a callback */
+}
+
 TEST_MAIN()

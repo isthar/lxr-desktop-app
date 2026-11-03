@@ -937,4 +937,197 @@ TEST(sequencer_micro_step_page)
 	run(1);
 }
 
+//------------------------------------------------------------------------------
+// LICHOMAT v0.6 (plan v0.6 Task 7, spec 10.1 record_micro): recording keeps the played offset
+//------------------------------------------------------------------------------
+#define TICK_120 281250u		/* cycles of a tick at 120 BPM */
+
+/** record mode and the start; the time of step 0 (the seq_tick() that applies the start) */
+static seqc_time_t recordStart(void)
+{
+	seq_setRecordingMode(1);
+	seq_setRunning(1);
+	run(1);
+	return hostNow;
+}
+
+/** one seq_tick() at time t */
+static void tickAt(seqc_time_t t)
+{
+	hostNow = t;
+	seq_tick();
+}
+
+/** the Note Ons of voice at or after time from, at most max, into at */
+static int voiceOnsFrom(uint8_t voice, seqc_time_t from, seqc_time_t *at, int max)
+{
+	int n = 0;
+	for (int i = 0; i < noteOns && i < 64; i++)
+		if (noteOnVoice[i] == voice && noteOnAt[i] >= from && n < max)
+			at[n++] = noteOnAt[i];
+	return n;
+}
+
+static void recordStop(void)
+{
+	seq_setRecordingMode(0);
+	seq_setRunning(0);
+	run(1);
+	activeParameters[PAR_REC_QUANT] = 0;
+}
+
+TEST(record_micro_rqn_off_stores_the_offset)
+{
+	reset();
+	activeParameters[PAR_REC_QUANT] = 0;
+	const uint8_t tr = 1;
+	seq_patternSet.seq_stepTiming[0][tr][4] = (StepTiming){ .flam = 3, .shift = 7 };	/* x4 */
+	Step *s4 = &seq_patternSet.seq_subStepPattern[0][tr][4];
+	s4->param1Nr = 5;
+	s4->param1Val = 66;
+	const seqc_time_t t0 = recordStart();
+	/* 19 ticks after step 4's grid tick: step 4, shf +2, fine -5; flam and p-locks kept */
+	seqc_time_t t = t0 + (seqc_time_t)(4 * 96 + 19) * TICK_120;
+	tickAt(t);
+	seq_addNoteAt(tr, 100, 64, t);
+	ASSERT_TRUE(seq_isMainStepActive(tr, 4, 0));
+	ASSERT_EQ(seq_patternSet.seq_stepTiming[0][tr][4].shift, 9);
+	ASSERT_EQ(seq_patternSet.seq_stepTiming[0][tr][4].flam, 3);
+	ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[0][tr], 4), -5);
+	ASSERT_EQ(s4->param1Nr, 5);
+	ASSERT_EQ(s4->param1Val, 66);
+	ASSERT_EQ(s4->note, 64);
+	ASSERT_EQ(s4->volume & 0x7f, 100);
+	/* 30 ticks before step 6's: step 6 at -30, with its skip-once marker */
+	t = t0 + (seqc_time_t)(6 * 96 - 30) * TICK_120;
+	tickAt(t);
+	noteOns = 0;
+	seq_addNoteAt(tr, 90, 62, t);
+	ASSERT_TRUE(seq_isMainStepActive(tr, 6, 0));
+	ASSERT_FALSE(seq_isMainStepActive(tr, 5, 0));
+	ASSERT_EQ(microOf(0, tr, 6), -30);
+	/* this loop plays neither; the next one step 4's four hits at +19, then step 6 at -30 */
+	while (hostNow < t0 + (seqc_time_t)(1536 + 600) * TICK_120)
+		run(1);
+	seqc_time_t at[8];
+	ASSERT_EQ(voiceOnsFrom(tr, t, at, 8), 5);
+	ASSERT_TRUE(at[0] >= t0 + (seqc_time_t)(1536 + 384 + 19) * TICK_120);
+	ASSERT_TRUE(at[0] < t0 + (seqc_time_t)(1536 + 384 + 19) * TICK_120 + MS);
+	ASSERT_TRUE(at[4] >= t0 + (seqc_time_t)(1536 + 546) * TICK_120);
+	ASSERT_TRUE(at[4] < t0 + (seqc_time_t)(1536 + 546) * TICK_120 + MS);
+	recordStop();
+}
+
+TEST(record_micro_rqn_on_keeps_the_timing)
+{
+	reset();
+	activeParameters[PAR_REC_QUANT] = 1;
+	const uint8_t tr = 1;
+	seq_patternSet.seq_stepTiming[0][tr][4] = (StepTiming){ .flam = 3, .shift = 10 };
+	stepFine_set(seq_patternSet.seq_stepFine[0][tr], 4, 2);
+	const seqc_time_t t0 = recordStart();
+	seqc_time_t t = t0 + (seqc_time_t)(4 * 96 + 19) * TICK_120;
+	tickAt(t);
+	seq_addNoteAt(tr, 100, 64, t);
+	ASSERT_TRUE(seq_isMainStepActive(tr, 4, 0));
+	ASSERT_EQ(seq_patternSet.seq_stepTiming[0][tr][4].shift, 10);	/* the timing as it was */
+	ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[0][tr], 4), 2);
+	t = t0 + (seqc_time_t)(6 * 96 - 30) * TICK_120;
+	tickAt(t);
+	noteOns = 0;
+	seq_addNoteAt(tr, 90, 62, t);
+	ASSERT_TRUE(seq_isMainStepActive(tr, 6, 0));
+	ASSERT_EQ(microOf(0, tr, 6), 0);
+	while (hostNow < t0 + (seqc_time_t)(1536 + 600) * TICK_120)
+		run(1);
+	seqc_time_t at[8];
+	ASSERT_EQ(voiceOnsFrom(tr, t, at, 8), 5);		/* step 6 skipped in this loop, then on the grid */
+	ASSERT_TRUE(at[4] >= t0 + (seqc_time_t)(1536 + 576) * TICK_120);
+	ASSERT_TRUE(at[4] < t0 + (seqc_time_t)(1536 + 576) * TICK_120 + MS);
+	recordStop();
+}
+
+TEST(record_micro_stamped_note_after_the_boundary)
+{
+	/* a MIDI note stamped 2 ms (1.536 ticks) before step 4, parsed 3 ms after it: step 4, -2 */
+	reset();
+	const seqc_time_t t0 = recordStart();
+	tickAt(t0 + (seqc_time_t)384 * TICK_120 + 3 * MS);
+	const uint32_t stamp = (uint32_t)(t0 + (seqc_time_t)384 * TICK_120 - 2 * MS);
+	seq_addNoteAt(1, 100, 60, seq_noteTime(stamp));
+	ASSERT_TRUE(seq_isMainStepActive(1, 4, 0));
+	ASSERT_FALSE(seq_isMainStepActive(1, 3, 0));
+	ASSERT_EQ(microOf(0, 1, 4), -2);
+	recordStop();
+	/* seq_noteTime() across the 32-bit wrap of the cycle counter */
+	tickAt((1ull << 32) + 1000u);
+	ASSERT_TRUE(seq_noteTime((uint32_t)(hostNow - 5000u)) == hostNow - 5000u);
+	ASSERT_TRUE(seq_noteTime((uint32_t)(hostNow + 700u)) == hostNow + 700u);
+}
+
+TEST(record_micro_template_and_delay_are_left_out)
+{
+	/* lay at 100 % and delay +10 ms (8 ticks): step 5's reference is 480 + 18 + 8 = 506, so a
+	 * note at 510 stores +4, and the next loop plays it at 1536 + 510 */
+	reset();
+	activeParameters[PAR_REC_QUANT] = 0;
+	seq_patternSet.tmpl[0][1] = (TrackTemplate){ .id = 2, .amount = 0 };
+	seq_patternSet.groove[0][1].delay = 10;
+	const seqc_time_t t0 = recordStart();
+	const seqc_time_t t = t0 + (seqc_time_t)510 * TICK_120;
+	tickAt(t);
+	seq_addNoteAt(1, 100, 60, t);
+	ASSERT_EQ(microOf(0, 1, 5), 4);
+	while (hostNow < t0 + (seqc_time_t)(1536 + 600) * TICK_120)
+		run(1);
+	seqc_time_t at[4];
+	ASSERT_EQ(voiceOnsFrom(1, t, at, 4), 1);
+	ASSERT_TRUE(at[0] >= t + (seqc_time_t)1536 * TICK_120);
+	ASSERT_TRUE(at[0] < t + (seqc_time_t)1536 * TICK_120 + MS);
+	recordStop();
+	seq_patternSet.tmpl[0][1] = (TrackTemplate){ 0, 0 };
+	seq_patternSet.groove[0][1].delay = 0;
+}
+
+TEST(record_micro_roll_hits_keep_the_timing)
+{
+	/* M21: roll hits record at their own step, the step's timing as it was */
+	reset();
+	activeParameters[PAR_REC_QUANT] = 0;
+	for (uint8_t s = 0; s < 16; s++)
+	{
+		seq_patternSet.seq_stepTiming[0][1][s] = (StepTiming){ .flam = 0, .shift = 9 };
+		stepFine_set(seq_patternSet.seq_stepFine[0][1], s, 3);
+	}
+	seq_setRollRate(8);				/* 1/16: one roll hit a step */
+	recordStart();
+	seq_setRoll(1, 1);
+	run(700);
+	seq_setRoll(1, 0);
+	for (uint8_t s = 1; s <= 4; s++)
+	{
+		ASSERT_TRUE(seq_isMainStepActive(1, s, 0));
+		ASSERT_EQ(microOf(0, 1, s), 27);
+	}
+	recordStop();
+}
+
+TEST(record_micro_oneshot_roll_at_the_apply_time)
+{
+	/* M21: the one-shot roll records at the core's time when seq_tick() applies it, before
+	 * that call's seqc_process(): tick 394, step 4 at +10 */
+	reset();
+	activeParameters[PAR_REC_QUANT] = 0;
+	seq_setRollRate(0);				/* One: through the mailbox */
+	const seqc_time_t t0 = recordStart();
+	tickAt(t0 + (seqc_time_t)394 * TICK_120);
+	seq_setRoll(1, 1);
+	tickAt(t0 + (seqc_time_t)394 * TICK_120 + MS);
+	seq_setRoll(1, 0);
+	ASSERT_TRUE(seq_isMainStepActive(1, 4, 0));
+	ASSERT_EQ(microOf(0, 1, 4), 10);
+	seq_setRollRate(8);
+	recordStop();
+}
+
 TEST_MAIN()

@@ -177,7 +177,7 @@ seqc_add_test(test_conditions IDS TC1 TC2 TC3 STRICT_CORE seq_core_strict)    # 
 seqc_add_test(test_perform IDS RL1 RL2 SL1 STRICT_CORE seq_core_strict)    # v0.3 P1 rolls, P2 slide
 seqc_add_test(test_slide IDS GL1)    # v0.3 P3 glide
 seqc_add_test(test_itemtime  IDS seqc_itemtime STRICT_CORE seq_core_strict)    # v0.5 Task 2 seqc_itemTime()
-seqc_add_test(test_micro     IDS micro_offsets templates micro_choke EXTRA queue_equiv.c STRICT_CORE seq_core_strict)    # v0.6 Task 3 microtiming, templates (Task 7: record_place)
+seqc_add_test(test_micro     IDS micro_offsets templates micro_choke record_place EXTRA queue_equiv.c STRICT_CORE seq_core_strict)    # v0.6 Task 3 microtiming, templates (Task 7: record_place)
 # LICHOMAT v0.5 (plan Task 3): the voice scheduler, plain C11 like the core, with its test
 # hooks (VSCHED_TEST); a second build with the fix-up's split cap 3 (S20) runs vsched_cap
 set(VSCHED_SOURCE ${LXR_ROOT}/Core/Src/Soundengine/vsched.c)
@@ -232,7 +232,7 @@ endif()
 # a buffer of the test with guard bytes after the 64 entries. stubs/seq_random_test.h
 # is forced into sequencer.c: its probability draw, SEQ_RANDOM(), becomes the
 # test's seqTest_random() (stage 1b F5).
-seqc_add_test(test_sequencer IDS sequencer EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c)  # E4.6  song page position, automation step; stage 1b F5 SEQ_RANDOM()
+seqc_add_test(test_sequencer IDS sequencer record_micro EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c)  # E4.6  song page position, automation step; stage 1b F5 SEQ_RANDOM()
 if(TARGET test_sequencer)
     target_include_directories(test_sequencer BEFORE PRIVATE stubs)
     target_include_directories(test_sequencer SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)

@@ -840,8 +840,8 @@ double seqc_position(void);
 seqc_time_t seqc_itemTime(void);
 //------------------------------------------------------------------------------
 /** Recording phase, 0..1, of the current step n at the current position.
- * seq_getElapsedStepTimePercent() returns it x 100, and seq_addNote() moves a
- * note to the next step at 0.5 or more (spec 6.7).
+ * v0.1–v0.5 recorded with it (spec 6.7); v0.6 places a note with
+ * seqc_recordPlace().
  * - 0 at the step boundary n * 96.
  * - 0.5 at n * 96 + (96 + swing) / 2, where swing = round(shuffle * 64 / 127)
  *   whatever the parity of n. That is halfway between the swung grid times of
@@ -855,6 +855,25 @@ float seqc_stepPhase(void);
  * on the master grid; for one on its own grid the same rule in its own step (its length
  * and swing). seq_addNote() quantises a note to the track's own steps with it. */
 float seqc_trackPhase(uint8_t track);
+//------------------------------------------------------------------------------
+/** v0.6 (spec v0.6 7.1): where a recorded note belongs */
+typedef struct seqc_recPlace
+{
+	uint8_t	step;		/**< the target track step: the current one, or the next one */
+	bool	ahead;		/**< true for the next one: the glue sets its skip-once marker (D6) */
+	int8_t	micro;		/**< the played position less the step's reference time, in 1/96 of the
+				 * track's step, rounded half away from zero, -84..+84 */
+} seqc_recPlace_t;
+/** v0.6 (spec v0.6 7.1, M19, M20): the step of track's current occurrence c or of its next
+ * one c+1 ((c + 1) mod the track length, in the active pattern) that is nearer to the
+ * position at time t, a tie going to c+1, and the note's offset from that step's reference
+ * time: its grid tick plus the swing, the template and the delay of 4.1, without humanize,
+ * shift or fine part. The position is the internal timeline at t, or in the slave modes the
+ * interpolation from the last clock (at most the next clock), not held at the core's
+ * position: a note stamped before the last boundary lies before it. Outside a callback
+ * only (the glue's recording, in seq_tick()); false inside one, while stopped or armed,
+ * before the track's first step, or for a track out of range, and *out is not written. */
+bool seqc_recordPlace(uint8_t track, seqc_time_t t, seqc_recPlace_t *out);
 //------------------------------------------------------------------------------
 /** v0.2: a number that changes whenever a track index can have changed (a master or a
  * track boundary, a rewind, a song position), for the glue's copies */
