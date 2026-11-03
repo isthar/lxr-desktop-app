@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-03 17:03",
+    "updated": "2026-11-03 17:08",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 w wykonaniu: E6.20 (nagrywanie), potem E6.21–E6.23",
     "branch": "timing-core",
-    "head": "c82febf",
+    "head": "5441dbf",
     "next": "E6.20 i jego pełny przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
-    "updated_at": "2026-11-03T17:03:00+01:00",
+    "updated_at": "2026-11-03T17:08:00+01:00",
     "now": "Przegląd E6.20; testy z przeglądu E6.17–E6.18 (wykonawca)"
   },
   "epics": [
@@ -590,7 +590,7 @@
       "id": "E6.19",
       "epic": "E6",
       "status": "zrobione",
-      "title": "v0.6 zad. 6: interfejs: mic na stronie kroku, tpl i amt na stronie toru, rqn na stronie nagrywania (e270f44)",
+      "title": "v0.6 zad. 6: interfejs: mic na stronie kroku, tpl i amt na stronie toru, rqn na stronie nagrywania (e270f44); lekki przegląd: 5 drobnych poprawek w kolejce",
       "updated": "2026-11-02"
     },
     {
@@ -3598,6 +3598,11 @@
       "n": 514,
       "at": "2026-11-03 17:03",
       "text": "E6.20 (v0.6 zad. 7) zrobione, c82febf: nagrywanie umieszcza nutę według jej czasu (znacznik MIDI z v0.5) względem kroku i zapisuje przesunięcie (rqn off). Host 125/125 (UBSan i ASan), emulator 331/331 i 303/303, 32 nagrania wzorcowe bez zmian, 0 ostrzeżeń, RAM −24 B (usunięta stara kopia fazy). Start pełnego przeglądu E6.20 (tylko odczyt); wykonawca dopisuje testy z przeglądu E6.17–E6.18."
+    },
+    {
+      "n": 515,
+      "at": "2026-11-03 17:08",
+      "text": "Lekki przegląd E6.19 gotowy: nic krytycznego ani ważnego. Wartości mic i amt powyżej 127 nigdzie nie idą przez 7-bitowe komunikaty menu; numery parametrów, glo.cfg i NRPN bez zmian. Pięć drobnych: brak strzałki na ekranie tmp hmt hmv dly, że dalej jest tpl amt; SHIFT+mode2 nie przechodzi na trzeci ekran; po wyjściu z tpl amt strona głosu otwiera się na drugiej podstronie; zapisane rqn > 1 włącza się przy każdym ruchu; ścieżka mic z menu bez testu. Poprawki zrobi wykonawca osobnym commitem po testach z przeglądu E6.17–E6.18. Poza v0.6: długie nazwy z v0.4/v0.5 (np. „Trig timing”) wchodzą na drugą linię LCD w trybie edycji."
     }
   ]
 }
