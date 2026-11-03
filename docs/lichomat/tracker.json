@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 00:35",
+    "updated": "2026-11-04 00:40",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Czeka na Ciebie: H12 (wybiera folder polowa/ albo lean/), testy na LXR, wybór B13, odsłuch kitów",
     "branch": "timing-core",
-    "head": "95f5af1",
+    "head": "62eb6be",
     "next": "H12 na 0.3 z CI, potem pliki z build/images/po-H12/; strona odsłuchu: kity, B13, pogłos",
-    "updated_at": "2026-11-04T00:35:00+01:00",
-    "now": "E4.12: fuzzing sekwencera v0.6 pod ASan w tle (dźwięk i MIDI: 16 000 renderów, 0 znalezisk)"
+    "updated_at": "2026-11-04T00:40:00+01:00",
+    "now": "E8.8: ścieżki ★ w emulatorze; E4.12: fuzzing sekwencera i pogłosu w tle"
   },
   "epics": [
     {
@@ -781,6 +781,13 @@
       "status": "zrobione",
       "title": "Obrazy do testów w build/images/ (0.3 z CI do H12, lokalny 0.6, fw 1.7 do H13, sumy SHA-256, README) i plan sesji testowej docs/lichomat/test-session-v0.6.md: część 1 na 0.3 (H12, 30 min), część 2 na 0.6 w blokach; całość ok. 7 h, wersja ★ na jeden wieczór ok. 2,5 h",
       "updated": "2026-11-03"
+    },
+    {
+      "id": "E8.8",
+      "epic": "E8",
+      "status": "w toku",
+      "title": "Ścieżki przycisków z sesji testowej (★) przechodzone w emulatorze na v0.6: czy LCD pokazuje to, co mówią lista sprawdzeń i notatki; błędy w dokumentach poprawione przed Twoją sesją",
+      "updated": "2026-11-04"
     }
   ],
   "milestones": [
@@ -3903,6 +3910,11 @@
       "n": 553,
       "at": "2026-11-04 00:35",
       "text": "E7.9, E7.10 i E7.7 zrobione, kamień M19: wszystkie siedem gałęzi zielone (v0.4-half/-lean/-full; v0.5-half i -lean: 114 testów hosta, 329 emulatora, ASan 114 i 301; v0.6-half i -lean: 125, 344, ASan 125 i 316; 0 ostrzeżeń). W build/images/po-H12/ są pliki 0.4, 0.5 i 0.6 w folderach polowa/ i lean/, 11 sum w SHA256SUMS. Po H12 robisz U20–U26, U30 i U37 bez czekania na mnie. Raport: docs/lichomat/reports/M19-po-H12.md."
+    },
+    {
+      "n": 554,
+      "at": "2026-11-04 00:40",
+      "text": "E8.8 w toku: przechodzę w emulatorze ścieżki przycisków z sesji ★ (v0.6-half). Zgodne: strona CPU (4× SHIFT + krok 12, po kcm cki cko trg), podstrona pogłosu (lvl siz dec ton), strona toru (len stp rot mrp → tmp hmt hmv dly → tpl amt). Błąd w dokumentach: strona nagrywania pokazuje trk rqn, nie aut rqn; poprawione w liście sprawdzeń, notatkach 0.6, M18, specyfikacji i na stronie odsłuchu. E4.12: dodatkowo 7 500 renderów samego pogłosu (wszystkie gałki, freeze, ton w trakcie ogona) pod ASan na v0.6-half i v0.4-lean."
     }
   ]
 }

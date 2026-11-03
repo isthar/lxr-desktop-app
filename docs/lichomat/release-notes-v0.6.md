@@ -69,7 +69,7 @@ Wszystkie wczytują projekty, wzorce, kity i `glo.cfg` zapisane przez v0.6 bez b
 - **Czas nuty:** nuty MIDI z DIN i USB liczą się od chwili przyjścia (znacznik czasu z 0.5), w obu ustawieniach `trg`; jako slave zegara MIDI nagrywanie idzie za zewnętrznym zegarem. Jednorazowy roll z panelu (tryb performance, `One`) liczy się od chwili, w której sekwencer go przyjmuje: przycisk nie ma znacznika czasu, różnica to najwyżej 1,45 ms. Uderzenia trzymanego rolla nagrywają się w swoich krokach, z timingiem bez zmian, jak w 0.5.
 - **Bez kompensacji opóźnienia:** nuta MIDI brzmi przy nagrywaniu tyle samo po swoim czasie co przy odtwarzaniu.
 - **Nakładanie:** nagrywanie na LXR zawsze nakłada. Nuta na kroku, który już gra, zastępuje jego nutę, velocity, prawdopodobieństwo i (z `rqn` `off`) timing; flam i p-locki zostają.
-- **Gdzie:** SHIFT + REC otwiera stronę nagrywania, `aut rqn`. `rqn` jest ustawieniem globalnym i zapisuje się z ustawieniami globalnymi (strona zapisu, typ global, jak w 1.7).
+- **Gdzie:** SHIFT + REC otwiera stronę nagrywania, `trk rqn`. `rqn` jest ustawieniem globalnym i zapisuje się z ustawieniami globalnymi (strona zapisu, typ global, jak w 1.7).
 
 ### MIDI out
 
@@ -106,7 +106,7 @@ Koszt policzony statycznie, metodą notatek 0.5 (instrukcje, 13 cykli na dzielen
 - Nagrywanie na żywo z `rqn` `off` (domyślnie) zapisuje zagrane przesunięcie w `mic` kroku; w 0.5 nuta lądowała na siatce. `rqn` `on` przywraca zachowanie 0.5.
 - Krok przy nagrywaniu wybiera się według czasu przyjścia nuty MIDI i miejsc kroków z szablonem i `dly`. Bez szablonu i `dly` to reguła 0.5.
 - Strona ścieżki ma trzeci ekran, `tpl amt`; enkoder przechodzi na nią za `dly`.
-- Strona nagrywania (SHIFT + REC) ma `rqn` po `aut`.
+- Strona nagrywania (SHIFT + REC) ma `rqn` po `trk` (ścieżka automatyki z 1.7).
 - Bajt 19 `glo.cfg` to `rqn`.
 - Ekran startowy pokazuje `LICHOMAT` i `v0.6 unofficial`.
 - Długie nazwy w trybie edycji mają najwyżej 8 znaków: `Slide tm`, `SceneChg`, `rev lvl`, `rev mod`, `rev frz`, `dly sync`, `duck dpt`, `DJ filtr`, `Trig tmg`. Dłuższe nazwy z fw 1.7, 0.4 i 0.5 pisały poza górną linię LCD (poprawka E4.10).

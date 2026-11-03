@@ -207,7 +207,7 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
   samples (2.90 ms) after it; `blk` starts it at the beginning of the next audio block, as 0.4 did.
   It is saved with the global settings (the save page's global type, as in 1.7), in byte 9 of
   `GLO.CFG`. A switch while playing takes effect at the next hit.
-- Record quantize (0.6, `rqn`, a global setting): SHIFT + REC opens the recording page, `aut rqn`.
+- Record quantize (0.6, `rqn`, a global setting): SHIFT + REC opens the recording page, `trk rqn` (`trk` is 1.7's automation track).
   `rqn` `off` (the default) records each note with its played offset into the step's `mic`, measured
   from where the step plays (the grid with the swing, the template and `dly`); `on` records onto the
   grid and leaves the step's timing as it was, as 0.5 did. It is saved with the global settings, in
