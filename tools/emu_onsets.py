@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """The onset timing of a render (plan v0.5 Task 9, spec 9.2): where each hit of a
-click starts in a channel of a lichomat-render WAV, against one of three references.
+click starts in a channel of a lichomat-render WAV, against one of four references.
 
     emu_onsets.py WAV --log TRIG.LOG [--voice V] [options]   against the trigger log
     emu_onsets.py WAV --grid BPM [options]                     against the tick grid
     emu_onsets.py WAV --against WAV2 [options]                 against another render
+    emu_onsets.py WAV --ticks FILE --bpm BPM [options]         against expected ticks
 
 An onset is the first frame with |x| >= 4,000 after at least 32 frames below 64.
 - --log: the timed records of voice V (0-5, default 0) of lichomat-render's
@@ -16,6 +17,10 @@ An onset is the first frame with |x| >= 4,000 after at least 32 frames below 64.
 - --grid BPM: the onsets on a grid of ticks (384 a quarter note) at BPM, from the
   first onset: each one's tick is the nearest. It does not read the firmware's times.
 - --against WAV2: the onsets of WAV2 in the same channel, one for one.
+- --ticks FILE (plan v0.6 Task 8): the expected tick, 384 a quarter note, of each onset in
+  order; the residual is onset - first onset - (tick - first tick) x frames per tick at
+  --bpm, so the ticks may count from any base; a count other than the onsets' is an error.
+  The test computes the ticks outside the firmware.
 The residuals r = onset - reference; c is their median, and the spread is
 max(r - c) - min(r - c). --from/--to (seconds) keep the onsets in [from, to).
 Exit 0 if the spread is at most --limit and at least --min (each if given), 1 if not
@@ -107,6 +112,8 @@ def main(argv=None):
     ref.add_argument('--log')
     ref.add_argument('--grid', type=float, metavar='BPM')
     ref.add_argument('--against', metavar='WAV2')
+    ref.add_argument('--ticks', metavar='FILE')
+    ap.add_argument('--bpm', type=float, help='the tempo of --ticks')
     ap.add_argument('--voice', type=int, default=0, choices=range(6))
     ap.add_argument('--from', dest='start', type=float, default=0.0, metavar='S')
     ap.add_argument('--to', dest='end', type=float, default=None, metavar='S')
@@ -119,6 +126,8 @@ def main(argv=None):
         f0 = a.start * float(RATE)
         f1 = a.end * float(RATE) if a.end is not None else float('inf')
         keep = lambda f: f0 <= f < f1
+        if a.bpm is not None and a.ticks is None:
+            raise Usage('--bpm is for --ticks')
         on = [f for f in onsets(channel(a.wav, a.channel)) if keep(f)]
         if not on:
             raise Usage('%s: no onset in %s' % (a.wav, a.channel))
@@ -138,6 +147,18 @@ def main(argv=None):
             fpt = float(RATE) * 60.0 / (a.grid * 384.0)
             base = on[0]
             res = [o - base - round((o - base) / fpt) * fpt for o in on]
+        elif a.ticks is not None:
+            if a.bpm is None:
+                raise Usage('--ticks needs --bpm')
+            with open(a.ticks) as f:
+                try:
+                    ticks = [float(x) for x in f.read().split()]
+                except ValueError as e:
+                    raise Usage('%s: %s' % (a.ticks, e))
+            if len(ticks) != len(on):
+                raise Usage('%d onsets in %s, %d ticks in %s' % (len(on), a.wav, len(ticks), a.ticks))
+            fpt = float(RATE) * 60.0 / (a.bpm * 384.0)
+            res = [o - on[0] - (k - ticks[0]) * fpt for o, k in zip(on, ticks)]
         else:
             other = [f for f in onsets(channel(a.against, a.channel)) if keep(f)]
             if len(other) != len(on):

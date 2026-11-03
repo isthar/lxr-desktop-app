@@ -1,0 +1,194 @@
+# The groove fixture (plan v0.6 Task 8, spec v0.6 10.2): the onset card's click on Drum 1 alone
+# on out 1 (pan left) and on Drum 2 on out 2 (pan left), every other voice on out 2. Kit 0.
+# Pattern 0: Drum 1 on all 16 steps with mic values over both nibble signs and the split edges
+# (+-5, +-6, +-7, +-78, +-79, +-84), a x2 ratchet with a fine part (step 7), and a shf edit that
+# keeps a fine part (step 14: mic +17, then shf +3: +41); Drum 2 at x3/4 on steps 1, 5, 9 and 13
+# with fine parts (+5, -6, +17, -19). Pattern 1: Drum 1 16ths with lyb at 100 %, Drum 2 16ths
+# with lay at 150 % and dly +3 ms (the shuffle is set by G21_template's script, plan V6-15).
+# Pattern 2: Drum 1 on steps 2, 3, 5, 6, 9, 10: crossings (step 2 at +84 after step 3 at -20;
+# step 9's x4 at +40 after step 10 at -40) and a flam that stays (step 5 at +84, step 6).
+# Pattern 3: empty, for recording. Patterns 1 and 2 are reached through the pattern page
+# (SHIFT + step 16, then the step) and left with mode1 (plan V6-14); a pattern change restores
+# the backup buffer, so each pattern is saved before it is left, and autoloads kit 0.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --no-start --seconds 24
+#keep PROJ00/PRJ.NFO PROJ00/GLO.CFG PROJ00/00-*.PAT PROJ00/01-*.PAT PROJ00/02-*.PAT PROJ00/03-*.PAT PROJ00/00-*.SND
+# the click (the onset card's) on Drum 1 and Drum 2, both hard left; voices 2-6 on out 2
+0ms param osc_wave_drum1=0
++100ms param veloa1=0
++100ms param velod1=0
++100ms param trans1_wave=2
++100ms param trans1_vol=127
++100ms param filter_type_1=7
++100ms param vol1=127
++100ms param pan1=0
++100ms param osc_wave_drum2=0
++100ms param veloa2=0
++100ms param velod2=0
++100ms param trans2_wave=2
++100ms param trans2_vol=127
++100ms param filter_type_2=7
++100ms param vol2=127
++100ms param pan2=0
++100ms param audio_out2=1
++100ms param audio_out3=1
++100ms param audio_out4=1
++100ms param audio_out5=1
++100ms param audio_out6=1
++200ms save-kit 0
++100ms mark pattern0
+# pattern 0, Drum 1: all 16 steps (the audio_out edits moved the active track, so voice 1 again)
++100ms press voice1
++100ms press step1
++100ms press step2
++100ms press step3
++100ms press step4
++100ms press step5
++100ms press step6
++100ms press step7
++100ms press step8
++100ms press step9
++100ms press step10
++100ms press step11
++100ms press step12
++100ms press step13
++100ms press step14
++100ms press step15
++100ms press step16
+# mic = T + 84 on steps 1-13 (active_step counts from 0); step 7 a x2 ratchet
++100ms param active_step=0
++100ms param step_micro=168
++100ms param active_step=1
++100ms param step_micro=163
++100ms param active_step=2
++100ms param step_micro=162
++100ms param active_step=3
++100ms param step_micro=91
++100ms param active_step=4
++100ms param step_micro=90
++100ms param active_step=5
++100ms param step_micro=89
++100ms param active_step=6
++100ms param step_flam=1
++100ms param step_micro=87
++100ms param active_step=7
++100ms param step_micro=79
++100ms param active_step=8
++100ms param step_micro=78
++100ms param active_step=9
++100ms param step_micro=77
++100ms param active_step=10
++100ms param step_micro=6
++100ms param active_step=11
++100ms param step_micro=5
++100ms param active_step=12
++100ms param step_micro=0
+# step 14: mic +17 (shift +1, fine +5), then shf +3: T = 36 + 5 = +41
++100ms param active_step=13
++100ms param step_micro=101
++100ms param step_shift=10
+# Drum 2 at x3/4 on steps 1, 5, 9 and 13: mic +5, -6, +17, -19
++100ms press voice2
++100ms press step1
++100ms press step5
++100ms press step9
++100ms press step13
++100ms param track_tempo=4
++100ms param active_step=0
++100ms param step_micro=89
++100ms param active_step=4
++100ms param step_micro=78
++100ms param active_step=8
++100ms param step_micro=101
++100ms param active_step=12
++100ms param step_micro=65
++200ms save-pattern 0
+# pattern 1 on the pattern page: SHIFT + step 16, then step 2; mode1 back to the voice page
++500ms down shift
++20ms press step16
++80ms up shift
++100ms press step2
++200ms press mode1
++200ms mark pattern1
+# pattern 1: Drum 1 16ths with lyb (3) at 100 %; Drum 2 16ths with lay (2) at 150 %, dly +3 ms
++100ms press voice1
++100ms press step1
++100ms press step2
++100ms press step3
++100ms press step4
++100ms press step5
++100ms press step6
++100ms press step7
++100ms press step8
++100ms press step9
++100ms press step10
++100ms press step11
++100ms press step12
++100ms press step13
++100ms press step14
++100ms press step15
++100ms press step16
++100ms param track_tpl=3
++100ms param track_tpl_amt=100
++100ms press voice2
++100ms press step1
++100ms press step2
++100ms press step3
++100ms press step4
++100ms press step5
++100ms press step6
++100ms press step7
++100ms press step8
++100ms press step9
++100ms press step10
++100ms press step11
++100ms press step12
++100ms press step13
++100ms press step14
++100ms press step15
++100ms press step16
++100ms param track_tpl=2
++100ms param track_tpl_amt=150
++100ms param track_delay=18
++200ms save-pattern 1
+# pattern 2 on the pattern page: SHIFT + step 16, then step 3; mode1 back to the voice page
++500ms down shift
++20ms press step16
++80ms up shift
++100ms press step3
++200ms press mode1
++200ms mark pattern2
+# pattern 2: Drum 1 on steps 2, 3, 5, 6, 9 and 10; mic +84, -20, +84, (0), x4 +40, -40
++100ms press voice1
++100ms press step2
++100ms press step3
++100ms press step5
++100ms press step6
++100ms press step9
++100ms press step10
++100ms param active_step=1
++100ms param step_micro=168
++100ms param active_step=2
++100ms param step_micro=64
++100ms param active_step=4
++100ms param step_micro=168
++100ms param active_step=8
++100ms param step_flam=3
++100ms param step_micro=124
++100ms param active_step=9
++100ms param step_micro=44
++200ms save-pattern 2
+# pattern 0 again on the pattern page: SHIFT + step 16, then step 1; mode1 back to the voice page
++500ms down shift
++20ms press step16
++80ms up shift
++100ms press step1
++200ms press mode1
++500ms save-project 0
++100ms mark saved

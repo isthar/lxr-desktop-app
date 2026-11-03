@@ -1447,6 +1447,34 @@ def V05_onsets_tool(t):
         check((code == 0) == ok, '%r: exit %d\n%s' % (args, code, out))
     check(onsets(t, off, '--against', wav)[1] == 63.0, 'the spread against the shifted render')
 
+@case
+def V06_onsets_ticks(t):
+    # tools/emu_onsets.py --ticks on made-up renders (plan v0.6 Task 8, V6-20): the clicks at
+    # their ticks at 142 BPM pass, one click 10 frames late fails, a ticks file one line short and
+    # --ticks without --bpm are usage errors
+    ticks = [0, 37, 96, 180, 271, 366, 391, 486]
+    fpt = 353125 / 8 * 60 / (142 * 384)
+    frames = [1000 + round(k * fpt) for k in ticks]
+    wav, late, tf, short = t.path('a.wav'), t.path('b.wav'), t.path('t.txt'), t.path('s.txt')
+    click_wav(wav, frames, 30000)
+    click_wav(late, frames[:5] + [frames[5] + 10] + frames[6:], 30000)
+    with open(tf, 'w') as f:
+        f.write(''.join('%d\n' % k for k in ticks))
+    with open(short, 'w') as f:
+        f.write(''.join('%d\n' % k for k in ticks[:-1]))
+    for args, want in (([wav, '--ticks', tf, '--bpm', 142, '--limit', 1], 0),
+                       ([late, '--ticks', tf, '--bpm', 142, '--limit', 2], 1),
+                       ([wav, '--ticks', short, '--bpm', 142], 2), ([wav, '--ticks', tf], 2)):
+        code, spread, out = onsets(t, *args)
+        check(code == want, '%r: exit %d, not %d\n%s' % (args, code, want, out))
+    code, spread, out = onsets(t, late, '--ticks', tf, '--bpm', 142)
+    check(spread is not None and 9.5 <= spread <= 10.5, 'the late click: %s' % out)
+    # the base of the ticks does not matter
+    with open(tf, 'w') as f:
+        f.write(''.join('%d\n' % (k + 1000) for k in ticks))
+    code, spread, out = onsets(t, wav, '--ticks', tf, '--bpm', 142, '--limit', 1)
+    check(code == 0, 'the ticks from 1000: %s' % out)
+
 def golden(t, gid):
     """the card, the #! options and the path of a golden, to render it with more options"""
     path = os.path.join(t.root, 'emu', 'tests', 'goldens', gid + '.txt')
@@ -1634,6 +1662,188 @@ def V05_plocks(t):
     print('step 2 p-locking the volume to 0: the render first differs from that without p-locks at frame %d, its '
           'split %d (k %d) + %d; then quiet (peak %d against %d)' % (first, S, k, first - S, peak(vch[0]), peak(nch[0])))
     no_copies_left()
+
+# --- v0.6: the groove card (plan v0.6 Task 8, spec v0.6 10.2) -------------------------
+# A model of the card's script and of spec v0.6 4.1, outside the firmware: the expected ticks
+# of the goldens G20-G22 come from the script's values through it.
+
+# spec v0.6 4.2: the offsets of templates 1..7 in ticks at 100 %, positions 1-16 of the bar
+GROOVE_TEMPLATES = {
+    1: (0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16),    # swg
+    2: (0, 18, 0, 5, 0, 18, 0, 5, 0, 18, 0, 5, 0, 18, 0, 5),        # lay
+    3: (0, 15, 0, 11, 0, 24, 0, 5, 0, 17, 0, 1, 0, 16, 0, 3),       # lyb
+    4: (0, 15, 1, 3, 0, 16, 2, 22, 0, 14, 2, 16, 0, 9, 2, 18),      # rlx
+    5: (0, 7, 3, 8, 0, 1, 2, 1, 0, 7, 3, 8, 0, 1, 2, 1),            # 2bt
+    6: (0, 0, -4, 0, 0, 0, -4, 0, 0, 0, -4, 0, 0, 0, -4, 0),        # psh
+    7: (0, 0, 6, 0, 0, 0, 6, 0, 0, 0, 6, 0, 0, 0, 6, 0),            # drg
+}
+TEMPO_STEPS = (384, 288, 192, 144, 128, 96, 72, 64, 48, 32, 24)    # ticks of a track step, track_tempo 0..10
+FLAM_HITS = (1, 2, 3, 4, 6, 8)
+
+def rha(x):
+    """x (a Fraction) rounded half away from zero"""
+    x = fractions.Fraction(x)
+    return math.floor(x + fractions.Fraction(1, 2)) if x >= 0 else -math.floor(-x + fractions.Fraction(1, 2))
+
+def micro_split(T):
+    """(coarse, fine) of T: coarse = floor((T + 6) / 12), fine = T - 12 coarse (spec v0.6 M3)"""
+    c = (T + 6) // 12
+    return c, T - 12 * c
+
+def groove_card(path):
+    """the card script's edits as the menu takes them: {(pattern, voice): track} with the track's
+    steps {step: (T, flam)} that are on, L, tpl, amt (%) and delay (ms). press voiceN selects the
+    voice; press stepN toggles a step on the voice page; SHIFT + step 16 opens the pattern page,
+    whose stepN selects pattern N - 1, and mode1 closes it; mark patternN must agree"""
+    tracks = {}
+    pattern, voice, step, page, shift = 0, 0, 0, 'voice', False
+    T, flam = {}, {}
+    def tr():
+        return tracks.setdefault((pattern, voice), {'on': set(), 'L': 96, 'tpl': 0, 'amt': 100, 'delay': 0})
+    with open(path) as f:
+        for line in f:
+            w = line.split('#', 1)[0].split()
+            if len(w) < 3:
+                continue
+            what, arg = w[1], w[2]
+            if what in ('down', 'up') and arg == 'shift':
+                shift = what == 'down'
+            elif what == 'press' and arg.startswith('voice'):
+                voice = int(arg[5:]) - 1
+            elif what == 'press' and arg == 'mode1':
+                page = 'voice'
+            elif what == 'press' and arg.startswith('step'):
+                n = int(arg[4:])
+                if shift and n == 16:
+                    page = 'pattern'
+                elif page == 'pattern':
+                    pattern = n - 1
+                else:
+                    tr()['on'] ^= {n - 1}
+            elif what == 'mark' and arg.startswith('pattern'):
+                check(int(arg[7:]) == pattern, 'groove.txt: %s at pattern %d' % (arg, pattern))
+            elif what == 'param':
+                name, v = arg.split('=')
+                v = int(v)
+                key = (pattern, voice, step)
+                if name == 'active_step':
+                    step = v
+                elif name == 'step_micro':
+                    T[key] = max(-84, min(84, v - 84))
+                elif name == 'step_shift':
+                    fine = micro_split(T.get(key, 0))[1]
+                    T[key] = max(-84, min(84, 12 * ((v - 7) if v <= 14 else 0) + fine))
+                elif name == 'step_flam':
+                    flam[key] = v
+                elif name == 'track_tempo':
+                    tr()['L'] = TEMPO_STEPS[v]
+                elif name == 'track_tpl':
+                    tr()['tpl'] = v
+                elif name == 'track_tpl_amt':
+                    tr()['amt'] = v
+                elif name == 'track_delay':
+                    tr()['delay'] = v - 15
+    for (p, v), x in tracks.items():
+        x['steps'] = {s: (T.get((p, v, s), 0), flam.get((p, v, s), 0)) for s in sorted(x['on'])}
+    return tracks
+
+def groove_events(card, pattern, voice, master_steps, bpm, shuffle=0):
+    """(tick, occurrence) of each hit of a voice in a pattern over master_steps 16ths, by spec
+    v0.6 4.1 (a 16-step track: q = n mod 16), with v0.2's swing on odd occurrences and the
+    ratchets; a hit at or after the next occurrence's first hit is dropped (M9). Returns the hits
+    kept and the count dropped"""
+    x = card.get((pattern, voice))
+    if x is None:
+        return [], 0
+    L = x['L']
+    reach = L - L // 8
+    swing = (shuffle * 64 * L + 127 * 96 // 2) // (127 * 96)
+    delay = min(rha(fractions.Fraction(x['delay']) * fractions.Fraction(bpm) * 384 / 60000), L)
+    occ = []
+    n = 0
+    while n * L < master_steps * 96:
+        s = n % 16
+        if s in x['steps']:
+            T, flam = x['steps'][s]
+            c, fine = micro_split(T)
+            C = c * L // 8
+            F = rha(fractions.Fraction(fine * L, 96))
+            G = rha(fractions.Fraction(GROOVE_TEMPLATES[x['tpl']][n % 16] * x['amt'] * L, 9600)) if x['tpl'] else 0
+            P = C if F == 0 and G == 0 else max(-reach, min(reach, C + F + G))
+            off = max((swing if n % 2 else 0) + P + delay, -reach)
+            k = FLAM_HITS[flam] if flam < 6 else 1
+            occ.append([n * L + off + (j * L) // k for j in range(k)])
+        n += 1
+    kept, dropped = [], 0
+    for i, hits in enumerate(occ):
+        nxt = occ[i + 1][0] if i + 1 < len(occ) else None
+        for h in hits:
+            if nxt is not None and h >= nxt:
+                dropped += 1
+            elif h >= 0:
+                kept.append(h)
+    return sorted(kept), dropped
+
+def groove_ticks(card, pattern, voice, master_steps, bpm, shuffle=0):
+    return groove_events(card, pattern, voice, master_steps, bpm, shuffle)[0]
+
+def pat_tracks(pat):
+    """(on steps, T and flam of each of 64 steps, template, groove) of each track of a pattern
+    file: 14 bytes of name and tag, 7 x (64 Steps of 7 bytes, 64 StepTiming bytes), the main
+    steps, shuffle, lengths, kit, block 1 (LCHM 1 7, 7 x 4), block 2 (LCHM 2 7, 7 x 2, 7 x 32)"""
+    b2 = pat[3697:]
+    out = []
+    for tr in range(7):
+        main = int.from_bytes(pat[3598 + 8 * tr:3606 + 8 * tr], 'little')
+        steps = []
+        for s in range(64):
+            tb = pat[14 + 512 * tr + 448 + s]
+            flam, sh = tb & 15, tb >> 4
+            fine = 0
+            if b2:
+                nib = (b2[20 + 32 * tr + (s >> 1)] >> ((s & 1) * 4)) & 15
+                fine = nib - 16 if nib & 8 else nib
+                fine = fine if -6 <= fine <= 5 else 0
+            steps.append((12 * (sh - 7 if sh <= 14 else 0) + fine, flam))
+        tpl = (b2[6 + 2 * tr], struct.unpack('b', b2[7 + 2 * tr:8 + 2 * tr])[0] + 100) if b2 else (0, 100)
+        groove = struct.unpack('4b', pat[3669 + 4 * tr:3673 + 4 * tr])
+        out.append({'on': {s for s in range(64) if main >> s & 1}, 'steps': steps, 'tpl': tpl, 'groove': groove})
+    return out
+
+def groove_script():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cards', 'scripts', 'groove.txt')
+
+@case
+def V06_card(t):
+    # the groove card's pattern files (V6-17): the UI path of spec v0.6 6 into the pattern data.
+    # Patterns 0-2 hold block 2 (LCHM 2 7) with each track's template and every step's T (the
+    # shift nibble and the fine nibble) as the model reads the script; pattern 3 is v0.5's file
+    card = groove_card(groove_script())
+    root = os.path.join(t.root, 'emu', 'tests', 'cards', 'groove')
+    for p in range(3):
+        pat = one_file(root, '%02d-*.PAT' % p)
+        check(len(pat) == 3941 and pat[3697:3703] == b'LCHM\x02\x07', 'pattern %d: %d bytes, block 2 %r'
+              % (p, len(pat), pat[3697:3703]))
+        for v, got in enumerate(pat_tracks(pat)):
+            x = card.get((p, v), {'on': set(), 'L': 96, 'tpl': 0, 'amt': 100, 'delay': 0, 'steps': {}})
+            want = [x['steps'].get(s, (0, 0)) for s in range(16)]
+            check(got['on'] == set(x['steps']), 'pattern %d voice %d: steps %r, not %r'
+                  % (p, v + 1, sorted(got['on']), sorted(x['steps'])))
+            check(got['steps'][:16] == want and all(x == (0, 0) for x in got['steps'][16:]), 'pattern %d voice %d: T, flam %r, not %r'
+                  % (p, v + 1, got['steps'][:16], want))
+            check(got['tpl'] == (x['tpl'], x['amt']), 'pattern %d voice %d: template %r, not %r'
+                  % (p, v + 1, got['tpl'], (x['tpl'], x['amt'])))
+            check(got['groove'][0] == TEMPO_STEPS.index(x['L']) - 5 and got['groove'][3] == x['delay'],
+                  'pattern %d voice %d: groove %r, not L %d, delay %d' % (p, v + 1, got['groove'], x['L'], x['delay']))
+        print('pattern %d: %s' % (p, '; '.join('voice %d: %d steps, T %s, tpl %r' % (
+            v + 1, len(x['steps']), [x['steps'][s][0] for s in sorted(x['steps'])], (x['tpl'], x['amt']))
+            for (q, v), x in sorted(card.items()) if q == p)))
+    pat = one_file(root, '03-*.PAT')
+    check(len(pat) == 3697 and not any(pat_tracks(pat)[0]['on']), 'pattern 3: %d bytes' % len(pat))
+    # the model's crossings in pattern 2 (G21_crossing): step 2 dropped by step 3, step 9's last three
+    # hits by step 10, per bar
+    _, dropped = groove_events(card, 2, 0, 32, 120)
+    check(dropped == 8, 'pattern 2 over 2 bars: the model drops %d hits, not 8' % dropped)
 
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
