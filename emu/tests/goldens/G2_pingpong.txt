@@ -1,4 +1,6 @@
-# G2_pingpong: the fx card through the delay, type Pp (ping-pong), at 120 BPM, 2 bars (spec 8.6)
+# G2_pingpong: the fx card through the delay, type Pp (ping-pong), at 120 BPM, 2 bars (spec 8.6).
+# The sends are centred: since E7.8 echo 1 of the first hit (0.14-0.22 s) moves to R1; fw 1.7
+# split it evenly (R1 -17.74 dBFS there, now -14.77 with L1 at -22.01)
 #
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
@@ -9,6 +11,7 @@
 #! --card fx --bpm 120 --bars 2 --param fx_type=4 --param fx_delay_type=1
 #expect lcd fx del St1  64 Pp
 #expect energy L1 -35
+#expect energy R1 -16 0.14s..0.22s
 #broken --param fx_type=0
 # SHIFT + step 15 opens the FX page
 0ms down shift

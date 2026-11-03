@@ -587,6 +587,7 @@ const char catNames[][16] =
 };
 //-----------------------------------------------------------------
 // these must correspond to longNamesEnum
+// LICHOMAT v0.6: at most 8 characters, the columns that edit mode leaves after the category (E4.10)
 const char longNames[][16] =
 {
 	{""},
@@ -679,10 +680,10 @@ const char longNames[][16] =
 	{"Flam"},
 	{"Shift"},
 	{"TrkTempo"}, {"HumTime"}, {"HumVol"}, {"TrkDelay"},	// LICHOMAT v0.2
-	{"Slide time"}, {"Slide"}, {"Scene change"},	// LICHOMAT v0.3
-	{"rev level"}, {"rev size"}, {"rev modul"}, {"rev freeze"}, {"delay sync"},	// LICHOMAT v0.4
-	{"duck src"}, {"duck depth"}, {"DJ filter"}, {"DJ reso"},
-	{"Trig timing"},	// LICHOMAT v0.5
+	{"Slide tm"}, {"Slide"}, {"SceneChg"},	// LICHOMAT v0.3
+	{"rev lvl"}, {"rev size"}, {"rev mod"}, {"rev frz"}, {"dly sync"},	// LICHOMAT v0.4
+	{"duck src"}, {"duck dpt"}, {"DJ filtr"}, {"DJ reso"},
+	{"Trig tmg"},	// LICHOMAT v0.5
 	{"Micro"}, {"Template"}, {"Tpl amt"}, {"RecQuant"},	// LICHOMAT v0.6
 };
 

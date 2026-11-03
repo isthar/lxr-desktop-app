@@ -130,9 +130,6 @@ if(LICHOMAT_EMU_SANITIZE MATCHES "undefined")
     # arm64 gives x % 0 the device's result, x (EuklidGenerator.c:235-236, spec 8.1, 9.2)
     set_source_files_properties("${EMU_SRC}/Soundengine/Sequencer/EuklidGenerator.c" PROPERTIES
         COMPILE_OPTIONS -fno-sanitize=integer-divide-by-zero)
-    # B13, B14: see sanitize/pwm_ignorelist.txt
-    set_source_files_properties("${EMU_SRC}/Soundengine/DSPAudio/Oscillator.c" PROPERTIES
-        COMPILE_OPTIONS "-fsanitize-ignorelist=${EMU_DIR}/sanitize/pwm_ignorelist.txt")
 endif()
 
 # --- the vendored libm (spec 8.1): Arm Optimized Routines v23.01 under MIT ---------------
@@ -334,6 +331,10 @@ emu_render_tests(V04_kit_file V04_kit_fw17)
 emu_render_tests(V05_trig_setting V05_onsets_tool V05_onsets V05_midi_in V05_slave_onsets V05_save_onsets
     V05_plocks)
 emu_render_tests(V06_rec_setting V06_ui V06_onsets_ticks V06_card V06_micro V06_template V06_record)
+# fw 1.7 fixes: the long names in edit mode (tracker E4.10)
+emu_render_tests(E410_long_names)
+# fw 1.7 fixes: the ping-pong delay of a centred send (tracker E7.8)
+emu_render_tests(E78_pingpong)
 # M23: emu/tests/cards/make.sh gives the committed card fixtures (spec 5.6)
 emu_render_tests(M23)
 

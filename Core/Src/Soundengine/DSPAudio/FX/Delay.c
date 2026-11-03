@@ -169,15 +169,25 @@ void Delay_processPingPong(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* o
 			outR = calcOnePole(&d->tone2, outR);
 
 			//-------------
+			//LICHOMAT E7.8: on a stereo destination the send's L+R sum, scaled by 1/sqrt(2), goes into
+			//the left line only, and the right line takes only the feedback. fw 1.7 fed L into the left
+			//line and R into the right one: a centred send (L = R) filled both lines alike, every echo
+			//came out equal on both sides and there was no ping-pong. Now the echoes alternate R, L, R, ...
+			//(the left line is read out on the right) whatever the pan. The 1/sqrt(2) (23170 in Q15) keeps
+			//a centred send's echoes at fw 1.7's energy, now on one side at a time, and a full-scale
+			//centred send saturates less; a hard-panned send's echoes are 3 dB quieter than in fw 1.7.
+			//The dry/wet mix below keeps the send's own image. A mono destination plays only outL, so it
+			//keeps fw 1.7's lines (every echo of a centred send); channels is the same for the whole block.
 			//left delay line
-			int16_t itg = (__QADD16(fxBuffer[idx1] , (int16_t)(outL*d->feedback)));
+			const int16_t inL = (channels == 2) ? (int16_t)__SSAT((((int32_t)fxBuffer[idx1] + fxBuffer[idx2]) * 23170) >> 15, 16) : fxBuffer[idx1];
+			int16_t itg = (__QADD16(inL , (int16_t)(outL*d->feedback)));
 			float val = itg/32767.f;
 			if(val > 1.f) val = 1.f;
 			else if(val < -1.f) val = -1.f;
 			FX_BUFFER[(FX_BUFFER_SIZE>>1) + d->write] = (__fp16)val;//(itg/32767.f);
 
-			//right delay line
-			itg = (__QADD16(fxBuffer[idx2] , (int16_t)(outR*d->feedback)));
+			//right delay line: on a stereo destination the feedback only (E7.8)
+			itg = (channels == 2) ? (int16_t)(outR*d->feedback) : (int16_t)(__QADD16(fxBuffer[idx2] , (int16_t)(outR*d->feedback)));
 			val = itg/32767.f;
 			if(val > 1.f) val = 1.f;
 			else if(val < -1.f) val = -1.f;

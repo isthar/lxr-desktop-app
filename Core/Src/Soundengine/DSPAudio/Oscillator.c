@@ -206,13 +206,14 @@ void calcPwmFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size
 		//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 		//oscOut += frac*(sawTable[osc->tableOffset][itg] - oscOut);
 		uint32_t frac = index & 0x3FFFFF;
-		oscOut = oscOut + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg] - oscOut) * frac)   >>22);
+		//LICHOMAT v0.6: each saw's sample 1023 interpolates towards the row's own sample 0, not sawTable[row][1024] (E4.11, B14)
+		oscOut = oscOut + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg & 1023] - oscOut) * frac)   >>22);
 
 		int16_t osc2Out = sawTable[osc->tableOffset][itg2++];// * -1;
 		//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 		frac = index2 & 0x3FFFFF;
 		//osc2Out += frac*(sawTable[osc->tableOffset][itg2] * -1 - osc2Out);
-		osc2Out = osc2Out + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg2] - osc2Out) * frac)   >>22);
+		osc2Out = osc2Out + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg2 & 1023] - osc2Out) * frac)   >>22);
 
 		oscOut =  __QSUB16(oscOut,osc2Out);
 
@@ -686,13 +687,14 @@ IN_ITCM_RAM void calcPwmBlock(OscInfo* osc, int16_t* buf, uint8_t size ,const fl
 			//const float frac = (itg&0x003FFFFF)*2.38418579101562e-07f;
 			//oscOut += frac*(sawTable[osc->tableOffset][itg] - oscOut);
 			uint32_t frac = oscPhase & 0x3FFFFF;
-			oscOut = oscOut + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg] - oscOut) * frac)   >>22);
+			//LICHOMAT v0.6: each saw's sample 1023 interpolates towards the row's own sample 0, not sawTable[row][1024] (E4.11, B14)
+			oscOut = oscOut + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg & 1023] - oscOut) * frac)   >>22);
 
 			int16_t osc2Out = sawTable[osc->tableOffset][itg2++] ;//* -1;
 			//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 			//osc2Out += frac*(sawTable[osc->tableOffset][itg2] * -1 - osc2Out);
 			frac = oscPhase2 & 0x3FFFFF;
-			osc2Out = osc2Out + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg2++] - osc2Out) * frac)   >>22);
+			osc2Out = osc2Out + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg2 & 1023] - osc2Out) * frac)   >>22);
 
 			oscOut =  __QSUB16(oscOut,osc2Out);
 
