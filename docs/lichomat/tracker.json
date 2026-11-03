@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-03 17:42",
+    "updated": "2026-11-03 17:59",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 w wykonaniu: E6.20 (nagrywanie), potem E6.21–E6.23",
     "branch": "timing-core",
-    "head": "0e4559c",
+    "head": "94d33e9",
     "next": "E6.20 i jego pełny przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
-    "updated_at": "2026-11-03T17:42:00+01:00",
+    "updated_at": "2026-11-03T17:59:00+01:00",
     "now": "E6.21–E6.22 (v0.6 zad. 8–9): wykonawca grupy D"
   },
   "epics": [
@@ -3630,6 +3630,11 @@
       "n": 519,
       "at": "2026-11-03 17:42",
       "text": "E6.20, poprawki z pełnego przeglądu, 0e4559c: testy (ARMED, zawinięcie pętli, slave, rqn 2), strażnik „tylko w seq_tick()”, blokada przy edycji bajtów timingu z menu (także flam), przesunięcie zapisane w zakresie, który da się zagrać, komentarze. Host 125/125, emulator 331/331 i 303/303, 32 nagrania wzorcowe bez zmian; każda poprawka z mutacją, która pada. Grupa C skończona. Nowy wiersz E4.10: stary błąd fw 1.7 znaleziony przy okazji (długie nazwy piszą poza bufor LCD w trybie edycji). E6.21 (v0.6 zad. 8) w toku: wykonawca grupy D robi E6.21–E6.22 (nagrania wzorcowe G20–G22, fuzzing, dema)."
+    },
+    {
+      "n": 520,
+      "at": "2026-11-03 17:59",
+      "text": "E6.21 (v0.6 zad. 8), część 1, 94d33e9: pomiar onsetów w tickach (emu_onsets.py --ticks, liczony poza firmware'em), karta groove z wzorami do testów, testy V06_onsets_ticks i V06_card. Host 125/125, emulator 333/333 i 305/305, 32 nagrania wzorcowe bez zmian, firmware bez zmian. Dalej nagrania wzorcowe G20–G22."
     }
   ]
 }
