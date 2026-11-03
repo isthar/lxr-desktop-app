@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 19:24",
+    "updated": "2026-11-03 19:26",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 gotowe w kodzie (M18); utwór pokazowy do odsłuchu",
     "branch": "timing-core",
-    "head": "e5ffe62",
+    "head": "c2e5f73",
     "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T19:24:00+01:00",
-    "now": "E7.7: badanie offsetu DC pogłosu; E4.11 (B13): pary A/B do odsłuchu PWM"
+    "updated_at": "2026-11-03T19:26:00+01:00",
+    "now": "E8.7: obrazy i sesja testowa; E6.25: drugi utwór pokazowy"
   },
   "epics": [
     {
@@ -650,6 +650,13 @@
       "updated": "2026-11-03"
     },
     {
+      "id": "E6.25",
+      "epic": "E6",
+      "status": "w toku",
+      "title": "Drugi utwór pokazowy: prosta, przesterowana strona stylu (kit PROSTO albo PRZESTER), z polirytmią ×3/4, slide'em i szablonem psh lub drg (gałąź showcase)",
+      "updated": "2026-11-03"
+    },
+    {
       "id": "E7.1",
       "epic": "E7",
       "status": "zablokowane",
@@ -739,6 +746,13 @@
       "status": "do zrobienia",
       "title": "Ty: v0.6 na LXR (U33–U37) i wydanie, po kodzie v0.6 (E6.14–E6.23) i po wydaniu v0.5 (E8.3)",
       "updated": "2026-11-02"
+    },
+    {
+      "id": "E8.7",
+      "epic": "E8",
+      "status": "w toku",
+      "title": "Obrazy do testów (0.3 do H12, 0.6 do reszty) z SHA-256 w build/images/ i jedna sesja testowa na wieczór (docs/lichomat/test-session-v0.6.md)",
+      "updated": "2026-11-03"
     }
   ],
   "milestones": [
@@ -3736,6 +3750,11 @@
       "n": 532,
       "at": "2026-11-03 19:24",
       "text": "E7.7: przyczyna offsetu DC pogłosu znaleziona. Filtr wejściowy przy tonie 64 to górnoprzepustowy 0,01 Hz, który trzyma średnią sygnału i po zatrzymaniu wejścia wpuszcza do pętli jej skok; pętla go wzmacnia. Typowo +35 LSB, a przy freeze rośnie do +1 123 LSB po 60 s (−29 dBFS stałej składowej). Poprawka: górnoprzepustowy 5 Hz przy każdym tonie, 0,00 LSB po niej, zero CPU (decyzja Q32). Wchodzi do v0.4 razem ze zmianą częstotliwości po H12, bo zmienia te same nagrania wzorcowe G13–G15. Raport i łatka w build/reference/e77/."
+    },
+    {
+      "n": 533,
+      "at": "2026-11-03 19:26",
+      "text": "Dwa nowe wiersze w toku. E8.7: obrazy do testów (0.3 do H12, 0.6 z wszystkim) z sumami SHA-256 i jedna sesja testowa na wieczór, żeby testy na LXR, które teraz wszystko blokują, zajęły Ci jak najmniej czasu. E6.25: drugi utwór pokazowy, tym razem prosta, przesterowana strona stylu (PROSTO albo PRZESTER), z polirytmią ×3/4 i slide'em."
     }
   ]
 }
