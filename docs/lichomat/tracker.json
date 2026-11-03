@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 20:15",
+    "updated": "2026-11-03 20:16",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 gotowe w kodzie (M18); utwór pokazowy do odsłuchu",
     "branch": "timing-core",
-    "head": "e971801",
+    "head": "3c2714b",
     "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T20:15:00+01:00",
-    "now": "Ponowny render obu utworów pokazowych z v0.6 (e971801)"
+    "updated_at": "2026-11-03T20:16:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -3794,6 +3794,11 @@
       "n": 538,
       "at": "2026-11-03 20:15",
       "text": "E7.8 zrobione (v0.6, e971801): ping-pong przerzuca echa głosu ze środka panoramy na przemian R, L, R; pierwsze echo ma tę samą głośność co w fw 1.7 (−19,17 dB łącznie przed i po), głos skrajnie w lewo 3 dB ciszej. Test E78_pingpong pada na starym kodzie; zmieniło się tylko G2_pingpong (zapisane od nowa, z warunkiem energii echa), pozostałe 37 nagrań wzorcowych bit w bit. Koszt: 2 cykle na próbkę. Teraz przerenderowuję oba utwory pokazowe z poprawkami v0.6."
+    },
+    {
+      "n": 539,
+      "at": "2026-11-03 20:16",
+      "text": "Oba utwory pokazowe przerenderowane z v0.6 (e971801: ping-pong, krótkie nazwy, tablica PWM) po scaleniu v0.6 do gałęzi showcase (4a8ba89, wypchnięte). Szczyty bez zmian (−3,4 i −4,8 dBFS), bez przesterowania. Strona odsłuchu zaktualizowana."
     }
   ]
 }
