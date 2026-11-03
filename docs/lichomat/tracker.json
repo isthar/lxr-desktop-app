@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 00:10",
+    "updated": "2026-11-04 00:16",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Noc: E7.9 (warianty 0.4 na wynik H12) i E4.12 (fuzzing)",
     "branch": "timing-core",
-    "head": "c9a7096",
+    "head": "7d1435e",
     "next": "E7.9: obrazy i README po H12, plan sesji; potem v0.5-half i v0.6-half (scalenie E7.7 dalej)",
-    "updated_at": "2026-11-04T00:10:00+01:00",
-    "now": "E7.9: bramki lean i pełna; potem obrazy do build/images/po-H12; E4.12: fuzzing sekwencera w tle"
+    "updated_at": "2026-11-04T00:16:00+01:00",
+    "now": "E7.9: bramki v0.5-half (scalenie E7.7 do v0.5, cztery nagrania pogłosu od nowa); potem v0.6-half; E4.12: fuzzing sekwencera w tle"
   },
   "epics": [
     {
@@ -3860,6 +3860,16 @@
       "n": 547,
       "at": "2026-11-04 00:10",
       "text": "E7.9: wariant lean nigdy wcześniej nie był budowany na LXR i miał ostrzeżenie kompilatora (earlyTaps nieużywane), na którym check.sh pada. Poprawione (cb432aa, przeniesione też do połowy i pełnej; obraz połowy bez zmian, 67ca9833). Bramki lean od nowa."
+    },
+    {
+      "n": 548,
+      "at": "2026-11-04 00:16",
+      "text": "E7.9: obrazy po H12 gotowe w build/images/po-H12/: połowa (v0.4-half cfba932, 67ca9833…) i lean (v0.4-lean 7bb00da, e44de0b6…), oba z E7.7; pełna tylko na próbę (559a6b1, 4f8519cc…). Lean po poprawce cały zielony (bramki jak przy połowie, 0 ostrzeżeń). README obrazów (punkt 5) i plan sesji mówią, co wgrać przy jakim P; U20–U26 można zrobić od razu po H12."
+    },
+    {
+      "n": 549,
+      "at": "2026-11-04 00:16",
+      "text": "E8.7: obraz 0.6 w build/images/ odświeżony do e971801 (z poprawką ping-ponga E7.8): beefc513…, wcześniej 975abbd1… z 9f04341. SHA256SUMS ma teraz siedem plików."
     }
   ]
 }
