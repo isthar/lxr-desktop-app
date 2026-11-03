@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-02 22:57",
+    "updated": "2026-11-03 16:53",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Przerwa: v0.6 w połowie (E6.14–E6.19 zrobione)",
+    "focus": "v0.6 w wykonaniu: E6.20 (nagrywanie), potem E6.21–E6.23",
     "branch": "timing-core",
-    "head": "e270f44",
-    "next": "E6.20 (nagrywanie) i jego przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
-    "updated_at": "2026-11-02T22:57:00+01:00",
-    "now": ""
+    "head": "597eeb2",
+    "next": "E6.20 i jego pełny przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
+    "updated_at": "2026-11-03T16:53:00+01:00",
+    "now": "E6.20 (v0.6 zad. 7): wykonawca; lekki przegląd E6.19 równolegle"
   },
   "epics": [
     {
@@ -596,9 +596,9 @@
     {
       "id": "E6.20",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "v0.6 zad. 7: nagrywanie z mikrotimingiem (seqc_recordPlace), testy record_place i record_micro; pełny przegląd",
-      "updated": "2026-11-02"
+      "updated": "2026-11-03"
     },
     {
       "id": "E6.21",
@@ -3588,6 +3588,11 @@
       "n": 512,
       "at": "2026-11-02 22:57",
       "text": "Przerwa na noc. Stan: E6.14–E6.19 zrobione i wypchnięte (gałąź v0.6, e270f44), worktree build/wt-v06 czysty. Dalej: E6.20 (nagrywanie) z pełnym przeglądem, testy z przeglądu E6.17–E6.18 (zapisane w planie, „Changes during execution”), potem E6.21–E6.23. Notatki: HANDOFF.md (wiersz v0.6), plan, pamięć projektu. Usage nowego tygodnia ok. 0,9%."
+    },
+    {
+      "n": 513,
+      "at": "2026-11-03 16:53",
+      "text": "Wracamy (3.11). E6.20 (v0.6 zad. 7) w toku: wykonawca robi nagrywanie z mikrotimingiem, potem testy z przeglądu E6.17–E6.18 osobnym commitem; limit czasu ok. 45 min. Równolegle lekki przegląd E6.19 (interfejs), tylko odczyt. Usage tygodnia ok. 1%. CI na GitHubie dalej stoi (84 h w kolejce)."
     }
   ]
 }
