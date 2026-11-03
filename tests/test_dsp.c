@@ -28,6 +28,8 @@
  *   fw 1.7 read table[row][1024]: the next row's first sample, which is the same
  *   for the saw and triangle tables but not for the rect table, and past the
  *   table for row 10.
+ * - The PWM oscillator at the end of a period (tracker E4.11, sweep B14): its
+ *   two saws read sawTable[row][1024] in the same way.
  *
  * The firmware files are compiled as they are, against the stand-in headers in
  * tests/stubs/, at -O3 as on the device (tests/CMakeLists.txt). ResonantFilter.c
@@ -221,10 +223,7 @@ static void oscBlock(uint8_t waveform, int fm, int16_t fill, int16_t out[BLOCK])
 
 TEST(dsp_oscillator_output_does_not_depend_on_the_old_buffer)
 {
-	/* PWM is left out: its read past the saw table (out of scope, Q13) */
 	for (unsigned waveform = 0; waveform <= 255; waveform++) {
-		if (waveform == PWM)
-			continue;
 		for (int fm = 0; fm <= 1; fm++) {
 			int16_t a[BLOCK], b[BLOCK];
 			oscBlock((uint8_t)waveform, fm, 0x5A5A, a);
@@ -269,6 +268,51 @@ TEST(dsp_wavetable_period_end_reads_the_row_start)
 			int16_t mod[1] = { 0 };		/* no FM: the same phase */
 			calcFmBlock(&osc, tables[t], mod, out, 1, 1.f);
 			ASSERT_EQ(out[0], expected);
+		}
+	}
+}
+
+//------------------------------------------------------------------------------
+// The PWM oscillator at the end of a period (tracker E4.11, sanitizer sweep B14)
+//------------------------------------------------------------------------------
+/** QSUB16 on the low halfwords, as the PWM oscillator subtracts its two saws */
+static int16_t qsub16(int16_t a, int16_t b)
+{
+	const int32_t d = (int32_t)a - b;
+	return (int16_t)(d > 32767 ? 32767 : d < -32768 ? -32768 : d);
+}
+
+TEST(dsp_pwm_period_end_reads_the_row_start)
+{
+	/* The PWM oscillator subtracts two saws, the second pwm * 2^31 later in
+	 * phase. Each interpolates its sample 1023 towards the row's own sample 0.
+	 * fw 1.7 read sawTable[row][1024]: the next row's sample 0, which is the same
+	 * value for rows 0-9, and past the table for row 10 (B14). The second phase
+	 * saturates at 2^32 (B13, kept), so these phases stay below it. */
+	static const struct { uint32_t phase; float pwm; } cases[] = {
+		{ 0xFFE00000u, 1.f / 4096 },	/* both saws at sample 1023 */
+		{ 0xBFE00000u, 0.5f },		/* the first at sample 767, the second at 1023 */
+	};
+	for (unsigned c = 0; c < sizeof cases / sizeof cases[0]; c++) {
+		const uint32_t p1 = cases[c].phase, p2 = p1 + (uint32_t)(cases[c].pwm * 2147483648.f);
+		for (uint8_t row = 0; row < 11; row++) {
+			const int16_t *s = sawTable[row];
+			/* rows 0-9: fw 1.7's read gave the same value, so the sound is
+			 * unchanged below 14,080 Hz (row 10) */
+			if (row < 10)
+				ASSERT_EQ(sawTable[row + 1][0], s[0]);
+			const int16_t o1 = towards(s[p1 >> 22], s[((p1 >> 22) + 1) & 1023], p1 & 0x3FFFFF);
+			const int16_t o2 = towards(s[p2 >> 22], s[((p2 >> 22) + 1) & 1023], p2 & 0x3FFFFF);
+			OscInfo osc = oscillator(PWM);
+			osc.tableOffset = row;
+			osc.phase = p1;
+			osc.phaseInc = 0;
+			int16_t out[1] = { 0 };
+			calcNextOscSampleBlock(&osc, out, 1, 1.f, cases[c].pwm);
+			ASSERT_EQ(out[0], qsub16(o1, o2));
+			int16_t mod[1] = { 0 };		/* no FM: the same phase */
+			calcNextOscSampleFmBlock(&osc, mod, out, 1, 1.f, cases[c].pwm);
+			ASSERT_EQ(out[0], qsub16(o1, o2));
 		}
 	}
 }

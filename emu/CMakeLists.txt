@@ -130,9 +130,6 @@ if(LICHOMAT_EMU_SANITIZE MATCHES "undefined")
     # arm64 gives x % 0 the device's result, x (EuklidGenerator.c:235-236, spec 8.1, 9.2)
     set_source_files_properties("${EMU_SRC}/Soundengine/Sequencer/EuklidGenerator.c" PROPERTIES
         COMPILE_OPTIONS -fno-sanitize=integer-divide-by-zero)
-    # B13, B14: see sanitize/pwm_ignorelist.txt
-    set_source_files_properties("${EMU_SRC}/Soundengine/DSPAudio/Oscillator.c" PROPERTIES
-        COMPILE_OPTIONS "-fsanitize-ignorelist=${EMU_DIR}/sanitize/pwm_ignorelist.txt")
 endif()
 
 # --- the vendored libm (spec 8.1): Arm Optimized Routines v23.01 under MIT ---------------
