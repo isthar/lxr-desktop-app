@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 17:59",
+    "updated": "2026-11-03 18:05",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 w wykonaniu: E6.20 (nagrywanie), potem E6.21–E6.23",
     "branch": "timing-core",
-    "head": "94d33e9",
+    "head": "18d566e",
     "next": "E6.20 i jego pełny przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
-    "updated_at": "2026-11-03T17:59:00+01:00",
-    "now": "E6.21–E6.22 (v0.6 zad. 8–9): wykonawca grupy D"
+    "updated_at": "2026-11-03T18:05:00+01:00",
+    "now": "E6.22 (v0.6 zad. 9): README, fuzzing, dema demo_v06.sh"
   },
   "epics": [
     {
@@ -610,16 +610,16 @@
     {
       "id": "E6.21",
       "epic": "E6",
-      "status": "w toku",
-      "title": "v0.6 zad. 8: emulator: pomiar onsetów w tickach, karta groove, nagrania wzorcowe G20–G22",
+      "status": "zrobione",
+      "title": "v0.6 zad. 8: emulator: pomiar onsetów w tickach, karta groove, nagrania wzorcowe G20–G22 (94d33e9, 18d566e)",
       "updated": "2026-11-03"
     },
     {
       "id": "E6.22",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "v0.6 zad. 9: README, fuzzing, dema demo_v06.sh, odbiór",
-      "updated": "2026-11-02"
+      "updated": "2026-11-03"
     },
     {
       "id": "E6.23",
@@ -3635,6 +3635,11 @@
       "n": 520,
       "at": "2026-11-03 17:59",
       "text": "E6.21 (v0.6 zad. 8), część 1, 94d33e9: pomiar onsetów w tickach (emu_onsets.py --ticks, liczony poza firmware'em), karta groove z wzorami do testów, testy V06_onsets_ticks i V06_card. Host 125/125, emulator 333/333 i 305/305, 32 nagrania wzorcowe bez zmian, firmware bez zmian. Dalej nagrania wzorcowe G20–G22."
+    },
+    {
+      "n": 521,
+      "at": "2026-11-03 18:05",
+      "text": "E6.21 (v0.6 zad. 8) zrobione, 18d566e: nagrania wzorcowe G20–G22 i testy V06_micro, V06_template, V06_record. Każdy onset zgadza się z tickami policzonymi poza firmware'em z dokładnością do ok. 2 próbek: mikrotiming G20 (także przy tempie ×3/4) 1,97, szablony G21 1,96–1,97, nagrany take G22 odtworzony 1,95; z rqn on na siatce 1,90; z szablonem lay ten sam dźwięk co bez (szablon odjęty przy nagrywaniu i dodany przy odtwarzaniu). Przekroczenie kroku: 8 nut zduszonych, jak w modelu. 32 stare nagrania wzorcowe bez zmian. E6.22 (v0.6 zad. 9: README, fuzzing, dema) w toku."
     }
   ]
 }
