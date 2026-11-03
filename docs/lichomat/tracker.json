@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 18:13",
+    "updated": "2026-11-03 18:14",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 w wykonaniu: E6.20 (nagrywanie), potem E6.21–E6.23",
     "branch": "timing-core",
-    "head": "6a822ed",
+    "head": "06a6a61",
     "next": "E6.20 i jego pełny przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
-    "updated_at": "2026-11-03T18:13:00+01:00",
-    "now": "E6.23 (v0.6 zad. 10): dokumenty i raport M18"
+    "updated_at": "2026-11-03T18:14:00+01:00",
+    "now": "E6.23 (v0.6 zad. 10): agent pisze dokumenty i raport M18"
   },
   "epics": [
     {
@@ -3652,6 +3652,11 @@
       "n": 522,
       "at": "2026-11-03 18:13",
       "text": "E6.22 (v0.6 zad. 9) zrobione, 6a822ed: README, fuzzing z losowymi mic, tpl i amt (1 800 renderów pod UBSan: 0 znalezisk; pod ASan dźwięk pokazał tylko stary odczyt tablicy PWM z fw 1.7, nowy wiersz E4.11), dema w build/wt-v06/build/demo/ (każdy szablon na hi-hacie przy 142 BPM, lay przy 50/100/150%, nagrany take). E6.23 (v0.6 zad. 10: dokumenty dla Ciebie i raport M18) w toku."
+    },
+    {
+      "n": 523,
+      "at": "2026-11-03 18:14",
+      "text": "Grupa D skończona: E6.21 i E6.22 wypchnięte (6a822ed). Start E6.23: agent pisze dokumenty dla Ciebie (U33–U37 w liście kontroli sprzętu, szkic notatek wydania v0.6, przepisy groove, raport M18, wiersz w HANDOFF); commituję je ja. CI na GitHubie nie ruszył żadnego przebiegu dla v0.5 ani v0.6 (E8.5)."
     }
   ]
 }
