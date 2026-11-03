@@ -38,7 +38,8 @@ TEST(RV1_every_unit_carries_signal)
 	/* fw 1.7's loop 1 ran its allpass through apDelay[1], loop 2's unit (Reverb.c:375), so
 	 * unit 0 (apDelay[0]) was never written although an output tap reads it. A pulse starts
 	 * every block: the early reflections (unit 12) and the predelay (unit 13) are plain
-	 * delays of about 2,000 samples, so a single pulse leaves them all zero again. */
+	 * delays of about 2,000 samples, so a single pulse leaves them all zero again. Lean (plan
+	 * D41) has no early reflections: there unit 12 stays empty, and must. */
 	static Reverb r;
 	int16_t in[2 * 64], out[2 * 64];
 	memset(REVERB_RAM, 0, sizeof REVERB_RAM);
@@ -53,7 +54,7 @@ TEST(RV1_every_unit_carries_signal)
 		Reverb_process(&r, in, out, out + 1, 64, 2, 1.0f);
 	}
 	for(int u = 0; u < 14; u++)
-		ASSERT_EQ(rv_unitWritten(RV_UNIT(u)), 1);
+		ASSERT_EQ(rv_unitWritten(RV_UNIT(u)), (ATMO_REVERB_LEAN && (u == 12)) ? 0 : 1);
 }
 
 /* the number of non-finite outputs of rv_t60() and rv_corners(); the ASSERT macros return

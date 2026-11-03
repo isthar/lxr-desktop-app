@@ -17,16 +17,16 @@
 
 #include <stdint.h>
 
-/* LICHOMAT v0.4: the reverb's rate by plan D41, PROVISIONAL until the owner's reading H12
- * (tracker Q30): H12 pk not read yet, R*_full 35.07 %, R*_half 18.03 %, R_dj 3.69 %
+/* LICHOMAT v0.4: the reverb's rate by plan D41: R*_full 35.07 %, R*_half 18.03 %, R_dj 3.69 %
  * -> full rate if P + F + D <= 85 (pk <= 46.24), else half rate if P + H + D <= 85
- * (pk <= 63.28), else half rate and lean. Half rate until then; both rates are built and
- * tested (RV2, RV4), so the reading changes only these two lines. */
+ * (pk <= 63.28), else half rate and lean. Branch v0.4-lean (tracker E7.9), prepared before
+ * the reading: half rate and lean, for an H12 pk P > 63.28. H12 pk not read yet; the release
+ * commit fills it in. */
 #ifndef ATMO_REVERB_DECIM
 #define ATMO_REVERB_DECIM	2	/* 1 full rate, 2 half rate (plan D42) */
 #endif
 #ifndef ATMO_REVERB_LEAN
-#define ATMO_REVERB_LEAN	0	/* 1: no early reflections, and the wet R is the wet L */
+#define ATMO_REVERB_LEAN	1	/* 1: no early reflections, and the wet R is the wet L */
 #endif
 
 /* sets the reverb up on its own buffer; FxBus_init() calls it */
