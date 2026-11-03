@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-03 19:10",
+    "updated": "2026-11-03 19:23",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 gotowe w kodzie (M18); utwór pokazowy do odsłuchu",
     "branch": "timing-core",
-    "head": "f723a89",
+    "head": "a4f6c75",
     "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T19:10:00+01:00",
+    "updated_at": "2026-11-03T19:23:00+01:00",
     "now": "E7.7: badanie offsetu DC pogłosu; E4.11 (B13): pary A/B do odsłuchu PWM"
   },
   "epics": [
@@ -429,7 +429,7 @@
       "id": "E4.11",
       "epic": "E4",
       "status": "zablokowane",
-      "title": "Błędy fw 1.7 w oscylatorze PWM: B14 (odczyt sawTable o jeden za wierszem) poprawiony na v0.6 (9f04341, bit w bit to samo poniżej 14 kHz, fuzzing pod ASan bez znalezisk); B13 (nasycenie fazy) zmienia brzmienie PWM i czeka na Twój odsłuch",
+      "title": "Błędy fw 1.7 w oscylatorze PWM: B14 poprawiony na v0.6 (9f04341); B13 (nasycenie fazy) czeka na Twój wybór A/B: pięć par do odsłuchu na stronie odsłuchu (A = fw 1.7, B = poprawka, czysty prostokąt); moja rekomendacja B",
       "updated": "2026-11-03"
     },
     {
@@ -3719,6 +3719,11 @@
       "n": 530,
       "at": "2026-11-03 19:10",
       "text": "E7.7 w toku: agent szuka źródła offsetu DC pogłosu i proponuje poprawkę (tylko pomiary i propozycja, bez zmian w gałęziach; poprawka pewnie pojedzie z ponownym zapisem G13–G15 po H12). E4.11 (B13): drugi agent przygotowuje pary A/B (obecne brzmienie PWM kontra poprawione) do Twojego odsłuchu, żebyś mógł zdecydować o B13 jednym porównaniem."
+    },
+    {
+      "n": 531,
+      "at": "2026-11-03 19:23",
+      "text": "E4.11 (B13): pięć par A/B do odsłuchu jest na stronie odsłuchu (sekcja „PWM: A czy B”): 55, 220 i 880 Hz z przejazdem PWM, staby 142 BPM ze stopą i bas z PWM na LFO. Do połowy PWM prawie to samo; przy pełnym PWM A (fw 1.7) to hybryda prostokąta i piły z aliasingiem, B czysty prostokąt, 1–2 dB głośniej. Żaden z ośmiu kitów nie używa PWM. Rekomendacja: B. Pliki i notatki także w build/reference/b13/."
     }
   ]
 }
