@@ -743,7 +743,7 @@ static void frontParser_handleSeqCC()
 		break;
 
 	case FRONT_SEQ_FLAM:
-		seq_patternSet.seq_stepTiming[frontParser_shownPattern][frontParser_activeTrack][frontParser_activeStep].flam = (cortex_midiMsg.data2);//seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][frontParser_activeStep].prob = (cortex_midiMsg.data2);
+		seq_setStepFlam(frontParser_shownPattern, frontParser_activeTrack, frontParser_activeStep, cortex_midiMsg.data2);	//LICHOMAT v0.6: masked against recording's write of the shift
 		break;
 
 	case FRONT_SEQ_SHIFT:

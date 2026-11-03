@@ -3152,6 +3152,8 @@ bool seqc_recordPlace(uint8_t track, seqc_time_t t, seqc_recPlace_t *out)
 	const uint16_t len = seqc_trk.len[track];
 	const uint8_t c = (uint8_t)seqc_trk.index[track];
 	const uint8_t n = (uint8_t)seqc_nextIndex(seqc_trk.index[track], seqc_trackLength(pattern, track));
+	/* a known limit: right after a track returns to x1 off the master grid, one step's base is
+	 * taken as absStep * 96, the simplification v0.5's seqc_trackPhase() makes too */
 	const seqc_tick_t base = seqc_trackOnMasterGrid(track) ? (seqc_tick_t)seqc.absStep * SEQC_TICKS_PER_STEP
 			: seqc_trk.next[track] - (seqc_tick_t)len;
 	const uint32_t abs = (uint32_t)seqc_trk.abs[track];
@@ -3162,9 +3164,14 @@ bool seqc_recordPlace(uint8_t track, seqc_time_t t, seqc_recPlace_t *out)
 			base + (seqc_tick_t)len, len, &g);
 	const bool ahead = x - r0 >= r1 - x;		/* a tie goes to the next step (M20) */
 	const double d = (x - (ahead ? r1 : r0)) * (double)SEQC_TICKS_PER_STEP / (double)len;
-	/* clamped before the conversion: a stamp far from the core's time gives any d */
-	const int micro = d >= STEP_MICRO_MAX ? STEP_MICRO_MAX : (d <= -STEP_MICRO_MAX ? -STEP_MICRO_MAX
-			: (d >= 0.0 ? (int)(d + 0.5) : -(int)(0.5 - d)));
+	/* M19: mu + G within the reach, as playback clamps P (seqc_stepPos()), so mic shows what
+	 * plays: G of the target step in 1/96 of the track's step, mu in [-84 - G, 84 - G] and in
+	 * +-84. Clamped before the conversion: a stamp far from the core's time gives any d */
+	const seqc_place_t pl96 = seqc_place(0, 0, SEQC_TICKS_PER_STEP, ahead ? seqc_nextLoop(track, n)
+			: seqc_trk.loop[track], false);
+	const int g96 = seqc_templateTicks(pattern, track, ahead ? n : c, &pl96);
+	const int hi = STEP_MICRO_MAX - (g96 > 0 ? g96 : 0), lo = -STEP_MICRO_MAX - (g96 < 0 ? g96 : 0);
+	const int micro = d >= hi ? hi : (d <= lo ? lo : (d >= 0.0 ? (int)(d + 0.5) : -(int)(0.5 - d)));
 	out->step = ahead ? n : c;
 	out->ahead = ahead;
 	out->micro = (int8_t)micro;

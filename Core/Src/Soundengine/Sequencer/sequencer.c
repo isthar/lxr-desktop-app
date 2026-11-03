@@ -1332,8 +1332,9 @@ seqc_time_t seq_noteTime(uint32_t stamp)
  * seq_tick() context, as both callers: the MIDI parser and the one-shot roll */
 void seq_addNoteAt(uint8_t trackNr, uint8_t vel, uint8_t note, seqc_time_t t)
 {
-	//only record notes when seq is running and recording
-	if(!(seq_running && seq_recordActive) || (trackNr >= NUM_TRACKS))
+	//only record notes when seq is running and recording; LICHOMAT v0.6: and inside seq_tick()
+	//only, where seqc_recordPlace() may read the core and the skip-once marker goes in at once
+	if(!seq_inTick || !(seq_running && seq_recordActive) || (trackNr >= NUM_TRACKS))
 		return;
 
 	//nothing is recorded while stopped or before the first step (fw 1.7 wrote step 255)
@@ -2603,9 +2604,14 @@ void seq_setStepMicro(uint8_t pattern, uint8_t track, uint8_t step, uint8_t valu
 	if((pattern >= NUM_PATTERN) || (track >= NUM_TRACKS) || (step >= NUM_STEPS)) return;
 	StepTiming *t = &seq_patternSet.seq_stepTiming[pattern][track][step];
 	const int micro = (value <= 2 * STEP_MICRO_MAX) ? (int)value - STEP_MICRO_MAX : 0;
+	//recording writes the same bytes from seq_tick() (TIM2): the shift shares its byte with the
+	//flam, the fine part with the neighbouring step
+	const uint32_t primask = seq_mailboxLock();
 	stepFine_set(seq_patternSet.seq_stepFine[pattern][track], step, stepMicro_split(micro, t));
+	const uint8_t shift = t->shift;
+	seq_mailboxUnlock(primask);
 	activeParameters[PAR_STEP_MICRO] = (uint8_t)(micro + STEP_MICRO_MAX);
-	activeParameters[PAR_STEP_SHIFT] = t->shift;
+	activeParameters[PAR_STEP_SHIFT] = shift;
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.6: shf edited (the menu's message, CortexParser.c): coarse part shift - 7, the
@@ -2617,7 +2623,19 @@ void seq_setStepShift(uint8_t pattern, uint8_t track, uint8_t step, uint8_t shif
 	StepTiming *t = &seq_patternSet.seq_stepTiming[pattern][track][step];
 	uint8_t *fine = seq_patternSet.seq_stepFine[pattern][track];
 	const int coarse = (shift > 14) ? 0 : (int)shift - 7;
+	const uint32_t primask = seq_mailboxLock();	//as seq_setStepMicro(): recording writes these bytes
 	stepFine_set(fine, step, stepMicro_split(STEP_SHIFT_UNIT * coarse + stepFine_get(fine, step), t));
+	seq_mailboxUnlock(primask);
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.6: flm edited (the menu's message, CortexParser.c): the flam's 4 bits of the
+ * step's StepTiming byte, whose shift recording writes from seq_tick() (TIM2) */
+void seq_setStepFlam(uint8_t pattern, uint8_t track, uint8_t step, uint8_t flam)
+{
+	if((pattern >= NUM_PATTERN) || (track >= NUM_TRACKS) || (step >= NUM_STEPS)) return;
+	const uint32_t primask = seq_mailboxLock();
+	seq_patternSet.seq_stepTiming[pattern][track][step].flam = flam & 0x0Fu;
+	seq_mailboxUnlock(primask);
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.6: mic's value (T + 84) of a step of track in pattern as tenths of a ms at the

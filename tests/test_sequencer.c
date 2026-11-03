@@ -146,7 +146,20 @@ void preset_touchTimer(PresetTimer type) { (void)type; }
 void trigger_clockTick(uint8_t onOff, uint8_t cnt) { (void)onOff; (void)cnt; }
 void trigger_reset(uint8_t value) { (void)value; }
 void trigger_setClockPhase(uint8_t pulse) { (void)pulse; }
-void uart_processMidi(uint8_t maxBytes) { (void)maxBytes; }
+/* LICHOMAT v0.6 (review of Task 7): seq_addNoteAt() records inside seq_tick() only; the MIDI
+ * parser's place there, seq_parseMidiInput(), calls this stand-in, which plays one note */
+static struct { bool on, stamped; uint8_t track, vel, note; seqc_time_t t; } tickNote;
+void uart_processMidi(uint8_t maxBytes)
+{
+	(void)maxBytes;
+	if (!tickNote.on)
+		return;
+	tickNote.on = false;
+	if (tickNote.stamped)
+		seq_addNoteAt(tickNote.track, tickNote.vel, tickNote.note, tickNote.t);
+	else
+		seq_addNote(tickNote.track, tickNote.vel, tickNote.note);
+}
 void uart_sendFrontpanelByte(uint8_t data) { (void)data; }
 void uart_sendFrontpanelSysExByte(uint8_t data) { (void)data; }
 void uart_sendMidi(MidiMsg msg) { (void)msg; }
@@ -215,6 +228,29 @@ static void run(int ms)
  * (preset_loadProject(), appMain.c): seq_init() does not touch it, and the
  * pattern switch below copies it back into the active pattern, so a stale or
  * zeroed buffer would give pattern 0 lengths of 0 and silent steps. */
+/** LICHOMAT v0.6: a note at time t recorded inside one more seq_tick() at the host's time */
+static void addNoteAtInTick(uint8_t track, uint8_t vel, uint8_t note, seqc_time_t t)
+{
+	tickNote.on = true;
+	tickNote.stamped = true;
+	tickNote.track = track;
+	tickNote.vel = vel;
+	tickNote.note = note;
+	tickNote.t = t;
+	seq_tick();
+}
+
+/** LICHOMAT v0.6: an unstamped note (seq_addNote()) recorded inside one more seq_tick() */
+static void addNoteInTick(uint8_t track, uint8_t vel, uint8_t note)
+{
+	tickNote.on = true;
+	tickNote.stamped = false;
+	tickNote.track = track;
+	tickNote.vel = vel;
+	tickNote.note = note;
+	seq_tick();
+}
+
 static void reset(void)
 {
 	activeParameters[PAR_TRIG_TIMING] = 1;	/* LICHOMAT v0.5: blk, v0.4's path, which the cases above were written for (plan P11) */
@@ -440,7 +476,7 @@ TEST(sequencer_recording_quantizes_to_the_tracks_own_steps)
 	const seqc_time_t start = hostNow;
 	seq_setRunning(1);
 	run(278);		/* own step 1 began at 167.7 ms: its phase is 0.66 */
-	seq_addNote(1, 100, 64);
+	addNoteInTick(1, 100, 64);	/* LICHOMAT v0.6: inside seq_tick(), as the MIDI parser */
 	ASSERT_TRUE(seq_isMainStepActive(1, 2, 0));	/* own step 2, not master step 2 */
 	run(122);		/* step 2 at 334.3 ms is skipped once */
 	double at[8];
@@ -1038,7 +1074,7 @@ TEST(record_micro_rqn_off_stores_the_offset)
 	/* 19 ticks after step 4's grid tick: step 4, shf +2, fine -5; flam and p-locks kept */
 	seqc_time_t t = t0 + (seqc_time_t)(4 * 96 + 19) * TICK_120;
 	tickAt(t);
-	seq_addNoteAt(tr, 100, 64, t);
+	addNoteAtInTick(tr, 100, 64, t);
 	ASSERT_TRUE(seq_isMainStepActive(tr, 4, 0));
 	ASSERT_EQ(seq_patternSet.seq_stepTiming[0][tr][4].shift, 9);
 	ASSERT_EQ(seq_patternSet.seq_stepTiming[0][tr][4].flam, 3);
@@ -1051,7 +1087,7 @@ TEST(record_micro_rqn_off_stores_the_offset)
 	t = t0 + (seqc_time_t)(6 * 96 - 30) * TICK_120;
 	tickAt(t);
 	noteOns = 0;
-	seq_addNoteAt(tr, 90, 62, t);
+	addNoteAtInTick(tr, 90, 62, t);
 	ASSERT_TRUE(seq_isMainStepActive(tr, 6, 0));
 	ASSERT_FALSE(seq_isMainStepActive(tr, 5, 0));
 	ASSERT_EQ(microOf(0, tr, 6), -30);
@@ -1077,14 +1113,14 @@ TEST(record_micro_rqn_on_keeps_the_timing)
 	const seqc_time_t t0 = recordStart();
 	seqc_time_t t = t0 + (seqc_time_t)(4 * 96 + 19) * TICK_120;
 	tickAt(t);
-	seq_addNoteAt(tr, 100, 64, t);
+	addNoteAtInTick(tr, 100, 64, t);
 	ASSERT_TRUE(seq_isMainStepActive(tr, 4, 0));
 	ASSERT_EQ(seq_patternSet.seq_stepTiming[0][tr][4].shift, 10);	/* the timing as it was */
 	ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[0][tr], 4), 2);
 	t = t0 + (seqc_time_t)(6 * 96 - 30) * TICK_120;
 	tickAt(t);
 	noteOns = 0;
-	seq_addNoteAt(tr, 90, 62, t);
+	addNoteAtInTick(tr, 90, 62, t);
 	ASSERT_TRUE(seq_isMainStepActive(tr, 6, 0));
 	ASSERT_EQ(microOf(0, tr, 6), 0);
 	while (hostNow < t0 + (seqc_time_t)(1536 + 600) * TICK_120)
@@ -1103,7 +1139,7 @@ TEST(record_micro_stamped_note_after_the_boundary)
 	const seqc_time_t t0 = recordStart();
 	tickAt(t0 + (seqc_time_t)384 * TICK_120 + 3 * MS);
 	const uint32_t stamp = (uint32_t)(t0 + (seqc_time_t)384 * TICK_120 - 2 * MS);
-	seq_addNoteAt(1, 100, 60, seq_noteTime(stamp));
+	addNoteAtInTick(1, 100, 60, seq_noteTime(stamp));
 	ASSERT_TRUE(seq_isMainStepActive(1, 4, 0));
 	ASSERT_FALSE(seq_isMainStepActive(1, 3, 0));
 	ASSERT_EQ(microOf(0, 1, 4), -2);
@@ -1125,7 +1161,7 @@ TEST(record_micro_template_and_delay_are_left_out)
 	const seqc_time_t t0 = recordStart();
 	const seqc_time_t t = t0 + (seqc_time_t)510 * TICK_120;
 	tickAt(t);
-	seq_addNoteAt(1, 100, 60, t);
+	addNoteAtInTick(1, 100, 60, t);
 	ASSERT_EQ(microOf(0, 1, 5), 4);
 	while (hostNow < t0 + (seqc_time_t)(1536 + 600) * TICK_120)
 		run(1);
@@ -1176,6 +1212,67 @@ TEST(record_micro_oneshot_roll_at_the_apply_time)
 	ASSERT_TRUE(seq_isMainStepActive(1, 4, 0));
 	ASSERT_EQ(microOf(0, 1, 4), 10);
 	seq_setRollRate(8);
+	recordStop();
+}
+
+TEST(record_micro_rqn_2_stores_the_offset)
+{
+	/* review of Task 7 (M22): any rqn value other than 1 is off, also a stored 2 */
+	reset();
+	activeParameters[PAR_REC_QUANT] = 2;
+	seq_patternSet.seq_stepTiming[0][2][4] = (StepTiming){ .flam = 0, .shift = 7 };
+	stepFine_set(seq_patternSet.seq_stepFine[0][2], 4, 0);
+	const seqc_time_t t0 = recordStart();
+	const seqc_time_t t = t0 + (seqc_time_t)(4 * 96 + 19) * TICK_120;
+	tickAt(t);
+	addNoteAtInTick(2, 100, 64, t);
+	ASSERT_TRUE(seq_isMainStepActive(2, 4, 0));
+	ASSERT_EQ(microOf(0, 2, 4), 19);
+	recordStop();
+}
+
+TEST(record_micro_mu_within_the_reach_of_the_template)
+{
+	/* review of Task 7 (M19): shuffle 127 (swing 64), drg at 200 % on track 2: step 2's G is
+	 * +12 and step 3's reference 288 + 64 = 352, so a note at 277 is step 2's, 73 late; the
+	 * stored mu is 84 - 12 = 72, and the next loop plays it where it was played, less the tick
+	 * that playback's clamp of P takes */
+	reset();
+	activeParameters[PAR_REC_QUANT] = 0;
+	seq_patternSet.tmpl[0][2] = (TrackTemplate){ .id = 7, .amount = 100 };
+	seq_setShuffle(1.0f);
+	const seqc_time_t t0 = recordStart();
+	const seqc_time_t t = t0 + (seqc_time_t)277 * TICK_120;
+	tickAt(t);
+	addNoteAtInTick(2, 100, 64, t);
+	seq_setShuffle(0.0f);
+	ASSERT_TRUE(seq_isMainStepActive(2, 2, 0));
+	ASSERT_EQ(microOf(0, 2, 2), 72);
+	while (hostNow < t0 + (seqc_time_t)(1536 + 300) * TICK_120)
+		run(1);
+	seqc_time_t at[4];
+	ASSERT_EQ(voiceOnsFrom(2, t, at, 4), 1);
+	ASSERT_TRUE(at[0] >= t0 + (seqc_time_t)(1536 + 192 + 72 + 12) * TICK_120);
+	ASSERT_TRUE(at[0] < t0 + (seqc_time_t)(1536 + 192 + 72 + 12) * TICK_120 + MS);
+	recordStop();
+	seq_patternSet.tmpl[0][2] = (TrackTemplate){ 0, 0 };
+}
+
+TEST(record_micro_only_inside_seq_tick)
+{
+	/* review of Task 7: seq_addNoteAt() reads the core directly, so outside seq_tick() it
+	 * records nothing; inside it records */
+	reset();
+	activeParameters[PAR_REC_QUANT] = 0;
+	seq_setMainStep(0, 3, 4, 0);
+	const seqc_time_t t0 = recordStart();
+	const seqc_time_t t = t0 + (seqc_time_t)(4 * 96 + 5) * TICK_120;
+	tickAt(t);
+	seq_addNoteAt(3, 100, 64, t);
+	seq_addNote(3, 100, 64);
+	ASSERT_FALSE(seq_isMainStepActive(3, 4, 0));
+	addNoteAtInTick(3, 100, 64, t);
+	ASSERT_TRUE(seq_isMainStepActive(3, 4, 0));
 	recordStop();
 }
 

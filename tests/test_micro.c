@@ -891,4 +891,91 @@ TEST(record_place_false_when_it_cannot_place)
 	ASSERT_FALSE(placedInCallback);			/* inside a callback */
 }
 
+TEST(record_place_false_while_armed)
+{
+	/* review of Task 7: MIDI slave, a song position to step 8 while stopped, then Continue: the
+	 * core is armed (the track index is set) until the next clock, and places nothing */
+	fake_host_t *h = fake_init();
+	h->logMask = 0;
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	fake_process(h, fake_msToCycles(1.0));
+	seqc_songPosition(8);
+	ASSERT_EQ(seqc_trackStep(0), 8);
+	fake_sync(h, SEQC_EV_CONTINUE, h->now + 100);
+	fake_process(h, h->now + fake_msToCycles(1.0));
+	ASSERT_EQ(seqc_state(), SEQC_ARMED);
+	seqc_recPlace_t p = { .step = 77, .ahead = true, .micro = 33 };
+	ASSERT_FALSE(seqc_recordPlace(0, h->now, &p));
+	ASSERT_EQ(p.step, 77);
+}
+
+TEST(record_place_template_across_the_loop_wrap)
+{
+	/* review of Task 7: 13 steps with lay; at step 12 of loop 0 (q 12, 0 ticks) the next step is
+	 * step 0 of loop 1, q 13 (+18): its reference is 1248 + 18, so a note at 1240 is 26 early
+	 * there (q 0 would read it as 8 early) */
+	fake_host_t *h = microHost();
+	h->logMask = 0;
+	fake_setLength(h, 0, 0, 13);
+	fake_setTemplate(h, 0, 0, LAY, 100);
+	play(h, 1.0);
+	const seqc_time_t t = (seqc_time_t)1240 * CYCLES_PER_TICK_120;
+	fake_runUntil(h, t, fake_msToCycles(0.5));
+	ASSERT_EQ(seqc_trackStep(0), 12);
+	seqc_recPlace_t p;
+	ASSERT_TRUE(seqc_recordPlace(0, t, &p));
+	ASSERT_TRUE(p.ahead);
+	ASSERT_EQ(p.step, 0);
+	ASSERT_EQ(p.micro, -26);
+	fake_useMicro(false);
+}
+
+TEST(record_place_slave_cap_and_dropout)
+{
+	/* review of Task 7: MIDI clock at 120 BPM, after clock 30 (tick 480, step 5). A stamp 1.5
+	 * clocks later reads the next clock's position, 496: +16, not +24. After a dropout (no clock
+	 * for 600 ms) the position is seqc.pos, which held at 496, for any stamp: also for one 0.3
+	 * clocks before clock 30, where the interpolation reads 475.2 (-5) */
+	fake_host_t *h = fake_init();
+	h->logMask = 0;
+	seqc_setSyncMode(SEQC_SYNC_MIDI);
+	fake_process(h, fake_msToCycles(1.0));
+	fake_sync(h, SEQC_EV_START, h->now + 100);
+	const double per = fake_clockCycles(120.0);
+	const seqc_time_t first = h->now + (seqc_time_t)per;
+	fake_runClocks(h, SEQC_EV_CLOCK, first, per, 31, fake_msToCycles(0.1));
+	const seqc_time_t clock30 = first + (seqc_time_t)(30.0 * per + 0.5);
+	ASSERT_EQ(seqc_trackStep(0), 5);
+	seqc_recPlace_t p;
+	ASSERT_TRUE(seqc_recordPlace(0, clock30 + (seqc_time_t)(1.5 * per), &p));
+	ASSERT_EQ(p.step, 5);
+	ASSERT_FALSE(p.ahead);
+	ASSERT_EQ(p.micro, 16);
+	fake_runUntil(h, clock30 + fake_msToCycles(600.0), fake_msToCycles(1.0));
+	ASSERT_EQ(seqc_state(), SEQC_RUNNING);
+	ASSERT_TRUE(seqc_recordPlace(0, clock30 - (seqc_time_t)(0.3 * per), &p));
+	ASSERT_EQ(p.step, 5);
+	ASSERT_EQ(p.micro, 16);
+}
+
+TEST(record_place_keeps_mu_within_the_reach_of_the_template)
+{
+	/* review of Task 7 (M19): playback clamps P = mu + G to +-84 at x1, so the stored mu is held
+	 * to [-84 - G, 84 - G]. Shuffle 127 (swing 64) and drg at 200 %: step 2's G is +12, step 3's
+	 * reference 288 + 64 = 352. A note at 192 + 12 + 73 = 277 is step 2's (73 < 75): mu 72 */
+	fake_host_t *h = microHost();
+	h->logMask = 0;
+	h->shuffle = 127;
+	fake_setTemplate(h, 0, 0, 7, 200);
+	play(h, 1.0);
+	const seqc_time_t t = (seqc_time_t)277 * CYCLES_PER_TICK_120;
+	fake_runUntil(h, t, fake_msToCycles(0.5));
+	seqc_recPlace_t p;
+	ASSERT_TRUE(seqc_recordPlace(0, t, &p));
+	ASSERT_EQ(p.step, 2);
+	ASSERT_FALSE(p.ahead);
+	ASSERT_EQ(p.micro, 72);
+	fake_useMicro(false);
+}
+
 TEST_MAIN()

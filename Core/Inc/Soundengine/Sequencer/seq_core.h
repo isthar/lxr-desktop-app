@@ -44,8 +44,10 @@
  * seqc_stats() after it; seq_initCore() calls seqc_init() at boot, before
  * seq_tick() runs. On each call seq_tick():
  *   1. applies the mailbox of sequencer.c: seqc_setSyncMode(), seqc_setAnalogPpq(),
- *      seqc_setTempo(), seqc_stop(), seqc_rewind(), seqc_start(), and seqc_skipOnce()
- *      for the notes that seq_addNote() moved to the next step;
+ *      seqc_setTempo(), seqc_stop(), seqc_rewind(), seqc_start(), and a posted
+ *      seqc_skipOnce(); v0.6: recording runs inside seq_tick() only (the one-shot
+ *      roll here, MIDI in step 4), so a note for the next step sets its marker at
+ *      once and none is posted;
  *   2. drains the DIN, USB and jack sync queues, merged in stamp order, into
  *      seqc_syncEvent(), a queued Song Position Pointer into seqc_songPosition(),
  *      and a queued Program Change into the pattern switch, whose rewind while
@@ -773,8 +775,8 @@ void seqc_process(seqc_time_t now);
 //------------------------------------------------------------------------------
 // Recording (spec 6.7)
 //------------------------------------------------------------------------------
-/** D6: the next occurrence of step on track does not play. seq_addNote() calls
- * this when it moves a recorded note forward to the next step while running.
+/** D6: the next occurrence of step on track does not play. v0.6: seq_addNoteAt() calls
+ * this, inside seq_tick(), when seqc_recordPlace() puts a recorded note on the next step.
  * - The marker belongs to the active pattern at the time of the call.
  * - Hits of that occurrence that are already queued (early hits from a negative
  *   shift) are removed at once.
@@ -841,7 +843,8 @@ seqc_time_t seqc_itemTime(void);
 //------------------------------------------------------------------------------
 /** Recording phase, 0..1, of the current step n at the current position.
  * v0.1–v0.5 recorded with it (spec 6.7); v0.6 places a note with
- * seqc_recordPlace().
+ * seqc_recordPlace(). v0.6: for the tests and the fake host only; the firmware
+ * does not call it.
  * - 0 at the step boundary n * 96.
  * - 0.5 at n * 96 + (96 + swing) / 2, where swing = round(shuffle * 64 / 127)
  *   whatever the parity of n. That is halfway between the swung grid times of
@@ -853,7 +856,8 @@ float seqc_stepPhase(void);
 //------------------------------------------------------------------------------
 /** v0.2: the recording phase of the track's current step: seqc_stepPhase() for a track
  * on the master grid; for one on its own grid the same rule in its own step (its length
- * and swing). seq_addNote() quantises a note to the track's own steps with it. */
+ * and swing). v0.2–v0.5's seq_addNote() quantised a note to the track's own steps with it;
+ * v0.6: for the tests and the fake host (fake_addNote()) only. */
 float seqc_trackPhase(uint8_t track);
 //------------------------------------------------------------------------------
 /** v0.6 (spec v0.6 7.1): where a recorded note belongs */
@@ -862,7 +866,8 @@ typedef struct seqc_recPlace
 	uint8_t	step;		/**< the target track step: the current one, or the next one */
 	bool	ahead;		/**< true for the next one: the glue sets its skip-once marker (D6) */
 	int8_t	micro;		/**< the played position less the step's reference time, in 1/96 of the
-				 * track's step, rounded half away from zero, -84..+84 */
+				 * track's step, rounded half away from zero, -84..+84, and with the
+				 * step's template part G within the reach: -84 - G..84 - G (M19) */
 } seqc_recPlace_t;
 /** v0.6 (spec v0.6 7.1, M19, M20): the step of track's current occurrence c or of its next
  * one c+1 ((c + 1) mod the track length, in the active pattern) that is nearer to the

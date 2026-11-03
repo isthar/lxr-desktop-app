@@ -248,10 +248,12 @@ void fake_setSong(fake_host_t *h, const uint8_t *entries, size_t count);
 //------------------------------------------------------------------------------
 // Recording, as the glue
 //------------------------------------------------------------------------------
-/** seq_addNote(): while running with recordActive, record the note at the
- * track's current step, or at the next one from phase 0.5 on. In the second
- * case it calls seqc_skipOnce() (D6). The step gets the note, volume vel | 0x80,
- * prob 100 and its main-step bit. Before the first step nothing is recorded. */
+/** v0.5's seq_addNote(): while running with recordActive, record the note at the
+ * track's current step, or at the next one from phase 0.5 on (seqc_trackPhase()). In
+ * the second case it calls seqc_skipOnce() (D6). The step gets the note, volume
+ * vel | 0x80, prob 100 and its main-step bit. Before the first step nothing is
+ * recorded. v0.6's glue places a note with seqc_recordPlace() instead (record_place,
+ * record_micro); this one keeps the v0.5 rule for the core's older tests. */
 void fake_addNote(fake_host_t *h, uint8_t track, uint8_t vel, uint8_t note);
 /** seq_recordNoteAtStep() (N11): write a recorded note into a given step */
 void fake_recordNoteAtStep(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step,

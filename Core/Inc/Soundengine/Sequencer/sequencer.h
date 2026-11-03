@@ -193,6 +193,7 @@ void seq_rotateTrack(uint8_t trackNr, uint8_t pattern, int8_t dir);	//LICHOMAT v
 void seq_loadStepMicro(uint8_t pattern, uint8_t track, uint8_t step);	//LICHOMAT v0.6: the step page's mic (spec v0.6 6.1)
 void seq_setStepMicro(uint8_t pattern, uint8_t track, uint8_t step, uint8_t value);
 void seq_setStepShift(uint8_t pattern, uint8_t track, uint8_t step, uint8_t shift);
+void seq_setStepFlam(uint8_t pattern, uint8_t track, uint8_t step, uint8_t flam);	//LICHOMAT v0.6: the step page's flm, masked against recording
 int32_t seq_stepMicroTenthsMs(uint8_t track, uint8_t pattern, uint8_t value);
 //LICHOMAT v0.3: the step page's slide flag and probability, each keeping the other (plan D23, D26)
 void seq_setStepSlide(uint8_t pattern, uint8_t track, uint8_t step, uint8_t on);
@@ -285,7 +286,9 @@ void seq_setRollRate(uint8_t rate);
  * performance mode (plan D16); it applies to the steps generated from now, one step ahead */
 void seq_setFill(uint8_t on);
 //------------------------------------------------------------------------------
-/** add a note to the current pattern position*/
+/** add a note to the current pattern position. LICHOMAT v0.6: seq_addNote() and seq_addNoteAt()
+ * record only inside seq_tick() (seq_isInTick()), where both callers run: the MIDI parser and the
+ * one-shot roll. Anywhere else they record nothing: seqc_recordPlace() reads the core directly */
 void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note);
 void seq_addNoteAt(uint8_t trackNr, uint8_t vel, uint8_t note, uint64_t t);	//LICHOMAT v0.6: at the note's time t, a seqc_time_t (spec v0.6 7.1)
 uint64_t seq_noteTime(uint32_t stamp);	//LICHOMAT v0.6: a MIDI stamp on the core's time base (seqc_time_t)
