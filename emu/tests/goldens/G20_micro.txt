@@ -1,0 +1,18 @@
+# G20_micro: the groove card's pattern 0 at 120 BPM: Drum 1's click alone on L1 with mic values
+# over both nibble signs and the split edges, a x2 ratchet with a fine part and a shf edit that
+# kept a fine part; Drum 2 at x3/4 with fine parts on L2 (plan v0.6 Task 8, spec v0.6 10.2);
+# V06_micro measures the onsets against the ticks of the script's values
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card groove --pattern 0 --bpm 120 --bars 4
+#expect energy L1 -40 0.1s..7.9s
+#expect energy L2 -40 0.1s..7.4s
+#expect summary vsched.late 0..0
+#expect summary vsched.splits 1..1000000
+#expect summary underrunsAfterT0 0..0
+#broken --param trig_timing=1

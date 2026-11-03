@@ -1845,6 +1845,104 @@ def V06_card(t):
     _, dropped = groove_events(card, 2, 0, 32, 120)
     check(dropped == 8, 'pattern 2 over 2 bars: the model drops %d hits, not 8' % dropped)
 
+def ticks_check(t, wav, ch, ticks, bpm, *more):
+    """emu_onsets.py --ticks on channel ch of wav against ticks at bpm, --limit 2"""
+    tf = t.path('ticks-%d.txt' % len(os.listdir(t.work)))
+    with open(tf, 'w') as f:
+        f.write(''.join('%d\n' % k for k in ticks))
+    code, spread, out = onsets(t, wav, '--channel', ch, '--ticks', tf, '--bpm', bpm, '--limit', 2, *more)
+    print('%s, %d ticks: %s' % (ch, len(ticks), out.strip()))
+    check(code == 0, '%s against the model\'s ticks: %s' % (ch, out))
+
+@case
+def V06_micro(t):
+    # G20 (spec v0.6 10.2): each onset of Drum 1 on L1 and Drum 2 (x3/4) on L2 at the tick of the
+    # card script's values through spec v0.6 4.1, outside the firmware, within 2 frames
+    card = groove_card(groove_script())
+    gc, opts, script = golden(t, 'G20_micro')
+    s, wav, _ = t.render(gc, opts + ['--events', script])
+    check(s['vsched']['late'] == 0, 'vsched %r' % s['vsched'])
+    for v, ch in ((0, 'L1'), (1, 'L2')):
+        ticks_check(t, wav, ch, groove_ticks(card, 0, v, 64, 120), 120)
+    no_copies_left()
+
+def script_shuffle(path):
+    """the one shuffle value that the param lines of a golden's script set"""
+    with open(path) as f:
+        v = {int(x.split('=')[1]) for x in f.read().split() if x.startswith('shuffle=')}
+    check(len(v) == 1, '%s sets the shuffles %r' % (path, sorted(v)))
+    return v.pop()
+
+@case
+def V06_template(t):
+    # G21_template (spec v0.6 10.2): Drum 1 with lyb at 100 % on L1, Drum 2 with lay at 150 % and
+    # dly +3 ms on L2, the script's shuffle on the odd steps, at the model's ticks within 2 frames
+    card = groove_card(groove_script())
+    gc, opts, script = golden(t, 'G21_template')
+    shuffle = script_shuffle(script)
+    s, wav, _ = t.render(gc, opts + ['--events', script])
+    check(s['vsched']['late'] == 0, 'vsched %r' % s['vsched'])
+    for v, ch in ((0, 'L1'), (1, 'L2')):
+        ticks_check(t, wav, ch, groove_ticks(card, 1, v, 64, 142, shuffle=shuffle), 142)
+    no_copies_left()
+
+DIN_LAST_BYTE_MS = fractions.Fraction(2 * 69120 * 1000, 216000000)   # a Note On's last byte after its line
+
+@case
+def V06_record(t):
+    # G22 (spec v0.6 10.2, M19-M22): each render again with a project save after the playback.
+    # d_k, step k's offset in ticks, comes from the script's DIN times (each Note On's last byte
+    # 0.64 ms after its line). The playback of bars 2 and 3 (to 6.75 s: bar 4 begins at 6.76 s) is
+    # at 1536 b + 96 k + d_k within 2 frames; the recorded pattern 3 holds T_k - T_0 = d_k (+11, -5).
+    # rqn on: on the grid (--grid 142, and --ticks on the 16ths, which G22_record fails), and the
+    # file has no block 2; with lay at 100 % the playback is
+    # G22_record's and the file holds d_k - lay_k (-7, -10) and the template (2, 0)
+    tick = fractions.Fraction(60000, 142 * 384)
+    wavs = {}
+    for gid in ('G22_record', 'G22_record_q', 'G22_record_tpl'):
+        gc, opts, script = golden(t, gid)
+        with open(script) as f:
+            text = f.read()
+        times = [fractions.Fraction(x.split()[0][:-2]) for x in text.splitlines() if ' din 91 ' in x]
+        check(len(times) == 16, '%s: %d Note Ons' % (gid, len(times)))
+        d = [round((x + DIN_LAST_BYTE_MS) / tick - 1536 - 96 * k) for k, x in enumerate(times)]
+        if gid == 'G22_record':
+            check(d == [0, 11, 0, -5] * 4, 'the script\'s offsets %r' % d)
+        keep = t.path('K-' + gid)
+        s, wav, _ = t.render(gc, opts + ['--keep-card', keep, '--events', t.script(text + '6900ms save-project 0\n')])
+        wavs[gid] = wav
+        check(s['vsched']['late'] == 0, '%s: vsched %r' % (gid, s['vsched']))
+        window = ('--from', 3.35, '--to', 6.75)
+        pat = one_file(keep, '03-*.PAT')
+        tr = pat_tracks(pat)[0]
+        T = [tr['steps'][k][0] for k in range(16)]
+        check(tr['on'] == set(range(16)), '%s: steps %r recorded' % (gid, sorted(tr['on'])))
+        if gid == 'G22_record':
+            ticks_check(t, wav, 'L1', [1536 * b + 96 * k + d[k] for b in (2, 3) for k in range(16)], 142, *window)
+            tf = t.path('sixteenths.txt')
+            with open(tf, 'w') as f:
+                f.write(''.join('%d\n' % (1536 * b + 96 * k) for b in (2, 3) for k in range(16)))
+            code, _, out = onsets(t, wav, '--ticks', tf, '--bpm', 142, *window, '--limit', 2)
+            check(code == 1, 'G22_record plays on the 16ths: %s' % out)
+            check(len(pat) == 3941 and [x - T[0] for x in T] == d and pat[3703:3705] == bytes(2),
+                  '%s: %d bytes, T %r, template %r' % (gid, len(pat), T, pat[3703:3705]))
+        elif gid == 'G22_record_q':
+            code, spread, out = onsets(t, wav, '--grid', 142, *window, '--limit', 2)
+            print('%s --grid 142: %s' % (gid, out.strip()))
+            check(code == 0, '%s on the grid: %s' % (gid, out))
+            # --grid takes the nearest tick; the 16ths themselves
+            ticks_check(t, wav, 'L1', [1536 * b + 96 * k for b in (2, 3) for k in range(16)], 142, *window)
+            check(len(pat) == 3697 and not any(T), '%s: %d bytes, T %r' % (gid, len(pat), T))
+        else:
+            code, spread, out = onsets(t, wav, '--against', wavs['G22_record'], *window, '--limit', 2)
+            print('%s --against G22_record: %s' % (gid, out.strip()))
+            check(code == 0, '%s against G22_record: %s' % (gid, out))
+            lay = GROOVE_TEMPLATES[2]
+            check(len(pat) == 3941 and [x - T[0] for x in T] == [d[k] - lay[k] for k in range(16)]
+                  and pat[3703:3705] == bytes([2, 0]), '%s: %d bytes, T %r, template %r' % (gid, len(pat), T, pat[3703:3705]))
+        print('%s: d %r, recorded T %r' % (gid, d, T))
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists

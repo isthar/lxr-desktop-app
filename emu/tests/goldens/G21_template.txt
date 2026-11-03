@@ -1,0 +1,23 @@
+# G21_template: the groove card's pattern 1 at 142 BPM: Drum 1's 16ths with lyb at 100 % on L1,
+# Drum 2's with lay at 150 % and dly +3 ms on L2, shuffle 20 (plan v0.6 Task 8, spec v0.6 10.2).
+# Every pattern end reloads the stored shuffle (0) and a menu edit does not reach the pattern
+# file, so the script sets it 50 ms into each bar, before step 2's boundary (V6-15, F5);
+# V06_template measures the onsets against the ticks of the script's values
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card groove --pattern 1 --bpm 142 --bars 4
+#expect energy L1 -40 0.1s..6.7s
+#expect energy L2 -40 0.1s..6.7s
+#expect summary vsched.late 0..0
+#expect summary vsched.splits 1..1000000
+#expect summary underrunsAfterT0 0..0
+#broken --param trig_timing=1
+50ms param shuffle=20
+1741ms param shuffle=20
+3431ms param shuffle=20
+5121ms param shuffle=20

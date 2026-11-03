@@ -1,0 +1,36 @@
+# G22_record_q: G22_record with rqn on (rec_quant=1): the take is quantized, so the playback is on
+# the grid and the pattern file has no block 2 (plan v0.6 Task 8, spec v0.6 10.2, M22)
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --card groove --pattern 3 --bpm 142 --seconds 7 --param midi_chan_1=2 --param midi_note1=0 --param rec_quant=1
+#expect energy L1 -40 1.69s..3.30s
+#expect energy L1 -40 3.38s..6.70s
+#expect summary vsched.late 0..0
+#broken-drop din
+# 16 DIN Note Ons on voice 1's channel in bar 1 (bars count from 0) at 142 BPM:
+# the "e" steps 11 ticks late (12.10 ms), the "a" steps 5 early (-5.50 ms), the rest on the grid;
+# each line 0.64 ms (the two bytes before the last) before its time (V6-16). REC is off before
+# bar 2; bars 2 and 3 play the take
+500ms press rec
+1689.500845ms din 91 3C 7F
+1807.238521ms din 91 3C 7F
+1900.768451ms din 91 3C 7F
+2000.900493ms din 91 3C 7F
+2112.036056ms din 91 3C 7F
+2229.773732ms din 91 3C 7F
+2323.303662ms din 91 3C 7F
+2423.435704ms din 91 3C 7F
+2534.571268ms din 91 3C 7F
+2652.308944ms din 91 3C 7F
+2745.838873ms din 91 3C 7F
+2845.970915ms din 91 3C 7F
+2957.106479ms din 91 3C 7F
+3074.844155ms din 91 3C 7F
+3168.374085ms din 91 3C 7F
+3268.506127ms din 91 3C 7F
+3330ms press rec
