@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 23:43",
+    "updated": "2026-11-03 23:58",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Noc: E7.9 (warianty 0.4 na wynik H12) i E4.12 (fuzzing)",
     "branch": "timing-core",
-    "head": "41997dd",
-    "next": "E7.9: wariant połowa (obecna częstotliwość + E7.7), potem pełna i lean; E4.12 w tle",
-    "updated_at": "2026-11-03T23:43:00+01:00",
-    "now": "E7.9: nakładam poprawkę E7.7 na v0.4 (91a61b5), od 23:50"
+    "head": "7b60fff",
+    "next": "E7.9: obrazy trzech wariantów, pary A/B pogłosu na stronie odsłuchu; E4.12 wyniki",
+    "updated_at": "2026-11-03T23:58:00+01:00",
+    "now": "E7.9: bramki (check.sh, fw_checks, ASan) na trzech wariantach; E4.12 fuzzing w tle"
   },
   "epics": [
     {
@@ -435,7 +435,7 @@
     {
       "id": "E4.12",
       "epic": "E4",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Nocny fuzzing v0.6 pod ASan i UBSan: dłuższy przebieg niż 1 800 renderów (dźwięk, MIDI, sekwencer, oba tryby trg); każdy znaleziony błąd fw 1.7 poprawiony z testem",
       "updated": "2026-11-03"
     },
@@ -3823,6 +3823,21 @@
       "n": 541,
       "at": "2026-11-03 23:43",
       "text": "E7.9 zaczęte, E4.12 założone: przez noc przygotowuję trzy warianty 0.4 na każdy wynik H12 (pełna częstotliwość, połowa, lean), każdy z poprawką E7.7 i nowym zapisem G13–G15, z obrazami do U20–U26. Obok nocny fuzzing v0.6 pod ASan i UBSan (E4.12). Do ok. 03:40."
+    },
+    {
+      "n": 542,
+      "at": "2026-11-03 23:52",
+      "text": "E4.12 w toku: fuzzing v0.6 (e971801) pod ASan i UBSan, 24 000 renderów (dźwięk, MIDI, sekwencer, trg smp i blk), nowe ziarna; poprzednio 1 800."
+    },
+    {
+      "n": 543,
+      "at": "2026-11-03 23:55",
+      "text": "E7.9: poprawka E7.7 na v0.4 (07dd737) z testem RV6: bez poprawki 171 LSB offsetu po ciszy i +1 396 LSB wzrostu we freeze, z poprawką 0,00 i −0,17. G13–G15 od nowa dla połowy (f0febfb); stara v0.4 renderuje je jak zapisane, więc zmiana to tylko poprawka."
+    },
+    {
+      "n": 544,
+      "at": "2026-11-03 23:58",
+      "text": "E7.9: warianty pełna (26030df) i lean (1ff38e2), każdy z G13–G15 zapisanymi od nowa; w lean RV1 oczekuje teraz pustego bufora wczesnych odbić. Gałęzie v0.4-half, v0.4-full i v0.4-lean na forku. Uwaga: przy pełnej częstotliwości pogłos jest o 3,6–7,5 dB głośniejszy przy tych samych gałkach (mniejszy pokój, D42); przygotowuję pary A/B do odsłuchu."
     }
   ]
 }
