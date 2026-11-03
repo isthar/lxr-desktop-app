@@ -1,4 +1,4 @@
-# G13_reverb_blk: G13_reverb in trg blk, v0.4's path (plan v0.5 Task 8, S18, spec 9.3); its entry is G13_reverb's at 91a61b5, copied, never blessed
+# G13_reverb_blk: G13_reverb in trg blk, v0.4's path (plan v0.5 Task 8, S18, spec 9.3); its entry is v0.4's G13_reverb, copied, never blessed (91a61b5's; since E7.7 that of v0.4-lean, 1ff38e2)
 #
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only

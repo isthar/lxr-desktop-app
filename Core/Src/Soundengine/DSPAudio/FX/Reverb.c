@@ -35,9 +35,12 @@
 #define REVERB_TONE_DAMP_MID	(64.f / 127.f)
 #define REVERB_TONE_DAMP_BRIGHT	0.85f
 #define REVERB_TONE_NONE		255
+//LICHOMAT E7.7: the DC blocker of the input, and of the outputs at tone 64: a one-pole high-pass, Hz
+#define REVERB_DC_HZ			5.f
 
 
 
+#if !ATMO_REVERB_LEAN	//LICHOMAT v0.4: lean has no early reflections (plan D41), so no taps
 static const float earlyTaps[] =
 {
 		12,
@@ -45,6 +48,7 @@ static const float earlyTaps[] =
 		38,
 		50
 };
+#endif
 
 void Reverb_init(Reverb *r)
 {
@@ -678,16 +682,21 @@ static void Reverb_setOnePoleEq(TiltEq *eq, float hz, float fs, uint8_t highpass
 //tracker Q31: the tone 0..1 (0..127). fw 1.7's Reverb_setComposition(tone/127) is nearly silent at
 //both ends: tone 1 a low-pass at about 930 Hz on the input and the output with a loop damping of
 //0.008 (a 55 Hz one-pole in the loop), tone 127 a high-pass at 20 kHz. Here:
-//- tone 64 is Reverb_setComposition(64/127), A7's coefficients bit for bit (flat);
-//- the input EQ keeps tone 64's setting, and the tone is one pole on each output (6 dB per octave,
+//- tone 64 is flat: Reverb_setComposition(64/127)'s loop damping, and DC blockers (E7.7);
+//- the input EQ is the DC blocker at every tone, and the tone is one pole on each output (6 dB per octave,
 //  heard at once on the tail already in the tank): 0..63 a low-pass from 1.5 kHz to 18 kHz,
 //  65..127 a high-pass from 20 Hz to 400 Hz, both geometric in the knob (equal steps are equal
 //  intervals, as the DJ filter's, plan D39);
 //- the loop damping is geometric too, from 0.25 (tone 0) through 64/127 to 0.85 (tone 127): the
 //  dark side's tail darkens as it decays, the bright side's keeps its air;
 //- entering tone 64, or crossing from the low-pass side to the high-pass side, clears the output
-//  filters' state: tone 64's high-pass is at 0.01 Hz, so the state of a low-pass (the signal) or of
-//  the 400 Hz high-pass (its bass) would stay on the output as an offset for about 16 s.
+//  filters' state: the state of a low-pass (the signal) or of the 400 Hz high-pass (its bass) would
+//  come back on the output as a step;
+//- E7.7: the input EQ is a DC blocker at REVERB_DC_HZ at every tone, and so are the outputs at
+//  tone 64. fw 1.7's 64/127 is a 0.01 Hz high-pass (TiltEq_setParameter(1/127): p^3 = 5e-7), whose
+//  state is the mean of the last 49 s of input (24 s at full rate): when the input stopped, it came
+//  back into the tank as a step, which the tank's DC gain 0.6 (1 - 5 fb) / (1 - fb^2) multiplies,
+//  and frozen (fb near 1) it grew without end.
 void Reverb_setTone(Reverb *r, float t01)
 {
 	const float tf = Reverb_clamp01(t01) * 127.f + 0.5f;
@@ -695,14 +704,17 @@ void Reverb_setTone(Reverb *r, float t01)
 	const uint8_t old = r->tone;
 	if((old != t) && ((t == 64) || ((old < 64) != (t < 64))))
 		r->eqFb.lp_out = r->eqFbR.lp_out = 0.f;
+	const float fs = REAL_FS / (float)r->decim;
+	Reverb_setOnePoleEq(&r->eq, REVERB_DC_HZ, fs, 1);	/* E7.7: the input's DC blocker */
 	if(t == 64)
-	{
-		Reverb_setComposition(r, 64.f / 127.f);
+	{	/* flat: the DC blocker on each output, the loop damping 64/127 */
+		Reverb_setOnePoleEq(&r->eqFb, REVERB_DC_HZ, fs, 1);
+		Reverb_setOnePoleEq(&r->eqFbR, REVERB_DC_HZ, fs, 1);
+		r->damp = REVERB_TONE_DAMP_MID;
+		setOnePoleCoef(&r->lpFeedback, r->frozen ? 1.f : r->damp);
 		r->tone = 64;
 		return;
 	}
-	TiltEq_setParameter(&r->eq, -1 + 2 * (64.f / 127.f));	/* the input EQ as at tone 64 */
-	const float fs = REAL_FS / (float)r->decim;
 	float hz, damp;
 	if(t < 64)
 	{	/* x = 1 at tone 0, 1/63 at tone 63; ln(18000/1500) = 2.4849, ln(0.50394/0.25) = 0.70110 */
