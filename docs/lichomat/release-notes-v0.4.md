@@ -33,6 +33,7 @@ Wszystkie wczytują projekty, wzorce i kity zapisane przez v0.4 bez błędów i 
 - **Co robi:** pogłos stoi na szynie FX za slotem efektu (dystorsja, ring, kompresor albo delay), więc echa delaya też się pogłosują. Wyjście jest stereo. `lvl` 0 wyłącza pogłos (wtedy nie liczy się wcale); wyżej głośność mokrego sygnału rośnie jak (`lvl`/127)².
 - `siz` to wielkość sali, `pre` predelay, `mod` wolny ruch ogona (LFO 0,2–1,5 Hz). `dec` to czas wybrzmienia RT60 od 0,3 s (0) do 19,2 s (127), w sekundach przy każdym `siz`.
 - **`ton`:** 0 to ciemny dolnoprzepustowy ok. 1,5 kHz, 64 płasko, 127 łagodny górnoprzepustowy ok. 400 Hz (6 dB na oktawę). Kroki są równe w oktawach, więc środek każdej strony ma tyle kroków co jej końce. Zmiana działa od razu także na ogon, który już brzmi; poziom zostaje mniej więcej ten sam.
+- **Bez stałej składowej:** wejście pogłosu ma filtr górnoprzepustowy 5 Hz (przy `ton` 64 także wyjścia). Filtr wejściowy z 1.7 był przy tym ustawieniu górnoprzepustowym 0,01 Hz, więc po końcu dźwięku zostawiał na wyjściu stałe przesunięcie (ok. +35 LSB po typowym wzorcu), a we freeze to przesunięcie rosło bez końca (+1 123 LSB po minucie). Teraz ogon kończy się na zerze.
 
 ### Freeze
 
@@ -65,13 +66,14 @@ Wszystkie wczytują projekty, wzorce i kity zapisane przez v0.4 bez błędów i 
 
 ## Częstotliwość pogłosu
 
-W tym szkicu pogłos liczy się w połowie częstotliwości próbkowania. **To ustawienie tymczasowe:** ostateczne wybiera reguła z pomiaru CPU H12 (najwyższe `pk` kroku 3, ciężki wzorzec z delayem, P):
+Pogłos liczy się w połowie częstotliwości próbkowania. Wersję oszczędną (bez wczesnych odbić, mokry sygnał mono) wybiera pomiar CPU H12 (najwyższe `pk` kroku 3, ciężki wzorzec z delayem, P):
 
-- pełna częstotliwość, gdy P ≤ 46,24;
 - połowa, gdy P ≤ 63,28;
-- inaczej połowa w wersji oszczędnej (bez wczesnych odbić, mokry sygnał mono).
+- inaczej połowa w wersji oszczędnej.
 
-Granice to 85 % minus szacowany koszt pogłosu (35,07 % przy pełnej częstotliwości, 18,03 % przy połowie) i filtra DJ (3,69 %). Potem U20 czyta `pk` z włączonym pogłosem; jeśli dojdzie do 95, wydanie dostaje następny tryb w dół (pełna → połowa → oszczędna). Przy połowie ten sam `siz` daje większą salę, a `pre` sięga 2–92 ms (przy pełnej 1–46 ms); `dec` zostaje w sekundach przy obu.
+Granica to 85 % minus szacowany koszt pogłosu przy połowie (18,03 %) i filtra DJ (3,69 %). Potem U20 czyta `pk` z włączonym pogłosem; jeśli dojdzie do 95, wydanie dostaje wersję oszczędną. Przy połowie `pre` sięga 2–92 ms; `dec` jest w sekundach.
+
+Pełnej częstotliwości wydanie nie używa, nawet gdy CPU by na nią pozwalało (decyzja Q34). Te same bufory dają przy niej mniejszą salę, a ogon basu przechyla się w lewo: na samej stopie mokry lewy kanał jest o 6–7 dB głośniejszy niż prawy. Rumble by na tym tracił, a kity i przepisy są strojone na połowie. [Szkic: zdanie o wybranej wersji i P dojdzie po H12.]
 
 ## Zmienione zachowanie
 
@@ -90,7 +92,8 @@ Granice to 85 % minus szacowany koszt pogłosu (35,07 % przy pełnej częstotliw
 
 ## Znane ograniczenia
 
-- Częstotliwość pogłosu czeka na H12 i U20: w tym szkicu połowa, tymczasowo (zob. „Częstotliwość pogłosu").
+- Wersja pogłosu (połowa albo oszczędna) czeka na H12 i U20 (zob. „Częstotliwość pogłosu").
+- Pełnej częstotliwości pogłosu nie ma w wydaniu (Q34).
 - `djf`, `djr`, `lvl`, `frz` i `dec` nie mają LFO, velocity ani p-locków: tylko menu i NRPN 96–99 i 116.
 - Zapis kitu w 1.7 (także w v0.1–v0.3) usuwa blok; v0.4 wczytuje potem taki kit z ustawieniami domyślnymi, z wyłączonym pogłosem.
 - `siz`, `ton`, `pre`, `mod`, `dck`, `ddp` i `syn` nie mają NRPN.

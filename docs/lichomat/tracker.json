@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 23:58",
+    "updated": "2026-11-04 00:10",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Noc: E7.9 (warianty 0.4 na wynik H12) i E4.12 (fuzzing)",
     "branch": "timing-core",
-    "head": "7b60fff",
-    "next": "E7.9: obrazy trzech wariantów, pary A/B pogłosu na stronie odsłuchu; E4.12 wyniki",
-    "updated_at": "2026-11-03T23:58:00+01:00",
-    "now": "E7.9: bramki (check.sh, fw_checks, ASan) na trzech wariantach; E4.12 fuzzing w tle"
+    "head": "c9a7096",
+    "next": "E7.9: obrazy i README po H12, plan sesji; potem v0.5-half i v0.6-half (scalenie E7.7 dalej)",
+    "updated_at": "2026-11-04T00:10:00+01:00",
+    "now": "E7.9: bramki lean i pełna; potem obrazy do build/images/po-H12; E4.12: fuzzing sekwencera w tle"
   },
   "epics": [
     {
@@ -1116,6 +1116,13 @@
       "question": "Delay ping-pong z fw 1.7 nie odbija echa między stronami, gdy głos jest na środku panoramy (L = R): oba tory dostają ten sam sygnał, więc każde echo jest takie samo po obu stronach. Kity mają prawie wszystkie głosy na środku. Poprawić?",
       "assumption": "Tak, na v0.6.",
       "answer": "Moja decyzja według Twojej reguły z 29.10: tak. Przy wyjściu stereo lewy tor dostaje sumę L+R przeskalowaną o 1/√2, prawy tylko sprzężenie; echa idą R, L, R… przy każdej panoramie. Skalowanie zachowuje głośność ech głosu ze środka (tak jak w fw 1.7); głos skrajnie w lewo albo w prawo daje echa 3 dB ciszej niż w fw 1.7. Wyjścia mono bez zmian. Zmienia jedno nagranie wzorcowe, G2_pingpong (zapisane świadomie od nowa z nowym warunkiem). Jeśli wolisz stary ping-pong, cofnę."
+    },
+    {
+      "id": "Q34",
+      "status": "zamknięte",
+      "question": "Pogłos 0.4 przy pełnej częstotliwości (plan D41: jeśli H12 da pk ≤ 46,24) brzmi inaczej niż przy połowie, na której strojone są kity, przepisy i utwory: te same bufory to mniejszy pokój, a ogon basu przechyla się w lewo (na samej stopie mokry L o 6–7 dB głośniejszy niż R i o 8–9 dB głośniejszy niż przy połowie; przy połowie L i R w granicach 1,5 dB). Brać pełną, gdy CPU pozwala?",
+      "assumption": "Nie: połowa także przy niskim pk.",
+      "answer": "Moja decyzja według Twojej reguły z 29.10: pogłos 0.4 zostaje w połowie częstotliwości także wtedy, gdy H12 pozwoli na pełną. H12 rozstrzyga już tylko między połową (P ≤ 63,28) a lean (P > 63,28), a U20 jak dotąd może zejść stopień niżej. Powody: rumble to podstawa stylu, a na pełnej przechyla się w lewo; wszystko, co słyszałeś, jest strojone na połowie; przepisy tną górę tonem i tak poniżej 11 kHz; zostaje ok. 17 % CPU zapasu. Pełna jest gotowa na gałęzi v0.4-full (z E7.7), pary A/B są na stronie odsłuchu. Jeśli wolisz pełną, napisz: wtedy najpierw osobne zadanie na nierówny bas w odczepach L i R. Zmienia D41 i Q30."
     }
   ],
   "log": [
@@ -3838,6 +3845,21 @@
       "n": 544,
       "at": "2026-11-03 23:58",
       "text": "E7.9: warianty pełna (26030df) i lean (1ff38e2), każdy z G13–G15 zapisanymi od nowa; w lean RV1 oczekuje teraz pustego bufora wczesnych odbić. Gałęzie v0.4-half, v0.4-full i v0.4-lean na forku. Uwaga: przy pełnej częstotliwości pogłos jest o 3,6–7,5 dB głośniejszy przy tych samych gałkach (mniejszy pokój, D42); przygotowuję pary A/B do odsłuchu."
+    },
+    {
+      "n": 545,
+      "at": "2026-11-04 00:10",
+      "text": "E7.9: wariant połowa (v0.4-half, 8bcf4aa) cały zielony: check.sh 104 testy hosta i 308 emulatora, 0 ostrzeżeń, budżet OK, fw_checks, host pod ASan 104/104, emulator pod ASan 280/280. Do wariantów dołączona poprawka M21 pod ASan z v0.5 (a213a5d)."
+    },
+    {
+      "n": 546,
+      "at": "2026-11-04 00:10",
+      "text": "E7.9, decyzja Q34: pogłos 0.4 zostaje w połowie częstotliwości także przy niskim pk. Pary A/B (połowa, pełna, lean) pokazały, że przy pełnej ogon basu przechyla się w lewo: na samej stopie mokry L o 6–7 dB głośniejszy niż R i o 8–9 dB głośniejszy niż przy połowie. H12 rozstrzyga już tylko połowa albo lean. Pary A/B są na stronie odsłuchu (wersja 5); U20 i notatki wydania 0.4 poprawione."
+    },
+    {
+      "n": 547,
+      "at": "2026-11-04 00:10",
+      "text": "E7.9: wariant lean nigdy wcześniej nie był budowany na LXR i miał ostrzeżenie kompilatora (earlyTaps nieużywane), na którym check.sh pada. Poprawione (cb432aa, przeniesione też do połowy i pełnej; obraz połowy bez zmian, 67ca9833). Bramki lean od nowa."
     }
   ]
 }

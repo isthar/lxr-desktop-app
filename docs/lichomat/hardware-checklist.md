@@ -39,10 +39,10 @@ voice), the tempo-synced delay and the DJ filter, and a 13-byte block after the 
 kit file (`.SND` 255 → 268 B, and `tmp.snd`) that holds the new kit settings; 1.7 ignores the block,
 and a kit saved by 1.7 loses it (U25). 0.4 is not released yet: there is no
 `LXR_V2_LICHOMAT_0.4.img` to install, and its SHA-256 goes into the run sheet when CI builds the
-release commit; H1 will then show `v0.4 unofficial`. **The reverb's rate is provisional:** the build
-runs it at half rate until the CPU readings fix it (plan D41). Run H12 on 0.3 first: its step 3
-`pk` picks the rate, and U20 then checks the CPU load with the reverb on, on the file CI builds from
-`v0.4` at that rate.
+release commit; H1 will then show `v0.4 unofficial`. **The reverb's rate waits for H12:** half rate, or
+lean if H12 step 3's `pk` is above 63.28 (plan D41, tracker Q34). Run H12 on 0.3 first. A local
+build for each outcome is ready in `build/images/po-H12/` (tracker E7.9), so U20 can follow H12 at
+once on the file `pk` picks; CI builds the release file from the matching branch afterwards.
 Test 0.4 (U21–U26) only on the build whose rate H12 and U20 have fixed. 0.4 keeps everything of
 0.3. Back up the card before you install 0.4, too. `tools/demo_v04.sh` on branch `v0.4` renders the
 synced delay, DJ filter sweeps, the reverb, freeze, rumble and the four kit recipes in the emulator
@@ -1128,17 +1128,22 @@ played and sent in 6.
 
 ## U20: CPU with the reverb
 
-0.4's CPU load with the reverb on (plan v0.4 D41). Run H12 on 0.3 first. Its step 3 `pk` (the
-highest of the 30 s, the heavy pattern with the delay on) is P, and P picks the reverb's rate:
+0.4's CPU load with the reverb on (plan v0.4 D41, amended by tracker Q34). Run H12 on 0.3 first. Its
+step 3 `pk` (the highest of the 30 s, the heavy pattern with the delay on) is P, and P picks the
+reverb's rate:
 
-- **full rate if P ≤ 46.24;**
 - **half rate if P ≤ 63.28;**
 - **else half rate and lean** (no early reflections, and the wet right channel is the left).
 
-These limits are 85 % less the reverb's estimated cost (35.07 % at full rate, 18.03 % at half rate)
-and the DJ filter's (3.69 %), `docs/lichomat/reports/v0.4-reverb-cost.md`. The build on `v0.4`
-runs at half rate provisionally (tracker Q30), so a P that picks the full rate or lean means a build
-at that rate first; run U20 on it. Use H12 step 3's kit, pattern and BPM (140), on 0.4.
+The limit is 85 % less the reverb's estimated cost at half rate (18.03 %) and the DJ filter's
+(3.69 %), `docs/lichomat/reports/v0.4-reverb-cost.md`. D41 also allowed the full rate for P ≤ 46.24
+(its cost 35.07 %); since Q34 (2026-11-04) the reverb stays at half rate there too: at full rate the
+tank's bass tail leans left (6–7 dB on a kick) and every kit and recipe is tuned at half rate. The
+full-rate build exists (branch `v0.4-full`) in case the owner prefers it by ear.
+
+A build for each outcome is ready, with the reverb's DC offset fix (E7.7): `build/images/po-H12/`
+(tracker E7.9; `build/images/README.txt`). Install the one P picks and run U20 on it at once; no
+other build is needed. Use H12 step 3's kit, pattern and BPM (140), on 0.4.
 
 1. Open the FX page (SHIFT + step 15), then SHIFT + step 15 again for the reverb sub-page (first
    screen `lvl siz dec ton`, second screen `pre mod frz syn`): `lvl` 100, `siz` 127, `dec` 127.
@@ -1153,11 +1158,11 @@ at that rate first; run U20 on it. Use H12 step 3's kit, pattern and BPM (140), 
 
 **Expected:** `pk` below 95 and `ovf` 0 in steps 1–3, and no dropouts or clicks. In step 4 the
 values match H12 step 3 within 2 points: at `lvl` 0 the reverb is not computed, nor the DJ filter at
-64. If `pk` reaches 95 in steps 1–3, the next mode down (full rate → half rate → lean) is a fix-up
-before the release, and U20 runs again on that build.
+64. If `pk` reaches 95 in steps 1–3, the next mode down (half rate → lean) is a fix-up before the
+release: install the lean file from `build/images/po-H12/` and run U20 again on it.
 
 **Record:** `CPU` and `pk` for each step, `Qmax` and `ovf`, the BPM, H12 step 3's `pk` (P), and the
-rate of the build (the release notes name it; the build on `v0.4` now: half rate).
+rate of the build (the folder of `build/images/po-H12/` it came from, with its SHA-256).
 
 ## U21: reverb and freeze
 
