@@ -40,6 +40,7 @@
 
 
 
+#if !ATMO_REVERB_LEAN	//LICHOMAT v0.4: lean has no early reflections (plan D41), so no taps
 static const float earlyTaps[] =
 {
 		12,
@@ -47,6 +48,7 @@ static const float earlyTaps[] =
 		38,
 		50
 };
+#endif
 
 void Reverb_init(Reverb *r)
 {
