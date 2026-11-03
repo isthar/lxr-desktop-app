@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 16:53",
+    "updated": "2026-11-03 17:03",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 w wykonaniu: E6.20 (nagrywanie), potem E6.21–E6.23",
     "branch": "timing-core",
-    "head": "597eeb2",
+    "head": "c82febf",
     "next": "E6.20 i jego pełny przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
-    "updated_at": "2026-11-03T16:53:00+01:00",
-    "now": "E6.20 (v0.6 zad. 7): wykonawca; lekki przegląd E6.19 równolegle"
+    "updated_at": "2026-11-03T17:03:00+01:00",
+    "now": "Przegląd E6.20; testy z przeglądu E6.17–E6.18 (wykonawca)"
   },
   "epics": [
     {
@@ -596,8 +596,8 @@
     {
       "id": "E6.20",
       "epic": "E6",
-      "status": "w toku",
-      "title": "v0.6 zad. 7: nagrywanie z mikrotimingiem (seqc_recordPlace), testy record_place i record_micro; pełny przegląd",
+      "status": "zrobione",
+      "title": "v0.6 zad. 7: nagrywanie z mikrotimingiem (seqc_recordPlace, seq_addNoteAt), testy record_place i record_micro (c82febf); pełny przegląd w toku",
       "updated": "2026-11-03"
     },
     {
@@ -3593,6 +3593,11 @@
       "n": 513,
       "at": "2026-11-03 16:53",
       "text": "Wracamy (3.11). E6.20 (v0.6 zad. 7) w toku: wykonawca robi nagrywanie z mikrotimingiem, potem testy z przeglądu E6.17–E6.18 osobnym commitem; limit czasu ok. 45 min. Równolegle lekki przegląd E6.19 (interfejs), tylko odczyt. Usage tygodnia ok. 1%. CI na GitHubie dalej stoi (84 h w kolejce)."
+    },
+    {
+      "n": 514,
+      "at": "2026-11-03 17:03",
+      "text": "E6.20 (v0.6 zad. 7) zrobione, c82febf: nagrywanie umieszcza nutę według jej czasu (znacznik MIDI z v0.5) względem kroku i zapisuje przesunięcie (rqn off). Host 125/125 (UBSan i ASan), emulator 331/331 i 303/303, 32 nagrania wzorcowe bez zmian, 0 ostrzeżeń, RAM −24 B (usunięta stara kopia fazy). Start pełnego przeglądu E6.20 (tylko odczyt); wykonawca dopisuje testy z przeglądu E6.17–E6.18."
     }
   ]
 }
