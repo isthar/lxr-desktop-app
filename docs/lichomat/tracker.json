@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 19:42",
+    "updated": "2026-11-03 19:44",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 gotowe w kodzie (M18); utwór pokazowy do odsłuchu",
     "branch": "timing-core",
-    "head": "e8ae371",
+    "head": "13c711c",
     "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T19:42:00+01:00",
-    "now": ""
+    "updated_at": "2026-11-03T19:44:00+01:00",
+    "now": "E7.8: badanie delaya ping-pong"
   },
   "epics": [
     {
@@ -708,7 +708,7 @@
     {
       "id": "E7.8",
       "epic": "E7",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Delay ping-pong (Pp) nie dodaje szerokości stereo na wyjściu 1 w emulatorze (sygnał side się nie zmienia); znalezione przy drugim utworze pokazowym. Sprawdzić, czy to błąd delaya v0.4, routingu FX czy emulatora",
       "updated": "2026-11-03"
     },
@@ -3772,6 +3772,11 @@
       "n": 535,
       "at": "2026-11-03 19:42",
       "text": "E6.25 zrobione: drugi utwór pokazowy, 2:42 przy 144 BPM (showcase, a84db5c; tools/demo_showcase.sh --track 2), jedna długa budowa na kicie PROSTO: przester stopy rośnie do wartości z PRZESTER, linia acid ze slide'ami i warunkami trigów otwiera filtr przez cały utwór, perkusja ×3/4, delay 1/8 z kropką w momencie napięcia, drop przy 1:47. Dodany na stronie odsłuchu. Nowy wiersz E7.8: delay ping-pong nie daje szerokości stereo na wyjściu 1 w emulatorze."
+    },
+    {
+      "n": 536,
+      "at": "2026-11-03 19:44",
+      "text": "E7.8 w toku: agent sprawdza, dlaczego delay ping-pong nie daje szerokości stereo (błąd delaya, routing FX, synchronizacja z v0.4 czy emulator), i przy okazji, czy pogłos w slocie FX z fw 1.7 ma ten sam offset DC co E7.7. Tylko pomiary i propozycja poprawki."
     }
   ]
 }
