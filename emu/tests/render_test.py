@@ -1442,6 +1442,46 @@ def E410_long_names(t):
     check(rows['trgedit'][0] == 'SequencrTrig tmg' and rows['trgedit'][1] == ' ' * 13 + 'smp',
           'edit mode on trg: %r' % rows['trgedit'])
 
+def pp_levels(t, pan):
+    """one click of voice 1 at pan through the fx card's delay, type Pp on St1, synced to 1/8 at
+    120 BPM (D = 250 ms), out 1 alone: [(L, R, L and R together)] in dBFS of the dry hit (k = 0)
+    and of echoes 1-3, each over 50 ms from 5 ms before onset + k x D"""
+    args = ['--stereo', 'out1', '--bpm', '120', '--no-start', '--seconds', '1.2']
+    for p in ['fx_type=4', 'fx_delay_type=1', 'fx_delay_sync=5', 'fx_p3=127', 'pan1=%d' % pan, 'velod1=3',
+              'modamnt1=0'] + ['vol%d=0' % v for v in range(2, 7)]:
+        args += ['--param', p]
+    _, wav, _ = t.render(os.path.join(t.root, 'emu', 'tests', 'cards', 'fx'),
+                         args + ['--events', t.script('0ms press start\n+60ms press start\n')])
+    ch, a = samples(wav)
+    check(ch == 2, '--stereo out1: %d channels' % ch)
+    on = next(f for f in range(len(a) // 2) if abs(a[2 * f]) > 100 or abs(a[2 * f + 1]) > 100) / 44140.625
+    out = []
+    for k in range(4):
+        w = (on + k * 0.25 - 0.005, on + k * 0.25 + 0.045)
+        out.append((dbfs(wav, (0,), *w), dbfs(wav, (1,), *w), dbfs(wav, (0, 1), *w)))
+    print('pan %d: %s' % (pan, '  '.join('%d: L %.2f R %.2f' % (k, x[0], x[1]) for k, x in enumerate(out))))
+    return out
+
+@case
+def E78_pingpong(t):
+    # fw 1.7 fix E7.8: fw 1.7 wrote the send's L into one line and its R into the other, and the
+    # lines feed each other, so a centred send echoed equally on both sides. The left line now
+    # takes (L + R) / sqrt 2 and the right line only the feedback: the echoes alternate R, L, R
+    # at any pan, a centred send at fw 1.7's echo energy, a hard-left one 3 dB below it.
+    # fw 1.7, centred: echo 1 total 4.99 dB above the dry hit's, the same as hard left.
+    for pan in (64, 0):
+        x = pp_levels(t, pan)
+        if pan == 0:
+            check(x[0][0] > -60 and x[0][0] - x[0][1] >= 20, 'pan 0: the dry hit is not on L: %r' % (x[0],))
+        for k, side in ((1, 1), (2, 0), (3, 1)):
+            on, off = x[k][side], x[k][1 - side]
+            check(on > -60 and on - off >= 20, 'pan %d: echo %d is not on %s alone: L %.2f, R %.2f dBFS'
+                  % (pan, k, 'LR'[side], x[k][0], x[k][1]))
+        want = 4.99 if pan == 64 else 4.99 - 3.01
+        got = x[1][2] - x[0][2]
+        check(abs(got - want) <= 0.5, 'pan %d: echo 1 is %.2f dB over the dry hit, not %.2f +- 0.5'
+              % (pan, got, want))
+
 def onsets(t, *args):
     """emu_onsets.py's exit code, spread and output"""
     p = subprocess.run([sys.executable, os.path.join(t.root, 'tools', 'emu_onsets.py')] + [str(a) for a in args],

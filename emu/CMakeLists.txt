@@ -333,6 +333,8 @@ emu_render_tests(V05_trig_setting V05_onsets_tool V05_onsets V05_midi_in V05_sla
 emu_render_tests(V06_rec_setting V06_ui V06_onsets_ticks V06_card V06_micro V06_template V06_record)
 # fw 1.7 fixes: the long names in edit mode (tracker E4.10)
 emu_render_tests(E410_long_names)
+# fw 1.7 fixes: the ping-pong delay of a centred send (tracker E7.8)
+emu_render_tests(E78_pingpong)
 # M23: emu/tests/cards/make.sh gives the committed card fixtures (spec 5.6)
 emu_render_tests(M23)
 
