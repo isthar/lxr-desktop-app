@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 19:09",
+    "updated": "2026-11-03 19:10",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 gotowe w kodzie (M18); utwór pokazowy do odsłuchu",
     "branch": "timing-core",
-    "head": "2a44244",
+    "head": "f723a89",
     "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T19:09:00+01:00",
-    "now": ""
+    "updated_at": "2026-11-03T19:10:00+01:00",
+    "now": "E7.7: badanie offsetu DC pogłosu; E4.11 (B13): pary A/B do odsłuchu PWM"
   },
   "epics": [
     {
@@ -694,7 +694,7 @@
     {
       "id": "E7.7",
       "epic": "E7",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Pogłos v0.4 zostawia po wybrzmieniu stały offset DC (+95 LSB, ok. −50 dBFS) na wyjściu, dopóki poziom pogłosu nie spadnie do 0; znalezione przy utworze pokazowym (E6.24). Zbadać źródło (filtr tonu, freeze, zaokrąglenia) i usunąć bez zmiany 38 nagrań wzorcowych, jeśli się da",
       "updated": "2026-11-03"
     },
@@ -3714,6 +3714,11 @@
       "n": 529,
       "at": "2026-11-03 19:09",
       "text": "E6.24 zrobione: utwór pokazowy LICHOMAT v0.6, 2:49 przy 142 BPM, jedno ciągłe ujęcie firmware'u w emulatorze, nic nie sklejane (gałąź showcase, a6ad0cc, skrypt tools/demo_showcase.sh). Prywatna strona do odsłuchu z utworem, wszystkimi szablonami groove (z wykresem przesunięć) i nagranym take'iem: https://claude.ai/artifact/Rpt17H2FX1sRRjssf7A4f6. Przy renderze wyszedł stały offset DC pogłosu po wybrzmieniu (ok. −50 dBFS): nowy wiersz E7.7."
+    },
+    {
+      "n": 530,
+      "at": "2026-11-03 19:10",
+      "text": "E7.7 w toku: agent szuka źródła offsetu DC pogłosu i proponuje poprawkę (tylko pomiary i propozycja, bez zmian w gałęziach; poprawka pewnie pojedzie z ponownym zapisem G13–G15 po H12). E4.11 (B13): drugi agent przygotowuje pary A/B (obecne brzmienie PWM kontra poprawione) do Twojego odsłuchu, żebyś mógł zdecydować o B13 jednym porównaniem."
     }
   ]
 }
