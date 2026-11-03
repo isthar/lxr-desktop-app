@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-03 20:16",
+    "updated": "2026-11-03 20:17",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "v0.6 gotowe w kodzie (M18); utwór pokazowy do odsłuchu",
+    "focus": "Czeka na Ciebie: H12, testy na LXR, wybór B13",
     "branch": "timing-core",
-    "head": "3c2714b",
-    "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T20:16:00+01:00",
+    "head": "ff779aa",
+    "next": "H12 na 0.3 z CI (30 min), potem sesja ★ na 0.6; odsłuch utworów pokazowych i B13 na stronie odsłuchu",
+    "updated_at": "2026-11-03T20:17:00+01:00",
     "now": ""
   },
   "epics": [
@@ -716,8 +716,8 @@
       "id": "E8.1",
       "epic": "E8",
       "status": "do zrobienia",
-      "title": "Ty: sesja testowa na v0.3, H12 najpierw, potem H1–H13 i U1–U19 (kolejność w docs/lichomat/test-session-v0.3.md); potem wydanie v0.3, które zawiera v0.1 i v0.2 (zamiast osobnego wydania v0.2, dawne E5.6)",
-      "updated": "2026-11-01"
+      "title": "Ty: sesja testowa według docs/lichomat/test-session-v0.6.md (zastępuje plan na 0.3): część 1 na 0.3 z CI, H12 najpierw (30 min); część 2 na 0.6 (wersja ★ ok. 2,5 h); obrazy w build/images/; potem wydanie v0.3",
+      "updated": "2026-11-03"
     },
     {
       "id": "E8.2",
@@ -3799,6 +3799,11 @@
       "n": 539,
       "at": "2026-11-03 20:16",
       "text": "Oba utwory pokazowe przerenderowane z v0.6 (e971801: ping-pong, krótkie nazwy, tablica PWM) po scaleniu v0.6 do gałęzi showcase (4a8ba89, wypchnięte). Szczyty bez zmian (−3,4 i −4,8 dBFS), bez przesterowania. Strona odsłuchu zaktualizowana."
+    },
+    {
+      "n": 540,
+      "at": "2026-11-03 20:17",
+      "text": "Koniec wieczornej roboty. Wszystko, co zostało otwarte, czeka na Ciebie: H12 i testy według test-session-v0.6.md (E8.1), wybór A/B dla B13 na stronie odsłuchu (E4.11), zgoda na ponowienie CI (E8.5), A1–A12 w aplikacji (E8.4). Poprawka offsetu DC pogłosu (E7.7) jest gotowa i wejdzie razem ze zmianą częstotliwości po H12. Usage ok. 5,3%."
     }
   ]
 }
