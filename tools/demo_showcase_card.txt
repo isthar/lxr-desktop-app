@@ -1,0 +1,252 @@
+# The card of the showcase track (tools/demo_showcase.sh): the HUSTAWKA kit (slot 57 of the kits
+# branch) as kit 0, a few kit edits, the one pattern the track plays, and eight mute scenes. Run on a
+# seeded card whose 00-*.SND is HUSTAWKA, with --keep-card; the track's render then plays the kept
+# card. Values as the menu stores them (emu/render/render_params.h); step_prob 101-115 are the trig
+# conditions 1:2 2:2 1:3 2:3 3:3 1:4 2:4 3:4 4:4 Fil !Fl 1st !1s Pre !Pr; track_tpl 0-7 are
+# off swg lay lyb rlx 2bt psh drg; step_micro is 84 + ticks (1/96 of a step).
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --no-start --seconds 40
+#
+# --- kit 0: HUSTAWKA with three edits ---
+# the Snare voice becomes the rolling perc: a sine on D5 with a short pitch blip, a little noise
+# and the Rim transient, short; step volumes on; a little right
+0ms param osc_wave_snare=0
++20ms param coarse4=74
++20ms param fine4=64
++20ms param mix1=18
++20ms param noise_freq1=100
++20ms param modamnt4=22
++20ms param mod_eg4=10
++20ms param veloa4=0
++20ms param velod4=7
++20ms param vol_slope4=40
++20ms param repeat4=0
++20ms param filter_type_4=7
++20ms param snare_distortion=0
++20ms param trans4_wave=6
++20ms param trans4_vol=20
++20ms param volume_mod_on_off4=1
++20ms param vol4=44
++20ms param pan4=84
+# the top louder and a little longer than the kit's, so the lay template is heard: the even-16th
+# ghosts (Cymbal) and the closed and open hat
++20ms param vol5=110
++20ms param velod5=7
++20ms param velod6_closed=6
++20ms param velod6_open=26
+# the kick a little lower, for headroom with the perc and the louder top
++20ms param vol1=72
++200ms save-kit 0
+#
+# --- pattern 0 ---
++100ms param shuffle=0
+# Drum 1, the kick: the quarters, straight (no template); step 13 is !Fl, so a fill drops the
+# fourth kick and the bed and the rumble fill the gap
++100ms press voice1
++100ms press step1
++100ms press step5
++100ms press step9
++100ms press step13
++100ms param active_step=12
++100ms param step_prob=111
+# Drum 2, the bed: the off-beat 8ths (into the reverb, ducked by the kick: the rumble)
++100ms press voice2
++100ms press step3
++100ms press step7
++100ms press step11
++100ms press step15
+# Drum 3, the figure (G4): accents on the last 16th of each beat; step 10 only every 4th bar (4:4),
+# step 14 every 2nd (1:2); steps 13 and 15 only in a fill (Fil); rlx at 80 %, and two steps moved
+# by hand on top of it (mic: step 4 +8 ticks, step 12 -6 ticks)
++100ms press voice3
++100ms press step3
++100ms press step4
++100ms press step7
++100ms press step8
++100ms press step10
++100ms press step11
++100ms press step12
++100ms press step13
++100ms press step14
++100ms press step15
++100ms press step16
++100ms param active_step=2
++100ms param step_volume=70
++100ms param active_step=3
++100ms param step_volume=110
++100ms param step_micro=92
++100ms param active_step=6
++100ms param step_volume=64
++100ms param active_step=7
++100ms param step_volume=110
++100ms param active_step=9
++100ms param step_volume=60
++100ms param step_prob=109
++100ms param active_step=10
++100ms param step_volume=70
++100ms param active_step=11
++100ms param step_volume=110
++100ms param step_micro=78
++100ms param active_step=12
++100ms param step_volume=90
++100ms param step_prob=110
++100ms param active_step=13
++100ms param step_volume=64
++100ms param step_prob=101
++100ms param active_step=14
++100ms param step_volume=100
++100ms param step_prob=110
++100ms param active_step=15
++100ms param step_volume=110
++100ms param track_tpl=4
++100ms param track_tpl_amt=80
+# the Snare voice, the perc: a 3-step track (a dotted-8th loop against the 4/4, back in line every
+# 3 bars), step 1 accented, step 3 a ghost every 2nd loop (1:2); rlx at 80 %
++100ms press voice4
++100ms param track_length=3
++100ms press step1
++100ms press step3
++100ms param active_step=0
++100ms param step_volume=115
++100ms param active_step=2
++100ms param step_volume=45
++100ms param step_prob=101
++100ms param track_tpl=4
++100ms param track_tpl_amt=80
+# Cymbal, the ghosts: the even 16ths ("e" 50, "a" 70), lay at 120 %, velocity humanize 15 %
++100ms press voice5
++100ms press step2
++100ms press step4
++100ms press step6
++100ms press step8
++100ms press step10
++100ms press step12
++100ms press step14
++100ms press step16
++100ms param active_step=1
++100ms param step_volume=50
++100ms param active_step=3
++100ms param step_volume=70
++100ms param active_step=5
++100ms param step_volume=50
++100ms param active_step=7
++100ms param step_volume=70
++100ms param active_step=9
++100ms param step_volume=50
++100ms param active_step=11
++100ms param step_volume=70
++100ms param active_step=13
++100ms param step_volume=50
++100ms param active_step=15
++100ms param step_volume=70
++100ms param track_tpl=2
++100ms param track_tpl_amt=120
++100ms param human_vol=15
+# the closed hat (track 6): the quarters at 60; steps 14-16 a crescendo only in a fill (Fil); lay
+# at 120 %, the same template as the open hat (they share the voice)
++100ms press voice6
++100ms press step1
++100ms press step5
++100ms press step9
++100ms press step13
++100ms press step14
++100ms press step15
++100ms press step16
++100ms param active_step=0
++100ms param step_volume=60
++100ms param active_step=4
++100ms param step_volume=60
++100ms param active_step=8
++100ms param step_volume=60
++100ms param active_step=12
++100ms param step_volume=60
++100ms param active_step=13
++100ms param step_volume=60
++100ms param step_prob=110
++100ms param active_step=14
++100ms param step_volume=80
++100ms param step_prob=110
++100ms param active_step=15
++100ms param step_volume=100
++100ms param step_prob=110
++100ms param track_tpl=2
++100ms param track_tpl_amt=120
+# the open hat (track 7): the off-beat 8ths; step 15 is !Fl (the fill's closed hats take it)
++100ms press voice7
++100ms press step3
++100ms press step7
++100ms press step11
++100ms press step15
++100ms param active_step=14
++100ms param step_prob=111
++100ms param track_tpl=2
++100ms param track_tpl_amt=120
++200ms save-pattern 0
+#
+# --- the mute scenes, in the performance mode (the second mode button): the voice buttons mute,
+# COPY + step 9-16 stores scene 1-8 ---
++200ms press mode2
+# scene 1, the intro: kick and bed (3-7 muted)
++100ms press voice3
++100ms press voice4
++100ms press voice5
++100ms press voice6
++100ms press voice7
++100ms down copy
++50ms press step9
++100ms up copy
+# scene 2: + the open hat
++100ms press voice7
++100ms down copy
++50ms press step10
++100ms up copy
+# scene 3: + the ghosts and the closed hat (the outro too)
++100ms press voice5
++100ms press voice6
++100ms down copy
++50ms press step11
++100ms up copy
+# scene 4: + the perc
++100ms press voice4
++100ms down copy
++50ms press step12
++100ms up copy
+# scene 5: everything (+ the figure)
++100ms press voice3
++100ms down copy
++50ms press step13
++100ms up copy
+# scene 6, the breakdown: no kick
++100ms press voice1
++100ms down copy
++50ms press step14
++100ms up copy
+# scene 7: the figure alone
++100ms press voice2
++100ms press voice4
++100ms press voice5
++100ms press voice6
++100ms press voice7
++100ms down copy
++50ms press step15
++100ms up copy
+# scene 8: the figure, the ghosts and the hats
++100ms press voice5
++100ms press voice6
++100ms press voice7
++100ms down copy
++50ms press step16
++100ms up copy
+# nothing muted again, back to the voice mode; the scenes are saved with the project
++100ms press voice1
++100ms press voice2
++100ms press voice4
++100ms press mode1
++300ms save-project 0
++100ms mark saved
