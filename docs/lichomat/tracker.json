@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-03 17:19",
+    "updated": "2026-11-03 17:27",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 w wykonaniu: E6.20 (nagrywanie), potem E6.21–E6.23",
     "branch": "timing-core",
-    "head": "a80fbab",
+    "head": "2f3df5c",
     "next": "E6.20 i jego pełny przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
-    "updated_at": "2026-11-03T17:19:00+01:00",
+    "updated_at": "2026-11-03T17:27:00+01:00",
     "now": "Przegląd E6.20; testy z przeglądu E6.17–E6.18 (wykonawca)"
   },
   "epics": [
@@ -590,8 +590,8 @@
       "id": "E6.19",
       "epic": "E6",
       "status": "zrobione",
-      "title": "v0.6 zad. 6: interfejs: mic na stronie kroku, tpl i amt na stronie toru, rqn na stronie nagrywania (e270f44); lekki przegląd: 5 drobnych poprawek w kolejce",
-      "updated": "2026-11-02"
+      "title": "v0.6 zad. 6: interfejs: mic na stronie kroku, tpl i amt na stronie toru, rqn na stronie nagrywania (e270f44); poprawki z lekkiego przeglądu (2f3df5c)",
+      "updated": "2026-11-03"
     },
     {
       "id": "E6.20",
@@ -3613,6 +3613,11 @@
       "n": 517,
       "at": "2026-11-03 17:19",
       "text": "Pełny przegląd E6.20 (nagrywanie) gotowy: nic krytycznego ani ważnego; zgodność ze specyfikacją potwierdzona, 18 z 25 mutacji zabitych, w tym każda zła reguła znaku i remisu. Drobne poprawki w kolejce u wykonawcy: testy (stan ARMED, zawinięcie pętli przy długości 13, slave, rqn 2), strażnik „tylko w seq_tick()”, blokada przy edycji bajtów timingu z menu (wyścig z nagrywaniem z przerwania), zapisane przesunięcie ograniczone do zakresu, który da się zagrać (specyfikacja §7.2 poprawiona), komentarze."
+    },
+    {
+      "n": 518,
+      "at": "2026-11-03 17:27",
+      "text": "E6.19, poprawki z lekkiego przeglądu, 2f3df5c: strzałka na ekranie toru, SHIFT+mode2 przechodzi 1→2→3, wyjście z tpl amt wraca na pierwszą podstronę, rqn > 1 czytane jako off, test ścieżki mic z menu w V06_ui (każdy test pada na swojej mutacji). Host 125/125, emulator 331/331 i 303/303, 32 nagrania wzorcowe bez zmian. Teraz poprawki z przeglądu E6.20."
     }
   ]
 }
