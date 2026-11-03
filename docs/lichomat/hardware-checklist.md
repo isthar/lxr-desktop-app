@@ -1,4 +1,4 @@
-# LICHOMAT 0.1, 0.2, 0.3, 0.4 and 0.5: hardware checklist (H1–H13, U1–U32, X4, optional X1–X3)
+# LICHOMAT 0.1, 0.2, 0.3, 0.4, 0.5 and 0.6: hardware checklist (H1–H13, U1–U37, X4, optional X1–X3)
 
 These are the checks of spec §13.2, written out as procedures for the LXR-02. Only the owner can run
 them, on the real device; nothing here is ever marked as passed by an agent. Record every result in
@@ -64,13 +64,31 @@ before you install 0.5, too. `tools/demo_v05.sh` on branch `v0.5` renders 0.4's 
 settings and two grooves in both (in the worktree `build/wt-v05`: `build/demo-v05/v05-*.wav`), to
 compare by ear.
 
+**LICHOMAT 0.6.** The whole of 0.6 is built (plan
+`docs/superpowers/plans/2026-11-02-v0.6-microtiming-groove.md`, spec
+`docs/superpowers/specs/2026-11-02-v0.6-microtiming-groove.md`, branch `v0.6`): each step has its own
+timing `mic` in ticks, 1/96 of the track's step (1.30 ms at 120 BPM), each voice of a pattern can
+follow one of seven groove templates with an amount (`tpl amt`), and live recording keeps the played
+offset in the step's `mic` unless the new global setting `rqn` is `on`. Patterns that use `mic` or a
+template get a 244-byte block after 0.2's block in their pattern file (`.PAT` and `tmp.pat`); 1.7 and
+0.2–0.5 ignore it, and a pattern without them is 0.5's file byte for byte. `rqn` is saved in byte 19
+of `GLO.CFG`, which 1.7 writes as 0 and never reads. 0.6 is built on 0.5 and is not released yet: it
+follows 0.5's release, and what 0.5 still takes in before it (0.4's reverb rate) is merged into 0.6
+first. So there is no `LXR_V2_LICHOMAT_0.6.img` to install yet; its SHA-256 goes into the run sheet
+when CI builds the release commit, and H1 will then show `v0.6 unofficial`. Run U33–U37 on that
+file. 0.6 keeps everything of 0.5, so the 0.5 checks need not be repeated. U33–U35 read onsets at
+sample level with U27's setup. Back up the card before you install 0.6, too. `tools/demo_v06.sh` on
+branch `v0.6` renders a closed hat with each template and a recorded take (in the worktree
+`build/wt-v06`: `build/demo/v06-*.wav`), to compare by ear; `docs/lichomat/groove-recipes-v0.6.md`
+(Polish) suggests which template goes on which track.
+
 **What you need**
 
 - The LXR-02, its SD card and a card reader.
 - The update files of the [run sheet](#run-sheet): `LXR_V2_LICHOMAT_0.1.img`,
-  `LXR_V2_LICHOMAT_0.2.img` and `LXR_V2_LICHOMAT_0.3.img` (LICHOMAT; 0.4 and 0.5 once CI builds their
-  release commits), and `LXR_V2_V1.7.img` (official 1.7, for H13, U12, U14, U16, U18, U25, U32 and
-  for comparisons).
+  `LXR_V2_LICHOMAT_0.2.img` and `LXR_V2_LICHOMAT_0.3.img` (LICHOMAT; 0.4, 0.5 and 0.6 once CI builds
+  their release commits), and `LXR_V2_V1.7.img` (official 1.7, for H13, U12, U14, U16, U18, U25, U32,
+  U36 and for comparisons).
 - A computer with a DAW that can record the LXR's audio output and send and receive MIDI over USB
   (and over DIN through a MIDI interface).
 - A MIDI monitor that shows time stamps, for example MIDI Monitor on macOS. Watch the LXR's MIDI
@@ -119,6 +137,15 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
 - Step timing: in step mode select a step; its page shows velocity, note and probability, and its
   second screen flam (ratchet: `off`, `x2`, `x3`, `x4`, `x6`, `x8`) and shift (`-7`…`+7`, in 1/8
   of a step).
+- Microtiming (0.6, `mic`): the step page's second screen reads `flm shf mic`; knob 3 sets `mic`, the
+  step's own offset in ticks of 1/96 of the track's step, `-84`…`+84`, 0 on the grid. The knob and
+  the encoder step it one tick per move. In edit mode the top row reads `Step` and `Micro`, and the
+  bottom row shows the ticks and, to their left, the offset in ms at the current BPM and the track's
+  tempo (+18 at 120 BPM: `23.4ms`). `shf` is now the coarse view of `mic`: one `shf` unit is 12 ticks,
+  a `shf` edit keeps the fine part (and stops `mic` at ±84), and a `mic` edit sets `shf` to the
+  nearest unit (+19 shows `shf` +2). A step from 0.5 with `shf` +2 shows `mic` +24. Turning the
+  encoder past `mic` reaches the p-lock sub-page, as it passed `shf` before. Like the step's other
+  values, `mic` belongs to the shown pattern and is saved with it.
 - A voice's MIDI channel and note (the note override) are on the second screen of its MIX sub-page
   (select button 8).
 - Shuffle belongs to the pattern: selecting a pattern loads the shuffle saved with it, and a value
@@ -137,6 +164,11 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
   the encoder push edit them. They belong to the selected voice (a voice button on the page selects
   another) in the shown pattern and are saved with it; like the pattern's other edits, a pattern
   change discards them unless you save the pattern first. A new pattern has ` x1` and 0 everywhere.
+  From 0.6 the encoder turned on past `dly` reaches a third screen, `tpl amt` (knobs 1 and 2): `tpl`
+  the groove template, `off swg lay lyb rlx 2bt psh drg` (edit mode shows the long names `even
+  swing`, `lay back`, `lay bar`, `relax bar`, `two beat`, `push off`, `drag off`), and `amt` its
+  amount, `0`…`200` %. A new pattern and a pattern from 0.5 have `off` and 100. The template moves
+  the sixteen 16ths of each bar; the quarters stay on the grid in every template.
 - Trig conditions (0.2): on the step page `prb` goes on past 100: 101–115 show `1:2 2:2 1:3 2:3
   3:3 1:4 2:4 3:4 4:4 Fil !Fl 1st !1s Pre !Pr`.
 - Rotation (0.2): SHIFT + step 1 moves every step of the selected voice in the shown pattern one
@@ -175,6 +207,11 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
   samples (2.90 ms) after it; `blk` starts it at the beginning of the next audio block, as 0.4 did.
   It is saved with the global settings (the save page's global type, as in 1.7), in byte 9 of
   `GLO.CFG`. A switch while playing takes effect at the next hit.
+- Record quantize (0.6, `rqn`, a global setting): SHIFT + REC opens the recording page, `aut rqn`.
+  `rqn` `off` (the default) records each note with its played offset into the step's `mic`, measured
+  from where the step plays (the grid with the swing, the template and `dly`); `on` records onto the
+  grid and leaves the step's timing as it was, as 0.5 did. It is saved with the global settings, in
+  byte 19 of `GLO.CFG`, which 1.7 writes as 0 and never reads.
 
 **Measuring times in a recording.** Record the LXR's main output at 48 kHz (H7 step 6 at 44.1
 kHz). Find a hit's onset by zooming in on the waveform (or with the DAW's transient detection), and
@@ -1443,6 +1480,122 @@ such as the drum filter cutoff, moves by up to 62 samples (1.4 ms) against the o
 
 **Record:** pass or fail per step, and what `trg` showed in 1 and 2.
 
+## U33–U37: microtiming and groove templates (0.6)
+
+0.6 gives each step its own timing in ticks, each track a groove template, and keeps the played
+offset when it records (spec `docs/superpowers/specs/2026-11-02-v0.6-microtiming-groove.md` §11.1,
+tracker E6.2, E6.4, E6.5). Run these checks on `LXR_V2_LICHOMAT_0.6.img`, with `trg smp` unless a
+step says otherwise. The setup is U27's: the LXR's main output (output 1, stereo) recorded into a DAW
+at 44.1 or 48 kHz. U33 uses the click of `docs/lichomat/kit-recipes-v0.5.md` on Drum 1 (voice 1); U34
+and U35 name their voices. At 120 BPM one tick is 1.302 ms (57.4 samples at 44.1 kHz, 62.5 at 48 kHz);
+at 142 BPM it is 1.100 ms (48.5 samples at 44.1 kHz, 52.8 at 48 kHz). Read the onsets at sample
+level, as in U27. A step's offset is
+its onset minus its grid time; the grid time is the onset of a step that is not moved, plus the 16ths
+between them (125.0 ms at 120 BPM, 105.6 ms at 142). `mic`, `tpl amt` and `rqn` are described under
+"Where things are on the LXR".
+
+## U33: microtiming
+
+0.6's step microtiming `mic` (spec M1–M3, M14, M16). Use a pattern you can spare, all tracks 16 steps
+long, with the click kit.
+
+1. BPM 120, `trg smp`, shuffle 0, Drum 1 (the click) on all 16 steps, every other voice off. Set
+   `mic` on steps 2, 4, 6, 8, 10, 12, 14 and 16 to +1, −1, +6, −6, +18, −18, +47 and −47. Press
+   START and record 2 bars.
+2. On step 6, turn `shf` from +1 to +2 and back. `mic` reads +18, then +6.
+3. Set `trg blk` and record 2 bars.
+
+**Expected:**
+- 1: each of those steps sits at its tick count × 1.302 ms from its grid time (step 2 at +1.30 ms,
+  step 12 at −23.4 ms, step 14 at +61.2 ms), within 2 samples; the odd steps sit on the grid.
+- 2: as written.
+- 3: the same offsets within 64 samples.
+- In edit mode the bottom row shows the ms value (+18 = `23.4ms`).
+
+**Record:** the eight offsets in 1 and 3.
+
+## U34: templates
+
+0.6's groove templates (spec M4–M6, §4.2). Any kit with a kick on voice 1 and a closed hat on voice 6
+will do.
+
+1. BPM 142, `trg smp`, shuffle 0. The kick on steps 1, 5, 9 and 13 (`tpl` `off`), the closed hat on
+   all 16 steps with `tpl` `lay`, `amt` 100 (the track page's third screen of voice 6). Record 2
+   bars.
+2. `amt` 50, then 150; record 2 bars each.
+3. Listen to every template on the hats with your own groove, with the kick straight.
+
+**Expected:**
+- 1: the hat's "e" (steps 2, 6, 10, 14) is 19.8 ms late and its "a" (steps 4, 8, 12, 16) 5.5 ms (18
+  and 5 ticks); the other steps sit on the kick's grid. All within 2 samples.
+- 2: at 50 %, 9.9 and 3.3 ms (9 and 3 ticks); at 150 %, 29.7 and 8.8 ms (27 and 8 ticks).
+- 3: no clicks, no missing hats, and the kick unchanged.
+
+**Record:** the offsets in 1 and 2, and which templates and amounts suit your tracks. They feed
+`docs/lichomat/groove-recipes-v0.6.md` and maybe a later change of the template table (spec §4.2).
+
+## U35: recording
+
+0.6 records a note with its played offset (spec M19–M23, §7). The note's time is its arrival at the
+LXR, and its offset is measured from where its step plays: the grid with the swing, the template and
+`dly`.
+
+1. BPM 142. For the DAW's grid to be the LXR's, run the LXR as a MIDI clock slave of the DAW over DIN,
+   as in U29 (BPM `MID`, `mrx` with N and R, for example `all`). Voice 3 with a short sound (the
+   click's values of the recipe on Drum 3 read best), on its own MIDI channel with `nte` `any` (as in
+   U28), `mrt` off, its track empty, `tpl` `off`, `dly` 0 and shuffle 0. The DAW
+   sends a clip of 16th notes on voice 3's channel over DIN, with steps 2, 6, 10 and 14 12 ms late,
+   steps 4, 8, 12 and 16 6 ms early, and the rest on the grid. With `rqn off`, turn REC on, record
+   one bar into the empty track and turn REC off. Then mute the clip, play the take back and record
+   the audio.
+2. The same with `rqn on`, into the empty track again: first remove the steps recorded in 1 (voice
+   button 3, then each lit step button). Recording overdubs, and with `rqn on` it leaves a step's
+   timing as it was.
+3. The same with `rqn off` and `tpl` `lay` at 100 % on that track.
+4. Play the hats by hand for a few bars with `rqn off`, and listen. The panel records through the
+   performance mode's one-shot roll, as in H10: the roll rate `One`, and step button 6 plays voice 6
+   (the closed hat) once per press.
+
+**Expected:**
+- 1: `mic` reads +11 on the late steps and −5 on the early ones (12.10 ms and −5.50 ms). The playback
+  reproduces the clip within 0.7 ms plus the interface's MIDI jitter.
+- 2: the steps on the grid, with `mic` 0.
+- 3: `mic` −7 and −10 (the played offset less `lay`'s 18 and 5 ticks), and the playback still
+  matches the clip.
+- 4: the take sounds as played.
+
+**Record:** the `mic` values and the playback offsets of 1–3, and an impression of 4.
+
+## U36: files and fw 1.7
+
+0.6's pattern files (spec M11–M13, §5.4).
+
+1. Save a pattern with `mic` values, a template and `amt` 70. Switch off and on: they are back.
+   Repeat with a project save and load, and with the autosave `tmp.pat`.
+2. Install fw 1.7 (H13). The pattern loads and plays each step at its nearest 1/8 step; `shf` shows
+   the coarse values. Save it there and go back to 0.6: coarse only, template `off` (and `amt` 100).
+3. Install 0.5 (`LXR_V2_LICHOMAT_0.5.img`). The 0.6 pattern of step 1 loads with its tempo,
+   humanize and delay, and plays coarse.
+4. A pattern without microtiming saved in 0.6 has the same size as in 0.5 (3,697 B on the card). With
+   `mic` or a template it is 3,941 B.
+
+**Expected:** as written. **Record:** pass or fail per step.
+
+## U37: CPU
+
+0.6's CPU cost (spec §8, M25). H12 step 3's kit, pattern and BPM 140, with the reverb at the rate the
+0.4 release chose (U20) and `trg smp`. Read the CPU page for 30 s:
+
+1. as in U30 step 2;
+2. with a template on tracks 2–7 and `mic` set on every step (a value other than 0 on every step
+   that plays). Do not save the pattern afterwards, or save it in a slot you can spare.
+
+**Expected:** `pk` in 2 is at most 1.5 points above 1, below 95, with `ovf` 0 and no dropouts. (The
+static count of the new code gives about 1.45 points for the worst block, all seven tracks stepping
+at one boundary; the code the LXR runs is shorter.)
+
+**Record:** `CPU` and `pk` for both.
+
 ## X4: USB MIDI out
 
 Not in the spec's list: 1.7 defects of the USB MIDI out that LICHOMAT fixes (tracker E2.8).
@@ -1553,6 +1706,7 @@ Update files under test (filled in when the files were built):
 | `LXR_V2_LICHOMAT_0.3.img` | `d630eabc990fe19a6dca1d620162f3f4af5efde970e975ccaff914574604aee9` | `v0.3` at `813aaf6`, built by CI; `a9865dc` (F14–F18 and the emulator's goldens) builds the same file, CI run 41140852554 (a later firmware change on `v0.3` replaces this row) | the artifact `lichomat-firmware-813aaf665353f9c7c2004f803cf7e08a4273049e` of CI run 41126736959 (kept until 2027-01-28) |
 | `LXR_V2_LICHOMAT_0.4.img` | filled in when CI builds the release commit | `v0.4`, the release commit, built by CI, once H12 and U20 have fixed the reverb's rate | the artifact of that CI run (filled in then) |
 | `LXR_V2_LICHOMAT_0.5.img` | filled in when CI builds the release commit | `v0.5`, the release commit, built by CI, once 0.4's release is merged in | the artifact of that CI run (filled in then) |
+| `LXR_V2_LICHOMAT_0.6.img` | filled in when CI builds the release commit | `v0.6`, the release commit, built by CI, once 0.5's release is merged in | the artifact of that CI run (filled in then) |
 
 The LICHOMAT file is the one CI builds, the file the release attaches (spec §14). Download it with
 `gh run download 40435442579 --repo isthar/lxr-desktop-app -n lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f`
@@ -1616,6 +1770,11 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | U30 | | | |
 | U31 | | | |
 | U32 | | | |
+| U33 | | | |
+| U34 | | | |
+| U35 | | | |
+| U36 | | | |
+| U37 | | | |
 | X1 | | | |
 | X2 | | | |
 | X3 | | | |

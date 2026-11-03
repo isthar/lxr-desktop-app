@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 18:14",
+    "updated": "2026-11-03 18:27",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "v0.6 w wykonaniu: E6.20 (nagrywanie), potem E6.21–E6.23",
+    "focus": "v0.6 gotowe w kodzie (M18); czekają Twoje testy na LXR",
     "branch": "timing-core",
-    "head": "06a6a61",
-    "next": "E6.20 i jego pełny przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
-    "updated_at": "2026-11-03T18:14:00+01:00",
-    "now": "E6.23 (v0.6 zad. 10): agent pisze dokumenty i raport M18"
+    "head": "6a822ed",
+    "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
+    "updated_at": "2026-11-03T18:27:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -484,9 +484,9 @@
     {
       "id": "E6.2",
       "epic": "E6",
-      "status": "w toku",
-      "title": "v0.6: szablony groove (przesunięcie każdego z 16 kroków) z pomiaru albumu referencyjnego; specyfikacja i plan gotowe (2.11), wykonanie w toku na gałęzi v0.6 (E6.14–E6.23)",
-      "updated": "2026-11-02"
+      "status": "zrobione",
+      "title": "v0.6: szablony groove (7 szablonów, ilość 0–200% na tor) z pomiaru albumu referencyjnego: w kodzie na gałęzi v0.6 (M18, E6.14–E6.23); testy na LXR i wydanie w E8.6",
+      "updated": "2026-11-03"
     },
     {
       "id": "E6.3",
@@ -498,16 +498,16 @@
     {
       "id": "E6.4",
       "epic": "E6",
-      "status": "w toku",
-      "title": "v0.6: pełny mikrotiming kroku i nowy format wzorca; specyfikacja i plan gotowe (2.11), wykonanie w toku na gałęzi v0.6 (E6.14–E6.23), RAM ma ok. 42,8 KB fizycznego zapasu",
-      "updated": "2026-11-02"
+      "status": "zrobione",
+      "title": "v0.6: pełny mikrotiming kroku (1 tick, ±84) i drugi blok w plikach wzorców: w kodzie na gałęzi v0.6 (M18, E6.14–E6.23); testy na LXR i wydanie w E8.6",
+      "updated": "2026-11-03"
     },
     {
       "id": "E6.5",
       "epic": "E6",
-      "status": "w toku",
-      "title": "v0.6: nagrywanie z zachowaniem mikrotimingu; specyfikacja i plan gotowe (2.11), wykonanie w toku na gałęzi v0.6 (E6.14–E6.23)",
-      "updated": "2026-11-02"
+      "status": "zrobione",
+      "title": "v0.6: nagrywanie z zachowaniem mikrotimingu (rqn): w kodzie na gałęzi v0.6 (M18, E6.14–E6.23); testy na LXR i wydanie w E8.6",
+      "updated": "2026-11-03"
     },
     {
       "id": "E6.6",
@@ -631,8 +631,8 @@
     {
       "id": "E6.23",
       "epic": "E6",
-      "status": "w toku",
-      "title": "v0.6 zad. 10: dokumenty dla Ciebie (U33–U37, notatki wydania, przepisy groove) i raport M18",
+      "status": "zrobione",
+      "title": "v0.6 zad. 10: dokumenty dla Ciebie (U33–U37, szkic notatek wydania, przepisy groove) i raport M18",
       "updated": "2026-11-03"
     },
     {
@@ -822,6 +822,12 @@
       "date": "2026-11-01",
       "title": "Kity: WIR, MGLA, RDZA, IGLA i cztery kity dopasowane do albumu referencyjnego (E6.12, E6.13)",
       "summary": "Kity budowane przez firmware (tools/kit_build.py), sloty 56–63, gałąź kits (f7034b0). Nowe kity PULS, HUSTAWKA, PROSTO i PRZESTER dopasowane pomiarem do albumu referencyjnego; tabele cel/wynik w kits/README.md. Czekają na Twój odsłuch."
+    },
+    {
+      "id": "M18",
+      "date": "2026-11-03",
+      "title": "v0.6: mikrotiming kroku, szablony groove i nagrywanie z mikrotimingiem (E6.2, E6.4, E6.5; E6.14–E6.23)",
+      "summary": "Gałąź v0.6 (6a822ed). Mikrotiming co 1 tick (±84), 7 szablonów groove z ilością na tor, nagrywanie zapisuje zagrane przesunięcie (rqn). Wszystkie testy pod UBSan i ASan, 32 stare nagrania wzorcowe bez zmian, 6 nowych; onsety w 2 próbkach od ticków liczonych poza firmware'em. Raport: docs/lichomat/reports/M18-v0.6-microtiming-groove.md. Czekają Twoje U33–U37 i wydanie (E8.6)."
     }
   ],
   "questions": [
@@ -3657,6 +3663,11 @@
       "n": 523,
       "at": "2026-11-03 18:14",
       "text": "Grupa D skończona: E6.21 i E6.22 wypchnięte (6a822ed). Start E6.23: agent pisze dokumenty dla Ciebie (U33–U37 w liście kontroli sprzętu, szkic notatek wydania v0.6, przepisy groove, raport M18, wiersz w HANDOFF); commituję je ja. CI na GitHubie nie ruszył żadnego przebiegu dla v0.5 ani v0.6 (E8.5)."
+    },
+    {
+      "n": 524,
+      "at": "2026-11-03 18:27",
+      "text": "E6.23 (v0.6 zad. 10) zrobione: U33–U37 w liście kontroli sprzętu, szkic notatek wydania v0.6, przepisy groove (stopa prosto, haty lay, perkusja rlx 80%), raport M18. v0.6 skończone w kodzie: E6.2, E6.4 i E6.5 zrobione, kamień milowy M18. Czekają Twoje U33–U37 i wydanie (E8.6), po wydaniu v0.5 (E8.3)."
     }
   ]
 }
