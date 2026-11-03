@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-03 18:54",
+    "updated": "2026-11-03 19:09",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Utwór pokazowy LICHOMAT (E6.24); poprawki fw 1.7 (E4.10, E4.11)",
+    "focus": "v0.6 gotowe w kodzie (M18); utwór pokazowy do odsłuchu",
     "branch": "timing-core",
-    "head": "9f04341",
+    "head": "2a44244",
     "next": "Odsłuch dem v0.6 (build/wt-v06/build/demo/); H12; U27–U37 na LXR; E4.10 i E4.11 (stare błędy fw 1.7)",
-    "updated_at": "2026-11-03T18:54:00+01:00",
-    "now": "E6.24: agent komponuje i renderuje utwór pokazowy; E4.10/E4.11: wykonawca na v0.6"
+    "updated_at": "2026-11-03T19:09:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -645,8 +645,8 @@
     {
       "id": "E6.24",
       "epic": "E6",
-      "status": "w toku",
-      "title": "Utwór pokazowy: 2,5–3 min groove techno 142 BPM wyrenderowane przez firmware w emulatorze, z nowymi kitami, szablonami v0.6, rumble, freeze i filtrem DJ (gałąź showcase)",
+      "status": "zrobione",
+      "title": "Utwór pokazowy: 2:49 groove techno 142 BPM, jedno ciągłe ujęcie firmware w emulatorze (kit HUSTAWKA, lay i rlx, mikrotiming, rumble, freeze, delay, filtr DJ, fille, rolle, sceny mute; gałąź showcase, a6ad0cc) i prywatna strona do odsłuchu z szablonami groove",
       "updated": "2026-11-03"
     },
     {
@@ -690,6 +690,13 @@
       "status": "zrobione",
       "title": "Rumble: w kodzie na gałęzi v0.4 (M13, 28abb29); testy na LXR i wydanie w E8.2",
       "updated": "2026-11-01"
+    },
+    {
+      "id": "E7.7",
+      "epic": "E7",
+      "status": "do zrobienia",
+      "title": "Pogłos v0.4 zostawia po wybrzmieniu stały offset DC (+95 LSB, ok. −50 dBFS) na wyjściu, dopóki poziom pogłosu nie spadnie do 0; znalezione przy utworze pokazowym (E6.24). Zbadać źródło (filtr tonu, freeze, zaokrąglenia) i usunąć bez zmiany 38 nagrań wzorcowych, jeśli się da",
+      "updated": "2026-11-03"
     },
     {
       "id": "E8.1",
@@ -3702,6 +3709,11 @@
       "n": 528,
       "at": "2026-11-03 18:54",
       "text": "E4.10 zrobione (v0.6, 65b55a6): długie nazwy w trybie edycji skrócone do 8 znaków i kopiowane bezpiecznie; z dolnej linii nazwa wychodziła nawet poza cały bufor. E4.11, część B14, zrobione (9f04341): odczyt tablicy PWM zawija się w wierszu; poniżej 14 kHz bit w bit to samo, 38 nagrań wzorcowych bez zmian, fuzzing dźwięku pod ASan 0 znalezisk; wyłączenie sprawdzania granic w tych funkcjach pod UBSan usunięte. B13 czeka na Twój odsłuch (E4.11 zablokowane). Notatki wydania v0.6 uzupełnione."
+    },
+    {
+      "n": 529,
+      "at": "2026-11-03 19:09",
+      "text": "E6.24 zrobione: utwór pokazowy LICHOMAT v0.6, 2:49 przy 142 BPM, jedno ciągłe ujęcie firmware'u w emulatorze, nic nie sklejane (gałąź showcase, a6ad0cc, skrypt tools/demo_showcase.sh). Prywatna strona do odsłuchu z utworem, wszystkimi szablonami groove (z wykresem przesunięć) i nagranym take'iem: https://claude.ai/artifact/Rpt17H2FX1sRRjssf7A4f6. Przy renderze wyszedł stały offset DC pogłosu po wybrzmieniu (ok. −50 dBFS): nowy wiersz E7.7."
     }
   ]
 }
