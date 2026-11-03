@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-04 00:43",
+    "updated": "2026-11-04 00:47",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Czeka na Ciebie: H12 (wybiera folder polowa/ albo lean/), testy na LXR, wybór B13, odsłuch kitów",
     "branch": "timing-core",
-    "head": "3a50052",
+    "head": "5015e58",
     "next": "H12 na 0.3 z CI, potem pliki z build/images/po-H12/; strona odsłuchu: kity, B13, pogłos",
-    "updated_at": "2026-11-04T00:43:00+01:00",
+    "updated_at": "2026-11-04T00:47:00+01:00",
     "now": "E4.12: fuzzing pogłosu (7 500 renderów) pod ASan na v0.6-half i v0.4-lean"
   },
   "epics": [
@@ -485,8 +485,8 @@
       "id": "E5.8",
       "epic": "E5",
       "status": "zrobione",
-      "title": "Aplikacja LICHOMAT Emu z v0.6 (6a822ed) do wypróbowania mic, tpl i amt: build/emu-show/v06, z kopią Twojej karty i ośmioma kitami w slotach 56–63",
-      "updated": "2026-11-03"
+      "title": "Aplikacja LICHOMAT Emu z v0.6 do wypróbowania mic, tpl i amt: build/emu-show/v06, z kopią Twojej karty i ośmioma kitami w slotach 56–63; od 4.11 zbudowana z v0.6-half (cb9c040: E4.10, E4.11 B14, E7.8, E7.7), stara z 6a822ed obok w stara-6a822ed/",
+      "updated": "2026-11-04"
     },
     {
       "id": "E6.1",
@@ -3920,6 +3920,11 @@
       "n": 555,
       "at": "2026-11-04 00:43",
       "text": "E8.8 zrobione: w emulatorze zgodne z listą sprawdzeń: strona kroku (vel nte prb sld, potem flm shf mic), U33 krok 2 (mic +6 daje shf +1, shf +2 daje mic +18, z powrotem +6; +6 ticków to 7,8 ms przy 120 BPM), freeze przez SHIFT + krok 3 w trybie wykonawczym (frz on), drugi ekran pogłosu pre mod frz syn, filtr DJ shu scn djf djr. Uwaga z fw 1.7: zanim wybierzesz krok, strona kroku pokazuje shf −7 i mic −84; to brak kroku, nie wartość. E4.12: 24 000 renderów dźwięku, MIDI i sekwencera pod ASan i UBSan, 0 znalezisk; fuzzing samego pogłosu jeszcze trwa."
+    },
+    {
+      "n": 556,
+      "at": "2026-11-04 00:47",
+      "text": "E5.8: aplikacja LICHOMAT Emu w build/emu-show/v06 odświeżona do v0.6-half (cb9c040): ma krótsze nazwy na LCD (E4.10), poprawioną tablicę PWM (E4.11 B14), ping-pong (E7.8) i pogłos bez offsetu (E7.7). Build Release bez ostrzeżeń, 98 testów aplikacji przechodzi. Folder home z kopią Twojej karty bez zmian; stara aplikacja obok w stara-6a822ed/."
     }
   ]
 }
