@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 00:16",
+    "updated": "2026-11-04 00:18",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Noc: E7.9 (warianty 0.4 na wynik H12) i E4.12 (fuzzing)",
     "branch": "timing-core",
-    "head": "7d1435e",
+    "head": "acef557",
     "next": "E7.9: obrazy i README po H12, plan sesji; potem v0.5-half i v0.6-half (scalenie E7.7 dalej)",
-    "updated_at": "2026-11-04T00:16:00+01:00",
-    "now": "E7.9: bramki v0.5-half (scalenie E7.7 do v0.5, cztery nagrania pogłosu od nowa); potem v0.6-half; E4.12: fuzzing sekwencera w tle"
+    "updated_at": "2026-11-04T00:18:00+01:00",
+    "now": "E7.10: bramki v0.5-half i v0.6-half; E4.12: fuzzing sekwencera w tle"
   },
   "epics": [
     {
@@ -725,6 +725,13 @@
       "status": "w toku",
       "title": "Gotowe warianty 0.4 na każdy wynik H12 (pełna częstotliwość, połowa, lean), każdy z poprawką E7.7 i nowym zapisem G13–G15, testy i obrazy w build/images/: po H12 wgrywasz od razu ten, który wskaże reguła, i robisz U20–U26 tego samego wieczoru",
       "updated": "2026-11-03"
+    },
+    {
+      "id": "E7.10",
+      "epic": "E7",
+      "status": "w toku",
+      "title": "E7.7 i połowa częstotliwości (Q34) scalone dalej: gałęzie v0.5-half (0136df1) i v0.6-half, bramki i obrazy 0.5 i 0.6 do U30 i U37 po H12; wariant lean tak samo",
+      "updated": "2026-11-04"
     },
     {
       "id": "E8.1",
@@ -3870,6 +3877,11 @@
       "n": 549,
       "at": "2026-11-04 00:16",
       "text": "E8.7: obraz 0.6 w build/images/ odświeżony do e971801 (z poprawką ping-ponga E7.8): beefc513…, wcześniej 975abbd1… z 9f04341. SHA256SUMS ma teraz siedem plików."
+    },
+    {
+      "n": 550,
+      "at": "2026-11-04 00:18",
+      "text": "E7.10 w toku: v0.4-half scalone do v0.5-half (0136df1): konflikt tylko w goldens.json; G13_reverb, G14_freeze i G15_rumble zapisane od nowa, G13_reverb_blk skopiowane z v0.4-half (P17: blk = v0.4 bit w bit) i renderuje się jak skopiowane; pozostałe 28 bez zmian. v0.6-half (cb9c040): wszystkie 38 nagrań przechodzi bez zmian. Bramki obu w toku."
     }
   ]
 }
