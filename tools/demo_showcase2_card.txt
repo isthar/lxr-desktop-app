@@ -1,0 +1,331 @@
+# The card of the second showcase track (tools/demo_showcase.sh --track 2): the PROSTO kit (slot 58
+# of the kits branch) as kit 0, with kit edits, the one pattern the track plays, and eight mute
+# scenes. Run on a seeded card whose 00-*.SND is PROSTO, with --keep-card; the track's render then
+# plays the kept card. Values as the menu stores them (emu/render/render_params.h); step_prob 101-115
+# are the trig conditions 1:2 2:2 1:3 2:3 3:3 1:4 2:4 3:4 4:4 Fil !Fl 1st !1s Pre !Pr; track_tpl 0-7
+# are off swg lay lyb rlx 2bt psh drg; step_micro is 84 + ticks (1/96 of a step); track_tempo 0-10
+# are 1/4 1/3 1/2 2/3 3/4 x1 4/3 3/2 x2 x3 x4; step_note is 60 for the voice's own pitch, +1 a
+# semitone; slide_time is x 4 ms.
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --no-start --seconds 40
+#
+# --- kit 0: PROSTO with edits ---
+# the kick: more drive than PROSTO's 32 from the start (the score takes it on to PRZESTER's 86),
+# a little lower for headroom with the louder top
+0ms param drive1=48
++20ms param vol1=88
+# Drum 3 becomes the acid line: a saw on E3 (an octave over the E2 bass) through a resonant
+# low-pass, nearly closed (the score opens it over the track), a little drive; no pitch blip,
+# no FM; the step volumes give the accents; LFO 3 off (it moved the FM index of the B3 figure);
+# slides of 56 ms
++20ms param osc_wave_drum3=2
++20ms param coarse3=52
++20ms param fine3=64
++20ms param modamnt3=0
++20ms param fmamnt3=0
++20ms param veloa3=0
++20ms param velod3=22
++20ms param vol_slope3=40
++20ms param filter_type_3=0
++20ms param filter_freq_3=14
++20ms param reso_3=96
++20ms param drive3=30
++20ms param vol3=100
++20ms param slide_time3=14
++20ms param amount_lfo3=0
+# the Snare voice becomes the polyrhythm perc: a sine on B4 with a short pitch blip, a little
+# noise and the Rim transient, short; step volumes on; a little left
++20ms param osc_wave_snare=0
++20ms param coarse4=71
++20ms param fine4=64
++20ms param mix1=18
++20ms param noise_freq1=100
++20ms param modamnt4=22
++20ms param mod_eg4=10
++20ms param veloa4=0
++20ms param velod4=6
++20ms param vol_slope4=40
++20ms param repeat4=0
++20ms param filter_type_4=7
++20ms param snare_distortion=0
++20ms param trans4_wave=6
++20ms param trans4_vol=20
++20ms param volume_mod_on_off4=1
++20ms param vol4=36
++20ms param pan4=44
+# Cymbal: the noise on 2 and 4, longer, a little darker and much louder than PROSTO's ghosts
++20ms param filter_freq_5=92
++20ms param velod5=12
++20ms param vol5=100
+# the hats a little longer than the kit's (closed 4 to 6, open 12 to 16): more of the top
+# against the kick, and the push of psh is heard
++20ms param velod6_closed=6
++20ms param velod6_open=16
++200ms save-kit 0
+#
+# --- pattern 0 ---
++100ms param shuffle=0
+# Drum 1, the kick: the quarters, straight
++100ms press voice1
++100ms press step1
++100ms press step5
++100ms press step9
++100ms press step13
+# Drum 2, the bass: the off-beat 8ths, each 36 ticks early (mic -36, about 37 ms at 144 BPM), as
+# PROSTO's notes say: the bass comes back sooner after the kick
++100ms press voice2
++100ms press step3
++100ms press step7
++100ms press step11
++100ms press step15
++100ms param active_step=2
++100ms param step_micro=48
++100ms param active_step=6
++100ms param step_micro=48
++100ms param active_step=10
++100ms param step_micro=48
++100ms param active_step=14
++100ms param step_micro=48
+# Drum 3, the acid line in E minor (the step note, 60 is E3): rests on the bass's off-beats but
+# 11, slides into the accents; step 8 every 2nd bar (2:2), step 10 every 1st of 2 (1:2), step 14
+# the 3rd of 4 (3:4), step 15 only in a fill (Fil)
++100ms press voice3
++100ms press step1
++100ms press step2
++100ms press step4
++100ms press step5
++100ms press step6
++100ms press step8
++100ms press step9
++100ms press step10
++100ms press step11
++100ms press step12
++100ms press step13
++100ms press step14
++100ms press step15
++100ms press step16
++100ms param active_step=0
++100ms param step_volume=90
++100ms param step_note=60
++100ms param active_step=1
++100ms param step_volume=56
++100ms param step_note=60
++100ms param active_step=3
++100ms param step_volume=118
++100ms param step_note=72
++100ms param step_slide=1
++100ms param active_step=4
++100ms param step_volume=80
++100ms param step_note=60
++100ms param active_step=5
++100ms param step_volume=64
++100ms param step_note=63
++100ms param active_step=7
++100ms param step_volume=118
++100ms param step_note=70
++100ms param step_slide=1
++100ms param step_prob=102
++100ms param active_step=8
++100ms param step_volume=90
++100ms param step_note=60
++100ms param active_step=9
++100ms param step_volume=56
++100ms param step_note=60
++100ms param step_prob=101
++100ms param active_step=10
++100ms param step_volume=72
++100ms param step_note=67
++100ms param step_slide=1
++100ms param active_step=11
++100ms param step_volume=118
++100ms param step_note=72
++100ms param active_step=12
++100ms param step_volume=80
++100ms param step_note=60
++100ms param active_step=13
++100ms param step_volume=64
++100ms param step_note=65
++100ms param step_slide=1
++100ms param step_prob=108
++100ms param active_step=14
++100ms param step_volume=100
++100ms param step_note=75
++100ms param step_prob=110
++100ms param active_step=15
++100ms param step_volume=118
++100ms param step_note=63
++100ms param step_slide=1
+# the Snare voice, the perc: track tempo 3/4, so a step is an 8th triplet and every 2nd step is a
+# quarter triplet, 3 against the 2 of the half bar; the 16 steps take 4/3 of a bar, so the accents
+# (steps 1 and 7) fall on a new place in each bar and come back in line every 4 bars; mic by hand
+# on four steps (+10, +6, -8 and -6 ticks of the track's step); step 10 a ghost every 2nd loop (1:2)
++100ms press voice4
++100ms param track_tempo=4
++100ms press step1
++100ms press step3
++100ms press step5
++100ms press step7
++100ms press step9
++100ms press step10
++100ms press step11
++100ms press step13
++100ms press step15
++100ms press step16
++100ms param active_step=0
++100ms param step_volume=115
++100ms param active_step=2
++100ms param step_volume=56
++100ms param step_micro=94
++100ms param active_step=4
++100ms param step_volume=70
++100ms param active_step=6
++100ms param step_volume=110
++100ms param step_micro=90
++100ms param active_step=8
++100ms param step_volume=56
++100ms param active_step=9
++100ms param step_volume=40
++100ms param step_micro=76
++100ms param step_prob=101
++100ms param active_step=10
++100ms param step_volume=86
++100ms param active_step=12
++100ms param step_volume=56
++100ms param active_step=14
++100ms param step_volume=70
++100ms param active_step=15
++100ms param step_volume=44
++100ms param step_micro=78
+# Cymbal, the noise on 2 and 4; steps 14-16 a crescendo only in a fill (Fil)
++100ms press voice5
++100ms press step5
++100ms press step13
++100ms press step14
++100ms press step15
++100ms press step16
++100ms param active_step=4
++100ms param step_volume=100
++100ms param active_step=12
++100ms param step_volume=100
++100ms param active_step=13
++100ms param step_volume=50
++100ms param step_prob=110
++100ms param active_step=14
++100ms param step_volume=76
++100ms param step_prob=110
++100ms param active_step=15
++100ms param step_volume=110
++100ms param step_prob=110
+# the closed hat (track 6): every 16th but the off-beats, straight: the quarters 50, "e" 76, "a"
+# 100; psh at 150 %, the same template as the open hat (they share the voice; psh moves only the
+# off-beats, so the closed hat stays on the grid)
++100ms press voice6
++100ms press step1
++100ms press step2
++100ms press step4
++100ms press step5
++100ms press step6
++100ms press step8
++100ms press step9
++100ms press step10
++100ms press step12
++100ms press step13
++100ms press step14
++100ms press step16
++100ms param active_step=0
++100ms param step_volume=50
++100ms param active_step=1
++100ms param step_volume=76
++100ms param active_step=3
++100ms param step_volume=100
++100ms param active_step=4
++100ms param step_volume=50
++100ms param active_step=5
++100ms param step_volume=76
++100ms param active_step=7
++100ms param step_volume=100
++100ms param active_step=8
++100ms param step_volume=50
++100ms param active_step=9
++100ms param step_volume=76
++100ms param active_step=11
++100ms param step_volume=100
++100ms param active_step=12
++100ms param step_volume=50
++100ms param active_step=13
++100ms param step_volume=76
++100ms param active_step=15
++100ms param step_volume=100
++100ms param track_tpl=6
++100ms param track_tpl_amt=150
+# the open hat (track 7): the off-beat 8ths, pushed: psh at 150 %, 6 ticks (about 6.5 ms) early
++100ms press voice7
++100ms press step3
++100ms press step7
++100ms press step11
++100ms press step15
++100ms param track_tpl=6
++100ms param track_tpl_amt=150
++200ms save-pattern 0
+#
+# --- the mute scenes, in the performance mode (the second mode button): the voice buttons mute,
+# COPY + step 9-16 stores scene 1-8 ---
++200ms press mode2
+# scene 1, the intro: the kick and the hats (2-5 muted)
++100ms press voice2
++100ms press voice3
++100ms press voice4
++100ms press voice5
++100ms down copy
++50ms press step9
++100ms up copy
+# scene 2: + the bass
++100ms press voice2
++100ms down copy
++50ms press step10
++100ms up copy
+# scene 3: + the noise on 2 and 4
++100ms press voice5
++100ms down copy
++50ms press step11
++100ms up copy
+# scene 4: + the perc (everything but the acid)
++100ms press voice4
++100ms down copy
++50ms press step12
++100ms up copy
+# scene 5: everything (+ the acid)
++100ms press voice3
++100ms down copy
++50ms press step13
++100ms up copy
+# scene 6, the tension: the acid and the hats alone
++100ms press voice1
++100ms press voice2
++100ms press voice4
++100ms press voice5
++100ms down copy
++50ms press step14
++100ms up copy
+# scene 7: the kick, the acid and the hats
++100ms press voice1
++100ms down copy
++50ms press step15
++100ms up copy
+# scene 8: the kick, the bass, the acid and the hats
++100ms press voice2
++100ms down copy
++50ms press step16
++100ms up copy
+# nothing muted again, back to the voice mode; the scenes are saved with the project
++100ms press voice4
++100ms press voice5
++100ms press mode1
++300ms save-project 0
++100ms mark saved
