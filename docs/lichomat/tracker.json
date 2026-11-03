@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-03 17:08",
+    "updated": "2026-11-03 17:12",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.6 w wykonaniu: E6.20 (nagrywanie), potem E6.21–E6.23",
     "branch": "timing-core",
-    "head": "5441dbf",
+    "head": "6effc02",
     "next": "E6.20 i jego pełny przegląd; testy z przeglądu E6.17–E6.18; E6.21–E6.23 (emulator, dema, dokumenty)",
-    "updated_at": "2026-11-03T17:08:00+01:00",
+    "updated_at": "2026-11-03T17:12:00+01:00",
     "now": "Przegląd E6.20; testy z przeglądu E6.17–E6.18 (wykonawca)"
   },
   "epics": [
@@ -3603,6 +3603,11 @@
       "n": 515,
       "at": "2026-11-03 17:08",
       "text": "Lekki przegląd E6.19 gotowy: nic krytycznego ani ważnego. Wartości mic i amt powyżej 127 nigdzie nie idą przez 7-bitowe komunikaty menu; numery parametrów, glo.cfg i NRPN bez zmian. Pięć drobnych: brak strzałki na ekranie tmp hmt hmv dly, że dalej jest tpl amt; SHIFT+mode2 nie przechodzi na trzeci ekran; po wyjściu z tpl amt strona głosu otwiera się na drugiej podstronie; zapisane rqn > 1 włącza się przy każdym ruchu; ścieżka mic z menu bez testu. Poprawki zrobi wykonawca osobnym commitem po testach z przeglądu E6.17–E6.18. Poza v0.6: długie nazwy z v0.4/v0.5 (np. „Trig timing”) wchodzą na drugą linię LCD w trybie edycji."
+    },
+    {
+      "n": 516,
+      "at": "2026-11-03 17:12",
+      "text": "E6.17–E6.18, poprawki z przeglądu, 6effc02: cztery nowe testy (zapis samego mikrotimingu bez szablonu, połączenie z hostem, przesunięcie 15, blok 2 tylko po poprawnym bloku 1); każdy pada na swojej mutacji. Host 125/125, emulator 331/331 i 303/303, obraz firmware'u bez zmian. Wykonawca robi teraz poprawki z przeglądu E6.19."
     }
   ]
 }
