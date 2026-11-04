@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 06:58",
+    "updated": "2026-11-04 07:08",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E4.13: pozostałe błędy fw 1.7 (B11, B12, B15–B18); czeka na Ciebie: H12, B13, odsłuch kitów",
     "branch": "timing-core",
-    "head": "d0e0451",
+    "head": "e772f53",
     "next": "E4.13: B17 i B15 (MIDI), B16 (RAT), B18 (wybór wzorca), B11 i B12 (menu) z testami; lekki przegląd; scalenie",
-    "updated_at": "2026-11-04T06:58:00+01:00",
-    "now": "E4.13: bramki v0.6 (check.sh, fw_checks, ASan); potem scalenie do v0.6-half i v0.6-lean"
+    "updated_at": "2026-11-04T07:08:00+01:00",
+    "now": "E4.13: bramki v0.6 (a856883); potem scalenie do v0.6-half i v0.6-lean i nowe obrazy 0.6"
   },
   "epics": [
     {
@@ -3952,6 +3952,16 @@
       "n": 560,
       "at": "2026-11-04 06:58",
       "text": "E4.13: B17 poprawiony (v0.6, 255b901): uszkodzona wiadomość USB MIDI z bajtem danych ≥ 128 jest odrzucana przed przekierowaniem; test hosta najpierw padał (UBSan: MidiParser.c:176). B11 i B12 poprawione (9ac5d9f): cel LFO przy voi 0 po pustej karcie (odtworzone narzędziem deweloperskim aplikacji, UBSan: menu.c:4411) i nazwy menu spoza listy z NRPN (UBSan: menu.c:2822); oba testy emulatora najpierw padały. B15, B16 i B18 były już poprawione przez F16, F13 i F12; raport skanu i notatki 0.6 zaktualizowane. Bramki v0.6 w toku."
+    },
+    {
+      "n": 561,
+      "at": "2026-11-04 06:59",
+      "text": "E4.13: lekki przegląd poprawek B11, B12 i B17 (jeden agent, tylko odczyt) wystartował; równolegle bramki v0.6."
+    },
+    {
+      "n": 562,
+      "at": "2026-11-04 07:08",
+      "text": "E4.13: przegląd bez uwag krytycznych i ważnych; trzy drobne poprawione (a856883): B17 liczy bajty danych według statusu, nie CIN pakietu (nowy przypadek testu najpierw padał); komentarz przy B12; test B11 działa teraz także bez sanitizera (mutant bez poprawki w Release pada: DST 'mod' zamiast 'ofs'). M20 zapisane (b7fd24a): model renderera nie obejmuje celów LFO. Bramki v0.6 od nowa."
     }
   ]
 }
