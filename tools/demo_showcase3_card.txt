@@ -15,7 +15,8 @@
 #   industrial roar    A on 1 of bar 1, b on 12 of bar 3 (of 4): a far-off call and its answer, in
 #                      a lot of reverb, each with two echoes (after the owner's note: a roar from far
 #                      away, rarer, not dominant, not bright)
-#   bass (Drum 3)      ..X....X..x|      (an 11-step loop: odd, not irritating)
+#   bass (Drum 3)      ..X....X..x|      (an 11-step loop: odd, not irritating; one note, dark,
+#                      after the owner's note that the first version sounded like a samba)
 #
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
@@ -50,23 +51,24 @@
 +20ms param volume_mod_on_off2=1
 +20ms param vol2=127
 # Drum 3, the bass: a sine on G#2 in a little FM with an odd modulator (LFO 3 of PULS moves the FM
-# index over 4 bars), a tiny pitch blip, a resonant low-pass, some drive; slides of 48 ms
+# index over 4 bars), no pitch blip, a long, held decay through a dark low-pass, some drive: a
+# hypnotic drone-like pulse, not a plucked line
 +20ms param osc_wave_drum3=0
 +20ms param coarse3=44
 +20ms param fine3=64
-+20ms param modamnt3=4
++20ms param modamnt3=0
 +20ms param mod_eg3=8
-+20ms param fmamnt3=20
++20ms param fmamnt3=16
 +20ms param fm_freq3=70
 +20ms param veloa3=0
-+20ms param velod3=22
-+20ms param vol_slope3=50
++20ms param velod3=40
++20ms param vol_slope3=20
 +20ms param filter_type_3=0
-+20ms param filter_freq_3=56
-+20ms param reso_3=50
++20ms param filter_freq_3=36
++20ms param reso_3=20
 +20ms param drive3=50
 +20ms param volume_mod_on_off3=1
-+20ms param vol3=127
++20ms param vol3=90
 +20ms param slide_time3=12
 # Snare, on 2 and 4: dry, noisy, mid; band-passed noise with a little tone and the Clp transient
 +20ms param osc_wave_snare=0
@@ -154,8 +156,8 @@
 +100ms param step_volume=64
 +100ms param active_step=14
 +100ms param step_volume=120
-# Drum 3, the bass: an 11-step loop ..X....X..x, against the bar (in line again every 11 bars): G#2,
-# then A2 (a semitone up, sliding in), then a quiet D#3
+# Drum 3, the bass: an 11-step loop ..X....X..x, against the bar (in line again every 11 bars), all
+# on G#2, the third step quiet
 +100ms press voice3
 +100ms param track_length=11
 +100ms press step3
@@ -166,11 +168,10 @@
 +100ms param step_note=60
 +100ms param active_step=7
 +100ms param step_volume=112
-+100ms param step_note=61
-+100ms param step_slide=1
++100ms param step_note=60
 +100ms param active_step=10
 +100ms param step_volume=70
-+100ms param step_note=67
++100ms param step_note=60
 # the Snare voice: 2 and 4
 +100ms press voice4
 +100ms press step5
