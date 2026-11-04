@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-04 07:24",
+    "updated": "2026-11-04 07:39",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Czeka na Ciebie: H12 (folder polowa/ albo lean/), sesja testowa, B13, odsłuch kitów, CI",
     "branch": "timing-core",
-    "head": "89b96ef",
+    "head": "2b23902",
     "next": "H12 na 0.3 z CI; potem pliki z build/images/po-H12/ (README, punkt 5)",
-    "updated_at": "2026-11-04T07:24:00+01:00",
+    "updated_at": "2026-11-04T07:39:00+01:00",
     "now": "Nic nie działa w tle; czekam na Twój odczyt H12, B13 i odsłuch kitów"
   },
   "epics": [
@@ -794,6 +794,13 @@
       "epic": "E8",
       "status": "zrobione",
       "title": "Ścieżki przycisków z sesji testowej (★) przechodzone w emulatorze (v0.6-half, v0.4-half): strona CPU, trg, podstrona i drugi ekran pogłosu, freeze, djf, strona toru z dly i tpl amt, strona kroku z mic, U33 krok 2 (+18, potem +6) zgodne z listą; jeden błąd w dokumentach poprawiony: strona nagrywania to trk rqn, nie aut rqn (3a50052)",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E8.9",
+      "epic": "E8",
+      "status": "zrobione",
+      "title": "Gotowy projekt do H12 krok 3 (build/images/h12/PROJ62, „H12 CPU”): kit Faders z Twojej karty DLC (wszystkie głosy na FX, delay), wzorzec z 7 ścieżkami na szesnastkach i x8 na krokach 4, 8, 12, 16 ścieżek 2, 3, 4, 6, BPM 140; zbudowany firmware'em 0.3 w emulatorze, każde uderzenie sprawdzone; ten sam do U20, U30 i U37",
       "updated": "2026-11-04"
     }
   ],
@@ -3972,6 +3979,11 @@
       "n": 564,
       "at": "2026-11-04 07:24",
       "text": "E5.8: aplikacja w build/emu-show/v06 przebudowana jeszcze raz, z v0.6-half fe1d696 (z poprawkami E4.13); 100 testów aplikacji przechodzi, karta w home bez zmian."
+    },
+    {
+      "n": 565,
+      "at": "2026-11-04 07:39",
+      "text": "E8.9 zrobione: gotowy projekt do H12 krok 3 w build/images/h12/PROJ62 („H12 CPU”): kit Faders z Twojej karty DLC (wszystkie głosy na FX, delay) i wzorzec z 7 ścieżkami na szesnastkach i x8 na krokach 4, 8, 12, 16 ścieżek 2, 3, 4, 6; BPM 140 przychodzi z projektem. Zbudowany firmware'em 0.3 w emulatorze, każde uderzenie sprawdzone logiem wyzwoleń v0.6. Zamiast 10 min układania wzorca: skopiuj folder, LOAD, START. Ten sam projekt do U20, U30 i U37. E8.5: anulowanie wiszącego przebiegu CI zablokowało automatyczne sprawdzanie uprawnień tej sesji; komenda dla Ciebie w czacie."
     }
   ]
 }

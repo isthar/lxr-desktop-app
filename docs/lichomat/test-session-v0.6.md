@@ -50,16 +50,17 @@ sam co na końcu gałęzi `v0.3`).
 - [ ] **H1** i **U19 krok 1**: ekran `LICHOMAT` / `v0.3 unofficial`, nazwa pliku na karcie.
 - [ ] **H2 krok 1** przy okazji: pierwszy start z Twoją kartą z 1.7 bez `glo.cfg error`, ustawienia
       globalne jak w 1.7. Zapisz tylko to; resztę H2 zrobisz na 0.6.
-- [ ] Kopia robocza do H12: wczytaj projekt z kitem DLC, w którym wszystkie głosy idą na FX (Faders,
-      Malware, Kronky albo Penalty), i od razu zapisz go w pustym slocie (SAVE, `Project`, slot
-      `Empty`). Dalej pracujesz na tej kopii, oryginał zostaje.
-- [ ] **H12** (5 min odczytu i ok. 10 min na ciężki wzorzec), kroki 1–5:
-  - krok 3 to ciężki przypadek: wszystkie 7 ścieżek na szesnastkach, kilka `x8`, 140 BPM, delay
-    w slocie FX;
-  - szybciej niż przyciskami: generator Euklid (SHIFT + drugi przycisk trybu), dla każdego głosu
-    `LEN` 16 i `stp` 16.
-- [ ] Zapisz ciężki wzorzec i kit z kroku 3 w tej kopii (SAVE `Pattern`, SAVE `Kit`) i zanotuj numer
-      projektu, wzorca i kitu. Potrzebują ich U20, U30 i U37.
+- [ ] **Ciężki przypadek do H12 jest gotowy** (`build/images/h12/PROJ62`, projekt `H12 CPU`): kit
+      Faders z Twojej karty DLC (wszystkie głosy na FX, delay w slocie) i wzorzec 0, w którym wszystkie
+      7 ścieżek gra szesnastki, a ścieżki 2, 3, 4 i 6 mają `x8` na krokach 4, 8, 12 i 16. Zbudował go
+      firmware 0.3 w emulatorze i sprawdził każde uderzenie. Dzień wcześniej, przy kopii karty: zobacz,
+      czy na karcie nie ma folderu `PROJ62`. Jeśli nie ma, skopiuj tam folder `PROJ62`. Jeśli jest,
+      skopiuj go pod innym wolnym numerem (`PROJnn`).
+- [ ] **H12** (5 min odczytu), kroki 1–5. Krok 3: wczytaj projekt `H12 CPU` (LOAD, `Project`); BPM
+      140 przychodzi z projektem (projekt ma własne ustawienia globalne, z karty init: po H12 wczytaj
+      swój projekt, a wrócą Twoje). START. Krok 4: to samo z `TYP` `off` na stronie FX. Ten sam projekt biorą U20, U30 i U37, więc P z każdej wersji da się porównać.
+      Gdybyś wolał własny wzorzec: wszystkie 7 ścieżek na szesnastkach (generator Euklid, SHIFT + drugi
+      przycisk trybu, `LEN` 16 i `stp` 16), kilka `x8`, 140 BPM, delay w slocie FX.
 - [ ] **Od razu wyślij mi `pk` z kroku 3** (to liczba P). Od niej zależy, który plik 0.4 wgrasz po
       H12. Oba są już gotowe, z poprawką offsetu DC pogłosu (E7.7):
 

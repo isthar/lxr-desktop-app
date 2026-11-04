@@ -621,7 +621,10 @@ velocity, and the steps recorded.
    encoder both ways and each of the four knobs, and press the encoder.
 2. Read the values stopped, with the kit you use most.
 3. Heavy case: a kit with all 7 voices busy (distortion and filters on), the delay effect on, all 7
-   tracks playing 16ths with several `x8` ratchets, BPM 140. Read the values for 30 s.
+   tracks playing 16ths with several `x8` ratchets, BPM 140. Read the values for 30 s. A ready project
+   for it is `build/images/h12/PROJ62` (`H12 CPU`, tracker E8.9; `build/images/README.txt`, point 6):
+   the DLC kit Faders and pattern 0, and BPM 140 in the project's own global settings (those of the
+   init card: load your own project afterwards to get yours back).
 4. The same with the delay off.
 5. Change the pattern while it plays, with kit autoload on.
 
