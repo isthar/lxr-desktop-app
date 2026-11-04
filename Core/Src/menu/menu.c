@@ -2766,6 +2766,10 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 	}
 }
 
+//LICHOMAT (E4.13, sweep B12): NRPN sets a menu parameter to any 0..127, past its name table (NRPN 119 = 14
+//read rollRateNames[15] of 12); a value past a table shows its first name. The table's size bounds it: its
+//[0][0] is not the count in every table (filterTypes, ppqInNames, fxNames, stepFlamNames, stepShiftNames)
+#define MENU_NAME(t)	((t)[(((size_t)curParmVal + 1) < (sizeof(t) / sizeof((t)[0]))) ? (curParmVal + 1) : 1])
 // given a menu id, and a value returns the name from PROGMEM
 static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmVal, char *buf)
 {
@@ -2773,17 +2777,17 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 	switch(menuId)
 	{
 	case MENU_TRANS:
-		p = transientNames[curParmVal + 1];
+		p = MENU_NAME(transientNames);
 		break;
 	case MENU_AUDIO_OUT:
-		p = outputNames[curParmVal + 1];
+		p = MENU_NAME(outputNames);
 		break;
 
 	case MENU_AUDIO_OUT_FX:
-		p = outputNamesFx[curParmVal + 1];
+		p = MENU_NAME(outputNamesFx);
 		break;
 	case MENU_FILTER:
-		p = filterTypes[curParmVal + 1];
+		p = MENU_NAME(filterTypes);
 		break;
 	case MENU_WAVEFORM:
 		if(curParmVal < waveformNames[0][0])
@@ -2798,28 +2802,28 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 		break;
 
 	case MENU_SYNC_RATES:
-		p=syncRateNames[curParmVal + 1];
+		p = MENU_NAME(syncRateNames);
 		break;
 	case MENU_LFO_WAVES:
-		p=lfoWaveNames[curParmVal+1];
+		p = MENU_NAME(lfoWaveNames);
 		break;
 	case MENU_RETRIGGER:
-		p=retriggerNames[curParmVal+1];
+		p = MENU_NAME(retriggerNames);
 		break;
 	case MENU_FOLLOW:
-		p=followNames[curParmVal+1];
+		p = MENU_NAME(followNames);
 		break;
 	case MENU_SEQ_QUANT:
-		p=quantisationNames[curParmVal+1];
+		p = MENU_NAME(quantisationNames);
 		break;
 	case MENU_MIDI:
-		p=midiModes[curParmVal+1];
+		p = MENU_NAME(midiModes);
 		break;
 	case MENU_NEXT_PATTERN:
-		p=nextPatternNames[curParmVal+1];
+		p = MENU_NAME(nextPatternNames);
 		break;
 	case MENU_ROLL_RATES:
-		p=rollRateNames[curParmVal+1];
+		p = MENU_NAME(rollRateNames);
 		break;
 	case MENU_SCENE_QUANT:		// LICHOMAT v0.3: any value but 0 from glo.cfg is stp, as seq_setMuteSceneQuant()
 		p=sceneQuantNames[(curParmVal ? 1 : 0) + 1];
@@ -2834,51 +2838,51 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 		p=trigTimingNames[((curParmVal == 1) ? 1 : 0) + 1];
 		break;
 	case MENU_MIDI_ROUTING:
-		p=midiRoutingNames[curParmVal+1];
+		p = MENU_NAME(midiRoutingNames);
 		break;
 	case MENU_MIDI_FILTERING:
-		p=midiFilterNames[curParmVal+1];
+		p = MENU_NAME(midiFilterNames);
 		break;
 	case MENU_PPQ_IN:
-		p=ppqInNames[curParmVal+1];
+		p = MENU_NAME(ppqInNames);
 		break;
 	case MENU_PPQ_OUT:
-		p=ppqOutNames[curParmVal+1];
+		p = MENU_NAME(ppqOutNames);
 		break;
 	case MENU_MIX_FM:
-		p=mixFmNames[curParmVal+1];
+		p = MENU_NAME(mixFmNames);
 		break;
 
 	case MENU_FX:
-		p=fxNames[curParmVal+1];
+		p = MENU_NAME(fxNames);
 		break;
 
 	case MENU_DIST:
-		p=distNames[curParmVal+1];
+		p = MENU_NAME(distNames);
 		break;
 
 	case MENU_RATIO:
-		p=ratioNames[curParmVal+1];
+		p = MENU_NAME(ratioNames);
 		break;
 
 	case MENU_DELAY:
-		p=delayNames[curParmVal+1];
+		p = MENU_NAME(delayNames);
 		break;
 
 	case MENU_REVERB:
-		p=reverbNames[curParmVal+1];
+		p = MENU_NAME(reverbNames);
 		break;
 
 	case MENU_PAT_MODE:
-		p=patModeNames[curParmVal+1];
+		p = MENU_NAME(patModeNames);
 		break;
 
 	case MENU_STEP_FLAM:
-		p=stepFlamNames[curParmVal+1];
+		p = MENU_NAME(stepFlamNames);
 		break;
 
 	case MENU_STEP_SHIFT:
-		p=stepShiftNames[curParmVal+1];
+		p = MENU_NAME(stepShiftNames);
 		break;
 
 	case MENU_TRK_TEMPO:		// LICHOMAT v0.2: clamped to the names, NRPN 134 can set any 0..127
@@ -3133,6 +3137,8 @@ static void menu_encoderChangeParameter(int8_t inc)
 		//**LFO - limit encoder start and end to range for the target voice (not the lfo number)
 		// this is a value from 1 to 6, so we adjust to be 0 based
 		uint8_t voiceNr =  (uint8_t)(activeParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
+		if(voiceNr > 5)	//LICHOMAT (E4.13, sweep B11): voi 0, a kit never loaded (a blank card), read index 255 of 6
+			voiceNr = 0;
 		if(*paramValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
 			if(inc < 0) // going down, allow 0
 				*paramValue=0;
@@ -4408,6 +4414,8 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 		// this is a value from 1 to 6, so we adjust to be 0 based
 		uint8_t value = dtypeValue;
 		uint8_t voiceNr =  (uint8_t)(activeParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
+		if(voiceNr > 5)	//LICHOMAT (E4.13, sweep B11): voi 0, a kit never loaded (a blank card), read index 255 of 6
+			voiceNr = 0;
 		if(dtypeValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
 			if(diff < 0) // going down, allow 0
 				value=0;

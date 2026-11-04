@@ -295,7 +295,24 @@ def R4_bundle(t):
           'the README does not say that the F8 interval that contains Start is anywhere from 0 to 20.8 ms')
 
 
-CASES = {f.__name__: f for f in [R4_dev_headless, R4_dev_import, R4_dev_crash, R4_dev_power, R4_dev_afterpid,
+def E413_lfo_voice_0(t):
+    """fw 1.7 fix E4.13 (sweep B11): a blank card boots with an empty project, so no kit sets the LFOs'
+    voices and voi stays 0. DST then read modTargetVoiceOffsets[voi - 1], index 255 of 6 (UBSan stopped
+    the device at menu.c:4411, the knob, and at the encoder's site); it reads voice 1's range now"""
+    blank = os.path.join(t.work, 'card-blank')
+    os.makedirs(blank, exist_ok=True)
+    # voice 1, the LFO sub-page (select 7 = button 10), its second screen, DST with knob 4, then the encoder
+    r = t.dev(['--card', blank, '--no-audio', '--no-midi', '--seconds', '4.5', '--script',
+               t.script(['1.5 press 1', '1.8 press 10', '2.1 enc 8', '2.5 knob 4 60', '2.9 knob 4 -60',
+                         '3.3 push', '3.6 enc 2', '3.9 enc -2', '4.2 push'])])
+    check(r.returncode == 0, 'exit %d: %s' % (r.returncode, r.stderr[-600:]))
+    check('runtime error' not in r.stdout + r.stderr, (r.stdout + r.stderr)[-600:])
+    lcd = lcd_lines(r.stdout)
+    lfo = [l for l in lcd if l[1].lower().startswith('rtg ofs voi dst')]
+    check(lfo and lfo[0][2][8:11] == '  0', 'the LFO page with voi 0 did not show: %r' % lcd[-4:])
+
+
+CASES = {f.__name__: f for f in [E413_lfo_voice_0, R4_dev_headless, R4_dev_import, R4_dev_crash, R4_dev_power, R4_dev_afterpid,
                                  R4_imgui_pin, R4_gui_version, R4_gui_clash, R4_bundle]}
 
 
