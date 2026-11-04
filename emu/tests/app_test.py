@@ -319,11 +319,12 @@ def E413_lfo_voice_0(t):
         # snapshot (at most 30 ms in 280 loaded runs; tracker E6.38). voi is read from a row that stood
         # for 100 ms (the page's own rows stand for about 380 ms before knob 4 turns)
         held = [l for l, nxt in zip(lines, lines[1:] + [None]) if nxt is None or nxt[0] - l[0] >= 0.1]
-        voi = [l for l in lfo if l in held]
-        check(voi, '%s: no LFO page stood for 100 ms' % name)
-        check(voi[0][2][8:11] == ('  0' if name == 'blank' else '  1'), '%s: voi reads %r' % (name, voi[0][2]))
-        # where knob 4's turn ends (the last DST of 2.5-2.9 s of wall time)
-        seen = [l[2][12:15] for l in lfo if 2.5 <= l[0] < 2.9]
+        steady = [l for l in lfo if l in held]
+        check(steady, '%s: no LFO page stood for 100 ms' % name)
+        check(steady[0][2][8:11] == ('  0' if name == 'blank' else '  1'), '%s: voi reads %r' % (name, steady[0][2]))
+        # where knob 4's turn ends (the last DST of 2.5-2.9 s of wall time), from rows that stood for 100 ms
+        # too: a torn row could stand at the window's end (the turn's last row stands about 300 ms)
+        seen = [l[2][12:15] for l in steady if 2.5 <= l[0] < 2.9]
         check(seen, '%s: no LFO page in 2.5-2.9 s' % name)
         dst[name] = seen[-1]
     # without the sanitizer too: voi 0 reads voice 1's targets now; fw 1.7 toggled off and voice 2's rtg
