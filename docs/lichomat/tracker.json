@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-04 14:50",
+    "updated": "2026-11-04 14:56",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Utwór 3 gotowy; v0.7: następne E6.30",
     "branch": "timing-core",
-    "head": "241471e",
+    "head": "b3420a2",
     "next": "E6.30 (rdzeń v0.7); czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-04T14:50:00+01:00",
+    "updated_at": "2026-11-04T14:56:00+01:00",
     "now": "Zaparkowane: nic nie działa w tle"
   },
   "epics": [
@@ -4195,6 +4195,11 @@
       "n": 583,
       "at": "2026-11-04 14:50",
       "text": "E6.37 wersja 3 (showcase b8a87e6), po Twojej uwadze („bas jak samba”). Rytm zostaje Twój (pętla 11), ale bas to teraz jedna ciemna nuta G#2 zamiast G#2, A2 ze slide i D#3: bez blipu, długie, trzymane wybrzmienie przez zamknięty filtr, 9,4 dB pod stopą (było 7). Render 2:51,7, szczyt −1,3 dBFS."
+    },
+    {
+      "n": 584,
+      "at": "2026-11-04 14:56",
+      "text": "E6.37 wersja 4 (showcase 840e827), po Twojej uwadze („ten bas mi nie leży”, prośba o berliński minimal). Bas toczy się szesnastkami w przerwach między stopą a ghost kickiem: kroki 2, 3, 6, 10, 11, 14, akcenty na 3 i 11, krok 16 co 4 takty. Jedna nuta G#2, piła przez ciemny, rezonansowy filtr, przester, krótko, 10 dB pod stopą. Pętla 11 kroków odpadła. Szczyt −1,5 dBFS."
     }
   ]
 }
