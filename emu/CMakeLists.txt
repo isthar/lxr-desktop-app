@@ -335,6 +335,8 @@ emu_render_tests(V06_rec_setting V06_ui V06_onsets_ticks V06_card V06_micro V06_
 emu_render_tests(E410_long_names)
 # fw 1.7 fixes: the ping-pong delay of a centred send (tracker E7.8)
 emu_render_tests(E78_pingpong)
+# fw 1.7 fixes: a menu name past its table from NRPN (tracker E4.13, sweep B12)
+emu_render_tests(E413_menu_names)
 # M23: emu/tests/cards/make.sh gives the committed card fixtures (spec 5.6)
 emu_render_tests(M23)
 
@@ -473,6 +475,8 @@ if(LICHOMAT_EMU_APP)
         endforeach()
     endfunction()
     emu_app_tests(R4_dev_headless R4_dev_import R4_dev_crash R4_dev_power R4_dev_afterpid R4_gui_version R4_gui_clash)
+    # fw 1.7 fixes: the LFO target with voi 0 after a blank card (tracker E4.13, sweep B11)
+    emu_app_tests(E413_lfo_voice_0)
     emu_add_app_test(test_app_devices ENGINE MAC FRAMEWORKS AudioToolbox CoreAudio CoreMIDI CoreFoundation
         IDS R4_dev_coreaudio R4_dev_spread R4_dev_render_short R4_dev_coremidi R4_dev_midiout R4_dev_cardop R4_dev_relaunch R4_dev_stopwait R4_dev_period R5_dev_input R5_dev_input_verdict R5_ci_slice R5_ci_watch R5_ci_oversize
         R5_ci_samechannel R5_ci_release R5_shell_clockin)

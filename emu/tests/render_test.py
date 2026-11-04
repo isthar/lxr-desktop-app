@@ -1463,6 +1463,23 @@ def pp_levels(t, pan):
     return out
 
 @case
+def E413_menu_names(t):
+    # fw 1.7 fix E4.13 (sweep B12): NRPN sets a menu parameter to any 0..127, and the page named it by
+    # table[value + 1] without a bound: NRPN 119 (the roll rate) = 14 on the performance page read
+    # rollRateNames[15] of 12 (UBSan stopped the render at menu.c:2822). A value past its table shows the
+    # table's first name now; the values inside it keep their names (the roll's 1/8 = 6 and 32 = 10)
+    seed, rows = t.seed(), {}
+    for name, value in (('past', 14), ('top', 127), ('eighth', 6), ('last', 10)):
+        log = t.path(name + '.log')
+        t.render(seed, ['--no-start', '--seconds', '1.5', '--panel-log', log, '--events',
+                        t.script('0ms press mode2\n+300ms din B0 63 00 B0 62 77 B0 06 %02X\n+300ms mark %s\n'
+                                 % (value, name))])
+        rows.update({x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)})
+    for name, label in (('past', 'One'), ('top', 'One'), ('eighth', '1/8'), ('last', '32 ')):
+        check(rows[name][0].lower().startswith('bpm rol'), 'the performance page: %r' % rows[name])
+        check(rows[name][1][4:7] == label, '%s: rol reads %r, not %r' % (name, rows[name][1][4:7], label))
+
+@case
 def E78_pingpong(t):
     # fw 1.7 fix E7.8: fw 1.7 wrote the send's L into one line and its R into the other, and the
     # lines feed each other, so a centred send echoed equally on both sides. The left line now
