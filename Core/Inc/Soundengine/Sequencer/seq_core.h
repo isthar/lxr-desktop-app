@@ -540,8 +540,8 @@ typedef struct seqc_host
 	TrackTemplate	(*tmpl)(void *ctx, uint8_t pattern, uint8_t track);
 	/* -- v0.7 (plan v0.7 V7-3); both may be NULL -- */
 	/** the track's velocity template in the pattern (TrackTemplate: id 0..8, amount = depth - 100,
-	 * SeqStepTypes.h), checked with velTemplate_checked(). Read for each step occurrence that
-	 * plays. NULL: off */
+	 * SeqStepTypes.h), checked with velTemplate_checked(). Read with tmpl() for each step
+	 * occurrence, also for an early part that does not play; not by seqc_recordPlace(). NULL: off */
 	TrackTemplate	(*vtmpl)(void *ctx, uint8_t pattern, uint8_t track);
 	/** the host's own templates us1..us4 (USER_TEMPLATES UserTemplates), read in place by the
 	 * timing ids 8..11 and the velocity ids 5..8. The host writes a template with interrupts
