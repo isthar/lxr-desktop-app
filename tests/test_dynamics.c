@@ -289,6 +289,41 @@ TEST(vel_templates_off_reads_no_length)
 	dynOff();
 }
 
+TEST(vel_templates_every_depth)
+{
+	/* review of Task 3: every depth 0..200 % of each built-in at each position, from velocities 127,
+	 * 64 and 1, through seqc_templateVelAt() (seqc_templateVel(), which a step plays through):
+	 * seqc_velScale() at that depth, and the formula rounded except within 0.005 of a tie (planning
+	 * model: 70 such inputs, the farthest 0.0028 from the tie). Only 0 % leaves the velocity: 1 %
+	 * already scales (127 at -15 dB is 125) */
+	static const uint8_t vels[3] = { 127, 64, 1 };
+	dynHost();
+	int ties = 0;
+	for (uint8_t id = 1; id < VEL_TEMPLATE_BUILTIN; id++)
+		for (uint8_t q = 0; q < TEMPLATE_STEPS; q++)
+			for (int pct = 0; pct <= 200; pct++)
+				for (int k = 0; k < 3; k++)
+				{
+					const TrackTemplate vt = { .id = id, .amount = (int8_t)(pct - 100) };
+					const int got = seqc_templateVelAt(vels[k], vt, q);
+					ASSERT_EQ(got, seqc_velScale(vels[k], vtab[id][q], (uint8_t)pct));
+					const int want = velModel(vels[k], vtab[id][q], pct);
+					if (got != want)
+					{
+						const double x = velExact(vels[k], vtab[id][q], pct);
+						ASSERT_TRUE(fabs(x - floor(x) - 0.5) < 0.005);
+						ASSERT_TRUE(got == velRound(floor(x)) || got == velRound(ceil(x)));
+						ties++;
+					}
+				}
+	printf("vel_templates_every_depth: %d inputs within 0.005 of a tie round the other way\n", ties);
+	ASSERT_TRUE(ties <= 70);
+	ASSERT_EQ(seqc_templateVelAt(127, (TrackTemplate){ OF8, -99 }, 1), 125);	/* 1 %, -15 dB */
+	ASSERT_EQ(seqc_templateVelAt(127, (TrackTemplate){ OF8, -75 }, 0), 95);	/* 25 %, -10 dB */
+	ASSERT_EQ(seqc_templateVelAt(127, (TrackTemplate){ OF8, -100 }, 1), 127);	/* 0 % */
+	dynOff();
+}
+
 TEST(vel_templates_position_counts_the_tracks_steps)
 {
 	/* q = (loop x length + step) mod 16, v0.6 M6: occurrence k of a track with every step on is at
