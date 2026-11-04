@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 08:55",
+    "updated": "2026-11-04 09:38",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Zaparkowane. Czeka na Ciebie: H12, sesja testowa, B13, odsłuch kitów, CI",
     "branch": "timing-core",
-    "head": "b5656ef",
-    "next": "Przy powrocie: sklasyfikować wyniki fuzzingu v0.4-half (E4.14); potem Twoje H12",
-    "updated_at": "2026-11-04T08:55:00+01:00",
-    "now": "Zaparkowane: nic nie robię; ewentualnie dobiega fuzzing v0.4-half w tle"
+    "head": "12cca7b",
+    "next": "Twoje H12 (build/images/h12/PROJ62), B13, odsłuch kitów, CI",
+    "updated_at": "2026-11-04T09:38:00+01:00",
+    "now": "Zaparkowane: nic nie działa w tle"
   },
   "epics": [
     {
@@ -449,8 +449,8 @@
     {
       "id": "E4.14",
       "epic": "E4",
-      "status": "w toku",
-      "title": "Fuzzing kandydatów do wydań v0.4-half i v0.5-half pod ASan i UBSan (dźwięk, MIDI, sekwencer, trg smp i blk), po E7.7",
+      "status": "zrobione",
+      "title": "Fuzzing kandydatów do wydań pod ASan i UBSan: v0.4-half 15 000 renderów, v0.5-half 15 000 (dźwięk, MIDI, sekwencer). MIDI i sekwencer czyste; w dźwięku wyłącznie B14 (odczyt tablicy PWM w calcPwmBlock i calcPwmFmBlock), poprawiony na v0.6 (E4.11); bez przenoszenia do 0.4 i 0.5",
       "updated": "2026-11-04"
     },
     {
@@ -4023,6 +4023,11 @@
       "n": 570,
       "at": "2026-11-04 08:55",
       "text": "Zaparkowane (wychodzisz). E4.14 w toku: fuzzing v0.4-half może jeszcze dobiec sam w tle; wyniki w build/wt-v04/build/emu-fuzz-e414/, do sklasyfikowania przy powrocie tak jak v0.5 (spodziewany tylko B14). Wszystko inne zamknięte i wypchnięte. Czeka na Ciebie: H12 (gotowy projekt build/images/h12/PROJ62, potem pliki z build/images/po-H12/), B13, odsłuch kitów, anulowanie wiszącego przebiegu CI (komenda w czacie)."
+    },
+    {
+      "n": 571,
+      "at": "2026-11-04 09:38",
+      "text": "E4.14 zrobione: v0.4-half 15 000 renderów pod ASan: MIDI i sekwencer bez znalezisk, w dźwięku 211, każde odtworzone: wyłącznie B14 (calcPwmBlock, calcPwmFmBlock), jak w v0.5-half. Nic nowego. Wszystko zaparkowane."
     }
   ]
 }
