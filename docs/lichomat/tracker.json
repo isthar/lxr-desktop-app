@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 00:48",
+    "updated": "2026-11-04 06:48",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Czeka na Ciebie: H12 (wybiera folder polowa/ albo lean/), sesja testowa, B13, odsłuch kitów, CI",
+    "focus": "E4.13: pozostałe błędy fw 1.7 (B11, B12, B15–B18); czeka na Ciebie: H12, B13, odsłuch kitów",
     "branch": "timing-core",
-    "head": "539ac85",
-    "next": "H12 na 0.3 z CI; potem pliki z build/images/po-H12/ (README, punkt 5); strona odsłuchu: kity, B13, pogłos",
-    "updated_at": "2026-11-04T00:48:00+01:00",
-    "now": "Nic nie działa w tle; czekam na Twój odczyt H12 i odsłuch"
+    "head": "443ecaa",
+    "next": "E4.13: B17 i B15 (MIDI), B16 (RAT), B18 (wybór wzorca), B11 i B12 (menu) z testami; lekki przegląd; scalenie",
+    "updated_at": "2026-11-04T06:48:00+01:00",
+    "now": "E4.13: test i poprawka B17 (USB MIDI), od 06:55"
   },
   "epics": [
     {
@@ -437,6 +437,13 @@
       "epic": "E4",
       "status": "zrobione",
       "title": "Nocny fuzzing v0.6 pod ASan i UBSan: 24 000 renderów (dźwięk, MIDI, sekwencer, trg smp i blk; wcześniej 1 800) i 7 500 renderów samego pogłosu na v0.6-half i v0.4-lean (wszystkie gałki, freeze, ton w trakcie ogona): 0 znalezisk",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E4.13",
+      "epic": "E4",
+      "status": "w toku",
+      "title": "Pozostałe błędy fw 1.7 ze skanu sanitizerów (raport z 27.10): B11 (cel LFO przy głosie 0 czyta poza tablicą), B12 (etykieta rolla z NRPN 119 poza tablicą), B15 (faza LFO 127), B16 (RAT czyta za tablicą), B17 (USB MIDI z bajtem ≥ 0x80 pisze za tablicą), B18 (wybór wzorca czyta poza tablicami Euklida); każdy z testem, na v0.6, potem do v0.6-half i v0.6-lean. B13 czeka na Ciebie (E4.11)",
       "updated": "2026-11-04"
     },
     {
@@ -3935,6 +3942,11 @@
       "n": 558,
       "at": "2026-11-04 00:48",
       "text": "Koniec nocnej roboty. Gotowe: M19 (0.4, 0.5 i 0.6 na każdy wynik H12, obrazy w build/images/po-H12/), Q34 (pogłos zostaje w połowie), E8.8 (ścieżki przycisków sprawdzone, poprawione trk rqn), E4.12 (fuzzing czysty), aplikacja odświeżona, kity na stronie odsłuchu. Czeka na Ciebie: H12 i sesja (E8.1), B13 (E4.11), odsłuch kitów, zgoda na ponowienie CI (E8.5), A1–A12 (E8.4). Usage ok. 6,5%."
+    },
+    {
+      "n": 559,
+      "at": "2026-11-04 06:48",
+      "text": "Wracam do pracy (kawa do ok. 10:45). E4.13 w toku: domykam pozostałe błędy fw 1.7 ze skanu sanitizerów z 27.10 (B11, B12, B15–B18), każdy z testem, który najpierw pada; na v0.6, potem scalenie do v0.6-half i v0.6-lean. B13 dalej czeka na Twój odsłuch."
     }
   ]
 }
