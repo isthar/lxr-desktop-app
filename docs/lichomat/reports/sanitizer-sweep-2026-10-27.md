@@ -1,6 +1,8 @@
 # LICHOMAT v0.1 — Sanitizer sweep report
 
-## Status after E4.6–E4.9 (2026-10-27, `3527cbc`)
+## Status after E4.6–E4.9 (2026-10-27, `3527cbc`), updated 2026-11-04 (tracker E4.13)
+
+*2026-11-04:* B11, B12 and B17 are fixed on `v0.6` (E4.13); B15, B16 and B18 had been fixed by the emulator's F16, F13 and F12 without this table saying so. Open: B13 (the owner's listening check, E4.11; B14 is fixed on `v0.6`, `9f04341`) and B19 (host-only).
 
 *Added when the report was copied into the repository. Everything below this section is the sweep's
 report as it was written in the night, with `8af1ece` as HEAD (before E4.7–E4.9); this section
@@ -31,14 +33,14 @@ names the same unchecked read in fw 1.7).
 | B8 | wrong-behaviour | fixed | `eb9712a` (the guard tests the stored state's exponent bits through a volatile read); `test_dsp`, `tools/fw_checks.sh E4.9`. While a runaway setting is held the filter still sounds broken (a buzz or drop-outs, where fw 1.7 was silent); after it is turned back the voice sounds again within about 8 audio blocks |
 | B9 | wrong-behaviour | fixed | `6a74b81` (the amount is limited to 0.99, so slope 127 gives a very steep curve; slope 0 returns 0, its flat curve, instead of the proposed −0.99 limit, which would bend it); `test_dsp` |
 | B10 | wrong-behaviour | fixed | `9353a68` (both default cases clear the buffer: a waveform of 6 or more is silent; 0–5 unchanged); `test_dsp` |
-| B11 | wrong-behaviour | open | Needs a blank or foreign card, reads flash only, no fault: a known limitation in the release notes, for a later version |
-| B12 | wrong-behaviour | open | A wrong label only, no sound change, nothing stored: a known limitation in the release notes |
+| B11 | wrong-behaviour | fixed (v0.6) | `9ac5d9f` (tracker E4.13: `voi` past 6 takes voice 1's range at both sites); app test `E413_lfo_voice_0`, the dev harness on a blank card. Before: a known limitation in the release notes |
+| B12 | wrong-behaviour | fixed (v0.6) | `9ac5d9f` (tracker E4.13: `MENU_NAME()` bounds all 25 fw 1.7 name tables of `getMenuItemNameForValue()` by their size; a value past a table shows its first name); render test `E413_menu_names` |
 | B13 | wrong-behaviour | open | Part of fw 1.7's PWM sound; the fix changes it. Goes with the owner's listening check (Q13, with `Oscillator.c:471`/`:175`, lines 464 and 174 before `9353a68`), v0.2 at the earliest |
-| B14 | wrong-behaviour | open | As B13: the PWM table read goes with the same listening check (Q13) |
-| B15 | harmless-on-device | open | VCVT saturates to the intended value on the device; only x86-64 hosts differ. For a clean UBSan baseline in stage 1b |
-| B16 | harmless-on-device | open | The read is multiplied by 0. For a clean UBSan baseline later |
-| B17 | harmless-on-device | open | The write lands in fill bytes; needs malformed USB-MIDI packets. For a clean UBSan baseline later |
-| B18 | harmless-on-device | open | The values read are neither shown, saved nor sent. For a clean UBSan baseline later |
+| B14 | wrong-behaviour | fixed (v0.6) | `9f04341` (tracker E4.11: the table read stays in its row; below 14 kHz bit for bit as before) |
+| B15 | harmless-on-device | fixed (emulator F16) | `e89ff7c` (`f2u32_sat()`, the device's saturation in defined C, stage 1b); since v0.3 |
+| B16 | harmless-on-device | fixed (emulator F13) | `813aaf6` (the diode curve returns the table's last entry at +1); since v0.3 |
+| B17 | harmless-on-device | fixed (v0.6) | `255b901` (tracker E4.13: a USB-MIDI channel message with a data byte of bit 7 is dropped before the routing); `test_midicc` |
+| B18 | harmless-on-device | fixed (emulator F12) | `7f5732f` (a pattern select asks for the active voice's Euclid values, Q23); since v0.2 |
 | B19 | host-only | open | Device and arm64 hosts agree; on the host, stage 1b's `-fno-strict-float-cast-overflow` (spec §8.2) gives the device's saturation at these sites. Spec F6 makes only the 8 FM sites and `freq2PhaseIncr()` defined C, not `freqToMidiNote()`, `freq2PhaseIncr1024()` or `freq2PhaseIncr32767()` |
 
 Also open, not filed as bugs above:
