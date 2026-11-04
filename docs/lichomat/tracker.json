@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 14:28",
+    "updated": "2026-11-04 14:37",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "E6.37: utwór referencyjny według Twojego wzoru",
+    "focus": "Utwór 3 gotowy; v0.7: następne E6.30",
     "branch": "timing-core",
-    "head": "3bf33db",
-    "next": "E6.30 przy następnym oknie; czeka na Ciebie: H12 (wyniki na stronie arkusza), B13, odsłuch kitów i akcentów, poprawki szkicu v0.7, CI",
-    "updated_at": "2026-11-04T14:28:00+01:00",
-    "now": "E6.37: karta i aranżacja utworu 3 (gałąź showcase)"
+    "head": "eb1b493",
+    "next": "E6.30 (rdzeń v0.7); czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
+    "updated_at": "2026-11-04T14:37:00+01:00",
+    "now": "Zaparkowane: nic nie działa w tle"
   },
   "epics": [
     {
@@ -757,8 +757,8 @@
     {
       "id": "E6.37",
       "epic": "E6",
-      "status": "w toku",
-      "title": "Trzeci utwór pokazowy według Twojego wzoru (BCCO / Mutual Rytm): stopa z rumble, ghost kick, shaker 3-krokowy, otwarty hihat na offbeatach, werbel na 2 i 4, industrialna perkusja z długim ogonem (call and response co 2 takty), bas na Drum 3 w pętli 11 kroków; render firmware w emulatorze, tools/demo_showcase.sh --track 3",
+      "status": "zrobione",
+      "title": "Trzeci utwór pokazowy według Twojego wzoru (BCCO / Mutual Rytm): 2:52, 140 BPM, prosto, kit PULS przebudowany (stopa z rumble, ghost kick, bas na Drum 3 w pętli 11, werbel, perkusja industrialna: wołanie 1:2 i odpowiedź 2:2 z ogonem w pogłosie, shaker w pętli 3, otwarty hihat z drg); tools/demo_showcase.sh --track 3 (showcase 378c19d), na stronie odsłuchu, pliki w build/wt-v06-app/build/demo/",
       "updated": "2026-11-04"
     },
     {
@@ -4180,6 +4180,11 @@
       "n": 580,
       "at": "2026-11-04 14:28",
       "text": "E6.37 start: trzeci utwór pokazowy według Twojego wzoru. Nie masz teraz urządzenia, więc sprawdzenia na sprzęcie (H12, E8.1) czekają; reszta idzie w emulatorze."
+    },
+    {
+      "n": 581,
+      "at": "2026-11-04 14:37",
+      "text": "E6.37 zrobione: utwór 3 według Twojego wzoru (showcase 378c19d), na stronie odsłuchu (wersja 9). Każda ścieżka gra zapis co do kroku (log uderzeń). Balans z renderów solo, RMS wobec stopy z rumble: ghost −11,6 dB, bas −7, werbel −13, perkusja −12, hihaty −15,5. Hihaty z filtrem PULS były 39 dB pod stopą; filtr górnoprzepustowy i przester podnoszą je o 22 dB. Render 2:51,7, szczyt −1,2 dBFS, powtarzalny. Pliki: build/wt-v06-app/build/demo/lichomat-showcase3-v06*.wav."
     }
   ]
 }
