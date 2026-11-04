@@ -232,7 +232,8 @@ void fake_useMicro(bool on);
 /** v0.6: the step's microtiming T, -84..+84 ticks, as the firmware stores it: the canonical
  * split (stepMicro_split()) into timing[].shift, the flam kept, and fine[] */
 void fake_setMicro(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t step, int micro);
-/** v0.6: the track's template, id 0..7, and its amount in percent, 0..200 */
+/** v0.6: the track's template, id 0..11 (v0.7: 8..11 are us1..us4, read through userTemplates),
+ * and its amount in percent, 0..200 */
 void fake_setTemplate(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t id, int percent);
 /** v0.7 (plan v0.7 V7-23): from the next fake_init() on, the host table has vtmpl(), which returns
  * h->vtpl, and userTemplates = h->user, or neither (on false: NULL, v0.6's path). Each fake_init()

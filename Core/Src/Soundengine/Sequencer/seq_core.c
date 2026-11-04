@@ -1184,7 +1184,7 @@ static int seqc_templateValue(uint8_t id, uint32_t q)
 }
 //------------------------------------------------------------------------------
 /** v0.6 (spec v0.6 4.1, M5): G, template tp at position q in a track step of len ticks, scaled
- * by its amount; 0 for off */
+ * by its amount; 0 for off. v0.7: the caller has checked tp (trackTemplate_checked(): id 0..11) */
 static int seqc_templateG(TrackTemplate tp, uint32_t q, uint16_t len)
 {
 	if (tp.id == 0)
@@ -1272,8 +1272,8 @@ static TrackTemplate seqc_vtmplOf(uint8_t pattern, uint8_t track)
 	return velTemplate_checked(seqc.host.vtmpl(seqc.host.ctx, pattern, track));
 }
 //------------------------------------------------------------------------------
-/** v0.7 (V7-4): vel through velocity template vt (checked) at position q; vel itself when vt is
- * off or its depth is 0 */
+/** v0.7 (V7-4): vel through velocity template vt at position q; vel itself when vt is off or its
+ * depth is 0. The caller has checked vt (velTemplate_checked(): id 0..8, amount -100..+100) */
 static uint8_t seqc_templateVel(uint8_t vel, TrackTemplate vt, uint32_t q)
 {
 	if (vt.id == 0 || vt.amount == TEMPLATE_AMOUNT_MIN)

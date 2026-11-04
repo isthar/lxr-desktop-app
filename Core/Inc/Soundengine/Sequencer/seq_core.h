@@ -910,12 +910,14 @@ uint8_t seqc_velScale(uint8_t vel, int db, uint8_t pct);
 /** v0.7 (V7-7): vel in whole dB below loudest, rounded, -42..0: 0 for vel >= loudest or loudest 0,
  * -42 for vel 0; an own template's velocity part (seq_captureUserTemplate()). Pure */
 int8_t seqc_velDb(uint8_t vel, uint8_t loudest);
-/** v0.7 (V7-10, Q36): timing template tp (checked) at position q (mod 16) for a track step at x1,
- * in ticks of 1/96 step, scaled by its amount; 0 for off. For the capture; reads the own templates
- * through userTemplates */
+/** v0.7 (V7-10, Q36): timing template tp at position q (mod 16) for a track step at x1, in ticks
+ * of 1/96 step, scaled by its amount; 0 for off. It checks tp itself (trackTemplate_checked()).
+ * For the capture: it reads the own templates in place through userTemplates and no other state
+ * of the core, so call it from the context that writes them, the main loop (the capture) */
 int seqc_templateTicksAt(TrackTemplate tp, uint8_t q);
-/** v0.7 (V7-10, Q36): vel through velocity template vt (checked) at position q (mod 16), as a step
- * plays it; vel for off or depth 0. For the capture */
+/** v0.7 (V7-10, Q36): vel through velocity template vt at position q (mod 16), as a step plays it;
+ * vel for off or depth 0. It checks vt itself (velTemplate_checked()). For the capture, from the
+ * main loop as seqc_templateTicksAt(): it reads the own templates in place through userTemplates */
 uint8_t seqc_templateVelAt(uint8_t vel, TrackTemplate vt, uint8_t q);
 //------------------------------------------------------------------------------
 /** v0.2: a number that changes whenever a track index can have changed (a master or a
