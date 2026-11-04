@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 07:08",
+    "updated": "2026-11-04 07:22",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E4.13: pozostałe błędy fw 1.7 (B11, B12, B15–B18); czeka na Ciebie: H12, B13, odsłuch kitów",
     "branch": "timing-core",
-    "head": "e772f53",
+    "head": "dbee5e6",
     "next": "E4.13: B17 i B15 (MIDI), B16 (RAT), B18 (wybór wzorca), B11 i B12 (menu) z testami; lekki przegląd; scalenie",
-    "updated_at": "2026-11-04T07:08:00+01:00",
-    "now": "E4.13: bramki v0.6 (a856883); potem scalenie do v0.6-half i v0.6-lean i nowe obrazy 0.6"
+    "updated_at": "2026-11-04T07:22:00+01:00",
+    "now": "Odświeżam aplikację LICHOMAT Emu do v0.6-half z E4.13"
   },
   "epics": [
     {
@@ -442,8 +442,8 @@
     {
       "id": "E4.13",
       "epic": "E4",
-      "status": "w toku",
-      "title": "Pozostałe błędy fw 1.7 ze skanu sanitizerów (raport z 27.10): B11 (cel LFO przy głosie 0 czyta poza tablicą), B12 (etykieta rolla z NRPN 119 poza tablicą), B15 (faza LFO 127), B16 (RAT czyta za tablicą), B17 (USB MIDI z bajtem ≥ 0x80 pisze za tablicą), B18 (wybór wzorca czyta poza tablicami Euklida); każdy z testem, na v0.6, potem do v0.6-half i v0.6-lean. B13 czeka na Ciebie (E4.11)",
+      "status": "zrobione",
+      "title": "Pozostałe błędy fw 1.7 ze skanu sanitizerów: B17 (uszkodzona wiadomość USB MIDI z bajtem danych ≥ 128 pisała za tablicą CC i szła na DIN; 255b901), B11 (cel LFO przy voi 0 po pustej karcie czytał poza tablicą) i B12 (nazwy menu spoza listy z NRPN; 9ac5d9f), poprawki z przeglądu (a856883); każdy test najpierw padał. B15, B16 i B18 były już poprawione przez F16, F13 i F12. Na v0.6 i scalone do v0.6-half i v0.6-lean; obrazy 0.6 odświeżone. B13 czeka na Ciebie (E4.11)",
       "updated": "2026-11-04"
     },
     {
@@ -3962,6 +3962,11 @@
       "n": 562,
       "at": "2026-11-04 07:08",
       "text": "E4.13: przegląd bez uwag krytycznych i ważnych; trzy drobne poprawione (a856883): B17 liczy bajty danych według statusu, nie CIN pakietu (nowy przypadek testu najpierw padał); komentarz przy B12; test B11 działa teraz także bez sanitizera (mutant bez poprawki w Release pada: DST 'mod' zamiast 'ofs'). M20 zapisane (b7fd24a): model renderera nie obejmuje celów LFO. Bramki v0.6 od nowa."
+    },
+    {
+      "n": 563,
+      "at": "2026-11-04 07:22",
+      "text": "E4.13 zrobione: v0.6 (a856883), v0.6-half (fe1d696) i v0.6-lean (e1b76e0) zielone: 125 testów hosta, 346 emulatora, ASan 125 i 317, 0 ostrzeżeń. Nowe obrazy 0.6: do części 2 sesji 30a9730f… (zastępuje beefc513…), w po-H12/polowa 79605882…, w po-H12/lean c7678823…; SHA256SUMS, README i plan sesji zaktualizowane. Ze skanu z 27.10 zostały tylko B13 (Twój odsłuch) i B19 (tylko na hoście)."
     }
   ]
 }

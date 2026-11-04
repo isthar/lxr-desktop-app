@@ -75,8 +75,9 @@ Więcej na 0.3 nie rób: wszystko inne z 0.1–0.3 jest w 0.6, więc na 0.3 robi
 
 ## Część 2: v0.6
 
-Plik: `build/images/LXR_V2_LICHOMAT_0.6.img` (`beefc513…`, lokalny build gałęzi `v0.6` @ `e971801`, z
-poprawką ping-ponga E7.8; starszy plik `975abbd1…` zastąp tym).
+Plik: `build/images/LXR_V2_LICHOMAT_0.6.img` (`30a9730f…`, lokalny build gałęzi `v0.6` @ `a856883`, z
+poprawką ping-ponga E7.8 i błędów fw 1.7 B11, B12, B17 z E4.13; starsze pliki `975abbd1…` i `beefc513…`
+zastąp tym).
 
 **Różnice wobec tekstu listy sprawdzeń na 0.6:**
 - Gdzie lista każe „install 0.1/0.2/0.3/0.5 again”, instalujesz 0.6.
@@ -220,7 +221,7 @@ razu po H12, tego samego wieczoru, albo kiedy indziej. Nie czekasz na mnie ani n
 
 - Wpisz każde sprawdzenie do run sheet na końcu listy (wystarczy też wiadomość albo zdjęcie): PASS, FAIL
   albo SKIPPED, data i wartości z **Record**. Przy każdym wyniku dopisz plik: 0.3 CI `d630eabc` albo 0.6
-  lokalny `beefc513`, 0.4 `67ca9833` albo `e44de0b6`.
+  lokalny `30a9730f`, 0.4 `67ca9833` albo `e44de0b6`.
 - H12: zdjęcie ekranu CPU w każdym kroku 2–5, z nazwą kitu, efektem i BPM; P wyślij od razu.
 - **Nie musisz mierzyć w DAW.** Wyeksportuj nagranie każdego sprawdzenia z pomiarem czasu jako WAV
   (bez normalizacji, z częstotliwością nagrania) i nazwij je ID sprawdzenia (`H3.wav`, `U27-smp.wav`,
