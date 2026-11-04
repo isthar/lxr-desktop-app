@@ -1742,6 +1742,14 @@ uint8_t midiParser_cc2voiceNr(uint8_t cc)
  */
 void midiParser_parseMidiMessage(MidiMsg msg)
 {
+	//LICHOMAT (E4.13, sweep B17): usbd_cdc.c copies a USB-MIDI packet's data bytes unmasked. A channel
+	//message whose data byte has bit 7 set is malformed (DIN cannot carry one): as CC 255 it wrote one
+	//byte past midiParser_originalCcValues, and routed to DIN its data byte went out as a status byte.
+	//It is dropped here, before the routing. A message with one data byte ignores the unused one.
+	if((msg.bits.source == midiSourceUSB) && (msg.status >= 0x80) && (msg.status < 0xF0)
+			&& ((msg.data1 | ((msg.bits.length >= 2) ? msg.data2 : 0)) & 0x80))
+		return;
+
 	// route message if needed
 	if(midiParser_routing.value) {
 		if(msg.bits.source==midiSourceUSB) {

@@ -311,6 +311,53 @@ TEST(midicc_note_on_posts_its_arrival)
 	activeParameters[PAR_TRIG_TIMING] = 0;
 }
 
+/* E4.13 (sweep B17): USB-MIDI packets are copied into MidiMsg without masking the data bytes, so
+ * a malformed packet such as 0B B0 FF 40 (DIN cannot carry one; a class-compliant host never
+ * sends one) reached the parser as CC 255 and wrote midiParser_originalCcValues[255], one byte
+ * past the table (UBSan stopped here, index 255 out of bounds for uint8_t[255]), and with the
+ * routing usb2midi on, its data byte 0xFF went out on DIN as a status byte. Such a channel message
+ * is now dropped before the routing and the parser; well-formed ones, and a Program Change whose
+ * unused second byte is not 0, pass as before. */
+static int routedToDin;	/* messages the parser routed to MIDI out (the stub below) */
+
+static MidiMsg usbMsg(uint8_t status, uint8_t data1, uint8_t data2, unsigned dataBytes)
+{
+	MidiMsg msg = { .status = status, .data1 = data1, .data2 = data2 };
+	msg.bits.source = midiSourceUSB;
+	msg.bits.length = dataBytes;
+	return msg;
+}
+
+TEST(midicc_usb_data_bytes_of_bit_7_are_dropped)
+{
+	midiParser_setRouting(1);	/* usb2midi */
+	static const uint8_t bad[][3] = { { MIDI_CC, 0xFF, 0x40 }, { MIDI_CC, 0x85, 0x40 }, { MIDI_CC, 0x07, 0x90 },
+		{ NOTE_ON, 0x80, 0x40 }, { NOTE_ON, 0x30, 0xFF } };
+	for (unsigned k = 0; k < sizeof bad / sizeof bad[0]; k++)
+	{
+		reset();
+		routedToDin = 0;
+		midiParser_parseMidiMessage(usbMsg(bad[k][0], bad[k][1], bad[k][2], 2));
+		ASSERT_EQ(changedOutside(), 0);
+		ASSERT_EQ(changedInTableExcept(-1), 0);
+		ASSERT_EQ(routedToDin, 0);
+	}
+	/* a Program Change has one data byte: bit 7 there drops it, junk in the unused byte does not */
+	routedToDin = 0;
+	midiParser_parseMidiMessage(usbMsg(0xC0, 0x85, 0x00, 1));
+	ASSERT_EQ(routedToDin, 0);
+	midiParser_parseMidiMessage(usbMsg(0xC0, 0x05, 0xFF, 1));
+	ASSERT_EQ(routedToDin, 1);
+	/* a well-formed CC from USB is routed and lands in the table as before */
+	reset();
+	routedToDin = 0;
+	midiParser_parseMidiMessage(usbMsg(MIDI_CC, 0x07, 0x33, 2));
+	ASSERT_EQ(routedToDin, 1);
+	ASSERT_EQ(midiParser_originalCcValues[7], 0x33);
+	ASSERT_EQ(changedInTableExcept(7), 0);
+	midiParser_setRouting(0);
+}
+
 TEST_MAIN()
 
 //------------------------------------------------------------------------------
@@ -381,7 +428,7 @@ void slopeEg2_setDecay(SlopeEg2 *eg, uint8_t data2, uint8_t isSync) { (void)eg; 
 void slopeEg2_setSlope(SlopeEg2 *eg, uint8_t data2) { (void)eg; (void)data2; }
 void transient_setWaveform(TransientGenerator *transient, const uint8_t waveform) { (void)transient; (void)waveform; }
 void uart_sendFrontpanelByte(uint8_t data) { (void)data; }
-void uart_sendMidi(MidiMsg msg) { (void)msg; }
+void uart_sendMidi(MidiMsg msg) { (void)msg; routedToDin++; }
 void usb_sendMidi(MidiMsg msg) { (void)msg; }
 void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel) { (void)voice; (void)note; (void)vel; noteOnsNow++; }
 void vsched_post(const vsched_rec_t *r) { if (posts < 16) posted[posts] = *r; posts++; }	/* LICHOMAT v0.5 (plan Task 10) */
