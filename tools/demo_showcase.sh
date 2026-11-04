@@ -22,7 +22,8 @@
 # Track 3 (--track 3): about 2:50 at 140 BPM from the owner's pattern of 2026-11-04 (BCCO / Mutual
 # Rytm): a kick with its rumble, a ghost kick under the groove, a 3-step shaker against the bar, the
 # open hat on the off-beats, the snare on 2 and 4, an industrial roar from far away as a call and
-# its answer over four bars, with echoes and a lot of reverb, and a bass on Drum 3 in an 11-step loop; on PULS (56-PULS.SND), rebuilt
+# its answer over four bars, with echoes and a lot of reverb, and a rolling Berghain-minimal bass on
+# Drum 3; on PULS (56-PULS.SND), rebuilt
 # voice by voice; card tools/demo_showcase3_card.txt.
 #
 # Writes OUT_DIR/NAME.wav (out 1, stereo, as rendered), NAME-norm.wav (the same, peak normalised to
@@ -278,11 +279,11 @@ def track3():
     # 25: the ghost kick and the snare (scene 4); a fill at 32 (the fourth kick drops, the rumble fills)
     scene(25, 4)
     fill(32)
-    # MAIN 33-56: the bass in its 11-step loop (scene 5); its dark low-pass opens a little from 41 to 49;
+    # MAIN 33-56: the rolling bass (scene 5); its dark low-pass opens a little from 41 to 49;
     # a 1/32 roll on the shaker at 40; fills at 48 and 56
     scene(33, 5)
     roll(40, 2, 6, 10)
-    sweep("filter_freq_3", 36, 46, 41, 49)
+    sweep("filter_freq_3", 34, 44, 41, 49)
     fill(48)
     fill(56)
     # BREAKDOWN 57-72: no kick, ghost kick or snare (scene 6): the reverb is not ducked and blooms; a
@@ -306,7 +307,7 @@ def track3():
     # kick, which ducks it, and thaws at 77; the bass's filter a little more open; fills at 80 and 88
     scene(73, 5)
     for name, v in (('dj_filter', 64), ('rev_size', 100), ('rev_decay', 84), ('rev_tone', 8),
-                    ("filter_freq_3", 50)):
+                    ("filter_freq_3", 46)):
         param(73, name, v)
     param(77, 'rev_freeze', 0)
     fill(80)
@@ -315,7 +316,7 @@ def track3():
     # rumble alone at 93 with the DJ filter closing; stopped at the end of bar 96, then the tail; the
     # reverb off 6 s later
     scene(89, 3)
-    param(89, "filter_freq_3", 36)
+    param(89, "filter_freq_3", 34)
     scene(93, 1)
     sweep('dj_filter', 63, 30, 93, 97)
     add(at(97) - 40, 'press start')
@@ -514,13 +515,12 @@ Głosy (X głośno, x duch):
                                                   przyciszany przez stopę (rumble); krok 13 !Fl
   Drum 2  ghost kick           ...x..X....x..X.   krótsza, miękka stopa ok. 58 Hz przez
                                                   dolnoprzepustowy; x 64, X 120
-  Drum 3  bas                  ..X....X..x|       pętla 11 kroków przeciw taktowi (wraca co 11
-                                                  taktów), cały na G#2, trzeci krok cicho; sinus
-                                                  w lekkim FM (LFO PULS faluje indeksem co 4
-                                                  takty), bez blipu wysokości, długie, trzymane
-                                                  wybrzmienie przez ciemny dolnoprzepustowy:
-                                                  hipnotyczny puls, nie melodia (wersja 1
-                                                  brzmiała jak samba)
+  Drum 3  bas toczący się      .Xx..x...Xx..x.(x) bas w stylu berlińskiego minimalu (wersja 4; Twój
+                                                  pierwszy zapis ..X....X..x brzmiał jak samba):
+                                                  szesnastki w przerwach między stopą a ghost
+                                                  kickiem, akcenty na 3 i 11, krok 16 co 4 takty
+                                                  (4:4); jedna nuta G#2, piła przez ciemny,
+                                                  rezonansowy dolnoprzepustowy, przester, krótko
   Snare   werbel               ....X.......X...   suchy szum z tonem i transientem Clp
   Cymbal  ryk z oddali          wołanie A w takcie 1 z 4 (1:4), odpowiedź b na kroku 12 w takcie
                                  3 (3:4), ciszej; każde z dwoma cichnącymi echami co 3 kroki
@@ -542,8 +542,7 @@ Oś czasu (mm:ss od początku pliku, takty po 1,71 s):
   0:27  takt 17  Shaker, 3 kroki przeciw 4/4 (scena 3).
   0:41  takt 25  Ghost kick i werbel (scena 4).
   0:53  takt 32  Fill: czwarta stopa milknie, rumble wypełnia dziurę.
-  0:55  takt 33  MAIN. Bas w pętli 11 kroków, jedna nuta (scena 5). Filtr basu trochę się otwiera
-                 w taktach 41-49.
+  0:55  takt 33  MAIN. Toczący się bas (scena 5). Filtr basu trochę się otwiera w taktach 41-49.
   1:07  takt 40  Roll 1/32 na shakerze przez ostatnie 2 ćwierćnuty. Fille w taktach 48 i 56.
   1:36  takt 57  BREAKDOWN. Bez stopy, ghost kicka i werbla (scena 6): pogłos nie jest już
                  przyciszany, większy i dłuższy pokój; filtr DJ zamyka się przez 8 taktów.
