@@ -342,6 +342,17 @@ TEST(midicc_usb_data_bytes_of_bit_7_are_dropped)
 		ASSERT_EQ(changedInTableExcept(-1), 0);
 		ASSERT_EQ(routedToDin, 0);
 	}
+	/* the status decides how many data bytes count, not the packet's CIN: CC 7 = 0xFF in a packet
+	 * whose CIN (0xD, 0xF) gives one data byte or none is dropped too (review of E4.13) */
+	for (unsigned dataBytes = 0; dataBytes < 2; dataBytes++)
+	{
+		reset();
+		routedToDin = 0;
+		midiParser_parseMidiMessage(usbMsg(MIDI_CC, 0x07, 0xFF, dataBytes));
+		ASSERT_EQ(changedOutside(), 0);
+		ASSERT_EQ(changedInTableExcept(-1), 0);
+		ASSERT_EQ(routedToDin, 0);
+	}
 	/* a Program Change has one data byte: bit 7 there drops it, junk in the unused byte does not */
 	routedToDin = 0;
 	midiParser_parseMidiMessage(usbMsg(0xC0, 0x85, 0x00, 1));

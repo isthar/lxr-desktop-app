@@ -2767,8 +2767,8 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 }
 
 //LICHOMAT (E4.13, sweep B12): NRPN sets a menu parameter to any 0..127, past its name table (NRPN 119 = 14
-//read rollRateNames[15] of 12); a value past a table shows its first name. The table's size bounds it: its
-//[0][0] is not the count in every table (filterTypes, ppqInNames, fxNames, stepFlamNames, stepShiftNames)
+//read rollRateNames[15] of 12); a value past a table shows its first name. The table's own size bounds it,
+//so the bound cannot drift from the rows (each [0][0] counts them today)
 #define MENU_NAME(t)	((t)[(((size_t)curParmVal + 1) < (sizeof(t) / sizeof((t)[0]))) ? (curParmVal + 1) : 1])
 // given a menu id, and a value returns the name from PROGMEM
 static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmVal, char *buf)
