@@ -214,6 +214,28 @@ TEST(vel_scale_db_of_two_velocities)
 		ASSERT_EQ(seqc_velDb(want[k].vel, want[k].loudest), want[k].db);
 }
 
+TEST(vel_scale_db_loudest_past_127)
+{
+	/* review of Task 3: the floor -42 dB holds for any uint8_t: from loudest 134 on, vel 1 is more
+	 * than 42.5 dB below (1/134: 42.54 dB) and still reads -42; every value stays in -42..0, 0 for
+	 * vel >= loudest. Not compared with the formula here: past 127 the near-ties exceed the bound */
+	for (int loudest = 128; loudest < 256; loudest++)
+		for (int vel = 0; vel < 256; vel++)
+		{
+			const int got = seqc_velDb((uint8_t)vel, (uint8_t)loudest);
+			if (vel >= loudest)
+				ASSERT_EQ(got, 0);
+			else
+				ASSERT_TRUE(got >= VEL_TEMPLATE_DB_MIN && got <= 0);
+		}
+	ASSERT_EQ(seqc_velDb(1, 255), -42);
+	ASSERT_EQ(seqc_velDb(1, 134), -42);
+	ASSERT_EQ(seqc_velDb(1, 133), -42);	/* 42.48 dB */
+	ASSERT_EQ(seqc_velDb(0, 255), -42);
+	ASSERT_EQ(seqc_velDb(3, 255), -39);	/* 38.59 dB */
+	ASSERT_EQ(seqc_velDb(128, 255), -6);	/* 5.99 dB */
+}
+
 //------------------------------------------------------------------------------
 // vel_templates
 //------------------------------------------------------------------------------
