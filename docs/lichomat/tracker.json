@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 12:25",
+    "updated": "2026-11-04 12:36",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E6.27: plan v0.7 (dynamika groove)",
     "branch": "timing-core",
-    "head": "cecd541",
+    "head": "cd1bbcc",
     "next": "Po E6.27: wykonanie planu v0.7 na gałęzi v0.7; czeka na Ciebie H12 (strona arkusza), B13, odsłuch kitów, CI, poprawki szkicu v0.7",
-    "updated_at": "2026-11-04T12:25:00+01:00",
-    "now": "E6.27: piszę plan v0.7"
+    "updated_at": "2026-11-04T12:36:00+01:00",
+    "now": "E6.27: plan v0.7 (agent w tle); podgląd akcentów na stronie odsłuchu"
   },
   "epics": [
     {
@@ -681,7 +681,7 @@
       "id": "E6.26",
       "epic": "E6",
       "status": "zrobione",
-      "title": "Szkic v0.7 z rekomendacjami (docs/superpowers/specs/2026-11-04-v0.7-draft.md): dynamika groove. Szablony głośności vtp i vdp (0–200 %) z pomiaru hihatów albumu (of8, ful, dep, qtr: akcent na offbeatowych ósemkach, ghosty), 4 własne szablony na projekt z nagranej ścieżki (czas i głośność), zerowanie mikrotimingu ścieżki; blok 3 w .pat, +1 038 B RAM w zapasie 1 900 B; decyzja Q35",
+      "title": "Szkic v0.7 z rekomendacjami (docs/superpowers/specs/2026-11-04-v0.7-draft.md): dynamika groove. Szablony głośności vtp i vdp (0–200 %) z pomiaru hihatów albumu (of8, ful, dep, qtr: akcent na offbeatowych ósemkach, ghosty), 4 własne szablony na projekt z nagranej ścieżki (czas i głośność), zerowanie mikrotimingu ścieżki; blok 3 w .pat, +1 038 B RAM w zapasie 1 900 B; decyzja Q35. Podgląd na stronie odsłuchu (sekcja „Akcenty z albumu”): hihat na 0.6 z głośnościami kroków ustawionymi jak przez szablon, of8, ful, dep, qtr, of8 na 50 i 200 %",
       "updated": "2026-11-04"
     },
     {
@@ -4072,6 +4072,11 @@
       "n": 574,
       "at": "2026-11-04 12:25",
       "text": "E6.26 zrobione: szkic v0.7 (docs/superpowers/specs/2026-11-04-v0.7-draft.md), decyzja Q35. Dynamika groove: szablony głośności z pomiaru hihatów 8 utworów albumu (we wszystkich offbeatowe ósemki na 0 dB, ćwierćnuty ok. −10, ghosty ok. −14), głębokość 0–200 % na ścieżkę, 4 własne szablony z nagranej ścieżki, zerowanie mikrotimingu. Sprawdzone na v0.6: obcy blok w .pat jest pomijany, głośność idzie do głosu i do MIDI, zapas budżetu 1 900 B. E6.27 start: plan v0.7."
+    },
+    {
+      "n": 575,
+      "at": "2026-11-04 12:36",
+      "text": "E6.26 dodatek: podgląd szablonów głośności na stronie odsłuchu (wersja 8, sekcja „Akcenty z albumu”), wyrenderowany na 0.6 z głośnościami kroków ustawionymi ręcznie tak, jak zrobi to szablon; każda wartość sprawdzona na ekranie. Znalezione: głośność kroku zmienia głośność głosu tylko przy włączonym „velocity → głośność” głosu (volume mod; w karcie init hihat ma go wyłączonego, 127 i 20 różniły się o 0,2 dB). Dopisane do szkicu i przekazane do planu. Parametr renderera step_volume nie zmienia kroku (ekran zostaje 127); działa push i enkoder. E6.27 trwa (plan v0.7)."
     }
   ]
 }
