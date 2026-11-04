@@ -12,7 +12,9 @@
 #   shaker             xxX|              (a 3-step loop against the bar)
 #   open hat           ..X...X...X...X.
 #   snare              ....X.......X...
-#   industrial perc    A on 1 of bar 1, b on 12 of bar 2: a call and its answer, long tail
+#   industrial roar    A on 1 of bar 1, b on 12 of bar 3 (of 4): a far-off call and its answer, in
+#                      a lot of reverb, each with two echoes (after the owner's note: a roar from far
+#                      away, rarer, not dominant, not bright)
 #   bass (Drum 3)      ..X....X..x|      (an 11-step loop: odd, not irritating)
 #
 # Copyright (C) 2026 Tomasz Krzywicki
@@ -85,26 +87,23 @@
 +20ms param trans4_vol=40
 +20ms param volume_mod_on_off4=1
 +20ms param vol4=127
-# Cymbal, the industrial perc: three squares in FM (RDZA's metal, lower), band-passed with
-# resonance, distorted, a long decay, into the FX bus: its tail goes into the reverb, which the
-# kick ducks
-+20ms param wave1_cym=3
-+20ms param wave2_cym=3
-+20ms param wave3_cym=3
-+20ms param coarse5=60
-+20ms param mod_osc_f1_cym=113
-+20ms param mod_osc_f2_cym=77
-+20ms param mod_osc_gain1_cym=127
-+20ms param mod_osc_gain2_cym=90
+# Cymbal, the industrial roar from far away: noise, no FM, through a narrow resonant band-pass
+# low in the mids, driven hard, a slow swell and a long decay. Quiet dry, into the FX bus: its tail
+# is in the reverb (40 of predelay: further away), which the kick ducks
++20ms param wave1_cym=4
++20ms param wave2_cym=4
++20ms param wave3_cym=4
++20ms param mod_osc_gain1_cym=0
++20ms param mod_osc_gain2_cym=0
 +20ms param filter_type_5=2
-+20ms param filter_freq_5=70
-+20ms param reso_5=40
-+20ms param veloa5=0
-+20ms param velod5=90
++20ms param filter_freq_5=45
++20ms param reso_5=60
++20ms param veloa5=40
++20ms param velod5=100
 +20ms param vol_slope5=40
-+20ms param cymbal_distortion=60
++20ms param cymbal_distortion=90
 +20ms param volume_mod_on_off5=1
-+20ms param vol5=56
++20ms param vol5=36
 +20ms param audio_out5=6
 # Hihat: the shaker (closed) and the open hat share the voice. Noise through a high-pass, driven
 # hard: with PULS's band-pass the hats measured 39 dB (RMS) under the kick with its rumble; the
@@ -118,13 +117,13 @@
 +20ms param velod6_open=20
 +20ms param vol_slope6=30
 +20ms param vol6=127
-# the reverb for the rumble and the perc's tail: dark, long, ducked fully by Drum 1; no FX slot
+# the reverb for the rumble and the roar's tail: dark, long, ducked fully by Drum 1; no FX slot
 +20ms param fx_type=0
 +20ms param rev_level=110
 +20ms param rev_size=100
 +20ms param rev_decay=84
 +20ms param rev_tone=8
-+20ms param rev_predelay=0
++20ms param rev_predelay=40
 +20ms param rev_mod=40
 +20ms param rev_duck_src=1
 +20ms param rev_duck_depth=118
@@ -176,18 +175,35 @@
 +100ms press voice4
 +100ms press step5
 +100ms press step13
-# Cymbal, the industrial perc: the call A on step 1 in the first of every 2 bars (1:2), the answer
-# b on step 12 in the second (2:2), softer and a fourth lower
+# Cymbal, the roar: the call A on step 1 in the first of every 4 bars (1:4), echoed on steps 4 and 7
+# (a dotted 8th apart, quieter); the answer b on step 12 in the third (3:4), softer, echoed on step
+# 15 and on step 2 of the fourth bar (4:4). The echoes are the sequencer's: the FX slot stays off,
+# since the kick is on the FX bus for its rumble and would be echoed too
 +100ms press voice5
 +100ms press step1
++100ms press step2
++100ms press step4
++100ms press step7
 +100ms press step12
++100ms press step15
 +100ms param active_step=0
 +100ms param step_volume=127
-+100ms param step_prob=101
++100ms param step_prob=106
++100ms param active_step=3
++100ms param step_volume=64
++100ms param step_prob=106
++100ms param active_step=6
++100ms param step_volume=32
++100ms param step_prob=106
 +100ms param active_step=11
-+100ms param step_volume=82
-+100ms param step_note=55
-+100ms param step_prob=102
++100ms param step_volume=96
++100ms param step_prob=108
++100ms param active_step=14
++100ms param step_volume=48
++100ms param step_prob=108
++100ms param active_step=1
++100ms param step_volume=24
++100ms param step_prob=109
 # the closed hat, the shaker: a 3-step loop xxX against the bar
 +100ms press voice6
 +100ms param track_length=3
@@ -224,7 +240,7 @@
 +100ms down copy
 +50ms press step9
 +100ms up copy
-# scene 2: + the perc's call and answer and the open hat
+# scene 2: + the roar's call and answer and the open hat
 +100ms press voice5
 +100ms press voice7
 +100ms down copy
@@ -253,13 +269,13 @@
 +100ms down copy
 +50ms press step14
 +100ms up copy
-# scene 7: the bass and the perc alone
+# scene 7: the bass and the roar alone
 +100ms press voice6
 +100ms press voice7
 +100ms down copy
 +50ms press step15
 +100ms up copy
-# scene 8, the build back: the kick, the ghost kick, the shaker, the open hat, the perc; no bass,
+# scene 8, the build back: the kick, the ghost kick, the shaker, the open hat, the roar; no bass,
 # no snare
 +100ms press voice1
 +100ms press voice2

@@ -21,8 +21,8 @@
 #
 # Track 3 (--track 3): about 2:50 at 140 BPM from the owner's pattern of 2026-11-04 (BCCO / Mutual
 # Rytm): a kick with its rumble, a ghost kick under the groove, a 3-step shaker against the bar, the
-# open hat on the off-beats, the snare on 2 and 4, an industrial perc with a long tail as a call and
-# its answer over two bars, and a bass on Drum 3 in an 11-step loop; on PULS (56-PULS.SND), rebuilt
+# open hat on the off-beats, the snare on 2 and 4, an industrial roar from far away as a call and
+# its answer over four bars, with echoes and a lot of reverb, and a bass on Drum 3 in an 11-step loop; on PULS (56-PULS.SND), rebuilt
 # voice by voice; card tools/demo_showcase3_card.txt.
 #
 # Writes OUT_DIR/NAME.wav (out 1, stereo, as rendered), NAME-norm.wav (the same, peak normalised to
@@ -270,7 +270,8 @@ def track3():
     # INTRO 1-8: the kick and its rumble; the DJ filter opens over 8 bars
     sweep('dj_filter', 30, 63, 1, 9)
     param(9, 'dj_filter', 64)
-    # 9: the perc's call (bar 1 of 2) and answer (bar 2) with its long tail, and the open hat (scene 2)
+    # 9: the roar's call (bar 1 of 4) and answer (bar 3), each with two echoes, far off in the reverb,
+    # and the open hat (scene 2)
     scene(9, 2)
     # 17: the shaker, 3 steps against 4/4 (scene 3)
     scene(17, 3)
@@ -290,7 +291,7 @@ def track3():
     for name, v in (('rev_size', 120), ('rev_decay', 100), ('rev_tone', 20)):
         param(57, name, v)
     sweep('dj_filter', 63, 34, 57, 65)
-    # 65: frozen just before the bar; the bass and the perc alone over the frozen wash (scene 7); the
+    # 65: frozen just before the bar; the bass and the roar alone over the frozen wash (scene 7); the
     # DJ filter opens again
     param(65, 'rev_freeze', 1, early=20)
     scene(65, 7)
@@ -310,7 +311,7 @@ def track3():
     param(77, 'rev_freeze', 0)
     fill(80)
     fill(88)
-    # OUTRO 89-96: the shaker, the open hat and the perc with the kick (scene 3); the kick and the
+    # OUTRO 89-96: the shaker, the open hat and the roar with the kick (scene 3); the kick and the
     # rumble alone at 93 with the DJ filter closing; stopped at the end of bar 96, then the tail; the
     # reverb off 6 s later
     scene(89, 3)
@@ -517,9 +518,13 @@ Głosy (X głośno, x duch):
                                                   taktów): G#2, A2 ze slide, cichy D#3; sinus w FM
                                                   z LFO PULS na indeksie FM, rezonansowy filtr
   Snare   werbel               ....X.......X...   suchy szum z tonem i transientem Clp
-  Cymbal  perkusja industrialna  A w takcie 1 z 2 (1:2), b na kroku 12 w takcie 2 (2:2), ciszej
-                                 i kwartę niżej: wołanie i odpowiedź; metal (FM kwadratów, BP,
-                                 przester), długie wybrzmienie, na szynę FX: ogon w pogłosie
+  Cymbal  ryk z oddali          wołanie A w takcie 1 z 4 (1:4), odpowiedź b na kroku 12 w takcie
+                                 3 (3:4), ciszej; każde z dwoma cichnącymi echami co 3 kroki
+                                 (echa z sekwencera: slot FX zostaje wyłączony, bo stopa idzie na
+                                 szynę FX dla rumble i też dostałaby echo); szum przez wąski,
+                                 rezonansowy pasmowy, przester, powolne narastanie, długie
+                                 wybrzmienie, cicho na sucho, na szynę FX: ogon w pogłosie
+                                 z predelay 40 (dalej)
   HH zamk. shaker              xxX|               pętla 3 kroków przeciw taktowi (wraca co 3 takty)
   HH otw. otwarty hihat        ..X...X...X...X.   szablon drg: 6 ticków (6,7 ms) później, więc
                                                   zawsze wygrywa ze shakerem na tym samym kroku
@@ -528,7 +533,8 @@ Głosy (X głośno, x duch):
 
 Oś czasu (mm:ss od początku pliku, takty po 1,71 s):
   0:00  takt 1   INTRO. Stopa i jej rumble, filtr DJ otwiera się przez 8 taktów (scena 1).
-  0:14  takt 9   Perkusja: wołanie A i odpowiedź b z długim ogonem; otwarty hihat (scena 2).
+  0:14  takt 9   Ryk z oddali: wołanie A (takt 1 z 4) i odpowiedź b (takt 3), z echami, w
+                 pogłosie; otwarty hihat (scena 2).
   0:27  takt 17  Shaker, 3 kroki przeciw 4/4 (scena 3).
   0:41  takt 25  Ghost kick i werbel (scena 4).
   0:53  takt 32  Fill: czwarta stopa milknie, rumble wypełnia dziurę.
@@ -536,12 +542,12 @@ Oś czasu (mm:ss od początku pliku, takty po 1,71 s):
   1:07  takt 40  Roll 1/32 na shakerze przez ostatnie 2 ćwierćnuty. Fille w taktach 48 i 56.
   1:36  takt 57  BREAKDOWN. Bez stopy, ghost kicka i werbla (scena 6): pogłos nie jest już
                  przyciszany, większy i dłuższy pokój; filtr DJ zamyka się przez 8 taktów.
-  1:50  takt 65  Freeze pogłosu: zamrożona plama, nad nią sam bas i perkusja (scena 7).
+  1:50  takt 65  Freeze pogłosu: zamrożona plama, nad nią sam bas i ryk (scena 7).
   1:57  takt 69  Wraca stopa, ghost kick i hihaty, bez basu i werbla (scena 8); filtr DJ
                  górnoprzepustowy w górę do dropu; w takcie 72 roll 1/32 na shakerze.
   2:04  takt 73  DROP. Wszystko (scena 5), filtr płasko, zamrożona plama pod stopą, która ją
                  przycisza; puszczona w takcie 77. Fille w taktach 80 i 88.
-  2:31  takt 89  OUTRO. Stopa, hihaty i perkusja (scena 3).
+  2:31  takt 89  OUTRO. Stopa, hihaty i ryk (scena 3).
   2:38  takt 93  Stopa i rumble (scena 1), filtr DJ zamyka się do końca.
   2:45  takt 97  STOP; ogon rumble do końca pliku.
 
