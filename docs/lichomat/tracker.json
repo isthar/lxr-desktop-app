@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 09:38",
+    "updated": "2026-11-04 12:14",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Zaparkowane. Czeka na Ciebie: H12, sesja testowa, B13, odsłuch kitów, CI",
+    "focus": "E8.11: arkusz wyników sesji testowej jako strona",
     "branch": "timing-core",
-    "head": "12cca7b",
-    "next": "Twoje H12 (build/images/h12/PROJ62), B13, odsłuch kitów, CI",
-    "updated_at": "2026-11-04T09:38:00+01:00",
-    "now": "Zaparkowane: nic nie działa w tle"
+    "head": "852394c",
+    "next": "Po E8.11: szkic v0.7 z rekomendacjami (Q35); dalej czeka na Ciebie H12, B13, odsłuch kitów, CI",
+    "updated_at": "2026-11-04T12:14:00+01:00",
+    "now": "E8.11: buduję stronę arkusza wyników"
   },
   "epics": [
     {
@@ -815,6 +815,13 @@
       "epic": "E8",
       "status": "zrobione",
       "title": "Jedna instrukcja LICHOMAT po polsku: docs/lichomat/instrukcja.md, wszystkie funkcje 0.1–0.6, tabela „gdzie co jest” ze ścieżkami przycisków sprawdzonymi w emulatorze, poprawione błędy fw 1.7 i zgodność plików",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E8.11",
+      "epic": "E8",
+      "status": "w toku",
+      "title": "Arkusz wyników sesji testowej jako strona: kolejność z test-session-v0.6.md, przy każdym sprawdzeniu PASS, FAIL albo SKIPPED, wartości z Record i uwagi, zapisywane na stronie, żebym odczytał je sam; H12 od razu wskazuje plik 0.4",
       "updated": "2026-11-04"
     }
   ],
@@ -4028,6 +4035,11 @@
       "n": 571,
       "at": "2026-11-04 09:38",
       "text": "E4.14 zrobione: v0.4-half 15 000 renderów pod ASan: MIDI i sekwencer bez znalezisk, w dźwięku 211, każde odtworzone: wyłącznie B14 (calcPwmBlock, calcPwmFmBlock), jak w v0.5-half. Nic nowego. Wszystko zaparkowane."
+    },
+    {
+      "n": 572,
+      "at": "2026-11-04 12:14",
+      "text": "E8.11 start: wracam (4 h). Wszystkie moje zadania są zrobione, otwarte czekają na Ciebie. Robię arkusz wyników sesji testowej jako stronę: wpisujesz przy LXR wynik, wartości i uwagi, ja czytam je bez przepisywania z czatu. CI bez zmian (41148813113 w kolejce 104 h)."
     }
   ]
 }
