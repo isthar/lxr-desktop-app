@@ -324,6 +324,45 @@ TEST(vel_templates_every_depth)
 	dynOff();
 }
 
+TEST(vel_templates_ids_9_to_11_read_as_off)
+{
+	/* review of Task 3: the velocity ids are checked as velocity ids (velTemplate_checked(), 0..8),
+	 * not as timing ids (0..11), on the play path and in seqc_templateVelAt(). userTemplates points
+	 * at 7 templates here, the 3 past us4 at -20 dB: ids 9, 10 and 11 play and read as off, while
+	 * id 8 (us4, -6 dB) reads us4 */
+	static UserTemplate wide[USER_TEMPLATES + 3];
+	memset(wide, 0, sizeof wide);
+	for (int u = USER_TEMPLATES - 1; u < USER_TEMPLATES + 3; u++)
+		memset(wide[u].vel, u == USER_TEMPLATES - 1 ? -6 : -20, sizeof wide[u].vel);
+	fake_host_t *h = dynHost();
+	h->host.userTemplates = wide;
+	seqc_init(&h->host, SEQC_CPU_HZ);		/* the host table again, with the pointer */
+	static const TrackTemplate raw[4] = { { 9, 0 }, { 10, 0 }, { 11, 0 }, { 8, 0 } };
+	for (uint8_t t = 0; t < 4; t++)
+	{
+		allOn(h, 0, t);
+		h->vtpl[0][t] = raw[t];
+	}
+	play(h, 1990.0);
+	for (uint8_t t = 0; t < 4; t++)
+	{
+		const fake_rec_t *r[20];
+		ASSERT_EQ(fake_triggers(h, t, r, 20), 16);
+		for (int k = 0; k < 16; k++)
+			ASSERT_EQ(r[k]->ev.vel, t == 3 ? 64 : 127);	/* 127 at -6 dB: 63.65 */
+	}
+	for (uint8_t q = 0; q < TEMPLATE_STEPS; q++)
+	{
+		for (int t = 0; t < 3; t++)
+			ASSERT_EQ(seqc_templateVelAt(120, raw[t], q), 120);
+		ASSERT_EQ(seqc_templateVelAt(120, raw[3], q), 60);	/* 120 at -6 dB: 60.14 */
+	}
+	ASSERT_EQ(velModel(127, -6, 100), 64);
+	ASSERT_EQ(velModel(120, -6, 100), 60);
+	ASSERT_EQ(h->errors, 0);
+	dynOff();
+}
+
 TEST(vel_templates_position_counts_the_tracks_steps)
 {
 	/* q = (loop x length + step) mod 16, v0.6 M6: occurrence k of a track with every step on is at
