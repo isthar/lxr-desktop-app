@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 00:29",
+    "updated": "2026-11-05 00:48",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7: E6.30 (rdzeń)",
     "branch": "timing-core",
-    "head": "fab1111",
+    "head": "95aaeb5",
     "next": "E6.30 (rdzeń v0.7); czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T00:29:00+01:00",
-    "now": "E6.30: przegląd jakości (od 00:40), z własnymi mutantami recenzenta"
+    "updated_at": "2026-11-05T00:48:00+01:00",
+    "now": "E6.30: implementer wprowadza zmiany z przeglądu jakości (od 00:50); potem recenzent sprawdza poprawki i start grupy B (E6.31)"
   },
   "epics": [
     {
@@ -4250,6 +4250,11 @@
       "n": 591,
       "at": "2026-11-05 00:29",
       "text": "E6.30 (v0.7 zad. 3) przegląd, 101e49d, 64d93f3, 53a7b59, 360925c: pozostałe 3 luki w testach zamknięte (id 9..11 grają jako wyłączone, głębokość powyżej 200 % jak 200 %, seqc_velDb() przy najgłośniejszym powyżej 127) i poprawiony komentarz w seq_core.h. Każdy mutant recenzenta teraz pada; host 132/132, ASan 132/132; obraz firmware bez zmian po komentarzu. Start przeglądu jakości."
+    },
+    {
+      "n": 592,
+      "at": "2026-11-05 00:48",
+      "text": "E6.30 (v0.7 zad. 3): przegląd jakości: rdzeń bez błędów, bezpieczny przy przerwaniach (każdy odczyt własnego szablonu to jeden bajt). Recenzent puścił 15 mutantów, 4 przeżyły, czyli 3 luki w testach: głośność uderzeń we wczesnej części kroku, szablon głośności z właściwego wzorca, nagrywanie przy tempie ścieżki innym niż x1 (to ostatnie zostało z v0.6). Przyjmuję też jego optymalizację: wczesna część bez przesunięcia kończy się od razu, wynik bit w bit ten sam, ok. 0,23 % najgorszego bloku mniej w typowym przypadku. Implementer wprowadza, każde w osobnym commicie."
     }
   ]
 }
