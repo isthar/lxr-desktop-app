@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 12:37",
+    "updated": "2026-11-04 13:30",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "E6.27: plan v0.7 (dynamika groove)",
+    "focus": "v0.7: zad. 1–2 (E6.28, E6.29)",
     "branch": "timing-core",
-    "head": "3c6f2a5",
-    "next": "Po E6.27: wykonanie planu v0.7 na gałęzi v0.7; czeka na Ciebie H12 (strona arkusza), B13, odsłuch kitów, CI, poprawki szkicu v0.7",
-    "updated_at": "2026-11-04T12:37:00+01:00",
-    "now": "E6.27: plan v0.7 (agent w tle); bazowy check.sh na build/wt-v07"
+    "head": "310f787",
+    "next": "E6.30 (rdzeń) w następnym oknie; czeka na Ciebie H12 (strona arkusza), B13, odsłuch kitów i akcentów, CI",
+    "updated_at": "2026-11-04T13:30:00+01:00",
+    "now": "E6.28: wersja 0.7 na build/wt-v07, bramka"
   },
   "epics": [
     {
@@ -687,8 +687,71 @@
     {
       "id": "E6.27",
       "epic": "E6",
+      "status": "zrobione",
+      "title": "Plan v0.7 (docs/superpowers/plans/2026-11-04-v0.7-groove-dynamics.md): 9 zadań E6.28–E6.36, decyzje V7-1..V7-24, fakty F1–F23 z cytatami w kodzie v0.6; odstępstwa od szkicu: CPU ok. 0,44 % najgorszego bloku (limit U41 0,5 punktu), 200 % sprawdzane wobec całkowitej velocity, +1 042 B RAM; zapis własnego szablonu bierze to, co słychać (Q36)",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E6.28",
+      "epic": "E6",
       "status": "w toku",
-      "title": "Plan v0.7 (dynamika groove) według szkicu E6.26: zadania jako wiersze trackera, fakty sprawdzone na v0.6",
+      "title": "v0.7 zad. 1: worktree, stan bazowy, przeliczenie seqc_generate(), wersja 0.7",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E6.29",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.7 zad. 2: typy szablonów głośności i własnych w SeqStepTypes.h, test vel_types",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E6.30",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.7 zad. 3: rdzeń: vtmpl(), własne szablony, jedna pozycja q, seqc_velScale(), seqc_velDb(); testy vel_scale, vel_templates, own_templates; pełny przegląd",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E6.31",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.7 zad. 4: klej: vtpl w RAM, własne szablony, zapis szablonu (to, co słychać, Q36), zerowanie mikrotimingu; test own_capture",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E6.32",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.7 zad. 5: pliki: blok 3 w .pat, USERTPL.LCH; testy pattern_block3, user_templates; pełny przegląd",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E6.33",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.7 zad. 6: interfejs: czwarty ekran vtp vdp sav, us1–us4 w tpl, clear [micro]; V07_ui; lekki przegląd",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E6.34",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.7 zad. 7: emulator: nagrania wzorcowe G23 (poziomy uderzeń na 50, 100 i 200 %), V07_levels, V07_capture",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E6.35",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.7 zad. 8: README, fuzzing, dema demo_v07.sh, odbiór",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E6.36",
+      "epic": "E6",
+      "status": "do zrobienia",
+      "title": "v0.7 zad. 9: dokumenty dla Ciebie (U38–U41, szkic notatek wydania, instrukcja), raport M20; lekki przegląd",
       "updated": "2026-11-04"
     },
     {
@@ -1199,6 +1262,14 @@
       "question": "Co po 0.6, skoro plan etapu 2 jest cały zrobiony? I czy pracować nad tym przed testami 0.4–0.6 na LXR?",
       "assumption": "Dynamika groove jako v0.7, na osobnej gałęzi od v0.6, przed testami.",
       "answer": "Moja decyzja według Twojej reguły z 29.10 (szkic docs/superpowers/specs/2026-11-04-v0.7-draft.md): v0.7 to dynamika groove. Szablony głośności z pomiaru albumu (of8, ful, dep, qtr) z głębokością 0–200 % na ścieżkę, 4 własne szablony na projekt z nagranej ścieżki (czas i głośność) i zerowanie mikrotimingu ścieżki. Robię to na gałęzi v0.7 od v0.6, tak jak 0.5 i 0.6 powstały przed testami 0.4. Gałęzie i pliki 0.4–0.6 do sesji testowej się nie zmieniają; wydanie 0.7 po 0.6. Zmień w szkicu §6, co chcesz.",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "Q36",
+      "status": "zamknięte",
+      "question": "Zapis własnego szablonu (us1–us4) z nagranej ścieżki: brać same wartości kroków, czy to, co słychać, razem z szablonem czasu i głośności ścieżki?",
+      "assumption": "To, co słychać.",
+      "answer": "Moja decyzja według Twojej reguły z 29.10: to, co słychać. Mikrotiming kroku plus szablon czasu ścieżki (przy ×1, ograniczony do ±84 ticków) i głośność po szablonie głośności. Nagranie zrobione do szablonu lay zapisuje się razem z lay, więc us1 odtworzy je na każdej ścieżce. Przy wyłączonych szablonach to są po prostu wartości kroków. Plan v0.7 V7-10, test own_capture_takes_what_plays.",
       "updated": "2026-11-04"
     }
   ],
@@ -4082,6 +4153,11 @@
       "n": 576,
       "at": "2026-11-04 12:37",
       "text": "E6.27: worktree build/wt-v07 (gałąź v0.7 od v0.6 a856883) założony, bazowy check.sh w tle. Poprawka do poprzedniego wpisu: parametr renderera step_volume jednak ustawia krok, tylko ekran kroku odświeża się dopiero po ponownym wybraniu kroku; pierwsze rendery były identyczne przez wyłączony volume mod."
+    },
+    {
+      "n": 577,
+      "at": "2026-11-04 13:30",
+      "text": "E6.27 zrobione: plan v0.7 (docs/superpowers/plans/2026-11-04-v0.7-groove-dynamics.md), 9 zadań jako E6.28–E6.36. Odstępstwa od szkicu: CPU ok. 0,44 % najgorszego bloku zamiast 0,3 % (limit U41 0,5 punktu), poziomy przy 200 % sprawdzane wobec całkowitej velocity (−32 dB to velocity 3, czyli −32,54), +1 042 B RAM (zostaje ok. 858 B). Q36: zapis własnego szablonu bierze to, co słychać (z szablonami ścieżki); naniesione na plan z testem. Bazowy check.sh na build/wt-v07: 125 i 346 testów, 0 ostrzeżeń. E6.28 start: wersja 0.7."
     }
   ]
 }
