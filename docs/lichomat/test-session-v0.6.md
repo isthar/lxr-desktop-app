@@ -61,8 +61,8 @@ sam co na końcu gałęzi `v0.3`).
       swój projekt, a wrócą Twoje). START. Krok 4: to samo z `TYP` `off` na stronie FX. Ten sam projekt biorą U20, U30 i U37, więc P z każdej wersji da się porównać.
       Gdybyś wolał własny wzorzec: wszystkie 7 ścieżek na szesnastkach (generator Euklid, SHIFT + drugi
       przycisk trybu, `LEN` 16 i `stp` 16), kilka `x8`, 140 BPM, delay w slocie FX.
-- [ ] **Od razu wyślij mi `pk` z kroku 3** (to liczba P). Od niej zależy, który plik 0.4 wgrasz po
-      H12. Oba są już gotowe, z poprawką offsetu DC pogłosu (E7.7):
+- [ ] **Od razu wpisz `pk` z kroku 3 na stronie arkusza** (to liczba P; strona pokaże plik). Od niej
+      zależy, który plik 0.4 wgrasz po H12. Oba są już gotowe, z poprawką offsetu DC pogłosu (E7.7):
 
 | P (`pk`, H12 krok 3) | pogłos w 0.4 | plik |
 |---|---|---|
@@ -220,10 +220,15 @@ razu po H12, tego samego wieczoru, albo kiedy indziej. Nie czekasz na mnie ani n
 
 ## Co zapisać
 
-- Wpisz każde sprawdzenie do run sheet na końcu listy (wystarczy też wiadomość albo zdjęcie): PASS, FAIL
-  albo SKIPPED, data i wartości z **Record**. Przy każdym wyniku dopisz plik: 0.3 CI `d630eabc` albo 0.6
-  lokalny `30a9730f`, 0.4 `67ca9833` albo `e44de0b6`.
-- H12: zdjęcie ekranu CPU w każdym kroku 2–5, z nazwą kitu, efektem i BPM; P wyślij od razu.
+- **Wyniki wpisuj na stronie arkusza: https://claude.ai/artifact/KsRmojvMf42Sr3GMxkD8bd** (tracker E8.11).
+  Ma tę samą kolejność co ten plan, przy każdej pozycji PASS, FAIL albo SKIPPED, pole na wartości z
+  **Record** i uwagi, a pod spodem **Expected** i **Record** z listy. Wszystko zapisuje się od razu i
+  czytam to stamtąd, więc nie musisz niczego przepisywać. H12 ma tam własną tabelę: po wpisaniu `pk` z
+  kroku 3 strona pokazuje, który plik 0.4 wgrać, a sekcje „Po H12” właściwe pliki. Plik i datę
+  dopisuje przy wyniku sama. Bez strony wystarczy run sheet na końcu listy, wiadomość albo zdjęcie: PASS,
+  FAIL albo SKIPPED, data, wartości z **Record** i plik (0.3 CI `d630eabc` albo 0.6 lokalny `30a9730f`,
+  0.4 `67ca9833` albo `e44de0b6`).
+- H12: zdjęcie ekranu CPU w każdym kroku 2–5, z nazwą kitu, efektem i BPM; wartości wpisz na stronie.
 - **Nie musisz mierzyć w DAW.** Wyeksportuj nagranie każdego sprawdzenia z pomiarem czasu jako WAV
   (bez normalizacji, z częstotliwością nagrania) i nazwij je ID sprawdzenia (`H3.wav`, `U27-smp.wav`,
   `U27-blk.wav`, `U33-1.wav` …). Uderzenia co do próbki zmierzę sam. Okno MIDI Monitor zapisz (File >

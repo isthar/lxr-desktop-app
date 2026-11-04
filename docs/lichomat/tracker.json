@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 12:14",
+    "updated": "2026-11-04 12:21",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "E8.11: arkusz wyników sesji testowej jako strona",
+    "focus": "E6.26: szkic v0.7 z rekomendacjami",
     "branch": "timing-core",
-    "head": "852394c",
-    "next": "Po E8.11: szkic v0.7 z rekomendacjami (Q35); dalej czeka na Ciebie H12, B13, odsłuch kitów, CI",
-    "updated_at": "2026-11-04T12:14:00+01:00",
-    "now": "E8.11: buduję stronę arkusza wyników"
+    "head": "d04960d",
+    "next": "Po E6.26: plan v0.7; dalej czeka na Ciebie H12 (wpisz na stronie arkusza), B13, odsłuch kitów, CI",
+    "updated_at": "2026-11-04T12:21:00+01:00",
+    "now": "E6.26: piszę szkic v0.7 (dynamika groove z pomiaru albumu)"
   },
   "epics": [
     {
@@ -678,6 +678,13 @@
       "updated": "2026-11-03"
     },
     {
+      "id": "E6.26",
+      "epic": "E6",
+      "status": "w toku",
+      "title": "Szkic v0.7 z rekomendacjami: dynamika groove (szablony głośności z pomiaru albumu: akcenty na offbeatach, ghosty), własne szablony z nagranej ścieżki, zerowanie mikrotimingu ścieżki; decyzje jako Q35",
+      "updated": "2026-11-04"
+    },
+    {
       "id": "E7.1",
       "epic": "E7",
       "status": "zablokowane",
@@ -820,8 +827,8 @@
     {
       "id": "E8.11",
       "epic": "E8",
-      "status": "w toku",
-      "title": "Arkusz wyników sesji testowej jako strona: kolejność z test-session-v0.6.md, przy każdym sprawdzeniu PASS, FAIL albo SKIPPED, wartości z Record i uwagi, zapisywane na stronie, żebym odczytał je sam; H12 od razu wskazuje plik 0.4",
+      "status": "zrobione",
+      "title": "Arkusz wyników sesji testowej jako strona: https://claude.ai/artifact/KsRmojvMf42Sr3GMxkD8bd, 72 pozycje w kolejności test-session-v0.6.md, PASS, FAIL albo SKIPPED, wartości i uwagi, Expected i Record z listy; H12 z tabelą kroków 2–5, a pk z kroku 3 wskazuje plik 0.4 i pliki sekcji „Po H12”. Wyniki czytam sam (ArtifactData). Generator tools/runsheet/",
       "updated": "2026-11-04"
     }
   ],
@@ -4040,6 +4047,11 @@
       "n": 572,
       "at": "2026-11-04 12:14",
       "text": "E8.11 start: wracam (4 h). Wszystkie moje zadania są zrobione, otwarte czekają na Ciebie. Robię arkusz wyników sesji testowej jako stronę: wpisujesz przy LXR wynik, wartości i uwagi, ja czytam je bez przepisywania z czatu. CI bez zmian (41148813113 w kolejce 104 h)."
+    },
+    {
+      "n": 573,
+      "at": "2026-11-04 12:21",
+      "text": "E8.11 zrobione: arkusz wyników sesji testowej jako strona (https://claude.ai/artifact/KsRmojvMf42Sr3GMxkD8bd). 72 pozycje w kolejności planu; wynik, wartości i uwagi zapisują się od razu, a ja je czytam. H12: po wpisaniu pk z kroku 3 strona pokazuje plik 0.4 i pliki sekcji „Po H12”. Zapis sprawdzony próbnym dokumentem. test-session-v0.6.md i HANDOFF wskazują stronę; generator tools/runsheet/. E6.26 start: szkic v0.7 (plan etapu 2 jest cały zrobiony)."
     }
   ]
 }
