@@ -295,7 +295,34 @@ def R4_bundle(t):
           'the README does not say that the F8 interval that contains Start is anywhere from 0 to 20.8 ms')
 
 
-CASES = {f.__name__: f for f in [R4_dev_headless, R4_dev_import, R4_dev_crash, R4_dev_power, R4_dev_afterpid,
+def E413_lfo_voice_0(t):
+    """fw 1.7 fix E4.13 (sweep B11): a blank card boots with an empty project, so no kit sets the LFOs'
+    voices and voi stays 0. DST then read modTargetVoiceOffsets[voi - 1], index 255 of 6 (UBSan stopped
+    the device at menu.c:4411, the knob, and at the encoder's site); it reads voice 1's range now"""
+    blank = os.path.join(t.work, 'card-blank')
+    os.makedirs(blank, exist_ok=True)
+    # voice 1, the LFO sub-page (select 7 = button 10), its second screen, DST with knob 4, then the encoder
+    script = t.script(['1.5 press 1', '1.8 press 10', '2.1 enc 8', '2.5 knob 4 60', '2.9 knob 4 -60',
+                       '3.3 push', '3.6 enc 2', '3.9 enc -2', '4.2 push'])
+    dst = {}
+    for name, card in (('blank', blank), ('init', t.card())):
+        r = t.dev(['--card', card, '--no-audio', '--no-midi', '--seconds', '4.5', '--script', script])
+        check(r.returncode == 0, '%s: exit %d: %s' % (name, r.returncode, r.stderr[-600:]))
+        check('runtime error' not in r.stdout + r.stderr, (r.stdout + r.stderr)[-600:])
+        # whole snapshots of the page only: a snapshot can catch the LCD between its two rows' updates
+        lfo = [l for l in lcd_lines(r.stdout) if l[1].lower().startswith('rtg ofs voi dst')
+               and re.match(r'^off +0 +[01] [a-z0-9 ]{3} $', l[2])]
+        check(lfo, '%s: the LFO page did not show' % name)
+        check(lfo[0][2][8:11] == ('  0' if name == 'blank' else '  1'), '%s: voi reads %r' % (name, lfo[0][2]))
+        # where knob 4's turn ends (the last DST of 2.5-2.9 s of wall time)
+        seen = [l[2][12:15] for l in lfo if 2.5 <= l[0] < 2.9]
+        check(seen, '%s: no LFO page in 2.5-2.9 s' % name)
+        dst[name] = seen[-1]
+    # without the sanitizer too: voi 0 reads voice 1's targets now; fw 1.7 toggled off and voice 2's rtg
+    check(dst['blank'] == dst['init'] != 'off', 'DST with voi 0: %r, with voi 1: %r' % (dst['blank'], dst['init']))
+
+
+CASES = {f.__name__: f for f in [E413_lfo_voice_0, R4_dev_headless, R4_dev_import, R4_dev_crash, R4_dev_power, R4_dev_afterpid,
                                  R4_imgui_pin, R4_gui_version, R4_gui_clash, R4_bundle]}
 
 
