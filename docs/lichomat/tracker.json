@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 14:56",
+    "updated": "2026-11-04 23:01",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Utwór 3 gotowy; v0.7: następne E6.30",
+    "focus": "v0.7: E6.30 (rdzeń)",
     "branch": "timing-core",
-    "head": "b3420a2",
+    "head": "b4f5fb0",
     "next": "E6.30 (rdzeń v0.7); czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-04T14:56:00+01:00",
-    "now": "Zaparkowane: nic nie działa w tle"
+    "updated_at": "2026-11-04T23:01:00+01:00",
+    "now": "E6.30: implementer v0.7 zad. 3 pracuje (od 23:05); potem przegląd spec i jakości"
   },
   "epics": [
     {
@@ -708,7 +708,7 @@
     {
       "id": "E6.30",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "v0.7 zad. 3: rdzeń: vtmpl(), własne szablony, jedna pozycja q, seqc_velScale(), seqc_velDb(); testy vel_scale, vel_templates, own_templates; pełny przegląd",
       "updated": "2026-11-04"
     },
@@ -4200,6 +4200,11 @@
       "n": 584,
       "at": "2026-11-04 14:56",
       "text": "E6.37 wersja 4 (showcase 840e827), po Twojej uwadze („ten bas mi nie leży”, prośba o berliński minimal). Bas toczy się szesnastkami w przerwach między stopą a ghost kickiem: kroki 2, 3, 6, 10, 11, 14, akcenty na 3 i 11, krok 16 co 4 takty. Jedna nuta G#2, piła przez ciemny, rezonansowy filtr, przester, krótko, 10 dB pod stopą. Pętla 11 kroków odpadła. Szczyt −1,5 dBFS."
+    },
+    {
+      "n": 585,
+      "at": "2026-11-04 23:01",
+      "text": "E6.30 (v0.7 zad. 3) start: rdzeń szablonów głośności (vel_scale, vel_templates, own_templates), potem pełny przegląd z mutantami. Bez sprzętu: testy hosta, emulator, sanitizery. Kofeina do ok. 03:00."
     }
   ]
 }
