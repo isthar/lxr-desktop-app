@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-04 14:37",
+    "updated": "2026-11-04 14:45",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Utwór 3 gotowy; v0.7: następne E6.30",
     "branch": "timing-core",
-    "head": "eb1b493",
+    "head": "fa1eacc",
     "next": "E6.30 (rdzeń v0.7); czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-04T14:37:00+01:00",
+    "updated_at": "2026-11-04T14:45:00+01:00",
     "now": "Zaparkowane: nic nie działa w tle"
   },
   "epics": [
@@ -4185,6 +4185,11 @@
       "n": 581,
       "at": "2026-11-04 14:37",
       "text": "E6.37 zrobione: utwór 3 według Twojego wzoru (showcase 378c19d), na stronie odsłuchu (wersja 9). Każda ścieżka gra zapis co do kroku (log uderzeń). Balans z renderów solo, RMS wobec stopy z rumble: ghost −11,6 dB, bas −7, werbel −13, perkusja −12, hihaty −15,5. Hihaty z filtrem PULS były 39 dB pod stopą; filtr górnoprzepustowy i przester podnoszą je o 22 dB. Render 2:51,7, szczyt −1,2 dBFS, powtarzalny. Pliki: build/wt-v06-app/build/demo/lichomat-showcase3-v06*.wav."
+    },
+    {
+      "n": 582,
+      "at": "2026-11-04 14:45",
+      "text": "E6.37 wersja 2 (showcase 063490d, strona odsłuchu wersja 10), po Twojej uwadze („brzmi jak organy”, ma być ryk z oddali). Zamiast FM kwadratów jest szum przez wąskie, rezonansowe pasmo, przester i powolne narastanie, cicho na sucho, w pogłosie z predelay 40. Gra rzadziej: wołanie w takcie 1 z 4, odpowiedź w takcie 3, każde z dwoma echami co ósemkę z kropką. Echa robi sekwencer, bo delay w slocie złapałby też stopę. Ryk solo jest 17,5 dB pod stopą (perkusja była 9 dB pod), ciemny. Ubocznie rumble ma +3 dB. Renderer na gałęzi showcase nie ustawia LFO przez param, więc bez warczenia LFO."
     }
   ]
 }
