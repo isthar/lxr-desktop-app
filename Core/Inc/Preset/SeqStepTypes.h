@@ -164,6 +164,7 @@ _Static_assert(sizeof(TrackTemplate) == 2, "TrackTemplate is stored raw in block
 #define TEMPLATE_STEPS		16	// positions: a bar of 16ths
 #define TEMPLATE_AMOUNT_MIN	(-100)
 #define TEMPLATE_AMOUNT_MAX	100
+#define USER_TEMPLATES		4	// LICHOMAT v0.7: the project's own templates us1..us4 (plan v0.7 V7-6)
 
 /** t with every field out of range set to its default (a file or a host from elsewhere) */
 static inline TrackTemplate trackTemplate_checked(TrackTemplate t)
@@ -171,6 +172,45 @@ static inline TrackTemplate trackTemplate_checked(TrackTemplate t)
 	if(t.id >= TEMPLATE_COUNT) t.id = 0;
 	if((t.amount < TEMPLATE_AMOUNT_MIN) || (t.amount > TEMPLATE_AMOUNT_MAX)) t.amount = 0;
 	return t;
+}
+
+/* LICHOMAT v0.7: a track's velocity template in a pattern (plan v0.7 V7-2), a TrackTemplate in
+ * PatternSet.vtpl, stored raw in block 3: id 0 off, 1..4 of8 ful dep qtr (the table in
+ * seq_core.c), 5..8 the own templates us1..us4; amount the depth in percent - 100 (0..200 %).
+ * Zero bytes are the default: off, 100 %. */
+#define VEL_TEMPLATE_BUILTIN	5	// ids 0..4: off and the table
+#define VEL_TEMPLATE_COUNT	(VEL_TEMPLATE_BUILTIN + USER_TEMPLATES)	// ids 0..8
+#define VEL_TEMPLATE_DB_MIN	(-42)	// dB: an own template's floor, 1/127 of the loudest step
+
+/** t with every field out of range set to its default (a file or a host from elsewhere) */
+static inline TrackTemplate velTemplate_checked(TrackTemplate t)
+{
+	if(t.id >= VEL_TEMPLATE_COUNT) t.id = 0;
+	if((t.amount < TEMPLATE_AMOUNT_MIN) || (t.amount > TEMPLATE_AMOUNT_MAX)) t.amount = 0;
+	return t;
+}
+
+/* LICHOMAT v0.7: one of the project's own templates us1..us4 (plan v0.7 V7-6, V7-7), in RAM
+ * (seq_userTemplates) and in the project's USERTPL.LCH: at each of the 16 positions an offset
+ * in ticks, -84..+84 (the timing part, tpl 8..11), and one in dB, -42..0 (the velocity part,
+ * vtp 5..8). Zero bytes are the default: an empty template, which plays as off. */
+typedef struct UserTemplate
+{
+	int8_t		timing[TEMPLATE_STEPS];
+	int8_t		vel[TEMPLATE_STEPS];
+}UserTemplate;
+_Static_assert(sizeof(UserTemplate) == 32, "UserTemplate is stored raw in USERTPL.LCH (32 bytes)");
+
+/** an own template's timing value, 0 when out of range (a file or a host from elsewhere) */
+static inline int8_t userTemplate_timing(int8_t v)
+{
+	return (int8_t)(((v < -STEP_MICRO_MAX) || (v > STEP_MICRO_MAX)) ? 0 : v);
+}
+
+/** an own template's velocity value, 0 when out of range */
+static inline int8_t userTemplate_vel(int8_t v)
+{
+	return (int8_t)(((v < VEL_TEMPLATE_DB_MIN) || (v > 0)) ? 0 : v);
 }
 
 #endif /* SEQSTEPTYPES_H_ */

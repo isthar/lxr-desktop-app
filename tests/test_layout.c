@@ -139,4 +139,43 @@ TEST(step_micro_template_checked)
 	}
 }
 
+//------------------------------------------------------------------------------
+// LICHOMAT v0.7 (plan v0.7 Task 2): the velocity templates' and the own templates' types
+//------------------------------------------------------------------------------
+TEST(vel_types_sizes)
+{
+	ASSERT_EQ(USER_TEMPLATES, 4);
+	ASSERT_EQ(VEL_TEMPLATE_BUILTIN, 5);		/* off, of8 ful dep qtr */
+	ASSERT_EQ(VEL_TEMPLATE_COUNT, 9);		/* and us1..us4 */
+	ASSERT_EQ(VEL_TEMPLATE_DB_MIN, -42);
+	ASSERT_EQ(sizeof(UserTemplate), 32);
+	ASSERT_EQ(offsetof(UserTemplate, timing), 0);
+	ASSERT_EQ(offsetof(UserTemplate, vel), 16);
+	/* block 3: "LCHM", the block number, the track count, 7 velocity templates */
+	ASSERT_EQ(6 + 7 * sizeof(TrackTemplate), 20);
+	/* USERTPL.LCH: "LCHM", the version, the count, the 4 templates */
+	ASSERT_EQ(6 + USER_TEMPLATES * sizeof(UserTemplate), 134);
+}
+
+TEST(vel_types_checks)
+{
+	for (unsigned id = 0; id < 256; id++)
+	{
+		const TrackTemplate t = velTemplate_checked((TrackTemplate){ .id = (uint8_t)id, .amount = -37 });
+		ASSERT_EQ(t.id, id < VEL_TEMPLATE_COUNT ? id : 0);
+		ASSERT_EQ(t.amount, -37);
+	}
+	for (int a = -128; a < 128; a++)
+	{
+		const TrackTemplate t = velTemplate_checked((TrackTemplate){ .id = 4, .amount = (int8_t)a });
+		ASSERT_EQ(t.amount, (a < -100 || a > 100) ? 0 : a);
+		ASSERT_EQ(t.id, 4);
+	}
+	for (int v = -128; v < 128; v++)
+	{
+		ASSERT_EQ(userTemplate_timing((int8_t)v), (v < -84 || v > 84) ? 0 : v);
+		ASSERT_EQ(userTemplate_vel((int8_t)v), (v < -42 || v > 0) ? 0 : v);
+	}
+}
+
 TEST_MAIN()
