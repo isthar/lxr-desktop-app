@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 08:22",
+    "updated": "2026-11-04 08:36",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Czeka na Ciebie: H12 (folder polowa/ albo lean/), sesja testowa, B13, odsłuch kitów, CI",
     "branch": "timing-core",
-    "head": "c46be09",
+    "head": "a2fac54",
     "next": "H12 na 0.3 z CI; potem pliki z build/images/po-H12/ (README, punkt 5)",
-    "updated_at": "2026-11-04T08:22:00+01:00",
-    "now": "E8.10: instrukcja; E4.14: fuzzing v0.4-half i v0.5-half w tle"
+    "updated_at": "2026-11-04T08:36:00+01:00",
+    "now": "E4.14: fuzzing v0.4-half i v0.5-half w tle"
   },
   "epics": [
     {
@@ -813,8 +813,8 @@
     {
       "id": "E8.10",
       "epic": "E8",
-      "status": "w toku",
-      "title": "Jedna instrukcja LICHOMAT po polsku (docs/lichomat/instrukcja.md): wszystkie funkcje 0.1–0.6 i gdzie są na panelu, zamiast szukania w sześciu notatkach wydań",
+      "status": "zrobione",
+      "title": "Jedna instrukcja LICHOMAT po polsku: docs/lichomat/instrukcja.md, wszystkie funkcje 0.1–0.6, tabela „gdzie co jest” ze ścieżkami przycisków sprawdzonymi w emulatorze, poprawione błędy fw 1.7 i zgodność plików",
       "updated": "2026-11-04"
     }
   ],
@@ -4003,6 +4003,16 @@
       "n": 566,
       "at": "2026-11-04 08:22",
       "text": "E4.14 i E8.10 w toku: fuzzing v0.4-half i v0.5-half pod ASan w tle; piszę jedną instrukcję LICHOMAT (wszystkie funkcje 0.1–0.6, gdzie są na panelu)."
+    },
+    {
+      "n": 567,
+      "at": "2026-11-04 08:23",
+      "text": "E8.10: piszący agent (jeden, tylko ten plik) zaczął instrukcję docs/lichomat/instrukcja.md ze wszystkich notatek wydań i ścieżek przycisków sprawdzonych w emulatorze; potem ją przejrzę. E4.14: fuzzing v0.4-half (15 000 renderów) i v0.5-half (15 000) pod ASan w tle."
+    },
+    {
+      "n": 568,
+      "at": "2026-11-04 08:36",
+      "text": "E8.10 zrobione: docs/lichomat/instrukcja.md (400 linii, po polsku): co robi każda funkcja 0.1–0.6, gdzie jest na panelu (tabela ze ścieżkami przycisków sprawdzonymi w emulatorze), na co uważać, poprawione błędy fw 1.7 i co starsze firmware robią z plikami 0.6. Przejrzałem ją i poprawiłem jedno miejsce (gest SHIFT + przycisk wyboru, pozostałość B6)."
     }
   ]
 }
