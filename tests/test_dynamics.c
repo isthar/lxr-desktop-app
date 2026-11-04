@@ -163,6 +163,19 @@ TEST(vel_scale_matches_the_formula)
 	ASSERT_EQ(seqc_velScale(120, -14, 100), 24);
 }
 
+TEST(vel_scale_above_200_as_200)
+{
+	/* review of Task 3: a depth above 200 % plays as 200 %, for every velocity and dB (a clamp to
+	 * 199 % would make 22 at -8 dB 4 instead of 3: 3.47 at 200 %, 3.51 at 199 %) */
+	for (int pct = 201; pct <= 255; pct++)
+		for (int vel = 0; vel < 128; vel++)
+			for (int db = -45; db <= 2; db++)
+				ASSERT_EQ(seqc_velScale((uint8_t)vel, db, (uint8_t)pct), seqc_velScale((uint8_t)vel, db, 200));
+	ASSERT_EQ(seqc_velScale(22, -8, 200), 3);
+	ASSERT_EQ(seqc_velScale(22, -8, 201), 3);
+	ASSERT_EQ(velModel(22, -8, 200), 3);
+}
+
 TEST(vel_scale_db_of_two_velocities)
 {
 	/* seqc_velDb(): -20 log10(vel / loudest) rounded to whole dB, -42..0; 0 for vel >= loudest or
