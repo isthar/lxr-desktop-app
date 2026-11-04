@@ -521,6 +521,37 @@ TEST(vel_templates_early_hits_take_it_too)
 	dynOff();
 }
 
+TEST(vel_templates_follow_the_pattern)
+{
+	/* quality review of Task 3: vtmpl() is asked about the pattern that plays. Pattern 0 of8,
+	 * pattern 1 dep, both at 100 %, every step on at 127, a switch to pattern 1 at the end of the
+	 * first bar; pattern 1's step 0 one unit early, so its hit is generated at pattern 0's last
+	 * boundary, for the next pattern. Runs to 3950 ms, before pattern 1's second bar (3984 ms) */
+	fake_host_t *h = dynHost();
+	allOn(h, 0, 0);
+	allOn(h, 1, 0);
+	fake_setVelTemplate(h, 0, 0, OF8, 100);
+	fake_setVelTemplate(h, 1, 0, DEP, 100);
+	fake_setTiming(h, 1, 0, 0, 0, -1);
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	fake_setNextPattern(h, 1);
+	fake_runUntil(h, fake_msToCycles(3950.0), fake_msToCycles(0.5));
+	const fake_rec_t *r[40];
+	ASSERT_EQ(fake_triggers(h, 0, r, 40), 32);
+	for (int k = 0; k < 32; k++)
+	{
+		ASSERT_EQ(r[k]->ev.pattern, k < 16 ? 0 : 1);
+		ASSERT_EQ(r[k]->ev.tick, 96 * k - (k == 16 ? 12 : 0));
+		ASSERT_EQ(r[k]->ev.vel, velModel(127, vtab[k < 16 ? OF8 : DEP][k % 16], 100));
+	}
+	ASSERT_EQ(r[16]->ev.vel, 25);			/* dep's -14 dB, not of8's -10 (40) */
+	ASSERT_EQ(velModel(127, -10, 100), 40);
+	ASSERT_EQ(h->errors, 0);
+	dynOff();
+}
+
 TEST(vel_templates_bit_identity_off_or_at_depth_0)
 {
 	/* V7-4: vtmpl() and userTemplates set, every velocity template off, or ids 1..8 at depth 0 with
