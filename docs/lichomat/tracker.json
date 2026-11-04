@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 13:45",
+    "updated": "2026-11-04 14:28",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Zaparkowane. v0.7: zad. 1–2 zrobione, następne E6.30 (rdzeń)",
+    "focus": "E6.37: utwór referencyjny według Twojego wzoru",
     "branch": "timing-core",
-    "head": "bda532b",
+    "head": "3bf33db",
     "next": "E6.30 przy następnym oknie; czeka na Ciebie: H12 (wyniki na stronie arkusza), B13, odsłuch kitów i akcentów, poprawki szkicu v0.7, CI",
-    "updated_at": "2026-11-04T13:45:00+01:00",
-    "now": "Zaparkowane: nic nie działa w tle"
+    "updated_at": "2026-11-04T14:28:00+01:00",
+    "now": "E6.37: karta i aranżacja utworu 3 (gałąź showcase)"
   },
   "epics": [
     {
@@ -752,6 +752,13 @@
       "epic": "E6",
       "status": "do zrobienia",
       "title": "v0.7 zad. 9: dokumenty dla Ciebie (U38–U41, szkic notatek wydania, instrukcja), raport M20; lekki przegląd",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E6.37",
+      "epic": "E6",
+      "status": "w toku",
+      "title": "Trzeci utwór pokazowy według Twojego wzoru (BCCO / Mutual Rytm): stopa z rumble, ghost kick, shaker 3-krokowy, otwarty hihat na offbeatach, werbel na 2 i 4, industrialna perkusja z długim ogonem (call and response co 2 takty), bas na Drum 3 w pętli 11 kroków; render firmware w emulatorze, tools/demo_showcase.sh --track 3",
       "updated": "2026-11-04"
     },
     {
@@ -4168,6 +4175,11 @@
       "n": 579,
       "at": "2026-11-04 13:45",
       "text": "E6.29 zrobione: v0.7 zad. 2 (0b420cc): typy w SeqStepTypes.h, test vel_types; 126 testów hosta, 346 emulatora, obraz firmware bez zmian (EQUIVALENT), budżet bez zmian. Zaparkowane: E6.30 (rdzeń z pełnym przeglądem) nie zmieściłby się w oknie, więc nie zaczynam go w połowie. Dziś: E8.11 (strona arkusza wyników), E6.26 (szkic v0.7, Q35, podgląd akcentów), E6.27 (plan v0.7, Q36), E6.28–E6.29. Nic nie działa w tle."
+    },
+    {
+      "n": 580,
+      "at": "2026-11-04 14:28",
+      "text": "E6.37 start: trzeci utwór pokazowy według Twojego wzoru. Nie masz teraz urządzenia, więc sprawdzenia na sprzęcie (H12, E8.1) czekają; reszta idzie w emulatorze."
     }
   ]
 }
