@@ -1621,7 +1621,7 @@ TEST(pattern_block2_values_out_of_range)
 	static uint8_t f[PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE];
 	memcpy(f, e->data, sizeof f);
 	uint8_t *b2 = f + PAT_V03_SIZE + PAT_EXT_SIZE;
-	b2[6 + 0] = 8;				/* track 0: template id 8 */
+	b2[6 + 0] = 12;				/* track 0: template id 12 (LICHOMAT v0.7: 8..11 are us1..us4, plan v0.7 V7-1) */
 	b2[6 + 3] = 101;			/* track 1: amount +101 */
 	b2[6 + 5] = (uint8_t)-101;		/* track 2: amount -101 */
 	b2[20 + 0] = 0x96;			/* track 0: step 0 nibble +6 (6), step 1 -7 (9) */

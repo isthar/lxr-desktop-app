@@ -243,6 +243,19 @@
  * between the two boundaries plays no hit twice. Roll events take neither (they stay at the
  * boundary plus the swing). seqc_recordPlace() places a recorded note against the same
  * reference: the grid plus swing, template and delay.
+ *
+ * Velocity templates and own templates (v0.7)
+ * -------------------------------------------
+ * A track's velocity template (vtmpl(): an id and a depth d, 0..200 %) scales the velocity of
+ * the occurrence at the same position q as the timing template, once for all its hits, before
+ * the humanize volume:
+ *     dB  = table[id][q]                                  (id 0 off; -42..0)
+ *     vel = clamp(rha(Step.volume x 10^(dB x d / 2000)), 1, 127)   (a volume of 0 stays 0)
+ * seqc_velScale() is that formula through two tables of gains in flash. With the template off
+ * or d = 0 the velocity is v0.6's. The voice and the MIDI Note On both take the event's vel;
+ * rolls take none. Timing ids 8..11 and velocity ids 5..8 read the host's own templates in
+ * place (userTemplates): the timing part in ticks as a timing template's table value, the
+ * velocity part in dB; a value out of range counts as 0.
  */
 
 //------------------------------------------------------------------------------
@@ -525,6 +538,15 @@ typedef struct seqc_host
 	 * with trackTemplate_checked(). Read for each step occurrence and by
 	 * seqc_recordPlace(). NULL: off */
 	TrackTemplate	(*tmpl)(void *ctx, uint8_t pattern, uint8_t track);
+	/* -- v0.7 (plan v0.7 V7-3); both may be NULL -- */
+	/** the track's velocity template in the pattern (TrackTemplate: id 0..8, amount = depth - 100,
+	 * SeqStepTypes.h), checked with velTemplate_checked(). Read for each step occurrence that
+	 * plays. NULL: off */
+	TrackTemplate	(*vtmpl)(void *ctx, uint8_t pattern, uint8_t track);
+	/** the host's own templates us1..us4 (USER_TEMPLATES UserTemplates), read in place by the
+	 * timing ids 8..11 and the velocity ids 5..8. The host writes a template with interrupts
+	 * masked. NULL: all 0 */
+	const UserTemplate	*userTemplates;
 } seqc_host_t;
 
 //------------------------------------------------------------------------------
@@ -879,6 +901,22 @@ typedef struct seqc_recPlace
  * only (the glue's recording, in seq_tick()); false inside one, while stopped or armed,
  * before the track's first step, or for a track out of range, and *out is not written. */
 bool seqc_recordPlace(uint8_t track, seqc_time_t t, seqc_recPlace_t *out);
+//------------------------------------------------------------------------------
+/** v0.7 (plan v0.7 V7-4): vel scaled by dB x pct / 100 decibels (dB -42..0, below -42 as -42, 0
+ * or above leaves vel; pct 0..200, above as 200): clamp(rha(vel x 10^(dB x pct / 2000)), 1, 127);
+ * a vel of 0 stays 0. Two tables in flash, no powf(); it differs from the exact value only
+ * within 0.003 of a rounding tie. Pure: any context */
+uint8_t seqc_velScale(uint8_t vel, int db, uint8_t pct);
+/** v0.7 (V7-7): vel in whole dB below loudest, rounded, -42..0: 0 for vel >= loudest or loudest 0,
+ * -42 for vel 0; an own template's velocity part (seq_captureUserTemplate()). Pure */
+int8_t seqc_velDb(uint8_t vel, uint8_t loudest);
+/** v0.7 (V7-10, Q36): timing template tp (checked) at position q (mod 16) for a track step at x1,
+ * in ticks of 1/96 step, scaled by its amount; 0 for off. For the capture; reads the own templates
+ * through userTemplates */
+int seqc_templateTicksAt(TrackTemplate tp, uint8_t q);
+/** v0.7 (V7-10, Q36): vel through velocity template vt (checked) at position q (mod 16), as a step
+ * plays it; vel for off or depth 0. For the capture */
+uint8_t seqc_templateVelAt(uint8_t vel, TrackTemplate vt, uint8_t q);
 //------------------------------------------------------------------------------
 /** v0.2: a number that changes whenever a track index can have changed (a master or a
  * track boundary, a rewind, a song position), for the glue's copies */

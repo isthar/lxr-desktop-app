@@ -948,7 +948,7 @@ TEST(sequencer_micro_step_page)
 	seq_loadGrooveParams(1, 2);
 	ASSERT_EQ(activeParameters[PAR_TRACK_TPL], 7);
 	ASSERT_EQ(activeParameters[PAR_TRACK_TPL_AMT], 200);
-	seq_setGrooveParam(1, 2, PAR_TRACK_TPL, 8);
+	seq_setGrooveParam(1, 2, PAR_TRACK_TPL, 12);	/* LICHOMAT v0.7: 8..11 are us1..us4 (plan v0.7 V7-1) */
 	seq_setGrooveParam(1, 2, PAR_TRACK_TPL_AMT, 201);
 	seq_loadGrooveParams(1, 2);
 	ASSERT_EQ(activeParameters[PAR_TRACK_TPL], 0);

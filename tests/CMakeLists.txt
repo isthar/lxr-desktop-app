@@ -178,6 +178,7 @@ seqc_add_test(test_perform IDS RL1 RL2 SL1 STRICT_CORE seq_core_strict)    # v0.
 seqc_add_test(test_slide IDS GL1)    # v0.3 P3 glide
 seqc_add_test(test_itemtime  IDS seqc_itemtime STRICT_CORE seq_core_strict)    # v0.5 Task 2 seqc_itemTime()
 seqc_add_test(test_micro     IDS micro_offsets templates micro_choke record_place EXTRA queue_equiv.c STRICT_CORE seq_core_strict)    # v0.6 Task 3 microtiming, templates (Task 7: record_place)
+seqc_add_test(test_dynamics  IDS vel_scale vel_templates own_templates EXTRA queue_equiv.c STRICT_CORE seq_core_strict)    # v0.7 Task 3 velocity templates, own templates
 # LICHOMAT v0.5 (plan Task 3): the voice scheduler, plain C11 like the core, with its test
 # hooks (VSCHED_TEST); a second build with the fix-up's split cap 3 (S20) runs vsched_cap
 set(VSCHED_SOURCE ${LXR_ROOT}/Core/Src/Soundengine/vsched.c)

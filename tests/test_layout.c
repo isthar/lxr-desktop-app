@@ -178,4 +178,14 @@ TEST(vel_types_checks)
 	}
 }
 
+TEST(vel_types_timing_ids_8_to_11)
+{
+	/* plan v0.7 V7-1: tpl reads us1..us4 as ids 8..11, after the 7 built-ins */
+	ASSERT_EQ(TEMPLATE_BUILTIN, 8);
+	ASSERT_EQ(TEMPLATE_COUNT, 12);
+	for (unsigned id = 8; id < 12; id++)
+		ASSERT_EQ(trackTemplate_checked((TrackTemplate){ .id = (uint8_t)id, .amount = 0 }).id, id);
+	ASSERT_EQ(trackTemplate_checked((TrackTemplate){ .id = 12, .amount = 0 }).id, 0);
+}
+
 TEST_MAIN()
