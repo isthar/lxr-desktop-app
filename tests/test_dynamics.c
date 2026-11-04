@@ -489,6 +489,38 @@ TEST(vel_templates_leave_volume_0_and_the_rolls)
 	dynOff();
 }
 
+TEST(vel_templates_early_hits_take_it_too)
+{
+	/* quality review of Task 3: hits before their step's boundary (the early part) take the velocity
+	 * template at the occurrence's q, as the late part's do. of8 at 100 %, every step on at 127;
+	 * step 1 one unit early (-12 ticks: its one hit early; q 1, -15 dB, 22.58: 23); step 5 x4 two
+	 * units early (hits at -24, 0, +24, +48: the first early, three late; q 5, -14 dB, 25.35: 25) */
+	fake_host_t *h = dynHost();
+	allOn(h, 0, 0);
+	fake_setTiming(h, 0, 0, 1, 0, -1);
+	fake_setTiming(h, 0, 0, 5, 3, -2);
+	fake_setVelTemplate(h, 0, 0, OF8, 100);
+	play(h, 1990.0);
+	const fake_rec_t *r[24];
+	ASSERT_EQ(fake_triggers(h, 0, r, 24), 19);
+	ASSERT_EQ(r[1]->ev.step, 1);
+	ASSERT_EQ(r[1]->ev.tick, 96 - 12);
+	ASSERT_EQ(r[1]->ev.vel, 23);
+	for (int j = 0; j < 4; j++)
+	{
+		ASSERT_EQ(r[5 + j]->ev.step, 5);
+		ASSERT_EQ(r[5 + j]->ev.hit, j);
+		ASSERT_EQ(r[5 + j]->ev.tick, 5 * 96 - 24 + 24 * j);
+		ASSERT_EQ(r[5 + j]->ev.vel, 25);
+	}
+	ASSERT_EQ(r[9]->ev.step, 6);
+	ASSERT_EQ(r[9]->ev.vel, velModel(127, vtab[OF8][6], 100));
+	ASSERT_EQ(velModel(127, -15, 100), 23);
+	ASSERT_EQ(velModel(127, -14, 100), 25);
+	ASSERT_EQ(h->errors, 0);
+	dynOff();
+}
+
 TEST(vel_templates_bit_identity_off_or_at_depth_0)
 {
 	/* V7-4: vtmpl() and userTemplates set, every velocity template off, or ids 1..8 at depth 0 with
