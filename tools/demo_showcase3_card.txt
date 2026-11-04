@@ -1,0 +1,277 @@
+# The card of the third showcase track (tools/demo_showcase.sh --track 3), from the owner's pattern
+# of 2026-11-04 in the BCCO / Mutual Rytm style: the PULS kit (slot 56 of the kits branch) as kit 0,
+# rebuilt voice by voice, the one pattern the track plays, and eight mute scenes. Run on a seeded card
+# whose 00-*.SND is PULS, with --keep-card; the track's render then plays the kept card. Values as
+# the menu stores them (emu/render/render_params.h); step_prob 101-115 are the trig conditions 1:2
+# 2:2 1:3 2:3 3:3 1:4 2:4 3:4 4:4 Fil !Fl 1st !1s Pre !Pr; track_tpl 0-7 are off swg lay lyb rlx 2bt
+# psh drg; step_note is 60 for the voice's own pitch, +1 a semitone; slide_time is x 4 ms.
+#
+# The owner's pattern (X loud, x a ghost, | the end of a loop):
+#   kick with rumble   X...X...X...X...
+#   ghost kick         ...x..X....x..X.
+#   shaker             xxX|              (a 3-step loop against the bar)
+#   open hat           ..X...X...X...X.
+#   snare              ....X.......X...
+#   industrial perc    A on 1 of bar 1, b on 12 of bar 2: a call and its answer, long tail
+#   bass (Drum 3)      ..X....X..x|      (an 11-step loop: odd, not irritating)
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#! --no-start --seconds 40
+#
+# --- kit 0: PULS, rebuilt ---
+# Drum 1, the kick: PULS's long near-sine kick (260 Hz down to 51 Hz), sent to the FX bus: the
+# reverb takes it and the kick ducks the reverb (the rumble, below)
+0ms param audio_out1=6
++20ms param vol1=92
+# Drum 2, the ghost kick under the groove: a shorter, softer kick a little above the main one (about
+# 58 Hz), less pitch drop, through a low-pass so it stays a thud; the step volumes give X and x
++20ms param osc_wave_drum2=0
++20ms param coarse2=34
++20ms param fine2=64
++20ms param modamnt2=34
++20ms param mod_eg2=30
++20ms param pitch_slope2=20
++20ms param fmamnt2=0
++20ms param veloa2=0
++20ms param velod2=11
++20ms param vol_slope2=70
++20ms param trans2_vol=0
++20ms param filter_type_2=0
++20ms param filter_freq_2=80
++20ms param reso_2=0
++20ms param drive2=40
++20ms param volume_mod_on_off2=1
++20ms param vol2=127
+# Drum 3, the bass: a sine on G#2 in a little FM with an odd modulator (LFO 3 of PULS moves the FM
+# index over 4 bars), a tiny pitch blip, a resonant low-pass, some drive; slides of 48 ms
++20ms param osc_wave_drum3=0
++20ms param coarse3=44
++20ms param fine3=64
++20ms param modamnt3=4
++20ms param mod_eg3=8
++20ms param fmamnt3=20
++20ms param fm_freq3=70
++20ms param veloa3=0
++20ms param velod3=22
++20ms param vol_slope3=50
++20ms param filter_type_3=0
++20ms param filter_freq_3=56
++20ms param reso_3=50
++20ms param drive3=50
++20ms param volume_mod_on_off3=1
++20ms param vol3=127
++20ms param slide_time3=12
+# Snare, on 2 and 4: dry, noisy, mid; band-passed noise with a little tone and the Clp transient
++20ms param osc_wave_snare=0
++20ms param coarse4=50
++20ms param mix1=96
++20ms param noise_freq1=70
++20ms param modamnt4=10
++20ms param mod_eg4=8
++20ms param veloa4=0
++20ms param velod4=12
++20ms param vol_slope4=40
++20ms param repeat4=0
++20ms param filter_type_4=2
++20ms param filter_freq_4=70
++20ms param reso_4=15
++20ms param snare_distortion=60
++20ms param trans4_wave=9
++20ms param trans4_vol=40
++20ms param volume_mod_on_off4=1
++20ms param vol4=127
+# Cymbal, the industrial perc: three squares in FM (RDZA's metal, lower), band-passed with
+# resonance, distorted, a long decay, into the FX bus: its tail goes into the reverb, which the
+# kick ducks
++20ms param wave1_cym=3
++20ms param wave2_cym=3
++20ms param wave3_cym=3
++20ms param coarse5=60
++20ms param mod_osc_f1_cym=113
++20ms param mod_osc_f2_cym=77
++20ms param mod_osc_gain1_cym=127
++20ms param mod_osc_gain2_cym=90
++20ms param filter_type_5=2
++20ms param filter_freq_5=70
++20ms param reso_5=40
++20ms param veloa5=0
++20ms param velod5=90
++20ms param vol_slope5=40
++20ms param cymbal_distortion=60
++20ms param volume_mod_on_off5=1
++20ms param vol5=56
++20ms param audio_out5=6
+# Hihat: the shaker (closed) and the open hat share the voice. Noise through a high-pass, driven
+# hard: with PULS's band-pass the hats measured 39 dB (RMS) under the kick with its rumble; the
+# high-pass and the drive bring them up by 22 dB and keep them noise; the closed hat a little longer than PULS's (a shaker), the open hat
+# short, as on the reference album
++20ms param filter_type_6=1
++20ms param filter_freq_6=90
++20ms param reso_6=20
++20ms param hat_distortion=100
++20ms param velod6_closed=10
++20ms param velod6_open=20
++20ms param vol_slope6=30
++20ms param vol6=127
+# the reverb for the rumble and the perc's tail: dark, long, ducked fully by Drum 1; no FX slot
++20ms param fx_type=0
++20ms param rev_level=110
++20ms param rev_size=100
++20ms param rev_decay=84
++20ms param rev_tone=8
++20ms param rev_predelay=0
++20ms param rev_mod=40
++20ms param rev_duck_src=1
++20ms param rev_duck_depth=118
++200ms save-kit 0
+#
+# --- pattern 0 ---
++100ms param shuffle=0
+# Drum 1, the kick: the quarters; step 13 is !Fl, so a fill drops the fourth kick and the rumble
+# fills the gap
++100ms press voice1
++100ms press step1
++100ms press step5
++100ms press step9
++100ms press step13
++100ms param active_step=12
++100ms param step_prob=111
+# Drum 2, the ghost kick: ...x..X....x..X.
++100ms press voice2
++100ms press step4
++100ms press step7
++100ms press step12
++100ms press step15
++100ms param active_step=3
++100ms param step_volume=64
++100ms param active_step=6
++100ms param step_volume=120
++100ms param active_step=11
++100ms param step_volume=64
++100ms param active_step=14
++100ms param step_volume=120
+# Drum 3, the bass: an 11-step loop ..X....X..x, against the bar (in line again every 11 bars): G#2,
+# then A2 (a semitone up, sliding in), then a quiet D#3
++100ms press voice3
++100ms param track_length=11
++100ms press step3
++100ms press step8
++100ms press step11
++100ms param active_step=2
++100ms param step_volume=120
++100ms param step_note=60
++100ms param active_step=7
++100ms param step_volume=112
++100ms param step_note=61
++100ms param step_slide=1
++100ms param active_step=10
++100ms param step_volume=70
++100ms param step_note=67
+# the Snare voice: 2 and 4
++100ms press voice4
++100ms press step5
++100ms press step13
+# Cymbal, the industrial perc: the call A on step 1 in the first of every 2 bars (1:2), the answer
+# b on step 12 in the second (2:2), softer and a fourth lower
++100ms press voice5
++100ms press step1
++100ms press step12
++100ms param active_step=0
++100ms param step_volume=127
++100ms param step_prob=101
++100ms param active_step=11
++100ms param step_volume=82
++100ms param step_note=55
++100ms param step_prob=102
+# the closed hat, the shaker: a 3-step loop xxX against the bar
++100ms press voice6
++100ms param track_length=3
++100ms press step1
++100ms press step2
++100ms press step3
++100ms param active_step=0
++100ms param step_volume=50
++100ms param active_step=1
++100ms param step_volume=50
++100ms param active_step=2
++100ms param step_volume=112
+# the open hat on the off-beat 8ths, with drg (6 ticks late): it shares the voice with the shaker,
+# and the hit that comes later wins, so the open hat always sounds over the shaker's hit
++100ms press voice7
++100ms press step3
++100ms press step7
++100ms press step11
++100ms press step15
++100ms param track_tpl=7
++100ms param track_tpl_amt=100
++200ms save-pattern 0
+#
+# --- the mute scenes, in the performance mode (the second mode button): the voice buttons mute,
+# COPY + step 9-16 stores scene 1-8 ---
++200ms press mode2
+# scene 1, the intro: the kick and its rumble (2-7 muted)
++100ms press voice2
++100ms press voice3
++100ms press voice4
++100ms press voice5
++100ms press voice6
++100ms press voice7
++100ms down copy
++50ms press step9
++100ms up copy
+# scene 2: + the perc's call and answer and the open hat
++100ms press voice5
++100ms press voice7
++100ms down copy
++50ms press step10
++100ms up copy
+# scene 3: + the shaker (the outro too)
++100ms press voice6
++100ms down copy
++50ms press step11
++100ms up copy
+# scene 4: + the ghost kick and the snare
++100ms press voice2
++100ms press voice4
++100ms down copy
++50ms press step12
++100ms up copy
+# scene 5: everything (+ the bass)
++100ms press voice3
++100ms down copy
++50ms press step13
++100ms up copy
+# scene 6, the breakdown: no kick, no ghost kick, no snare
++100ms press voice1
++100ms press voice2
++100ms press voice4
++100ms down copy
++50ms press step14
++100ms up copy
+# scene 7: the bass and the perc alone
++100ms press voice6
++100ms press voice7
++100ms down copy
++50ms press step15
++100ms up copy
+# scene 8, the build back: the kick, the ghost kick, the shaker, the open hat, the perc; no bass,
+# no snare
++100ms press voice1
++100ms press voice2
++100ms press voice3
++100ms press voice6
++100ms press voice7
++100ms down copy
++50ms press step16
++100ms up copy
+# nothing muted again, back to the voice mode; the scenes are saved with the project
++100ms press voice3
++100ms press voice4
++100ms press mode1
++300ms save-project 0
++100ms mark saved

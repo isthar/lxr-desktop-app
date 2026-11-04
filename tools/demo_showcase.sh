@@ -19,16 +19,24 @@
 # against the bar, back in line every 4 bars), the v0.6 psh template on the hats and per-step mic on
 # the perc and the bass, trig conditions, one short tension moment in the v0.4 synced delay, rolls.
 #
+# Track 3 (--track 3): about 2:50 at 140 BPM from the owner's pattern of 2026-11-04 (BCCO / Mutual
+# Rytm): a kick with its rumble, a ghost kick under the groove, a 3-step shaker against the bar, the
+# open hat on the off-beats, the snare on 2 and 4, an industrial perc with a long tail as a call and
+# its answer over two bars, and a bass on Drum 3 in an 11-step loop; on PULS (56-PULS.SND), rebuilt
+# voice by voice; card tools/demo_showcase3_card.txt.
+#
 # Writes OUT_DIR/NAME.wav (out 1, stereo, as rendered), NAME-norm.wav (the same, peak normalised to
-# -1 dBFS), NAME.txt (the generated event script), where NAME is lichomat-showcase-v06 (track 1) or
-# lichomat-showcase2-v06 (track 2), and README-showcase.txt (in Polish: both timelines, the levels of
+# -1 dBFS), NAME.txt (the generated event script), where NAME is lichomat-showcase-v06 (track 1),
+# lichomat-showcase2-v06 (track 2) or lichomat-showcase3-v06 (track 3), and README-showcase.txt (in
+# Polish: the timelines, the levels of
 # the WAVs in OUT_DIR, and how to render them again). Only these files are written; everything else in
 # OUT_DIR stays.
 #
-#   tools/demo_showcase.sh [--track 1|2] [OUT_DIR]
+#   tools/demo_showcase.sh [--track 1|2|3] [OUT_DIR]
 #       default: track 1, build/demo (git-ignored); needs build/emu-release or build/emu (the Release
 #       renderer when both are there), python3, and the kit: the local branch 'kits', or
-#       LICHOMAT_KIT=FILE.SND (57-HUSTA.SND for track 1, 58-PROST.SND for track 2)
+#       LICHOMAT_KIT=FILE.SND (57-HUSTA.SND for track 1, 58-PROST.SND for track 2, 56-PULS.SND for
+#       track 3)
 #
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
@@ -48,7 +56,9 @@ case "$TRACK" in
      FADERS=0.85,0.85,0.85,0.85,0.85,0.85 ;;
   2) KIT=58-PROST.SND; CARD_SCRIPT=demo_showcase2_card.txt; NAME=lichomat-showcase2-v06; BPM=144
      FADERS=0.75,0.75,0.85,0.85,0.95,1 ;;
-  *) echo "usage: tools/demo_showcase.sh [--track 1|2] [OUT_DIR]"; exit 1 ;;
+  3) KIT=56-PULS.SND; CARD_SCRIPT=demo_showcase3_card.txt; NAME=lichomat-showcase3-v06; BPM=140
+     FADERS=0.65,0.65,0.65,0.65,0.65,0.65 ;;
+  *) echo "usage: tools/demo_showcase.sh [--track 1|2|3] [OUT_DIR]"; exit 1 ;;
 esac
 R="$ROOT/build/emu-release/lichomat-render"
 [ -x "$R" ] || R="$ROOT/build/emu/lichomat-render"
@@ -78,7 +88,7 @@ fi
 python3 - "$NAME.txt" "$W/seconds" "$TRACK" <<'SCORE'
 import sys
 TRACK = sys.argv[3]
-BPM = {'1': 142, '2': 144}[TRACK]
+BPM = {'1': 142, '2': 144, '3': 140}[TRACK]
 BAR = 240000.0 / BPM            # ms
 START = 120.0                   # the START press (ms after t0); bar 1 starts 0.162 ms later
 T1 = START + 0.162
@@ -249,15 +259,80 @@ def track2():
     add(at(97) + 1000, 'param rev_level=0')
     return at(97) + 2000
 
-END = track1() if TRACK == '1' else track2()
+def track3():
+    # the owner's pattern: everything is in the card; the arrangement is the scenes, the rumble and
+    # the perc's tail in the reverb, the DJ filter and the bass's filter
+    # before the start: the performance mode, scene 1 (stopped, so at once), the DJ filter low
+    add(0, 'press mode2')
+    add(30, 'param dj_filter=30')
+    add(60, 'press step9')
+    add(START, 'press start')
+    # INTRO 1-8: the kick and its rumble; the DJ filter opens over 8 bars
+    sweep('dj_filter', 30, 63, 1, 9)
+    param(9, 'dj_filter', 64)
+    # 9: the perc's call (bar 1 of 2) and answer (bar 2) with its long tail, and the open hat (scene 2)
+    scene(9, 2)
+    # 17: the shaker, 3 steps against 4/4 (scene 3)
+    scene(17, 3)
+    # 25: the ghost kick and the snare (scene 4); a fill at 32 (the fourth kick drops, the rumble fills)
+    scene(25, 4)
+    fill(32)
+    # MAIN 33-56: the bass in its 11-step loop (scene 5); its low-pass opens a little from 41 to 49;
+    # a 1/32 roll on the shaker at 40; fills at 48 and 56
+    scene(33, 5)
+    roll(40, 2, 6, 10)
+    sweep("filter_freq_3", 56, 70, 41, 49)
+    fill(48)
+    fill(56)
+    # BREAKDOWN 57-72: no kick, ghost kick or snare (scene 6): the reverb is not ducked and blooms; a
+    # bigger, longer room; the DJ filter closes over 8 bars
+    scene(57, 6)
+    for name, v in (('rev_size', 120), ('rev_decay', 100), ('rev_tone', 20)):
+        param(57, name, v)
+    sweep('dj_filter', 63, 34, 57, 65)
+    # 65: frozen just before the bar; the bass and the perc alone over the frozen wash (scene 7); the
+    # DJ filter opens again
+    param(65, 'rev_freeze', 1, early=20)
+    scene(65, 7)
+    sweep('dj_filter', 34, 63, 65, 69)
+    # 69: the kick, the ghost kick and the hats back without the bass and the snare (scene 8); the DJ
+    # filter flat, then high-pass up to the drop; a 1/32 roll on the shaker for the last two beats
+    scene(69, 8)
+    param(69, 'dj_filter', 64)
+    sweep('dj_filter', 66, 90, 69, 73)
+    roll(72, 2, 6, 10)
+    # DROP 73-88: everything (scene 5), the filter flat, the room back; the frozen wash stays under the
+    # kick, which ducks it, and thaws at 77; the bass's filter a little more open; fills at 80 and 88
+    scene(73, 5)
+    for name, v in (('dj_filter', 64), ('rev_size', 100), ('rev_decay', 84), ('rev_tone', 8),
+                    ("filter_freq_3", 74)):
+        param(73, name, v)
+    param(77, 'rev_freeze', 0)
+    fill(80)
+    fill(88)
+    # OUTRO 89-96: the shaker, the open hat and the perc with the kick (scene 3); the kick and the
+    # rumble alone at 93 with the DJ filter closing; stopped at the end of bar 96, then the tail; the
+    # reverb off 6 s later
+    scene(89, 3)
+    param(89, "filter_freq_3", 56)
+    scene(93, 1)
+    sweep('dj_filter', 63, 30, 93, 97)
+    add(at(97) - 40, 'press start')
+    add(at(97) + 6000, 'param rev_level=0')
+    return at(97) + 7000
+
+END = {'1': track1, '2': track2, '3': track3}[TRACK]()
 ev.sort(key=lambda e: e[0])
 with open(sys.argv[1], 'w') as f:
     if TRACK == '1':
         f.write('# the LICHOMAT v0.6 showcase: the performance on the card of tools/demo_showcase_card.txt\n')
         f.write('# generated by tools/demo_showcase.sh; 142 BPM, a bar is %.6f ms, bar 1 at %.3f ms\n' % (BAR, T1))
-    else:
+    elif TRACK == '2':
         f.write('# the LICHOMAT v0.6 showcase, track 2: the performance on the card of tools/demo_showcase2_card.txt\n')
         f.write('# generated by tools/demo_showcase.sh --track 2; 144 BPM, a bar is %.6f ms, bar 1 at %.3f ms\n' % (BAR, T1))
+    else:
+        f.write('# the LICHOMAT v0.6 showcase, track 3: the performance on the card of tools/demo_showcase3_card.txt\n')
+        f.write('# generated by tools/demo_showcase.sh --track 3; 140 BPM, a bar is %.6f ms, bar 1 at %.3f ms\n' % (BAR, T1))
     for ms, what in ev:
         f.write('%.3fms %s\n' % (ms, what))
 open(sys.argv[2], 'w').write('%.3f' % (END / 1000))
@@ -307,7 +382,7 @@ levels() {   # the measured lines for a WAV in OUT_DIR, or a note that it is not
   else echo "(Nie wyrenderowany w tym katalogu: tools/demo_showcase.sh $2.)"; fi
 }
 { cat <<'EOF'
-LICHOMAT v0.6: dwa utwory pokazowe, wyrenderowane przez firmware w emulatorze (tools/demo_showcase.sh).
+LICHOMAT v0.6: trzy utwory pokazowe, wyrenderowane przez firmware w emulatorze (tools/demo_showcase.sh).
 
 Każdy to jeden ciągły render (lichomat-render): nic nie jest sklejane ani dogrywane. Gra karta
 (kit, jeden wzorzec, osiem scen mute) ze skryptu karty, a aranżacja to granie na żywo w trybie
@@ -422,9 +497,62 @@ EOF
   levels lichomat-showcase2-v06 "--track 2"
   cat <<'EOF'
 
+=== Utwór 3: lichomat-showcase3-v06 (Twój wzór, BCCO / Mutual Rytm) ===
+
+Według Twojego wzoru z 4.11: 140 BPM, prosto (shuffle 0), 96 taktów i ogon pogłosu. Gra karta
+z tools/demo_showcase3_card.txt: kit PULS (56-PULS.SND z gałęzi kits) przebudowany głos po głosie.
+Suwaki głosów na 0,65 (zapas, bo przesterowany hihat i bas są głośne).
+
+Pliki:
+  lichomat-showcase3-v06.wav       wyjście 1, stereo, tak jak wyszło z firmware (z zapasem)
+  lichomat-showcase3-v06-norm.wav  to samo, szczyt podniesiony do -1 dBFS
+  lichomat-showcase3-v06.txt       wygenerowany skrypt zdarzeń (co i kiedy)
+
+Głosy (X głośno, x duch):
+  Drum 1  stopa z rumble       X...X...X...X...   stopa PULS na szynę FX: pogłos ciemny, długi,
+                                                  przyciszany przez stopę (rumble); krok 13 !Fl
+  Drum 2  ghost kick           ...x..X....x..X.   krótsza, miękka stopa ok. 58 Hz przez
+                                                  dolnoprzepustowy; x 64, X 120
+  Drum 3  bas                  ..X....X..x|       pętla 11 kroków przeciw taktowi (wraca co 11
+                                                  taktów): G#2, A2 ze slide, cichy D#3; sinus w FM
+                                                  z LFO PULS na indeksie FM, rezonansowy filtr
+  Snare   werbel               ....X.......X...   suchy szum z tonem i transientem Clp
+  Cymbal  perkusja industrialna  A w takcie 1 z 2 (1:2), b na kroku 12 w takcie 2 (2:2), ciszej
+                                 i kwartę niżej: wołanie i odpowiedź; metal (FM kwadratów, BP,
+                                 przester), długie wybrzmienie, na szynę FX: ogon w pogłosie
+  HH zamk. shaker              xxX|               pętla 3 kroków przeciw taktowi (wraca co 3 takty)
+  HH otw. otwarty hihat        ..X...X...X...X.   szablon drg: 6 ticków (6,7 ms) później, więc
+                                                  zawsze wygrywa ze shakerem na tym samym kroku
+  Hihat to szum przez górnoprzepustowy z mocnym przesterem. Z filtrem PULS hihaty były 39 dB
+  (RMS) pod stopą z rumble; górnoprzepustowy i przester podnoszą je o 22 dB.
+
+Oś czasu (mm:ss od początku pliku, takty po 1,71 s):
+  0:00  takt 1   INTRO. Stopa i jej rumble, filtr DJ otwiera się przez 8 taktów (scena 1).
+  0:14  takt 9   Perkusja: wołanie A i odpowiedź b z długim ogonem; otwarty hihat (scena 2).
+  0:27  takt 17  Shaker, 3 kroki przeciw 4/4 (scena 3).
+  0:41  takt 25  Ghost kick i werbel (scena 4).
+  0:53  takt 32  Fill: czwarta stopa milknie, rumble wypełnia dziurę.
+  0:55  takt 33  MAIN. Bas w pętli 11 kroków (scena 5). Filtr basu trochę się otwiera w taktach 41-49.
+  1:07  takt 40  Roll 1/32 na shakerze przez ostatnie 2 ćwierćnuty. Fille w taktach 48 i 56.
+  1:36  takt 57  BREAKDOWN. Bez stopy, ghost kicka i werbla (scena 6): pogłos nie jest już
+                 przyciszany, większy i dłuższy pokój; filtr DJ zamyka się przez 8 taktów.
+  1:50  takt 65  Freeze pogłosu: zamrożona plama, nad nią sam bas i perkusja (scena 7).
+  1:57  takt 69  Wraca stopa, ghost kick i hihaty, bez basu i werbla (scena 8); filtr DJ
+                 górnoprzepustowy w górę do dropu; w takcie 72 roll 1/32 na shakerze.
+  2:04  takt 73  DROP. Wszystko (scena 5), filtr płasko, zamrożona plama pod stopą, która ją
+                 przycisza; puszczona w takcie 77. Fille w taktach 80 i 88.
+  2:31  takt 89  OUTRO. Stopa, hihaty i perkusja (scena 3).
+  2:38  takt 93  Stopa i rumble (scena 1), filtr DJ zamyka się do końca.
+  2:45  takt 97  STOP; ogon rumble do końca pliku.
+
+EOF
+  levels lichomat-showcase3-v06 "--track 3"
+  cat <<'EOF'
+
 Jak wyrenderować ponownie (w worktree z gałęzią showcase, z renderem w build/emu-release albo build/emu):
   tools/demo_showcase.sh                    utwór 1, pliki trafiają do build/demo
   tools/demo_showcase.sh --track 2          utwór 2
+  tools/demo_showcase.sh --track 3          utwór 3
   tools/demo_showcase.sh --track 2 KATALOG  albo do KATALOG
 Kity biorą się z lokalnej gałęzi kits (git show kits:kits/card/PROJ00/57-HUSTA.SND, 58-PROST.SND);
 bez niej podaj plik: LICHOMAT_KIT=/ścieżka/58-PROST.SND tools/demo_showcase.sh --track 2. Render jest
