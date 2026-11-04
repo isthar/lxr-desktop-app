@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 07:22",
+    "updated": "2026-11-04 07:24",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "E4.13: pozostałe błędy fw 1.7 (B11, B12, B15–B18); czeka na Ciebie: H12, B13, odsłuch kitów",
+    "focus": "Czeka na Ciebie: H12 (folder polowa/ albo lean/), sesja testowa, B13, odsłuch kitów, CI",
     "branch": "timing-core",
-    "head": "dbee5e6",
-    "next": "E4.13: B17 i B15 (MIDI), B16 (RAT), B18 (wybór wzorca), B11 i B12 (menu) z testami; lekki przegląd; scalenie",
-    "updated_at": "2026-11-04T07:22:00+01:00",
-    "now": "Odświeżam aplikację LICHOMAT Emu do v0.6-half z E4.13"
+    "head": "89b96ef",
+    "next": "H12 na 0.3 z CI; potem pliki z build/images/po-H12/ (README, punkt 5)",
+    "updated_at": "2026-11-04T07:24:00+01:00",
+    "now": "Nic nie działa w tle; czekam na Twój odczyt H12, B13 i odsłuch kitów"
   },
   "epics": [
     {
@@ -492,7 +492,7 @@
       "id": "E5.8",
       "epic": "E5",
       "status": "zrobione",
-      "title": "Aplikacja LICHOMAT Emu z v0.6 do wypróbowania mic, tpl i amt: build/emu-show/v06, z kopią Twojej karty i ośmioma kitami w slotach 56–63; od 4.11 zbudowana z v0.6-half (cb9c040: E4.10, E4.11 B14, E7.8, E7.7), stara z 6a822ed obok w stara-6a822ed/",
+      "title": "Aplikacja LICHOMAT Emu z v0.6 do wypróbowania mic, tpl i amt: build/emu-show/v06, z kopią Twojej karty i ośmioma kitami w slotach 56–63; od 4.11 zbudowana z v0.6-half (fe1d696: E4.10, E4.11 B14, E7.8, E7.7, E4.13), stara z 6a822ed obok w stara-6a822ed/",
       "updated": "2026-11-04"
     },
     {
@@ -3967,6 +3967,11 @@
       "n": 563,
       "at": "2026-11-04 07:22",
       "text": "E4.13 zrobione: v0.6 (a856883), v0.6-half (fe1d696) i v0.6-lean (e1b76e0) zielone: 125 testów hosta, 346 emulatora, ASan 125 i 317, 0 ostrzeżeń. Nowe obrazy 0.6: do części 2 sesji 30a9730f… (zastępuje beefc513…), w po-H12/polowa 79605882…, w po-H12/lean c7678823…; SHA256SUMS, README i plan sesji zaktualizowane. Ze skanu z 27.10 zostały tylko B13 (Twój odsłuch) i B19 (tylko na hoście)."
+    },
+    {
+      "n": 564,
+      "at": "2026-11-04 07:24",
+      "text": "E5.8: aplikacja w build/emu-show/v06 przebudowana jeszcze raz, z v0.6-half fe1d696 (z poprawkami E4.13); 100 testów aplikacji przechodzi, karta w home bez zmian."
     }
   ]
 }
