@@ -765,4 +765,29 @@ TEST(own_templates_at_a_position)
 	dynOff();
 }
 
+TEST(own_templates_record_place_in_the_tracks_own_step)
+{
+	/* quality review of Task 3: seqc_recordPlace() scales the template to the track's step, as
+	 * playback does (seqc_templateTicks() passes pl->len, a line this task rewrote): at x2 (48
+	 * ticks) lay at 100 % at q 1 (18 at x1) is rha(18 x 48 / 96) = 9 ticks, step 1's reference
+	 * 48 + 9; a note 3 ticks later stores 3 x 96 / 48 = 6 (G at x1, 18 ticks, would store -12) */
+	fake_useMicro(true);
+	fake_host_t *h = dynHost();
+	h->logMask = 0;
+	fake_setTempo(h, 0, 0, 8);
+	fake_setTemplate(h, 0, 0, LAY, 100);
+	fake_process(h, 0);
+	seqc_start();
+	fake_process(h, 0);
+	const seqc_time_t t = (seqc_time_t)(48 + 9 + 3) * CYCLES_PER_TICK_120;
+	fake_runUntil(h, t, fake_msToCycles(0.5));
+	seqc_recPlace_t p;
+	ASSERT_TRUE(seqc_recordPlace(0, t, &p));
+	ASSERT_EQ(p.step, 1);
+	ASSERT_EQ(p.micro, 6);
+	ASSERT_EQ(rha(lay[1] * 100 * 48, 9600), 9);
+	ASSERT_EQ(h->errors, 0);
+	dynOff();
+}
+
 TEST_MAIN()
