@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 13:39",
+    "updated": "2026-11-04 13:45",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "v0.7: zad. 1–2 (E6.28, E6.29)",
+    "focus": "Zaparkowane. v0.7: zad. 1–2 zrobione, następne E6.30 (rdzeń)",
     "branch": "timing-core",
-    "head": "3927d97",
-    "next": "E6.30 (rdzeń) w następnym oknie; czeka na Ciebie H12 (strona arkusza), B13, odsłuch kitów i akcentów, CI",
-    "updated_at": "2026-11-04T13:39:00+01:00",
-    "now": "E6.29: bramka zadania 2 na build/wt-v07"
+    "head": "bda532b",
+    "next": "E6.30 przy następnym oknie; czeka na Ciebie: H12 (wyniki na stronie arkusza), B13, odsłuch kitów i akcentów, poprawki szkicu v0.7, CI",
+    "updated_at": "2026-11-04T13:45:00+01:00",
+    "now": "Zaparkowane: nic nie działa w tle"
   },
   "epics": [
     {
@@ -701,8 +701,8 @@
     {
       "id": "E6.29",
       "epic": "E6",
-      "status": "w toku",
-      "title": "v0.7 zad. 2: typy szablonów głośności i własnych w SeqStepTypes.h, test vel_types",
+      "status": "zrobione",
+      "title": "v0.7 zad. 2: typy szablonów głośności i własnych w SeqStepTypes.h (UserTemplate 32 B, velTemplate_checked(), zakresy ±84 ticków i −42..0 dB), test vel_types (0b420cc); obraz bez zmian (EQUIVALENT)",
       "updated": "2026-11-04"
     },
     {
@@ -4163,6 +4163,11 @@
       "n": 578,
       "at": "2026-11-04 13:39",
       "text": "E6.28 zrobione: v0.7 zad. 1 (8a32b36, gałąź v0.7 wypchnięta). Stan bazowy zgodny z planem: 125 testów hosta, 346 emulatora, 317 pod ASan, 38 nagrań wzorcowych, 10 × PASS w fw_checks, seqc_generate() instr 763 div 4 bl 4 blx 9. Po zmianie wersji: obraz LXR_V2_LICHOMAT_0.7.img, ekran v0.7 unofficial, budżet bez zmian, 0 ostrzeżeń. E6.29 start: typy; test vel_types najpierw padał (USER_TEMPLATES niezadeklarowany), teraz przechodzi."
+    },
+    {
+      "n": 579,
+      "at": "2026-11-04 13:45",
+      "text": "E6.29 zrobione: v0.7 zad. 2 (0b420cc): typy w SeqStepTypes.h, test vel_types; 126 testów hosta, 346 emulatora, obraz firmware bez zmian (EQUIVALENT), budżet bez zmian. Zaparkowane: E6.30 (rdzeń z pełnym przeglądem) nie zmieściłby się w oknie, więc nie zaczynam go w połowie. Dziś: E8.11 (strona arkusza wyników), E6.26 (szkic v0.7, Q35, podgląd akcentów), E6.27 (plan v0.7, Q36), E6.28–E6.29. Nic nie działa w tle."
     }
   ]
 }
