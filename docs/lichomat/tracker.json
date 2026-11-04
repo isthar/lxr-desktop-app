@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-04 14:45",
+    "updated": "2026-11-04 14:50",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Utwór 3 gotowy; v0.7: następne E6.30",
     "branch": "timing-core",
-    "head": "fa1eacc",
+    "head": "241471e",
     "next": "E6.30 (rdzeń v0.7); czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-04T14:45:00+01:00",
+    "updated_at": "2026-11-04T14:50:00+01:00",
     "now": "Zaparkowane: nic nie działa w tle"
   },
   "epics": [
@@ -4190,6 +4190,11 @@
       "n": 582,
       "at": "2026-11-04 14:45",
       "text": "E6.37 wersja 2 (showcase 063490d, strona odsłuchu wersja 10), po Twojej uwadze („brzmi jak organy”, ma być ryk z oddali). Zamiast FM kwadratów jest szum przez wąskie, rezonansowe pasmo, przester i powolne narastanie, cicho na sucho, w pogłosie z predelay 40. Gra rzadziej: wołanie w takcie 1 z 4, odpowiedź w takcie 3, każde z dwoma echami co ósemkę z kropką. Echa robi sekwencer, bo delay w slocie złapałby też stopę. Ryk solo jest 17,5 dB pod stopą (perkusja była 9 dB pod), ciemny. Ubocznie rumble ma +3 dB. Renderer na gałęzi showcase nie ustawia LFO przez param, więc bez warczenia LFO."
+    },
+    {
+      "n": 583,
+      "at": "2026-11-04 14:50",
+      "text": "E6.37 wersja 3 (showcase b8a87e6), po Twojej uwadze („bas jak samba”). Rytm zostaje Twój (pętla 11), ale bas to teraz jedna ciemna nuta G#2 zamiast G#2, A2 ze slide i D#3: bez blipu, długie, trzymane wybrzmienie przez zamknięty filtr, 9,4 dB pod stopą (było 7). Render 2:51,7, szczyt −1,3 dBFS."
     }
   ]
 }
