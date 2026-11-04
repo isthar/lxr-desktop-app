@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 12:36",
+    "updated": "2026-11-04 12:37",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E6.27: plan v0.7 (dynamika groove)",
     "branch": "timing-core",
-    "head": "cd1bbcc",
+    "head": "3c6f2a5",
     "next": "Po E6.27: wykonanie planu v0.7 na gałęzi v0.7; czeka na Ciebie H12 (strona arkusza), B13, odsłuch kitów, CI, poprawki szkicu v0.7",
-    "updated_at": "2026-11-04T12:36:00+01:00",
-    "now": "E6.27: plan v0.7 (agent w tle); podgląd akcentów na stronie odsłuchu"
+    "updated_at": "2026-11-04T12:37:00+01:00",
+    "now": "E6.27: plan v0.7 (agent w tle); bazowy check.sh na build/wt-v07"
   },
   "epics": [
     {
@@ -4076,7 +4076,12 @@
     {
       "n": 575,
       "at": "2026-11-04 12:36",
-      "text": "E6.26 dodatek: podgląd szablonów głośności na stronie odsłuchu (wersja 8, sekcja „Akcenty z albumu”), wyrenderowany na 0.6 z głośnościami kroków ustawionymi ręcznie tak, jak zrobi to szablon; każda wartość sprawdzona na ekranie. Znalezione: głośność kroku zmienia głośność głosu tylko przy włączonym „velocity → głośność” głosu (volume mod; w karcie init hihat ma go wyłączonego, 127 i 20 różniły się o 0,2 dB). Dopisane do szkicu i przekazane do planu. Parametr renderera step_volume nie zmienia kroku (ekran zostaje 127); działa push i enkoder. E6.27 trwa (plan v0.7)."
+      "text": "E6.26 dodatek: podgląd szablonów głośności na stronie odsłuchu (wersja 8, sekcja „Akcenty z albumu”), wyrenderowany na 0.6 z głośnościami kroków ustawionymi ręcznie tak, jak zrobi to szablon; każda wartość sprawdzona na ekranie. Znalezione: głośność kroku zmienia głośność głosu tylko przy włączonym „velocity → głośność” głosu (volume mod; w karcie init hihat ma go wyłączonego, 127 i 20 różniły się o 0,2 dB). Dopisane do szkicu i przekazane do planu. E6.27 trwa (plan v0.7)."
+    },
+    {
+      "n": 576,
+      "at": "2026-11-04 12:37",
+      "text": "E6.27: worktree build/wt-v07 (gałąź v0.7 od v0.6 a856883) założony, bazowy check.sh w tle. Poprawka do poprzedniego wpisu: parametr renderera step_volume jednak ustawia krok, tylko ekran kroku odświeża się dopiero po ponownym wybraniu kroku; pierwsze rendery były identyczne przez wyłączony volume mod."
     }
   ]
 }
