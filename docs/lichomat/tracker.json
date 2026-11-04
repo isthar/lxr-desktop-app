@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-05 00:01",
+    "updated": "2026-11-05 00:06",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7: E6.30 (rdzeń)",
     "branch": "timing-core",
-    "head": "30a9f8d",
+    "head": "da53b73",
     "next": "E6.30 (rdzeń v0.7); czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T00:01:00+01:00",
+    "updated_at": "2026-11-05T00:06:00+01:00",
     "now": "E6.30: przegląd zgodności ze spec (od 00:05); potem przegląd jakości"
   },
   "epics": [
@@ -764,7 +764,7 @@
     {
       "id": "E6.38",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Niestabilny test emulatora E413_lfo_voice_0 (od v0.6, ok. 7 % przebiegów): migawka LCD łapie wiersz w połowie przepisany; przyjmować odczyt dopiero, gdy dwie kolejne migawki pokazują ten sam wiersz",
       "updated": "2026-11-05"
     },
@@ -4230,6 +4230,11 @@
       "n": 587,
       "at": "2026-11-05 00:01",
       "text": "E6.30 (v0.7 zad. 3): Q37 zamknięte (CPU przyjęte według najdłuższej ścieżki, 1,10 %; limit U41 1,5 punktu). Nowy wiersz E6.38: niestabilny test emulatora E413_lfo_voice_0 (od v0.6). Start przeglądu zgodności ze spec, z własnymi mutantami recenzenta."
+    },
+    {
+      "n": 588,
+      "at": "2026-11-05 00:06",
+      "text": "E6.38 zrobione, ba682c5 (v0.7): test E413_lfo_voice_0 czyta voi z wiersza LCD, który stał 100 ms. Migawka łapała czasem wiersz w połowie przepisany (nowe 10 kolumn, reszta ze starego ekranu). Na 280 przebiegach pod obciążeniem stary filtr zawiódł 10 razy, nowy 0; rozdarty wiersz stał najwyżej 30 ms."
     }
   ]
 }
