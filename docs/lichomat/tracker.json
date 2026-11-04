@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-04 12:21",
+    "updated": "2026-11-04 12:25",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "E6.26: szkic v0.7 z rekomendacjami",
+    "focus": "E6.27: plan v0.7 (dynamika groove)",
     "branch": "timing-core",
-    "head": "d04960d",
-    "next": "Po E6.26: plan v0.7; dalej czeka na Ciebie H12 (wpisz na stronie arkusza), B13, odsłuch kitów, CI",
-    "updated_at": "2026-11-04T12:21:00+01:00",
-    "now": "E6.26: piszę szkic v0.7 (dynamika groove z pomiaru albumu)"
+    "head": "cecd541",
+    "next": "Po E6.27: wykonanie planu v0.7 na gałęzi v0.7; czeka na Ciebie H12 (strona arkusza), B13, odsłuch kitów, CI, poprawki szkicu v0.7",
+    "updated_at": "2026-11-04T12:25:00+01:00",
+    "now": "E6.27: piszę plan v0.7"
   },
   "epics": [
     {
@@ -680,8 +680,15 @@
     {
       "id": "E6.26",
       "epic": "E6",
+      "status": "zrobione",
+      "title": "Szkic v0.7 z rekomendacjami (docs/superpowers/specs/2026-11-04-v0.7-draft.md): dynamika groove. Szablony głośności vtp i vdp (0–200 %) z pomiaru hihatów albumu (of8, ful, dep, qtr: akcent na offbeatowych ósemkach, ghosty), 4 własne szablony na projekt z nagranej ścieżki (czas i głośność), zerowanie mikrotimingu ścieżki; blok 3 w .pat, +1 038 B RAM w zapasie 1 900 B; decyzja Q35",
+      "updated": "2026-11-04"
+    },
+    {
+      "id": "E6.27",
+      "epic": "E6",
       "status": "w toku",
-      "title": "Szkic v0.7 z rekomendacjami: dynamika groove (szablony głośności z pomiaru albumu: akcenty na offbeatach, ghosty), własne szablony z nagranej ścieżki, zerowanie mikrotimingu ścieżki; decyzje jako Q35",
+      "title": "Plan v0.7 (dynamika groove) według szkicu E6.26: zadania jako wiersze trackera, fakty sprawdzone na v0.6",
       "updated": "2026-11-04"
     },
     {
@@ -1185,6 +1192,14 @@
       "question": "Pogłos 0.4 przy pełnej częstotliwości (plan D41: jeśli H12 da pk ≤ 46,24) brzmi inaczej niż przy połowie, na której strojone są kity, przepisy i utwory: te same bufory to mniejszy pokój, a ogon basu przechyla się w lewo (na samej stopie mokry L o 6–7 dB głośniejszy niż R i o 8–9 dB głośniejszy niż przy połowie; przy połowie L i R w granicach 1,5 dB). Brać pełną, gdy CPU pozwala?",
       "assumption": "Nie: połowa także przy niskim pk.",
       "answer": "Moja decyzja według Twojej reguły z 29.10: pogłos 0.4 zostaje w połowie częstotliwości także wtedy, gdy H12 pozwoli na pełną. H12 rozstrzyga już tylko między połową (P ≤ 63,28) a lean (P > 63,28), a U20 jak dotąd może zejść stopień niżej. Powody: rumble to podstawa stylu, a na pełnej przechyla się w lewo; wszystko, co słyszałeś, jest strojone na połowie; przepisy tną górę tonem i tak poniżej 11 kHz; zostaje ok. 17 % CPU zapasu. Pełna jest gotowa na gałęzi v0.4-full (z E7.7), pary A/B są na stronie odsłuchu. Jeśli wolisz pełną, napisz: wtedy najpierw osobne zadanie na nierówny bas w odczepach L i R. Zmienia D41 i Q30."
+    },
+    {
+      "id": "Q35",
+      "status": "zamknięte",
+      "question": "Co po 0.6, skoro plan etapu 2 jest cały zrobiony? I czy pracować nad tym przed testami 0.4–0.6 na LXR?",
+      "assumption": "Dynamika groove jako v0.7, na osobnej gałęzi od v0.6, przed testami.",
+      "answer": "Moja decyzja według Twojej reguły z 29.10 (szkic docs/superpowers/specs/2026-11-04-v0.7-draft.md): v0.7 to dynamika groove. Szablony głośności z pomiaru albumu (of8, ful, dep, qtr) z głębokością 0–200 % na ścieżkę, 4 własne szablony na projekt z nagranej ścieżki (czas i głośność) i zerowanie mikrotimingu ścieżki. Robię to na gałęzi v0.7 od v0.6, tak jak 0.5 i 0.6 powstały przed testami 0.4. Gałęzie i pliki 0.4–0.6 do sesji testowej się nie zmieniają; wydanie 0.7 po 0.6. Zmień w szkicu §6, co chcesz.",
+      "updated": "2026-11-04"
     }
   ],
   "log": [
@@ -4052,6 +4067,11 @@
       "n": 573,
       "at": "2026-11-04 12:21",
       "text": "E8.11 zrobione: arkusz wyników sesji testowej jako strona (https://claude.ai/artifact/KsRmojvMf42Sr3GMxkD8bd). 72 pozycje w kolejności planu; wynik, wartości i uwagi zapisują się od razu, a ja je czytam. H12: po wpisaniu pk z kroku 3 strona pokazuje plik 0.4 i pliki sekcji „Po H12”. Zapis sprawdzony próbnym dokumentem. test-session-v0.6.md i HANDOFF wskazują stronę; generator tools/runsheet/. E6.26 start: szkic v0.7 (plan etapu 2 jest cały zrobiony)."
+    },
+    {
+      "n": 574,
+      "at": "2026-11-04 12:25",
+      "text": "E6.26 zrobione: szkic v0.7 (docs/superpowers/specs/2026-11-04-v0.7-draft.md), decyzja Q35. Dynamika groove: szablony głośności z pomiaru hihatów 8 utworów albumu (we wszystkich offbeatowe ósemki na 0 dB, ćwierćnuty ok. −10, ghosty ok. −14), głębokość 0–200 % na ścieżkę, 4 własne szablony z nagranej ścieżki, zerowanie mikrotimingu. Sprawdzone na v0.6: obcy blok w .pat jest pomijany, głośność idzie do głosu i do MIDI, zapas budżetu 1 900 B. E6.27 start: plan v0.7."
     }
   ]
 }
