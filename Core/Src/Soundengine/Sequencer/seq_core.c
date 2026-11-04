@@ -1128,6 +1128,8 @@ static const uint16_t seqc_gainDb[85] = {
 	82, 73, 65, 58, 52, 46, 41, 37, 33, 29, 26, 23, 21, 18, 16, 15, 13, 12, 10, 9, 8, 7, 7, 6, 5, 5, 4,
 	4, 3, 3, 3, 2, 2,
 };
+_Static_assert((int)(sizeof seqc_gainDb / sizeof seqc_gainDb[0]) == -VEL_TEMPLATE_DB_MIN * (100 + TEMPLATE_AMOUNT_MAX) / 100 + 1,
+		"seqc_gainDb reaches the deepest dB at the deepest depth (42 dB at 200 %: 84 dB)");	//LICHOMAT v0.7
 /** v0.7: 10^(-j/2000) in Q15 for j = 0..99 hundredths of a dB */
 static const uint16_t seqc_gainCentiDb[100] = {
 	32768, 32730, 32693, 32655, 32617, 32580, 32542, 32505, 32468, 32430, 32393, 32356, 32318, 32281,
@@ -1139,6 +1141,7 @@ static const uint16_t seqc_gainCentiDb[100] = {
 	29747, 29713, 29679, 29645, 29611, 29577, 29543, 29509, 29475, 29441, 29407, 29373, 29339, 29306,
 	29272, 29238,
 };
+_Static_assert(sizeof seqc_gainCentiDb / sizeof seqc_gainCentiDb[0] == 100u, "seqc_gainCentiDb holds the hundredths of a dB");	//LICHOMAT v0.7
 //------------------------------------------------------------------------------
 /** v0.6: a / b rounded half away from zero (b > 0), as seqc_msTicks() rounds */
 static int seqc_rhaDiv(int a, int b)
@@ -1236,6 +1239,7 @@ static uint8_t seqc_humanVel(uint8_t vel, const seqc_draw_t *d)
 	return (uint8_t)(v > 127 ? 127 : v);
 }
 //------------------------------------------------------------------------------
+_Static_assert(100 + TEMPLATE_AMOUNT_MAX == 200, "seqc_velScale() clamps the depth at 200 %, the amount's maximum + 100");	//LICHOMAT v0.7
 uint8_t seqc_velScale(uint8_t vel, int db, uint8_t pct)
 {
 	if (vel == 0 || db >= 0 || pct == 0)
