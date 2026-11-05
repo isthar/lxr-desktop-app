@@ -743,13 +743,20 @@ def P10_plugin_app_card(t):
 @case
 def P10_plugin_renew(t):
     # delete and add again: instance 0 is terminated at 4.5 s and a new one takes its place; it plays from its own
-    # frame 0 (latency silence) and starts the slave afresh where the transport is
-    lat, _ = host(t, plan(t, 'renew.txt', TIMELINE + ['out ' + t.path('renew.wav'), 'renew 198656 0']))
+    # frame 0 (latency silence) and starts the slave afresh where the transport is. Offline the new instance's first
+    # block waits for its engine, so a Note On in that block sounds at the renewal plus the latency (or one less);
+    # the slave's first step, from 3,000 frames on (after the note's attack), at the renewal plus 4,713 frames
+    renew = 198656
+    tl = TIMELINE[:-1] + ['note %d 0 48 127' % renew, 'note %d 0 48 0' % (renew + 5000)] + TIMELINE[-1:]
+    lat, _ = host(t, plan(t, 'renew.txt', tl + ['out ' + t.path('renew.wav'), 'renew %d 0' % renew]))
     _, _, x = wav(t.path('renew.wav'))
     left = x[0::2]
-    back = next((i for i in range(198656, len(left)) if abs(left[i]) >= 4000), None)
-    print('the new instance (latency %d) sounds %d frames after its start' % (lat[0], (back or 0) - 198656))
-    check(back is not None and back - 198656 < 22070, 'no sound in 0.5 s after the renewal')
+    note = next((i for i in range(renew, len(left)) if abs(left[i]) >= 4000), renew) - renew
+    step = next((i for i in range(renew + 3000, len(left)) if abs(left[i]) >= 4000), renew) - renew
+    print('the new instance (latency %d): its first block\'s Note On sounds %d frames after its start, the slave\'s '
+          'first step %d frames after it' % (lat[0], note, step))
+    check(note in (lat[0], lat[0] - 1), 'the Note On of the first block at +%d' % note)
+    check(step == 4713, 'the slave\'s first step at +%d' % step)
 
 
 def instance_dirs(home):
