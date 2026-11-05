@@ -98,6 +98,15 @@ typedef struct {
 static CardEntry card[CARD_ENTRIES];
 static char cardCwd[CARD_PATH] = "/";
 static int cardOpenFile = -1;
+/* LICHOMAT v0.7 (quality review of group B): failures on demand, each for the files whose
+ * absolute path holds the given name: f_open() of one returns cardFailOpenResult; f_write() to
+ * one writes nothing and returns FR_OK, as FatFs does on a full card; f_close() of one returns
+ * FR_DISK_ERR and leaves it open, as FatFs's f_close() does when its f_sync() fails. With
+ * cardFailWrite > 0 the cardFailWrite-th f_write() from now returns FR_DISK_ERR. cardReset()
+ * clears them. */
+static const char *cardFailOpen, *cardFull, *cardFailClose;
+static FRESULT cardFailOpenResult = FR_DISK_ERR;
+static int cardFailWrite;
 
 static int lowerChar(int c) { return (c >= 'A' && c <= 'Z') ? c - 'A' + 'a' : c; }
 
@@ -191,6 +200,9 @@ static void cardReset(void)
 		removeEntry(i);
 	snprintf(cardCwd, sizeof cardCwd, "/");
 	cardOpenFile = -1;
+	cardFailOpen = cardFull = cardFailClose = NULL;	/* LICHOMAT v0.7 */
+	cardFailOpenResult = FR_DISK_ERR;
+	cardFailWrite = 0;
 }
 
 /** a file with the given bytes (path absolute) */
@@ -210,6 +222,12 @@ static int cardHas(const char *path) { return findAbsolute(path) >= 0; }
 
 FRESULT f_open(FIL *fp, const TCHAR *path, BYTE mode)
 {
+	if (cardFailOpen) {		/* LICHOMAT v0.7 */
+		char abs[CARD_PATH];
+		absolutePath(abs, path);
+		if (strstr(abs, cardFailOpen))
+			return cardFailOpenResult;
+	}
 	int i = find(path);
 	if (mode & (FA_CREATE_ALWAYS | FA_CREATE_NEW | FA_OPEN_ALWAYS)) {
 		if (i < 0)
@@ -230,6 +248,8 @@ FRESULT f_open(FIL *fp, const TCHAR *path, BYTE mode)
 FRESULT f_close(FIL *fp)
 {
 	(void)fp;
+	if (cardFailClose && cardOpenFile >= 0 && strstr(card[cardOpenFile].path, cardFailClose))
+		return FR_DISK_ERR;		/* LICHOMAT v0.7: still open */
 	cardOpenFile = -1;
 	return FR_OK;
 }
@@ -253,8 +273,12 @@ FRESULT f_read(FIL *fp, void *buff, UINT btr, UINT *br)
 FRESULT f_write(FIL *fp, const void *buff, UINT btw, UINT *bw)
 {
 	*bw = 0;
+	if (cardFailWrite > 0 && --cardFailWrite == 0)	/* LICHOMAT v0.7 */
+		return FR_DISK_ERR;
 	if (cardOpenFile < 0)
 		return FR_INVALID_OBJECT;
+	if (cardFull && strstr(card[cardOpenFile].path, cardFull))
+		return FR_OK;			/* LICHOMAT v0.7: a full card, nothing written */
 	CardEntry *e = &card[cardOpenFile];
 	UINT end = (UINT)fp->fptr + btw;
 	if (end > e->len) {
@@ -1986,6 +2010,10 @@ TEST(user_templates_bad_files)
 		fillUser(9);
 		ASSERT_EQ(preset_loadProject(0, 1), FR_OK);
 		ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+		ASSERT_EQ(cardOpenFile, -1);				/* quality review of group B: closed */
+		ASSERT_EQ(f_chdir("/proj00"), FR_OK);			/* the loader alone, too */
+		preset_loadUserTemplates(1);
+		ASSERT_EQ(cardOpenFile, -1);
 	}
 }
 
@@ -2140,6 +2168,28 @@ TEST(pattern_block3_gated_on_block_1)
 		ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
 		ASSERT_EQ(memcmp(seq_patternSet.vtpl[5], none, sizeof none), 0);
 	}
+}
+
+TEST(user_templates_error_paths)
+{
+	/* quality review of group B: a failed open, header write or data write is reported and leaves
+	 * no file open (with _FS_LOCK 1 an open file would fail every later f_open() until a remount) */
+	reset();
+	ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+	fillUser(4);
+	cardFailOpen = "usertpl";
+	ASSERT_EQ(preset_saveUserTemplates(1), FR_DISK_ERR);
+	ASSERT_EQ(cardOpenFile, -1);
+	cardFailOpen = NULL;
+	for (int w = 1; w <= 2; w++)				/* the header, then the templates */
+	{
+		cardFailWrite = w;
+		ASSERT_EQ(preset_saveUserTemplates(1), FR_DISK_ERR);
+		ASSERT_EQ(cardOpenFile, -1);
+	}
+	ASSERT_EQ(preset_saveUserTemplates(1), FR_OK);
+	ASSERT_EQ(cardOpenFile, -1);
+	ASSERT_EQ(card[find("/tmp/usertpl.lch")].len, 134);
 }
 
 TEST_MAIN()
