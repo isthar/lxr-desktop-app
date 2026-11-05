@@ -1636,4 +1636,21 @@ TEST(own_capture_edges_of_the_length_and_the_range)
 	seq_clearUserTemplates();
 }
 
+TEST(own_capture_db_below_the_loudest_heard)
+{
+	/* spec review of group B (V7-10): the dB is below the loudest of the volumes as they play, not
+	 * of the steps' own: of8 at 100 % on steps 1 and 5 alone (both -10 dB: 127 plays as 40) gives
+	 * 0 dB on both */
+	reset();
+	seq_clearPattern(45);
+	ownStep(45, 1, 0, 127, 0);
+	ownStep(45, 1, 4, 127, 0);
+	seq_patternSet.vtpl[45][1] = (TrackTemplate){ .id = 1, .amount = 0 };	/* of8, 100 % */
+	ASSERT_EQ(seq_captureUserTemplate(1, 45, 0), 2);
+	ASSERT_EQ(seq_userTemplates[0].vel[0], 0);
+	ASSERT_EQ(seq_userTemplates[0].vel[4], 0);
+	seq_clearPattern(45);
+	seq_clearUserTemplates();
+}
+
 TEST_MAIN()
