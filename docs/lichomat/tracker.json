@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 00:26",
+    "updated": "2026-11-06 00:32",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "af18a65",
+    "head": "fdedb60",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-06T00:26:00+01:00",
-    "now": "E9.18–E9.19: implementer poprawia wyniki przeglądu wtyczki (od 23:30)"
+    "updated_at": "2026-11-06T00:32:00+01:00",
+    "now": "E9.18–E9.19: recenzent sprawdza poprawki wtyczki (od 00:32)"
   },
   "epics": [
     {
@@ -4572,6 +4572,11 @@
       "n": 633,
       "at": "2026-11-06 00:26",
       "text": "E9.18–E9.19 przegląd, 3699c56, ad54931, 5c14b00, eea931e, 6e18878, dd7cdf6, 899c84a: pierwsza nuta nowej instancji sprawdzona co do ramki; nowy stan wczytany w trakcie grania (preset, wklejenie, cofnięcie) restartuje silnik na nowej karcie; sprawdzanie czasu rzeczywistego łapie też pliki, mapowanie pamięci, procesy, wątki i dispatch; sprzątanie folderu bez pliku blokady; po nieudanym starcie wątek główny nie czeka już 3 s; zapis budzący silnik nigdy nie blokuje wątku audio; zawieszony silnik nie wstrzyma już bounce ani freeze w Live."
+    },
+    {
+      "n": 634,
+      "at": "2026-11-06 00:32",
+      "text": "E9.18–E9.19 przegląd, 3244a72, 40395fe i komplet: wszystkie 12 punktów z przeglądu wtyczki domknięte w 14 commitach, każdy od testu. Nowe testy: zawieszony silnik zastąpiony po 2 s; po 5 awariach w minutę wtyczka się poddaje i milknie, zamiast restartować bez końca; sprzątanie folderów; priorytet wątku; nieudany start; render offline z zawieszonym silnikiem kończy się w 30 s zamiast nigdy. Wtyczka ma 71 testów, walidator 47/0. Recenzent sprawdza poprawki."
     }
   ]
 }
