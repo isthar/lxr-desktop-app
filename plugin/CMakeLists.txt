@@ -84,4 +84,4 @@ plugin_add_test(test_clock IDS P4_clock_start_at_zero P4_clock_rounding_44k P4_c
 
 target_sources(plug_common PRIVATE common/plug_time.c)
 target_sources(plug_common_san PRIVATE common/plug_time.c)
-plugin_add_test(test_time IDS P5_time_native P5_time_integer P5_time_covering P5_time_latency P5_time_margin)
+plugin_add_test(test_time IDS P5_time_native P5_time_integer P5_time_covering P5_time_latency P5_time_margin P5_time_wide)

@@ -11,6 +11,7 @@
  * the repository.
  */
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "plug_time.h"
 #include "seqc_test.h"
@@ -20,6 +21,7 @@ TEST(P5_time_native)
 	ASSERT_TRUE(plug_isNative(44140.625));
 	ASSERT_FALSE(plug_isNative(44100.0));
 	ASSERT_FALSE(plug_isNative(44140.0));
+	ASSERT_FALSE(plug_isNative(44140.5));	/* exactly, not nearly */
 	/* emu_framesToCycles(): floor(frames x 552,960 / 113) */
 	ASSERT_EQ(plug_framesToCycles(0, PLUG_ENGINE_RATE), 0);
 	ASSERT_EQ(plug_framesToCycles(1, PLUG_ENGINE_RATE), 4893);
@@ -82,9 +84,29 @@ TEST(P5_time_margin)
 	ASSERT_EQ(plug_marginFromEnv(), 4096);
 	setenv("LICHOMAT_PLUGIN_MARGIN", "8", 1);
 	ASSERT_EQ(plug_marginFromEnv(), 128);
+	setenv("LICHOMAT_PLUGIN_MARGIN", "16", 1);	/* the bounds: 16-4,096 */
+	ASSERT_EQ(plug_marginFromEnv(), 16);
+	setenv("LICHOMAT_PLUGIN_MARGIN", "15", 1);
+	ASSERT_EQ(plug_marginFromEnv(), 128);
+	setenv("LICHOMAT_PLUGIN_MARGIN", "4097", 1);
+	ASSERT_EQ(plug_marginFromEnv(), 128);
 	setenv("LICHOMAT_PLUGIN_MARGIN", "12x", 1);
 	ASSERT_EQ(plug_marginFromEnv(), 128);
 	unsetenv("LICHOMAT_PLUGIN_MARGIN");
+}
+
+TEST(P5_time_wide)
+{
+	/* products beyond 64 bits: the 128-bit paths of plug_framesToCycles() and plug_framesCovering()
+	 * (frames x 216,000,000 past 2^64 from 8.5e10 frames; cycles x 113 past it from 1.6e17). A
+	 * 64-bit product makes plug_framesCovering() step for ages: the alarm fails the test. */
+	alarm(20);
+	ASSERT_EQ(plug_framesToCycles(100000000000ull, 96000.0), 225000000000000ull);
+	ASSERT_EQ(plug_framesToCycles(100000000000ull, 44100.0), 489795918367346ull);
+	ASSERT_EQ(plug_framesCovering(22500000000000000ull, 96000.0), 10000000000000ull);
+	ASSERT_EQ(plug_framesToCycles(1000000000000000ull, PLUG_ENGINE_RATE), 4893451327433628318ull);
+	ASSERT_EQ(plug_framesCovering(4893451327433628318ull, PLUG_ENGINE_RATE), 1000000000000000ull);
+	alarm(0);
 }
 
 TEST_MAIN()
