@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 01:18",
+    "updated": "2026-11-05 01:33",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7: grupa B (E6.31, E6.32)",
     "branch": "timing-core",
-    "head": "79a443a",
+    "head": "20c7548",
     "next": "E6.31–E6.32 (klej, pliki), potem pełny przegląd; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T01:18:00+01:00",
-    "now": "E6.31: implementer grupy B (zad. 4 i 5) pracuje (od 01:25)"
+    "updated_at": "2026-11-05T01:33:00+01:00",
+    "now": "E6.32: implementer grupy B robi zad. 5 (pliki), od 01:33; potem pełny przegląd grupy B"
   },
   "epics": [
     {
@@ -722,9 +722,9 @@
     {
       "id": "E6.32",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "v0.7 zad. 5: pliki: blok 3 w .pat, USERTPL.LCH; testy pattern_block3, user_templates; pełny przegląd",
-      "updated": "2026-11-04"
+      "updated": "2026-11-05"
     },
     {
       "id": "E6.33",
@@ -4270,6 +4270,11 @@
       "n": 595,
       "at": "2026-11-05 01:18",
       "text": "E6.30 zrobione (v0.7 zad. 3, 4612cf5..dc3d86e): recenzent jakości zatwierdził poprawki, optymalizacja B sprawdzona drugi raz (3 × 1000 ziaren, te same skróty). Rdzeń: szablony głośności of8, ful, dep, qtr i us1–us4, jedna pozycja na oba szablony, wzmocnienie z dwóch tablic Q15 bez powf. E6.31 start: grupa B (v0.7 zad. 4 klej i zad. 5 pliki), jeden implementer, potem pełny przegląd."
+    },
+    {
+      "n": 596,
+      "at": "2026-11-05 01:33",
+      "text": "E6.31 (v0.7 zad. 4), 0250d74: klej zacommitowany i wypchnięty: szablony głośności w RAM, własne szablony, zapis szablonu z tego, co gra (Q36), zerowanie mikrotimingu, kopia i bufor kopii zapasowej je niosą. Host 133/133, ASan 133/133, emulator 346/346, ASan emulatora 317/317, 38 nagrań wzorcowych bez zmian, 0 ostrzeżeń. Budżet 470 180 z 471 032 B (zostaje 852 B). E6.31 czeka na pełny przegląd po zad. 5. E6.32 start: blok 3 w .pat i USERTPL.LCH."
     }
   ]
 }
