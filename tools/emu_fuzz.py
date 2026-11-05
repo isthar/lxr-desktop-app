@@ -65,7 +65,7 @@ def value(rnd):
     return rnd.choice([0, 1, 63, 64, 100, 101, 115, 116, 126, 127, rnd.randrange(128)])
 
 
-# LICHOMAT v0.6 (plan v0.6 V6-21): mic (0-168), tpl (0-7) and amt (0-200) pass 127; the edges of
+# LICHOMAT v0.6/v0.7: mic (0-168), tpl (0-11), amt and vdp (0-200), vtp (0-8) and sav (0-4): the edges of
 # their ranges and of the menu's clamp
 WIDE = ('step_micro', 'track_tpl', 'track_tpl_amt', 'track_vtp', 'track_vdp', 'track_tpl_save')
 
@@ -76,7 +76,8 @@ def wide(rnd):
 
 # LICHOMAT v0.7: tpl (0-11), vtp (0-8) and sav (0-4) are lists, and the menu's clamp puts each value
 # past a list on its last entry (us4), so wide() alone reaches of8-qtr and us1-us3 about once a sweep;
-# half of their draws pick from the list and the first value past it
+# half of their draws pick from 0-12: tpl's list and the first value past it, vtp's and sav's lists and
+# values past them
 LISTS = ('track_tpl', 'track_vtp', 'track_tpl_save')
 
 
