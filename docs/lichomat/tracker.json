@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 20:25",
+    "updated": "2026-11-05 20:29",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "92595d0",
+    "head": "0112bf0",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T20:25:00+01:00",
-    "now": "E9.11–E9.15: implementer grup A i B wtyczki (od 20:20); potem lekki przegląd"
+    "updated_at": "2026-11-05T20:29:00+01:00",
+    "now": "E9.15: lekki przegląd grupy B wtyczki (od 20:30)"
   },
   "epics": [
     {
@@ -946,21 +946,21 @@
     {
       "id": "E9.12",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Wtyczka zad. 2: SDK VST3 3.8.1 w repozytorium (przypięte, sumy kontrolne), projekt CMake wtyczki, osłona w emu/CMakeLists.txt",
       "updated": "2026-11-05"
     },
     {
       "id": "E9.13",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Wtyczka zad. 3: pamięć współdzielona między wtyczką a silnikiem: nagłówek, pierścień zdarzeń, pierścień audio, wykrywanie śmierci silnika; testy P3",
       "updated": "2026-11-05"
     },
     {
       "id": "E9.14",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Wtyczka zad. 4: transport hosta jako MIDI clock, Start, Continue, Stop i Song Position; testy P4",
       "updated": "2026-11-05"
     },
@@ -4487,6 +4487,11 @@
       "n": 616,
       "at": "2026-11-05 20:25",
       "text": "E9.11 zrobione: worktree build/wt-plugin (gałąź plugin od v0.6 a856883), stan wyjściowy zgodny z planem. E9.12 (wtyczka zad. 2), a5ea81e: SDK VST3 3.8.1 w repozytorium (341 plików, 2,9 MB, sumy kontrolne, bez logo VST), projekt CMake wtyczki, osłona w emu/CMakeLists.txt. Emulator 346/346 bez zmian, 0 ostrzeżeń w naszych plikach. Folder ~/Library/Audio/Plug-Ins/VST3 dalej nie istnieje."
+    },
+    {
+      "n": 617,
+      "at": "2026-11-05 20:29",
+      "text": "E9.13 (9ecf13f), E9.14 (365f254), E9.15 (cc59a9b): pamięć współdzielona (2 mln zdarzeń i ramek między dwoma procesami bez błędu), transport jako MIDI clock, ramki, cykle i opóźnienie. Wtyczka ma 26 testów, wszystkie przechodzą w Debug z UBSan i w Release, 0 ostrzeżeń w naszych plikach. Każdy plik zgodny z planem bajt w bajt. E9.12–E9.14 zrobione, E9.15 czeka na lekki przegląd grupy B, który właśnie startuje. Sprzątanie: zabiłem proces yes, który został po moim teście obciążeniowym z 00:05 i przez 20 h zajmował jeden rdzeń."
     }
   ]
 }
