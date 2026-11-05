@@ -239,6 +239,24 @@ def same_files(a, b):
     return 'differ from byte %d (frame %d) of %d, %d' % (i, (i - 44) // 4, len(x), len(y))
 
 
+def engines_on(card):
+    """the pids of the engines playing card (lichomat-engine --card CARD)"""
+    return subprocess.run(['pgrep', '-f', 'lichomat-engine --card ' + card], capture_output=True, text=True).stdout.split()
+
+
+def kill_all(procs, card):
+    """SIGKILL the processes of procs still running and every engine of card: a case that fails leaves none"""
+    for p in procs:
+        if p is not None and p.poll() is None:
+            p.kill()
+            p.wait()
+    for pid in engines_on(card):
+        try:
+            os.kill(int(pid), signal.SIGKILL)
+        except OSError:
+            pass
+
+
 def ninja_inputs(build, target):
     """the explicit inputs of target's build statement in build/build.ninja"""
     with open(os.path.join(build, 'build.ninja')) as f:
@@ -368,26 +386,31 @@ def P6_engine_epoch(t):
 
 @case
 def P6_engine_quit(t):
-    # plug_drive ends the engine (quit, its pipe closed: exit 0); a killed driver leaves no engine behind
+    # plug_drive ends the engine (quit, its pipe closed: exit 0); a killed driver leaves no engine behind. Whatever
+    # fails, the case kills its driver and every engine of its card
     script = write_script(t, 'script.txt')
     s = t.run([t.a.drive, t.a.engine, t.card('q'), RATE_TEXT, '128', script, '44160', t.path('q.wav')]).stdout
     check('engine exit 0' in s, s)
     card = t.card('k')
-    p = subprocess.Popen([t.a.drive, t.a.engine, card, RATE_TEXT, '128', script, str(blocks_frames(60)), t.path('k.wav'),
-                          'realtime', '128'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    time.sleep(2.0)
-    engines = subprocess.run(['pgrep', '-f', 'lichomat-engine --card ' + card], capture_output=True, text=True).stdout.split()
-    check(len(engines) == 1, 'engines while the driver runs: %r' % engines)
-    p.send_signal(signal.SIGKILL)
-    p.wait()
-    t0 = time.time()
-    while time.time() - t0 < 3.0:
-        left = subprocess.run(['pgrep', '-f', 'lichomat-engine --card ' + card], capture_output=True, text=True).stdout.split()
-        if not left:
-            break
-        time.sleep(0.05)
-    print('the engine ended %.2f s after its driver was killed' % (time.time() - t0))
-    check(not left, 'the engine outlived its driver: %r' % left)
+    p = None
+    try:
+        p = subprocess.Popen([t.a.drive, t.a.engine, card, RATE_TEXT, '128', script, str(blocks_frames(60)),
+                              t.path('k.wav'), 'realtime', '128'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        time.sleep(2.0)
+        engines = engines_on(card)
+        check(len(engines) == 1, 'engines while the driver runs: %r' % engines)
+        p.send_signal(signal.SIGKILL)
+        p.wait()
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < 3.0:
+            left = engines_on(card)
+            if not left:
+                break
+            time.sleep(0.05)
+        print('the engine ended %.2f s after its driver was killed' % (time.monotonic() - t0))
+        check(not left, 'the engine outlived its driver: %r' % left)
+    finally:
+        kill_all([p], card)
 
 
 @case
