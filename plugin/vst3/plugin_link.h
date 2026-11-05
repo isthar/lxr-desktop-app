@@ -39,7 +39,8 @@ public:
 	 * plays in real time; false with err */
 	bool start (double rate, uint32_t maxBlock, bool realtime, const std::string& card, const std::string& engineLog,
 	            const std::string& pluginLog, std::string& err);
-	/** the engine starts again on another card; returns once the old engine is gone (at most 3 s) */
+	/** the engine starts again on another card, also after a failure; returns once a new engine is
+	 * started on it, or could not be (at most 3 s) */
 	void restart (const std::string& card, const std::string& engineLog, const std::string& pluginLog);
 	/** end the engine (quit, then SIGKILL after 2 s), the monitor, the memory */
 	void stop ();
@@ -68,8 +69,8 @@ private:
 	int wakeFd[2] = {-1, -1};
 	std::thread thread;
 	std::atomic<bool> stopping {false};
-	std::atomic<bool> restartWanted {false};
-	std::atomic<bool> restarted {false};
+	std::atomic<uint64_t> restartAsked {0};	/**< restart() calls; the monitor answers each in restartDone */
+	std::atomic<uint64_t> restartDone {0};	/**< the last call answered: an engine started on its card, or none */
 	std::atomic<pid_t> enginePid {-1};
 	std::mutex paths;	/* the monitor thread and restart(); never the audio thread */
 	std::string card, engineLog, pluginLog, engine;

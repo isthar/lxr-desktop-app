@@ -569,9 +569,10 @@ def P10_plugin_helper(t):
 
 # --- the VST3 bundle through lichomat-plughost (Task 9) -----------------------------------
 
-def plan(t, name, lines, rate=RATE_TEXT, block=128, frames=None, card=True):
+def plan(t, name, lines, rate=RATE_TEXT, block=128, frames=None, card=True, bundle=None):
     """a plughost plan in the case's folder: the bundle, the rate, the block, the frames, the onset card"""
-    body = ['bundle ' + t.a.bundle, 'rate ' + str(rate), 'block %d' % block, 'frames %d' % (frames or blocks_frames(12))]
+    body = ['bundle ' + (bundle or t.a.bundle), 'rate ' + str(rate), 'block %d' % block,
+            'frames %d' % (frames or blocks_frames(12))]
     if card:
         body.append('card ' + os.path.join(t.a.root, 'emu', 'tests', 'cards', 'onset'))
     path = t.path(name)
@@ -921,6 +922,53 @@ def P10_plugin_policy(t):
             check(pri.endswith('R') and pri[:-1].isdigit() and int(pri[:-1]) >= 90, 'real time: %r' % rows[:2])
         else:
             check(pri.endswith('T') and pri[:-1].isdigit() and int(pri[:-1]) < 50, 'offline: %r' % rows[:2])
+
+
+def bundle_copy(t, name):
+    """a copy of the bundle in the case's folder (the plugin finds its engine next to itself), and its helper's path"""
+    dst = t.path(name)
+    shutil.copytree(t.a.bundle, dst, symlinks=True)
+    return dst, os.path.join(dst, 'Contents', 'Helpers', 'lichomat-engine')
+
+
+@case
+def P10_plugin_spawn_fail(t):
+    # The engine cannot be started (its file is missing): the instance reports "failed", and a state given later
+    # (Live's preset load) starts an engine on the new card once the file is back, and setState returns at once.
+    # Real time, paced, 48 kHz: the helper is put back once the log has the failure, the state given at 2 s; a Note
+    # On every 0.25 s from 2.1 s on sounds
+    bundle, helper = bundle_copy(t, 'LICHOMAT.vst3')
+    os.remove(helper)
+    host(t, plan(t, 'make.txt', ['out ' + t.path('make.wav'), 'state-out ' + t.path('onset.bin')], frames=12800))
+    at = 96000
+    lines = ['mode realtime', 'paced', 'out ' + t.path('f.wav'), 'setstate %d %s' % (at, t.path('onset.bin'))]
+    lines += ['note %d 0 48 127' % (at + 4800 + 12000 * k) for k in range(8)]
+    p = None
+    try:
+        p = subprocess.Popen([t.a.host, plan(t, 'f.txt', lines, rate=48000, block=256, frames=48000 * 4, bundle=bundle)],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=host_env(t))
+        t0 = time.monotonic()
+        while not any('cannot start the engine' in x for x in instance_logs(t.path('home')).values()):
+            check(p.poll() is None and time.monotonic() - t0 < 1.8, 'no spawn failure in the log in time')
+            time.sleep(0.02)
+        shutil.copy2(os.path.join(t.a.bundle, 'Contents', 'Helpers', 'lichomat-engine'), helper)
+        out, err = p.communicate(timeout=120)
+        check(p.returncode == 0, 'the host exited %d: %s%s' % (p.returncode, out, err))
+    finally:
+        if p is not None and p.poll() is None:
+            p.kill()
+            p.wait()
+    print(out.strip())
+    log = ''.join(x for x in instance_logs(t.path('home')).values() if 'cannot start the engine' in x)
+    print(log.strip())
+    took = [float(l.split(' in ')[1].split()[0]) for l in out.splitlines() if 'setstate at' in l]
+    _, _, x = wav(t.path('f.wav'))
+    loud = sum(1 for v in x[2 * at::2] if abs(v) >= 4000)
+    print('setState after the failure: %s s; %d loud frames after it' % (took, loud))
+    check(took and took[0] < 1.0, 'setState took %r s' % took)
+    check(re.search(r'cannot start the engine: posix_spawn .*: No such file or directory', log)
+          and re.search(r'engine \d+ started on ', log), 'the log')
+    check(loud > 1000 and 'engine running' in out, 'no engine on the new card: %d loud frames, %r' % (loud, out))
 
 
 def longest_silence(x):

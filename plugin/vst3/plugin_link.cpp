@@ -100,7 +100,7 @@ bool EngineLink::start (double rate, uint32_t maxBlock, bool realtime, const std
 		engine = enginePath ();
 	}
 	stopping = false;
-	restartWanted = false;
+	restartDone = restartAsked.load ();
 	thread = std::thread ([this] { monitor (); });
 	return true;
 }
@@ -115,10 +115,9 @@ void EngineLink::restart (const std::string& cardDir, const std::string& eLog, c
 	}
 	if (!thread.joinable ())
 		return;
-	restarted = false;
-	restartWanted = true;
+	const uint64_t n = ++restartAsked;
 	const double t0 = wallNow ();
-	while (!restarted && wallNow () - t0 < 3.0)
+	while (restartDone.load () < n && wallNow () - t0 < 3.0)
 		std::this_thread::sleep_for (std::chrono::milliseconds (5));
 }
 
@@ -150,14 +149,24 @@ void EngineLink::stop ()
 void EngineLink::monitor ()
 {
 	std::vector<double> deaths;
+	/* No engine, for good: failed until stop(), or until restart() asks for another card. The
+	 * thread stays, so that restart() is answered at once and starts an engine on its card. */
+	auto failed = [&] (uint64_t asked) {
+		plug_store (&mem->state, PLUG_ENGINE_FAILED);
+		restartDone = asked;
+		while (!stopping && restartAsked.load () == asked)
+			std::this_thread::sleep_for (std::chrono::milliseconds (50));
+		deaths.clear ();
+	};
 	while (!stopping)
 	{
+		const uint64_t asked = restartAsked.load ();	/* before the paths, which restart() sets first */
 		int life[2];
 		if (pipe (life) != 0)
 		{
 			note ("pipe: %s", strerror (errno));
-			plug_store (&mem->state, PLUG_ENGINE_FAILED);
-			break;
+			failed (asked);
+			continue;
 		}
 		fcntl (life[0], F_SETFD, FD_CLOEXEC);
 		fcntl (life[1], F_SETFD, FD_CLOEXEC);
@@ -179,11 +188,11 @@ void EngineLink::monitor ()
 		{
 			note ("cannot start the engine: %s", err);
 			close (life[0]);
-			plug_store (&mem->state, PLUG_ENGINE_FAILED);
-			break;
+			failed (asked);
+			continue;
 		}
 		enginePid = pid;
-		restarted = true;
+		restartDone = asked;
 		note ("engine %d started on %s", (int)pid, c.c_str ());
 		/* watch it */
 		const double started = wallNow ();
@@ -214,7 +223,7 @@ void EngineLink::monitor ()
 					kill (pid, SIGKILL);
 				break;
 			}
-			if (restartWanted)
+			if (restartAsked.load () != asked)
 			{
 				why = "a new card";
 				kill (pid, SIGKILL);
@@ -242,36 +251,29 @@ void EngineLink::monitor ()
 			snprintf (how, sizeof how, WIFSIGNALED (status) ? "signal %d" : "exit %d",
 			          WIFSIGNALED (status) ? WTERMSIG (status) : WEXITSTATUS (status));
 		enginePid = -1;
-		const bool failed = plug_load (&mem->state) == PLUG_ENGINE_FAILED;
+		const bool reported = plug_load (&mem->state) == PLUG_ENGINE_FAILED;
 		note ("engine %d ended (%s): %s; underruns %llu, late %llu, dropped %llu, ring full %llu", (int)pid, how, why,
 		      (unsigned long long)mem->underruns, (unsigned long long)mem->late, (unsigned long long)mem->dropped,
 		      (unsigned long long)mem->evDropped);
 		if (stopping)
 			break;
 		plug_store (&mem->state, PLUG_ENGINE_NONE);	/* the audio thread reads silence */
-		if (restartWanted)
-		{
-			restartWanted = false;
-			continue;
-		}
+		if (restartAsked.load () != asked)
+			continue;	/* a new card: no death */
 		const double now = wallNow ();
 		deaths.push_back (now);
 		while (!deaths.empty () && now - deaths.front () > 60.0)
 			deaths.erase (deaths.begin ());
-		if (deaths.size () >= 5 || failed)
+		if (deaths.size () >= 5 || reported)
 		{
-			note ("the engine is not started again: %s", failed ? "it reported a failure" : "5 deaths in a minute");
-			plug_store (&mem->state, PLUG_ENGINE_FAILED);
-			while (!stopping && !restartWanted)
-				std::this_thread::sleep_for (std::chrono::milliseconds (50));
-			restartWanted = false;
-			deaths.clear ();
+			note ("the engine is not started again: %s", reported ? "it reported a failure" : "5 deaths in a minute");
+			failed (asked);
 			continue;
 		}
-		for (int i = 0; i < 10 && !stopping; i++)
+		for (int i = 0; i < 10 && !stopping && restartAsked.load () == asked; i++)
 			std::this_thread::sleep_for (std::chrono::milliseconds (50));
 	}
-	restarted = true;
+	restartDone = restartAsked.load ();	/* a restart() still waiting returns */
 }
 
 } // namespace lichomat
