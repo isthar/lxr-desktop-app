@@ -58,6 +58,27 @@ static void removeTree (const std::string& dir)
 		nftw (dir.c_str (), removeEntry, 16, FTW_DEPTH | FTW_PHYS);
 }
 
+/* everything below the folder but its own lock file */
+static int removeEntryButLock (const char* path, const struct stat*, int, struct FTW* w)
+{
+	if (w->level == 0 || (w->level == 1 && strcmp (path + w->base, "lock") == 0))
+		return 0;
+	return ::remove (path) == 0 ? 0 : -1;
+}
+
+/* An instance folder, its lock file last: a removal that stops partway (an error, a crash) leaves
+ * the lock, so the folder is still seen as an instance's and cleaned later; the next cleaner takes
+ * a folder without a lock file for nobody's (cleanStale()) */
+static void removeFolder (const std::string& dir)
+{
+	if (dir.empty ())
+		return;
+	if (nftw (dir.c_str (), removeEntryButLock, 16, FTW_DEPTH | FTW_PHYS) != 0)
+		return;	/* the lock stays: the next instance tries again */
+	unlink ((dir + "/lock").c_str ());
+	rmdir (dir.c_str ());
+}
+
 std::string CardFolder::base ()
 {
 	std::string b;
@@ -124,9 +145,10 @@ void CardFolder::cleanStale ()
 		struct stat st;
 		if (stat (dir.c_str (), &st) != 0 || !S_ISDIR (st.st_mode) || now - st.st_mtime < 60)
 			continue;
+		/* nobody holds it: its lock is free, or it has none (a removal that stopped partway) */
 		const int fd = open ((dir + "/lock").c_str (), O_RDWR | O_CLOEXEC);
-		if (fd >= 0 && flock (fd, LOCK_EX | LOCK_NB) == 0)
-			removeTree (dir);	/* nobody holds it */
+		if ((fd >= 0 && flock (fd, LOCK_EX | LOCK_NB) == 0) || (fd < 0 && errno == ENOENT))
+			removeFolder (dir);
 		if (fd >= 0)
 			close (fd);
 	}
@@ -199,7 +221,7 @@ std::string CardFolder::log () const
 
 void CardFolder::remove ()
 {
-	removeTree (dirPath);
+	removeFolder (dirPath);	/* the lock still held: no cleaner takes it meanwhile */
 	release ();
 }
 

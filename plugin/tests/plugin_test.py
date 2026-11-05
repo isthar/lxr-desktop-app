@@ -853,17 +853,18 @@ def P10_plugin_setstate(t):
 @case
 def P10_plugin_stale(t):
     # P-18: a folder of BASE left by a host that died (its lock held by nobody, older than a minute) is removed by the
-    # next instance; one whose lock an instance holds is kept however old, and so is a young one (an instance being
-    # made); the new instance's own folder goes at its end
+    # next instance, also one without its lock file (a removal that stopped partway); one whose lock an instance holds
+    # is kept however old, and so is a young one (an instance being made); the new instance's own folder goes at its end
     home = t.path('home')
-    names = {'stale': 'a' * 16, 'held': 'b' * 16, 'young': 'c' * 16}
-    for n in names.values():
+    names = {'stale': 'a' * 16, 'held': 'b' * 16, 'young': 'c' * 16, 'no lock': 'd' * 16}
+    for k, n in names.items():
         os.makedirs(os.path.join(home, n, 'card', 'TMP'))
         with open(os.path.join(home, n, 'card', 'TMP', 'X.BIN'), 'w') as f:
             f.write('x')
-        open(os.path.join(home, n, 'lock'), 'w').close()
+        if k != 'no lock':
+            open(os.path.join(home, n, 'lock'), 'w').close()
     old = time.time() - 120
-    for k in ('stale', 'held'):
+    for k in ('stale', 'held', 'no lock'):
         os.utime(os.path.join(home, names[k]), (old, old))
     with open(os.path.join(home, names['held'], 'lock'), 'r+') as held:
         fcntl.flock(held, fcntl.LOCK_EX)
@@ -873,6 +874,24 @@ def P10_plugin_stale(t):
     check(left == sorted([names['held'], names['young']]), 'left %r' % left)
     for k in ('held', 'young'):
         check(os.path.isfile(os.path.join(home, names[k], 'card', 'TMP', 'X.BIN')), 'the %s folder\'s card' % k)
+    # a stale folder that cannot be removed whole (a folder in it without write permission) keeps its lock, which
+    # is removed last, and goes with the next instance once it can
+    part = os.path.join(home, 'e' * 16)
+    os.makedirs(os.path.join(part, 'card', 'RO'))
+    for f in (os.path.join(part, 'card', 'RO', 'X.BIN'), os.path.join(part, 'card', 'Y.BIN'), os.path.join(part, 'lock')):
+        open(f, 'w').close()
+    os.chmod(os.path.join(part, 'card', 'RO'), 0o555)
+    os.utime(part, (old, old))
+    try:
+        host(t, plan(t, 's2.txt', ['out ' + t.path('s2.wav')], frames=12800))
+        kept = sorted(os.listdir(part)) if os.path.isdir(part) else None
+    finally:
+        os.chmod(os.path.join(part, 'card', 'RO'), 0o755)
+    os.utime(part, (old, old))
+    host(t, plan(t, 's3.txt', ['out ' + t.path('s3.wav')], frames=12800))
+    print('a stale folder removed partway keeps %r; the next instance removes it: %s' % (kept, not os.path.exists(part)))
+    check(kept is not None and 'lock' in kept, 'the folder removed partway kept %r' % kept)
+    check(not os.path.exists(part), 'the folder removed partway is still there')
 
 
 @case
