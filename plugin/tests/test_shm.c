@@ -145,10 +145,75 @@ TEST(P3_shm_overwritten)
 	plug_audioBegin(s, 0);
 	plug_audioWrite(s, lr, PLUG_AUDIO_FRAMES);
 	plug_audioWrite(s, lr, 4);	/* frames 0..3 are overwritten by 32768..32771 */
-	ASSERT_EQ(plug_audioRead(s, 0, 8, l, r), 4);
+	/* and frame 4 shares its slot with frame 32772, the next the engine writes: the ring holds the
+	 * 32,767 frames before audioEnd */
+	ASSERT_EQ(plug_audioRead(s, 0, 8, l, r), 3);
 	ASSERT_EQ_DBL(l[3], 0.0);
-	ASSERT_EQ_DBL(l[4], 5.0);
+	ASSERT_EQ_DBL(l[4], 0.0);
+	ASSERT_EQ_DBL(l[5], 6.0);
+	ASSERT_EQ_DBL(r[7], 8.0);
 	munmap(s, sizeof *s);
+}
+
+TEST(P3_shm_overrun)
+{
+	/* A child writes frames as fast as it can, in blocks of 64, frame f's samples f mod 2^24; the
+	 * parent reads the oldest 1,024 frames the ring holds, the first of which the child writes over
+	 * meanwhile. A frame plug_audioRead() copies must be that frame, not one written over it while
+	 * it was copied: the copied frames are the last n of the 1,024 (n its result), the others 0. */
+	char err[160];
+	int fd = -1;
+	plug_shm_t *s = plug_shmCreate(48000.0, 512, &fd, err, sizeof err);
+	ASSERT_TRUE(s != NULL);
+	plug_audioBegin(s, 0);
+	const pid_t pid = fork();
+	if (pid == 0)
+	{
+		alarm(30);
+		plug_shm_t *c = plug_shmMap(fd, err, sizeof err);
+		if (!c)
+			_exit(3);
+		float lr[2 * 64];
+		uint64_t f = 0;
+		while (!plug_load(&c->quit))
+		{
+			for (unsigned i = 0; i < 64; i++)
+				lr[2 * i] = lr[2 * i + 1] = (float)((f + i) & 0xFFFFFFu);
+			plug_audioWrite(c, lr, 64);
+			f += 64;
+		}
+		_exit(0);
+	}
+	alarm(30);
+	static float l[1024], r[1024];
+	uint64_t reads = 0, copied = 0, wrong = 0;
+	while (reads < 20000u)
+	{
+		const uint64_t end = plug_load(&s->audioEnd);
+		if (end < PLUG_AUDIO_FRAMES + 1024u)
+			continue;	/* the ring fills */
+		const uint64_t from = end - PLUG_AUDIO_FRAMES;
+		const uint32_t n = plug_audioRead(s, from, 1024, l, r);
+		for (uint32_t i = 0; i < 1024; i++)
+		{
+			const float want = i >= 1024u - n ? (float)((from + i) & 0xFFFFFFu) : 0.0f;
+			wrong += l[i] != want || r[i] != want;
+		}
+		copied += n;
+		reads++;
+	}
+	plug_store(&s->quit, 1);
+	int status = 0;
+	ASSERT_EQ(waitpid(pid, &status, 0), pid);
+	alarm(0);
+	printf("P3_shm_overrun: %llu reads, %llu frames copied, %llu wrong, %llu frames written\n",
+		(unsigned long long)reads, (unsigned long long)copied, (unsigned long long)wrong,
+		(unsigned long long)plug_load(&s->audioEnd));
+	ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+	ASSERT_EQ(wrong, 0);
+	ASSERT_TRUE(copied > 0);
+	plug_shmClose(s);
+	close(fd);
 }
 
 #define N_EVENTS 2000000u

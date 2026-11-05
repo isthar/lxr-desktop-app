@@ -138,7 +138,10 @@ uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *l,
 	for (uint32_t i = 0; i < frames; i++)
 	{
 		const uint64_t f = from + i;
-		if (f >= start && f < end && end - f <= PLUG_AUDIO_FRAMES)
+		/* frame f's slot is also frame f + PLUG_AUDIO_FRAMES's: the ring holds the frames less than
+		 * PLUG_AUDIO_FRAMES before end (the one before them shares its slot with frame end, the next
+		 * the engine writes) */
+		if (f >= start && f < end && end - f < PLUG_AUDIO_FRAMES)
 		{
 			const float *p = s->audio[f & (PLUG_AUDIO_FRAMES - 1u)];
 			l[i] = p[0];
@@ -150,6 +153,23 @@ uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *l,
 			l[i] = r[i] = 0.0f;
 			if (running && f >= start && f >= end)
 				missing++;
+		}
+	}
+	if (copied)
+	{
+		/* The engine may have written over the oldest of them while they were copied. It publishes
+		 * audioEnd = g before it writes frame g (plug_audioWrite()), so the frames it may have
+		 * written over are those with f + PLUG_AUDIO_FRAMES <= audioEnd, loaded again after the copy */
+		__atomic_thread_fence(__ATOMIC_ACQUIRE);
+		const uint64_t now = __atomic_load_n(&s->audioEnd, __ATOMIC_RELAXED);
+		for (uint32_t i = 0; i < frames; i++)
+		{
+			const uint64_t f = from + i;
+			if (f >= start && f < end && end - f < PLUG_AUDIO_FRAMES && f + PLUG_AUDIO_FRAMES <= now)
+			{
+				l[i] = r[i] = 0.0f;
+				copied--;
+			}
 		}
 	}
 	if (missing)
@@ -190,12 +210,16 @@ void plug_audioBegin(plug_shm_t *s, uint64_t epoch)
 
 void plug_audioWrite(plug_shm_t *s, const float *lr, uint32_t frames)
 {
-	const uint64_t end = __atomic_load_n(&s->audioEnd, __ATOMIC_RELAXED);
-	for (uint32_t i = 0; i < frames; i++)
+	/* Frame by frame: audioEnd = g, published, then frame g over frame g - PLUG_AUDIO_FRAMES, the
+	 * release fence ordering the two for plug_audioRead(), which loads audioEnd again after it
+	 * copies (an acquire fence) and leaves out what may have been written over meanwhile */
+	uint64_t end = __atomic_load_n(&s->audioEnd, __ATOMIC_RELAXED);
+	for (uint32_t i = 0; i < frames; i++, end++)
 	{
-		float *p = s->audio[(end + i) & (PLUG_AUDIO_FRAMES - 1u)];
+		__atomic_thread_fence(__ATOMIC_RELEASE);
+		float *p = s->audio[end & (PLUG_AUDIO_FRAMES - 1u)];
 		p[0] = lr[2u * i];
 		p[1] = lr[2u * i + 1u];
+		plug_store(&s->audioEnd, end + 1u);
 	}
-	plug_store(&s->audioEnd, end + frames);
 }

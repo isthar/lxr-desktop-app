@@ -12,8 +12,11 @@
  * - Events: the plugin writes the events of a block, then publishes hostFrames, the end of the
  *   block: every event before that frame is in the ring. Events are written in frame order.
  * - Audio: the engine writes the frames [audioStart, audioEnd) of the host timeline; frame f
- *   lies at audio[f % PLUG_AUDIO_FRAMES]. A new engine moves audioStart and audioEnd to its
- *   epoch, the host frame of its first block.
+ *   lies at audio[f % PLUG_AUDIO_FRAMES], so the ring holds the frames less than PLUG_AUDIO_FRAMES
+ *   before audioEnd. The engine publishes audioEnd frame by frame, before it writes the next one;
+ *   the plugin loads audioEnd again after a copy and leaves out the frames that may have been
+ *   written over meanwhile. A new engine moves audioStart and audioEnd to its epoch, the host
+ *   frame of its first block.
  * - The memory is a POSIX shared memory object whose name is unlinked at once: the plugin keeps
  *   its descriptor and gives it to each engine it starts as fd 5, so nothing is left behind when
  *   either process dies.
@@ -125,8 +128,9 @@ int plug_evPush(plug_shm_t *s, uint64_t frame, const uint8_t *b, uint8_t len);
 /** every event before hostFrames is written */
 void plug_publish(plug_shm_t *s, uint64_t hostFrames);
 
-/** Copy the frames [from, from + frames) into l and r. A frame the engine has not written is 0; one
- * that it should have written by now (from its epoch on, while it runs) counts in underruns.
+/** Copy the frames [from, from + frames) into l and r. A frame the engine has not written, or has
+ * written over (more than PLUG_AUDIO_FRAMES - 1 before audioEnd, also while it was copied), is 0;
+ * one that it should have written by now (from its epoch on, while it runs) counts in underruns.
  * Returns the frames copied from the ring. */
 uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *l, float *r);
 
@@ -144,7 +148,7 @@ void plug_evSkipAll(plug_shm_t *s);
 /** an engine's first frame: the audio ring starts at epoch, empty */
 void plug_audioBegin(plug_shm_t *s, uint64_t epoch);
 
-/** append frames, interleaved L R, at audioEnd */
+/** append frames, interleaved L R, at audioEnd, publishing audioEnd after each */
 void plug_audioWrite(plug_shm_t *s, const float *lr, uint32_t frames);
 
 #ifdef __cplusplus
