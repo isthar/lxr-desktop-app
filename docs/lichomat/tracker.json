@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-05 02:32",
+    "updated": "2026-11-05 02:39",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7: grupa B (E6.31, E6.32)",
     "branch": "timing-core",
-    "head": "394e619",
+    "head": "e782759",
     "next": "E6.31–E6.32 (klej, pliki), potem pełny przegląd; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T02:32:00+01:00",
+    "updated_at": "2026-11-05T02:39:00+01:00",
     "now": "E6.31–E6.32: implementer poprawia błąd zapisu przy pełnej karcie i luki z przeglądu jakości (od 02:30)"
   },
   "epics": [
@@ -4300,6 +4300,11 @@
       "n": 601,
       "at": "2026-11-05 02:32",
       "text": "E6.31–E6.32: przegląd jakości grupy B znalazł błąd. Przy pełnej karcie zapis projektu zgłaszał sukces, a plik własnych szablonów zostawał pusty, kopia w /tmp była kasowana i szablony przepadały. Implementer poprawia to od testu z kartą, która symuluje błędy zapisu. Do tego luki w testach: włączanie przerwań z powrotem po zapisach z maskowaniem, ścieżki błędów pliku i żaden plik nie zostaje otwarty, surowe bajty po zerowaniu mikrotimingu. Każdy commit wypychany od razu."
+    },
+    {
+      "n": 602,
+      "at": "2026-11-05 02:39",
+      "text": "E6.31–E6.32 jakość, c9e4d03, e0e0f00, afeedce, bb1a59d, b7b8302: testy hosta widzą, że przerwania wracają po zapisach z maskowaniem; zerowanie mikrotimingu zostawia surowe bajty na 0; najgłośniejszy krok liczony w obrębie długości ścieżki; komentarz o odczycie kroków przy zapisie szablonu; ścieżki błędów USERTPL.LCH przechodzą i nie zostawiają otwartego pliku. Dalej: sam błąd zapisu przy pełnej karcie i wynik odczytu szablonów."
     }
   ]
 }
