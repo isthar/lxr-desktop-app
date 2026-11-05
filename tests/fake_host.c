@@ -19,6 +19,10 @@
 #include <stdio.h>
 #include <string.h>
 
+/* LICHOMAT v0.7 (reviews of group B): the interrupt mask of tests/stubs/stm32f7xx_hal.h and its
+ * count of __disable_irq() calls, one object each for the whole test program */
+uint32_t host_primask, host_irqDisables;
+
 static fake_host_t fake_instance;
 static bool fake_micro;			/* v0.6: fake_useMicro() */
 static bool fake_dynamics;			/* v0.7: fake_useDynamics() */
