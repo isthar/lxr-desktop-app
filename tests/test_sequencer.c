@@ -1490,6 +1490,10 @@ TEST(own_capture_clear_track_micro)
 		ASSERT_EQ(stepMicro(seq_patternSet.seq_stepTiming[41][2][s], stepFine_get(seq_patternSet.seq_stepFine[41][2], s)), 13);
 		ASSERT_EQ(stepMicro(seq_patternSet.seq_stepTiming[42][1][s], stepFine_get(seq_patternSet.seq_stepFine[42][1], s)), -20);
 	}
+	/* quality review of group B: the stored bytes are 0, not only the values (a nibble of -8 reads
+	 * 0, but block 2 would be written for it) */
+	static const uint8_t noFine[STEP_FINE_BYTES];
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[41][1], noFine, sizeof noFine), 0);
 	ASSERT_EQ(seq_patternSet.tmpl[41][1].id, 4);
 	ASSERT_EQ(seq_patternSet.vtpl[41][1].amount, -30);
 	seq_clearTrackMicro(7, 41);				/* out of range: nothing */
