@@ -1478,7 +1478,9 @@ TEST(own_capture_clear_track_micro)
 	seq_patternSet.seq_stepTiming[41][1][63].shift = 15;
 	seq_patternSet.tmpl[41][1] = (TrackTemplate){ .id = 4, .amount = 20 };
 	seq_patternSet.vtpl[41][1] = (TrackTemplate){ .id = 2, .amount = -30 };
+	const uint32_t locks = host_irqDisables;
 	seq_clearTrackMicro(1, 41);
+	ASSERT_EQ(host_irqDisables - locks, 64u);			/* spec review of group B: each step masked */
 	for (uint8_t s = 0; s < NUM_STEPS; s++)
 	{
 		ASSERT_EQ(seq_patternSet.seq_stepTiming[41][1][s].shift, 7);
@@ -1579,8 +1581,12 @@ TEST(own_capture_slots_set_and_clear)
 			all[u].timing[q] = (int8_t)(u * 16 + q - 30);
 			all[u].vel[q] = (int8_t)-(u * 10 + q);
 		}
+	uint32_t locks = host_irqDisables;			/* spec review of group B: each masked */
 	seq_clearUserTemplates();
+	ASSERT_TRUE(host_irqDisables - locks >= 1u);
+	locks = host_irqDisables;
 	seq_setUserTemplate(2, &all[3]);
+	ASSERT_TRUE(host_irqDisables - locks >= 1u);
 	ASSERT_EQ(memcmp(&seq_userTemplates[2], &all[3], sizeof all[3]), 0);
 	ASSERT_EQ(memcmp(&seq_userTemplates[0], &none[0], sizeof none[0]), 0);
 	ASSERT_EQ(memcmp(&seq_userTemplates[3], &none[0], sizeof none[0]), 0);
@@ -1588,7 +1594,9 @@ TEST(own_capture_slots_set_and_clear)
 	seq_setUserTemplate(1, NULL);
 	ASSERT_EQ(memcmp(&seq_userTemplates[1], &none[0], sizeof none[0]), 0);
 	ASSERT_EQ(memcmp(&seq_userTemplates[2], &all[3], sizeof all[3]), 0);
+	locks = host_irqDisables;
 	seq_setUserTemplates(all);
+	ASSERT_TRUE(host_irqDisables - locks >= 1u);
 	ASSERT_EQ(memcmp(seq_userTemplates, all, sizeof all), 0);
 	seq_setUserTemplates(NULL);
 	ASSERT_EQ(memcmp(seq_userTemplates, all, sizeof all), 0);
@@ -1650,7 +1658,9 @@ TEST(own_capture_db_below_the_loudest_heard)
 	ownStep(45, 1, 0, 127, 0);
 	ownStep(45, 1, 4, 127, 0);
 	seq_patternSet.vtpl[45][1] = (TrackTemplate){ .id = 1, .amount = 0 };	/* of8, 100 % */
+	const uint32_t locks = host_irqDisables;
 	ASSERT_EQ(seq_captureUserTemplate(1, 45, 0), 2);
+	ASSERT_TRUE(host_irqDisables - locks >= 1u);		/* the slot written masked */
 	ASSERT_EQ(seq_userTemplates[0].vel[0], 0);
 	ASSERT_EQ(seq_userTemplates[0].vel[4], 0);
 	seq_clearPattern(45);

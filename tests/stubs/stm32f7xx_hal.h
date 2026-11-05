@@ -101,7 +101,11 @@ static inline uint32_t __get_APSR(void) { return 0; }
 __attribute__((unused)) static uint32_t host_primask;
 static inline uint32_t __get_PRIMASK(void) { return host_primask; }
 static inline void __set_PRIMASK(uint32_t primask) { host_primask = primask; }
-static inline void __disable_irq(void) { host_primask = 1; }
+/* LICHOMAT v0.7 (spec review of group B): every __disable_irq() of the test program, of all its
+ * files, so a test sees the masking of the firmware file it is built with (test_sequencer and
+ * sequencer.c). Weak, so each file's definition is the same object. */
+__attribute__((weak)) uint32_t host_irqDisables;
+static inline void __disable_irq(void) { host_primask = 1; host_irqDisables++; }
 
 uint32_t HAL_RCC_GetHCLKFreq(void);
 uint32_t HAL_GetTick(void);
