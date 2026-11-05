@@ -233,7 +233,7 @@ Expected: `== emu build: 0`, `== emu warnings: 0`, `100% tests passed, 0 tests f
 
 **Files:** none (the worktree only).
 
-- [ ] **Step 1: the worktree** (P-1).
+- [x] **Step 1: the worktree** (P-1).
 
 ```bash
 cd /Users/tk/Code/lxr && git worktree list | grep -c wt-plugin; git branch --list plugin | wc -l
@@ -246,14 +246,14 @@ cd /Users/tk/Code/lxr && git worktree add build/wt-plugin -b plugin a856883 && l
 ```
 
   Expected: `a856883 E4.13 review fixes: B17 decides the data bytes by the status, B12's comment, B11's test without UBSan` and `?? .toolchain` (the link is never staged).
-- [ ] **Step 2: the SDK checkout** (it is git-ignored in `/Users/tk/Code/lxr/build/vst3sdk`; nothing is fetched):
+- [x] **Step 2: the SDK checkout** (it is git-ignored in `/Users/tk/Code/lxr/build/vst3sdk`; nothing is fetched):
 
 ```bash
 cd /Users/tk/Code/lxr/build/vst3sdk && git rev-parse HEAD && git submodule status && ls ~/Library/Audio/Plug-Ins
 ```
 
   Expected: `3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96`; ` fcf9da0bd27a16f7f03773a3a39822f28f5c8477 base (v3.8.1_build_84)`, ` 054c9143cbb8d47fc4694e473f2ee3b4d951a8f5 cmake (v3.8.1_build_84)`, `-8bfca19… doc`, ` 4f547e8e102b47de4a8b8aaf343c73b700786372 pluginterfaces (v3.8.1_build_84)`, ` 586dc5e6c8012c3e4b01c79389375cbe96bdb1da public.sdk (v3.8.1_build_84)`, `-33b73df… tutorials`, `-5db2722… vstgui4`; record the `ls` line (at planning `Components Digidesign VST`: the rule "The user's folders" compares against it).
-- [ ] **Step 3: the baseline.** CHECK and EMU-CHECK. Expected as in the Rules (125 host ids, 346 emulator ids, the budget line, `OK`). A different number is a finding to report before Task 2. No commit: nothing changed.
+- [x] **Step 3: the baseline.** CHECK and EMU-CHECK. Expected as in the Rules (125 host ids, 346 emulator ids, the budget line, `OK`). A different number is a finding to report before Task 2. No commit: nothing changed.
 
 ---
 
@@ -261,7 +261,7 @@ cd /Users/tk/Code/lxr/build/vst3sdk && git rev-parse HEAD && git submodule statu
 
 **Files:** Modify `emu/CMakeLists.txt` (before `# --- the test harness`, `:193`). Create `plugin/tools/vendor_vst3sdk.sh`, `plugin/third_party/vst3sdk/` (by the script), `plugin/third_party/CMakeLists.txt`, `plugin/CMakeLists.txt`, `plugin/tests/sdk_pin.py`, `plugin/tools/plugin_check.sh`.
 
-- [ ] **Step 1: the failing pin test.** `plugin/tests/sdk_pin.py`:
+- [x] **Step 1: the failing pin test.** `plugin/tests/sdk_pin.py`:
 
 ```python
 #!/usr/bin/env python3
@@ -317,7 +317,7 @@ if __name__ == '__main__':
 ```
 
   Run: `cd /Users/tk/Code/lxr/build/wt-plugin && python3 plugin/tests/sdk_pin.py .` — Expected: a `FileNotFoundError` for `plugin/third_party/vst3sdk/SHA256SUMS`.
-- [ ] **Step 2: the vendor script** (P-3). `plugin/tools/vendor_vst3sdk.sh`:
+- [x] **Step 2: the vendor script** (P-3). `plugin/tools/vendor_vst3sdk.sh`:
 
 ```bash
 #!/bin/bash
@@ -374,7 +374,7 @@ echo "vendor_vst3sdk: $(wc -l < "$DST/SHA256SUMS" | tr -d ' ') files, $(du -sk "
 
   Run: `cd /Users/tk/Code/lxr/build/wt-plugin && chmod +x plugin/tools/vendor_vst3sdk.sh && plugin/tools/vendor_vst3sdk.sh /Users/tk/Code/lxr/build/vst3sdk && python3 plugin/tests/sdk_pin.py . && find plugin/third_party/vst3sdk -name '.*' | wc -l && grep -rIl -e Erica -e 'Sonic Potions' plugin/third_party/vst3sdk | wc -l`
   Expected: `vendor_vst3sdk: 341 files, 2932 KB in plugin/third_party/vst3sdk`, `sdk pin: the 341 files of the VST 3 SDK subset match SHA256SUMS`, `0`, `0`. `head -1 plugin/third_party/vst3sdk/LICENSE.txt` prints `MIT License`.
-- [ ] **Step 3: the emulator's guard** (P-2). In `emu/CMakeLists.txt`, insert before the line `# --- the test harness -------------------------------------------------------------------------` (`:193`):
+- [x] **Step 3: the emulator's guard** (P-2). In `emu/CMakeLists.txt`, insert before the line `# --- the test harness -------------------------------------------------------------------------` (`:193`):
 
 ```cmake
 # The plugin's project (plugin/CMakeLists.txt, plan E9.2 P-2) takes the device objects and the renderer
@@ -386,7 +386,7 @@ endif()
 ```
 
   Run EMU-CHECK. Expected: `== emu build: 0`, `== emu warnings: 0`, `100% tests passed, 0 tests failed out of 346` (the guard is off in the emulator's own build).
-- [ ] **Step 4: the SDK's glue** (P-4). `plugin/third_party/CMakeLists.txt`:
+- [x] **Step 4: the SDK's glue** (P-4). `plugin/third_party/CMakeLists.txt`:
 
 ```cmake
 # The VST 3 SDK's libraries, the validator and moduleinfotool, built from plugin/third_party/vst3sdk
@@ -432,7 +432,7 @@ add_subdirectory("${SDK_ROOT}/public.sdk/samples/vst-hosting/validator" validato
 add_subdirectory("${SDK_ROOT}/public.sdk/samples/vst-utilities/moduleinfotool" moduleinfotool)
 ```
 
-- [ ] **Step 5: the project.** `plugin/CMakeLists.txt`, the first block (each later task appends one):
+- [x] **Step 5: the project.** `plugin/CMakeLists.txt`, the first block (each later task appends one):
 
 ```cmake
 # The LICHOMAT plugin (plan E9.2): a VST3 instrument that plays the LICHOMAT firmware in an
@@ -536,9 +536,9 @@ done
 exit $status
 ```
 
-- [ ] **Step 6: build and run.** `chmod +x plugin/tools/plugin_check.sh plugin/tests/sdk_pin.py`, then PLUGIN with `-R P2` and `ls build/plugin/bin/Debug/validator build/plugin/bin/Debug/moduleinfotool && ls ~/Library/Audio/Plug-Ins`.
+- [x] **Step 6: build and run.** `chmod +x plugin/tools/plugin_check.sh plugin/tests/sdk_pin.py`, then PLUGIN with `-R P2` and `ls build/plugin/bin/Debug/validator build/plugin/bin/Debug/moduleinfotool && ls ~/Library/Audio/Plug-Ins`.
   Expected: `== plugin build: 0`, `== plugin warnings: 0`, `100% tests passed, 0 tests failed out of 1`; both tools exist; the `ls` line is Task 1's (no `VST3` folder appeared: F18). The configure prints `[SMTG] Building with Xcode version: 26.6`.
-- [ ] **Step 7: the gate.** PLUGIN-CHECK (T 1). **Step 8: commit** `plugin Task 2 (E9.12): the VST 3 SDK 3.8.1 vendored and pinned, the plugin's project, the emulator's device-only guard` with `emu/CMakeLists.txt plugin/CMakeLists.txt plugin/third_party/CMakeLists.txt plugin/third_party/vst3sdk plugin/tools/vendor_vst3sdk.sh plugin/tools/plugin_check.sh plugin/tests/sdk_pin.py`; `git push -u origin plugin`.
+- [x] **Step 7: the gate.** PLUGIN-CHECK (T 1). **Step 8: commit** `plugin Task 2 (E9.12): the VST 3 SDK 3.8.1 vendored and pinned, the plugin's project, the emulator's device-only guard` with `emu/CMakeLists.txt plugin/CMakeLists.txt plugin/third_party/CMakeLists.txt plugin/third_party/vst3sdk plugin/tools/vendor_vst3sdk.sh plugin/tools/plugin_check.sh plugin/tests/sdk_pin.py`; `git push -u origin plugin`.
 
 ---
 
@@ -546,7 +546,7 @@ exit $status
 
 **Files:** Create `plugin/common/plug_shm.h`, `plugin/common/plug_shm.c`, `plugin/tests/test_shm.c`; modify `plugin/CMakeLists.txt` (append).
 
-- [ ] **Step 1: the failing test.** `plugin/tests/test_shm.c`:
+- [x] **Step 1: the failing test.** `plugin/tests/test_shm.c`:
 
 ```c
 /*
@@ -832,8 +832,8 @@ plugin_add_test(test_shm IDS P3_shm_header P3_shm_events P3_shm_audio P3_shm_new
     P3_shm_processes P3_shm_killed)
 ```
 
-- [ ] **Step 2: run it.** PLUGIN with `-R P3`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: common/plug_shm.c` (`build/plugin.log`).
-- [ ] **Step 3: the header** (P-6, P-7). `plugin/common/plug_shm.h`:
+- [x] **Step 2: run it.** PLUGIN with `-R P3`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: common/plug_shm.c` (`build/plugin.log`).
+- [x] **Step 3: the header** (P-6, P-7). `plugin/common/plug_shm.h`:
 
 ```c
 /*
@@ -1198,8 +1198,8 @@ void plug_audioWrite(plug_shm_t *s, const float *lr, uint32_t frames)
 }
 ```
 
-- [ ] **Step 4: pass.** PLUGIN with `-R P3`. Expected: `100% tests passed, 0 tests failed out of 7`; `build/plugin/test_shm P3_shm_processes` prints `P3_shm_processes: 2000000 events and frames, N pushes refused while full` (N varies) and `PASS P3_shm_processes`.
-- [ ] **Step 5: the gate.** PLUGIN-CHECK (T 8). **Step 6: commit** `plugin Task 3 (E9.13): the shared memory between the plugin and its engine: header, event ring, audio ring; P3` with the four files; push.
+- [x] **Step 4: pass.** PLUGIN with `-R P3`. Expected: `100% tests passed, 0 tests failed out of 7`; `build/plugin/test_shm P3_shm_processes` prints `P3_shm_processes: 2000000 events and frames, N pushes refused while full` (N varies) and `PASS P3_shm_processes`.
+- [x] **Step 5: the gate.** PLUGIN-CHECK (T 8). **Step 6: commit** `plugin Task 3 (E9.13): the shared memory between the plugin and its engine: header, event ring, audio ring; P3` with the four files; push.
 
 ---
 
@@ -1207,7 +1207,7 @@ void plug_audioWrite(plug_shm_t *s, const float *lr, uint32_t frames)
 
 **Files:** Create `plugin/common/plug_clock.h`, `plugin/common/plug_clock.c`, `plugin/tests/test_clock.c`; modify `plugin/CMakeLists.txt` (append).
 
-- [ ] **Step 1: the failing test.** `plugin/tests/test_clock.c` (each case drives the generator block by block and checks absolute frames computed here):
+- [x] **Step 1: the failing test.** `plugin/tests/test_clock.c` (each case drives the generator block by block and checks absolute frames computed here):
 
 ```c
 /*
@@ -1574,8 +1574,8 @@ plugin_add_test(test_clock IDS P4_clock_start_at_zero P4_clock_rounding_44k P4_c
     P4_clock_reset P4_clock_spp_bytes P4_clock_max)
 ```
 
-- [ ] **Step 2: run it.** PLUGIN with `-R P4`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: common/plug_clock.c`.
-- [ ] **Step 3: the generator** (P-13). `plugin/common/plug_clock.h`:
+- [x] **Step 2: run it.** PLUGIN with `-R P4`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: common/plug_clock.c`.
+- [x] **Step 3: the generator** (P-13). `plugin/common/plug_clock.h`:
 
 ```c
 /*
@@ -1816,8 +1816,8 @@ unsigned plug_clockBlock(plug_clock_t *c, const plug_transport_t *t, uint32_t fr
 }
 ```
 
-- [ ] **Step 4: pass.** PLUGIN with `-R P4`. Expected: `100% tests passed, 0 tests failed out of 13`. The cases' numbers, for the reviewer: 1,000 frames a clock at 120 BPM and 48 kHz; 918.75 at 44.1 kHz (clock 2 at 1,837.5 may round either way); from 1.1 quarter notes Song Position 5 and clock 30 at 3,600; the loop [4, 8) wraps at 96,000 with Stop, Song Position 16, Continue and clock 96 there, the last clock before it at 95,000, the same whether the block holds the end or ends on it; a locate from 10.24 to 2.3 gives Song Position 10 and clock 60 at 4,800 after the jump; 800 frames a clock at 150 BPM; a count-in from −1 gives Start and clock 0 at 24,000.
-- [ ] **Step 5: the gate.** PLUGIN-CHECK (T 21). **Step 6: commit** `plugin Task 4 (E9.14): the host's transport as MIDI clock, Start, Continue, Stop and Song Position; P4` with the four files; push.
+- [x] **Step 4: pass.** PLUGIN with `-R P4`. Expected: `100% tests passed, 0 tests failed out of 13`. The cases' numbers, for the reviewer: 1,000 frames a clock at 120 BPM and 48 kHz; 918.75 at 44.1 kHz (clock 2 at 1,837.5 may round either way); from 1.1 quarter notes Song Position 5 and clock 30 at 3,600; the loop [4, 8) wraps at 96,000 with Stop, Song Position 16, Continue and clock 96 there, the last clock before it at 95,000, the same whether the block holds the end or ends on it; a locate from 10.24 to 2.3 gives Song Position 10 and clock 60 at 4,800 after the jump; 800 frames a clock at 150 BPM; a count-in from −1 gives Start and clock 0 at 24,000.
+- [x] **Step 5: the gate.** PLUGIN-CHECK (T 21). **Step 6: commit** `plugin Task 4 (E9.14): the host's transport as MIDI clock, Start, Continue, Stop and Song Position; P4` with the four files; push.
 
 ---
 
@@ -1825,7 +1825,7 @@ unsigned plug_clockBlock(plug_clock_t *c, const plug_transport_t *t, uint32_t fr
 
 **Files:** Create `plugin/common/plug_time.h`, `plugin/common/plug_time.c`, `plugin/tests/test_time.c`; modify `plugin/CMakeLists.txt` (append).
 
-- [ ] **Step 1: the failing test.** `plugin/tests/test_time.c`:
+- [x] **Step 1: the failing test.** `plugin/tests/test_time.c`:
 
 ```c
 /*
@@ -1928,8 +1928,8 @@ target_sources(plug_common_san PRIVATE common/plug_time.c)
 plugin_add_test(test_time IDS P5_time_native P5_time_integer P5_time_covering P5_time_latency P5_time_margin)
 ```
 
-- [ ] **Step 2: run it.** PLUGIN with `-R P5`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: common/plug_time.c`.
-- [ ] **Step 3: the code** (P-9, P-12). `plugin/common/plug_time.h`:
+- [x] **Step 2: run it.** PLUGIN with `-R P5`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: common/plug_time.c`.
+- [x] **Step 3: the code** (P-9, P-12). `plugin/common/plug_time.h`:
 
 ```c
 /*
@@ -2089,8 +2089,8 @@ uint32_t plug_marginFromEnv(void)
 }
 ```
 
-- [ ] **Step 4: pass.** PLUGIN with `-R P5`. Expected: `100% tests passed, 0 tests failed out of 5`.
-- [ ] **Step 5: the gate.** PLUGIN-CHECK (T 26). **Step 6: commit** `plugin Task 5 (E9.15): host frames, cycles and the latency; P5` with the four files; push. **Review: light** (group B), with the mutants of the Rules.
+- [x] **Step 4: pass.** PLUGIN with `-R P5`. Expected: `100% tests passed, 0 tests failed out of 5`.
+- [x] **Step 5: the gate.** PLUGIN-CHECK (T 26). **Step 6: commit** `plugin Task 5 (E9.15): host frames, cycles and the latency; P5` with the four files; push. **Review: light** (group B), with the mutants of the Rules.
 
 ---
 
@@ -6876,3 +6876,4 @@ Jeśli w P3–P4 nic nie słychać: plik `engine.log` z tego samego folderu. Wł
 (Filled in during execution: measured values that differ from this plan, review findings and their fixes, tracker notes.)
 
 **Tasks 1–5 (E9.11–E9.15), `a5ea81e`..`cc59a9b`.** Applied byte for byte from the plan; 26 tests in Debug and Release. **Group B light review: changes requested, three real defects:** (1) Song Position capped at 16,383 made `resume()` start counting clocks from the cap, so a start, locate or loop past bar 1,024 sent every clock in between at frame 0 (a burst of ≈ 170 steps in the slave); (2) `ceil(4p − 1e-6)` let a loop wrap reported a fraction of a frame late skip the loop's first 16th (the downbeat), 1 in 401 passes at 128-frame blocks, 3 in 6 at 1-frame blocks; (3) `P3_shm_processes` flaked under load (the test's engine could run 65,474 frames ahead of a 32,768-frame ring). Also a non-finite tempo or position hung `clocks()`, `plug_audioRead()` did not re-check after copying, P3–P5 ran without UBSan, and nine test gaps. Fixed in review commits; Tasks 6–10's measured values that depend on the clock are re-measured by their implementer.
+- Review fixes `3a02cc4`..`15f14d8` (11 commits, each test first): clocks count from the real 16th and only the Song Position bytes wrap (`six & 0x3FFF`; positions past bar 1,024 wrap modulo 1,024 bars instead of being clamped); the 16th is `ceil(4p − 4·PLUG_JUMP)` = `ceil(4p − 1/12)`, half a clock (P-13's "ceil(4p)" is out of date), so a wrap reported late plays its downbeat (`P4_clock_wrap_blocks`: 260 wraps at 44.1 kHz / 128 BPM in blocks of 1, 37, 128, 4,096, 0 lost; before 56/4/1/0); "no context" also covers a tempo outside 1–10,000 BPM, a position beyond ±1e9 quarter notes and a rate outside 1,000–10⁷ Hz (each used to hang or hit UBSan); `plug_audioWrite()` publishes `audioEnd` frame by frame and `plug_audioRead()` re-checks after the copy and zeroes overwritten frames (`P3_shm_overwritten` frame 4 now 0); tests link a UBSan copy `plug_common_san` (the plugin's own `plug_common` stays unsanitized: it runs in the host's process); nits. **T is 8 higher from here: Task 6 43, Task 7 46, Task 8 47, Task 9 56, Task 10 57.** A new test id must not extend an existing one (the `seqc_test.h` filter matches `<name>_…`). 35 of 38 mutants killed (survivors: an equivalent loop-end compare, a one-frame race, a memory-order fence). **Re-measure in Tasks 6–10** (taken with the old clock): `P10_plugin_renew`'s 4,713 frames (may be one 16th earlier), `P10_plugin_kill`'s return time, `P10_plugin_onsets`' 22 onsets and its −1…+1 range, `P6_engine_native`'s speed (one fence and one store per frame now), `P7_engine_realtime`'s underruns. **Group B done.**

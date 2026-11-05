@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 21:07",
+    "updated": "2026-11-05 21:29",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "e13ac49",
+    "head": "2962593",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T21:07:00+01:00",
-    "now": "E9.15: implementer poprawia błędy z lekkiego przeglądu grupy B wtyczki (od 20:48)"
+    "updated_at": "2026-11-05T21:29:00+01:00",
+    "now": "E9.16: implementer silnika wtyczki (od 21:29); potem pełny przegląd"
   },
   "epics": [
     {
@@ -967,14 +967,14 @@
     {
       "id": "E9.15",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Wtyczka zad. 5: ramki hosta, cykle i opóźnienie; testy P5; lekki przegląd grupy",
       "updated": "2026-11-05"
     },
     {
       "id": "E9.16",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka zad. 6: lichomat-engine, bez przeliczania i z przeliczaniem próbkowania; testy P6, P7; pełny przegląd",
       "updated": "2026-11-05"
     },
@@ -4502,6 +4502,11 @@
       "n": 619,
       "at": "2026-11-05 21:07",
       "text": "E9.13–E9.15 przegląd, 3a02cc4, 1797b32, b339366, 17cb965, 2473ea7: test pamięci współdzielonej już nie jest niestabilny; testy wspólnego kodu idą z UBSan; za taktem 1024 zegar liczy od prawdziwej szesnastki (koniec lawiny zegara); po przeskoku pętli każde przejście gra swój downbeat; tempo albo pozycja NaN lub poza zakresem nie zawiesza już wątku audio. Dalej: sprawdzanie odczytu audio po kopiowaniu, luki w testach, drobiazgi."
+    },
+    {
+      "n": 620,
+      "at": "2026-11-05 21:29",
+      "text": "E9.13–E9.15 zrobione (wtyczka zad. 3–5, przegląd zamknięty, 3a02cc4..15f14d8): 11 poprawek, każda od testu; 34 testy, 35 z 38 mutantów pada (pozostałe: równoważny, wyścig jednej ramki, kolejność pamięci). Pod obciążeniem test pamięci współdzielonej 288/288. E9.16 start: silnik lichomat-engine (zad. 6), potem pełny przegląd; wartości zmierzone w planie starym kodem zegara implementer mierzy od nowa."
     }
   ]
 }
