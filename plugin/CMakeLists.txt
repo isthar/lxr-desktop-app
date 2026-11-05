@@ -124,3 +124,17 @@ endfunction()
 plugin_py_tests(P6_engine_version P6_engine_native P6_engine_blocks P6_engine_seed P6_engine_quit
     P7_engine_resampled P7_engine_realtime)
 set_tests_properties(P7_engine_realtime PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
+
+# --- the card archive (the plugin's state, Task 7) -------------------------------------------
+# with its own copy of the card's POSIX half, built without the emulator's sanitizers: the
+# plugin runs in the host's process
+add_library(plug_card OBJECT common/plug_archive.c "${LXR_ROOT}/emu/core/emu_hostfs.c")
+target_include_directories(plug_card PUBLIC "${PLUGIN_DIR}/common" "${LXR_ROOT}/emu/core")
+target_compile_options(plug_card PRIVATE ${PLUGIN_FLAGS})
+# the test's copy, with the sanitizers of the emulator's build (as plug_common_san)
+add_library(plug_card_san OBJECT common/plug_archive.c "${LXR_ROOT}/emu/core/emu_hostfs.c")
+target_include_directories(plug_card_san PUBLIC "${PLUGIN_DIR}/common" "${LXR_ROOT}/emu/core")
+target_compile_options(plug_card_san PRIVATE ${PLUGIN_FLAGS} ${PLUGIN_SAN_FLAGS})
+plugin_add_test(test_archive IDS P8_archive_roundtrip P8_archive_skips P8_archive_refused)
+target_sources(test_archive PRIVATE $<TARGET_OBJECTS:plug_card_san>)
+target_include_directories(test_archive PRIVATE "${LXR_ROOT}/emu/core")
