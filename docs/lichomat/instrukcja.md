@@ -249,9 +249,9 @@ Który szablon na którą ścieżkę: [przepisy groove 0.6](groove-recipes-v0.6.
 
 ### Zerowanie mikrotimingu: `clear [micro]` (0.7)
 
-- Przytrzymaj SHIFT, naciśnij COPY (strona czyszczenia z 1.7, `clear [kit]?`), przekręć enkoder na ostatni
-  cel, `clear [micro]?` (za `clear [autom. 2]`), naciśnij enkoder, puść SHIFT. Puszczenie SHIFT wcześniej
-  anuluje.
+- Przytrzymaj SHIFT, naciśnij COPY (strona czyszczenia z 1.7; otwiera się na `clear [kit]?` albo na ostatnio
+  użytym celu), przekręć enkoder na ostatni cel, `clear [micro]?` (za `clear [autom. 2]`), naciśnij enkoder,
+  puść SHIFT. Puszczenie SHIFT wcześniej anuluje.
 - Wszystkie kroki (64) wybranego głosu w pokazanym wzorcu dostają `shf` 0 i `mic` 0. Flamy, `tpl`, `vtp` i
   reszta kroków zostają; ścieżka gra potem na siatce swojego szablonu. Strona kroku od razu pokazuje 0.
 - To edycja wzorca: zapisz wzorzec, inaczej zmiana wzorca ją odrzuci.
@@ -465,11 +465,11 @@ Co robią starsze firmware z plikami zapisanymi przez 0.7. Wszystkie wczytują j
 - Zapis w starszym firmware traci to, czego ono nie zna: wzorzec z 1.7 wraca z samym zgrubnym `shf`, z v0.5 ze
   zgrubnym `shf` i blokiem 0.2; projekt z 1.7 bez scen; kit z 1.7 i v0.1–v0.3 z wyłączonym pogłosem. `slt`
   przetrwa zapis w 1.7.
-- Wzorzec bez `mic` i szablonów jest bajt w bajt taki jak z 0.5 (3 697 B); z nimi ma 3 941 B. Wzorzec bez
-  szablonów głośności jest bajt w bajt taki jak z 0.6; z nimi ma 20 B więcej (3 717 albo 3 961 B). Kity,
-  piosenki i `glo.cfg` są w 0.7 takie jak w 0.5.
+- Wzorzec bez `mic` i szablonów jest bajt w bajt taki jak z 0.5 (3 697 B); z nimi ma 3 941 B. Wzorzec, w
+  którym każda ścieżka ma `vtp` `off` i `vdp` 100, jest bajt w bajt taki jak z 0.6; inny ma 20 B więcej (3 717
+  albo 3 961 B). Kity, piosenki i `glo.cfg` są w 0.7 takie jak w 0.5.
 - Projekt zapisany ponownie w 1.7 albo v0.2–v0.6 traci `USERTPL.LCH` (ich zapis najpierw czyści folder
-  projektu); wzorzec zapisany ponownie w v0.6 traci blok 3.
+  projektu); wzorzec zapisany ponownie w v0.6 traci blok 3, a `tpl` `us1`–`us4` wraca jako `off`.
 
 ## Linki
 

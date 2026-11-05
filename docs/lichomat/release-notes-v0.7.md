@@ -6,7 +6,7 @@ LICHOMAT to nieoficjalny firmware dla Erica Synths LXR-02. Nie jest robiony, zat
 
 **Ważne:** velocity zmienia głośność głosu tylko wtedy, gdy ten głos ma włączone `vol` (velocity → głośność, ekran `dst amt vol` na podstronie modulacji). Bez tego szablon głośności zmienia tylko MIDI Note On i modulację velocity.
 
-Wzorzec z szablonem głośności dostaje w pliku trzeci blok (20 B) po blokach z 0.2 i 0.6. Firmware 1.7 i v0.2–v0.6 go pomijają, a wzorzec bez szablonu głośności jest bajt w bajt taki jak z 0.6. Własne szablony zapisują się w pliku `USERTPL.LCH` w folderze projektu, którego 1.7 i v0.2–v0.6 nie otwierają.
+Wzorzec z szablonem głośności dostaje w pliku trzeci blok (20 B) po blokach z 0.2 i 0.6. Firmware 1.7 i v0.2–v0.6 go pomijają, a wzorzec, w którym każda ścieżka ma `vtp` `off` i `vdp` 100, jest bajt w bajt taki jak z 0.6. Własne szablony zapisują się w pliku `USERTPL.LCH` w folderze projektu, którego 1.7 i v0.2–v0.6 nie otwierają.
 
 ## Instalacja
 
@@ -36,7 +36,7 @@ Wszystkie wczytują projekty, wzorce, kity i `glo.cfg` zapisane przez v0.7 bez b
 
 - **Co robi:** ścieżka może grać według szablonu głośności. Na każdej z 16 szesnastek taktu krok gra ciszej o tyle dB, ile szablon ma na tej pozycji, razy głębokość `vdp`. Pozycje z 0 dB grają głośnością kroku: szablon tylko ścisza, a krok z głośnością 0 dalej milczy. Szablon ustawia się osobno dla każdego głosu w każdym wzorcu, tak jak szablon groove.
 - **Ważne: głośność zmienia się tylko z włączonym `vol` głosu** (velocity → głośność). To ustawienie kitu z 1.7: przycisk wyboru 3 otwiera podstronę modulacji głosu, a `dst amt vol` to jej drugi ekran dla głosów 1–4 i pierwszy dla talerza i hihatów. Z `vol` `off` głos gra każde uderzenie tak samo głośno, a velocity z szablonu dostają tylko modulacja velocity (`dst amt`) i MIDI out. Nie myl go z `vol` na podstronie MIX (przycisk wyboru 8), czyli głośnością głosu.
-- **Gdzie:** wybierz głos, SHIFT + drugi przycisk trybu (strona Euklid), potem enkoder w prawo za `amt` (albo SHIFT + drugi przycisk trybu cztery razy): czwarty ekran, `vtp vdp sav`, gałki 1–3. W trybie edycji `vtp` pokazuje długą nazwę.
+- **Gdzie:** wybierz głos, SHIFT + drugi przycisk trybu (strona Euklid), potem enkoder w prawo za `amt` (albo, zamiast enkodera, jeszcze trzy razy SHIFT + drugi przycisk trybu): czwarty ekran, `vtp vdp sav`, gałki 1–3. W trybie edycji `vtp` pokazuje długą nazwę.
 - **`vdp`:** 0–200 %, domyślnie 100 (także we wzorcach z 0.6). 0 % nic nie zmienia, 200 % podwaja dB (najwyżej −84 dB).
 - **Szablony** (dB przy 100 %, pozycje 1–16 od początku taktu; 1, 5, 9, 13 to ćwierćnuty, 3, 7, 11, 15 offbeatowe ósemki):
 
@@ -76,7 +76,7 @@ Wszystkie wczytują projekty, wzorce, kity i `glo.cfg` zapisane przez v0.7 bez b
 | v0.7 | v0.6 | bloki 1 i 2 czytane, blok 3 pominięty: bez szablonów głośności; `tpl` `us1`–`us4` gra jak `off` |
 | v0.7 | v0.2–v0.5 | jak wzorzec z v0.6: blok 1, każdy krok w zgrubnym `shf`, bez szablonów |
 | v0.7 | 1.7 | jak wzorzec z v0.6: tylko zgrubne `shf` |
-| v0.7 zapisany ponownie w v0.6 | v0.7 | bloki 1 i 2 z v0.6, bez bloku 3: szablony głośności giną |
+| v0.7 zapisany ponownie w v0.6 | v0.7 | bloki 1 i 2 z v0.6, bez bloku 3: szablony głośności giną, a `tpl` `us1`–`us4` wraca jako `off` |
 | projekt v0.7 zapisany ponownie w 1.7 albo v0.2–v0.6 | v0.7 | `USERTPL.LCH` skasowany: własne szablony puste; wzorce jak w wierszach wyżej |
 
 - Blok 3 to `LCHM`, wersja 3, 7 ścieżek i 7 × 2 B (szablon, głębokość): 20 B po bloku 2, a bez bloku 2 zaraz po bloku 1. Zapisuje się, gdy któraś ścieżka ma `vtp` albo `vdp` inne niż `off` i 100 %. Wzorzec z samym blokiem 1 i blokiem 3 ma 3 717 B, z wszystkimi trzema 3 961 B; bez szablonów głośności dalej 3 697 albo 3 941 B. Autozapis `tmp.pat` działa tak samo.
@@ -117,9 +117,9 @@ Koszt policzony statycznie na skompilowanym kodzie tego buildu, metodą notatek 
 - Rolle grają ze stałą velocity rolla, bez szablonu głośności, tak jak bez szablonu groove i `mic`.
 - Zapis własnego szablonu bierze `mic`, `shf` i szablony ścieżki, ale nie swing, `dly`, humanize ani tempo ścieżki: pozycja to numer kroku, jak dla ścieżki w `x1`.
 - Szablon tylko ścisza: krok nie zagra głośniej niż jego własna głośność, a najcichszy zostaje na velocity 1. Przy 200 % ghosty mają velocity 3–6, więc tabela −32 dB to w praktyce −32,5 dB.
-- Przester na głosie ściska ciche uderzenia: hihat z karty init emulatora z włączonym przesterem gra ghosty do 3 dB głośniej, niż mówi tabela. Nawet przy `drv` 0 stopień przesteru z 1.7 ścisza ciche uderzenia o ok. 0,1 dB.
+- Przester na głosie ściska ciche uderzenia: hihat z mocnym przesterem gra ghosty do ok. 3 dB głośniej, niż mówi tabela. Nawet przy `drv` 0 stopień przesteru z 1.7 ścisza ciche uderzenia o ok. 0,1 dB.
 - Zapis (`sav`) w trakcie nagrywania na tej samej ścieżce może wziąć dla właśnie nagrywanego kroku stary i nowy timing naraz.
-- Wspólny hihat (ścieżki 6 i 7): gdy oba grają na tym samym kroku, słychać otwarty, bez szablonu głośności zamkniętego. Tak gra karta init emulatora na ćwierćnutach; dla dem otwarty hihat jest z nich zdjęty.
+- Wspólny hihat (ścieżki 6 i 7): gdy oba grają na tym samym kroku, słychać otwarty, bez szablonu głośności zamkniętego; zdejmij otwarty z kroków zamkniętego.
 - Pogłos gra w połowie częstotliwości, jak 0.4–0.6 (decyzja Q34); wersję oszczędną wybiera H12 i U20.
 - Ograniczenia v0.1–v0.6 zostają, poza tymi, które v0.7 zamyka: są już szablony głośności, własne szablony i zerowanie mikrotimingu ścieżki. Dalej nie ma kwantyzowanego MIDI out obok przesuniętego.
 

@@ -92,12 +92,13 @@ track's microtiming back to the grid (`clear [micro]?`). **A velocity changes a 
 with that voice's `vol` (velocity → volume) switch on** (see "Where things are on the LXR"); MIDI out
 and the velocity modulation get it either way. A pattern with a velocity template gets a 20-byte third
 block in its pattern file (`.PAT` and `tmp.pat`), and a project with own templates the file
-`USERTPL.LCH` in its folder; 1.7 and 0.2–0.6 ignore both. A pattern without a velocity template is
-0.6's file byte for byte, and a project saved by 1.7 or 0.2–0.6 loses `USERTPL.LCH`. 0.7 is built on
-0.6 and is not released yet: it follows 0.6's release. So there is no `LXR_V2_LICHOMAT_0.7.img` to
-install yet; its SHA-256 goes into the run sheet when CI builds the release commit, and H1 will then
-show `v0.7 unofficial`. Run U38–U41 on that file, in a session after 0.6's (U39 and U40 start from
-U35's setup, U41 from U37's). 0.7 keeps everything of 0.6, so the 0.6 checks need not be repeated.
+`USERTPL.LCH` in its folder; 1.7 and 0.2–0.6 ignore both. A pattern whose tracks all have `vtp` `off`
+and `vdp` 100 is 0.6's file byte for byte, and a project saved by 1.7 or 0.2–0.6 loses `USERTPL.LCH`.
+0.7 is built on 0.6 and is not released yet: it follows 0.6's release. So there is no
+`LXR_V2_LICHOMAT_0.7.img` to install yet; its SHA-256 goes into the run sheet when CI builds the
+release commit, and H1 will then show `v0.7 unofficial`. Run U38–U41 on that file, in a session after
+0.6's (U39 and U40 start from U35's setup, U41 from U37's). 0.7 keeps everything of 0.6, so the 0.6
+checks need not be repeated.
 U38 and U39 read levels and onsets at sample level with U27's setup. Back up the card before you
 install 0.7, too. `tools/demo_v07.sh` on branch `v0.7` renders a closed hat with each velocity
 template and a depth sweep (in the worktree `build/wt-v07`: `build/demo/v07-*.wav`), to compare by
@@ -208,10 +209,11 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
   plays every hit at the same level, and the velocity reaches only the velocity modulation (`dst`,
   `amt`) and MIDI out. Velocity templates (0.7) need it on to be heard. Not to be confused with `vol`,
   the voice's volume, on the MIX sub-page (select button 8).
-- Clearing a track's microtiming (0.7): hold SHIFT and press COPY, the clear page (`clear [kit]?`);
-  turn the encoder to the last target, `clear [micro]?` (after `clear [autom. 2]`), press the encoder,
-  then release SHIFT (releasing SHIFT first cancels). Every step (all 64) of the selected voice in the
-  shown pattern gets `shf` 0 and `mic` 0; its flams and templates stay.
+- Clearing a track's microtiming (0.7): hold SHIFT and press COPY, the clear page (it opens on
+  `clear [kit]?`, or on the target used last); turn the encoder to the last target, `clear [micro]?`
+  (after `clear [autom. 2]`), press the encoder, then release SHIFT (releasing SHIFT first cancels).
+  Every step (all 64) of the selected voice in the shown pattern gets `shf` 0 and `mic` 0; its flams
+  and templates stay.
 - Trig conditions (0.2): on the step page `prb` goes on past 100: 101–115 show `1:2 2:2 1:3 2:3
   3:3 1:4 2:4 3:4 4:4 Fil !Fl 1st !1s Pre !Pr`.
 - Rotation (0.2): SHIFT + step 1 moves every step of the selected voice in the shown pattern one
@@ -1675,8 +1677,9 @@ output and the LXR's MIDI out recorded into the DAW.
    about half.) On its track page's fourth screen set `vtp` `of8`, `vdp` 100. Press START and record 2
    bars of audio and MIDI.
 2. `vdp` 50, then 200; record 2 bars each.
-3. The closed hat (voice 6) with your own sound on all 16 steps, `vol` on: listen to `of8`, `ful`, `dep`
-   and `qtr` at 100 %, then turn `vdp` from 0 to 200 while it plays.
+3. The closed hat (voice 6) with your own sound on all 16 steps, `vol` on (on output 1, MIX `out` `St1`;
+   voice 7, the open hat, off: on the shared hat voice it replaces the closed hat): listen to `of8`, `ful`,
+   `dep` and `qtr` at 100 %, then turn `vdp` from 0 to 200 while it plays.
 4. Switch voice 6's `vol` off: the template no longer changes the hats' loudness.
 5. Save the pattern. Install 0.6: it loads and plays at the steps' own volume (no velocity template). Go
    back to 0.7.
@@ -1709,18 +1712,22 @@ output and the LXR's MIDI out recorded into the DAW.
 2. On voice 3's track page, fourth screen, with the pattern playing: turn the encoder to `sav`, press it,
    turn it to `us1` (the bottom row reads `push: save` and `us1`) and press it again. `sav` reads `---`.
    Listen while you press: the capture writes the card while the pattern plays.
-3. Voice 4 (a short sound, `vol` on) on all 16 steps at volume 127, `tpl` `us1` at 100 % and `vtp` `us1`
-   at 100 %. Record 2 bars.
+3. Mute voice 3 (the performance mode: the second mode button, then voice button 3; the first mode button
+   goes back), so that its take does not sound on top of voice 4. Voice 4 (a short sound with little or no
+   noise, `vol` on, on output 1: MIX second screen `out` `St1`) on all 16 steps at volume 127, `tpl` `us1`
+   at 100 % and `vtp` `us1` at 100 %. Record 2 bars, and watch voice 4's Note Ons on the LXR's MIDI out in
+   the MIDI monitor.
 4. Save the pattern, switch off and on: voice 4 plays the same. Save the project, load another and this
    one again: the same.
-5. Install 0.6: the pattern loads; voice 4 plays on the grid at 127 (`tpl` reads `off`).
+5. Install 0.6: the pattern loads; voice 4 plays on the grid at 127 (`tpl` reads `off`). Go back to 0.7.
 
 **Expected:**
 - 1: `mic` as U35 1 (+11 on the late steps, −5 on the early ones, each ±1 tick).
 - 2: the capture while the pattern plays: no gap or stutter in the sound, and no new `ovf` on the CPU
   page.
-- 3: voice 4 plays the clip's timing (late steps 12.10 ms, early −5.50 ms, ±1 tick) and its levels: the late
-  steps −7 dB (velocity 57), the early −3 dB (velocity 90), the rest 0 dB (127).
+- 3: voice 4 plays the clip's timing (late steps 12.10 ms, early −5.50 ms, ±1 tick) and its levels, each
+  within 0.5 dB: the late steps −7 dB, the early −3 dB, the rest 0 dB; its Note On velocities are 57, 90
+  and 127.
 - 4, 5: as written.
 
 **Record:** the offsets, levels and MIDI velocities of 3, pass or fail of 2, 4 and 5.
@@ -1730,7 +1737,8 @@ output and the LXR's MIDI out recorded into the DAW.
 0.7's clear page (V7-14).
 
 1. After U39 step 1 (voice 3's take with `mic` +11 and −5), set voice 3's `tpl` to `lay`.
-2. Hold SHIFT, press COPY, turn the encoder to `clear [micro]?`, press the encoder. Release SHIFT.
+2. Hold SHIFT, press COPY, turn the encoder until the LCD reads `clear [micro]?` (the other targets clear
+   the kit, the track, the pattern or an automation track), press the encoder. Release SHIFT.
 3. Look at voice 3's steps on the step page, then play.
 
 **Expected:** every step of voice 3 reads `mic` 0 and `shf` 0; `tpl` still `lay`, `vtp` and the flams
@@ -1744,8 +1752,9 @@ unchanged; the take plays on `lay`'s grid; voice 4's `tpl us1` is unchanged.
 the 0.4 release chose (U20) and `trg smp`. Read the CPU page for 30 s:
 
 1. as in U37 step 2 (a template on tracks 2–7, `mic` on every step);
-2. the same with `vtp` `of8` on all 7 tracks and `tpl` `us1` on tracks 2–7 (us1 from U39). Do not save the
-   pattern afterwards, or save it in a slot you can spare.
+2. the same with `vtp` `of8` on all 7 tracks and `tpl` `us1` on tracks 2–7 (after loading H12's project its
+   own templates are empty: first capture track 2, which has `mic` on every step, into `us1` with `sav`).
+   Do not save the pattern afterwards, or save it in a slot you can spare.
 
 **Expected:** `pk` in 2 at most 1.5 points above 1, below 95, with `ovf` 0 and no dropouts. (The static
 count of the new code's longest path gives about 1.10 points for the worst block, all seven tracks
