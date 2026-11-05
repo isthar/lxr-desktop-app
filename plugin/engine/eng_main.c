@@ -11,8 +11,10 @@
  *   lichomat-engine --version
  *
  * With --card, a missing or empty card folder is seeded first, by a process of its own: the
- * firmware powers on once per process (emu_firmware.c:66-74). Exit codes: 0 the plugin ended it,
- * 1 usage, 2 the card or the shared memory, 3 a firmware fault or a fault signal, 4 the converter.
+ * firmware powers on once per process (emu_firmware.c:66-74). A thread of its own ends the engine
+ * when the plugin's process goes away, whatever the firmware's thread does. Exit codes: 0 the
+ * plugin ended it or went away, 1 usage, 2 the card or the shared memory, 3 a firmware fault or a
+ * fault signal, 4 the converter.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -23,12 +25,14 @@
  */
 #include <errno.h>
 #include <mach-o/dyld.h>
+#include <pthread.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "emu_notices.h"
@@ -128,6 +132,42 @@ static int eng_seedChild(const char *card)
 	return WIFEXITED(status) ? WEXITSTATUS(status) : 2;
 }
 
+/* the process that started the engine: the plugin's host, or plug_drive */
+static pid_t eng_parent;
+
+/* The plugin's process gone (a host that crashed or was killed): the engine ends, whatever its main
+ * thread does, a firmware that hangs, the prelude or the seeding included. Every 100 ms; in
+ * eng_waitFor() the wake pipe's end and the quit flag end it sooner. write(2) and _exit() only. */
+static void *eng_watch(void *arg)
+{
+	(void)arg;
+	for (;;)
+	{
+		nanosleep(&(const struct timespec){ 0, 100000000L }, NULL);
+		const pid_t p = getppid();
+		if (p != eng_parent || p == 1)
+		{
+			static const char msg[] = "lichomat-engine: the plugin's process is gone\n";
+			(void)!write(2, msg, sizeof msg - 1u);
+			_exit(0);
+		}
+	}
+	return NULL;
+}
+
+static void eng_watchParent(void)
+{
+	eng_parent = getppid();
+	pthread_attr_t a;
+	pthread_t th;
+	pthread_attr_init(&a);
+	pthread_attr_setdetachstate(&a, PTHREAD_CREATE_DETACHED);
+	pthread_attr_setstacksize(&a, 64u * 1024u);
+	if (pthread_create(&th, &a, eng_watch, NULL) != 0)
+		fprintf(stderr, "lichomat-engine: no thread to watch the plugin's process; the engine ends when it waits for events\n");
+	pthread_attr_destroy(&a);
+}
+
 static int eng_usage(void)
 {
 	fprintf(stderr, "usage: lichomat-engine --card DIR | --seed-card DIR | --version\n");
@@ -147,6 +187,7 @@ int main(int argc, char **argv)
 	if (argc != 3 || strcmp(argv[1], "--card"))
 		return eng_usage();
 	const char *card = argv[2];
+	eng_watchParent();
 	char err[256];
 	eng_shm = plug_shmMap(ENG_SHM_FD, err, sizeof err);
 	if (!eng_shm || plug_shmCheck(eng_shm, err, sizeof err) != 0)

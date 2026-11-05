@@ -239,9 +239,10 @@ def same_files(a, b):
     return 'differ from byte %d (frame %d) of %d, %d' % (i, (i - 44) // 4, len(x), len(y))
 
 
-def engines_on(card):
-    """the pids of the engines playing card (lichomat-engine --card CARD)"""
-    return subprocess.run(['pgrep', '-f', 'lichomat-engine --card ' + card], capture_output=True, text=True).stdout.split()
+def engines_on(card, mode='--card'):
+    """the pids of the engines playing card (lichomat-engine --card CARD), or seeding it (mode --seed-card)"""
+    return subprocess.run(['pgrep', '-f', 'lichomat-engine %s %s' % (mode, card)], capture_output=True,
+                          text=True).stdout.split()
 
 
 def kill_all(procs, card):
@@ -411,6 +412,55 @@ def P6_engine_quit(t):
         check(not left, 'the engine outlived its driver: %r' % left)
     finally:
         kill_all([p], card)
+
+
+@case
+def P6_engine_orphan(t):
+    # A host that dies while its engine is elsewhere than in the wait for events (a firmware that hangs, the
+    # prelude, the seeding) leaves no engine behind: here the engine waits for its seeding of an empty card, held
+    # with SIGSTOP, when its driver is killed, and must be gone within 1 s. Whatever fails, the case kills what it
+    # started. A seeding over before it could be held is tried again, up to 3 times.
+    script = write_script(t, 'script.txt')
+    for attempt in range(3):
+        card = t.path('empty%d' % attempt)
+        os.makedirs(card)
+        p, seed = None, None
+        try:
+            p = subprocess.Popen([t.a.drive, t.a.engine, card, RATE_TEXT, '128', script, str(blocks_frames(3)),
+                                  t.path('o%d.wav' % attempt)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            t0 = time.monotonic()
+            while seed is None and p.poll() is None and time.monotonic() - t0 < 10.0:
+                for pid in engines_on(card, '--seed-card'):
+                    try:
+                        os.kill(int(pid), signal.SIGSTOP)
+                        seed = int(pid)
+                    except OSError:
+                        pass
+            if seed is None:
+                print('attempt %d: the seeding was over before it could be held' % attempt)
+                continue
+            engines = engines_on(card)
+            check(len(engines) == 1, 'engines while the seeding is held: %r' % engines)
+            p.kill()
+            p.wait()
+            t0 = time.monotonic()
+            while time.monotonic() - t0 < 3.0:
+                left = engines_on(card)
+                if not left:
+                    break
+                time.sleep(0.02)
+            gone = time.monotonic() - t0
+            print('the engine, held in its seeding, ended %.2f s after its driver was killed' % gone)
+            check(not left and gone < 1.0, 'the engine outlived its driver: %r after %.2f s' % (left, gone))
+            return
+        finally:
+            kill_all([p], card)
+            for pid in engines_on(card, '--seed-card'):
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except OSError:
+                    pass
+    raise Fail('the seeding was never held')
 
 
 @case

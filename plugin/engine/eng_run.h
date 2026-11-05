@@ -29,8 +29,9 @@
 #include "plug_shm.h"
 
 /** Boot the firmware on the card folder and play until the plugin ends it. Exits: 0 when the
- * plugin sets quit, closes the wake pipe (wake, a read end; -1 for none) or goes away; 3 on a
- * firmware fault; 4 when the resampler fails. */
+ * plugin sets quit, closes the wake pipe (wake, a read end; -1 for none) or goes away (also seen
+ * by eng_main.c's watching thread, at any time); 3 on a firmware fault; 4 when the resampler
+ * fails. */
 void eng_run(plug_shm_t *s, int wake, const char *card) __attribute__((noreturn));
 
 /** --seed-card (lichomat-render's render_seed(), render_main.c:328-350): an init card from the
