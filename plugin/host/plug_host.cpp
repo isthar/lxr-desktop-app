@@ -18,6 +18,7 @@
  *   note FRAME CH PITCH VELOCITY (0-127; 0 is a Note Off)
  *   kill FRAME             SIGKILL every engine of this process
  *   renew FRAME I          terminate instance I and put a new one in its place
+ *   setstate FRAME FILE    give instance 0 the state FILE while it plays (a preset, a paste, an undo)
  *   rtcheck                count the calls of process() that the interposer (plug_rtcheck) sees
  *   mode realtime|offline  the ProcessSetup's mode (default offline: the plugin waits for its engine)
  *   paced                  each block at its wall-clock time, as an audio device gives it: the
@@ -96,6 +97,7 @@ struct Plan
 	std::vector<TransportCmd> transport;
 	std::vector<uint64_t> kills;
 	std::vector<std::pair<uint64_t, int>> renews;
+	std::vector<std::pair<uint64_t, std::string>> setstates;
 };
 
 [[noreturn]] void die (const std::string& what)
@@ -138,6 +140,7 @@ Plan readPlan (const char* path)
 		else if (cmd == "tempo") { TransportCmd t {0, TransportCmd::Tempo, 0, 0}; ok = !!(s >> t.frame >> t.tempo); p.transport.push_back (t); }
 		else if (cmd == "kill") { uint64_t k; ok = !!(s >> k); p.kills.push_back (k); }
 		else if (cmd == "renew") { uint64_t k; int i; ok = !!(s >> k >> i); p.renews.push_back ({k, i}); }
+		else if (cmd == "setstate") { uint64_t k; std::string fn; ok = !!(s >> k >> fn); p.setstates.push_back ({k, fn}); }
 		else ok = false;
 		if (!ok)
 			die ("plan: cannot read the line: " + line);
@@ -422,7 +425,7 @@ int main (int argc, char** argv)
 	plug_clock_t expect;
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
-	size_t nextNote = 0, nextKill = 0, nextRenew = 0;
+	size_t nextNote = 0, nextKill = 0, nextRenew = 0, nextSet = 0;
 	unsigned long long processCalls = 0;
 	if (p.paced)
 		paceAsDevice (p);
@@ -443,6 +446,16 @@ int main (int argc, char** argv)
 			close (in);
 			open (in, factory, cls, p);
 			nextRenew++;
+		}
+		while (nextSet < p.setstates.size () && p.setstates[nextSet].first <= f)
+		{
+			std::vector<uint8_t> st = readFile (p.setstates[nextSet].second);
+			IPtr<MemoryStream> m = owned (new MemoryStream (st.data (), (TSize)st.size ()));
+			const auto w0 = std::chrono::steady_clock::now ();
+			const tresult r = inst[0]->component->setState (m);
+			printf ("lichomat-plughost: setstate at %llu: %s in %.3f s\n", (unsigned long long)f, r == kResultOk ? "ok" : "refused",
+			        std::chrono::duration<double> (std::chrono::steady_clock::now () - w0).count ());
+			nextSet++;
 		}
 		const plug_transport_t t = tl.block (f, n);
 		ctx.state = ProcessContext::kTempoValid | ProcessContext::kProjectTimeMusicValid;

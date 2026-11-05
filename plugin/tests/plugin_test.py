@@ -804,6 +804,47 @@ def P10_plugin_logs(t):
     check(not instance_dirs(home), 'instance folders left: %r' % instance_dirs(home))
 
 
+@case
+def P10_plugin_setstate(t):
+    # setState while the instance plays (Live's preset load, paste, undo), offline, at 4.5 s: the plugin restarts its
+    # engine on the state's new card at once (the call returns once the new engine is started); the output is the
+    # old one's up to that frame, silence for the read offset (the new engine's ring starts at its epoch, that frame),
+    # then the same as an instance on the groove card given the same state there. A corrupt archive is refused and
+    # changes nothing. No folder or engine is left
+    at = 198656
+    groove = os.path.join(t.a.root, 'emu', 'tests', 'cards', 'groove')
+    host(t, plan(t, 'make.txt', ['play 0 120 0', 'out ' + t.path('make.wav'), 'state-out ' + t.path('groove.bin'),
+                                 'card ' + groove], frames=12800, card=False))
+    with open(t.path('bad.bin'), 'wb') as f:
+        f.write(b'LCHS\x01\x00\x00\x00\x02\x05\x00../xx' + b'\x00' * 20)
+    runs = {}
+    for name, lines, card in (('onset', [], True), ('set', ['setstate %d %s' % (at, t.path('groove.bin'))], True),
+                              ('bad', ['setstate %d %s' % (at, t.path('bad.bin'))], True),
+                              ('ref', ['setstate %d %s' % (at, t.path('groove.bin')), 'card ' + groove], False)):
+        lat, out = host(t, plan(t, name + '.txt', TIMELINE + ['out ' + t.path(name + '.wav')] + lines, card=card))
+        runs[name] = (wav(t.path(name + '.wav'))[2], [l for l in out.splitlines() if 'setstate at' in l])
+    read = lat[0] - 128
+    onset, set_, bad, ref = (runs[n][0] for n in ('onset', 'set', 'bad', 'ref'))
+    took = [float(l.split(' in ')[1].split()[0]) for l in runs['set'][1]]
+    print('setstate: %s; corrupt: %s' % (runs['set'][1], runs['bad'][1]))
+    check(took and 'ok' in runs['set'][1][0] and took[0] < 1.0, 'setState %r' % runs['set'][1])
+    check(set_[:2 * at] == onset[:2 * at], 'the output before the setState changed')
+    check(not any(set_[2 * at:2 * (at + read)]), 'sound in the read offset after the setState')
+    check(set_[2 * at:] == ref[2 * at:], 'after the setState the output is not the groove card\'s')
+    loud = sum(1 for v in set_[2 * at::2] if abs(v) >= 4000)
+    check(set_[2 * at:] != onset[2 * at:] and loud > 1000, 'after the setState: %d loud frames' % loud)
+    check(runs['bad'][1] and 'refused' in runs['bad'][1][0] and bad == onset, 'the corrupt state %r' % runs['bad'][1])
+    # the logs of the runs with a restart, set and ref: two engines each, on two card folders
+    logs = [x for x in instance_logs(t.path('home')).values() if 'a new card' in x]
+    cards = [re.findall(r'started on (\S+)', x) for x in logs]
+    print('the logs with a new card: %s' % [[os.path.basename(os.path.dirname(c)) for c in k] for k in cards])
+    check(len(logs) == 2 and all(len(k) == 2 and k[0] != k[1] for k in cards)
+          and all(re.search(r'ended \(signal 9\): a new card', x) for x in logs), 'the logs %r' % logs)
+    print('setState at %d: the old output up to it, %d frames of silence, then == the groove card\'s (%d loud frames); '
+          'the corrupt state refused, nothing changed' % (at, read, loud))
+    check(not instance_dirs(t.path('home')), 'instance folders left: %r' % instance_dirs(t.path('home')))
+
+
 def longest_silence(x):
     best = run = 0
     for v in x:
