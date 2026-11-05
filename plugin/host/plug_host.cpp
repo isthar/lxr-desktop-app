@@ -20,7 +20,8 @@
  *   renew FRAME I          terminate instance I and put a new one in its place
  *   rtcheck                count the calls of process() that the interposer (plug_rtcheck) sees
  *   mode realtime|offline  the ProcessSetup's mode (default offline: the plugin waits for its engine)
- *   paced                  realtime: each block at its wall-clock time, as an audio device would
+ *   paced                  each block at its wall-clock time, as an audio device gives it: the
+ *                          thread takes the time-constraint policy of the block's period
  * Instance I > 0 writes FILE-I.wav. The summary on stdout gives each instance's latency. Before each
  * process() the output buffers are filled with 0.5, as a host may leave anything in them.
  *
@@ -39,6 +40,9 @@
 #include <dlfcn.h>
 #include <fstream>
 #include <libproc.h>
+#include <mach/mach.h>
+#include <mach/mach_time.h>
+#include <mach/thread_policy.h>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -324,6 +328,32 @@ void writeWav (const std::string& path, const Instance& in, double rate)
 	fclose (f);
 }
 
+/* paced, the host's thread plays as an audio device's does: a time-constraint thread of the block's
+ * period, a quarter of it to compute (app_mach.c:106-117, as the engine's), woken at each block's
+ * time with mach_wait_until(); a normal thread's long sleep may end milliseconds late (timer
+ * coalescing), and two blocks back to back give the engine no time between them */
+void paceAsDevice (const Plan& p)
+{
+	mach_timebase_info_data_t tb;
+	mach_timebase_info (&tb);
+	thread_time_constraint_policy_data_t pol;
+	pol.period = (uint32_t)((double)p.block / p.rate * 1e9 * (double)tb.denom / (double)tb.numer);
+	pol.computation = pol.period / 4u;
+	pol.constraint = pol.period;
+	pol.preemptible = 1;
+	if (thread_policy_set (pthread_mach_thread_np (pthread_self ()), THREAD_TIME_CONSTRAINT_POLICY, (thread_policy_t)&pol,
+	                       THREAD_TIME_CONSTRAINT_POLICY_COUNT) != KERN_SUCCESS)
+		fprintf (stderr, "lichomat-plughost: the time-constraint policy was refused; pacing as a normal thread\n");
+}
+
+/* mach_absolute_time() at wall time t0 + seconds */
+uint64_t machAt (uint64_t t0, double seconds)
+{
+	mach_timebase_info_data_t tb;
+	mach_timebase_info (&tb);
+	return t0 + (uint64_t)(seconds * 1e9 * (double)tb.denom / (double)tb.numer);
+}
+
 void killEngines ()
 {
 	pid_t kids[64];
@@ -394,11 +424,13 @@ int main (int argc, char** argv)
 	std::map<uint64_t, std::vector<std::string>> script;
 	size_t nextNote = 0, nextKill = 0, nextRenew = 0;
 	unsigned long long processCalls = 0;
-	const auto wall0 = std::chrono::steady_clock::now ();
+	if (p.paced)
+		paceAsDevice (p);
+	const uint64_t wall0 = mach_absolute_time ();
 	for (uint64_t f = 0; f < p.frames; f += (uint64_t)p.block)
 	{
 		if (p.paced)
-			std::this_thread::sleep_until (wall0 + std::chrono::duration<double> ((double)f / p.rate));
+			mach_wait_until (machAt (wall0, (double)f / p.rate));
 		const uint32_t n = (uint32_t)std::min<uint64_t> ((uint64_t)p.block, p.frames - f);
 		while (nextKill < p.kills.size () && p.kills[nextKill] <= f)
 		{
