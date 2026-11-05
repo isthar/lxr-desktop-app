@@ -2088,6 +2088,39 @@ TEST(user_templates_magic_and_the_last_values_checked)
 	ASSERT_EQ(seq_userTemplates[3].vel[14], (int8_t)g[6 + 3 * 32 + 16 + 14]);
 }
 
+TEST(pattern_block3_gated_on_block_1)
+{
+	/* spec review of group B (V7-13): block 3's defaults hold without a complete block 1, so a
+	 * fw 1.7 or v0.3 file loaded after a v0.7 one drops the velocity templates: (a) the v0.3 part
+	 * alone, (b) block 1's head with version 9 (no body), then a valid block 3 right where a
+	 * reader past that head would look; both over stale values */
+	ASSERT_TRUE(proj00());
+	fillPattern(5, 4);
+	fillDynamics(5, 2);
+	ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+	CardEntry *e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK3_SIZE);
+	char path[CARD_PATH];
+	snprintf(path, sizeof path, "%s", e->path);
+	static uint8_t file[PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK3_SIZE], f[PAT_V03_SIZE + 6 + PAT_BLOCK3_SIZE];
+	memcpy(file, e->data, sizeof file);
+	static const uint8_t head1[6] = { 'L', 'C', 'H', 'M', 9, 7 };
+	memcpy(f, file, PAT_V03_SIZE);
+	memcpy(f + PAT_V03_SIZE, head1, sizeof head1);
+	memcpy(f + PAT_V03_SIZE + 6, file + PAT_V03_SIZE + PAT_EXT_SIZE, PAT_BLOCK3_SIZE);
+	ASSERT_EQ(memcmp(f + PAT_V03_SIZE + 6, "LCHM\x03\x07", 6), 0);
+	static const TrackTemplate none[NUM_TRACKS];
+	const struct { const uint8_t *data; UINT len; } cases[2] = { { file, PAT_V03_SIZE }, { f, sizeof f } };
+	for (int k = 0; k < 2; k++)
+	{
+		cardPut(path, cases[k].data, cases[k].len);
+		fillDynamics(5, 3);				/* stale values */
+		ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+		ASSERT_EQ(memcmp(seq_patternSet.vtpl[5], none, sizeof none), 0);
+	}
+}
+
 TEST_MAIN()
 
 //------------------------------------------------------------------------------
