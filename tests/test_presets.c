@@ -1787,8 +1787,9 @@ TEST(pattern_block3_tmp_pat_round_trip)
 
 TEST(pattern_block3_left_out_keeps_the_defaults)
 {
-	/* a v0.6 file (blocks 1 and 2), a short block 3, block number 4, a track count of 6, and a
-	 * block 2 cut by 10 bytes before a valid block 3: the velocity templates stay off */
+	/* a v0.6 file (blocks 1 and 2), a short block 3, block number 4, a track count of 6, 8 or 255
+	 * (8 and 255: spec review of group B), and a block 2 cut by 10 bytes before a valid block 3:
+	 * the velocity templates stay off */
 	ASSERT_TRUE(proj00());
 	fillPattern(5, 1);
 	fillTiming(5, 1);
@@ -1801,15 +1802,16 @@ TEST(pattern_block3_left_out_keeps_the_defaults)
 	memcpy(file, e->data, sizeof file);
 	char path[CARD_PATH];
 	snprintf(path, sizeof path, "%s", e->path);
-	static const struct { int at; uint8_t value; UINT len; } cases[4] = {
-		{ -1, 0, B3 }, { -1, 0, ALL - 1 }, { B3 + 4, 4, ALL }, { B3 + 5, 6, ALL },
+	static const struct { int at; uint8_t value; UINT len; } cases[6] = {
+		{ -1, 0, B3 }, { -1, 0, ALL - 1 }, { B3 + 4, 4, ALL }, { B3 + 5, 6, ALL }, { B3 + 5, 8, ALL },
+		{ B3 + 5, 255, ALL },
 	};
 	static const TrackTemplate none[NUM_TRACKS];
-	for (unsigned k = 0; k < 5; k++)
+	for (unsigned k = 0; k < 7; k++)
 	{
 		UINT len;
 		memcpy(f, file, sizeof f);
-		if (k < 4)
+		if (k < 6)
 		{
 			if (cases[k].at >= 0)
 				f[cases[k].at] = cases[k].value;
@@ -1954,9 +1956,11 @@ TEST(user_templates_bad_files)
 		ASSERT_EQ(seq_userTemplates[0].vel[q], 0);
 	ASSERT_EQ(seq_userTemplates[0].timing[4], (int8_t)f[6 + 4]);		/* a valid value stays */
 	ASSERT_EQ(seq_userTemplates[3].vel[15], (int8_t)f[6 + 3 * 32 + 16 + 15]);
-	static const struct { int at; uint8_t value; UINT len; } cases[3] = { { 4, 2, 134 }, { 5, 3, 134 }, { -1, 0, 133 } };
+	/* version 0 and count 5: spec review of group B */
+	static const struct { int at; uint8_t value; UINT len; } cases[5] = { { 4, 2, 134 }, { 5, 3, 134 }, { -1, 0, 133 },
+		{ 4, 0, 134 }, { 5, 5, 134 } };
 	static const UserTemplate none[USER_TEMPLATES];
-	for (int k = 0; k < 3; k++)
+	for (int k = 0; k < 5; k++)
 	{
 		memcpy(g, f, sizeof g);
 		if (cases[k].at >= 0)
