@@ -2720,6 +2720,9 @@ uint8_t seq_captureUserTemplate(uint8_t trackNr, uint8_t pattern, uint8_t slot)
 		on[s] = (uint8_t)((s < len) && seq_intIsMainStepActive(trackNr, s, pattern));
 		if(!on[s]) continue;
 		n++;
+		//LICHOMAT v0.7: the shift and the fine part are read unmasked, as seq_loadStepMicro() reads
+		//them; recording writes them from seq_tick() (TIM2), so a capture while the same step is
+		//being recorded can mix its old and new parts (quality review of group B)
 		int micro = stepMicro(seq_patternSet.seq_stepTiming[pattern][trackNr][s],
 				stepFine_get(seq_patternSet.seq_stepFine[pattern][trackNr], s)) + seqc_templateTicksAt(tp, s);
 		if(micro > STEP_MICRO_MAX) micro = STEP_MICRO_MAX;
