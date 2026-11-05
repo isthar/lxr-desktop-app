@@ -104,11 +104,12 @@ static int cardOpenFile = -1;
  * FR_DISK_ERR (cardFailRead); f_close() of one returns
  * FR_DISK_ERR and leaves it open, as FatFs's f_close() does when its f_sync() fails. With
  * cardFailWrite > 0 the cardFailWrite-th f_write() from now returns FR_DISK_ERR; with
- * cardShortWrite > 0 the cardShortWrite-th one writes nothing and returns FR_OK. cardReset()
+ * cardShortWrite > 0 the cardShortWrite-th one writes nothing and returns FR_OK; with
+ * cardFailReadNth > 0 the cardFailReadNth-th f_read() from now returns FR_DISK_ERR. cardReset()
  * clears them. */
 static const char *cardFailOpen, *cardFull, *cardFailClose, *cardFailRead;
 static FRESULT cardFailOpenResult = FR_DISK_ERR;
-static int cardFailWrite, cardShortWrite;
+static int cardFailWrite, cardShortWrite, cardFailReadNth;
 
 static int lowerChar(int c) { return (c >= 'A' && c <= 'Z') ? c - 'A' + 'a' : c; }
 
@@ -204,7 +205,7 @@ static void cardReset(void)
 	cardOpenFile = -1;
 	cardFailOpen = cardFull = cardFailClose = cardFailRead = NULL;	/* LICHOMAT v0.7 */
 	cardFailOpenResult = FR_DISK_ERR;
-	cardFailWrite = cardShortWrite = 0;
+	cardFailWrite = cardShortWrite = cardFailReadNth = 0;
 }
 
 /** a file with the given bytes (path absolute) */
@@ -259,6 +260,8 @@ FRESULT f_close(FIL *fp)
 FRESULT f_read(FIL *fp, void *buff, UINT btr, UINT *br)
 {
 	*br = 0;
+	if (cardFailReadNth > 0 && --cardFailReadNth == 0)	/* LICHOMAT v0.7 */
+		return FR_DISK_ERR;
 	if (cardOpenFile < 0)
 		return FR_INVALID_OBJECT;
 	const CardEntry *e = &card[cardOpenFile];
@@ -2236,6 +2239,11 @@ TEST(user_templates_full_card_keeps_the_captures)
 		ASSERT_EQ(preset_saveUserTemplates(1), FR_DENIED);
 		ASSERT_EQ(cardOpenFile, -1);
 	}
+	cardShortWrite = 2;					/* a short write and a failing f_close(): the first error */
+	cardFailClose = "usertpl";
+	ASSERT_EQ(preset_saveUserTemplates(1), FR_DENIED);
+	cardFailClose = NULL;
+	cardOpenFile = -1;
 }
 
 TEST(user_templates_load_errors)
@@ -2281,6 +2289,12 @@ TEST(user_templates_load_errors)
 	ASSERT_EQ(memcmp(seq_userTemplates, stale, sizeof stale), 0);
 	ASSERT_EQ(cardOpenFile, -1);
 	cardFailRead = NULL;
+	cardFailReadNth = 2;					/* the templates' read alone, after the header's */
+	fillUser(9);
+	ASSERT_EQ(preset_loadUserTemplates(1), FR_DISK_ERR);
+	ASSERT_EQ(cardFailReadNth, 0);
+	ASSERT_EQ(memcmp(seq_userTemplates, stale, sizeof stale), 0);	/* not emptied */
+	ASSERT_EQ(cardOpenFile, -1);
 	const int i = find("/proj00/usertpl.lch");			/* bad content: as no file */
 	card[i].data[4] = 2;
 	ASSERT_EQ(preset_loadUserTemplates(1), FR_NO_FILE);
