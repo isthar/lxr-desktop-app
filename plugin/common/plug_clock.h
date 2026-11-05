@@ -10,8 +10,10 @@
  *   at tempo T is the nearest to (k / 24 - p0) x 60 x rate / T. Clocks go out in order, each
  *   once: one that falls before the block (the host's rounding) goes out at frame 0.
  * - Playing from position 0 (or from a count-in before it): Start, with the clock of position 0.
- * - Playing from p > 0: Song Position s = ceil(4p) sixteenths and Continue at the first frame,
- *   then the clocks from 16th s on (the slave's next clock plays step s, seq_core.h:752-765).
+ * - Playing from p > 0: Song Position s and Continue at the first frame, then the clocks from 16th
+ *   s on (the slave's next clock plays step s, seq_core.h:752-765). s is the first 16th at or after
+ *   p, or the one before it when p is at most half a clock after it, s = ceil(4p - 1/12): a host
+ *   reports a loop's start a fraction of a frame late, and that 16th's clock goes out at once.
  *   Past 16th 16,383 (bar 1,024) the message carries s modulo 16,384, its 14 bits, which keeps a
  *   pattern whose length is a power of two in line; the clocks still count from the real 16th.
  * - A jump while playing, between blocks (the block's position is more than half a clock from

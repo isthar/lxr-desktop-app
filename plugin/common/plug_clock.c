@@ -43,12 +43,14 @@ void plug_clockReset(plug_clock_t *c)
 	c->expect = 0.0;
 }
 
-/* the 16th that a start or a jump to p resumes at: the first at or after p, also past 16,383 */
+/* the 16th that a start or a jump to p resumes at, also past 16,383: the first at or after p, or
+ * the one before it when p is within half a clock after it (4 x PLUG_JUMP sixteenths): a host
+ * reports a loop's start a fraction of a frame late, and that 16th's clock is then due at once */
 static int64_t sixteenth(double p)
 {
 	if (p <= 0.0)
 		return 0;
-	return (int64_t)ceil(p * 4.0 - PLUG_AT_ZERO);
+	return (int64_t)ceil(p * 4.0 - 4.0 * PLUG_JUMP);
 }
 
 /* Song Position s and Continue at offset; the clocks resume at 16th s. Past 16,383 only the

@@ -18,7 +18,7 @@
 #include "plug_clock.h"
 #include "seqc_test.h"
 
-#define MAXEV 20000
+#define MAXEV 32768
 
 typedef struct
 {
@@ -220,6 +220,85 @@ TEST(P4_clock_far_loop)
 		}
 	}
 	ASSERT_EQ(spp, 3);	/* the start and the wraps at 96,000 and 192,000 */
+}
+
+/* the loop [4, 8) at 44.1 kHz and 128 BPM (20,671.875 frames a quarter note, a pass 82,687.5
+ * frames), from position 4, in blocks of size: the host reports the position at each block's
+ * first frame, wrapped into the loop, and does not split its blocks at the loop's end. The
+ * messages before frame total. */
+static void wrapRun(unsigned size, uint64_t total)
+{
+	plug_clock_t c;
+	plug_clockInit(&c, 44100.0);
+	nev = 0;
+	const double fpq = 44100.0 * 60.0 / 128.0;
+	for (uint64_t at = 0; at < total; at += size)
+	{
+		double p = 4.0 + (double)at / fpq;
+		if (p >= 8.0)
+			p = 4.0 + fmod(p - 4.0, 4.0);
+		plug_transport_t t = playing(128.0, p);
+		t.cycle = 1;
+		t.cycleStart = 4.0;
+		t.cycleEnd = 8.0;
+		block(&c, &t, at, size);
+	}
+	while (nev > 0 && evs[nev - 1].frame >= total)
+		nev--;
+}
+
+TEST(P4_clock_wrap_blocks)
+{
+	/* Every pass plays its first 16th: each wrap is Stop, Song Position 16, Continue and the clock
+	 * of position 4, in blocks of 1, 37, 128 and 4,096. Every other pass ends on a half frame; when
+	 * that falls in a block's last half frame (before the fix, blocks of 1 at 56 of the 260 wraps,
+	 * of 37 at 4, of 128 at the 257th), the wrap is the next block's, and the host reports that
+	 * block a fraction of a frame after the loop's start: Song Position 16 and its clock at once,
+	 * not 17. The frames are within 1 of the exact ones computed here, and of the blocks of 128:
+	 * where an exact frame is a half (every other wrap, and clocks such as the 32nd of a pass,
+	 * 27,562.5 frames in), the block sizes round it either way. */
+	typedef struct
+	{
+		double f;
+		uint8_t b0;
+	} want_t;
+	static want_t want[MAXEV];
+	static ev_t ref[MAXEV];
+	const double clock = 44100.0 * 60.0 / 128.0 / 24.0, pass = 96.0 * clock;
+	const uint64_t total = 5250u * 4096u;	/* 260 wraps; the 261st would be at 21,581,437.5 */
+	unsigned nw = 0;
+	for (unsigned k = 0; k <= 260; k++)
+	{
+		const double x = pass * k;
+		if (k > 0)
+			want[nw++] = (want_t){ x, 0xFC };
+		want[nw++] = (want_t){ x, 0xF2 };
+		want[nw++] = (want_t){ x, 0xFB };
+		for (unsigned j = 0; j < 96 && x + clock * j < (double)total; j++)
+			want[nw++] = (want_t){ x + clock * j, 0xF8 };
+	}
+	ASSERT_EQ(nw, 25749);	/* 260 x 96 + 7 clocks, 260 Stops, 261 Song Positions and Continues */
+	static const unsigned sizes[] = { 128, 1, 37, 4096 };
+	for (unsigned s = 0; s < 4; s++)
+	{
+		wrapRun(sizes[s], total);
+		unsigned spp = 0;
+		for (unsigned i = 0; i < nev && i < nw; i++)
+		{
+			const double f = (double)evs[i].frame;
+			const int bad = evs[i].b[0] != want[i].b0 || (evs[i].b[0] == 0xF2 && (evs[i].b[1] != 16 || evs[i].b[2] != 0))
+				|| fabs(f - want[i].f) > 1.0 || (s > 0 && fabs(f - (double)ref[i].frame) > 1.0);
+			if (bad)
+				printf("blocks of %u, message %u: frame %llu %02X %u, want %.3f %02X\n", sizes[s], i,
+					(unsigned long long)evs[i].frame, evs[i].b[0], evs[i].b[1], want[i].f, want[i].b0);
+			ASSERT_FALSE(bad);
+			spp += evs[i].b[0] == 0xF2;
+		}
+		ASSERT_EQ(nev, nw);
+		ASSERT_EQ(spp, 261);
+		if (s == 0)
+			memcpy(ref, evs, nev * sizeof evs[0]);
+	}
 }
 
 TEST(P4_clock_locate)
