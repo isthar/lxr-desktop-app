@@ -1,4 +1,4 @@
-# LICHOMAT 0.1, 0.2, 0.3, 0.4, 0.5 and 0.6: hardware checklist (H1–H13, U1–U37, X4, optional X1–X3)
+# LICHOMAT 0.1, 0.2, 0.3, 0.4, 0.5, 0.6 and 0.7: hardware checklist (H1–H13, U1–U41, X4, optional X1–X3)
 
 These are the checks of spec §13.2, written out as procedures for the LXR-02. Only the owner can run
 them, on the real device; nothing here is ever marked as passed by an agent. Record every result in
@@ -82,13 +82,34 @@ branch `v0.6` renders a closed hat with each template and a recorded take (in th
 `build/wt-v06`: `build/demo/v06-*.wav`), to compare by ear; `docs/lichomat/groove-recipes-v0.6.md`
 (Polish) suggests which template goes on which track.
 
+**LICHOMAT 0.7.** The whole of 0.7 is built (plan
+`docs/superpowers/plans/2026-11-04-v0.7-groove-dynamics.md`, draft
+`docs/superpowers/specs/2026-11-04-v0.7-draft.md`, branch `v0.7`): each voice of a pattern can follow
+a velocity template (`vtp`, four templates measured on the reference album's hats, with a depth `vdp`
+of 0–200 %), each project holds four own templates `us1`–`us4`, captured from a track as it plays
+(`sav`; timing and velocity together, played through `tpl` and `vtp`), and the clear page sets a
+track's microtiming back to the grid (`clear [micro]?`). **A velocity changes a voice's loudness only
+with that voice's `vol` (velocity → volume) switch on** (see "Where things are on the LXR"); MIDI out
+and the velocity modulation get it either way. A pattern with a velocity template gets a 20-byte third
+block in its pattern file (`.PAT` and `tmp.pat`), and a project with own templates the file
+`USERTPL.LCH` in its folder; 1.7 and 0.2–0.6 ignore both. A pattern without a velocity template is
+0.6's file byte for byte, and a project saved by 1.7 or 0.2–0.6 loses `USERTPL.LCH`. 0.7 is built on
+0.6 and is not released yet: it follows 0.6's release. So there is no `LXR_V2_LICHOMAT_0.7.img` to
+install yet; its SHA-256 goes into the run sheet when CI builds the release commit, and H1 will then
+show `v0.7 unofficial`. Run U38–U41 on that file, in a session after 0.6's (U39 and U40 start from
+U35's setup, U41 from U37's). 0.7 keeps everything of 0.6, so the 0.6 checks need not be repeated.
+U38 and U39 read levels and onsets at sample level with U27's setup. Back up the card before you
+install 0.7, too. `tools/demo_v07.sh` on branch `v0.7` renders a closed hat with each velocity
+template and a depth sweep (in the worktree `build/wt-v07`: `build/demo/v07-*.wav`), to compare by
+ear.
+
 **What you need**
 
 - The LXR-02, its SD card and a card reader.
 - The update files of the [run sheet](#run-sheet): `LXR_V2_LICHOMAT_0.1.img`,
-  `LXR_V2_LICHOMAT_0.2.img` and `LXR_V2_LICHOMAT_0.3.img` (LICHOMAT; 0.4, 0.5 and 0.6 once CI builds
-  their release commits), and `LXR_V2_V1.7.img` (official 1.7, for H13, U12, U14, U16, U18, U25, U32,
-  U36 and for comparisons).
+  `LXR_V2_LICHOMAT_0.2.img` and `LXR_V2_LICHOMAT_0.3.img` (LICHOMAT; 0.4, 0.5, 0.6 and 0.7 once CI
+  builds their release commits), and `LXR_V2_V1.7.img` (official 1.7, for H13, U12, U14, U16, U18,
+  U25, U32, U36 and for comparisons).
 - A computer with a DAW that can record the LXR's audio output and send and receive MIDI over USB
   (and over DIN through a MIDI interface).
 - A MIDI monitor that shows time stamps, for example MIDI Monitor on macOS. Watch the LXR's MIDI
@@ -169,6 +190,28 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
   swing`, `lay back`, `lay bar`, `relax bar`, `two beat`, `push off`, `drag off`), and `amt` its
   amount, `0`…`200` %. A new pattern and a pattern from 0.5 have `off` and 100. The template moves
   the sixteen 16ths of each bar; the quarters stay on the grid in every template.
+  From 0.7 `tpl` goes on past `drg` to the own templates `us1`–`us4` (edit mode: `user 1` …
+  `user 4`), and the encoder turned on past `amt` (or SHIFT + the second mode button pressed four
+  times) reaches a fourth screen, `vtp vdp sav` (knobs 1–3): `vtp` the velocity template, `off of8 ful
+  dep qtr us1 us2 us3 us4` (edit mode: `offbeat 8th`, `full 16th`, `deep ghost`, `quarters`, `user 1`
+  … `user 4`), `vdp` its depth, `0`…`200` %, and `sav`, `---` or `us1`…`us4`, which captures the track
+  into an own template. A new pattern and a pattern from 0.6 have `vtp` `off` and `vdp` 100. To
+  capture, turn the encoder to `sav`, press it (edit mode), turn it to a slot (the bottom row reads
+  `push: save` and the slot) and press it again: steps 1–16 of the selected voice in the shown pattern,
+  as they play (with the track's `tpl` and `vtp`), go into that slot, the card gets `USERTPL.LCH` in
+  its working folder `/tmp`, and `sav` reads `---` again. A click on a dark screen (the screensaver)
+  only wakes the screen. The own templates belong to the project: a project save stores them, a
+  project load brings its own back, a new project starts with them empty.
+- Velocity → volume (`vol`, a kit setting of 1.7): select button 3 opens a voice's modulation
+  sub-page, and `dst amt vol` is its second screen for voices 1–4 and its first screen for voice 5
+  and the hats. With `vol` `on` a step's velocity sets the voice's loudness; with `off` the voice
+  plays every hit at the same level, and the velocity reaches only the velocity modulation (`dst`,
+  `amt`) and MIDI out. Velocity templates (0.7) need it on to be heard. Not to be confused with `vol`,
+  the voice's volume, on the MIX sub-page (select button 8).
+- Clearing a track's microtiming (0.7): hold SHIFT and press COPY, the clear page (`clear [kit]?`);
+  turn the encoder to the last target, `clear [micro]?` (after `clear [autom. 2]`), press the encoder,
+  then release SHIFT (releasing SHIFT first cancels). Every step (all 64) of the selected voice in the
+  shown pattern gets `shf` 0 and `mic` 0; its flams and templates stay.
 - Trig conditions (0.2): on the step page `prb` goes on past 100: 101–115 show `1:2 2:2 1:3 2:3
   3:3 1:4 2:4 3:4 4:4 Fil !Fl 1st !1s Pre !Pr`.
 - Rotation (0.2): SHIFT + step 1 moves every step of the selected voice in the shown pattern one
@@ -1605,6 +1648,111 @@ at one boundary; the code the LXR runs is shorter.)
 
 **Record:** `CPU` and `pk` for both.
 
+## U38–U41: groove dynamics (0.7)
+
+0.7 gives each track a velocity template and each project four own templates captured from a track,
+and clears a track's microtiming (plan `docs/superpowers/plans/2026-11-04-v0.7-groove-dynamics.md`
+V7-1–V7-24, tracker E6.26–E6.36). Run these checks on `LXR_V2_LICHOMAT_0.7.img`, with `trg smp`. The
+setup is U27's: the LXR's main output (output 1, stereo) recorded into a DAW at 44.1 or 48 kHz, and
+for U38 also the LXR's MIDI out on DIN. U38 uses the click of `docs/lichomat/kit-recipes-v0.5.md` on
+Drum 1 (voice 1); U39 and U40 build on U35's setup. A velocity template lowers each of the sixteen
+16ths of a bar by its value in dB times the depth `vdp` (0 % none, 200 % twice the dB), from the step's
+own volume; the velocity is `127 × 10^(dB/20)` for a step at 127, rounded, at least 1. `vtp vdp sav`,
+`us1`–`us4`, `clear [micro]?` and the `vol` switch are described under "Where things are on the
+LXR".
+
+## U38: velocity templates
+
+0.7's velocity templates (plan v0.7 V7-2, V7-4). A step's velocity changes a voice's loudness only when
+the voice's `vol` (velocity → volume, the voice's modulation sub-page, screen `dst amt vol`) is on;
+MIDI out and the velocity modulation get it either way. Setup as U33: the click on Drum 1, the main
+output and the LXR's MIDI out recorded into the DAW.
+
+1. BPM 120, `trg smp`, shuffle 0. Drum 1 (the click) with `vol` on, velocity modulation `amt` 0, and on
+   its MIX sub-page (select button 8) the volume `vol` at 64 and `drv` 0, on all 16 steps at volume
+   127, every other voice off. (At the volume 127 of the recipe the click's loudest hit reaches the
+   clip, 32,750 of 32,767 in the emulator, and would read the soft hits too loud; at 64 it peaks at
+   about half.) On its track page's fourth screen set `vtp` `of8`, `vdp` 100. Press START and record 2
+   bars of audio and MIDI.
+2. `vdp` 50, then 200; record 2 bars each.
+3. The closed hat (voice 6) with your own sound on all 16 steps, `vol` on: listen to `of8`, `ful`, `dep`
+   and `qtr` at 100 %, then turn `vdp` from 0 to 200 while it plays.
+4. Switch voice 6's `vol` off: the template no longer changes the hats' loudness.
+5. Save the pattern. Install 0.6: it loads and plays at the steps' own volume (no velocity template). Go
+   back to 0.7.
+
+**Expected:**
+- 1: each hit's peak, against step 3's, is the `of8` row within 0.5 dB: steps 1, 5, 9, 13 −10 dB, step 2
+  −15, 3 0, 4 −14, 6 −14, 7 0, 8 −13, 10 −16, 11 0, 12 −14, 14 −15, 15 0, 16 −13. The MIDI Note On
+  velocities are 40, 23, 127, 25, 40, 25, 127, 28, 40, 20, 127, 25, 40, 23, 127, 28.
+- 2: at 50 %: 71, 54, 127, 57, 71, 57, 127, 60, 71, 51, 127, 57, 71, 54, 127, 60 (−5, −7.5 … dB); at 200 %:
+  13, 4, 127, 5, 13, 5, 127, 6, 13, 3, 127, 5, 13, 4, 127, 6. Each level within 0.5 dB of
+  20·log10(velocity / 127). (At 200 % the table's −32 dB of step 10 is velocity 3, −32.5 dB: the
+  integer velocity counts.)
+- 1, 2: the soft hits may read up to about 0.15 dB below these values: fw 1.7's drive stage is a slight
+  expander even at `drv` 0. The emulator measured each hit at most 0.12 dB (100 %), 0.08 dB (50 %) and
+  0.15 dB (200 %) from `20·log10(velocity / 127)`, and at most 0.24 dB (100 %) and 0.11 dB (50 %) from
+  the table.
+- 3: no clicks, no missing hats; the sweep changes smoothly, a step at a time. A hat with its distortion
+  up squeezes the soft hits: the emulator's init hat reads them up to 3 dB louder than the table.
+- 4, 5: as written.
+
+**Record:** the levels and velocities of one bar in 1 and 2, and which template and depth suit your hats.
+
+## U39: own templates from a recording
+
+0.7's own templates (V7-6–V7-12, decision Q36: the capture takes what plays).
+
+1. As U35 step 1 (BPM 142, the LXR a MIDI clock slave of the DAW, voice 3 with the click and `vol` on, its
+   track empty, `tpl` and `vtp` `off`, `rqn off`), but the clip's late steps 2, 6, 10, 14 at velocity 60,
+   its early steps 4, 8, 12, 16 at velocity 90 and the rest at 127. Record one bar.
+2. On voice 3's track page, fourth screen, with the pattern playing: turn the encoder to `sav`, press it,
+   turn it to `us1` (the bottom row reads `push: save` and `us1`) and press it again. `sav` reads `---`.
+   Listen while you press: the capture writes the card while the pattern plays.
+3. Voice 4 (a short sound, `vol` on) on all 16 steps at volume 127, `tpl` `us1` at 100 % and `vtp` `us1`
+   at 100 %. Record 2 bars.
+4. Save the pattern, switch off and on: voice 4 plays the same. Save the project, load another and this
+   one again: the same.
+5. Install 0.6: the pattern loads; voice 4 plays on the grid at 127 (`tpl` reads `off`).
+
+**Expected:**
+- 1: `mic` as U35 1 (+11 on the late steps, −5 on the early ones, each ±1 tick).
+- 2: the capture while the pattern plays: no gap or stutter in the sound, and no new `ovf` on the CPU
+  page.
+- 3: voice 4 plays the clip's timing (late steps 12.10 ms, early −5.50 ms, ±1 tick) and its levels: the late
+  steps −7 dB (velocity 57), the early −3 dB (velocity 90), the rest 0 dB (127).
+- 4, 5: as written.
+
+**Record:** the offsets, levels and MIDI velocities of 3, pass or fail of 2, 4 and 5.
+
+## U40: clearing a track's microtiming
+
+0.7's clear page (V7-14).
+
+1. After U39 step 1 (voice 3's take with `mic` +11 and −5), set voice 3's `tpl` to `lay`.
+2. Hold SHIFT, press COPY, turn the encoder to `clear [micro]?`, press the encoder. Release SHIFT.
+3. Look at voice 3's steps on the step page, then play.
+
+**Expected:** every step of voice 3 reads `mic` 0 and `shf` 0; `tpl` still `lay`, `vtp` and the flams
+unchanged; the take plays on `lay`'s grid; voice 4's `tpl us1` is unchanged.
+
+**Record:** pass or fail.
+
+## U41: CPU
+
+0.7's CPU cost (V7-21, decision Q37). H12 step 3's kit, pattern and BPM 140, with the reverb at the rate
+the 0.4 release chose (U20) and `trg smp`. Read the CPU page for 30 s:
+
+1. as in U37 step 2 (a template on tracks 2–7, `mic` on every step);
+2. the same with `vtp` `of8` on all 7 tracks and `tpl` `us1` on tracks 2–7 (us1 from U39). Do not save the
+   pattern afterwards, or save it in a slot you can spare.
+
+**Expected:** `pk` in 2 at most 1.5 points above 1, below 95, with `ovf` 0 and no dropouts. (The static
+count of the new code's longest path gives about 1.10 points for the worst block, all seven tracks
+stepping at one boundary; the code the LXR runs is shorter.)
+
+**Record:** `CPU` and `pk` for both.
+
 ## X4: USB MIDI out
 
 Not in the spec's list: 1.7 defects of the USB MIDI out that LICHOMAT fixes (tracker E2.8).
@@ -1716,6 +1864,7 @@ Update files under test (filled in when the files were built):
 | `LXR_V2_LICHOMAT_0.4.img` | filled in when CI builds the release commit | `v0.4`, the release commit, built by CI, once H12 and U20 have fixed the reverb's rate | the artifact of that CI run (filled in then) |
 | `LXR_V2_LICHOMAT_0.5.img` | filled in when CI builds the release commit | `v0.5`, the release commit, built by CI, once 0.4's release is merged in | the artifact of that CI run (filled in then) |
 | `LXR_V2_LICHOMAT_0.6.img` | filled in when CI builds the release commit | `v0.6`, the release commit, built by CI, once 0.5's release is merged in | the artifact of that CI run (filled in then) |
+| `LXR_V2_LICHOMAT_0.7.img` | filled in when CI builds the release commit | `v0.7`, the release commit, built by CI, once 0.6's release is merged in | the artifact of that CI run (filled in then) |
 
 The LICHOMAT file is the one CI builds, the file the release attaches (spec §14). Download it with
 `gh run download 40435442579 --repo isthar/lxr-desktop-app -n lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f`
@@ -1784,6 +1933,10 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | U35 | | | |
 | U36 | | | |
 | U37 | | | |
+| U38 | | | |
+| U39 | | | |
+| U40 | | | |
+| U41 | | | |
 | X1 | | | |
 | X2 | | | |
 | X3 | | | |

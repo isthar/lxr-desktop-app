@@ -1,12 +1,14 @@
-# LICHOMAT 0.6: instrukcja
+# LICHOMAT 0.7: instrukcja
 
 LICHOMAT to nieoficjalny firmware dla Erica Synths LXR-02, zbudowany na fw 1.7. Nie jest robiony, zatwierdzony
 ani wspierany przez Erica Synths. Dodaje nowy rdzeń timingu z poprawkami MIDI i zegara, groove na poziomie
-ścieżki, narzędzia do grania na żywo, pogłos z freeze i rumble, delay z tempem, filtr DJ, timing co do próbki
-i mikrotiming kroku. Wersja 0.6 zawiera wszystko z 0.1–0.5, więc wystarczy jedna instalacja. Powrót do 1.7:
-usuń z karty `LXR_V2_LICHOMAT_0.6.img` i zainstaluj `LXR_V2_V1.7.img` tak samo (updater się nie zmienia);
-szczegóły w [notatkach 0.6](release-notes-v0.6.md), „Powrót do v0.5 … albo do oficjalnego firmware”. Opis
-pochodzi z notatek do wydania i z emulatora; na LXR sprawdza go [sesja testowa](test-session-v0.6.md).
+ścieżki, narzędzia do grania na żywo, pogłos z freeze i rumble, delay z tempem, filtr DJ, timing co do próbki,
+mikrotiming kroku i szablony głośności. Wersja 0.7 zawiera wszystko z 0.1–0.6, więc wystarczy jedna
+instalacja. Części oznaczone (0.7) są tylko w 0.7; reszta działa tak samo w 0.6. Powrót do 1.7: usuń z karty
+`LXR_V2_LICHOMAT_0.7.img` i zainstaluj `LXR_V2_V1.7.img` tak samo (updater się nie zmienia); szczegóły w
+[notatkach 0.7](release-notes-v0.7.md), „Powrót do v0.6 … albo do oficjalnego firmware”. Opis pochodzi z
+notatek do wydania i z emulatora; na LXR sprawdza go [sesja testowa](test-session-v0.6.md), a części 0.7
+sprawdzenia U38–U41 z [listy](hardware-checklist.md).
 
 ## Gdzie co jest
 
@@ -28,7 +30,11 @@ pierwszy przycisk trybu, potem krok.
 | Humanize czasu i velocity | strona ścieżki, ekran 2 | `hmt hmv` | 0.2 |
 | Opóźnienie ścieżki | strona ścieżki, ekran 2 | `dly` | 0.2 |
 | Szablony groove | strona ścieżki, ekran 3 (enkoder za `dly`) | `tpl amt` | 0.6 |
+| Szablony głośności, zapis własnego szablonu | strona ścieżki, ekran 4 (enkoder za `amt`) | `vtp vdp sav` | 0.7 |
+| Własne szablony | na listach `tpl` (za `drg`) i `vtp` (za `qtr`) | `us1`–`us4` | 0.7 |
+| Velocity → głośność głosu | strona głosu, przycisk wyboru 3 (modulacja), ekran velocity: drugi dla głosów 1–4, pierwszy dla talerza i hihatów | `dst amt vol` | 1.7 |
 | Rotacja ścieżki | SHIFT + krok 1 (wcześniej), SHIFT + krok 2 (później) | – | 0.2 |
+| Zerowanie mikrotimingu ścieżki | SHIFT + COPY, enkoder na ostatni cel, naciśnięcie enkodera | `clear [micro]?` | 0.7 |
 | Strona kroku | pierwszy przycisk trybu, potem krok | `vel nte prb sld` | 1.7 (`sld` 0.3) |
 | Warunki trigów | strona kroku, `prb` za 100 (101–115) | `1:2` … `!Pr` | 0.2 |
 | Slide Drum 1–3 | strona kroku `sld`; czas: przycisk wyboru 1, drugi ekran | `sld`, `slt` | 0.3 |
@@ -45,7 +51,7 @@ pierwszy przycisk trybu, potem krok.
 | Rumble (przyciszanie pogłosu) | SHIFT + krok 15 trzeci raz | `dck ddp djf djr` | 0.4 |
 | Filtr DJ | tryb wykonawczy, drugi ekran, gałki 3 i 4; też FX, trzecia podstrona | `djf djr` | 0.4 |
 | NRPN efektów | NRPN 96–99 i 116 | – | 0.4 |
-| MIDI out z przesunięciem | zawsze | – | 0.2, z `mic` i `tpl` 0.6 |
+| MIDI out z przesunięciem | zawsze | – | 0.2, z `mic` i `tpl` 0.6, velocity z `vtp` 0.7 |
 
 Na co uważać przy nawigacji:
 
@@ -57,7 +63,10 @@ Na co uważać przy nawigacji:
 - **Strona kroku:** zanim naciśniesz krok, pokazuje `shf -7` i `mic -84`. To znaczy: żaden krok nie jest
   wybrany. Najpierw naciśnij krok.
 - **Strona ścieżki:** ustawienia działają na wybrany głos w pokazanym wzorcu. Przycisk głosu na tej stronie
-  wybiera inny głos.
+  wybiera inny głos. Każde SHIFT + drugi przycisk trybu idzie o ekran dalej; w 0.7 są cztery ekrany, więc
+  `vtp vdp sav` to czwarte naciśnięcie (w 0.6 czwarte wracało na ekran 1).
+- **Dwa `vol`:** `vol` na ekranie `dst amt vol` (modulacja) to przełącznik velocity → głośność; `vol` na
+  podstronie MIX (przycisk wyboru 8) to głośność głosu.
 - **Nie używaj, pozostałość z fw 1.x:** SHIFT + przycisk wyboru trzymane pół sekundy w trybie głosu i ruch
   gałki zapisują p-lock nie na wybranym kroku, tylko na innym kroku tej samej ścieżki (krok × 8 + numer
   przycisku). Po kroku 9–16 nie zapisują nic. Tak działa też 1.7; fw 1.7 pisał wtedy nawet w następnej ścieżce.
@@ -123,8 +132,8 @@ Na co uważać przy nawigacji:
   edycja `mic` ustawia `shf` na najbliższą jednostkę. Krok z 0.5 z `shf` +2 pokazuje `mic` +24.
 - `mic` należy do kroku pokazanego wzorca. Zapisz wzorzec przed zmianą wzorca, inaczej edycja znika.
 - Uwaga: przy +84 uderzenie leży 12 ticków przed następnym krokiem (flam 15,6 ms przy 120 BPM) i grają oba.
-  Krok, który swing albo `dly` przesuną za pierwsze uderzenie następnego kroku, pomija choke. Nie ma funkcji,
-  która zeruje mikrotiming całej ścieżki.
+  Krok, który swing albo `dly` przesuną za pierwsze uderzenie następnego kroku, pomija choke. Mikrotiming całej
+  ścieżki zeruje od 0.7 `clear [micro]?` (niżej, „Sekwencer i występ”).
 
 ### Szablony groove: `tpl amt` (0.6)
 
@@ -143,9 +152,58 @@ Na co uważać przy nawigacji:
 - Uwaga: we wzorcu o nieparzystej długości swing przełącza się co pętlę, więc szablon i swing mogą się
   rozjechać. Szablony są w tickach: przy 120 BPM ten sam szablon jest w ms o 18 % dłuższy niż przy 142.
 - Uwaga: ścieżki 6 i 7 dzielą hihat. Wygrywa ten, który uderza później: zamknięty przesunięty za otwarty z
-  tego samego kroku go ucina. Daj obu ten sam szablon. Nie ma własnych szablonów.
+  tego samego kroku go ucina. Daj obu ten sam szablon. Własne szablony `us1`–`us4` są od 0.7 (niżej).
 
 Który szablon na którą ścieżkę: [przepisy groove 0.6](groove-recipes-v0.6.md).
+
+### Szablony głośności: `vtp vdp` (0.7)
+
+- **Najpierw `vol`:** velocity zmienia głośność głosu tylko z włączonym `vol` tego głosu (velocity → głośność,
+  przycisk wyboru 3, ekran `dst amt vol`: drugi dla głosów 1–4, pierwszy dla talerza i hihatów). Z `vol`
+  `off` głos gra każde uderzenie tak samo, a szablon zmienia tylko MIDI Note On i modulację velocity (`dst
+  amt`). `vol` należy do kitu; hihat karty init emulatora ma go wyłączonego.
+- Szablon głośności to jedna wartość w dB na każdą z 16 szesnastek taktu: krok gra o tyle ciszej od swojej
+  głośności. Ustawiasz go osobno dla każdego głosu w każdym wzorcu, na czwartym ekranie strony ścieżki
+  (enkoder za `amt`), gałki 1 i 2. W trybie edycji `vtp` pokazuje długą nazwę.
+- Szablony, dB na pozycjach 1–16 (1, 5, 9, 13 to ćwierćnuty, 3, 7, 11, 15 offbeaty), zmierzone na hihatach
+  albumu referencyjnego:
+  - `of8` (`offbeat 8th`, mediana 8 utworów): −10 −15 0 −14 −10 −14 0 −13 −10 −16 0 −14 −10 −15 0 −13;
+  - `ful` (`full 16th`, gęste szesnastki): −7 −15 0 −5 −7 −9 −1 −10 −7 −14 0 −7 −6 −10 −1 −10;
+  - `dep` (`deep ghost`, głębokie ghosty): −14 −12 0 −19 −14 −11 0 −19 −15 −12 0 −16 −13 −12 0 −21;
+  - `qtr` (`quarters`, ćwierćnuty tuż pod offbeatem): −5 −15 0 −20 −6 −17 0 −16 −5 −17 0 −15 −6 −17 −1 −16.
+- `vdp` 0–200 %, domyślnie 100: mnoży dB (0 % nic, 200 % dwa razy tyle). Velocity = głośność kroku ×
+  10^(dB × `vdp` / 2000), zaokrąglona, najmniej 1; krok z głośnością 0 milczy dalej. Krok na 127 z `of8` na
+  100 %: 40, 23, 127, 25, 40, 25, 127, 28, …; na 200 % ghosty mają velocity 3–6.
+- Szablon działa raz na krok, przed `hmv`: ratchety dzielą tę samą głośność, a humanize losuje wokół niej.
+  Pozycja jest ta sama co w `tpl` (krok ścieżki od startu albo od zmiany wzorca, modulo 16). MIDI Note On
+  wychodzi z tą velocity. Zmiana działa od następnego kroku.
+- Uwaga: nagrywanie zapisuje zagraną velocity, a szablon gra na niej jeszcze raz. Nagrywaj z `vtp` `off`.
+  Rolle grają bez szablonu głośności. Przester na głosie ściska ghosty: hihat karty init z przesterem gra je do
+  3 dB głośniej, niż mówi tabela. Gdy ścieżki 6 i 7 grają na tym samym kroku, słychać otwarty hihat, bez
+  szablonu zamkniętego.
+- Pełna tabela i przykłady velocity przy 50 i 200 %: [notatki 0.7](release-notes-v0.7.md).
+
+### Własne szablony: `sav`, `us1`–`us4` (0.7)
+
+- Cztery własne szablony na projekt, `us1`–`us4`, każdy z timingiem (−84…+84 ticków) i głośnością (0…−42 dB)
+  na 16 pozycji. `tpl` ma je za `drg`, `vtp` za `qtr` (w trybie edycji `user 1` … `user 4`), z `amt` i `vdp`
+  jak każdy szablon. Nagranie jednego głosu gra więc na każdym innym: timing, akcenty albo jedno i drugie.
+- **Zapis:** czwarty ekran strony ścieżki, enkoder na `sav`, naciśnij (tryb edycji), przekręć na slot (dolna
+  linia `push: save` i slot), naciśnij jeszcze raz. `sav` wraca na `---`. Zapisuje wybrany głos w pokazanym
+  wzorcu. Na wygaszonym ekranie kliknięcie tylko budzi ekran.
+- **Co się zapisuje:** to, co grają kroki 1–16: `mic` kroku (z `shf`) razem z `tpl` ścieżki na tej pozycji, do
+  ±84 ticków, i głośność kroku przez `vtp` ścieżki, w dB poniżej najgłośniejszego kroku, w całych dB. Ze
+  ścieżki z `tpl off` i `vtp off` to wartości samych kroków. Swing, `dly`, humanize i `tmp` się nie zapisują.
+- Krok wyłączony albo za długością ścieżki zostawia swoją pozycję w spokoju (0 ticków, 0 dB). Ścieżka bez
+  żadnego kroku opróżnia slot, a pusty szablon gra jak `off`. Ścieżka, która gra slot, do którego zapisujesz,
+  bierze do zapisu jego starą zawartość.
+- Zapis idzie od razu na kartę (`/tmp`), więc przetrwa wyłączenie; zapis projektu zabiera szablony do projektu,
+  wczytanie projektu przywraca jego szablony, nowy projekt zaczyna z pustymi. Zapis w trakcie grania pisze
+  kartę przy działającym dźwięku.
+- Przepis: nagraj takt z `rqn off` na ścieżkę z `tpl off` i `vtp off` (z velocity, jak gra ręka), zapisz go w
+  `us1`, a na hihatach i perkusji ustaw `tpl us1` i `vtp us1`, `amt` i `vdp` do smaku. Jeśli nagrana ścieżka
+  też ma grać przez `us1`, wyzeruj jej mikrotiming (`clear [micro]?`) i wyrównaj głośność jej kroków, inaczej
+  przesunięcia i akcenty zagrają na niej dwa razy.
 
 ## Sekwencer i występ
 
@@ -188,6 +246,15 @@ Który szablon na którą ścieżkę: [przepisy groove 0.6](groove-recipes-v0.6.
 - Nagrywanie zawsze nakłada: nowa nuta zastępuje nutę, velocity, `prb` i (z `off`) timing kroku; flam i
   p-locki zostają. Uwaga: tuż po powrocie ścieżki z własnego tempa do `x1` nuta w tym jednym kroku może trafić
   na następny. Gdy nagrywany krok ma w kolejce przesunięte uderzenie, brzmi raz i ono, i nuta na żywo.
+
+### Zerowanie mikrotimingu: `clear [micro]` (0.7)
+
+- Przytrzymaj SHIFT, naciśnij COPY (strona czyszczenia z 1.7, `clear [kit]?`), przekręć enkoder na ostatni
+  cel, `clear [micro]?` (za `clear [autom. 2]`), naciśnij enkoder, puść SHIFT. Puszczenie SHIFT wcześniej
+  anuluje.
+- Wszystkie kroki (64) wybranego głosu w pokazanym wzorcu dostają `shf` 0 i `mic` 0. Flamy, `tpl`, `vtp` i
+  reszta kroków zostają; ścieżka gra potem na siatce swojego szablonu. Strona kroku od razu pokazuje 0.
+- To edycja wzorca: zapisz wzorzec, inaczej zmiana wzorca ją odrzuci.
 
 ### Tryb wykonawczy: fill, sceny, rolle (0.3)
 
@@ -267,6 +334,7 @@ Przepisy na kity: [pogłos, freeze, rumble i delay](kit-recipes-v0.4.md),
 - Note On i Note Off wychodzą w czasie przesuniętego uderzenia: z `shf`, swingiem, `dly`, humanize, a od 0.6
   też z `mic` i szablonem. Syntezator na MIDI out gra z groove, DAW nagrywa groove. Zegar MIDI, jack clock out
   i diody zostają na siatce mastera. Nie ma kwantyzowanego MIDI out obok przesuniętego.
+- Od 0.7 velocity Note On idzie z szablonem głośności (`vtp`), także gdy `vol` głosu jest wyłączone.
 - Jedna Note On na uderzenie, z override nuty, i zawsze jej Note Off, też dla jednorazowego rolla. Note Off
   idzie per głos, więc głosy na jednym kanale nie zostawiają wiszących nut. Wyciszenie ścieżki gasi jej nutę.
   Nuta przychodząca, która gra głos, ma jedno echo na MIDI out.
@@ -299,8 +367,8 @@ Przepisy na kity: [pogłos, freeze, rumble i delay](kit-recipes-v0.4.md),
 
 - Nowe NRPN (7-bitowe: CC 99 = 0, CC 98 = numer, CC 6 = wartość): 96 `djf`, 97 `djr`, 98 `lvl`, 99 `frz`, 116
   `dec`.
-- Tylko w menu, bez CC i NRPN: `siz ton pre mod dck ddp syn`, `tmp hmt hmv dly`, `mic tpl amt`, fill, sceny,
-  slide.
+- Tylko w menu, bez CC i NRPN: `siz ton pre mod dck ddp syn`, `tmp hmt hmv dly`, `mic tpl amt`, `vtp vdp sav`
+  (0.7), fill, sceny, slide.
 - NRPN tempa rolla wybiera z nowej, 11-pozycyjnej listy. Bank Select (CC 0) 64–127 jest ignorowany. LXR dalej
   przedstawia się przez USB jako `Sonic Potions USB MIDI`.
 
@@ -316,24 +384,32 @@ Przepisy na kity: [pogłos, freeze, rumble i delay](kit-recipes-v0.4.md),
 
 ### Instalacja
 
-- Przed instalacją skopiuj całą kartę SD na komputer. Skopiuj `LXR_V2_LICHOMAT_0.6.img` do głównego folderu
-  karty bez zmiany nazwy i usuń każdy inny `LXR*.img`: updater instaluje pierwszy, który znajdzie.
+- Przed instalacją skopiuj całą kartę SD na komputer. Skopiuj `LXR_V2_LICHOMAT_0.7.img` (albo `..._0.6.img`)
+  do głównego folderu karty bez zmiany nazwy i usuń każdy inny `LXR*.img`: updater instaluje pierwszy, który
+  znajdzie.
 - Wyłącz LXR, włóż kartę, trzymaj przycisk enkodera i włącz. Trzymaj do `LXR Updater`, czekaj na `Update OK!`.
-  Ekran startowy: `LICHOMAT`, `v0.6 unofficial`.
+  Ekran startowy: `LICHOMAT`, `v0.7 unofficial` (albo `v0.6 unofficial`).
 
 ### Co się gdzie zapisuje
 
 - **Wzorzec** (`.PAT` i autosave `tmp.pat`): blok z 0.2 (`tmp hmt hmv dly` siedmiu ścieżek), a od 0.6 drugi
-  blok z częścią drobną `mic` i szablonami, tylko gdy ich używasz. Warunki trigów i `sld` siedzą w bajcie
+  blok z częścią drobną `mic` i szablonami, tylko gdy ich używasz. Od 0.7 trzeci blok (20 B) z `vtp` i `vdp`
+  siedmiu ścieżek, tylko gdy któraś ma je inne niż `off` i 100 %. Warunki trigów i `sld` siedzą w bajcie
   `prb` kroku.
-- **Projekt** (`prj.nfo`): sceny mute. **Kit** (`.SND`, `tmp.snd`): pogłos, rumble, `syn`, `djr` i `slt`, w
-  bloku z 0.4 i w bajtach, których 1.7 nie używa.
+- **Projekt** (`prj.nfo`): sceny mute. Od 0.7 własne szablony `us1`–`us4` w pliku `USERTPL.LCH` (134 B) w
+  folderze projektu, tylko gdy któryś nie jest pusty. `sav` zapisuje ten plik od razu w `/tmp`, więc po
+  wyłączeniu wracają ostatnie zapisane szablony. **Kit** (`.SND`, `tmp.snd`): pogłos, rumble, `syn`, `djr` i
+  `slt`, w bloku z 0.4 i w bajtach, których 1.7 nie używa; przełącznik `vol` (velocity → głośność) to zwykły
+  parametr kitu z 1.7.
 - **Ustawienia globalne** (`glo.cfg`, dalej 30 bajtów): `trg`, `rqn` i `scn`, w bajtach, których 1.7 nie
   czyta. Zapis przez stronę zapisu, typ global, jak w 1.7.
 - **Nie zapisuje się:** bieżące wyciszenia, freeze (kit zawsze z `frz` `off`), `djf` (kit zawsze z 64), strona
   CPU. Ustawienia ścieżki, `mic` i szablony są edycją wzorca: zmiana wzorca bez zapisu je odrzuca.
-- Pliki z 1.7 grają w 0.6 jak w 1.7: `x1`, humanize i `dly` 0, `mic` równe `shf` z pliku, `tpl` `off` z `amt`
-  100, pogłos wyłączony, `trg` `smp`, `rqn` `off`. Pliki z v0.2–v0.5 grają jak tam.
+- Pliki z 1.7 grają w 0.7 jak w 1.7: `x1`, humanize i `dly` 0, `mic` równe `shf` z pliku, `tpl` `off` z `amt`
+  100, `vtp` `off` z `vdp` 100, pogłos wyłączony, `trg` `smp`, `rqn` `off`. Pliki z v0.2–v0.6 grają jak tam;
+  projekt bez `USERTPL.LCH` ma puste własne szablony.
+- Pełna karta przy zapisie: LCD pokazuje `SD Card error:` i `Card full!` (0.7). Zapis projektu, który nie
+  zmieści `USERTPL.LCH`, to zgłasza i nie czyści `/tmp`.
 
 ## Poprawione błędy fw 1.7
 
@@ -371,31 +447,36 @@ W 0.6:
 
 ## Zgodność plików
 
-Co robią starsze firmware z plikami zapisanymi przez 0.6. Wszystkie wczytują je bez błędów.
+Co robią starsze firmware z plikami zapisanymi przez 0.7. Wszystkie wczytują je bez błędów.
 
-| Plik z 0.6 | 1.7 i v0.1 | v0.2–v0.5 |
-|---|---|---|
-| Wzorzec, timing | tylko zgrubne `shf`; `tmp`, humanize, `dly`, `mic` i szablony giną | `tmp`, humanize i `dly` zostają; krok w zgrubnym `shf` (najbliższa 1/8, remis w górę); bez szablonów |
-| Warunki trigów | grają w każdej pętli, jak `prb` 100 | v0.2–v0.5 je znają |
-| Slide | krok gra bez slide, ze swoją nutą; z warunkiem jak `prb` 100 | v0.2 jak 1.7; v0.3–v0.5 grają slide |
-| Projekt, sceny | sceny pomijane | v0.2 pomija; v0.3–v0.5 je znają |
-| Kit, efekty 0.4 | slot efektu bez pogłosu i filtra DJ; `syn` gra wolny czas `tim`/`rng` | v0.2–v0.3 jak 1.7; v0.4–v0.5 je znają |
-| `glo.cfg` | `trg`, `rqn` i `scn` pomijane | `rqn` pomijane; `scn` znają v0.3–v0.5, `trg` v0.5 |
+| Plik z 0.7 | 1.7 i v0.1 | v0.2–v0.5 | v0.6 |
+|---|---|---|---|
+| Wzorzec, timing | tylko zgrubne `shf`; `tmp`, humanize, `dly`, `mic` i szablony giną | `tmp`, humanize i `dly` zostają; krok w zgrubnym `shf` (najbliższa 1/8, remis w górę); bez szablonów | wszystko poza własnymi szablonami: `tpl` `us1`–`us4` gra jak `off` |
+| Wzorzec, szablony głośności (0.7) | giną | giną | blok 3 pomijany: giną |
+| Warunki trigów | grają w każdej pętli, jak `prb` 100 | v0.2–v0.5 je znają | zna |
+| Slide | krok gra bez slide, ze swoją nutą; z warunkiem jak `prb` 100 | v0.2 jak 1.7; v0.3–v0.5 grają slide | zna |
+| Projekt, sceny | sceny pomijane | v0.2 pomija; v0.3–v0.5 je znają | zna |
+| Projekt, własne szablony (0.7) | `USERTPL.LCH` pomijany; zapis projektu go kasuje | jak 1.7 | jak 1.7 |
+| Kit, efekty 0.4 | slot efektu bez pogłosu i filtra DJ; `syn` gra wolny czas `tim`/`rng` | v0.2–v0.3 jak 1.7; v0.4–v0.5 je znają | zna |
+| `glo.cfg` | `trg`, `rqn` i `scn` pomijane | `rqn` pomijane; `scn` znają v0.3–v0.5, `trg` v0.5 | zna |
 
 - Nie ruszaj tam `prb` kroków z warunkiem albo `sld`: starszy edytor ustawi go na 100 lub mniej i zdejmie
   znacznik slide.
 - Zapis w starszym firmware traci to, czego ono nie zna: wzorzec z 1.7 wraca z samym zgrubnym `shf`, z v0.5 ze
   zgrubnym `shf` i blokiem 0.2; projekt z 1.7 bez scen; kit z 1.7 i v0.1–v0.3 z wyłączonym pogłosem. `slt`
   przetrwa zapis w 1.7.
-- Wzorzec bez `mic` i szablonów jest bajt w bajt taki jak z 0.5 (3 697 B); z nimi ma 3 941 B. Kity, piosenki i
-  `glo.cfg` są w 0.6 takie jak w 0.5.
+- Wzorzec bez `mic` i szablonów jest bajt w bajt taki jak z 0.5 (3 697 B); z nimi ma 3 941 B. Wzorzec bez
+  szablonów głośności jest bajt w bajt taki jak z 0.6; z nimi ma 20 B więcej (3 717 albo 3 961 B). Kity,
+  piosenki i `glo.cfg` są w 0.7 takie jak w 0.5.
+- Projekt zapisany ponownie w 1.7 albo v0.2–v0.6 traci `USERTPL.LCH` (ich zapis najpierw czyści folder
+  projektu); wzorzec zapisany ponownie w v0.6 traci blok 3.
 
 ## Linki
 
 - Notatki do wydania: [0.1](release-notes-v0.1.md) (po angielsku), [0.2](release-notes-v0.2.md),
   [0.3](release-notes-v0.3.md), [0.4](release-notes-v0.4.md), [0.5](release-notes-v0.5.md),
-  [0.6](release-notes-v0.6.md).
+  [0.6](release-notes-v0.6.md), [0.7](release-notes-v0.7.md).
 - Przepisy: [groove 0.6](groove-recipes-v0.6.md), [kity z pogłosem 0.4](kit-recipes-v0.4.md),
   [klik 0.5](kit-recipes-v0.5.md).
-- Plan sesji testowej: [test-session-v0.6.md](test-session-v0.6.md); procedury:
+- Plan sesji testowej: [test-session-v0.6.md](test-session-v0.6.md) (0.7: U38–U41 po niej); procedury:
   [hardware-checklist.md](hardware-checklist.md).
