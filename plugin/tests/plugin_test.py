@@ -121,7 +121,9 @@ def script_events():
     128 BPM with Start at 4,410 frames, 140 BPM from beat 8, a loop jump at beat 12 back to beat 4 (Stop,
     Song Position 16, Continue with the clock), 12.6 s of clocks; Note Ons and Offs on channel 1, note 48 (the
     onset card's Drum 1 and the voices on out 2), at irregular frames and on and around block boundaries
-    (64k - 1, 64k, 64k + 1 at 44,140.625 Hz), the first at frame 0, the epoch's own frame."""
+    (64k - 1, 64k, 64k + 1 at 44,140.625 Hz), the first at frame 0, the epoch's own frame. At the loop's wrap, as a
+    host plays it to seven voices on channels of their own, the transport's four messages and each voice's Note Off
+    and Note On: 18 messages at one frame, more than one USB transfer holds (16 packets, eng_run.c)."""
     msgs = {}
 
     def add(f, b):
@@ -135,7 +137,7 @@ def script_events():
             first = False
         elif beat == 12 and not jumped:
             add(f, 'FC F2 10 00 FB F8')
-            jumped = True
+            jumped, jump = True, f
             beat = fractions.Fraction(4)
         else:
             add(f, 'F8')
@@ -148,6 +150,12 @@ def script_events():
         add(f + 3000 + 7 * i, '80 30 00')
     add(0, '90 30 7F')
     add(2000, '80 30 00')
+    for c in range(7):
+        add(jump, '%02X 30 00' % (0x80 + c))
+    for c in range(7):
+        add(jump, '%02X 30 7F' % (0x90 + c))
+    for c in range(7):
+        add(jump + 2000, '%02X 30 00' % (0x80 + c))
     return msgs
 
 
