@@ -2630,7 +2630,8 @@ void preset_readSceneBlock(void)
 // after the project (no file: the project's stay). fw 1.7 and v0.2-v0.6 open a project's files
 // by name and never this one; their project save empties the folder first, so it drops the
 // file. A value out of range reads 0; another version or count, or a short file, reads as no
-// file.
+// file. A write that fails or comes up short (a full card) is an error: the project save returns
+// it before /tmp is cleared, so the captures there stay (quality review of group B).
 //----------------------------------------------------
 #define USER_TPL_FILE		"usertpl.lch"
 #define USER_TPL_VERSION	1
@@ -2643,16 +2644,24 @@ FRESULT preset_saveUserTemplates(uint8_t always)
 		if(b[i]) used = 1;
 	if(!used)
 		return FR_OK;
-	UINT bytesWritten;
+	UINT bytesWritten = 0;
 	const uint8_t head[6] = { 'L', 'C', 'H', 'M', USER_TPL_VERSION, USER_TEMPLATES };
 	FRESULT res = f_open((FIL*)&SDFile, USER_TPL_FILE, FA_CREATE_ALWAYS | FA_WRITE);
 	if(res != FR_OK)
 		return res;
+	//on a full card f_write() returns FR_OK and writes fewer bytes (quality review of group B)
 	res = f_write((FIL*)&SDFile, head, sizeof head, &bytesWritten);
+	if((res == FR_OK) && (bytesWritten != sizeof head))
+		res = FR_DENIED;
 	if(res == FR_OK)
+	{
 		res = f_write((FIL*)&SDFile, seq_userTemplates, sizeof seq_userTemplates, &bytesWritten);
-	f_close((FIL*)&SDFile);
-	return res;
+		if((res == FR_OK) && (bytesWritten != sizeof seq_userTemplates))
+			res = FR_DENIED;
+	}
+	//with _FS_TINY 0 the bytes reach the card in f_close() (f_sync()), so its result counts too
+	const FRESULT closed = f_close((FIL*)&SDFile);
+	return (res != FR_OK) ? res : closed;
 }
 
 void preset_loadUserTemplates(uint8_t clearIfAbsent)
@@ -2867,7 +2876,17 @@ FRESULT preset_saveProject(uint8_t presetNr)
 			return res;
 		}
 	}
-	preset_saveUserTemplates(0);	//LICHOMAT v0.7: the own templates, if any, into the project folder (V7-12)
+	res = preset_saveUserTemplates(0);	//LICHOMAT v0.7: the own templates, if any, into the project folder (V7-12)
+	if(res != FR_OK) {	//LICHOMAT v0.7: as an error in the loop; /tmp, with the captures since the last save, stays
+		lcd_process_display_interrupt = 1;
+		preset_initTmpFolder();
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+		HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
+#else
+
+#endif
+		return res;
+	}
 
 	lcd_process_display_interrupt = 1;
 	preset_initTmpFolder();

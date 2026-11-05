@@ -102,11 +102,12 @@ static int cardOpenFile = -1;
  * absolute path holds the given name: f_open() of one returns cardFailOpenResult; f_write() to
  * one writes nothing and returns FR_OK, as FatFs does on a full card; f_close() of one returns
  * FR_DISK_ERR and leaves it open, as FatFs's f_close() does when its f_sync() fails. With
- * cardFailWrite > 0 the cardFailWrite-th f_write() from now returns FR_DISK_ERR. cardReset()
+ * cardFailWrite > 0 the cardFailWrite-th f_write() from now returns FR_DISK_ERR; with
+ * cardShortWrite > 0 the cardShortWrite-th one writes nothing and returns FR_OK. cardReset()
  * clears them. */
 static const char *cardFailOpen, *cardFull, *cardFailClose;
 static FRESULT cardFailOpenResult = FR_DISK_ERR;
-static int cardFailWrite;
+static int cardFailWrite, cardShortWrite;
 
 static int lowerChar(int c) { return (c >= 'A' && c <= 'Z') ? c - 'A' + 'a' : c; }
 
@@ -202,7 +203,7 @@ static void cardReset(void)
 	cardOpenFile = -1;
 	cardFailOpen = cardFull = cardFailClose = NULL;	/* LICHOMAT v0.7 */
 	cardFailOpenResult = FR_DISK_ERR;
-	cardFailWrite = 0;
+	cardFailWrite = cardShortWrite = 0;
 }
 
 /** a file with the given bytes (path absolute) */
@@ -279,6 +280,8 @@ FRESULT f_write(FIL *fp, const void *buff, UINT btw, UINT *bw)
 		return FR_INVALID_OBJECT;
 	if (cardFull && strstr(card[cardOpenFile].path, cardFull))
 		return FR_OK;			/* LICHOMAT v0.7: a full card, nothing written */
+	if (cardShortWrite > 0 && --cardShortWrite == 0)
+		return FR_OK;
 	CardEntry *e = &card[cardOpenFile];
 	UINT end = (UINT)fp->fptr + btw;
 	if (end > e->len) {
@@ -2190,6 +2193,46 @@ TEST(user_templates_error_paths)
 	ASSERT_EQ(preset_saveUserTemplates(1), FR_OK);
 	ASSERT_EQ(cardOpenFile, -1);
 	ASSERT_EQ(card[find("/tmp/usertpl.lch")].len, 134);
+}
+
+TEST(user_templates_full_card_keeps_the_captures)
+{
+	/* quality review of group B (item 1): on a full card f_write() returns FR_OK and writes fewer
+	 * bytes, and with _FS_TINY 0 the bytes reach the card in f_close(), so its result is the real
+	 * one. A project save that cannot write /proj00/usertpl.lch reports it and leaves /tmp's copy,
+	 * the captures since the last save: k 0 the writes short (FR_DENIED), k 1 f_close() failing */
+	static const FRESULT want[2] = { FR_DENIED, FR_DISK_ERR };
+	static UserTemplate saved[USER_TEMPLATES];
+	for (int k = 0; k < 2; k++)
+	{
+		reset();
+		fillUser(3);
+		memcpy(saved, seq_userTemplates, sizeof saved);
+		ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+		ASSERT_EQ(preset_saveUserTemplates(1), FR_OK);		/* a capture */
+		if (k == 0)
+			cardFull = "usertpl";
+		else
+			cardFailClose = "usertpl";
+		ASSERT_EQ(preset_saveProject(0), want[k]);
+		ASSERT_EQ(strcmp(cardCwd, "/tmp"), 0);			/* the loop's error path */
+		ASSERT_EQ(lcd_process_display_interrupt, 1);
+		const int i = find("/tmp/usertpl.lch");
+		ASSERT_TRUE(i >= 0);					/* the captures stay */
+		ASSERT_EQ(card[i].len, 134);
+		ASSERT_EQ(memcmp(card[i].data + 6, saved, sizeof saved), 0);
+		cardOpenFile = -1;					/* k 1: FatFs keeps a file whose f_close() failed */
+		ASSERT_EQ(f_chdir("/tmp"), FR_OK);			/* the function alone */
+		ASSERT_EQ(preset_saveUserTemplates(1), want[k]);
+		cardFull = cardFailClose = NULL;
+	}
+	cardOpenFile = -1;
+	for (int w = 1; w <= 2; w++)				/* the header short, then the templates */
+	{
+		cardShortWrite = w;
+		ASSERT_EQ(preset_saveUserTemplates(1), FR_DENIED);
+		ASSERT_EQ(cardOpenFile, -1);
+	}
 }
 
 TEST_MAIN()
