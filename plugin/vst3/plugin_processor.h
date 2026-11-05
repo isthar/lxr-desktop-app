@@ -50,9 +50,11 @@ public:
 private:
 	unsigned notesOf (Steinberg::Vst::IEventList* events, Steinberg::int32 frames);
 	void reportState (Steinberg::Vst::ProcessData& data, uint64_t state);
+	const std::string& logOf (const CardFolder& f);
 
 	EngineLink link;
 	CardFolder folder;
+	std::string logPath;	/**< BASE/logs/<id>.log, set when the first engine starts */
 	plug_clock_t clock {};
 	Steinberg::uint32 latency = 0;
 	uint32_t readOffset = 0;

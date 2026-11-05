@@ -12,6 +12,7 @@
  */
 #include "plugin_card.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -23,6 +24,8 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <utility>
+#include <vector>
 
 extern "C" {
 #include "emu_hostfs.h"	/* a C header without its own extern "C" */
@@ -78,9 +81,37 @@ static bool instanceName (const char* name)
 	return true;
 }
 
+/* the instance logs of BASE/logs but the newest keep */
+static void pruneLogs (const std::string& b, unsigned keep)
+{
+	const std::string dir = b + "/logs";
+	DIR* d = opendir (dir.c_str ());
+	if (!d)
+		return;
+	std::vector<std::pair<struct timespec, std::string>> logs;
+	for (const struct dirent* e; (e = readdir (d)) != nullptr;)
+	{
+		const std::string n = e->d_name;
+		struct stat st;
+		if (n.size () == 20 && n.compare (16, 4, ".log") == 0 && instanceName (n.substr (0, 16).c_str ())
+		    && stat ((dir + "/" + n).c_str (), &st) == 0 && S_ISREG (st.st_mode))
+			logs.push_back ({st.st_mtimespec, n});
+	}
+	closedir (d);
+	if (logs.size () <= keep)
+		return;
+	std::sort (logs.begin (), logs.end (), [] (const auto& x, const auto& y) {
+		return x.first.tv_sec != y.first.tv_sec ? x.first.tv_sec > y.first.tv_sec : x.first.tv_nsec > y.first.tv_nsec;
+	});
+	for (size_t i = keep; i < logs.size (); i++)
+		unlink ((dir + "/" + logs[i].second).c_str ());
+}
+
 void CardFolder::cleanStale ()
 {
 	const std::string b = base ();
+	if (!b.empty ())
+		pruneLogs (b, kLogsKept);
 	DIR* d = b.empty () ? nullptr : opendir (b.c_str ());
 	if (!d)
 		return;
@@ -155,6 +186,15 @@ bool CardFolder::copyStartCard ()
 	removeTree (card ());	/* a part of it: the engine seeds the init card instead */
 	mkdir (card ().c_str (), 0755);
 	return false;
+}
+
+std::string CardFolder::log () const
+{
+	const size_t slash = dirPath.rfind ('/');
+	if (slash == std::string::npos)
+		return {};
+	const std::string dir = dirPath.substr (0, slash) + "/logs";
+	return mkdirs (dir) == 0 ? dir + "/" + dirPath.substr (slash + 1) + ".log" : std::string ();
 }
 
 void CardFolder::remove ()

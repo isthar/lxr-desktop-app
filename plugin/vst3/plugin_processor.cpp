@@ -83,6 +83,15 @@ tresult PLUGIN_API Processor::setupProcessing (ProcessSetup& setup)
 	return AudioEffect::setupProcessing (setup);
 }
 
+/* the instance's log: BASE/logs/<id>.log of the folder its first engine starts on, kept through a
+ * restored state's new folder, so that one file tells the instance's story */
+const std::string& Processor::logOf (const CardFolder& f)
+{
+	if (logPath.empty ())
+		logPath = f.log ();
+	return logPath;
+}
+
 tresult PLUGIN_API Processor::setActive (TBool state)
 {
 	if (state)
@@ -101,8 +110,7 @@ tresult PLUGIN_API Processor::setActive (TBool state)
 		reported = -1;
 		if (folder.valid ()
 		    && !link.start (processSetup.sampleRate, (uint32_t)processSetup.maxSamplesPerBlock,
-		                    processSetup.processMode == kRealtime, folder.card (), folder.engineLog (), folder.pluginLog (),
-		                    err))
+		                    processSetup.processMode == kRealtime, folder.card (), logOf (folder), logOf (folder), err))
 			fprintf (stderr, "LICHOMAT: the engine cannot start: %s\n", err.c_str ());
 		active = true;
 	}
@@ -295,7 +303,7 @@ tresult PLUGIN_API Processor::setState (IBStream* state)
 		return kResultFalse;
 	}
 	if (active)
-		link.restart (fresh.card (), fresh.engineLog (), fresh.pluginLog ());
+		link.restart (fresh.card (), logOf (fresh), logOf (fresh));
 	CardFolder old;
 	old.take (folder);
 	folder.take (fresh);

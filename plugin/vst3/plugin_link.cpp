@@ -58,10 +58,13 @@ void EngineLink::note (const char* fmt, ...)
 	FILE* f = path.empty () ? nullptr : fopen (path.c_str (), "a");
 	if (!f)
 		return;
+	struct timespec ts;
+	clock_gettime (CLOCK_REALTIME, &ts);
+	struct tm tm;
+	localtime_r (&ts.tv_sec, &tm);
 	char when[32];
-	const time_t now = time (nullptr);
-	strftime (when, sizeof when, "%Y-%m-%d %H:%M:%S", localtime (&now));
-	fprintf (f, "%s ", when);
+	strftime (when, sizeof when, "%Y-%m-%d %H:%M:%S", &tm);
+	fprintf (f, "%s.%03ld ", when, ts.tv_nsec / 1000000L);
 	va_list ap;
 	va_start (ap, fmt);
 	vfprintf (f, fmt, ap);
@@ -168,7 +171,9 @@ void EngineLink::monitor ()
 		plug_store (&mem->quit, 0);
 		plug_store (&mem->state, PLUG_ENGINE_NONE);
 		char err[256];
-		const pid_t pid = plug_spawnEngine (exe.c_str (), c.c_str (), wakeFd[0], life[1], memFd, log.c_str (), err, sizeof err);
+		/* no log (BASE/logs could not be made): the engine's output goes nowhere rather than stop it */
+		const pid_t pid = plug_spawnEngine (exe.c_str (), c.c_str (), wakeFd[0], life[1], memFd,
+		                                    log.empty () ? "/dev/null" : log.c_str (), err, sizeof err);
 		close (life[1]);
 		if (pid < 0)
 		{
@@ -193,7 +198,11 @@ void EngineLink::monitor ()
 			{
 				char b;
 				if (read (life[0], &b, 1) <= 0)
+				{
+					if (stopping)
+						why = "the plugin stopped it";	/* it took the quit before this loop saw stopping */
 					break;	/* the end of the pipe: the engine is gone */
+				}
 			}
 			if (stopping)
 			{
@@ -228,10 +237,13 @@ void EngineLink::monitor ()
 		}
 		close (life[0]);
 		int status = 0;
-		(void)waitpid (pid, &status, 0);	/* ECHILD when the host reaps its children itself */
+		char how[32] = "status unknown";	/* ECHILD when the host reaps its children itself */
+		if (waitpid (pid, &status, 0) == pid)
+			snprintf (how, sizeof how, WIFSIGNALED (status) ? "signal %d" : "exit %d",
+			          WIFSIGNALED (status) ? WTERMSIG (status) : WEXITSTATUS (status));
 		enginePid = -1;
 		const bool failed = plug_load (&mem->state) == PLUG_ENGINE_FAILED;
-		note ("engine %d ended: %s; underruns %llu, late %llu, dropped %llu, ring full %llu", (int)pid, why,
+		note ("engine %d ended (%s): %s; underruns %llu, late %llu, dropped %llu, ring full %llu", (int)pid, how, why,
 		      (unsigned long long)mem->underruns, (unsigned long long)mem->late, (unsigned long long)mem->dropped,
 		      (unsigned long long)mem->evDropped);
 		if (stopping)

@@ -18,6 +18,7 @@ import array
 import fractions
 import math
 import os
+import re
 import shutil
 import signal
 import struct
@@ -536,7 +537,7 @@ def P10_plugin_validator(t):
     result = [l for l in p.stdout.splitlines() if l.startswith('Result:')]
     print('\n'.join(result))
     check(p.returncode == 0 and result and result[-1].endswith(' 0 tests failed'), 'the validator: %d %r' % (p.returncode, result))
-    check(not os.listdir(t.path('home')), 'instance folders left: %r' % os.listdir(t.path('home')))
+    check(not instance_dirs(t.path('home')), 'instance folders left: %r' % os.listdir(t.path('home')))
 
 
 def macho_uuid(path):
@@ -715,7 +716,7 @@ def P10_plugin_state(t):
         head = f.read(8)
     print('two instances == one; the state, %d bytes (%r...), restores it' % (os.path.getsize(t.path('state.bin')), head))
     check(head == b'LCHS\x01\x00\x00\x00', 'the state header %r' % head)
-    check(not os.listdir(t.path('home')), 'instance folders left: %r' % os.listdir(t.path('home')))
+    check(not instance_dirs(t.path('home')), 'instance folders left: %r' % os.listdir(t.path('home')))
 
 
 @case
@@ -749,6 +750,51 @@ def P10_plugin_renew(t):
     back = next((i for i in range(198656, len(left)) if abs(left[i]) >= 4000), None)
     print('the new instance (latency %d) sounds %d frames after its start' % (lat[0], (back or 0) - 198656))
     check(back is not None and back - 198656 < 22070, 'no sound in 0.5 s after the renewal')
+
+
+def instance_dirs(home):
+    """the instance folders in BASE: 16 lowercase hex digits (plugin_card.cpp)"""
+    return [n for n in os.listdir(home) if len(n) == 16 and all(c in '0123456789abcdef' for c in n)]
+
+
+def instance_logs(home):
+    """{name: text} of the instance logs in BASE/logs"""
+    d = os.path.join(home, 'logs')
+    out = {}
+    for n in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        with open(os.path.join(d, n), errors='replace') as f:
+            out[n] = f.read()
+    return out
+
+
+@case
+def P10_plugin_logs(t):
+    # each instance's log, BASE/logs/<id>.log, outlives the instance (the owner's check P8 asks for it after the set
+    # is closed): the plugin's lines, each engine started and ended (with its exit), to the millisecond. BASE/logs
+    # keeps the newest 32 logs: with 40 old ones, a host's instance removes 8 when it starts, the next host's one
+    home = t.path('home')
+    logs = os.path.join(home, 'logs')
+    os.makedirs(logs)
+    old = time.time() - 3600
+    for k in range(40):
+        p = os.path.join(logs, '%016x.log' % k)
+        with open(p, 'w') as f:
+            f.write('an old log\n')
+        os.utime(p, (old + k, old + k))
+    stamp = r'\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} '
+    for run in (1, 2):
+        host(t, plan(t, 'run%d.txt' % run, TIMELINE + ['out ' + t.path('run%d.wav' % run)], frames=blocks_frames(1)))
+        found = instance_logs(home)
+        new = {n: x for n, x in found.items() if x != 'an old log\n'}
+        kept = sorted(n for n in found if n not in new)
+        print('after run %d: %d new logs, %d old kept (%s ... %s)' % (run, len(new), len(kept), kept[0], kept[-1]))
+        check(len(new) == run and all(n.endswith('.log') and len(n) == 20 for n in new), 'the new logs %r' % sorted(new))
+        check(kept == ['%016x.log' % k for k in range(7 + run, 40)], 'the old logs kept: %r' % kept)
+    for n, x in sorted(new.items()):
+        print('%s:\n%s' % (n, x.strip()))
+        check(re.search(stamp + r'engine \d+ started on .+/card\n', x)
+              and re.search(stamp + r'engine \d+ ended \(exit 0\): the plugin stopped it', x), '%s: %r' % (n, x))
+    check(not instance_dirs(home), 'instance folders left: %r' % instance_dirs(home))
 
 
 def longest_silence(x):
