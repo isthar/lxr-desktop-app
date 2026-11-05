@@ -971,6 +971,30 @@ def P10_plugin_spawn_fail(t):
     check(loud > 1000 and 'engine running' in out, 'no engine on the new card: %d loud frames, %r' % (loud, out))
 
 
+@case
+def P10_plugin_nonblock(t):
+    # The wake pipe's write end is non-blocking: with no engine to read it the pipe fills (64 KB, a byte a block),
+    # and a blocking write() would stop the audio thread for good. A copy of the bundle whose helper exits at once:
+    # 5 deaths, the instance "failed"; then 100,000 blocks of 16 frames in real time, unpaced, must go through
+    bundle, helper = bundle_copy(t, 'LICHOMAT.vst3')
+    with open(helper, 'w') as f:
+        f.write('#!/bin/sh\nexit 1\n')
+    os.chmod(helper, 0o755)
+    pl = plan(t, 'n.txt', ['mode realtime', 'out ' + t.path('n.wav')], rate=48000, block=16, frames=16 * 100000,
+              bundle=bundle)
+    t0 = time.monotonic()
+    try:
+        p = subprocess.run([t.a.host, pl], capture_output=True, text=True, timeout=60, env=host_env(t))
+    except subprocess.TimeoutExpired:
+        raise Fail('the host did not finish in 60 s: the wake-up write() blocks')
+    took = time.monotonic() - t0
+    log = ''.join(instance_logs(t.path('home')).values())
+    print(p.stdout.strip())
+    print('%d engines ended with exit 1; the host done in %.1f s' % (log.count('ended (exit 1): it died'), took))
+    check(p.returncode == 0 and 'engine failed' in p.stdout, 'the host: %d %s%s' % (p.returncode, p.stdout, p.stderr))
+    check(log.count('ended (exit 1): it died') == 5 and 'not started again: 5 deaths in a minute' in log, 'the log %r' % log)
+
+
 def longest_silence(x):
     best = run = 0
     for v in x:
