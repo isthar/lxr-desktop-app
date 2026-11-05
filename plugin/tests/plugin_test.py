@@ -821,6 +821,38 @@ def P10_plugin_kill(t):
 
 
 @case
+def P10_plugin_beats(t):
+    # real time, paced, 48 kHz, blocks of 256: the init card's four on the floor as the slave of a playing transport,
+    # no notes, the engine killed at 3 s. The plugin starts the new engine's slave afresh (Song Position and
+    # Continue where the transport is), so the beats come back within 1.5 s of the kill: every beat before the kill
+    # sounds at its frame plus the latency, -1 to +1 (P10_plugin_onsets), and every one from the first back, -2 to
+    # +2: the voices start on every second engine frame, 2.18 host frames at 48 kHz, and the new engine's epoch puts
+    # that grid anywhere among the host's frames (the first engine's is frame 0). The underruns in the instance's log
+    # tell a busy machine from a fault
+    frames, kill = 48000 * 6, 144000
+    init = os.path.join(t.a.root, 'emu', 'tests', 'cards', 'init')
+    lines = ['card ' + init, 'mode realtime', 'paced', 'play 0 120 0', 'kill %d' % kill, 'out ' + t.path('beats.wav')]
+    lat, _ = host(t, plan(t, 'beats.txt', lines, rate=48000, block=256, frames=frames, card=False))
+    _, _, x = wav(t.path('beats.wav'))
+    on = attacks(x[0::2])
+    beats = [b + lat[0] for b in beat_frames(48000.0, 256, frames, 120.0, frames, 120.0, float('inf'))]
+    before = [o for o in on if o < kill + lat[0]]
+    after = [o for o in on if o >= kill + lat[0]]
+    want = [w for w in beats if w < kill + lat[0]]
+    back = [w for w in beats if after and w >= after[0] - 1 and w < frames - 64]
+    print('latency %d; %d onsets before the kill (%d beats), the first after it at %.3f s, %d after (%d beats)'
+          % (lat[0], len(before), len(want), (after[0] if after else 0) / 48000, len(after), len(back)))
+    print('onset - (beat + latency): before %r, after %r' % (sorted(set(o - w for o, w in zip(before, want))),
+                                                            sorted(set(o - w for o, w in zip(after, back)))))
+    log = ''.join(instance_logs(t.path('home')).values())
+    print('the log: %s' % '; '.join(re.findall(r'engine \d+ ended \([^)]*\): [^;]*; underruns \d+', log)))
+    check(len(before) == len(want) and all(-1 <= o - w <= 1 for o, w in zip(before, want)), 'before the kill: %r' % before)
+    check(after and after[0] < kill + 72000, 'no beat within 1.5 s of the kill: %r' % after[:3])
+    check(len(after) == len(back) and all(-2 <= o - w <= 2 for o, w in zip(after, back)), 'after the kill: %r, beats %r'
+          % (after, back))
+
+
+@case
 def P10_plugin_rt(t):
     # the audio thread under the interposer, paced in real time for 10 s at 48 kHz in blocks of 128: no allocation,
     # lock, wait, read or sleep inside process(), one write (the wake-up) per call

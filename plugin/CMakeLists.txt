@@ -184,8 +184,8 @@ add_library(plug_rtcheck SHARED tests/plug_rtcheck.c)
 target_compile_options(plug_rtcheck PRIVATE ${PLUGIN_FLAGS})
 set(PLUGIN_HOST_TEST ${PLUGIN_BUNDLE_TEST} --host $<TARGET_FILE:lichomat-plughost> --rtcheck $<TARGET_FILE:plug_rtcheck>)
 foreach(id P10_plugin_native P10_plugin_onsets P10_plugin_latency P10_plugin_resampled P10_plugin_state P10_plugin_app_card
-        P10_plugin_renew P10_plugin_kill P10_plugin_rt P10_plugin_logs)
+        P10_plugin_renew P10_plugin_kill P10_plugin_rt P10_plugin_logs P10_plugin_beats)
     add_test(NAME ${id} COMMAND ${PLUGIN_HOST_TEST} ${id})
     set_tests_properties(${id} PROPERTIES TIMEOUT 600 LABELS plugin)
 endforeach()
-set_tests_properties(P10_plugin_kill P10_plugin_rt PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
+set_tests_properties(P10_plugin_kill P10_plugin_rt P10_plugin_beats PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
