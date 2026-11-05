@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 03:03",
+    "updated": "2026-11-05 03:10",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "v0.7: grupa B (E6.31, E6.32)",
+    "focus": "v0.7: grupy A i B gotowe; następne E6.33 (interfejs)",
     "branch": "timing-core",
-    "head": "1bc3732",
-    "next": "E6.31–E6.32 (klej, pliki), potem pełny przegląd; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T03:03:00+01:00",
-    "now": "E6.32: ostatni test z przeglądu jakości (od 03:05); potem E6.31–E6.32 zrobione"
+    "head": "f4378f5",
+    "next": "E6.33 (zad. 6, interfejs) i E6.34 (zad. 7, emulator); czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
+    "updated_at": "2026-11-05T03:10:00+01:00",
+    "now": "Zaparkowane: nic nie działa w tle"
   },
   "epics": [
     {
@@ -715,14 +715,14 @@
     {
       "id": "E6.31",
       "epic": "E6",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "v0.7 zad. 4: klej: vtpl w RAM, własne szablony, zapis szablonu (to, co słychać, Q36), zerowanie mikrotimingu; test own_capture",
       "updated": "2026-11-05"
     },
     {
       "id": "E6.32",
       "epic": "E6",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "v0.7 zad. 5: pliki: blok 3 w .pat, USERTPL.LCH; testy pattern_block3, user_templates; pełny przegląd",
       "updated": "2026-11-05"
     },
@@ -4315,6 +4315,11 @@
       "n": 604,
       "at": "2026-11-05 03:03",
       "text": "E6.31–E6.32: recenzent jakości zatwierdził poprawki. Ścieżka błędu zapisu zgadza się linia w linię z istniejącą pętlą zapisu, a przy starcie błąd odczytu zostawia szablony projektu. Został jeden drobny mutant: błąd odczytu w danych szablonów, nie w nagłówku. Implementer domyka go testem. Uwagi do zad. 6 dopisane w planie (komunikat „Card full!” zamiast „unknown!”); znaleziony też stary błąd z fw 1.7 w appMain.c:671, na później."
+    },
+    {
+      "n": 605,
+      "at": "2026-11-05 03:10",
+      "text": "E6.31 i E6.32 zrobione (v0.7 zad. 4–5, 0250d74..2d91ef9): klej i pliki po pełnym przeglądzie. 2d91ef9 domyka ostatniego mutanta (błąd odczytu w danych szablonów). Wszystkie mutanty obu recenzentów padają. Host 135/135, emulator 346/346, oba sanitizery, 38 nagrań wzorcowych bez zmian. Koniec bloku kofeiny: zaparkowane, nic nie działa w tle. Następne: E6.33 (v0.7 zad. 6, interfejs)."
     }
   ]
 }
