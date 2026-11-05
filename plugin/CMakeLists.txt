@@ -121,9 +121,9 @@ function(plugin_py_tests)
         set_tests_properties(${id} PROPERTIES TIMEOUT 600 LABELS plugin)
     endforeach()
 endfunction()
-plugin_py_tests(P6_engine_version P6_engine_native P6_engine_blocks P6_engine_seed P6_engine_epoch P6_engine_quit
-    P7_engine_resampled P7_engine_realtime)
-set_tests_properties(P7_engine_realtime PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
+plugin_py_tests(P6_engine_version P6_engine_native P6_engine_blocks P6_engine_paced P6_engine_seed P6_engine_epoch
+    P6_engine_quit P7_engine_resampled P7_engine_realtime)
+set_tests_properties(P6_engine_paced P7_engine_realtime PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
 
 # --- the card archive (the plugin's state, Task 7) -------------------------------------------
 # with its own copy of the card's POSIX half, built without the emulator's sanitizers: the

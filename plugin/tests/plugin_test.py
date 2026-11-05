@@ -261,16 +261,34 @@ def P6_engine_native(t):
 
 @case
 def P6_engine_blocks(t):
-    # the block size does not change the output: 1, 37, 512 and 4,096 frames
+    # the block size does not change the output: 1, 37, 512 and 4,096 frames; no input late or dropped (with
+    # blocks of 1 the engine waits at the published frontier at every hook)
     script = write_script(t, 'script.txt')
     frames = blocks_frames(3)
     t.render(t.card('render'), script, 3, t.path('render.wav'))
     for b in (1, 37, 512, 4096):
         out = t.path('drive-%d.wav' % b)
-        t.drive(t.card('b%d' % b), RATE_TEXT, b, script, frames, out)
+        s = t.drive(t.card('b%d' % b), RATE_TEXT, b, script, frames, out)
+        check(s.get('late') == 0 and s.get('dropped') == 0 and s.get('full') == 0, 'blocks of %d: counters %r' % (b, s))
         d = same_files(t.path('render.wav'), out)
         check(d is None, 'blocks of %d: %s' % (b, d))
     print('blocks of 1, 37, 512, 4096: each == render')
+
+
+@case
+def P6_engine_paced(t):
+    # paced like a host at 44,140.625 Hz in blocks of 128 with the default margin, 3 s: the engine waits at the
+    # published frontier, as in a host, and no input is late; the output, read plug_readOffset() frames behind as
+    # the plugin reads it, is the renderer's byte for byte
+    script = write_script(t, 'script.txt')
+    frames = blocks_frames(3)
+    t.render(t.card('render'), script, 3, t.path('render.wav'))
+    s = t.drive(t.card('p'), RATE_TEXT, 128, script, frames, t.path('drive.wav'), realtime=128)
+    check(s.get('late') == 0 and s.get('dropped') == 0 and s.get('full') == 0 and s.get('underruns') == 0,
+          'counters %r' % s)
+    d = same_files(t.path('render.wav'), t.path('drive.wav'))
+    check(d is None, 'paced: %s' % d)
+    print('paced, blocks of 128: == render, late 0')
 
 
 @case
@@ -361,7 +379,8 @@ def P7_engine_resampled(t):
 
 @case
 def P7_engine_realtime(t):
-    # paced like a host at 48 kHz in blocks of 128 with the default margin, four engines at once: no underrun
+    # paced like a host at 48 kHz in blocks of 128 with the default margin, four engines at once: no underrun, no
+    # input late or dropped
     script = write_script(t, 'script48.txt', 48000)
     frames = 48000 * 10
     procs = []
@@ -372,7 +391,8 @@ def P7_engine_realtime(t):
         out, _ = p.communicate(timeout=120)
         print('engine %d: %s' % (i, out.strip()))
         s = parse_drive(out)
-        check(p.returncode == 0 and s.get('underruns') == 0, 'engine %d: %s' % (i, out))
+        check(p.returncode == 0 and all(s.get(k) == 0 for k in ('underruns', 'late', 'dropped', 'full')),
+              'engine %d: %s' % (i, out))
 
 
 def main():
