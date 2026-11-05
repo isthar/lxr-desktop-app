@@ -16,6 +16,11 @@
 
 #define PLUG_JUMP (1.0 / 48.0)	/**< half a clock, in quarter notes: a larger difference is a jump */
 #define PLUG_AT_ZERO 1e-6		/**< a start closer than this to position 0 is a start at 0 */
+#define PLUG_TEMPO_MIN 1.0		/**< quarter notes per minute */
+#define PLUG_TEMPO_MAX 10000.0
+#define PLUG_PPQ_MAX 1e9		/**< quarter notes: a position or a loop bound beyond +-1e9 is none */
+#define PLUG_RATE_MIN 1000.0	/**< frames per second */
+#define PLUG_RATE_MAX 1e7
 
 typedef struct
 {
@@ -101,10 +106,19 @@ static void clocks(plug_clock_t *c, sink_t *s, double fpq, uint32_t fo, double q
 	}
 }
 
+/* A position within +-PLUG_PPQ_MAX; false for NaN and the infinities. Every number clocks() and
+ * sixteenth() compute from such a position, a tempo and a rate in range is finite, an int64_t
+ * holds the 16th, and a block holds at most 4 clocks a frame. */
+static int position(double p)
+{
+	return fabs(p) <= PLUG_PPQ_MAX;
+}
+
 unsigned plug_clockBlock(plug_clock_t *c, const plug_transport_t *t, uint32_t frames, plug_midi_t *out, unsigned max)
 {
 	sink_t s = { out, 0, max };
-	if (!t->valid || !t->playing || !(t->tempo > 0.0))
+	if (!t->valid || !t->playing || !(t->tempo >= PLUG_TEMPO_MIN && t->tempo <= PLUG_TEMPO_MAX) || !position(t->ppq)
+		|| !(c->rate >= PLUG_RATE_MIN && c->rate <= PLUG_RATE_MAX))
 	{
 		if (c->running)
 			put(&s, 0, 0xFC, 0, 0, 1);
@@ -127,7 +141,8 @@ unsigned plug_clockBlock(plug_clock_t *c, const plug_transport_t *t, uint32_t fr
 			start(c, &s, 0, p0);	/* a jump during a count-in */
 	}
 	const double end = p0 + (double)frames / fpq;
-	const double w = t->cycle && t->cycleEnd > t->cycleStart && p0 < t->cycleEnd ? floor((t->cycleEnd - p0) * fpq + 0.5) : -1.0;
+	const int loop = t->cycle && position(t->cycleStart) && position(t->cycleEnd) && t->cycleEnd > t->cycleStart;
+	const double w = loop && p0 < t->cycleEnd ? floor((t->cycleEnd - p0) * fpq + 0.5) : -1.0;
 	if (w >= 0.0 && w < (double)frames)
 	{
 		/* the loop's end inside the block: a jump at its frame. One at or after the block's end is

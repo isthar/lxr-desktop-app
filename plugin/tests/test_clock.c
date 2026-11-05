@@ -14,6 +14,7 @@
  */
 #include <math.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "plug_clock.h"
 #include "seqc_test.h"
@@ -366,6 +367,73 @@ TEST(P4_clock_no_context)
 	plug_clockInit(&c, 48000.0);
 	block(&c, &t, 0, 512);
 	ASSERT_EQ(nev, 0);
+}
+
+TEST(P4_clock_garbage)
+{
+	/* A tempo or a position that is not a number, a tempo outside 1-10,000 BPM, a position beyond
+	 * +-1e9 quarter notes or a rate outside 1,000-10,000,000 Hz is no context: Stop once if
+	 * running, then nothing. Each block must return: a tempo or a position of +inf, or a position
+	 * of 1e300, made clocks() loop forever, and a NaN position or a tempo of 1e-320 converted NaN
+	 * to an integer (UBSan). A hang fails the test by its alarm. */
+	alarm(20);
+	const double tempos[] = { INFINITY, -INFINITY, NAN, 0.0, -120.0, 1e-320, 0.999, 10000.5 };
+	const double ppqs[] = { NAN, INFINITY, -INFINITY, 1e300, -1e300, 1.5e9, -1.5e9 };
+	const unsigned nt = sizeof tempos / sizeof tempos[0], np = sizeof ppqs / sizeof ppqs[0];
+	plug_midi_t out[64];
+	plug_clock_t c;
+	plug_transport_t t;
+	for (unsigned i = 0; i < nt + np; i++)
+	{
+		plug_clockInit(&c, 48000.0);
+		t = playing(120.0, 0.0);
+		ASSERT_EQ(plug_clockBlock(&c, &t, 512, out, 64), 2);	/* Start and clock 0 */
+		t = i < nt ? playing(tempos[i], 512.0 / 24000.0) : playing(120.0, ppqs[i - nt]);
+		ASSERT_EQ(plug_clockBlock(&c, &t, 512, out, 64), 1);
+		ASSERT_EQ(out[0].b[0], 0xFC);
+		ASSERT_EQ(plug_clockBlock(&c, &t, 512, out, 64), 0);
+		plug_clockInit(&c, 48000.0);	/* from the start: nothing */
+		ASSERT_EQ(plug_clockBlock(&c, &t, 512, out, 64), 0);
+	}
+	/* the bounds are good: 1 and 10,000 BPM (12 frames a clock), positions of +-1e9 */
+	plug_clockInit(&c, 48000.0);
+	t = playing(1.0, 0.0);
+	ASSERT_EQ(plug_clockBlock(&c, &t, 512, out, 64), 2);
+	plug_clockInit(&c, 48000.0);
+	t = playing(10000.0, 0.0);
+	ASSERT_EQ(plug_clockBlock(&c, &t, 512, out, 64), 44);	/* Start and the clocks at 0, 12, ..., 504 */
+	ASSERT_EQ(out[43].offset, 504);
+	plug_clockInit(&c, 48000.0);
+	t = playing(120.0, 1e9);
+	ASSERT_EQ(plug_clockBlock(&c, &t, 512, out, 64), 3);	/* Song Position, Continue, the clock of 1e9 */
+	ASSERT_EQ(out[0].b[0], 0xF2);
+	plug_clockInit(&c, 48000.0);
+	t = playing(120.0, -1e9);
+	ASSERT_EQ(plug_clockBlock(&c, &t, 512, out, 64), 0);	/* a count-in, from far before 0 */
+	/* rates outside 1,000-10,000,000 Hz: nothing */
+	const double rates[] = { 0.0, -48000.0, NAN, INFINITY, 999.0, 2e7 };
+	for (unsigned i = 0; i < sizeof rates / sizeof rates[0]; i++)
+	{
+		plug_clockInit(&c, rates[i]);
+		t = playing(120.0, 0.0);
+		ASSERT_EQ(plug_clockBlock(&c, &t, 512, out, 64), 0);
+	}
+	/* loop bounds that are not numbers within +-1e9 are no loop: from 4, Song Position 16, Continue
+	 * and clock 96, as without a loop (a start of -inf or -1e300 wrapped at frame 240 to 0) */
+	const double bounds[][2] = { { NAN, 8.0 }, { 4.0, NAN }, { -INFINITY, 4.01 }, { 4.0, INFINITY },
+		{ -1e300, 4.01 }, { 4.0, 1e300 }, { -2e9, 4.01 } };
+	for (unsigned i = 0; i < sizeof bounds / sizeof bounds[0]; i++)
+	{
+		plug_clockInit(&c, 48000.0);
+		t = playing(120.0, 4.0);
+		t.cycle = 1;
+		t.cycleStart = bounds[i][0];
+		t.cycleEnd = bounds[i][1];
+		ASSERT_EQ(plug_clockBlock(&c, &t, 512, out, 64), 3);
+		ASSERT_EQ(out[0].b[1], 16);
+		ASSERT_EQ(out[2].b[0], 0xF8);
+	}
+	alarm(0);
 }
 
 TEST(P4_clock_count_in)

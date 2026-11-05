@@ -20,7 +20,10 @@
  *   the one expected) or at the loop's end inside a block: Stop, Song Position, Continue at the
  *   jump's frame, then the clocks from the new 16th on. The slave takes a Song Position only
  *   while stopped (seq_core.h:752-765).
- * - Stopped, or no tempo or position from the host: Stop once, then nothing.
+ * - Stopped, or no tempo or position from the host: Stop once, then nothing. So is a tempo or a
+ *   position that is not a number, a tempo outside 1-10,000 BPM, a position beyond +-1e9 quarter
+ *   notes, or a rate outside 1,000-10,000,000 Hz; loop bounds that are not numbers within +-1e9
+ *   are no loop. Every block returns, whatever the host gives.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
