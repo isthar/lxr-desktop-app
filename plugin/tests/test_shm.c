@@ -223,10 +223,11 @@ TEST(P3_shm_overwritten)
 
 TEST(P3_shm_overrun)
 {
-	/* A child writes frames as fast as it can, in blocks of 64, frame f's samples f mod 2^24; the
-	 * parent reads the oldest 1,024 frames the ring holds, the first of which the child writes over
-	 * meanwhile. A frame plug_audioRead() copies must be that frame, not one written over it while
-	 * it was copied: the copied frames are the last n of the 1,024 (n its result), the others 0. */
+	/* A child writes frames as fast as it can, in blocks of 1,024, frame f's samples f mod 2^24;
+	 * the parent reads the oldest 1,024 frames the ring holds, the first of which the child writes
+	 * over meanwhile. A frame plug_audioRead() copies must be that frame, not one written over it
+	 * while it was copied: the copied frames are the last n of the 1,024 (n its result), the others
+	 * 0. The large blocks make a wide window for an audioEnd published only at a block's end. */
 	char err[160];
 	int fd = -1;
 	plug_shm_t *s = plug_shmCreate(48000.0, 512, &fd, err, sizeof err);
@@ -239,14 +240,14 @@ TEST(P3_shm_overrun)
 		plug_shm_t *c = plug_shmMap(fd, err, sizeof err);
 		if (!c)
 			_exit(3);
-		float lr[2 * 64];
+		static float lr[2 * 1024];
 		uint64_t f = 0;
 		while (!plug_load(&c->quit))
 		{
-			for (unsigned i = 0; i < 64; i++)
+			for (unsigned i = 0; i < 1024; i++)
 				lr[2 * i] = lr[2 * i + 1] = (float)((f + i) & 0xFFFFFFu);
-			plug_audioWrite(c, lr, 64);
-			f += 64;
+			plug_audioWrite(c, lr, 1024);
+			f += 1024;
 		}
 		_exit(0);
 	}
