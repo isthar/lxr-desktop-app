@@ -1354,7 +1354,7 @@ static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint
 		d->hits = hits;
 		d->offset = (int16_t)offset;
 		d->len = len;
-		if (!plays)
+		if (!plays || offset >= 0)	//LICHOMAT v0.7: no hit before the boundary, so none to queue here: skip the velocity and the hit loop (CPU)
 			return;
 	}
 	else if (d->timed && (d->offset < 0 || offset < 0))
