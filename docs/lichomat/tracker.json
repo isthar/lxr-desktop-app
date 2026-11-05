@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 02:56",
+    "updated": "2026-11-05 03:03",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7: grupa B (E6.31, E6.32)",
     "branch": "timing-core",
-    "head": "7dedf5f",
+    "head": "1bc3732",
     "next": "E6.31–E6.32 (klej, pliki), potem pełny przegląd; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T02:56:00+01:00",
-    "now": "E6.31–E6.32: recenzent jakości sprawdza poprawki (od 02:55)"
+    "updated_at": "2026-11-05T03:03:00+01:00",
+    "now": "E6.32: ostatni test z przeglądu jakości (od 03:05); potem E6.31–E6.32 zrobione"
   },
   "epics": [
     {
@@ -4310,6 +4310,11 @@
       "n": 603,
       "at": "2026-11-05 02:56",
       "text": "E6.31–E6.32 jakość, 6293f3f, 4388f45: błąd zapisu przy pełnej karcie naprawiony. Krótki zapis albo nieudane zamknięcie pliku to teraz błąd, zapis projektu go zgłasza i nie czyści /tmp, więc szablony zostają. Test z kartą symulującą błędy najpierw nie przechodził, teraz przechodzi. Wczytywanie szablonów zwraca wynik: brak pliku albo zły plik to puste szablony, inny błąd karty przerywa wczytywanie projektu. Bramka: host 135/135, ASan 135/135, emulator 346/346, ASan emulatora 317/317, 38 nagrań wzorcowych, 0 ostrzeżeń, budżet 470 180 z 471 032 B. Recenzent jakości sprawdza poprawki."
+    },
+    {
+      "n": 604,
+      "at": "2026-11-05 03:03",
+      "text": "E6.31–E6.32: recenzent jakości zatwierdził poprawki. Ścieżka błędu zapisu zgadza się linia w linię z istniejącą pętlą zapisu, a przy starcie błąd odczytu zostawia szablony projektu. Został jeden drobny mutant: błąd odczytu w danych szablonów, nie w nagłówku. Implementer domyka go testem. Uwagi do zad. 6 dopisane w planie (komunikat „Card full!” zamiast „unknown!”); znaleziony też stary błąd z fw 1.7 w appMain.c:671, na później."
     }
   ]
 }
