@@ -1,0 +1,110 @@
+# LICHOMAT jako wtyczka do Abletona: szkic z rekomendacjami
+
+| | |
+|---|---|
+| Data | 2026-11-05 |
+| Status | Szkic do Twoich poprawek (tracker E9.1, decyzja Q38). Według reguły z 29.10 idę dalej z tymi rekomendacjami, dopóki ich nie zmienisz |
+| Podstawa | Emulator z etapu 1b (`emu/`, gałąź `v0.7`), ten sam kod firmware co na LXR |
+| Nie zmienia | Firmware na LXR, gałęzi 0.4–0.7 ani aplikacji emulatora |
+
+## 1. Po co
+
+Emulator gra kodem firmware na Macu, ale jako osobna aplikacja: ma własne wyjście audio, a z Abletonem łączy go tylko MIDI clock. Wtyczka instrumentu daje to samo wprost w secie:
+
+- dźwięk idzie na ścieżkę Live'a, więc działa w miksie, w bounce i we freeze;
+- nuty i automatyka płyną z klipów;
+- sekwencer idzie za tempem i pozycją Live'a.
+
+Mikrotiming, szablony i dynamika z v0.6–v0.7 słychać wtedy w aranżacji, nie tylko na żywo.
+
+## 2. Co proponuję
+
+1. **Formaty: VST3 i AU v2, tylko Mac z Apple Silicon.**
+   - Live 12 na Macu ładuje AU, VST2 i VST3. CLAP-a nie ładuje, więc go pomijam.
+   - SDK VST3 jest od 29.10.2025 na licencji MIT, AudioUnitSDK Apple'a na Apache-2.0. Obie dają się połączyć z GPL-3.0.
+   - JUCE odpada: jest na AGPL albo licencji komercyjnej i wymaga Xcode.
+   - Emulator buduje się tylko na arm64, więc wtyczka też. Intel nie wchodzi w grę.
+2. **Silnik w osobnym procesie na każdą instancję wtyczki.** Wtyczka w Live'ie to cienka warstwa: przekazuje bloki audio, nuty i transport przez pamięć współdzieloną do procesu z silnikiem. Ten proces to emulator bez okna, jak `lichomat-render`. Powody, wszystkie z kodu:
+   - Firmware trzyma cały stan w zmiennych globalnych (ok. 0,66 MB) i daje się uruchomić tylko raz na proces (`emu_powerOn()`). Restartu w procesie nie ma; aplikacja emulatora robi „power cycle” nowym procesem. Usunięcie i ponowne dodanie urządzenia w Live'ie wymaga więc nowego procesu. Kilka instancji naraz to kilka procesów, więc też działa.
+   - Błąd w silniku woła `abort()`. W procesie Live'a zamknąłby cały Live razem z Twoim setem. W osobnym procesie wtyczka tylko milknie, pokazuje „silnik zatrzymany” i uruchamia go ponownie z ostatnim stanem.
+   - Silnik czyta i pisze kartę, alokuje pamięć i potrzebuje 8 MB stosu, czyli robi rzeczy, których nie wolno robić w wątku audio hosta. We własnym procesie wolno.
+   - Odrzucona alternatywa: kopia biblioteki z silnikiem ładowana osobno dla każdej instancji. Daje świeży stan, ale `abort()` i przechwytywanie sygnałów dalej dotyczą procesu Live'a.
+3. **Opóźnienie zgłoszone hostowi.**
+   - Silnik liczy z wyprzedzeniem, a wtyczka podaje Live'owi stałe opóźnienie, które Live wyrównuje przy odtwarzaniu (kompensacja opóźnień wtyczek).
+   - Przy graniu klipów i aranżacji tego opóźnienia nie słychać. Przy graniu na żywo z klawiatury słychać.
+   - Cel: ≤ 10 ms ponad stałe 2,9 ms silnika (128 próbek kolejki głosów, jak na LXR). Prototyp to zmierzy; aplikacja emulatora ma dziś 34–58 ms, bo jej bufor jest dobrany pod CoreAudio, nie pod hosta.
+4. **Synchronizacja z Live'em w dwóch krokach.**
+   - **Prototyp, bez zmiany firmware:** wtyczka zamienia transport Live'a na MIDI clock i Song Position, wpisane w dokładne chwile, a sekwencer gra jako slave, tak jak z zegarem z Abletona dziś. Ograniczenia obecnego slave'a:
+     - po zmianie tempa dochodzi do nowego przez dopasowanie (najmniejsze kwadraty);
+     - pozycję przyjmuje tylko w stanie zatrzymanym;
+     - przeskok pętli Live'a to stop, pozycja i continue.
+   - **Docelowo, tryb „host” w `seq_core`:** w każdym bloku wtyczka podaje pozycję w ćwierćnutach, tempo i stan transportu, a rdzeń ustawia na tym swój zegar muzyczny. Przeskoki pętli i zmiany tempa wypadają wtedy co do próbki. To zmiana w rdzeniu (nowe wejście w skrzynce i nowa funkcja), testowana na hoście jak reszta `seq_core`. LXR jej nie wywołuje, więc jego gra się nie zmienia; wszystkie nagrania wzorcowe zostają.
+5. **Częstotliwość próbkowania.**
+   - Silnik liczy w 44 140,625 Hz, tak jak LXR. Proces silnika przelicza to na częstotliwość Live'a (44,1, 48, 88,2 lub 96 kHz) konwerterem Apple'a (AudioConverter) w tej samej jakości, co aplikacja emulatora dziś.
+   - W trybie testowym wtyczka może oddawać 44 140,625 Hz bez przeliczania, żeby porównać ją bit w bit z rendererem.
+6. **Wyjścia.** Stereo sumy w prototypie. Potem dwie szyny stereo, out1 i out2, tak jak gniazda LXR:
+   - głosy idą tam według `audio_out` kitu;
+   - w Live'ie to wyjścia instrumentu na osobne ścieżki.
+
+   Osobnego wyjścia na każdy z sześciu głosów LXR nie ma, a wtyczka tego nie zmienia.
+7. **Wejścia.**
+   - Nuty MIDI z klipów trafiają do silnika z dokładnym momentem w bloku. Silnik przyjmuje zdarzenia z czasem co do cyklu, a dźwięk wypada na siatce 2 próbek, jak na LXR.
+   - Firmware już obsługuje Program Change (zmiana wzorca); plan sprawdzi, co dokładnie robi.
+   - Parametry jako automatyka Live'a: wybrane parametry kitu idą do firmware tą samą drogą, co edycje w rendererze (CC). W prototypie kilka, potem lista do Twojego wyboru.
+8. **Stan w secie.**
+   - Każda instancja ma własną kartę: folder w `~/Library/Application Support/LICHOMAT Plugin/<id instancji>`.
+   - Przy zapisie setu wtyczka zapisuje folder projektu z kartą (z `/tmp`, w kolejności plików, bo firmware czyta je według niej) jako jeden blok danych w stanie wtyczki.
+   - Przy otwarciu setu rozpakowuje go do świeżego folderu i uruchamia silnik na nim.
+   - Start trwa ok. 2 s czasu emulatora. Proces silnika liczy go bez czekania na zegar ścienny (renderer liczy ponad 10 razy szybciej), więc to ułamek sekundy.
+9. **Okno.**
+   - Prototyp: bez własnego okna, tylko ogólne okno parametrów Live'a.
+   - Potem panel z emulatora w oknie wtyczki. Panel rozmawia tylko z interfejsem powłoki aplikacji, więc da się go podłączyć przez adapter. Backend Dear ImGui dla macOS zakłada jednak globalne haki zdarzeń (monitor NSEvent, aktywacja aplikacji); w cudzym oknie trzeba je zastąpić własnymi.
+10. **Licencja i nazwa.**
+    - Wtyczka na GPL-3.0, z tymi samymi warunkami NOTICE.md co reszta: bez nazw „Erica Synths”, „LXR”, „LXR-02” sugerujących związek z producentem, oznaczona jako zmodyfikowana.
+    - Nazwa: „LICHOMAT” (VST3 i AU), producent we wtyczce: „LICHOMAT” albo Twoje imię, do Twojego wyboru.
+    - Logo VST nie używam, bo wymaga osobnej umowy ze Steinbergiem.
+    - Sprawdzenie licencji (test M21) obejmuje też pliki wtyczki.
+    - Kodu z niekomercyjnych projektów (oryginalne wtyczki Sonic Potions, `lxr-vst3`, LXR02XXL i inne z listy emulatora) nie używam, tak jak w emulatorze.
+11. **Dystrybucja.**
+    - U Ciebie lokalnie wystarczy podpis ad hoc.
+    - Do udostępnienia innym trzeba podpisu Developer ID i notaryzacji Apple'a. To Twoje konto, więc decyzja Twoja, po prototypie.
+
+Poza zakresem tego etapu: MIDI out z wtyczki, Windows i Intel, wtyczka efektu (np. sam pogłos), AU v3.
+
+## 3. Jak sprawdzę bez Ciebie
+
+- **Walidatory:** walidator z SDK VST3 i `auval` Apple'a dla AU. Oba muszą przejść bez błędów.
+- **Własny mały host testowy:**
+  - ładuje wtyczkę, podaje transport i nuty, zapisuje WAV;
+  - porównuje wynik z rendererem w trybie bez przeliczania próbkowania (bit w bit) i z przeliczaniem (różnica tylko z konwertera);
+  - sprawdza moment uderzeń przez kilka pętli i zmian tempa (log uderzeń, jak w testach emulatora).
+- **Odporność:**
+  - zabicie procesu silnika w trakcie: wtyczka milknie i wraca;
+  - dwie i cztery instancje naraz;
+  - usunięcie i ponowne dodanie;
+  - zapis i odtworzenie stanu.
+- **Czas rzeczywisty:** wątek audio wtyczki niczego nie alokuje i na nic nie czeka (sprawdzane narzędziem do wykrywania blokad, jak bufor audio w aplikacji emulatora).
+
+## 4. Kolejność i Twoje sprawdzenia
+
+| Wiersz | Co | Twoje sprawdzenie w Abletonie |
+|---|---|---|
+| E9.2 | Prototyp: VST3, proces silnika, stereo, nuty, synchronizacja przez MIDI clock, karta na instancję, bez okna | Ok. 20 min: wtyczka się ładuje, gra z klipu, idzie za tempem, dwie instancje, zapis i otwarcie setu |
+| E9.3 | Tryb „host” w `seq_core`: pętle i zmiany tempa co do próbki; pomiar i zmniejszenie opóźnienia | Pętla 4 takty z mikrotimingiem przez 5 min bez dryfu, zmiana tempa w aranżacji |
+| E9.4 | AU, dwie szyny stereo, automatyka parametrów, stan w secie dopracowany | Wyjścia na osobne ścieżki, automatyka, freeze i bounce |
+| E9.5 | Panel w oknie wtyczki | Obsługa panelu w oknie Live'a |
+
+Każdy wiersz dostaje plan i przeglądy jak v0.6–v0.7. Prace nad wtyczką nie zmieniają gałęzi firmware z Twojej sesji testowej. Tryb „host” (E9.3) wejdzie do rdzenia na gałęzi po v0.7, z testami.
+
+## 5. Otwarte do Twojej poprawki (z moimi domyślnymi)
+
+| | Domyślnie |
+|---|---|
+| Kolejność wobec v0.7 | Równolegle (Q38) |
+| Formaty | VST3 i AU v2, tylko Apple Silicon |
+| Silnik | Osobny proces na instancję |
+| Synchronizacja | Prototyp przez MIDI clock, potem tryb „host” w rdzeniu |
+| Wyjścia | Stereo sumy, potem out1 i out2 |
+| Okno | Prototyp bez okna, panel w E9.5 |
+| Nazwa i producent | „LICHOMAT”, producent do Twojego wyboru |
+| Udostępnianie innym | Po prototypie, Twoja decyzja o podpisie i notaryzacji |

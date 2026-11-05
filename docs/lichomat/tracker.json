@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 17:39",
+    "updated": "2026-11-05 17:54",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7 grupa C (E6.33–E6.34) i szkic wtyczki (E9.1)",
     "branch": "timing-core",
-    "head": "3c1eec0",
+    "head": "0f5d2f3",
     "next": "E6.33–E6.34, potem E6.35–E6.36; E9.1 szkic wtyczki do Twoich poprawek, potem E9.2 prototyp; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13 (A czy B), poprawki szkicu v0.7, CI; sprzęt (H12, E8.1)",
-    "updated_at": "2026-11-05T17:39:00+01:00",
-    "now": "E6.33: implementer grupy C v0.7 pracuje (od 17:40); E9.1: rozpoznanie emulatora pod wtyczkę (od 17:40)"
+    "updated_at": "2026-11-05T17:54:00+01:00",
+    "now": "E6.33: implementer grupy C v0.7 pracuje (od 17:40); E9.2: plan prototypu wtyczki (od 18:10)"
   },
   "epics": [
     {
@@ -925,14 +925,14 @@
     {
       "id": "E9.1",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Rozpoznanie i szkic wtyczki z rekomendacjami (docs/superpowers/specs/2026-11-05-plugin-draft.md): formaty i licencje (VST3, AU, GPL), jak emulator prowadzi czas i wątki, synchronizacja z transportem hosta, jedna czy kilka instancji, 44 140,625 Hz wobec 44,1/48 kHz, stan w secie, wyjścia, sprawdzanie bez Abletona; decyzja Q38",
       "updated": "2026-11-05"
     },
     {
       "id": "E9.2",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Prototyp: jedna instancja, VST3 i AU, nuty MIDI odpalają głosy, sekwencer idzie za tempem i pozycją Abletona, wyjście stereo; walidatory (VST3 validator, auval) i rendery bez hosta; Twój test w Abletonie",
       "updated": "2026-11-05"
     }
@@ -4354,6 +4354,11 @@
       "n": 606,
       "at": "2026-11-05 17:39",
       "text": "Kawa na 8 h (do ok. 01:40). Nowy epik E9: wtyczka do Abletona (VST3, AU) z emulatora; Q38 zamknięte: robię ją równolegle z v0.7. E9.1 start: rozpoznanie i szkic z rekomendacjami. E6.33 start: grupa C v0.7 (zad. 6 interfejs, zad. 7 emulator), jeden implementer, potem lekki przegląd."
+    },
+    {
+      "n": 607,
+      "at": "2026-11-05 17:54",
+      "text": "E9.1 zrobione: szkic wtyczki docs/superpowers/specs/2026-11-05-plugin-draft.md, do Twoich poprawek. Rekomendacje: VST3 i AU v2 na Apple Silicon (SDK VST3 jest od 29.10.2025 na MIT); silnik w osobnym procesie na każdą instancję, bo firmware ma stan globalny bez restartu w procesie, a błąd kończy się abort(), który zamknąłby Live; synchronizacja najpierw przez MIDI clock, potem tryb host w seq_core; przeliczanie z 44 140,625 Hz konwerterem Apple'a; karta i stan w secie na instancję; prototyp bez okna. E9.2 start: plan prototypu."
     }
   ]
 }
