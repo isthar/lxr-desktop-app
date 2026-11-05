@@ -3,7 +3,8 @@
  *
  * P8: a card folder as the plugin's state (plan E9.2 Task 7): a round trip keeps the files, the
  * folders and the card's order (birth times, not names); names the device cannot see are left
- * out; a damaged archive is refused.
+ * out; a damaged archive is refused. Each test removes its temporary folder at its end (a failed one
+ * keeps it, to be looked at).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -13,6 +14,7 @@
  * the repository.
  */
 #include <fcntl.h>
+#include <ftw.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -65,6 +67,26 @@ static const char *fresh(const char *name)
 	}
 	snprintf(p, sizeof p, "%s/%s", root, name);
 	return p;
+}
+
+static int removeOne(const char *p, const struct stat *st, int flag, struct FTW *f)
+{
+	(void)st;
+	(void)flag;
+	(void)f;
+	return remove(p);
+}
+
+/* the test's temporary folder and everything in it: 0 when it is gone */
+static int cleanup(void)
+{
+	if (!root[0])
+		return 0;
+	const int rc = nftw(root, removeOne, 16, FTW_DEPTH | FTW_PHYS);
+	struct stat st;
+	const int gone = rc == 0 && stat(root, &st) != 0;
+	root[0] = '\0';
+	return gone ? 0 : -1;
 }
 
 static void file(const char *dir, const char *name, const char *text)
@@ -136,6 +158,7 @@ TEST(P8_archive_roundtrip)
 	printf("P8_archive_roundtrip: %zu bytes; %s\n", m.n, got);
 	ASSERT_EQ(strcmp(got, want), 0);
 	free(m.p);
+	ASSERT_EQ(cleanup(), 0);
 }
 
 TEST(P8_archive_skips)
@@ -155,6 +178,7 @@ TEST(P8_archive_skips)
 	listing(dst, got, sizeof got);
 	ASSERT_EQ(strcmp(got, "GOOD.TXT =g "), 0);
 	free(m.p);
+	ASSERT_EQ(cleanup(), 0);
 }
 
 TEST(P8_archive_refused)
@@ -192,6 +216,7 @@ TEST(P8_archive_refused)
 	ASSERT_EQ(plug_archiveRead(src, memGet, &m, err, sizeof err), -1);
 	ASSERT_TRUE(strstr(err, "not empty") != NULL);
 	free(m.p);
+	ASSERT_EQ(cleanup(), 0);
 }
 
 TEST_MAIN()
