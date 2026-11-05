@@ -47,12 +47,16 @@ add_subdirectory(third_party)
 enable_testing()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 # plugin_add_test(<name> IDS <id>...): plugin/tests/<name>.c with the shared code; each id is a
-# ctest test that runs the executable with the id as its filter (tests/seqc_test.h)
+# ctest test that runs the executable with the id as its filter (tests/seqc_test.h). A test and
+# the shared code it runs have the sanitizers of the emulator's build (UBSan in Debug): it links
+# plug_common_san, the engine's copy; plug_common, the plugin's, runs in the host's process
+# without them
 function(plugin_add_test name)
     cmake_parse_arguments(ARG "" "" "IDS" ${ARGN})
-    add_executable(${name} tests/${name}.c $<TARGET_OBJECTS:plug_common>)
+    add_executable(${name} tests/${name}.c $<TARGET_OBJECTS:plug_common_san>)
     target_include_directories(${name} PRIVATE "${PLUGIN_DIR}/common" "${LXR_ROOT}/tests")
-    target_compile_options(${name} PRIVATE ${PLUGIN_FLAGS})
+    target_compile_options(${name} PRIVATE ${PLUGIN_FLAGS} ${PLUGIN_SAN_FLAGS})
+    target_link_options(${name} PRIVATE ${PLUGIN_SAN_FLAGS})
     foreach(id IN LISTS ARG_IDS)
         add_test(NAME ${id} COMMAND ${name} ${id})
         set_tests_properties(${id} PROPERTIES TIMEOUT 120 LABELS plugin)
