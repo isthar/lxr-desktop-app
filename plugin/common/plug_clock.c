@@ -43,22 +43,23 @@ void plug_clockReset(plug_clock_t *c)
 	c->expect = 0.0;
 }
 
-/* the 16th that a start or a jump to p resumes at: the first at or after p */
-static int sixteenth(double p)
+/* the 16th that a start or a jump to p resumes at: the first at or after p, also past 16,383 */
+static int64_t sixteenth(double p)
 {
 	if (p <= 0.0)
 		return 0;
-	const double s = ceil(p * 4.0 - PLUG_AT_ZERO);
-	return s > PLUG_SPP_MAX ? PLUG_SPP_MAX : (int)s;
+	return (int64_t)ceil(p * 4.0 - PLUG_AT_ZERO);
 }
 
-/* Song Position s and Continue at offset; the clocks resume at 16th s */
+/* Song Position s and Continue at offset; the clocks resume at 16th s. Past 16,383 only the
+ * message's 14 bits wrap: the clocks count from the real 16th */
 static void resume(plug_clock_t *c, sink_t *s, uint32_t offset, double p)
 {
-	const int six = sixteenth(p);
-	put(s, offset, 0xF2, (uint8_t)(six & 0x7F), (uint8_t)(six >> 7), 3);
+	const int64_t six = sixteenth(p);
+	const unsigned spp = (unsigned)(six & PLUG_SPP_MAX);
+	put(s, offset, 0xF2, (uint8_t)(spp & 0x7Fu), (uint8_t)(spp >> 7), 3);
 	put(s, offset, 0xFB, 0, 0, 1);
-	c->next = (int64_t)six * (PLUG_CLOCK_PPQ / 4);
+	c->next = six * (PLUG_CLOCK_PPQ / 4);
 	c->running = 1;
 	c->startPending = 0;
 }

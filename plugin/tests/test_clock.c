@@ -140,9 +140,9 @@ TEST(P4_clock_stop)
 	ASSERT_EQ(count(0xF8), 6);	/* clocks 0..5 before 5,120 */
 }
 
-/* a loop [4, 8) quarter notes at 120 BPM, 48 kHz (24,000 frames a quarter), from position 4,
- * in blocks of the given size; split 1 ends a block exactly at the loop's end */
-static void loopRun(unsigned size, int split)
+/* a loop [cs, cs + 4) quarter notes at 120 BPM, 48 kHz (24,000 frames a quarter), from position
+ * cs, in blocks of the given size; split 1 ends a block exactly at the loop's end */
+static void loopRun(unsigned size, int split, double cs)
 {
 	plug_clock_t c;
 	plug_clockInit(&c, 48000.0);
@@ -153,10 +153,10 @@ static void loopRun(unsigned size, int split)
 		uint32_t n = size;
 		if (split && at < 96000u && at + n > 96000u)
 			n = (uint32_t)(96000u - at);
-		plug_transport_t t = playing(120.0, 4.0 + fmod((double)at / 24000.0, 4.0));
+		plug_transport_t t = playing(120.0, cs + fmod((double)at / 24000.0, 4.0));
 		t.cycle = 1;
-		t.cycleStart = 4.0;
-		t.cycleEnd = 8.0;
+		t.cycleStart = cs;
+		t.cycleEnd = cs + 4.0;
 		block(&c, &t, at, n);
 		at += n;
 	}
@@ -165,10 +165,10 @@ static void loopRun(unsigned size, int split)
 TEST(P4_clock_loop)
 {
 	static ev_t inBlock[MAXEV];
-	loopRun(700, 0);	/* the block [95,900, 96,600) holds the loop's end */
+	loopRun(700, 0, 4.0);	/* the block [95,900, 96,600) holds the loop's end */
 	const unsigned n = nev;
 	memcpy(inBlock, evs, sizeof evs);
-	loopRun(700, 1);
+	loopRun(700, 1, 4.0);
 	ASSERT_EQ(nev, n);
 	for (unsigned i = 0; i < n; i++)
 	{
@@ -192,6 +192,34 @@ TEST(P4_clock_loop)
 	ASSERT_EQ(evs[i - 1].b[0], 0xF8);
 	ASSERT_EQ(evs[i - 1].frame, 95000);	/* the last clock before the end, position 7 23/24 */
 	ASSERT_EQ(count(0xFC), 2);			/* 96,000 and 192,000 */
+}
+
+TEST(P4_clock_far_loop)
+{
+	/* the loop [4,396, 4,400), past bar 1,024, where Song Position (14 bits) wraps: the clocks follow
+	 * the real 16th, so the messages are those of the loop [4, 8) at the same frames, and only the
+	 * Song Positions differ: 17,584 mod 16,384 = 1,200 = 9 x 128 + 48 for 16 */
+	static ev_t near[MAXEV];
+	loopRun(700, 0, 4.0);
+	const unsigned n = nev;
+	memcpy(near, evs, sizeof evs);
+	loopRun(700, 0, 4396.0);
+	ASSERT_EQ(nev, n);
+	unsigned spp = 0;
+	for (unsigned i = 0; i < n; i++)
+	{
+		ASSERT_EQ(evs[i].frame, near[i].frame);
+		ASSERT_EQ(evs[i].b[0], near[i].b[0]);
+		if (evs[i].b[0] == 0xF2)
+		{
+			ASSERT_EQ(near[i].b[1], 16);
+			ASSERT_EQ(near[i].b[2], 0);
+			ASSERT_EQ(evs[i].b[1], 0x30);
+			ASSERT_EQ(evs[i].b[2], 0x09);
+			spp++;
+		}
+	}
+	ASSERT_EQ(spp, 3);	/* the start and the wraps at 96,000 and 192,000 */
 }
 
 TEST(P4_clock_locate)
@@ -329,14 +357,28 @@ TEST(P4_clock_spp_bytes)
 	nev = 0;
 	plug_transport_t t = playing(120.0, 700.0);
 	block(&c, &t, 0, 64);
+	/* the first block holds Song Position, Continue and the clock of position 700 at frame 0 only */
+	ASSERT_EQ(nev, 3);
+	ASSERT_EQ(evs[0].b[0], 0xF2);
 	ASSERT_EQ(evs[0].b[1], 0x70);	/* 2,800 = 21 x 128 + 112 */
 	ASSERT_EQ(evs[0].b[2], 0x15);
+	ASSERT_EQ(evs[1].b[0], 0xFB);
+	ASSERT_EQ(evs[2].b[0], 0xF8);
+	ASSERT_EQ(evs[2].frame, 0);
 	plug_clockInit(&c, 48000.0);
 	nev = 0;
 	t = playing(120.0, 5000.0);
 	block(&c, &t, 0, 64);
-	ASSERT_EQ(evs[0].b[1], 0x7F);	/* 20,000 is past 16,383 */
-	ASSERT_EQ(evs[0].b[2], 0x7F);
+	/* 20,000 is past 16,383: the two bytes wrap, 20,000 mod 16,384 = 3,616 = 28 x 128 + 32 (a pattern
+	 * whose length is a power of two stays in line); the clocks follow the real 16th, so the block
+	 * holds the same three messages, not the clocks from 16th 16,383 on */
+	ASSERT_EQ(nev, 3);
+	ASSERT_EQ(evs[0].b[0], 0xF2);
+	ASSERT_EQ(evs[0].b[1], 0x20);
+	ASSERT_EQ(evs[0].b[2], 0x1C);
+	ASSERT_EQ(evs[1].b[0], 0xFB);
+	ASSERT_EQ(evs[2].b[0], 0xF8);
+	ASSERT_EQ(evs[2].frame, 0);
 }
 
 TEST(P4_clock_max)

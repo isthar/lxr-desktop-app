@@ -12,6 +12,8 @@
  * - Playing from position 0 (or from a count-in before it): Start, with the clock of position 0.
  * - Playing from p > 0: Song Position s = ceil(4p) sixteenths and Continue at the first frame,
  *   then the clocks from 16th s on (the slave's next clock plays step s, seq_core.h:752-765).
+ *   Past 16th 16,383 (bar 1,024) the message carries s modulo 16,384, its 14 bits, which keeps a
+ *   pattern whose length is a power of two in line; the clocks still count from the real 16th.
  * - A jump while playing, between blocks (the block's position is more than half a clock from
  *   the one expected) or at the loop's end inside a block: Stop, Song Position, Continue at the
  *   jump's frame, then the clocks from the new 16th on. The slave takes a Song Position only
@@ -35,7 +37,7 @@ extern "C" {
 #endif
 
 #define PLUG_CLOCK_PPQ 24
-#define PLUG_SPP_MAX 16383	/**< the largest Song Position, in sixteenths */
+#define PLUG_SPP_MAX 16383	/**< the largest Song Position, in sixteenths: the message's 14 bits */
 
 /** the host's transport at a block's first frame */
 typedef struct plug_transport
