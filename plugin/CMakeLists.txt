@@ -166,3 +166,22 @@ add_custom_command(TARGET LICHOMAT POST_BUILD
 set(PLUGIN_BUNDLE_TEST ${PLUGIN_TEST} --bundle $<TARGET_BUNDLE_DIR:LICHOMAT> --validator $<TARGET_FILE:validator>)
 add_test(NAME P10_plugin_validator COMMAND ${PLUGIN_BUNDLE_TEST} P10_plugin_validator)
 set_tests_properties(P10_plugin_validator PROPERTIES TIMEOUT 600 LABELS plugin)
+
+# --- lichomat-plughost, the test host, and the real-time check (Task 9) ---------------------
+add_executable(lichomat-plughost host/plug_host.cpp "${SDK_ROOT}/public.sdk/source/vst/hosting/module_mac.mm"
+    "${SDK_ROOT}/public.sdk/source/vst/hosting/plugprovider.cpp" "${SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
+    $<TARGET_OBJECTS:plug_common> $<TARGET_OBJECTS:plug_card>)
+set_source_files_properties("${SDK_ROOT}/public.sdk/source/vst/hosting/module_mac.mm" PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+target_include_directories(lichomat-plughost PRIVATE "${PLUGIN_DIR}/common" "${LXR_ROOT}/emu/core")
+target_compile_options(lichomat-plughost PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${PLUGIN_FLAGS}> "SHELL:-ivfsoverlay ${PLUGIN_OVERLAY}")
+target_compile_features(lichomat-plughost PRIVATE cxx_std_17)
+target_link_libraries(lichomat-plughost PRIVATE sdk_hosting "-framework Cocoa")
+add_library(plug_rtcheck SHARED tests/plug_rtcheck.c)
+target_compile_options(plug_rtcheck PRIVATE ${PLUGIN_FLAGS})
+set(PLUGIN_HOST_TEST ${PLUGIN_BUNDLE_TEST} --host $<TARGET_FILE:lichomat-plughost> --rtcheck $<TARGET_FILE:plug_rtcheck>)
+foreach(id P10_plugin_native P10_plugin_onsets P10_plugin_latency P10_plugin_resampled P10_plugin_state P10_plugin_app_card
+        P10_plugin_renew P10_plugin_kill P10_plugin_rt)
+    add_test(NAME ${id} COMMAND ${PLUGIN_HOST_TEST} ${id})
+    set_tests_properties(${id} PROPERTIES TIMEOUT 600 LABELS plugin)
+endforeach()
+set_tests_properties(P10_plugin_kill P10_plugin_rt PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
