@@ -2098,7 +2098,7 @@ uint32_t plug_marginFromEnv(void)
 
 **Files:** Create `plugin/common/plug_spawn.h`, `plugin/common/plug_spawn.c`, `plugin/common/plug_notices.h`, `plugin/engine/eng_run.h`, `plugin/engine/eng_run.c`, `plugin/engine/eng_main.c`, `plugin/engine/eng_resample.h`, `plugin/engine/eng_resample.c`, `plugin/tests/test_resample.c`, `plugin/tests/plug_drive.c`, `plugin/tests/plug_resample_wav.c`, `plugin/tests/plugin_test.py`; modify `plugin/CMakeLists.txt` (append).
 
-- [ ] **Step 1: the failing tests.** The converter's unit test, `plugin/tests/test_resample.c`:
+- [x] **Step 1: the failing tests.** The converter's unit test, `plugin/tests/test_resample.c`:
 
 ```c
 /*
@@ -3001,8 +3001,8 @@ plugin_py_tests(P6_engine_version P6_engine_native P6_engine_blocks P6_engine_se
 set_tests_properties(P7_engine_realtime PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
 ```
 
-- [ ] **Step 2: run it.** PLUGIN with `-R 'P6|P7'`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file` for `common/plug_spawn.c` and the engine's files.
-- [ ] **Step 3: starting the engine** (P-6). `plugin/common/plug_spawn.h`:
+- [x] **Step 2: run it.** PLUGIN with `-R 'P6|P7'`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file` for `common/plug_spawn.c` and the engine's files.
+- [x] **Step 3: starting the engine** (P-6). `plugin/common/plug_spawn.h`:
 
 ```c
 /*
@@ -3151,7 +3151,7 @@ pid_t plug_spawnEngine(const char *engine, const char *card, int wakeRead, int l
 #endif /* PLUG_NOTICES_H_ */
 ```
 
-- [ ] **Step 4: the converter** (P-11). `plugin/engine/eng_resample.h`:
+- [x] **Step 4: the converter** (P-11). `plugin/engine/eng_resample.h`:
 
 ```c
 /*
@@ -3317,7 +3317,7 @@ void eng_resampleClose(eng_resample_t *r)
 }
 ```
 
-- [ ] **Step 5: the engine** (P-8, P-15, P-18, P-24). `plugin/engine/eng_run.h`:
+- [x] **Step 5: the engine** (P-8, P-15, P-18, P-24). `plugin/engine/eng_run.h`:
 
 ```c
 /*
@@ -3888,9 +3888,9 @@ int main(int argc, char **argv)
 }
 ```
 
-- [ ] **Step 6: pass.** PLUGIN with `-R 'P6|P7'` and `ctest --test-dir build/plugin -R 'P6_engine_native|P7_converter_delay|P7_engine_resampled' -V | grep -E 'plug_drive|render ==|P7_converter|Hz:'`.
+- [x] **Step 6: pass.** PLUGIN with `-R 'P6|P7'` and `ctest --test-dir build/plugin -R 'P6_engine_native|P7_converter_delay|P7_engine_resampled' -V | grep -E 'plug_drive|render ==|P7_converter|Hz:'`.
   Expected: `100% tests passed, 0 tests failed out of 9`; `plug_drive: epoch 0, 617984 frames, late 0, dropped 0, ring full 0, underruns 0 …` and `render == drive: 617984 frames, 55 onsets in L`; the converter's delay `47.94`, `52.27`, `95.90`, `104.38` output frames (`47.99`–`48.07` input frames); at 44,100, 48,000 and 96,000 Hz `the largest difference 1 LSB`. In Release (`build/plugin-release`, from PLUGIN-CHECK) `P6_engine_native` prints about `127x real time` (Debug about 15x).
-- [ ] **Step 7: the gate.** PLUGIN-CHECK (T 35). **Step 8: commit** `plugin Task 6 (E9.16): lichomat-engine, the renderer's prelude and the tier hook's input, native and resampled; P6, P7` with the twelve files; push. **Review: full** (spec, then quality), the mutants of the Rules among them: the hook's 66 frames at 64, the epoch's load moved after `plug_audioBegin()`, the `/ 65536` at `/ 32768`, the converter's prime method at Normal.
+- [x] **Step 7: the gate.** PLUGIN-CHECK (T 35). **Step 8: commit** `plugin Task 6 (E9.16): lichomat-engine, the renderer's prelude and the tier hook's input, native and resampled; P6, P7` with the twelve files; push. **Review: full** (spec, then quality), the mutants of the Rules among them: the hook's 66 frames at 64, the epoch's load moved after `plug_audioBegin()`, the `/ 65536` at `/ 32768`, the converter's prime method at Normal.
 
 ---
 
@@ -3898,7 +3898,7 @@ int main(int argc, char **argv)
 
 **Files:** Create `plugin/common/plug_archive.h`, `plugin/common/plug_archive.c`, `plugin/tests/test_archive.c`; modify `plugin/CMakeLists.txt` (append).
 
-- [ ] **Step 1: the failing test.** `plugin/tests/test_archive.c`:
+- [x] **Step 1: the failing test.** `plugin/tests/test_archive.c`:
 
 ```c
 /*
@@ -4114,8 +4114,8 @@ target_sources(test_archive PRIVATE $<TARGET_OBJECTS:plug_card>)
 target_include_directories(test_archive PRIVATE "${LXR_ROOT}/emu/core")
 ```
 
-- [ ] **Step 2: run it.** PLUGIN with `-R P8`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: common/plug_archive.c`.
-- [ ] **Step 3: the archive** (P-17). `plugin/common/plug_archive.h`:
+- [x] **Step 2: run it.** PLUGIN with `-R P8`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: common/plug_archive.c`.
+- [x] **Step 3: the archive** (P-17). `plugin/common/plug_archive.h`:
 
 ```c
 /*
@@ -4433,8 +4433,8 @@ int plug_archiveRead(const char *dir, plug_get_t get, void *ctx, char *err, size
 }
 ```
 
-- [ ] **Step 4: pass.** PLUGIN with `-R P8`. Expected: `100% tests passed, 0 tests failed out of 3`; `P8_archive_roundtrip: 135 bytes; ZZZ.TXT =zzz PROJ00/ 01-B.PAT =pattern one 00-A.PAT =pattern zero | AAA.TXT =aaa`.
-- [ ] **Step 5: the gate.** PLUGIN-CHECK (T 38). **Step 6: commit** `plugin Task 7 (E9.17): the card folder as one archive in the card's order; P8` with the four files; push.
+- [x] **Step 4: pass.** PLUGIN with `-R P8`. Expected: `100% tests passed, 0 tests failed out of 3`; `P8_archive_roundtrip: 135 bytes; ZZZ.TXT =zzz PROJ00/ 01-B.PAT =pattern one 00-A.PAT =pattern zero | AAA.TXT =aaa`.
+- [x] **Step 5: the gate.** PLUGIN-CHECK (T 38). **Step 6: commit** `plugin Task 7 (E9.17): the card folder as one archive in the card's order; P8` with the four files; push.
 
 ---
 
@@ -6883,3 +6883,4 @@ Jeśli w P3–P4 nic nie słychać: plik `engine.log` z tego samego folderu. Wł
 **Task 7 (E9.17), `6502ad2`.** As planned (P8 3 of 3, the round trip's 135 bytes and order exactly the plan's), except that `test_archive` links a UBSan copy `plug_card_san` (group B's rule: a test and the shared code it runs carry the sanitizers; the plugin's own `plug_card` stays unsanitized). T 46. `test_archive.c` leaves its `mkdtemp` folder in `$TMPDIR` after each run (to be removed by the test).
 - **Task 6 full review: changes requested, tests and small fixes** (no defect in the engine code; P-6, P-8–P-11, P-15, P-18, P-24 checked live). Gaps: no test had a nonzero epoch, which in Live is never 0 (plan mutants M2 and M6 survived: a reordered epoch load or `<=` at the pre-epoch filter would drop the Start or Song Position after a restart); `late` was not checked where the engine waits at the frontier (the plan's mutant M1, 66 → 64 frames, and M7 survived); no frame of more than 16 messages; `eng_fw` was not the renderer's object (P-2); P6_engine_quit left processes on failure; no liveness check outside `eng_waitFor`, so an engine orphaned during its prelude or a hung firmware spun forever. Fixed with a pre-roll mode of `plug_drive`, the `late` checks, a 19-message frame, the renderer's own `render_fw` object, and a watchdog thread that ends the engine when its parent is gone.
 - Review fixes `d6c2bc0`..`9055549`: `P6_engine_epoch` (a pre-roll `plug_drive` publishes while the engine boots: epochs 5,760 and 3,108, dropped 1, byte-equal), `P6_engine_paced` (3 s paced native, late 0, and the time-constraint policy `97R` via `ps -M`), late/dropped/full checked in `P6_engine_blocks` and `P7_engine_realtime`, an 18-message frame at the loop wrap, the engine links `lichomat-render_fw`'s object (`P6_engine_objects`), `P6_engine_quit` cleans up, a watcher thread ends the engine 0.07–0.08 s after its parent goes away (`P6_engine_orphan`; before: still alive after 3 s), `test_archive` removes its folder. At t0 the engine loads the epoch, then pops only the events before it (not "skip all, then load": that loses a block written during the skip). `P6_engine_native` now finds 56 onsets (a Note On at frame 0 added). T 50.
+- Re-check approved: every survivor fails; the t0 order (load the epoch, then pop only the events before it) is race-free on its own; the watcher is correct, and leaving `--seed-card` without one is deliberate. P6_engine_epoch 24 of 24 repeated runs. **Group C done.**

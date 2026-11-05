@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 22:35",
+    "updated": "2026-11-05 22:41",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "3630d45",
+    "head": "c2a535a",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T22:35:00+01:00",
-    "now": "E9.16: recenzent sprawdza poprawki silnika (od 22:35)"
+    "updated_at": "2026-11-05T22:41:00+01:00",
+    "now": "E9.18: implementer grupy D wtyczki (od 22:41)"
   },
   "epics": [
     {
@@ -974,21 +974,21 @@
     {
       "id": "E9.16",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Wtyczka zad. 6: lichomat-engine, bez przeliczania i z przeliczaniem próbkowania; testy P6, P7; pełny przegląd",
       "updated": "2026-11-05"
     },
     {
       "id": "E9.17",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Wtyczka zad. 7: karta jako jedno archiwum w kolejności karty (stan w secie); testy P8",
       "updated": "2026-11-05"
     },
     {
       "id": "E9.18",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka zad. 8: LICHOMAT.vst3: procesor, kontroler, połączenie z silnikiem, foldery instancji; walidator SDK",
       "updated": "2026-11-05"
     },
@@ -4537,6 +4537,11 @@
       "n": 626,
       "at": "2026-11-05 22:35",
       "text": "E9.16–E9.17 przegląd, 34497de, 176ad29, 9055549: wątek nadzoru kończy silnik 0,07 s po zniknięciu rodzica (wcześniej silnik wisiał w nieskończoność); priorytet czasu rzeczywistego silnika sprawdzany w teście; test archiwum sprząta po sobie. Wtyczka ma 50 testów, wszystkie przechodzą, 0 ostrzeżeń. Recenzent sprawdza poprawki."
+    },
+    {
+      "n": 627,
+      "at": "2026-11-05 22:41",
+      "text": "E9.16 i E9.17 zrobione (wtyczka zad. 6–7, 7a9f8aa..9055549): silnik i archiwum karty po pełnym przeglądzie i jego sprawdzeniu; 50 testów. E9.18 start: grupa D, czyli sama wtyczka LICHOMAT.vst3 (zad. 8), host testowy i sprawdzanie czasu rzeczywistego (zad. 9, potem pełny przegląd), bramka licencji, README i instalacja (zad. 10)."
     }
   ]
 }
