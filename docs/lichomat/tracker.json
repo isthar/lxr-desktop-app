@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 19:52",
+    "updated": "2026-11-05 20:12",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "v0.7 grupa C (E6.33–E6.34) i szkic wtyczki (E9.1)",
+    "focus": "v0.7 gotowe (M20); wtyczka: plan prototypu (E9.2)",
     "branch": "timing-core",
-    "head": "e43379e",
-    "next": "E6.33–E6.34, potem E6.35–E6.36; E9.1 szkic wtyczki do Twoich poprawek, potem E9.2 prototyp; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13 (A czy B), poprawki szkicu v0.7, CI; sprzęt (H12, E8.1)",
-    "updated_at": "2026-11-05T19:52:00+01:00",
-    "now": "E6.35–E6.36: lekki przegląd grupy D (od 19:50); E9.2: planista pisze i sprawdza plan prototypu wtyczki (od 18:00)"
+    "head": "63e280d",
+    "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
+    "updated_at": "2026-11-05T20:12:00+01:00",
+    "now": "E9.2: planista pisze i sprawdza plan prototypu wtyczki (od 18:00)"
   },
   "epics": [
     {
@@ -750,14 +750,14 @@
     {
       "id": "E6.35",
       "epic": "E6",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "v0.7 zad. 8: README, fuzzing, dema demo_v07.sh, odbiór",
       "updated": "2026-11-05"
     },
     {
       "id": "E6.36",
       "epic": "E6",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "v0.7 zad. 9: dokumenty dla Ciebie (U38–U41, szkic notatek wydania, instrukcja), raport M20; lekki przegląd",
       "updated": "2026-11-05"
     },
@@ -1051,6 +1051,12 @@
       "date": "2026-11-04",
       "title": "0.4, 0.5 i 0.6 gotowe na każdy wynik H12 (E7.7, E7.9, E7.10, Q34)",
       "summary": "Po H12 nie czekasz na mnie: w build/images/po-H12/ są przetestowane pliki 0.4, 0.5 i 0.6 w folderze polowa/ (P ≤ 63,28) i lean/ (P > 63,28), wszystkie z poprawką offsetu DC pogłosu (E7.7). Decyzja Q34: pogłos zostaje w połowie częstotliwości, bo przy pełnej ogon basu przechyla się w lewo (pary A/B na stronie odsłuchu). Lean nigdy wcześniej nie był budowany na LXR i miał ostrzeżenie kompilatora; poprawione. Raport: docs/lichomat/reports/M19-po-H12.md."
+    },
+    {
+      "id": "M20",
+      "date": "2026-11-05",
+      "title": "v0.7: dynamika groove gotowa w kodzie (E6.26–E6.36)",
+      "summary": "Szablony głośności na ścieżkę: vtp of8, ful, dep, qtr z pomiaru hihatów albumu referencyjnego i us1–us4, głębokość vdp 0–200 %. Własne szablony zapisywane z tego, co gra (sav, Q36), strona clear micro, blok 3 w .pat i USERTPL.LCH. Bez szablonu v0.7 gra bit w bit jak 0.6: 38 nagrań wzorcowych bez zmian. Trzy nowe nagrania poziomów zgadzają się ze wzorem do 0,15 dB. Host 135 testów, emulator 353, fuzzing 4 800 renderów bez znalezisk. Przeglądy znalazły i naprawiły błąd zapisu przy pełnej karcie. CPU 1,10 % najgorszego bloku (Q37). Pamięć: budżet 470 188 z 471 032 B. Twoje sprawdzenia: U38–U41 (ok. 30 min, po sesji 0.6). Raport: docs/lichomat/reports/M20-v0.7-groove-dynamics.md; notatki wydania: docs/lichomat/release-notes-v0.7.md (szkic). Nic nie jest otagowane ani wydane."
     }
   ],
   "questions": [
@@ -4384,6 +4390,16 @@
       "n": 612,
       "at": "2026-11-05 19:52",
       "text": "E6.35 (v0.7 zad. 8), e4104c0, i E6.36 (zad. 9), e43379e: README v0.7, fuzzing 4 800 renderów bez znalezisk, dema hihatów z szablonami (build/wt-v07/build/demo/v07-hats-*.wav), Twoje dokumenty: lista sprawdzeń z U38–U41, notatki wydania 0.7 (szkic), instrukcja 0.7, raport M20. Start lekkiego przeglądu grupy D: liczby wobec pomiarów, procedury U38–U41 wobec kodu."
+    },
+    {
+      "n": 613,
+      "at": "2026-11-05 20:10",
+      "text": "E6.35–E6.36: lekki przegląd grupy D. Wszystkie liczby w dokumentach zgadzają się z pomiarami i commitami, nazwa albumu nigdzie nie pada. Jeden ważny błąd w procedurze U39 krok 3: take głosu 3 gra na tych samych przesunięciach co głos 4, więc poziomów głosu 4 nie da się odczytać. Poprawka: wyciszyć głos 3, głos 4 na wyjściu 1, tolerancja 0,5 dB, velocity z monitora MIDI. Do tego 10 drobnych poprawek tekstu. Implementer je wprowadza; HANDOFF zaktualizowany."
+    },
+    {
+      "n": 614,
+      "at": "2026-11-05 20:12",
+      "text": "E6.35 i E6.36 zrobione (95c2787 na v0.7, 63e280d na timing-core): poprawki dokumentów z lekkiego przeglądu, w tym U39 krok 3. M20: v0.7 gotowe w kodzie: szablony głośności, własne szablony us1–us4, clear micro, blok 3 i USERTPL.LCH, po pełnych przeglądach. Czeka na Ciebie: U38–U41 na LXR (po sesji 0.6), odsłuch sekcji „Akcenty na v0.7” na stronie odsłuchu (nowe rendery z prawdziwego kodu v0.7)."
     }
   ]
 }
