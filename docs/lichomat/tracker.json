@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 17:59",
+    "updated": "2026-11-05 18:29",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7 grupa C (E6.33–E6.34) i szkic wtyczki (E9.1)",
     "branch": "timing-core",
-    "head": "196779d",
+    "head": "9bfd520",
     "next": "E6.33–E6.34, potem E6.35–E6.36; E9.1 szkic wtyczki do Twoich poprawek, potem E9.2 prototyp; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13 (A czy B), poprawki szkicu v0.7, CI; sprzęt (H12, E8.1)",
-    "updated_at": "2026-11-05T17:59:00+01:00",
-    "now": "E6.33: implementer grupy C v0.7 pracuje (od 17:40); E9.2: planista pisze i sprawdza plan prototypu wtyczki (od 18:00)"
+    "updated_at": "2026-11-05T18:29:00+01:00",
+    "now": "E6.33–E6.34: lekki przegląd grupy C (od 18:20); E9.2: planista pisze i sprawdza plan prototypu wtyczki (od 18:00)"
   },
   "epics": [
     {
@@ -743,9 +743,9 @@
     {
       "id": "E6.34",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "v0.7 zad. 7: emulator: nagrania wzorcowe G23 (poziomy uderzeń na 50, 100 i 200 %), V07_levels, V07_capture",
-      "updated": "2026-11-04"
+      "updated": "2026-11-05"
     },
     {
       "id": "E6.35",
@@ -4364,6 +4364,11 @@
       "n": 608,
       "at": "2026-11-05 17:59",
       "text": "E9.2: za Twoją zgodą pobrane SDK VST3 Steinberga (github.com/steinbergmedia/vst3sdk, v3.8.1_build_84, commit 3cdf9ca, MIT; tylko base, pluginterfaces, public.sdk, cmake), 37 MB w build/vst3sdk, poza gitem. Planista pisze plan prototypu i sprawdza najpierw na tym Macu: build walidatora i przykładowej wtyczki z SDK, silnik emulatora w osobnym programie, pamięć współdzieloną między dwoma procesami."
+    },
+    {
+      "n": 609,
+      "at": "2026-11-05 18:29",
+      "text": "E6.33 (v0.7 zad. 6), 8cea498, i E6.34 (zad. 7), 67183b0: interfejs i emulator zacommitowane i wypchnięte. Czwarty ekran ścieżki (vtp, vdp, sav), us1–us4 w tpl, strona clear micro, komunikat Card full!. Trzy nowe nagrania wzorcowe poziomów z szablonem of8 na 50, 100 i 200 %: każde uderzenie najwyżej 0,15 dB od wzoru (limit 0,5 dB). 38 starych nagrań bez zmian. Ponowne sprawdzenie zad. 5: 0.6 i 0.5 pomijają blok 3. Host 135/135, emulator 352/352, ASan emulatora 323/323, budżet 470 188 z 471 032 B. Start lekkiego przeglądu grupy C."
     }
   ]
 }
