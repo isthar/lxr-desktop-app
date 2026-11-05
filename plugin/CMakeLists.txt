@@ -60,3 +60,14 @@ function(plugin_add_test name)
 endfunction()
 add_test(NAME P2_sdk_pin COMMAND ${Python3_EXECUTABLE} "${PLUGIN_DIR}/tests/sdk_pin.py" "${LXR_ROOT}")
 set_tests_properties(P2_sdk_pin PROPERTIES LABELS plugin)
+
+# --- the code the plugin, the engine and the tests share (Tasks 3-6) -----------------------
+add_library(plug_common OBJECT common/plug_shm.c)
+target_include_directories(plug_common PUBLIC "${PLUGIN_DIR}/common")
+target_compile_options(plug_common PRIVATE ${PLUGIN_FLAGS})
+# the engine's copy, with the sanitizers of the device objects it links with
+add_library(plug_common_san OBJECT common/plug_shm.c)
+target_include_directories(plug_common_san PUBLIC "${PLUGIN_DIR}/common")
+target_compile_options(plug_common_san PRIVATE ${PLUGIN_FLAGS} ${PLUGIN_SAN_FLAGS})
+plugin_add_test(test_shm IDS P3_shm_header P3_shm_events P3_shm_audio P3_shm_new_engine P3_shm_overwritten
+    P3_shm_processes P3_shm_killed)
