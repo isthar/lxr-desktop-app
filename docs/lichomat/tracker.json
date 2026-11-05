@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 20:29",
+    "updated": "2026-11-05 20:48",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "0112bf0",
+    "head": "5d4daf5",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T20:29:00+01:00",
-    "now": "E9.15: lekki przegląd grupy B wtyczki (od 20:30)"
+    "updated_at": "2026-11-05T20:48:00+01:00",
+    "now": "E9.15: implementer poprawia błędy z lekkiego przeglądu grupy B wtyczki (od 20:48)"
   },
   "epics": [
     {
@@ -4492,6 +4492,11 @@
       "n": 617,
       "at": "2026-11-05 20:29",
       "text": "E9.13 (9ecf13f), E9.14 (365f254), E9.15 (cc59a9b): pamięć współdzielona (2 mln zdarzeń i ramek między dwoma procesami bez błędu), transport jako MIDI clock, ramki, cykle i opóźnienie. Wtyczka ma 26 testów, wszystkie przechodzą w Debug z UBSan i w Release, 0 ostrzeżeń w naszych plikach. Każdy plik zgodny z planem bajt w bajt. E9.12–E9.14 zrobione, E9.15 czeka na lekki przegląd grupy B, który właśnie startuje. Sprzątanie: zabiłem proces yes, który został po moim teście obciążeniowym z 00:05 i przez 20 h zajmował jeden rdzeń."
+    },
+    {
+      "n": 618,
+      "at": "2026-11-05 20:48",
+      "text": "E9.15: lekki przegląd grupy B wtyczki znalazł trzy prawdziwe błędy. (1) Po przeskoku pętli w Live, zgłoszonym ułamek ramki po początku pętli, pierwsza szesnastka pętli (downbeat) nie grała: raz na 401 przejść przy buforze 128, częściej przy małych blokach. (2) Za taktem 1024 (ok. 33 min) start albo pętla wysyłały naraz setki taktów zegara. (3) Niestabilny test pamięci współdzielonej pod obciążeniem. Do tego zawieszenie wątku audio przy tempie NaN lub nieskończonym i luki w testach. Implementer poprawia, każdą rzecz od testu, osobnym commitem."
     }
   ]
 }
