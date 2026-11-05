@@ -1,0 +1,267 @@
+/*
+ * plug_drive.c
+ *
+ * The engine's test driver (plan E9.2 Task 6): the plugin's side of the shared memory without
+ * the VST 3 layer. It starts lichomat-engine on a card, waits until it runs (epoch 0), then
+ * plays a script of lichomat-render's usb lines ("<frame>f usb XX ..", host frames) in blocks,
+ * and writes the ring's frames [0, FRAMES) as a 16-bit stereo WAV.
+ *
+ *   plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN]
+ *
+ * Without realtime it waits for each frame; with it, it paces the blocks by the wall clock,
+ * reads each block plug_readOffset(RATE, BLOCK, MARGIN) frames behind as the plugin does, and
+ * counts the underruns.
+ * At 44,140.625 Hz a sample is floor(x x 32,768), the renderer's --stereo sum exactly.
+ *
+ * Copyright (C) 2026 Tomasz Krzywicki
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * Licensed under the GNU General Public License version 3, with the additional
+ * permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+ * the repository.
+ */
+#include <errno.h>
+#include <fcntl.h>
+#include <math.h>
+#include <poll.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
+
+#include "plug_shm.h"
+#include "plug_spawn.h"
+#include "plug_time.h"
+
+typedef struct
+{
+	uint64_t frame;
+	unsigned n;
+	uint8_t b[64];
+} line_t;
+
+static double wall(void)
+{
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return (double)t.tv_sec + (double)t.tv_nsec * 1e-9;
+}
+
+static unsigned msgLen(uint8_t st)
+{
+	if (st >= 0x80u && st < 0xF0u)
+		return ((st >> 4) == 0xC || (st >> 4) == 0xD) ? 2u : 3u;
+	if (st == 0xF2u)
+		return 3u;
+	if (st == 0xF1u || st == 0xF3u)
+		return 2u;
+	return 1u;
+}
+
+static void put16(FILE *f, unsigned v)
+{
+	fputc((int)(v & 255u), f);
+	fputc((int)((v >> 8) & 255u), f);
+}
+
+static void put32(FILE *f, uint32_t v)
+{
+	put16(f, v & 0xFFFFu);
+	put16(f, v >> 16);
+}
+
+static int16_t sample(float x, int native)
+{
+	const double v = native ? floor((double)x * 32768.0) : floor((double)x * 32768.0 + 0.5);
+	return (int16_t)(v > 32767.0 ? 32767.0 : v < -32768.0 ? -32768.0 : v);
+}
+
+int main(int argc, char **argv)
+{
+	if (argc != 8 && !(argc == 10 && !strcmp(argv[8], "realtime")))
+	{
+		fprintf(stderr, "usage: plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN]\n");
+		return 1;
+	}
+	const double rate = strtod(argv[3], NULL);
+	const uint32_t block = (uint32_t)strtoul(argv[4], NULL, 10);
+	const uint64_t frames = strtoull(argv[6], NULL, 10);
+	const int realtime = argc == 10;
+	const uint32_t margin = realtime ? (uint32_t)strtoul(argv[9], NULL, 10) : 0u;
+	const int native = plug_isNative(rate);
+	/* the script */
+	FILE *sf = fopen(argv[5], "r");
+	if (!sf)
+	{
+		perror(argv[5]);
+		return 1;
+	}
+	line_t *lines = NULL;
+	unsigned nlines = 0;
+	char text[1024];
+	while (fgets(text, sizeof text, sf))
+	{
+		unsigned long long f;
+		char *p = strstr(text, "f usb");
+		if (text[0] == '#' || !p || sscanf(text, "%llu", &f) != 1)
+			continue;
+		lines = realloc(lines, (nlines + 1u) * sizeof *lines);
+		line_t *l = &lines[nlines++];
+		l->frame = f;
+		l->n = 0;
+		p += 5;
+		unsigned v;
+		int k;
+		while (l->n < sizeof l->b && sscanf(p, " %x%n", &v, &k) == 1)
+		{
+			l->b[l->n++] = (uint8_t)v;
+			p += k;
+		}
+	}
+	fclose(sf);
+	/* the shared memory, the pipes, the engine */
+	char err[256];
+	int shmFd = -1;
+	plug_shm_t *s = plug_shmCreate(rate, block, &shmFd, err, sizeof err);
+	if (!s)
+	{
+		fprintf(stderr, "plug_drive: %s\n", err);
+		return 1;
+	}
+	s->realtime = (uint32_t)realtime;
+	int wake[2], life[2];
+	if (pipe(wake) || pipe(life) || fcntl(wake[1], F_SETFL, O_NONBLOCK))
+		return 1;
+	signal(SIGPIPE, SIG_IGN);
+	const double w0 = wall();
+	const pid_t pid = plug_spawnEngine(argv[1], argv[2], wake[0], life[1], shmFd, NULL, err, sizeof err);
+	if (pid < 0)
+	{
+		fprintf(stderr, "plug_drive: %s\n", err);
+		return 1;
+	}
+	close(wake[0]);
+	close(life[1]);
+	while (plug_load(&s->state) != PLUG_ENGINE_RUNNING)
+	{
+		struct pollfd p = { life[0], POLLIN, 0 };
+		if (poll(&p, 1, 5) > 0 || plug_load(&s->state) == PLUG_ENGINE_FAILED || wall() - w0 > 60.0)
+		{
+			fprintf(stderr, "plug_drive: the engine did not start (state %llu)\n", (unsigned long long)s->state);
+			return 2;
+		}
+	}
+	const double wRun = wall();
+	/* play */
+	float *l = calloc(frames + block, sizeof *l), *r = calloc(frames + block, sizeof *r);
+	uint64_t n = 0, got = 0, firstMiss = 0, lastMiss = 0;
+	unsigned next = 0;
+	const uint32_t lp = plug_readOffset(rate, block, margin);
+	while (got < frames)
+	{
+		/* waiting: at most 8,192 frames ahead of the engine's audio, so that neither ring overflows
+		 * and the engine has no more to play than the frames asked for */
+		while (!realtime && n + block > plug_load(&s->audioEnd) + 8192u)
+		{
+			struct pollfd p = { life[0], POLLIN, 0 };
+			if (poll(&p, 1, 0) > 0)
+				break;
+			const uint64_t end = plug_load(&s->audioEnd);
+			if (end > got)
+			{
+				const uint64_t to = end < frames ? end : frames;
+				(void)plug_audioRead(s, got, (uint32_t)(to - got), &l[got], &r[got]);
+				got = to;
+			}
+			nanosleep(&(const struct timespec){ 0, 50000L }, NULL);
+		}
+		while (next < nlines && lines[next].frame < n + block)
+		{
+			const line_t *li = &lines[next++];
+			for (unsigned i = 0; i < li->n;)
+			{
+				const unsigned len = msgLen(li->b[i]);
+				(void)plug_evPush(s, li->frame, &li->b[i], (uint8_t)len);
+				i += len;
+			}
+		}
+		plug_publish(s, n + block);
+		(void)!write(wake[1], "w", 1);
+		if (realtime)
+		{
+			/* the plugin's read of the block [n, n + block): plug_readOffset() frames behind */
+			if (n >= lp)
+			{
+				const uint64_t from = n - lp;
+				const uint32_t take = from + block > frames ? (uint32_t)(frames > from ? frames - from : 0u) : block;
+				const uint64_t before = s->underruns;
+				if (take)
+					(void)plug_audioRead(s, from, take, &l[from], &r[from]);
+				if (s->underruns != before)
+				{
+					if (!firstMiss)
+						firstMiss = from;
+					lastMiss = from;
+				}
+				got = from + take;
+			}
+			const double due = wRun + (double)(n + block) / rate;
+			while (wall() < due)
+				nanosleep(&(const struct timespec){ 0, 100000L }, NULL);
+		}
+		else
+		{
+			const uint64_t end = plug_load(&s->audioEnd);
+			if (end > got)
+			{
+				const uint64_t to = end < frames ? end : frames;
+				(void)plug_audioRead(s, got, (uint32_t)(to - got), &l[got], &r[got]);
+				got = to;
+			}
+		}
+		n += block;
+		struct pollfd p = { life[0], POLLIN, 0 };
+		if (poll(&p, 1, 0) > 0)
+		{
+			fprintf(stderr, "plug_drive: the engine died at host frame %llu\n", (unsigned long long)n);
+			return 3;
+		}
+	}
+	const double wEnd = wall();
+	plug_store(&s->quit, 1);
+	close(wake[1]);
+	int status = 0;
+	waitpid(pid, &status, 0);
+	FILE *o = fopen(argv[7], "wb");
+	const uint32_t data = (uint32_t)(frames * 4u);
+	fwrite("RIFF", 1, 4, o);
+	put32(o, 36u + data);
+	fwrite("WAVEfmt ", 1, 8, o);
+	put32(o, 16);
+	put16(o, 1);
+	put16(o, 2);
+	const uint32_t hz = native ? 44141u : (uint32_t)rate;
+	put32(o, hz);
+	put32(o, hz * 4u);
+	put16(o, 4);
+	put16(o, 16);
+	fwrite("data", 1, 4, o);
+	put32(o, data);
+	for (uint64_t i = 0; i < frames; i++)
+	{
+		put16(o, (uint16_t)sample(l[i], native));
+		put16(o, (uint16_t)sample(r[i], native));
+	}
+	fclose(o);
+	printf("plug_drive: epoch %llu, %llu frames, late %llu, dropped %llu, ring full %llu, underruns %llu (blocks from "
+		"%llu to %llu); start %.3f s, play %.3f s (%.1fx real time), engine exit %d\n",
+		(unsigned long long)s->epoch, (unsigned long long)frames, (unsigned long long)s->late,
+		(unsigned long long)s->dropped, (unsigned long long)s->evDropped, (unsigned long long)s->underruns,
+		(unsigned long long)firstMiss, (unsigned long long)lastMiss, wRun - w0, wEnd - wRun,
+		(double)frames / rate / (wEnd - wRun), WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+	return 0;
+}

@@ -85,3 +85,42 @@ plugin_add_test(test_clock IDS P4_clock_start_at_zero P4_clock_rounding_44k P4_c
 target_sources(plug_common PRIVATE common/plug_time.c)
 target_sources(plug_common_san PRIVATE common/plug_time.c)
 plugin_add_test(test_time IDS P5_time_native P5_time_integer P5_time_covering P5_time_latency P5_time_margin P5_time_wide)
+
+# --- lichomat-engine (Task 6) --------------------------------------------------------------
+target_sources(plug_common PRIVATE common/plug_spawn.c)
+add_library(eng_fw OBJECT "${LXR_ROOT}/emu/render/render_fw.c")	# the renderer's direct calls
+target_link_libraries(eng_fw PRIVATE emu_fw_headers)
+target_include_directories(eng_fw PRIVATE "${LXR_ROOT}/emu/core" "${LXR_ROOT}/emu/render")
+target_compile_options(eng_fw PRIVATE -Wall -Wextra -Werror)
+add_executable(lichomat-engine engine/eng_main.c engine/eng_run.c engine/eng_resample.c
+    $<TARGET_OBJECTS:eng_fw> $<TARGET_OBJECTS:plug_common_san> ${PLUGIN_DEVICE_OBJECTS})
+target_include_directories(lichomat-engine PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/engine"
+    "${LXR_ROOT}/emu/core" "${LXR_ROOT}/emu/render" "${LXR_ROOT}/emu/common")
+target_compile_options(lichomat-engine PRIVATE ${PLUGIN_FLAGS} ${PLUGIN_SAN_FLAGS} -ffp-contract=off -fno-fast-math)
+target_link_options(lichomat-engine PRIVATE ${PLUGIN_SAN_FLAGS} "LINKER:-stack_size,0x800000")
+target_link_libraries(lichomat-engine PRIVATE "-framework AudioToolbox" "-framework CoreFoundation")
+plugin_add_test(test_resample IDS P7_converter_delay P7_converter_open)
+target_sources(test_resample PRIVATE engine/eng_resample.c)
+target_include_directories(test_resample PRIVATE "${PLUGIN_DIR}/engine")
+target_link_libraries(test_resample PRIVATE "-framework AudioToolbox" "-framework CoreFoundation")
+add_executable(plug_resample_wav tests/plug_resample_wav.c engine/eng_resample.c)
+target_include_directories(plug_resample_wav PRIVATE "${PLUGIN_DIR}/engine")
+target_compile_options(plug_resample_wav PRIVATE ${PLUGIN_FLAGS})
+target_link_libraries(plug_resample_wav PRIVATE "-framework AudioToolbox" "-framework CoreFoundation")
+add_executable(plug_drive tests/plug_drive.c $<TARGET_OBJECTS:plug_common>)
+target_include_directories(plug_drive PRIVATE "${PLUGIN_DIR}/common")
+target_compile_options(plug_drive PRIVATE ${PLUGIN_FLAGS})
+set(PLUGIN_TEST ${Python3_EXECUTABLE} "${PLUGIN_DIR}/tests/plugin_test.py" --root "${LXR_ROOT}"
+    --build "${CMAKE_BINARY_DIR}" --render $<TARGET_FILE:lichomat-render> --engine $<TARGET_FILE:lichomat-engine>
+    --drive $<TARGET_FILE:plug_drive> --resample $<TARGET_FILE:plug_resample_wav>
+    --work "${CMAKE_BINARY_DIR}/plugin-test")
+# plugin_py_tests(<id>...): a case of plugin/tests/plugin_test.py each
+function(plugin_py_tests)
+    foreach(id IN LISTS ARGN)
+        add_test(NAME ${id} COMMAND ${PLUGIN_TEST} ${id})
+        set_tests_properties(${id} PROPERTIES TIMEOUT 600 LABELS plugin)
+    endforeach()
+endfunction()
+plugin_py_tests(P6_engine_version P6_engine_native P6_engine_blocks P6_engine_seed P6_engine_quit
+    P7_engine_resampled P7_engine_realtime)
+set_tests_properties(P7_engine_realtime PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
