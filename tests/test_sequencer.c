@@ -1299,14 +1299,18 @@ TEST(sequencer_dynamics_follow_copy_clear_and_backup)
 	const TrackTemplate vt = { .id = 6, .amount = -25 };
 	static const TrackTemplate none[NUM_TRACKS];
 	seq_patternSet.vtpl[3][2] = vt;
+	seq_patternSet.vtpl[3][6] = (TrackTemplate){ .id = 8, .amount = 70 };	/* spec review of group B: the last track too */
 	seq_copyTrack(2, 5, 3);
 	ASSERT_EQ(memcmp(&seq_patternSet.vtpl[3][5], &vt, sizeof vt), 0);
 	seq_copyPattern(3, 7);
 	ASSERT_EQ(memcmp(seq_patternSet.vtpl[7], seq_patternSet.vtpl[3], sizeof seq_patternSet.vtpl[3]), 0);
 	seq_copyPatternToBackupBuffer(3);
+	TrackTemplate row[NUM_TRACKS];
+	memcpy(row, seq_patternSet.vtpl[3], sizeof row);
 	memset(seq_patternSet.vtpl[3], 0, sizeof seq_patternSet.vtpl[3]);
 	seq_copyBackupBufferToPattern(3);
 	ASSERT_EQ(memcmp(&seq_patternSet.vtpl[3][2], &vt, sizeof vt), 0);
+	ASSERT_EQ(memcmp(seq_patternSet.vtpl[3], row, sizeof row), 0);	/* the whole row, track 6 too */
 	seq_clearTrack(2, 3);
 	ASSERT_EQ(seq_patternSet.vtpl[3][2].id, 0);
 	ASSERT_EQ(seq_patternSet.vtpl[3][2].amount, 0);
