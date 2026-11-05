@@ -101,6 +101,8 @@ bool EngineLink::start (double rate, uint32_t maxBlock, bool realtime, const std
 	}
 	stopping = false;
 	restartDone = restartAsked.load ();
+	offlineWaiting = false;
+	stalledPid = -1;
 	thread = std::thread ([this] { monitor (); });
 	return true;
 }
@@ -151,12 +153,14 @@ void EngineLink::monitor ()
 	std::vector<double> deaths;
 	/* No engine, for good: failed until stop(), or until restart() asks for another card. The
 	 * thread stays, so that restart() is answered at once and starts an engine on its card. */
+	std::vector<double> stalls;	/* engines killed for a hang, a boot over 30 s, or a vain offline wait */
 	auto failed = [&] (uint64_t asked) {
 		plug_store (&mem->state, PLUG_ENGINE_FAILED);
 		restartDone = asked;
 		while (!stopping && restartAsked.load () == asked)
 			std::this_thread::sleep_for (std::chrono::milliseconds (50));
 		deaths.clear ();
+		stalls.clear ();
 	};
 	while (!stopping)
 	{
@@ -197,8 +201,9 @@ void EngineLink::monitor ()
 		/* watch it */
 		const double started = wallNow ();
 		double lastMove = started;
-		uint64_t lastFrontier = plug_load (&mem->frontier);
+		uint64_t lastFrontier = plug_load (&mem->frontier), lastEnd = plug_load (&mem->audioEnd);
 		const char* why = "it died";
+		bool stall = false;
 		for (;;)
 		{
 			struct pollfd p = {life[0], POLLIN, 0};
@@ -231,16 +236,28 @@ void EngineLink::monitor ()
 			}
 			const double now = wallNow ();
 			const uint64_t st = plug_load (&mem->state), frontier = plug_load (&mem->frontier);
-			if (frontier != lastFrontier)
+			const uint64_t audioEnd = plug_load (&mem->audioEnd);
+			if (frontier != lastFrontier || audioEnd != lastEnd)
 			{
 				lastFrontier = frontier;
+				lastEnd = audioEnd;
 				lastMove = now;
 			}
-			const bool behind = plug_load (&mem->hostFrames) > frontier + (uint64_t)(mem->rate / 2.0);
-			if ((st == PLUG_ENGINE_RUNNING && behind && now - lastMove > 2.0)
-			    || (st != PLUG_ENGINE_RUNNING && now - started > 30.0))
+			/* the plugin ahead by 0.5 s (real time), or waiting for it (offline, where it is never ahead) */
+			const bool behind =
+			    plug_load (&mem->hostFrames) > frontier + (uint64_t)(mem->rate / 2.0) || offlineWaiting.load ();
+			const char* stalled = nullptr;
+			if (stalledPid.load () == pid)
+				stalled = "the plugin waited 10 s for it";
+			else if (st == PLUG_ENGINE_RUNNING && behind && now - lastMove > 2.0)
+				stalled = "it hung (2 s without taking events)";
+			else if (st != PLUG_ENGINE_RUNNING && now - started > 30.0)
+				stalled = "it did not start in 30 s";
+			if (stalled)
 			{
-				why = st == PLUG_ENGINE_RUNNING ? "it hung (2 s without taking events)" : "it did not start in 30 s";
+				if (!stall)
+					why = stalled;
+				stall = true;
 				kill (pid, SIGKILL);
 			}
 		}
@@ -264,9 +281,15 @@ void EngineLink::monitor ()
 		deaths.push_back (now);
 		while (!deaths.empty () && now - deaths.front () > 60.0)
 			deaths.erase (deaths.begin ());
-		if (deaths.size () >= 5 || reported)
+		if (stall)
+			stalls.push_back (now);
+		while (!stalls.empty () && now - stalls.front () > 600.0)
+			stalls.erase (stalls.begin ());
+		if (deaths.size () >= 5 || stalls.size () >= 3 || reported)
 		{
-			note ("the engine is not started again: %s", reported ? "it reported a failure" : "5 deaths in a minute");
+			note ("the engine is not started again: %s", reported           ? "it reported a failure"
+			                                             : deaths.size () >= 5 ? "5 deaths in a minute"
+			                                                                   : "3 stalls in 10 minutes");
 			failed (asked);
 			continue;
 		}

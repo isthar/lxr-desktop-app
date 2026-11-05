@@ -107,6 +107,7 @@ tresult PLUGIN_API Processor::setActive (TBool state)
 		plug_clockInit (&clock, processSetup.sampleRate);
 		frames = 0;
 		runningPid = 0;
+		waitedInVain = -2;
 		reported = -1;
 		if (folder.valid ()
 		    && !link.start (processSetup.sampleRate, (uint32_t)processSetup.maxSamplesPerBlock,
@@ -173,18 +174,40 @@ void Processor::reportState (ProcessData& data, uint64_t state)
 		reported = (int)state;
 }
 
-/* Offline (a bounce, a freeze, an export) the host does not wait for real time, nor need we:
- * process() waits for the engine, which runs at least 15 times real time. 10 s at most each. */
-static void offlineWait (plug_shm_t* s, uint64_t audioEnd)
+static double monotonicNow ()
 {
-	for (int i = 0; i < 100000; i++)
+	struct timespec t;
+	clock_gettime (CLOCK_MONOTONIC, &t);
+	return (double)t.tv_sec + (double)t.tv_nsec * 1e-9;
+}
+
+/* Offline (a bounce, a freeze, an export) the host does not wait for real time, nor need we:
+ * process() waits for the engine, which runs at least 15 times real time, until it runs and has
+ * written the frames before audioEnd, or it failed; 10 s at most by the clock. A wait in vain is
+ * told to the monitor, which ends that engine (a stall), and no other wait is made for it: an
+ * engine that hangs costs a render 10 s, not 10 s a block. */
+void Processor::offlineWait (plug_shm_t* s, uint64_t audioEnd)
+{
+	const pid_t engine = link.pid ();
+	if (engine == waitedInVain)
+		return;
+	link.waiting (true);
+	const double t0 = monotonicNow ();
+	for (;;)
 	{
 		const uint64_t st = plug_load (&s->state);
 		if (st == PLUG_ENGINE_FAILED || (st == PLUG_ENGINE_RUNNING && plug_load (&s->audioEnd) >= audioEnd))
-			return;
+			break;
+		if (monotonicNow () - t0 >= 10.0)
+		{
+			waitedInVain = link.pid ();
+			link.stalled (waitedInVain);
+			break;
+		}
 		struct timespec d = {0, 100000L};
 		nanosleep (&d, nullptr);
 	}
+	link.waiting (false);
 }
 
 tresult PLUGIN_API Processor::process (ProcessData& data)

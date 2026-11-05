@@ -995,6 +995,68 @@ def P10_plugin_nonblock(t):
     check(log.count('ended (exit 1): it died') == 5 and 'not started again: 5 deaths in a minute' in log, 'the log %r' % log)
 
 
+@case
+def P10_plugin_offline_hang(t):
+    # Offline (Live's export, freeze) an engine that hangs must not hold the render for ever. The host offline but
+    # paced (30 s of TIMELINE at 44,140.625 Hz, blocks of 128, so that the render outlasts the waits), every engine
+    # stopped (SIGSTOP): the first 1 s after it starts, so it hangs while it plays; the others at once, so they hang
+    # while they boot. The monitor kills the first 2 s after it stops while the processor waits for it; each other
+    # one when the processor has waited 10 s for it in vain (by the clock), and the processor does not wait again
+    # for that engine; after 3 such stalls the plugin gives up ("failed", at about 21 s) and the render goes on in
+    # silence. Bounded: the host done within 34 s (its 30 s paced), no engine left
+    frames = blocks_frames(30)
+    pl = plan(t, 'h.txt', TIMELINE + ['paced', 'out ' + t.path('h.wav')], frames=frames)
+    p, seen, order, stopped = None, {}, [], set()
+    t0 = time.monotonic()
+    try:
+        p = subprocess.Popen([t.a.host, pl], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=host_env(t))
+        while p.poll() is None and time.monotonic() - t0 < 60:
+            now = time.monotonic()
+            for k in map(int, subprocess.run(['pgrep', '-P', str(p.pid)], capture_output=True, text=True).stdout.split()):
+                if k not in seen:
+                    seen[k] = now
+                    order.append(k)
+            for i, k in enumerate(order):
+                if k not in stopped and (i > 0 or now - seen[k] >= 1.0):
+                    try:
+                        os.kill(k, signal.SIGSTOP)
+                    except OSError:
+                        pass
+                    stopped.add(k)
+            time.sleep(0.01)
+        took = time.monotonic() - t0
+        check(p.poll() is not None, 'the host did not finish in 60 s')
+        out, err = p.communicate()
+    finally:
+        if p is not None and p.poll() is None:
+            p.kill()
+            p.wait()
+        for k in order:    # an engine of this host still there (the host killed): SIGKILL
+            if 'lichomat-engine' in subprocess.run(['ps', '-p', str(k), '-o', 'comm='], capture_output=True, text=True).stdout:
+                os.kill(k, signal.SIGKILL)
+    log = ''.join(instance_logs(t.path('home')).values())
+    print(out.strip())
+    print(log.strip())
+    _, _, x = wav(t.path('h.wav'))
+    loud = sum(1 for v in x[0::2] if abs(v) >= 4000)
+    tail = x[-2 * 44140 * 10:]
+    print('%d engines started and stopped; the host done in %.1f s; %d loud frames, the last 10 s silent: %s'
+          % (len(seen), took, loud, not any(tail)))
+    # (the render's rest, in silence, may end before the give-up reaches the Engine parameter: the log tells it)
+    check(p.returncode == 0, 'the host: %d %s%s' % (p.returncode, out, err))
+    check(took < 34.0, 'the render took %.1f s' % took)
+    check(len(seen) == 3 and log.count('ended (signal 9): it hung (2 s without taking events)') == 1
+          and log.count('ended (signal 9): the plugin waited 10 s for it') == 2
+          and 'not started again: 3 stalls in 10 minutes' in log, 'the log %r' % log)
+    # the third engine's vain wait began as the second one was killed: 10 s by the clock (not 100,000 sleeps of
+    # 0.1 ms, which last longer) and the monitor's poll of 0.1 s (measured 10.02 s)
+    ends = [l.split()[1] for l in log.splitlines() if 'ended (signal 9)' in l]
+    sec = [int(h) * 3600 + int(m) * 60 + float(x) for h, m, x in (e.split(':') for e in ends)]
+    print('from the second kill to the third: %.2f s' % (sec[2] - sec[1]))
+    check(9.95 <= sec[2] - sec[1] <= 10.3, 'the vain wait lasted %.2f s' % (sec[2] - sec[1]))
+    check(loud > 0 and not any(tail), 'the output: %d loud frames, the last 10 s %s' % (loud, 'silent' if not any(tail) else 'not silent'))
+
+
 def longest_silence(x):
     best = run = 0
     for v in x:

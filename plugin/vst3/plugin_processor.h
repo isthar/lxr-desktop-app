@@ -51,6 +51,7 @@ private:
 	unsigned notesOf (Steinberg::Vst::IEventList* events, Steinberg::int32 frames);
 	void reportState (Steinberg::Vst::ProcessData& data, uint64_t state);
 	const std::string& logOf (const CardFolder& f);
+	void offlineWait (plug_shm_t* s, uint64_t audioEnd);
 
 	EngineLink link;
 	CardFolder folder;
@@ -61,6 +62,7 @@ private:
 	uint32_t margin = 0;
 	uint64_t frames = 0;		/**< host frames since the activation */
 	uint64_t runningPid = 0;	/**< the engine that the clock generator last started */
+	pid_t waitedInVain = -2;	/**< the engine an offline wait gave up on (-1: none ran): no more waits for it */
 	int reported = -1;			/**< the engine state last sent to the controller */
 	bool active = false;
 	plug_midi_t clocks[kMaxMidi];

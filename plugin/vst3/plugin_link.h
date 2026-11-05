@@ -3,9 +3,11 @@
  *
  * The plugin's side of its engine process (plan E9.2 Task 8): the shared memory, the wake pipe,
  * and a monitor thread that starts lichomat-engine, sees it die (the end of its life pipe) or
- * hang (2 s without taking the published events), starts it again after 0.5 s, and gives up
- * (failed) after 5 deaths in a minute. While no engine runs the audio thread reads silence: the
- * memory stays mapped from start() to stop().
+ * stall, starts it again after 0.5 s, and gives up (failed) after 5 deaths in a minute or 3
+ * stalls in 10 minutes. A stall is an engine killed because it hung (2 s without taking the
+ * events or giving audio while the plugin is ahead by 0.5 s or waits for it offline), did not
+ * start in 30 s, or did not answer one of the processor's offline waits in 10 s. While no engine
+ * runs the audio thread reads silence: the memory stays mapped from start() to stop().
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -54,8 +56,15 @@ public:
 			(void)!write (wakeFd[1], "w", 1);	/* O_NONBLOCK: a full pipe is a wake-up already pending */
 	}
 
-	/** the running engine's pid, -1 when none (tests) */
+	/** the running engine's pid, -1 when none */
 	pid_t pid () const { return enginePid.load (); }
+
+	/* the processor offline (it may wait) */
+
+	/** the processor waits for the engine, or no longer (the monitor's hang rule) */
+	void waiting (bool on) { offlineWaiting.store (on); }
+	/** the processor waited 10 s in vain for engine pid: the monitor ends it, a stall */
+	void stalled (pid_t pid) { stalledPid.store (pid); }
 
 	/** lichomat-engine next to the plugin's binary: Contents/Helpers/ of the bundle */
 	static std::string enginePath ();
@@ -72,6 +81,8 @@ private:
 	std::atomic<uint64_t> restartAsked {0};	/**< restart() calls; the monitor answers each in restartDone */
 	std::atomic<uint64_t> restartDone {0};	/**< the last call answered: an engine started on its card, or none */
 	std::atomic<pid_t> enginePid {-1};
+	std::atomic<bool> offlineWaiting {false};
+	std::atomic<pid_t> stalledPid {-1};
 	std::mutex paths;	/* the monitor thread and restart(); never the audio thread */
 	std::string card, engineLog, pluginLog, engine;
 };
