@@ -247,7 +247,7 @@ endif()
 # and configuration, and an in-memory card in the test. For this target
 # currentFolder, savefileNames and mainParameters are pointers to arrays of their
 # size, which the test points into buffers with guard bytes after the arrays.
-seqc_add_test(test_presets   IDS presets pattern_block2 EXTRA ${LXR_ROOT}/Core/Src/Preset/presetManager.c ${LXR_ROOT}/Core/Src/frontPanelParser.c)  # E4.7  project re-save, kit and project slot numbers; E4.8 NRPN 121
+seqc_add_test(test_presets   IDS presets pattern_block2 pattern_block3 user_templates EXTRA ${LXR_ROOT}/Core/Src/Preset/presetManager.c ${LXR_ROOT}/Core/Src/frontPanelParser.c)  # E4.7  project re-save, kit and project slot numbers; E4.8 NRPN 121
 if(TARGET test_presets)
     target_include_directories(test_presets BEFORE PRIVATE stubs/presets stubs)
     target_include_directories(test_presets SYSTEM PRIVATE

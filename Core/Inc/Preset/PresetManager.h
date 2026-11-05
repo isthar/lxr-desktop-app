@@ -96,6 +96,8 @@ FRESULT preset_createProject(uint8_t presetNr);
 //LICHOMAT v0.3: the mute scenes after the 8-byte name in prj.nfo (plan D20), at the file position
 //of SDFile after the name: write them, or read them (no block or another version: none)
 void preset_writeSceneBlock(void);
+FRESULT preset_saveUserTemplates(uint8_t always);	//LICHOMAT v0.7: USERTPL.LCH in the current folder (plan v0.7 V7-12)
+void preset_loadUserTemplates(uint8_t clearIfAbsent);
 void preset_readSceneBlock(void);
 void preset_loadProjectNames(uint8_t projectNr);
 
