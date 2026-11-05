@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-05 22:56",
+    "updated": "2026-11-05 23:27",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "4a7c71f",
+    "head": "d271a01",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T22:56:00+01:00",
+    "updated_at": "2026-11-05T23:27:00+01:00",
     "now": "E9.18–E9.19: pełny przegląd wtyczki (od 22:56)"
   },
   "epics": [
@@ -4552,6 +4552,11 @@
       "n": 629,
       "at": "2026-11-05 22:56",
       "text": "E9.19 (wtyczka zad. 9), 5936055: host testowy na klasach SDK, sprawdzanie czasu rzeczywistego i scenariusze. Przez hosta wtyczka gra bit w bit jak renderer (529 471 ramek, 5 przeskoków pętli), przy 48 kHz też 0 różnic. Uderzenia w ±1 ramce od taktu plus opóźnienie. Dwie instancje działają jak jedna; stan w secie 4 166 B; silnik wraca ok. 0,69 s po zabiciu. W wątku audio przez 3 750 wywołań process() ani jednej zakazanej operacji. 60 testów. Twoja karta emulatora nietknięta. Start pełnego przeglądu samej wtyczki."
+    },
+    {
+      "n": 630,
+      "at": "2026-11-05 23:27",
+      "text": "Kofeina dołożona: pracuję do rana. Kolejność: przegląd i poprawki wtyczki, zad. 10 (bramka licencji, README, skrypt instalacji; samej instalacji do ~/Library/Audio/Plug-Ins/VST3 nie robię, rano dostaniesz jedno polecenie), zad. 11 (Twoje sprawdzenia P1–P8 w Abletonie)."
     }
   ]
 }
