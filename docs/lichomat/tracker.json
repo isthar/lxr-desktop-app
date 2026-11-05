@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 01:50",
+    "updated": "2026-11-05 02:04",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7: grupa B (E6.31, E6.32)",
     "branch": "timing-core",
-    "head": "01b7140",
+    "head": "a514fd5",
     "next": "E6.31–E6.32 (klej, pliki), potem pełny przegląd; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T01:50:00+01:00",
-    "now": "E6.31–E6.32: przegląd zgodności ze spec grupy B (od 01:55); potem przegląd jakości"
+    "updated_at": "2026-11-05T02:04:00+01:00",
+    "now": "E6.31–E6.32: implementer zamyka 8 luk w testach z przeglądu spec (od 02:15); potem przegląd jakości grupy B"
   },
   "epics": [
     {
@@ -4280,6 +4280,11 @@
       "n": 597,
       "at": "2026-11-05 01:50",
       "text": "E6.32 (v0.7 zad. 5), 6a76469: pliki zacommitowane i wypchnięte: blok 3 w .pat (za blokiem 2 albo od razu za blokiem 1, tylko gdy ścieżka ma szablon głośności) i USERTPL.LCH w folderze projektu i /tmp. Host 135/135, ASan 135/135, emulator 346/346, ASan emulatora 317/317, 38 nagrań wzorcowych bez zmian. Stare wersje (0.6, 0.5) czytają nowe pliki i pomijają blok 3. Sprawdzenie zrobione na karcie z blokiem 3 wpisanym ręcznie, bo renderer dostanie parametry vtp i vdp dopiero w zad. 6; skrypt z planu puszczę ponownie po zad. 6. Start pełnego przeglądu grupy B (spec)."
+    },
+    {
+      "n": 598,
+      "at": "2026-11-05 02:04",
+      "text": "E6.31–E6.32 (v0.7 zad. 4–5): przegląd zgodności ze spec: kod zgodny z planem. Recenzent puścił 34 mutanty, 8 przeżyło, czyli luki w testach. Najważniejsze dwie: zapis szablonu musi liczyć dB od najgłośniejszego słyszanego uderzenia, nie od surowych głośności kroków; wczytanie starego projektu (fw 1.7, v0.3) po projekcie v0.7 musi zerować szablony głośności. Implementer dopisuje testy, każdą lukę w osobnym commicie. Uwagi do zad. 6 zapisane w planie."
     }
   ]
 }
