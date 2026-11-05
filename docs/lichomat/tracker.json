@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 20:12",
+    "updated": "2026-11-05 20:15",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "v0.7 gotowe (M20); wtyczka: plan prototypu (E9.2)",
+    "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "63e280d",
+    "head": "ef92a05",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T20:12:00+01:00",
-    "now": "E9.2: planista pisze i sprawdza plan prototypu wtyczki (od 18:00)"
+    "updated_at": "2026-11-05T20:15:00+01:00",
+    "now": "E9.11–E9.15: implementer grup A i B wtyczki (od 20:35); potem lekki przegląd"
   },
   "epics": [
     {
@@ -934,6 +934,83 @@
       "epic": "E9",
       "status": "w toku",
       "title": "Prototyp: jedna instancja, VST3 i AU, nuty MIDI odpalają głosy, sekwencer idzie za tempem i pozycją Abletona, wyjście stereo; walidatory (VST3 validator, auval) i rendery bez hosta; Twój test w Abletonie",
+      "updated": "2026-11-05"
+    },
+    {
+      "id": "E9.11",
+      "epic": "E9",
+      "status": "w toku",
+      "title": "Wtyczka zad. 1: worktree build/wt-plugin (gałąź plugin od v0.6 a856883), stan wyjściowy",
+      "updated": "2026-11-05"
+    },
+    {
+      "id": "E9.12",
+      "epic": "E9",
+      "status": "w toku",
+      "title": "Wtyczka zad. 2: SDK VST3 3.8.1 w repozytorium (przypięte, sumy kontrolne), projekt CMake wtyczki, osłona w emu/CMakeLists.txt",
+      "updated": "2026-11-05"
+    },
+    {
+      "id": "E9.13",
+      "epic": "E9",
+      "status": "w toku",
+      "title": "Wtyczka zad. 3: pamięć współdzielona między wtyczką a silnikiem: nagłówek, pierścień zdarzeń, pierścień audio, wykrywanie śmierci silnika; testy P3",
+      "updated": "2026-11-05"
+    },
+    {
+      "id": "E9.14",
+      "epic": "E9",
+      "status": "w toku",
+      "title": "Wtyczka zad. 4: transport hosta jako MIDI clock, Start, Continue, Stop i Song Position; testy P4",
+      "updated": "2026-11-05"
+    },
+    {
+      "id": "E9.15",
+      "epic": "E9",
+      "status": "w toku",
+      "title": "Wtyczka zad. 5: ramki hosta, cykle i opóźnienie; testy P5; lekki przegląd grupy",
+      "updated": "2026-11-05"
+    },
+    {
+      "id": "E9.16",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka zad. 6: lichomat-engine, bez przeliczania i z przeliczaniem próbkowania; testy P6, P7; pełny przegląd",
+      "updated": "2026-11-05"
+    },
+    {
+      "id": "E9.17",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka zad. 7: karta jako jedno archiwum w kolejności karty (stan w secie); testy P8",
+      "updated": "2026-11-05"
+    },
+    {
+      "id": "E9.18",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka zad. 8: LICHOMAT.vst3: procesor, kontroler, połączenie z silnikiem, foldery instancji; walidator SDK",
+      "updated": "2026-11-05"
+    },
+    {
+      "id": "E9.19",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka zad. 9: host testowy na klasach SDK, sprawdzenie czasu rzeczywistego, scenariusze; testy P10; pełny przegląd",
+      "updated": "2026-11-05"
+    },
+    {
+      "id": "E9.20",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka zad. 10: bramka licencji, README, instalacja z podpisem ad hoc, końcowe bramki; testy P11",
+      "updated": "2026-11-05"
+    },
+    {
+      "id": "E9.21",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka zad. 11: Twoje sprawdzenia w Abletonie P1–P8, HANDOFF, tracker",
       "updated": "2026-11-05"
     }
   ],
@@ -4400,6 +4477,11 @@
       "n": 614,
       "at": "2026-11-05 20:12",
       "text": "E6.35 i E6.36 zrobione (95c2787 na v0.7, 63e280d na timing-core): poprawki dokumentów z lekkiego przeglądu, w tym U39 krok 3. M20: v0.7 gotowe w kodzie: szablony głośności, własne szablony us1–us4, clear micro, blok 3 i USERTPL.LCH, po pełnych przeglądach. Czeka na Ciebie: U38–U41 na LXR (po sesji 0.6), odsłuch sekcji „Akcenty na v0.7” na stronie odsłuchu (nowe rendery z prawdziwego kodu v0.7)."
+    },
+    {
+      "n": 615,
+      "at": "2026-11-05 20:15",
+      "text": "E9.2: plan prototypu wtyczki gotowy (docs/superpowers/plans/2026-11-05-plugin-prototype.md, 11 zadań = wiersze E9.11–E9.21). Planista zbudował i przetestował całość na kopii roboczej: 49 z 49 testów, walidator SDK przechodzi. Wtyczka gra bit w bit jak renderer, także z 5 przeskokami pętli i zmianą tempa. Przy 44,1, 48 i 96 kHz zgodność do 1 LSB. Po zabiciu silnika wtyczka milknie na ok. 0,7 s i gra dalej; dwie instancje działają. Poprawki do szkicu: bounce i freeze wymagają czekania na silnik w trybie offline; cel ≤ 10 ms opóźnienia trzyma się do bufora 256 ramek, przy 512 jest ok. 15 ms. Przy planowaniu SDK raz utworzyło pusty folder ~/Library/Audio/Plug-Ins/VST3, który planista usunął. E9.11–E9.15 start: implementer grup A i B (zad. 1–5)."
     }
   ]
 }
