@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 21:35",
+    "updated": "2026-11-05 21:38",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "881d06a",
+    "head": "9e0ec4a",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T21:35:00+01:00",
-    "now": "E9.16: pełny przegląd silnika wtyczki (od 21:35); E9.17: implementer archiwum karty (od 21:35)"
+    "updated_at": "2026-11-05T21:38:00+01:00",
+    "now": "E9.16: pełny przegląd silnika wtyczki (od 21:35)"
   },
   "epics": [
     {
@@ -4517,6 +4517,11 @@
       "n": 622,
       "at": "2026-11-05 21:35",
       "text": "E9.17 start (wtyczka zad. 7): karta jako jedno archiwum, czyli stan wtyczki w secie Abletona. Idzie równolegle z przeglądem silnika, bo przegląd czyta tylko kopię i nie dotyka worktree."
+    },
+    {
+      "n": 623,
+      "at": "2026-11-05 21:38",
+      "text": "E9.17 (wtyczka zad. 7), 6502ad2: karta jako jedno archiwum (stan w secie Abletona) zacommitowana; kolejność plików karty zachowana, bo firmware czyta je według niej. 46 testów, 0 ostrzeżeń. Grupa C kompletna, czeka na wynik przeglądu silnika."
     }
   ]
 }
