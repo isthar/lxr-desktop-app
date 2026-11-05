@@ -71,10 +71,12 @@ class T:
         self.run([self.a.render, '--card', card, '--bpm', 'mid', '--no-start', '--as-booted', '--stereo', 'sum',
                   '--seconds', str(seconds), '--events', script, '--out', out])
 
-    def drive(self, card, rate, block, script, frames, out, realtime=None):
+    def drive(self, card, rate, block, script, frames, out, realtime=None, preroll=False):
         cmd = [self.a.drive, self.a.engine, card, str(rate), str(block), script, str(frames), out]
         if realtime is not None:
             cmd += ['realtime', str(realtime)]
+        if preroll:
+            cmd += ['preroll']
         line = self.run(cmd).stdout.strip()
         print(line)
         return parse_drive(line)
@@ -119,7 +121,7 @@ def script_events():
     128 BPM with Start at 4,410 frames, 140 BPM from beat 8, a loop jump at beat 12 back to beat 4 (Stop,
     Song Position 16, Continue with the clock), 12.6 s of clocks; Note Ons and Offs on channel 1, note 48 (the
     onset card's Drum 1 and the voices on out 2), at irregular frames and on and around block boundaries
-    (64k - 1, 64k, 64k + 1 at 44,140.625 Hz)."""
+    (64k - 1, 64k, 64k + 1 at 44,140.625 Hz), the first at frame 0, the epoch's own frame."""
     msgs = {}
 
     def add(f, b):
@@ -144,6 +146,8 @@ def script_events():
     for i, f in enumerate(notes):
         add(f, '90 30 7F')
         add(f + 3000 + 7 * i, '80 30 00')
+    add(0, '90 30 7F')
+    add(2000, '80 30 00')
     return msgs
 
 
@@ -284,6 +288,26 @@ def P6_engine_seed(t):
     d = same_files(t.path('render.wav'), t.path('drive.wav'))
     check(d is None, 'seeded by the engine vs by the renderer: %s' % d)
     print('the engine seeded %s: %s' % (empty, sorted(os.listdir(empty))))
+
+
+@case
+def P6_engine_epoch(t):
+    # In a host the epoch is never 0: the plugin publishes every block, also while its engine boots. With
+    # plug_drive's pre-roll (a Note On before the engine starts and one while it boots, which the new engine
+    # leaves out with the ring, and one at epoch - 1 once it runs, which it drops), blocks of 128 and 37: the
+    # epoch is above 0, one event dropped, none late, and the output from the epoch on is the renderer's, byte for
+    # byte, the script's Note On at frame 0 sounding from the epoch's own frame.
+    script = write_script(t, 'script.txt')
+    frames = blocks_frames(3)
+    t.render(t.card('render'), script, 3, t.path('render.wav'))
+    for b in (128, 37):
+        out = t.path('drive-%d.wav' % b)
+        s = t.drive(t.card('e%d' % b), RATE_TEXT, b, script, frames, out, preroll=True)
+        check(s.get('epoch', 0) > 0 and s.get('dropped') == 1 and s.get('late') == 0 and s.get('full') == 0,
+              'blocks of %d: counters %r' % (b, s))
+        d = same_files(t.path('render.wav'), out)
+        check(d is None, 'blocks of %d: %s' % (b, d))
+    print('the pre-roll, blocks of 128 and 37: each == render')
 
 
 @case

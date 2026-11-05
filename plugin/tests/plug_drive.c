@@ -6,11 +6,19 @@
  * plays a script of lichomat-render's usb lines ("<frame>f usb XX ..", host frames) in blocks,
  * and writes the ring's frames [0, FRAMES) as a 16-bit stereo WAV.
  *
- *   plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN]
+ *   plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN | preroll]
  *
  * Without realtime it waits for each frame; with it, it paces the blocks by the wall clock,
  * reads each block plug_readOffset(RATE, BLOCK, MARGIN) frames behind as the plugin does, and
  * counts the underruns.
+ * With preroll it publishes while the engine boots, as the plugin does in a host: a block about
+ * every 0.5 ms from before the engine starts, with a Note On in the block before the start and
+ * one in the first block after the engine reports booting, which the new engine must leave out.
+ * Once the engine runs it pushes a Note On at epoch - 1, which the engine must drop, and plays
+ * the script from the epoch, script frame f at host frame epoch + f, and the WAV holds the
+ * frames [epoch, epoch + FRAMES). The pre-roll's blocks are at most 64 frames: the engine's
+ * first hook waits for the events up to epoch + 66 (eng_run.c), so a block published between
+ * the epoch and the driver seeing it leaves the script's first frames still to come.
  * At 44,140.625 Hz a sample is floor(x x 32,768), the renderer's --stereo sum exactly.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
@@ -82,15 +90,16 @@ static int16_t sample(float x, int native)
 
 int main(int argc, char **argv)
 {
-	if (argc != 8 && !(argc == 10 && !strcmp(argv[8], "realtime")))
+	const int realtime = argc == 10 && !strcmp(argv[8], "realtime");
+	const int preroll = argc == 9 && !strcmp(argv[8], "preroll");
+	if (argc != 8 && !realtime && !preroll)
 	{
-		fprintf(stderr, "usage: plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN]\n");
+		fprintf(stderr, "usage: plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN | preroll]\n");
 		return 1;
 	}
 	const double rate = strtod(argv[3], NULL);
 	const uint32_t block = (uint32_t)strtoul(argv[4], NULL, 10);
 	const uint64_t frames = strtoull(argv[6], NULL, 10);
-	const int realtime = argc == 10;
 	const uint32_t margin = realtime ? (uint32_t)strtoul(argv[9], NULL, 10) : 0u;
 	const int native = plug_isNative(rate);
 	/* the script */
@@ -137,6 +146,17 @@ int main(int argc, char **argv)
 	if (pipe(wake) || pipe(life) || fcntl(wake[1], F_SETFL, O_NONBLOCK))
 		return 1;
 	signal(SIGPIPE, SIG_IGN);
+	/* the pre-roll: blocks of at most 64 frames, the first one, with a Note On, before the engine
+	 * starts */
+	static const uint8_t junk[3] = { 0x90, 0x30, 0x7F };
+	const uint32_t preBlock = block < 64u ? block : 64u;
+	uint64_t n = 0;
+	if (preroll)
+	{
+		(void)plug_evPush(s, n, junk, 3);
+		n += preBlock;
+		plug_publish(s, n);
+	}
 	const double w0 = wall();
 	const pid_t pid = plug_spawnEngine(argv[1], argv[2], wake[0], life[1], shmFd, NULL, err, sizeof err);
 	if (pid < 0)
@@ -146,19 +166,53 @@ int main(int argc, char **argv)
 	}
 	close(wake[0]);
 	close(life[1]);
+	int junkBooting = 0;
+	double lastPub = w0;
 	while (plug_load(&s->state) != PLUG_ENGINE_RUNNING)
 	{
+		if (preroll && wall() - lastPub >= 0.0005)
+		{
+			/* a Note On in the first block after the engine reports booting: it boots for more than
+			 * 10 ms after that (the firmware's boot and the renderer's settle), so the block is
+			 * published, and the Note On is before the epoch, long before the engine takes it */
+			if (!junkBooting && plug_load(&s->state) == PLUG_ENGINE_BOOTING)
+			{
+				(void)plug_evPush(s, n, junk, 3);
+				junkBooting = 1;
+			}
+			n += preBlock;
+			plug_publish(s, n);
+			(void)!write(wake[1], "w", 1);
+			lastPub = wall();
+		}
 		struct pollfd p = { life[0], POLLIN, 0 };
-		if (poll(&p, 1, 5) > 0 || plug_load(&s->state) == PLUG_ENGINE_FAILED || wall() - w0 > 60.0)
+		if (poll(&p, 1, preroll ? 0 : 5) > 0 || plug_load(&s->state) == PLUG_ENGINE_FAILED || wall() - w0 > 60.0)
 		{
 			fprintf(stderr, "plug_drive: the engine did not start (state %llu)\n", (unsigned long long)s->state);
 			return 2;
 		}
+		if (preroll)
+			nanosleep(&(const struct timespec){ 0, 50000L }, NULL);
 	}
 	const double wRun = wall();
+	/* base: the host frame of script frame 0 and of the WAV's first frame, the epoch */
+	const uint64_t base = preroll ? plug_load(&s->epoch) : 0u;
+	if (preroll)
+	{
+		if (base == 0 || n > base + 64u)
+		{
+			fprintf(stderr, "plug_drive: pre-roll: epoch %llu with %llu frames published\n", (unsigned long long)base,
+				(unsigned long long)n);
+			return 5;
+		}
+		(void)plug_evPush(s, base - 1u, junk, 3);	/* after the engine's start, before its epoch */
+		for (unsigned i = 0; i < nlines; i++)
+			lines[i].frame += base;
+	}
 	/* play */
 	float *l = calloc(frames + block, sizeof *l), *r = calloc(frames + block, sizeof *r);
-	uint64_t n = 0, got = 0, firstMiss = 0, lastMiss = 0;
+	uint64_t got = 0, firstMiss = 0, lastMiss = 0, lastEnd = 0;
+	double lastMove = wall();
 	unsigned next = 0;
 	const uint32_t lp = plug_readOffset(rate, block, margin);
 	while (got < frames)
@@ -171,11 +225,22 @@ int main(int argc, char **argv)
 			if (poll(&p, 1, 0) > 0)
 				break;
 			const uint64_t end = plug_load(&s->audioEnd);
-			if (end > got)
+			if (end > base + got)
 			{
-				const uint64_t to = end < frames ? end : frames;
-				(void)plug_audioRead(s, got, (uint32_t)(to - got), &l[got], &r[got]);
+				const uint64_t to = end - base < frames ? end - base : frames;
+				(void)plug_audioRead(s, base + got, (uint32_t)(to - got), &l[got], &r[got]);
 				got = to;
+			}
+			if (end != lastEnd)
+			{
+				lastEnd = end;
+				lastMove = wall();
+			}
+			else if (wall() - lastMove > 10.0)
+			{
+				fprintf(stderr, "plug_drive: the engine's audio stopped at host frame %llu, %llu published\n",
+					(unsigned long long)end, (unsigned long long)n);
+				return 4;
 			}
 			nanosleep(&(const struct timespec){ 0, 50000L }, NULL);
 		}
@@ -216,10 +281,10 @@ int main(int argc, char **argv)
 		else
 		{
 			const uint64_t end = plug_load(&s->audioEnd);
-			if (end > got)
+			if (end > base + got)
 			{
-				const uint64_t to = end < frames ? end : frames;
-				(void)plug_audioRead(s, got, (uint32_t)(to - got), &l[got], &r[got]);
+				const uint64_t to = end - base < frames ? end - base : frames;
+				(void)plug_audioRead(s, base + got, (uint32_t)(to - got), &l[got], &r[got]);
 				got = to;
 			}
 		}
