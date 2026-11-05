@@ -71,3 +71,9 @@ target_include_directories(plug_common_san PUBLIC "${PLUGIN_DIR}/common")
 target_compile_options(plug_common_san PRIVATE ${PLUGIN_FLAGS} ${PLUGIN_SAN_FLAGS})
 plugin_add_test(test_shm IDS P3_shm_header P3_shm_events P3_shm_audio P3_shm_new_engine P3_shm_overwritten
     P3_shm_processes P3_shm_killed)
+
+target_sources(plug_common PRIVATE common/plug_clock.c)
+target_sources(plug_common_san PRIVATE common/plug_clock.c)
+plugin_add_test(test_clock IDS P4_clock_start_at_zero P4_clock_rounding_44k P4_clock_start_later P4_clock_stop
+    P4_clock_loop P4_clock_locate P4_clock_tempo P4_clock_no_context P4_clock_count_in P4_clock_jitter
+    P4_clock_reset P4_clock_spp_bytes P4_clock_max)
