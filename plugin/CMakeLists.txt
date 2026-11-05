@@ -77,3 +77,7 @@ target_sources(plug_common_san PRIVATE common/plug_clock.c)
 plugin_add_test(test_clock IDS P4_clock_start_at_zero P4_clock_rounding_44k P4_clock_start_later P4_clock_stop
     P4_clock_loop P4_clock_locate P4_clock_tempo P4_clock_no_context P4_clock_count_in P4_clock_jitter
     P4_clock_reset P4_clock_spp_bytes P4_clock_max)
+
+target_sources(plug_common PRIVATE common/plug_time.c)
+target_sources(plug_common_san PRIVATE common/plug_time.c)
+plugin_add_test(test_time IDS P5_time_native P5_time_integer P5_time_covering P5_time_latency P5_time_margin)
