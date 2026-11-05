@@ -88,7 +88,8 @@ typedef struct plug_shm
 	uint64_t audioEnd;		/**< the frame after the last one it wrote */
 	uint64_t frontier;		/**< the host frames whose events it has given to the firmware */
 	uint64_t late;			/**< inputs that reached the firmware after their time */
-	uint64_t dropped;		/**< events before the epoch, left out */
+	uint64_t dropped;		/**< events left out: before the epoch, or a message without a USB-MIDI code
+							 * index number (F0, F4, F5, F7, or a data byte for a status) */
 	plug_event_t ev[PLUG_EVENT_SLOTS];
 	float audio[PLUG_AUDIO_FRAMES][2];
 } plug_shm_t;

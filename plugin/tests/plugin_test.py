@@ -336,11 +336,29 @@ def P6_engine_blocks(t):
 def P6_engine_paced(t):
     # paced like a host at 44,140.625 Hz in blocks of 128 with the default margin, 3 s: the engine waits at the
     # published frontier, as in a host, and no input is late; the output, read plug_readOffset() frames behind as
-    # the plugin reads it, is the renderer's byte for byte
+    # the plugin reads it, is the renderer's byte for byte. In real time the engine's thread has the time-constraint
+    # policy (P-15): ps -M shows its priority as 97R (a normal thread's is 31T)
     script = write_script(t, 'script.txt')
     frames = blocks_frames(3)
     t.render(t.card('render'), script, 3, t.path('render.wav'))
-    s = t.drive(t.card('p'), RATE_TEXT, 128, script, frames, t.path('drive.wav'), realtime=128)
+    card = t.card('p')
+    p = None
+    try:
+        p = subprocess.Popen([t.a.drive, t.a.engine, card, RATE_TEXT, '128', script, str(frames), t.path('drive.wav'),
+                              'realtime', '128'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        time.sleep(1.0)
+        pids = engines_on(card)
+        check(len(pids) == 1, 'engines while the driver runs: %r' % pids)
+        rows = subprocess.run(['ps', '-M', '-p', pids[0]], capture_output=True, text=True).stdout.split('\n')
+        pri = rows[1].split()[5] if len(rows) > 1 and len(rows[1].split()) > 5 else '?'
+        print('the engine\'s main thread: priority %s' % pri)
+        check(pri.endswith('R') and pri[:-1].isdigit() and int(pri[:-1]) >= 90, 'not a time-constraint thread: %r' % rows[:2])
+        out, err = p.communicate(timeout=120)
+        check(p.returncode == 0, 'plug_drive exited %d: %s%s' % (p.returncode, out, err))
+    finally:
+        kill_all([p], card)
+    print(out.strip())
+    s = parse_drive(out)
     check(s.get('late') == 0 and s.get('dropped') == 0 and s.get('full') == 0 and s.get('underruns') == 0,
           'counters %r' % s)
     d = same_files(t.path('render.wav'), t.path('drive.wav'))

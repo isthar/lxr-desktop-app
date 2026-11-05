@@ -119,8 +119,14 @@ static void eng_sink(void *ctx, uint64_t t, const int16_t *o1, const int16_t *o2
 	if (E.phase == 1 && eng_t0Due(t))
 	{
 		E.t0 = t;
+		/* The epoch, then the events before it: a dead engine's, and those written before this one
+		 * ran. Every event before the published hostFrames is in the ring and frames only grow
+		 * (plug_shm.h), so none before the epoch comes later and none after it is left out: the
+		 * events of a block the plugin writes now are kept, also those written before the epoch was
+		 * loaded, which skipping the whole ring would lose. The filter in eng_inject() stays. */
 		E.epoch = plug_load(&E.s->hostFrames);
-		plug_evSkipAll(E.s);	/* a dead engine's events, and any written before this one ran */
+		for (plug_event_t old; plug_evNextFrame(E.s) < E.epoch;)
+			(void)plug_evPop(E.s, &old);
 		plug_audioBegin(E.s, E.epoch);
 		plug_store(&E.s->epoch, E.epoch);
 		plug_store(&E.s->frontier, E.epoch);
