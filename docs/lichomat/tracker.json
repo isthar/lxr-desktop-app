@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 17:54",
+    "updated": "2026-11-05 17:59",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7 grupa C (E6.33–E6.34) i szkic wtyczki (E9.1)",
     "branch": "timing-core",
-    "head": "0f5d2f3",
+    "head": "196779d",
     "next": "E6.33–E6.34, potem E6.35–E6.36; E9.1 szkic wtyczki do Twoich poprawek, potem E9.2 prototyp; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13 (A czy B), poprawki szkicu v0.7, CI; sprzęt (H12, E8.1)",
-    "updated_at": "2026-11-05T17:54:00+01:00",
-    "now": "E6.33: implementer grupy C v0.7 pracuje (od 17:40); E9.2: plan prototypu wtyczki (od 17:55)"
+    "updated_at": "2026-11-05T17:59:00+01:00",
+    "now": "E6.33: implementer grupy C v0.7 pracuje (od 17:40); E9.2: planista pisze i sprawdza plan prototypu wtyczki (od 18:00)"
   },
   "epics": [
     {
@@ -4359,6 +4359,11 @@
       "n": 607,
       "at": "2026-11-05 17:54",
       "text": "E9.1 zrobione: szkic wtyczki docs/superpowers/specs/2026-11-05-plugin-draft.md, do Twoich poprawek. Rekomendacje: VST3 i AU v2 na Apple Silicon (SDK VST3 jest od 29.10.2025 na MIT); silnik w osobnym procesie na każdą instancję, bo firmware ma stan globalny bez restartu w procesie, a błąd kończy się abort(), który zamknąłby Live; synchronizacja najpierw przez MIDI clock, potem tryb host w seq_core; przeliczanie z 44 140,625 Hz konwerterem Apple'a; karta i stan w secie na instancję; prototyp bez okna. E9.2 start: plan prototypu."
+    },
+    {
+      "n": 608,
+      "at": "2026-11-05 17:59",
+      "text": "E9.2: za Twoją zgodą pobrane SDK VST3 Steinberga (github.com/steinbergmedia/vst3sdk, v3.8.1_build_84, commit 3cdf9ca, MIT; tylko base, pluginterfaces, public.sdk, cmake), 37 MB w build/vst3sdk, poza gitem. Planista pisze plan prototypu i sprawdza najpierw na tym Macu: build walidatora i przykładowej wtyczki z SDK, silnik emulatora w osobnym programie, pamięć współdzieloną między dwoma procesami."
     }
   ]
 }
