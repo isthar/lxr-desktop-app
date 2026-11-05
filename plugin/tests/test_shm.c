@@ -204,7 +204,13 @@ TEST(P3_shm_processes)
 	uint64_t w = 0, checked = 0;
 	while (checked < N_EVENTS)
 	{
-		const uint64_t burst = w + 300u > N_EVENTS ? N_EVENTS : w + 300u;
+		uint64_t burst = w + 300u > N_EVENTS ? N_EVENTS : w + 300u;
+		/* hostFrames at most 8,192 frames ahead of the frames checked, as the plugin keeps the
+		 * engine (it publishes one block ahead of the frames it reads): the child writes one frame
+		 * per published frame, and more than PLUG_AUDIO_FRAMES ahead it would overwrite frames
+		 * not checked yet */
+		if (burst > checked + 8192u)
+			burst = checked + 8192u;
 		while (w < burst)
 		{
 			const uint8_t b = (uint8_t)(0x80u | (w & 0x7Fu));
