@@ -136,3 +136,33 @@ target_compile_options(plug_card_san PRIVATE ${PLUGIN_FLAGS} ${PLUGIN_SAN_FLAGS}
 plugin_add_test(test_archive IDS P8_archive_roundtrip P8_archive_skips P8_archive_refused)
 target_sources(test_archive PRIVATE $<TARGET_OBJECTS:plug_card_san>)
 target_include_directories(test_archive PRIVATE "${LXR_ROOT}/emu/core")
+
+# --- the bundle LICHOMAT.vst3 (Task 8) ---------------------------------------------------------
+smtg_add_vst3plugin(LICHOMAT vst3/plugin_factory.cpp vst3/plugin_processor.cpp vst3/plugin_controller.cpp
+    vst3/plugin_link.cpp vst3/plugin_card.cpp)
+target_sources(LICHOMAT PRIVATE $<TARGET_OBJECTS:plug_common> $<TARGET_OBJECTS:plug_card>)
+target_link_libraries(LICHOMAT PRIVATE sdk)
+target_include_directories(LICHOMAT PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/vst3" "${LXR_ROOT}/emu/core")
+target_compile_options(LICHOMAT PRIVATE ${PLUGIN_FLAGS})
+target_compile_features(LICHOMAT PRIVATE cxx_std_17)
+configure_file(vst3/Info.plist.in "${CMAKE_BINARY_DIR}/LICHOMAT-Info.plist" @ONLY)
+set_target_properties(LICHOMAT PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${CMAKE_BINARY_DIR}/LICHOMAT-Info.plist")
+# Before the link, the engine into Contents/Helpers and the licences into Contents/Resources (the MIT
+# licence asks for its notice with every copy); after the SDK's steps (moduleinfo.json), the signature
+# of the helper and then of the whole bundle, ad hoc
+add_dependencies(LICHOMAT lichomat-engine)
+add_custom_command(TARGET LICHOMAT PRE_LINK
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Helpers"
+        "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Resources"
+    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:lichomat-engine>" "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Helpers/lichomat-engine"
+    COMMAND ${CMAKE_COMMAND} -E copy "${LXR_ROOT}/LICENSE" "${LXR_ROOT}/NOTICE.md" "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Resources/"
+    COMMAND ${CMAKE_COMMAND} -E copy "${PLUGIN_DIR}/third_party/vst3sdk/LICENSE.txt"
+        "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Resources/VST3-SDK-LICENSE.txt"
+    VERBATIM)
+add_custom_command(TARGET LICHOMAT POST_BUILD
+    COMMAND codesign --force --sign - "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Helpers/lichomat-engine"
+    COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:LICHOMAT>"
+    VERBATIM)
+set(PLUGIN_BUNDLE_TEST ${PLUGIN_TEST} --bundle $<TARGET_BUNDLE_DIR:LICHOMAT> --validator $<TARGET_FILE:validator>)
+add_test(NAME P10_plugin_validator COMMAND ${PLUGIN_BUNDLE_TEST} P10_plugin_validator)
+set_tests_properties(P10_plugin_validator PROPERTIES TIMEOUT 600 LABELS plugin)

@@ -524,6 +524,20 @@ def P7_engine_realtime(t):
               'engine %d: %s' % (i, out))
 
 
+# --- the bundle (Task 8) ----------------------------------------------------------------------
+
+@case
+def P10_plugin_validator(t):
+    e = dict(os.environ)
+    e['LICHOMAT_PLUGIN_HOME'] = t.path('home')
+    e['LICHOMAT_EMU_HOME'] = t.path('no-emu')
+    p = subprocess.run([t.a.validator, t.a.bundle], capture_output=True, text=True, timeout=600, env=e)
+    result = [l for l in p.stdout.splitlines() if l.startswith('Result:')]
+    print('\n'.join(result))
+    check(p.returncode == 0 and result and result[-1].endswith(' 0 tests failed'), 'the validator: %d %r' % (p.returncode, result))
+    check(not os.listdir(t.path('home')), 'instance folders left: %r' % os.listdir(t.path('home')))
+
+
 def main():
     ap = argparse.ArgumentParser()
     for o in ('root', 'build', 'render', 'engine', 'drive', 'resample', 'work'):
