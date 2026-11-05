@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 02:18",
+    "updated": "2026-11-05 02:32",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7: grupa B (E6.31, E6.32)",
     "branch": "timing-core",
-    "head": "f581708",
+    "head": "394e619",
     "next": "E6.31–E6.32 (klej, pliki), potem pełny przegląd; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T02:18:00+01:00",
-    "now": "E6.31–E6.32: przegląd jakości grupy B (od 02:20)"
+    "updated_at": "2026-11-05T02:32:00+01:00",
+    "now": "E6.31–E6.32: implementer poprawia błąd zapisu przy pełnej karcie i luki z przeglądu jakości (od 02:30)"
   },
   "epics": [
     {
@@ -4295,6 +4295,11 @@
       "n": 600,
       "at": "2026-11-05 02:18",
       "text": "E6.31–E6.32, 4b4805d: bramka po poprawkach przechodzi: host 135/135, ASan 135/135, emulator 346/346, 0 ostrzeżeń, obraz firmware bez zmian po samych testach. Maskowanie przerwań w sequencer.c widać teraz w testach hosta (licznik w zaślepce HAL), więc tego ograniczenia z v0.6 nie trzeba już przyjmować. Start przeglądu jakości grupy B."
+    },
+    {
+      "n": 601,
+      "at": "2026-11-05 02:32",
+      "text": "E6.31–E6.32: przegląd jakości grupy B znalazł błąd. Przy pełnej karcie zapis projektu zgłaszał sukces, a plik własnych szablonów zostawał pusty, kopia w /tmp była kasowana i szablony przepadały. Implementer poprawia to od testu z kartą, która symuluje błędy zapisu. Do tego luki w testach: włączanie przerwań z powrotem po zapisach z maskowaniem, ścieżki błędów pliku i żaden plik nie zostaje otwarty, surowe bajty po zerowaniu mikrotimingu. Każdy commit wypychany od razu."
     }
   ]
 }
