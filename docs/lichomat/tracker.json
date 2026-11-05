@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-05 23:51",
+    "updated": "2026-11-06 00:26",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "62609d2",
+    "head": "af18a65",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T23:51:00+01:00",
+    "updated_at": "2026-11-06T00:26:00+01:00",
     "now": "E9.18–E9.19: implementer poprawia wyniki przeglądu wtyczki (od 23:30)"
   },
   "epics": [
@@ -4567,6 +4567,11 @@
       "n": 632,
       "at": "2026-11-05 23:51",
       "text": "E9.18–E9.19 przegląd, 1635ba7, 4841dc7, d22fa69, 4ae652b, 141bac9: paczka wtyczki zawsze ma bieżący silnik (nowy test P10_plugin_helper); wtyczka zeruje wyjście przed upływem opóźnienia, a host testowy wypełnia bufory, żeby to sprawdzić; log każdej instancji zostaje po zamknięciu w BASE/logs (32 najnowsze); host testowy w tempie rzeczywistym działa jak urządzenie audio; nowy test P10_plugin_beats: po zabiciu silnika w trakcie grania perkusja wraca w rytm."
+    },
+    {
+      "n": 633,
+      "at": "2026-11-06 00:26",
+      "text": "E9.18–E9.19 przegląd, 3699c56, ad54931, 5c14b00, eea931e, 6e18878, dd7cdf6, 899c84a: pierwsza nuta nowej instancji sprawdzona co do ramki; nowy stan wczytany w trakcie grania (preset, wklejenie, cofnięcie) restartuje silnik na nowej karcie; sprawdzanie czasu rzeczywistego łapie też pliki, mapowanie pamięci, procesy, wątki i dispatch; sprzątanie folderu bez pliku blokady; po nieudanym starcie wątek główny nie czeka już 3 s; zapis budzący silnik nigdy nie blokuje wątku audio; zawieszony silnik nie wstrzyma już bounce ani freeze w Live."
     }
   ]
 }
