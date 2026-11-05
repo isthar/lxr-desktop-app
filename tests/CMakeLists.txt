@@ -233,7 +233,7 @@ endif()
 # a buffer of the test with guard bytes after the 64 entries. stubs/seq_random_test.h
 # is forced into sequencer.c: its probability draw, SEQ_RANDOM(), becomes the
 # test's seqTest_random() (stage 1b F5).
-seqc_add_test(test_sequencer IDS sequencer record_micro EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c)  # E4.6  song page position, automation step; stage 1b F5 SEQ_RANDOM()
+seqc_add_test(test_sequencer IDS sequencer record_micro own_capture EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c)  # E4.6  song page position, automation step; stage 1b F5 SEQ_RANDOM()
 if(TARGET test_sequencer)
     target_include_directories(test_sequencer BEFORE PRIVATE stubs)
     target_include_directories(test_sequencer SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)

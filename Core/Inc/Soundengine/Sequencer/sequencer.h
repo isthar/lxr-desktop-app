@@ -106,6 +106,7 @@ typedef struct PatternSetStruct
 	TrackGroove groove[NUM_PATTERN][NUM_TRACKS];	//LICHOMAT v0.2: tempo, humanize, delay (file extension block)
 	uint8_t seq_stepFine[NUM_PATTERN][NUM_TRACKS][STEP_FINE_BYTES];	//LICHOMAT v0.6: the steps' fine microtiming, a nibble each (SeqStepTypes.h, block 2)
 	TrackTemplate tmpl[NUM_PATTERN][NUM_TRACKS];	//LICHOMAT v0.6: groove template and amount (block 2)
+	TrackTemplate vtpl[NUM_PATTERN][NUM_TRACKS];	//LICHOMAT v0.7: velocity template and depth (block 3, plan v0.7 V7-2)
 }PatternSet;
 
 typedef struct PatternBackupBufferStruct
@@ -120,6 +121,7 @@ typedef struct PatternBackupBufferStruct
 	TrackGroove groove[NUM_TRACKS];
 	uint8_t seq_stepFine[NUM_TRACKS][STEP_FINE_BYTES];	//LICHOMAT v0.6
 	TrackTemplate tmpl[NUM_TRACKS];
+	TrackTemplate vtpl[NUM_TRACKS];	//LICHOMAT v0.7
 }PatternBackupBuffer;
 
 /*
@@ -195,6 +197,13 @@ void seq_setStepMicro(uint8_t pattern, uint8_t track, uint8_t step, uint8_t valu
 void seq_setStepShift(uint8_t pattern, uint8_t track, uint8_t step, uint8_t shift);
 void seq_setStepFlam(uint8_t pattern, uint8_t track, uint8_t step, uint8_t flam);	//LICHOMAT v0.6: the step page's flm, masked against recording
 int32_t seq_stepMicroTenthsMs(uint8_t track, uint8_t pattern, uint8_t value);
+//LICHOMAT v0.7: the project's own templates us1..us4 (plan v0.7 V7-6, V7-12); the core reads them in place
+extern UserTemplate seq_userTemplates[USER_TEMPLATES];
+void seq_setUserTemplate(uint8_t slot, const UserTemplate *t);
+void seq_setUserTemplates(const UserTemplate *t);
+void seq_clearUserTemplates(void);
+uint8_t seq_captureUserTemplate(uint8_t trackNr, uint8_t pattern, uint8_t slot);
+void seq_clearTrackMicro(uint8_t trackNr, uint8_t pattern);	//LICHOMAT v0.7: the clear page's micro (V7-14)
 //LICHOMAT v0.3: the step page's slide flag and probability, each keeping the other (plan D23, D26)
 void seq_setStepSlide(uint8_t pattern, uint8_t track, uint8_t step, uint8_t on);
 void seq_setStepProbKeepSlide(uint8_t pattern, uint8_t track, uint8_t step, uint8_t prob);
