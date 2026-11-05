@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 22:27",
+    "updated": "2026-11-05 22:35",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "6c8a4ec",
+    "head": "3630d45",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T22:27:00+01:00",
-    "now": "E9.16: implementer domyka luki z przeglądu silnika (od 22:08)"
+    "updated_at": "2026-11-05T22:35:00+01:00",
+    "now": "E9.16: recenzent sprawdza poprawki silnika (od 22:35)"
   },
   "epics": [
     {
@@ -4532,6 +4532,11 @@
       "n": 625,
       "at": "2026-11-05 22:27",
       "text": "E9.16 przegląd, d6c2bc0, 4f8b962, 15b360a, 360a36f, d1522bd: test silnika z niezerową epoką (jak w Live po restarcie); spóźnione i odrzucone zdarzenia sprawdzane przy pracy w tempie rzeczywistym (nowy test P6_engine_paced); ramka z 18 komunikatami przy zawinięciu pętli; silnik linkuje ten sam obiekt render_fw co renderer; test zamykania sprząta po sobie przy każdym błędzie. Dalej: nadzór, który kończy silnik bez rodzica, drobiazgi, sprzątanie po teście archiwum."
+    },
+    {
+      "n": 626,
+      "at": "2026-11-05 22:35",
+      "text": "E9.16–E9.17 przegląd, 34497de, 176ad29, 9055549: wątek nadzoru kończy silnik 0,07 s po zniknięciu rodzica (wcześniej silnik wisiał w nieskończoność); priorytet czasu rzeczywistego silnika sprawdzany w teście; test archiwum sprząta po sobie. Wtyczka ma 50 testów, wszystkie przechodzą, 0 ostrzeżeń. Recenzent sprawdza poprawki."
     }
   ]
 }
