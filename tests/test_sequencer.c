@@ -1653,4 +1653,20 @@ TEST(own_capture_db_below_the_loudest_heard)
 	seq_clearUserTemplates();
 }
 
+TEST(own_capture_takes_the_velocity_depth)
+{
+	/* spec review of group B (V7-10): of8 at 50 % (amount -50) on 16 steps at 127 plays half of
+	 * of8's dB (velocities 71, 54, 127, 57, ...), which round back to these */
+	reset();
+	seq_clearPattern(46);
+	for (uint8_t s = 0; s < 16; s++)
+		ownStep(46, 5, s, 127, 0);
+	seq_patternSet.vtpl[46][5] = (TrackTemplate){ .id = 1, .amount = -50 };	/* of8, 50 % */
+	ASSERT_EQ(seq_captureUserTemplate(5, 46, 3), 16);
+	static const int8_t half[16] = { -5, -7, 0, -7, -5, -7, 0, -7, -5, -8, 0, -7, -5, -7, 0, -7 };
+	ASSERT_EQ(memcmp(seq_userTemplates[3].vel, half, 16), 0);
+	seq_clearPattern(46);
+	seq_clearUserTemplates();
+}
+
 TEST_MAIN()
