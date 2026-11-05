@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 02:04",
+    "updated": "2026-11-05 02:18",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7: grupa B (E6.31, E6.32)",
     "branch": "timing-core",
-    "head": "a514fd5",
+    "head": "f581708",
     "next": "E6.31–E6.32 (klej, pliki), potem pełny przegląd; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T02:04:00+01:00",
-    "now": "E6.31–E6.32: implementer zamyka 8 luk w testach z przeglądu spec (od 02:15); potem przegląd jakości grupy B"
+    "updated_at": "2026-11-05T02:18:00+01:00",
+    "now": "E6.31–E6.32: przegląd jakości grupy B (od 02:20)"
   },
   "epics": [
     {
@@ -4285,6 +4285,16 @@
       "n": 598,
       "at": "2026-11-05 02:04",
       "text": "E6.31–E6.32 (v0.7 zad. 4–5): przegląd zgodności ze spec: kod zgodny z planem. Recenzent puścił 34 mutanty, 8 przeżyło, czyli luki w testach. Najważniejsze dwie: zapis szablonu musi liczyć dB od najgłośniejszego słyszanego uderzenia, nie od surowych głośności kroków; wczytanie starego projektu (fw 1.7, v0.3) po projekcie v0.7 musi zerować szablony głośności. Implementer dopisuje testy, każdą lukę w osobnym commicie. Uwagi do zad. 6 zapisane w planie."
+    },
+    {
+      "n": 599,
+      "at": "2026-11-05 02:17",
+      "text": "E6.31–E6.32 przegląd, c0873b2, bd77b74, 998b4a0, 79b19e8, 9dcaebe, 49e66d9, 7c54b55, 4b4805d: wszystkie luki z przeglądu spec zamknięte: dB od najgłośniejszego słyszanego uderzenia, wartości domyślne bez pełnego bloku 1, głębokość szablonu przy zapisie, bufor kopii dla każdej ścieżki, dokładne sprawdzanie nagłówków, wczytywanie własnych szablonów przez funkcje z maskowaniem, testy hosta widzą maskowanie przerwań w sequencer.c, deklaracje w PresetManager.h na swoim miejscu. Implementer puszcza bramkę."
+    },
+    {
+      "n": 600,
+      "at": "2026-11-05 02:18",
+      "text": "E6.31–E6.32, 4b4805d: bramka po poprawkach przechodzi: host 135/135, ASan 135/135, emulator 346/346, 0 ostrzeżeń, obraz firmware bez zmian po samych testach. Maskowanie przerwań w sequencer.c widać teraz w testach hosta (licznik w zaślepce HAL), więc tego ograniczenia z v0.6 nie trzeba już przyjmować. Start przeglądu jakości grupy B."
     }
   ]
 }
