@@ -100,12 +100,13 @@ static char cardCwd[CARD_PATH] = "/";
 static int cardOpenFile = -1;
 /* LICHOMAT v0.7 (quality review of group B): failures on demand, each for the files whose
  * absolute path holds the given name: f_open() of one returns cardFailOpenResult; f_write() to
- * one writes nothing and returns FR_OK, as FatFs does on a full card; f_close() of one returns
+ * one writes nothing and returns FR_OK, as FatFs does on a full card; f_read() of one returns
+ * FR_DISK_ERR (cardFailRead); f_close() of one returns
  * FR_DISK_ERR and leaves it open, as FatFs's f_close() does when its f_sync() fails. With
  * cardFailWrite > 0 the cardFailWrite-th f_write() from now returns FR_DISK_ERR; with
  * cardShortWrite > 0 the cardShortWrite-th one writes nothing and returns FR_OK. cardReset()
  * clears them. */
-static const char *cardFailOpen, *cardFull, *cardFailClose;
+static const char *cardFailOpen, *cardFull, *cardFailClose, *cardFailRead;
 static FRESULT cardFailOpenResult = FR_DISK_ERR;
 static int cardFailWrite, cardShortWrite;
 
@@ -201,7 +202,7 @@ static void cardReset(void)
 		removeEntry(i);
 	snprintf(cardCwd, sizeof cardCwd, "/");
 	cardOpenFile = -1;
-	cardFailOpen = cardFull = cardFailClose = NULL;	/* LICHOMAT v0.7 */
+	cardFailOpen = cardFull = cardFailClose = cardFailRead = NULL;	/* LICHOMAT v0.7 */
 	cardFailOpenResult = FR_DISK_ERR;
 	cardFailWrite = cardShortWrite = 0;
 }
@@ -261,6 +262,8 @@ FRESULT f_read(FIL *fp, void *buff, UINT btr, UINT *br)
 	if (cardOpenFile < 0)
 		return FR_INVALID_OBJECT;
 	const CardEntry *e = &card[cardOpenFile];
+	if (cardFailRead && strstr(e->path, cardFailRead))
+		return FR_DISK_ERR;		/* LICHOMAT v0.7 */
 	UINT n = fp->fptr < e->len ? e->len - (UINT)fp->fptr : 0;
 	if (n > btr)
 		n = btr;
@@ -2233,6 +2236,80 @@ TEST(user_templates_full_card_keeps_the_captures)
 		ASSERT_EQ(preset_saveUserTemplates(1), FR_DENIED);
 		ASSERT_EQ(cardOpenFile, -1);
 	}
+}
+
+TEST(user_templates_load_errors)
+{
+	/* quality review of group B (item 6): only FR_NO_FILE and bad content read as no file (V7-12;
+	 * the loader returns FR_NO_FILE, and clears when asked); another error of the card is returned
+	 * and leaves the templates as they are: a project load returns it through the loop's error
+	 * path, so its next save does not drop the project's file, and boot's /tmp overlay keeps the
+	 * project's templates. No file is left open */
+	reset();
+	fillUser(0);
+	ASSERT_EQ(preset_saveProject(0), FR_OK);
+	ASSERT_TRUE(find("/proj00/usertpl.lch") >= 0);
+	static UserTemplate stale[USER_TEMPLATES], project[USER_TEMPLATES];
+	memcpy(project, seq_userTemplates, sizeof project);
+	static const UserTemplate none[USER_TEMPLATES];
+	/* the loader alone, in the project folder */
+	ASSERT_EQ(f_chdir("/proj00"), FR_OK);
+	fillUser(9);
+	ASSERT_EQ(preset_loadUserTemplates(1), FR_OK);
+	ASSERT_EQ(memcmp(seq_userTemplates, project, sizeof project), 0);
+	static const FRESULT errors[2] = { FR_DISK_ERR, FR_TOO_MANY_OPEN_FILES };
+	for (int k = 0; k < 2; k++)
+	{
+		cardFailOpen = "usertpl";
+		cardFailOpenResult = errors[k];
+		fillUser(9);
+		memcpy(stale, seq_userTemplates, sizeof stale);
+		ASSERT_EQ(preset_loadUserTemplates(1), errors[k]);
+		ASSERT_EQ(memcmp(seq_userTemplates, stale, sizeof stale), 0);	/* not emptied */
+		ASSERT_EQ(cardOpenFile, -1);
+	}
+	cardFailOpenResult = FR_NO_FILE;				/* no file: emptied when asked */
+	ASSERT_EQ(preset_loadUserTemplates(0), FR_NO_FILE);
+	ASSERT_EQ(memcmp(seq_userTemplates, stale, sizeof stale), 0);
+	ASSERT_EQ(preset_loadUserTemplates(1), FR_NO_FILE);
+	ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+	cardFailOpen = NULL;
+	cardFailOpenResult = FR_DISK_ERR;
+	cardFailRead = "usertpl";					/* a read error: kept, closed */
+	fillUser(9);
+	ASSERT_EQ(preset_loadUserTemplates(1), FR_DISK_ERR);
+	ASSERT_EQ(memcmp(seq_userTemplates, stale, sizeof stale), 0);
+	ASSERT_EQ(cardOpenFile, -1);
+	cardFailRead = NULL;
+	const int i = find("/proj00/usertpl.lch");			/* bad content: as no file */
+	card[i].data[4] = 2;
+	ASSERT_EQ(preset_loadUserTemplates(1), FR_NO_FILE);
+	ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+	ASSERT_EQ(cardOpenFile, -1);
+	card[i].data[4] = 1;
+	/* a project load: the error is returned through the loop's error path, the templates kept */
+	cardFailOpen = "usertpl";
+	fillUser(9);
+	ASSERT_EQ(preset_loadProject(0, 1), FR_DISK_ERR);
+	ASSERT_EQ(memcmp(seq_userTemplates, stale, sizeof stale), 0);
+	ASSERT_EQ(strcmp(cardCwd, "/tmp"), 0);
+	ASSERT_EQ(lcd_process_display_interrupt, 1);
+	ASSERT_EQ(cardOpenFile, -1);
+	cardFailOpen = NULL;
+	ASSERT_EQ(preset_loadProject(0, 1), FR_OK);			/* without the error: the project's */
+	ASSERT_EQ(memcmp(seq_userTemplates, project, sizeof project), 0);
+	/* boot's /tmp overlay: an error keeps the project's templates and is returned */
+	ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+	fillUser(5);
+	ASSERT_EQ(preset_saveUserTemplates(1), FR_OK);		/* a capture */
+	memcpy(seq_userTemplates, project, sizeof project);		/* the project, loaded at boot */
+	cardFailRead = "usertpl";
+	ASSERT_EQ(loadTmpFolderFiles(), FR_DISK_ERR);
+	ASSERT_EQ(memcmp(seq_userTemplates, project, sizeof project), 0);
+	ASSERT_EQ(cardOpenFile, -1);
+	cardFailRead = NULL;
+	ASSERT_EQ(loadTmpFolderFiles(), FR_OK);			/* without the error: the capture */
+	ASSERT_TRUE(memcmp(seq_userTemplates, project, sizeof project) != 0);
 }
 
 TEST_MAIN()

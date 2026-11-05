@@ -174,7 +174,19 @@ FRESULT loadTmpFolderFiles()
 			return res;
 		}
 	}
-	preset_loadUserTemplates(0);	//LICHOMAT v0.7: the captures since the project's save, if any
+	res = preset_loadUserTemplates(0);	//LICHOMAT v0.7: the captures since the project's save, if any
+	if ((res != FR_OK) && (res != FR_NO_FILE))
+	{	//LICHOMAT v0.7: as an error in the loop; the project's own templates stay
+		f_close((FIL*)&SDFile);
+		lcd_process_display_interrupt = 1;
+		preset_initTmpFolder();
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+		HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
+#else
+
+#endif
+		return res;
+	}
 
 	return FR_OK;
 }
@@ -2664,25 +2676,37 @@ FRESULT preset_saveUserTemplates(uint8_t always)
 	return (res != FR_OK) ? res : closed;
 }
 
-void preset_loadUserTemplates(uint8_t clearIfAbsent)
+/** the own templates from USERTPL.LCH in the current folder: FR_OK; FR_NO_FILE when there is
+ * none or it is another version or count or short (all empty when clearIfAbsent); another error
+ * of the card is returned and the templates stay as they are (quality review of group B) */
+FRESULT preset_loadUserTemplates(uint8_t clearIfAbsent)
 {
 	UINT bytesRead = 0;
 	uint8_t head[6];
 	UserTemplate u[USER_TEMPLATES];
 	uint8_t ok = 0;
-	if(f_open((FIL*)&SDFile, USER_TPL_FILE, FA_OPEN_EXISTING | FA_READ) == FR_OK)
+	FRESULT res = f_open((FIL*)&SDFile, USER_TPL_FILE, FA_OPEN_EXISTING | FA_READ);
+	if(res == FR_OK)
 	{
-		if((f_read((FIL*)&SDFile, head, sizeof head, &bytesRead) == FR_OK) && (bytesRead == sizeof head)
-				&& (memcmp(head, "LCHM", 4) == 0) && (head[4] == USER_TPL_VERSION) && (head[5] == USER_TEMPLATES)
-				&& (f_read((FIL*)&SDFile, u, sizeof u, &bytesRead) == FR_OK) && (bytesRead == sizeof u))
-			ok = 1;
-		f_close((FIL*)&SDFile);
+		res = f_read((FIL*)&SDFile, head, sizeof head, &bytesRead);
+		if((res == FR_OK) && (bytesRead == sizeof head) && (memcmp(head, "LCHM", 4) == 0)
+				&& (head[4] == USER_TPL_VERSION) && (head[5] == USER_TEMPLATES))
+		{
+			res = f_read((FIL*)&SDFile, u, sizeof u, &bytesRead);
+			if((res == FR_OK) && (bytesRead == sizeof u))
+				ok = 1;
+		}
+		f_close((FIL*)&SDFile);	//read only: nothing to flush
 	}
+	else if(res == FR_NO_FILE)
+		res = FR_OK;	//no file: as bad content, below
+	if(res != FR_OK)
+		return res;
 	if(!ok)
 	{
 		if(clearIfAbsent)
 			seq_clearUserTemplates();
-		return;
+		return FR_NO_FILE;
 	}
 	for(uint8_t k=0; k<USER_TEMPLATES; k++)
 		for(uint8_t q=0; q<TEMPLATE_STEPS; q++)
@@ -2691,6 +2715,7 @@ void preset_loadUserTemplates(uint8_t clearIfAbsent)
 			u[k].vel[q] = userTemplate_vel(u[k].vel[q]);
 		}
 	seq_setUserTemplates(u);
+	return FR_OK;
 }
 //----------------------------------------------------
 // **SAVEALL
@@ -3281,7 +3306,19 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 			return res;
 		}
 	}
-	preset_loadUserTemplates(1);	//LICHOMAT v0.7: the project's own templates, or none
+	res = preset_loadUserTemplates(1);	//LICHOMAT v0.7: the project's own templates, or none
+	if ((res != FR_OK) && (res != FR_NO_FILE))
+	{	//LICHOMAT v0.7: as an error in the loop, so the next save does not drop the project's file
+		f_close((FIL*)&SDFile);
+		lcd_process_display_interrupt = 1;
+		preset_initTmpFolder();
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+		HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
+#else
+
+#endif
+		return res;
+	}
 
 	res = FR_OK;
 

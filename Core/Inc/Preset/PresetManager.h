@@ -98,7 +98,7 @@ FRESULT preset_createProject(uint8_t presetNr);
 void preset_writeSceneBlock(void);
 void preset_readSceneBlock(void);
 FRESULT preset_saveUserTemplates(uint8_t always);	//LICHOMAT v0.7: USERTPL.LCH in the current folder (plan v0.7 V7-12)
-void preset_loadUserTemplates(uint8_t clearIfAbsent);
+FRESULT preset_loadUserTemplates(uint8_t clearIfAbsent);	//LICHOMAT v0.7: FR_NO_FILE for none or a bad file
 void preset_loadProjectNames(uint8_t projectNr);
 
 FRESULT preset_loadSongSD(uint8_t songNr);
