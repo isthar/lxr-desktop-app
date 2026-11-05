@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 01:33",
+    "updated": "2026-11-05 01:50",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7: grupa B (E6.31, E6.32)",
     "branch": "timing-core",
-    "head": "20c7548",
+    "head": "01b7140",
     "next": "E6.31–E6.32 (klej, pliki), potem pełny przegląd; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T01:33:00+01:00",
-    "now": "E6.32: implementer grupy B robi zad. 5 (pliki), od 01:33; potem pełny przegląd grupy B"
+    "updated_at": "2026-11-05T01:50:00+01:00",
+    "now": "E6.31–E6.32: przegląd zgodności ze spec grupy B (od 01:55); potem przegląd jakości"
   },
   "epics": [
     {
@@ -4275,6 +4275,11 @@
       "n": 596,
       "at": "2026-11-05 01:33",
       "text": "E6.31 (v0.7 zad. 4), 0250d74: klej zacommitowany i wypchnięty: szablony głośności w RAM, własne szablony, zapis szablonu z tego, co gra (Q36), zerowanie mikrotimingu, kopia i bufor kopii zapasowej je niosą. Host 133/133, ASan 133/133, emulator 346/346, ASan emulatora 317/317, 38 nagrań wzorcowych bez zmian, 0 ostrzeżeń. Budżet 470 180 z 471 032 B (zostaje 852 B). E6.31 czeka na pełny przegląd po zad. 5. E6.32 start: blok 3 w .pat i USERTPL.LCH."
+    },
+    {
+      "n": 597,
+      "at": "2026-11-05 01:50",
+      "text": "E6.32 (v0.7 zad. 5), 6a76469: pliki zacommitowane i wypchnięte: blok 3 w .pat (za blokiem 2 albo od razu za blokiem 1, tylko gdy ścieżka ma szablon głośności) i USERTPL.LCH w folderze projektu i /tmp. Host 135/135, ASan 135/135, emulator 346/346, ASan emulatora 317/317, 38 nagrań wzorcowych bez zmian. Stare wersje (0.6, 0.5) czytają nowe pliki i pomijają blok 3. Sprawdzenie zrobione na karcie z blokiem 3 wpisanym ręcznie, bo renderer dostanie parametry vtp i vdp dopiero w zad. 6; skrypt z planu puszczę ponownie po zad. 6. Start pełnego przeglądu grupy B (spec)."
     }
   ]
 }
