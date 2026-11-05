@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-05 20:48",
+    "updated": "2026-11-05 21:07",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "5d4daf5",
+    "head": "e13ac49",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T20:48:00+01:00",
+    "updated_at": "2026-11-05T21:07:00+01:00",
     "now": "E9.15: implementer poprawia błędy z lekkiego przeglądu grupy B wtyczki (od 20:48)"
   },
   "epics": [
@@ -4497,6 +4497,11 @@
       "n": 618,
       "at": "2026-11-05 20:48",
       "text": "E9.15: lekki przegląd grupy B wtyczki znalazł trzy prawdziwe błędy. (1) Po przeskoku pętli w Live, zgłoszonym ułamek ramki po początku pętli, pierwsza szesnastka pętli (downbeat) nie grała: raz na 401 przejść przy buforze 128, częściej przy małych blokach. (2) Za taktem 1024 (ok. 33 min) start albo pętla wysyłały naraz setki taktów zegara. (3) Niestabilny test pamięci współdzielonej pod obciążeniem. Do tego zawieszenie wątku audio przy tempie NaN lub nieskończonym i luki w testach. Implementer poprawia, każdą rzecz od testu, osobnym commitem."
+    },
+    {
+      "n": 619,
+      "at": "2026-11-05 21:07",
+      "text": "E9.13–E9.15 przegląd, 3a02cc4, 1797b32, b339366, 17cb965, 2473ea7: test pamięci współdzielonej już nie jest niestabilny; testy wspólnego kodu idą z UBSan; za taktem 1024 zegar liczy od prawdziwej szesnastki (koniec lawiny zegara); po przeskoku pętli każde przejście gra swój downbeat; tempo albo pozycja NaN lub poza zakresem nie zawiesza już wątku audio. Dalej: sprawdzanie odczytu audio po kopiowaniu, luki w testach, drobiazgi."
     }
   ]
 }
