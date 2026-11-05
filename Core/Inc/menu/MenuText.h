@@ -55,6 +55,8 @@
 #define MENU_STEP_MICRO	36	// LICHOMAT v0.6
 #define MENU_TRK_TPL		37
 #define MENU_TPL_AMT		38
+#define MENU_TRK_VTP		39	// LICHOMAT v0.7
+#define MENU_TPL_SAVE		40
 
 //-----------------------------------------------------------------
 // Shared texts. Reduce mem usage by pooling common text
@@ -142,12 +144,31 @@ const char trigTimingNames[][4] =
 // LICHOMAT v0.6: the groove templates (PAR_TRACK_TPL), and their long names for edit mode
 const char trackTplNames[][4] =
 {
-	{8},		//number of entries
+	{12},		//number of entries
 	{"off"}, {"swg"}, {"lay"}, {"lyb"}, {"rlx"}, {"2bt"}, {"psh"}, {"drg"},
+	{"us1"}, {"us2"}, {"us3"}, {"us4"},	// LICHOMAT v0.7: us1..us4, the project's own templates
 };
 const char trackTplLongNames[][12] =
 {
 	{"off"}, {"even swing"}, {"lay back"}, {"lay bar"}, {"relax bar"}, {"two beat"}, {"push off"}, {"drag off"},
+	{"user 1"}, {"user 2"}, {"user 3"}, {"user 4"},	// LICHOMAT v0.7
+};
+//-----------------------------------------------------------------
+// LICHOMAT v0.7: the velocity templates (PAR_TRACK_VTP), their long names, and the own
+// template's save slot (PAR_TRACK_TPL_SAVE)
+const char trackVtpNames[][4] =
+{
+	{9},		//number of entries
+	{"off"}, {"of8"}, {"ful"}, {"dep"}, {"qtr"}, {"us1"}, {"us2"}, {"us3"}, {"us4"},
+};
+const char trackVtpLongNames[][12] =
+{
+	{"off"}, {"offbeat 8th"}, {"full 16th"}, {"deep ghost"}, {"quarters"}, {"user 1"}, {"user 2"}, {"user 3"}, {"user 4"},
+};
+const char tplSaveNames[][4] =
+{
+	{5},		//number of entries
+	{"---"}, {"us1"}, {"us2"}, {"us3"}, {"us4"},
 };
 //-----------------------------------------------------------------
 // LICHOMAT v0.2: the trig conditions of PAR_STEP_PROB 101..115 (SeqStepTypes.h)
@@ -548,6 +569,7 @@ const char shortNames[][4]  =
 	{"lvl"}, {"siz"}, {"mod"}, {"frz"}, {"syn"}, {"dck"}, {"ddp"}, {"djf"}, {"djr"},	// LICHOMAT v0.4
 	{"trg"},	// LICHOMAT v0.5
 	{"mic"}, {"tpl"}, {"amt"}, {"rqn"},	// LICHOMAT v0.6
+	{"vtp"}, {"vdp"}, {"sav"},	// LICHOMAT v0.7
 
 };
 //-----------------------------------------------------------------
@@ -685,6 +707,7 @@ const char longNames[][16] =
 	{"duck src"}, {"duck dpt"}, {"DJ filtr"}, {"DJ reso"},
 	{"Trig tmg"},	// LICHOMAT v0.5
 	{"Micro"}, {"Template"}, {"Tpl amt"}, {"RecQuant"},	// LICHOMAT v0.6
+	{"Vel tpl"}, {"Vel dpth"}, {"Save tpl"},	// LICHOMAT v0.7
 };
 
 

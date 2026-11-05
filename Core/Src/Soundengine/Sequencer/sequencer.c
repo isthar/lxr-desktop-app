@@ -2567,6 +2567,11 @@ void seq_loadGrooveParams(uint8_t trackNr, uint8_t pattern)
 	const TrackTemplate tp = trackTemplate_checked(seq_patternSet.tmpl[pattern][trackNr]);
 	activeParameters[PAR_TRACK_TPL] = tp.id;
 	activeParameters[PAR_TRACK_TPL_AMT] = (uint8_t)(tp.amount + 100);
+	//LICHOMAT v0.7: the fourth screen: the velocity template and its depth, sav at --- (plan v0.7 V7-11)
+	const TrackTemplate vt = velTemplate_checked(seq_patternSet.vtpl[pattern][trackNr]);
+	activeParameters[PAR_TRACK_VTP] = vt.id;
+	activeParameters[PAR_TRACK_VDP] = (uint8_t)(vt.amount + 100);
+	activeParameters[PAR_TRACK_TPL_SAVE] = 0;
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.2: a track page parameter edited, as its menu value */
@@ -2583,6 +2588,9 @@ void seq_setGrooveParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 	//LICHOMAT v0.6: direct calls, the values pass 127 (M17)
 	case PAR_TRACK_TPL:	seq_patternSet.tmpl[pattern][trackNr].id = (value < TEMPLATE_COUNT) ? value : 0; break;
 	case PAR_TRACK_TPL_AMT:	seq_patternSet.tmpl[pattern][trackNr].amount = (int8_t)((value <= TEMPLATE_AMOUNT_MAX - TEMPLATE_AMOUNT_MIN) ? (int)value - 100 : 0); break;
+	//LICHOMAT v0.7: the fourth screen (V7-15)
+	case PAR_TRACK_VTP:	seq_patternSet.vtpl[pattern][trackNr].id = (value < VEL_TEMPLATE_COUNT) ? value : 0; break;
+	case PAR_TRACK_VDP:	seq_patternSet.vtpl[pattern][trackNr].amount = (int8_t)((value <= TEMPLATE_AMOUNT_MAX - TEMPLATE_AMOUNT_MIN) ? (int)value - 100 : 0); break;
 	default: break;
 	}
 }

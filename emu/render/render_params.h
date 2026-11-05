@@ -325,4 +325,7 @@ static const struct { const char *name; uint16_t par; } render_params[] = {
 	{ "fx_delay_sync", PAR_FX_DELAY_SYNC },
 	{ "track_tpl", PAR_TRACK_TPL },
 	{ "track_tpl_amt", PAR_TRACK_TPL_AMT },
+	{ "track_vtp", PAR_TRACK_VTP },
+	{ "track_vdp", PAR_TRACK_VDP },
+	{ "track_tpl_save", PAR_TRACK_TPL_SAVE },
 };

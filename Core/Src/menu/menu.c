@@ -274,6 +274,9 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_TRACK_TPL, CAT_PATTERN, LONG_TRACK_TPL},/*TEXT_TRACK_TPL*/
 		{SHORT_TRACK_TPL_AMT, CAT_PATTERN, LONG_TRACK_TPL_AMT},/*TEXT_TRACK_TPL_AMT*/
 		{SHORT_REC_QUANT, CAT_SEQUENCER, LONG_REC_QUANT},/*TEXT_REC_QUANT*/
+		{SHORT_TRACK_VTP, CAT_PATTERN, LONG_TRACK_VTP},/*TEXT_TRACK_VTP, LICHOMAT v0.7*/
+		{SHORT_TRACK_VDP, CAT_PATTERN, LONG_TRACK_VDP},/*TEXT_TRACK_VDP*/
+		{SHORT_TPL_SAVE, CAT_PATTERN, LONG_TPL_SAVE},/*TEXT_TPL_SAVE*/
 
 
 };
@@ -600,6 +603,9 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 		/*PAR_FX_DELAY_SYNC*/	DTYPE_MENU | (MENU_DELAY_SYNC<<8),
 		/*PAR_TRACK_TPL*/	DTYPE_MENU | (MENU_TRK_TPL<<8),	// LICHOMAT v0.6
 		/*PAR_TRACK_TPL_AMT*/	DTYPE_MENU | (MENU_TPL_AMT<<8),
+		/*PAR_TRACK_VTP*/	DTYPE_MENU | (MENU_TRK_VTP<<8),	// LICHOMAT v0.7
+		/*PAR_TRACK_VDP*/	DTYPE_MENU | (MENU_TPL_AMT<<8),
+		/*PAR_TRACK_TPL_SAVE*/	DTYPE_MENU | (MENU_TPL_SAVE<<8),
 };
 
 
@@ -1116,6 +1122,10 @@ static void menu_repaintSimplePage()
 
 			case CLEAR_AUTOMATION2:
 				strcpy(&editDisplayBuffer[0][7], "autom. 2]");
+			break;
+
+			case CLEAR_MICRO:	// LICHOMAT v0.7: the track's microtiming (plan v0.7 V7-14)
+				strcpy(&editDisplayBuffer[0][7], "micro]?");
 			break;
 		}
 
@@ -1691,6 +1701,13 @@ void menu_repaintGeneric()
 					const char *n = trackTplLongNames[(curParmVal < trackTplNames[0][0]) ? curParmVal : 0];
 					memcpy(&editDisplayBuffer[1][0], n, strlen(n));
 				}
+				else if(menuId == MENU_TRK_VTP)		// LICHOMAT v0.7: the velocity template's long name
+				{
+					const char *n = trackVtpLongNames[(curParmVal < trackVtpNames[0][0]) ? curParmVal : 0];
+					memcpy(&editDisplayBuffer[1][0], n, strlen(n));
+				}
+				else if((menuId == MENU_TPL_SAVE) && curParmVal && (curParmVal <= USER_TEMPLATES))	// LICHOMAT v0.7 (V7-11)
+					memcpy(&editDisplayBuffer[1][0], "push: save", 10);
 			}
 				break; // switch(parameters[parNr].dtype&0x0F) case DTYPE_MENU
 
@@ -2101,6 +2118,11 @@ void menu_showSdError(uint8_t res)
 
 		case FR_NO_FILE:
 			lcd_string("File not found!");
+			break;
+
+		//LICHOMAT v0.7: a short write, a full card (preset_saveUserTemplates(), group B's reviews)
+		case FR_DENIED:
+			lcd_string("Card full!");
 			break;
 
 		default:
@@ -2760,6 +2782,8 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 	case MENU_STEP_MICRO: return 2 * STEP_MICRO_MAX + 1;	// LICHOMAT v0.6: -84..+84
 	case MENU_TRK_TPL: return trackTplNames[0][0];
 	case MENU_TPL_AMT: return TEMPLATE_AMOUNT_MAX - TEMPLATE_AMOUNT_MIN + 1;	// 0..200 %
+	case MENU_TRK_VTP: return trackVtpNames[0][0];	// LICHOMAT v0.7
+	case MENU_TPL_SAVE: return tplSaveNames[0][0];
 
 	default:
 		return 0;
@@ -2923,6 +2947,12 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 	case MENU_TPL_AMT:
 		numtostrpu(buf, curParmVal, ' ');
 		return;
+	case MENU_TRK_VTP:			// LICHOMAT v0.7: a value past the list reads "off", as velTemplate_checked()
+		p=trackVtpNames[((curParmVal < trackVtpNames[0][0]) ? curParmVal : 0) + 1];
+		break;
+	case MENU_TPL_SAVE:			// LICHOMAT v0.7
+		p=tplSaveNames[((curParmVal < tplSaveNames[0][0]) ? curParmVal : 0) + 1];
+		break;
 
 
 	default:
@@ -2933,6 +2963,38 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 
 }
 
+//-----------------------------------------------------------------
+/** LICHOMAT v0.7 (plan v0.7 V7-11): the cursor is on the track page's sav and it shows us1..us4 */
+static uint8_t menu_tplSaveArmed(void)
+{
+	const uint8_t activeParameter = menuIndex & MASK_PARAMETER;
+	const uint8_t activePage = (menuIndex & MASK_PAGE) >> PAGE_SHIFT;
+	if(menu_activePage != EUKLID_PAGE)
+		return 0;
+	if(pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter) != PAR_TRACK_TPL_SAVE)
+		return 0;
+	return (activeParameters[PAR_TRACK_TPL_SAVE] >= 1) && (activeParameters[PAR_TRACK_TPL_SAVE] <= USER_TEMPLATES);
+}
+//-----------------------------------------------------------------
+/** LICHOMAT v0.7 (V7-9, V7-11, V7-12): steps 1-16 of the active track in the shown pattern into
+ * the own template that sav names, saved to /tmp (the working folder, set again here), also when
+ * every template is empty; sav reads --- again. A card error shows (group B's reviews) */
+static void menu_saveUserTemplate(void)
+{
+	seq_captureUserTemplate(menu_getActiveVoice(), menu_getViewedPattern(), (uint8_t)(activeParameters[PAR_TRACK_TPL_SAVE] - 1));
+	activeParameters[PAR_TRACK_TPL_SAVE] = 0;
+	editModeActive = 0;
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+	HAL_TIM_Base_Start_IT(&htim2);	//calc sample interrupt - prio 1: the sound goes on while the card writes, as a pattern save to /tmp
+#endif
+	preset_initTmpFolder();
+	const FRESULT res = preset_saveUserTemplates(1);
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+	HAL_TIM_Base_Stop_IT(&htim2);
+#endif
+	if(res != FR_OK)
+		menu_showSdError(res);
+}
 //-----------------------------------------------------------------
 // called when either the encoder is rotated, or the encoder button is clicked
 // inc - the number of clicks the encoder has moved
@@ -2949,6 +3011,10 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 			{
 				//execute
 				copyClear_executeClear();
+			}
+			else if(!screensaver_Active && menu_tplSaveArmed())	// LICHOMAT v0.7: the click saves the track into sav's template (V7-11)
+			{
+				menu_saveUserTemplate();
 			}
 			else
 			{
@@ -3015,7 +3081,7 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 					target--;
 				}
 			} else if(inc>0) {
-				if(target!=CLEAR_AUTOMATION2) {
+				if(target!=CLEAR_MICRO) {	// LICHOMAT v0.7: micro is the last target
 					target++;
 				}
 			}
@@ -3680,6 +3746,8 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	case PAR_TRACK_DELAY:
 	case PAR_TRACK_TPL:	// LICHOMAT v0.6: the third screen (M17)
 	case PAR_TRACK_TPL_AMT:
+	case PAR_TRACK_VTP:	// LICHOMAT v0.7: the fourth screen
+	case PAR_TRACK_VDP:
 		seq_setGrooveParam(menu_getActiveVoice(), menu_getViewedPattern(), paramNr, value);
 		break;
 

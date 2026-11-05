@@ -1710,4 +1710,43 @@ TEST(own_capture_loudest_within_the_length)
 	seq_clearUserTemplates();
 }
 
+TEST(sequencer_dynamics_track_page)
+{
+	/* plan v0.7 Task 6: vtp, vdp and sav through the direct calls (V7-15); values past the lists
+	 * are the defaults; tpl takes us1..us4 (V7-1); sav reads --- on every load */
+	reset();
+	seq_setGrooveParam(1, 2, PAR_TRACK_VTP, 8);
+	seq_setGrooveParam(1, 2, PAR_TRACK_VDP, 200);
+	ASSERT_EQ(seq_patternSet.vtpl[2][1].id, 8);
+	ASSERT_EQ(seq_patternSet.vtpl[2][1].amount, 100);
+	activeParameters[PAR_TRACK_TPL_SAVE] = 3;
+	seq_loadGrooveParams(1, 2);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VTP], 8);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VDP], 200);
+	ASSERT_EQ(activeParameters[PAR_TRACK_TPL_SAVE], 0);
+	seq_setGrooveParam(1, 2, PAR_TRACK_VTP, 9);
+	seq_setGrooveParam(1, 2, PAR_TRACK_VDP, 201);
+	ASSERT_EQ(seq_patternSet.vtpl[2][1].id, 0);		/* the setter stores the defaults, off at 100 % */
+	ASSERT_EQ(seq_patternSet.vtpl[2][1].amount, 0);
+	seq_loadGrooveParams(1, 2);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VTP], 0);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VDP], 100);
+	/* Task 6's mutants: a velocity template from elsewhere (a file, a host) loads checked, as
+	 * velTemplate_checked(): id 9 is off, an amount of +101 or -101 is 100 % */
+	seq_patternSet.vtpl[2][1] = (TrackTemplate){ 9, 101 };
+	seq_loadGrooveParams(1, 2);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VTP], 0);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VDP], 100);
+	seq_patternSet.vtpl[2][1] = (TrackTemplate){ 5, -101 };
+	seq_loadGrooveParams(1, 2);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VTP], 5);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VDP], 100);
+	seq_setGrooveParam(1, 2, PAR_TRACK_TPL, 11);
+	ASSERT_EQ(seq_patternSet.tmpl[2][1].id, 11);
+	seq_setGrooveParam(1, 2, PAR_TRACK_TPL, 12);
+	ASSERT_EQ(seq_patternSet.tmpl[2][1].id, 0);
+	seq_patternSet.vtpl[2][1] = (TrackTemplate){ 0, 0 };	/* the songs' pattern 2 as it was */
+	seq_patternSet.tmpl[2][1] = (TrackTemplate){ 0, 0 };
+}
+
 TEST_MAIN()

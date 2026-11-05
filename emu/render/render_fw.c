@@ -87,7 +87,9 @@ enum
 	RFW_MENU_TRIG_TIMING = 35,	/* LICHOMAT v0.5 */
 	RFW_MENU_STEP_MICRO = 36,	/* LICHOMAT v0.6 */
 	RFW_MENU_TRK_TPL = 37,
-	RFW_MENU_TPL_AMT = 38
+	RFW_MENU_TPL_AMT = 38,
+	RFW_MENU_TRK_VTP = 39,	/* LICHOMAT v0.7 */
+	RFW_MENU_TPL_SAVE = 40
 };
 
 extern const char transientNames[][4], outputNames[][7], outputNamesFx[][7], filterTypes[][8],
@@ -96,7 +98,7 @@ extern const char transientNames[][4], outputNames[][7], outputNamesFx[][7], fil
 	midiFilterNames[][16], ppqOutNames[][4], ppqInNames[][4], mixFmNames[][6], fxNames[][4], distNames[][4],
 	ratioNames[][4], delayNames[][4], reverbNames[][4], patModeNames[][4], stepFlamNames[][4],
 	stepShiftNames[][4], trackTempoNames[][4], sceneQuantNames[][4], duckSrcNames[][4], delaySyncNames[][4],
-	trigTimingNames[][4], trackTplNames[][4];
+	trigTimingNames[][4], trackTplNames[][4], trackVtpNames[][4], tplSaveNames[][4];
 extern uint8_t menu_numSamples;		/* menu.c: the samples on the card, after the waveforms */
 
 /* menu.c getMaxEntriesForMenu() (static there; M20 hashes the original) */
@@ -142,6 +144,8 @@ static uint8_t rfw_menuEntries(uint8_t menuId)
 	case RFW_MENU_STEP_MICRO:	return 2 * STEP_MICRO_MAX + 1;	/* LICHOMAT v0.6 */
 	case RFW_MENU_TRK_TPL:		return trackTplNames[0][0];
 	case RFW_MENU_TPL_AMT:		return TEMPLATE_AMOUNT_MAX - TEMPLATE_AMOUNT_MIN + 1;
+	case RFW_MENU_TRK_VTP:		return trackVtpNames[0][0];	/* LICHOMAT v0.7 */
+	case RFW_MENU_TPL_SAVE:		return tplSaveNames[0][0];
 	default:					return 0;
 	}
 }

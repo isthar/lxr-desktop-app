@@ -18,6 +18,7 @@
 #include "menu/menu.h"
 #include "Preset/PresetManager.h"
 #include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/MIDI/CortexParser.h"	// LICHOMAT v0.7: the step page's step
 
 uint8_t copyClear_Mode = MODE_NONE;
 #define SRC_DST_NONE -1
@@ -33,6 +34,21 @@ void copyClear_clearTrackAutom(uint8_t automTrack)
 	uint8_t voice = menu_getActiveVoice();
 	frontPanel_sendData(SEQ_CC,SEQ_CLEAR_AUTOM,(uint8_t)((voice<<4)|(automTrack&0x0f)));
 };
+//-----------------------------------------------------------------------------
+/** LICHOMAT v0.7 (plan v0.7 V7-14): the clear page's micro: every step of the active track in the
+ * shown pattern to T 0, its templates kept; the step page's shf and mic show it when it shows that
+ * track, since seq_clearTrackMicro() leaves activeParameters alone (group B's reviews) */
+void copyClear_clearTrackMicro(void)
+{
+	const uint8_t voice = menu_getActiveVoice();
+	const uint8_t pattern = menu_getViewedPattern();
+	seq_clearTrackMicro(voice, pattern);
+	if((voice == frontParser_activeTrack) && (pattern == frontParser_shownPattern))
+	{
+		activeParameters[PAR_STEP_SHIFT] = 7;	// no shift (SEQC_SHIFT_CENTER)
+		seq_loadStepMicro(pattern, voice, frontParser_activeStep);
+	}
+}
 //-----------------------------------------------------------------------------
 void copyClear_clearCurrentPattern()
 {
@@ -64,6 +80,10 @@ void copyClear_executeClear()
 		
 		case CLEAR_AUTOMATION2:
 			copyClear_clearTrackAutom(1);
+		break;
+
+		case CLEAR_MICRO:	// LICHOMAT v0.7 (plan v0.7 V7-14)
+			copyClear_clearTrackMicro();
 		break;
 	}
 	

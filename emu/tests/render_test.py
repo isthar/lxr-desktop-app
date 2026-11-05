@@ -1364,28 +1364,31 @@ def V06_ui(t):
     # voice's values and stops at amt; back left to dly; the recording page shows rqn. Review of
     # Task 6: the scroll signs >, * and <; edit mode on tpl shows the template's long name; the
     # voice mode button from the third screen opens the voice page's first sub-page; SHIFT + mode2
-    # steps through the three screens and back to the first
+    # steps through the three screens and back to the first. v0.7: the fourth screen follows the
+    # third (plan v0.7 V7-16)
     seed, log = t.seed(), t.path('panel.log')
     mode2 = '+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
     script = t.script('0ms press voice2\n+100ms param track_tpl=3\n+100ms param track_tpl_amt=150\n'
                       + mode2 + '+200ms mark euklid\n'
                       '+100ms encoder +4\n+200ms mark track\n+100ms encoder +4\n+200ms mark tpl\n'
-                      '+100ms push\n+200ms mark tpledit\n+100ms push\n+100ms encoder +3\n+200ms mark amt\n'
+                      '+100ms push\n+200ms mark tpledit\n+100ms push\n+100ms encoder +1\n+200ms mark amt\n'
                       '+100ms encoder -2\n+200ms mark back\n+100ms encoder +1\n+100ms press mode1\n+200ms mark voice\n'
                       + mode2 + '+200ms mark c1\n' + mode2 + '+200ms mark c2\n' + mode2 + '+200ms mark c3\n'
-                      + mode2 + '+200ms mark c4\n'
+                      + mode2 + '+200ms mark c4\n' + mode2 + '+200ms mark c5\n'
                       '+100ms down shift\n+20ms press rec\n+100ms up shift\n+200ms mark rec\n')
-    t.render(seed, ['--no-start', '--seconds', '5', '--param', 'rec_quant=1', '--panel-log', log,
+    t.render(seed, ['--no-start', '--seconds', '6', '--param', 'rec_quant=1', '--panel-log', log,
                     '--events', script])
     rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
     check(re.match(r'LEN.stp.rot.mrp>', rows['euklid'][0]), 'the first screen, sign >: %r' % rows['euklid'])
     check(re.match(r'TMP.hmt.hmv.dly\*', rows['track'][0]), 'the second screen, sign *: %r' % rows['track'])
-    check(re.match(r'TPL.amt.{8}<', rows['tpl'][0]) and re.match(r'lyb.150', rows['tpl'][1]), 'tpl: %r' % rows['tpl'])
+    check(re.match(r'TPL.amt.{8}\*', rows['tpl'][0]) and re.match(r'lyb.150', rows['tpl'][1]),
+          'tpl, sign * (a fourth screen follows, v0.7): %r' % rows['tpl'])
     check(rows['tpledit'][1].startswith('lay bar'), 'edit mode on tpl 3: %r' % rows['tpledit'])
-    check(re.match(r'tpl.AMT', rows['amt'][0]), 'amt, where the encoder stops: %r' % rows['amt'])
+    check(re.match(r'tpl.AMT', rows['amt'][0]), 'amt: %r' % rows['amt'])
     check(re.match(r'tmp.hmt.hmv.DLY', rows['back'][0]), 'back to dly: %r' % rows['back'])
     check(re.match(r'COA.fin.wav.pwm>', rows['voice'][0]), 'the voice page from tpl: %r' % rows['voice'])
-    for m, want in (('c1', r'LEN.stp'), ('c2', r'TMP.hmt'), ('c3', r'TPL.amt'), ('c4', r'LEN.stp')):
+    for m, want in (('c1', r'LEN.stp'), ('c2', r'TMP.hmt'), ('c3', r'TPL.amt'), ('c4', r'VTP.vdp.sav'),
+                    ('c5', r'LEN.stp')):
         check(re.match(want, rows[m][0]), 'SHIFT + mode2, %s: %r' % (m, rows[m]))
     check(re.search(r'rqn', rows['rec'][0], re.I) and re.search(r'on', rows['rec'][1]), 'rec: %r' % rows['rec'])
     # the step page's mic (review of Task 6): loaded on step select (seq_loadStepMicro() in
@@ -1405,6 +1408,94 @@ def V06_ui(t):
     check(re.match(r'Step +Micro', rows['micedit'][0]) and rows['micedit'][1].endswith('99.0ms +76'),
           'edit mode on mic: %r' % rows['micedit'])
     check(re.match(r'off \+7 +\+84 ', rows['shf'][1]), 'shf +1: %r' % rows['shf'])
+
+@case
+def V07_ui(t):
+    # the track page's fourth screen (plan v0.7 Task 6, V7-11, V7-14, V7-16): the encoder runs from
+    # amt over the skips to vtp and stops at sav (sign <); vtp and vdp show the voice's values, edit
+    # mode on vtp its long name, sav at 2 reads us2; back left to amt. SHIFT + COPY and the encoder
+    # show the clear page's micro, SHIFT up leaves it. A project save writes block 3 right after block
+    # 1 (3,697 + 20 bytes, LCHM 03 07, voice 2's of8 at 50 %, the others 0) and no USERTPL.LCH
+    seed, log, keep = t.seed(), t.path('panel.log'), t.path('K')
+    mode2 = '+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
+    script = t.script('0ms press voice2\n+100ms param track_vtp=1\n+100ms param track_vdp=50\n'
+                      + mode2 + '+200ms encoder +8\n+200ms mark tpl\n+100ms encoder +1\n+100ms encoder +1\n'
+                      '+200ms mark vtp\n+100ms push\n+200ms mark vtpedit\n+100ms push\n+150ms encoder +3\n'
+                      '+200ms mark sav\n+100ms push\n+150ms encoder +2\n+200ms mark savedit\n+100ms encoder -2\n'
+                      '+100ms push\n+200ms mark savoff\n+100ms param track_tpl_save=2\n+100ms encoder -1\n'
+                      '+100ms encoder +1\n+200ms mark sav2\n+100ms encoder -3\n'
+                      '+200ms mark back\n+100ms down shift\n+20ms press copy\n+150ms encoder +9\n+200ms mark clear\n'
+                      '+100ms up shift\n+200ms mark gone\n+300ms save-project 0\n')
+    t.render(seed, ['--no-start', '--seconds', '6', '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'TPL.amt.{8}\*', rows['tpl'][0]), 'the third screen, sign *: %r' % rows['tpl'])
+    check(re.match(r'VTP.vdp.sav.{4}<', rows['vtp'][0]) and re.match(r'of8. 50.---', rows['vtp'][1]),
+          'the fourth screen: %r' % rows['vtp'])
+    check(rows['vtpedit'][1].startswith('offbeat 8th'), 'edit mode on vtp 1: %r' % rows['vtpedit'])
+    check(re.match(r'vtp.vdp.SAV', rows['sav'][0]), 'sav, where the encoder stops: %r' % rows['sav'])
+    check(rows['savedit'][1] == 'push: save   us2', 'edit mode on sav 2: %r' % rows['savedit'])
+    check(re.match(r'vtp.vdp.SAV', rows['savoff'][0]) and re.match(r'of8. 50.---', rows['savoff'][1]),
+          'sav back at ---, edit mode left: %r' % rows['savoff'])
+    check(re.match(r'of8. 50.us2', rows['sav2'][1]), 'sav at 2 (shown after the cursor moves): %r' % rows['sav2'])
+    check(re.match(r'tpl.AMT', rows['back'][0]), 'back to amt: %r' % rows['back'])
+    check(rows['clear'][0].startswith('clear [micro]?'), 'the clear page: %r' % rows['clear'])
+    check(not rows['gone'][0].startswith('clear'), 'SHIFT up leaves the clear page: %r' % rows['gone'])
+    pat = one_file(keep, '00-*.PAT')
+    check(len(pat) == 3697 + 20 and pat[3697:3703] == b'LCHM\x03\x07', 'pattern 0: %d bytes, %r'
+          % (len(pat), pat[3697:3703]))
+    check(pat[3703:3717] == bytes([0, 0, 1, (50 - 100) & 0xFF] + [0] * 10), 'block 3: %r' % pat[3703:3717])
+    check(not glob.glob(os.path.join(keep, 'PROJ00', 'USERTPL.LCH')), 'no own template, no USERTPL.LCH')
+    # us1..us4 in tpl and vtp (V7-1, V7-2), their long names in edit mode. The capture (Task 6,
+    # group B's reviews), from edit mode as the manual says: sav's click writes /tmp's USERTPL.LCH
+    # and leaves edit mode, also when every template is empty: the project's USERTPL.LCH holds us1
+    # only, and Drum 1 has no step on in the seed's pattern 0 (us4 is empty too), so us1 is emptied;
+    # sav reads --- again. With TMP/USERTPL.LCH a directory (--as-booted copies TMP) the write is
+    # refused (FR_DENIED) and the LCD shows it (the mark comes at the end of menu_showSdError()'s
+    # HAL_Delay())
+    sav = ('0ms press voice1\n+100ms param track_tpl=11\n+100ms param track_vtp=8\n+100ms down shift\n'
+           '+20ms press mode2\n+100ms up shift\n+200ms encoder +8\n+200ms mark tplus\n+100ms push\n'
+           '+200ms mark tplusedit\n+100ms push\n+150ms encoder +2\n+200ms mark vtpus\n+100ms push\n'
+           '+200ms mark vtpusedit\n+100ms push\n+150ms encoder +13\n+200ms mark sav\n+100ms push\n'
+           '+150ms encoder +1\n+200ms mark savus1\n+100ms push\n+300ms mark saved\n')
+    own = card_copy(t, seed, 'own')
+    with open(os.path.join(own, 'PROJ00', 'USERTPL.LCH'), 'wb') as f:
+        f.write(b'LCHM\x01\x04' + bytes([5] * 16 + [256 - 10] * 16) + bytes(96))
+    keep, log = t.path('K2'), t.path('panel2.log')
+    t.render(own, ['--no-start', '--seconds', '5', '--panel-log', log, '--keep-card', keep, '--events', t.script(sav)])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'TPL.amt', rows['tplus'][0]) and re.match(r'us4.100', rows['tplus'][1]), 'tpl us4: %r' % rows['tplus'])
+    check(rows['tplusedit'][1].startswith('user 4'), 'edit mode on tpl 11: %r' % rows['tplusedit'])
+    check(re.match(r'VTP.vdp.sav', rows['vtpus'][0]) and re.match(r'us4.100.---', rows['vtpus'][1]),
+          'vtp us4: %r' % rows['vtpus'])
+    check(rows['vtpusedit'][1].startswith('user 4'), 'edit mode on vtp 8: %r' % rows['vtpusedit'])
+    check(re.match(r'vtp.vdp.SAV', rows['sav'][0]), 'the encoder on sav: %r' % rows['sav'])
+    check(rows['savus1'][1] == 'push: save   us1', 'edit mode on sav 1: %r' % rows['savus1'])
+    check(re.match(r'vtp.vdp.SAV', rows['saved'][0]) and re.match(r'us4.100.---', rows['saved'][1]),
+          'after the click: edit mode left, sav at ---: %r' % rows['saved'])
+    tpl = glob.glob(os.path.join(keep, 'TMP', 'USERTPL.LCH'))
+    tpl = open(tpl[0], 'rb').read() if tpl else None
+    check(tpl == b'LCHM\x01\x04' + bytes(128), "TMP's USERTPL.LCH after an empty capture: %r" % tpl)
+    card, log = card_copy(t, own, 'denied'), t.path('panel3.log')
+    os.mkdir(os.path.join(card, 'TMP', 'USERTPL.LCH'))
+    t.render(card, ['--no-start', '--seconds', '5', '--as-booted', '--panel-log', log, '--events', t.script(sav)])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(rows['saved'][0].startswith('SD Card error:') and rows['saved'][1].startswith('Card full!'),
+          'a refused write: %r' % rows['saved'])
+    # the clear page's micro on the track the step page shows (V7-14, group B's reviews): shf and mic
+    # read 0 at once, not only after the step is selected again
+    log = t.path('panel4.log')
+    script = t.script('0ms press voice1\n+300ms press mode1\n+200ms param active_step=2\n'
+                      '+100ms param step_micro=160\n+100ms param active_step=0\n+100ms param active_step=2\n'
+                      '+300ms mark step2\n+100ms down shift\n+20ms press copy\n+150ms encoder +9\n'
+                      '+200ms mark clear\n+100ms push\n+100ms up shift\n+300ms mark cleared\n')
+    t.render(seed, ['--no-start', '--seconds', '3', '--panel-log', log, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'FLM.shf.mic', rows['step2'][0]) and re.match(r'off \+6 +\+76 ', rows['step2'][1]),
+          'step 2 before the clear: %r' % rows['step2'])
+    check(rows['clear'][0].startswith('clear [micro]?'), 'the clear page on the step page: %r' % rows['clear'])
+    check(re.match(r'FLM.shf.mic', rows['cleared'][0]) and re.match(r'off 0 +0 ', rows['cleared'][1]),
+          'step 2 after the clear: %r' % rows['cleared'])
+    no_copies_left()
 
 def name_table(text, table):
     """the strings of a name table of MenuText.h, without its #if USE_CODEC_EQ entries (off in the build)"""

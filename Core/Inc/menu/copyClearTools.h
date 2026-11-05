@@ -35,12 +35,14 @@ enum
 	CLEAR_PATTERN,
 	CLEAR_AUTOMATION1,
 	CLEAR_AUTOMATION2,
+	CLEAR_MICRO,	// LICHOMAT v0.7: a track's microtiming (plan v0.7 V7-14)
 };
 extern uint8_t copyClear_Mode;
 
 void copyClear_executeClear();
 void copyClear_clearCurrentTrack();
 void copyClear_clearCurrentPattern();
+void copyClear_clearTrackMicro(void);	// LICHOMAT v0.7
 void copyClear_copyTrack();
 void copyClear_copyPattern();
 uint8_t copyClear_getClearTarget();
