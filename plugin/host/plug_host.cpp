@@ -21,7 +21,8 @@
  *   rtcheck                count the calls of process() that the interposer (plug_rtcheck) sees
  *   mode realtime|offline  the ProcessSetup's mode (default offline: the plugin waits for its engine)
  *   paced                  realtime: each block at its wall-clock time, as an audio device would
- * Instance I > 0 writes FILE-I.wav. The summary on stdout gives each instance's latency.
+ * Instance I > 0 writes FILE-I.wav. The summary on stdout gives each instance's latency. Before each
+ * process() the output buffers are filled with 0.5, as a host may leave anything in them.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -461,6 +462,9 @@ int main (int argc, char** argv)
 			in->outParams.clearQueue ();
 			in->data.numSamples = (int32)n;
 			in->data.processContext = &ctx;
+			/* a host's buffers hold anything: the plugin must write every frame (P10_plugin_native) */
+			for (uint32_t i = 0; i < n; i++)
+				in->data.outputs[0].channelBuffers32[0][i] = in->data.outputs[0].channelBuffers32[1][i] = 0.5f;
 			if (rtInside)
 				rtInside (1);
 			in->processor->process (in->data);
