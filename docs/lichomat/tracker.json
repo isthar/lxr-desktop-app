@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 23:27",
+    "updated": "2026-11-05 23:30",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "d271a01",
+    "head": "20a812e",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T23:27:00+01:00",
-    "now": "E9.18–E9.19: pełny przegląd wtyczki (od 22:56)"
+    "updated_at": "2026-11-05T23:30:00+01:00",
+    "now": "E9.18–E9.19: implementer poprawia wyniki przeglądu wtyczki (od 23:30)"
   },
   "epics": [
     {
@@ -4557,6 +4557,11 @@
       "n": 630,
       "at": "2026-11-05 23:27",
       "text": "Kofeina dołożona: pracuję do rana. Kolejność: przegląd i poprawki wtyczki, zad. 10 (bramka licencji, README, skrypt instalacji; samej instalacji do ~/Library/Audio/Plug-Ins/VST3 nie robię, rano dostaniesz jedno polecenie), zad. 11 (Twoje sprawdzenia P1–P8 w Abletonie)."
+    },
+    {
+      "n": 631,
+      "at": "2026-11-05 23:30",
+      "text": "E9.18–E9.19: pełny przegląd wtyczki. Kod zgodny z planem, ale jeden błąd buildu: paczka LICHOMAT.vst3 mogła zawierać starą wersję silnika. Do tego luki ważne w Live: po restarcie silnika w trakcie grania perkusja milczałaby do zawinięcia pętli (test tego brakował); przy zawieszonym silniku bounce albo freeze nigdy by się nie skończył; logi kasowane przy zamknięciu setu; zapis stanu w trakcie grania bez testu. Implementer poprawia, każdą rzecz od testu."
     }
   ]
 }
