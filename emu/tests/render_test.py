@@ -1495,6 +1495,42 @@ def V07_ui(t):
     check(rows['clear'][0].startswith('clear [micro]?'), 'the clear page on the step page: %r' % rows['clear'])
     check(re.match(r'FLM.shf.mic', rows['cleared'][0]) and re.match(r'off 0 +0 ', rows['cleared'][1]),
           'step 2 after the clear: %r' % rows['cleared'])
+    # the capture and the clear take the active voice in the shown pattern, sav's last slot us4 too
+    # (light review of group C): Drum 1's step 6 at T +24 in pattern 0 (kept by save-pattern 0
+    # before the pattern page, V6-14), then pattern 3, voice 3's steps 1 and 3 on at T +30 and -20;
+    # edit mode on sav reads no "push: save" at --- and "push: save   us4" at us4; the click on us4
+    # captures, the clear page's micro clears voice 3 in pattern 3, and the project save writes
+    # USERTPL.LCH (us1 the project's, us2 and us3 empty, us4 voice 3's T at 0 dB; TMP is emptied
+    # by the save, F9), voice 3's T all 0 in pattern 3 and Drum 1's +24 in pattern 0
+    keep, log = t.path('K3'), t.path('panel5.log')
+    script = t.script('0ms press voice1\n+100ms param active_step=5\n+100ms param step_micro=108\n'
+                      '+100ms save-pattern 0\n+100ms down shift\n+20ms press step16\n+80ms up shift\n'
+                      '+100ms press step4\n+200ms press mode1\n+100ms press voice3\n+100ms press step1\n'
+                      '+100ms press step3\n+100ms param active_step=0\n+100ms param step_micro=114\n'
+                      '+100ms param active_step=2\n+100ms param step_micro=64\n+100ms down shift\n'
+                      '+20ms press mode2\n+100ms up shift\n+200ms encoder +13\n+200ms mark sav\n+100ms push\n'
+                      '+150ms encoder +2\n+100ms encoder -2\n+200ms mark savdash\n+100ms encoder +13\n'
+                      '+200ms mark savus4\n+100ms push\n+300ms mark saved\n+100ms down shift\n+20ms press copy\n'
+                      '+150ms encoder +9\n+200ms mark clear\n+100ms push\n+100ms up shift\n+300ms save-project 0\n')
+    t.render(own, ['--no-start', '--seconds', '6', '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'vtp.vdp.SAV', rows['sav'][0]), 'voice 3, the encoder on sav: %r' % rows['sav'])
+    check(rows['savdash'][1].endswith('---') and not rows['savdash'][1].startswith('push: save'),
+          'edit mode on sav at ---: %r' % rows['savdash'])
+    check(rows['savus4'][1] == 'push: save   us4', 'edit mode on sav 4: %r' % rows['savus4'])
+    check(re.match(r'vtp.vdp.SAV', rows['saved'][0]) and re.match(r'off.100.---', rows['saved'][1]),
+          'after the click on us4: %r' % rows['saved'])
+    check(rows['clear'][0].startswith('clear [micro]?'), 'the clear page, voice 3: %r' % rows['clear'])
+    tpl = one_file(keep, 'USERTPL.LCH')
+    us4 = [30, 0, -20] + [0] * 13
+    want = b'LCHM\x01\x04' + bytes([5] * 16 + [256 - 10] * 16) + bytes(64) + bytes(x & 0xFF for x in us4) + bytes(16)
+    check(tpl == want, 'USERTPL.LCH after the capture of voice 3 into us4: %r, not %r' % (tpl, want))
+    v3 = pat_tracks(one_file(keep, '03-*.PAT'))[2]
+    check(v3['on'] == {0, 2} and all(T == 0 for T, _ in v3['steps']), 'voice 3 in pattern 3: on %r, T %r'
+          % (sorted(v3['on']), [T for T, _ in v3['steps'][:16]]))
+    d1 = pat_tracks(one_file(keep, '00-*.PAT'))[0]
+    check([T for T, _ in d1['steps'][:16]] == [0] * 5 + [24] + [0] * 10, "Drum 1's T in pattern 0 kept: %r"
+          % [T for T, _ in d1['steps'][:16]])
     no_copies_left()
 
 def name_table(text, table):
