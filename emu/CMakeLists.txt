@@ -190,6 +190,12 @@ endfunction()
 emu_render_exe(lichomat-render 0)
 emu_render_exe(lichomat-render-test 1)
 
+# The plugin's project (plugin/CMakeLists.txt, plan E9.2 P-2) takes the device objects and the renderer
+# and stops here: the emulator's tests, the app and the licence gate stay this project's.
+if(LICHOMAT_EMU_DEVICE_ONLY)
+    return()
+endif()
+
 # --- the test harness -------------------------------------------------------------------------
 add_library(emu_test_options INTERFACE)
 target_link_libraries(emu_test_options INTERFACE emu_fw_headers)
