@@ -1692,4 +1692,22 @@ TEST(own_capture_takes_the_velocity_depth)
 	seq_clearUserTemplates();
 }
 
+TEST(own_capture_loudest_within_the_length)
+{
+	/* quality review of group B (V7-8, V7-10): a step past the track's length is no position and
+	 * not the loudest either: length 12, step 1 at 100 and step 14 at 127 (T 30) give step 1 0 dB
+	 * and leave position 14 at 0 */
+	reset();
+	seq_clearPattern(47);
+	ownStep(47, 6, 0, 100, 0);
+	ownStep(47, 6, 13, 127, 30);
+	seq_patternSet.length[47][6] = 12;
+	ASSERT_EQ(seq_captureUserTemplate(6, 47, 1), 1);
+	ASSERT_EQ(seq_userTemplates[1].vel[0], 0);
+	ASSERT_EQ(seq_userTemplates[1].vel[13], 0);
+	ASSERT_EQ(seq_userTemplates[1].timing[13], 0);
+	seq_clearPattern(47);
+	seq_clearUserTemplates();
+}
+
 TEST_MAIN()
