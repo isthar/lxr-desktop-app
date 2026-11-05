@@ -133,11 +133,14 @@ void EngineLink::stop ()
 		wake ();
 		thread.join ();
 	}
-	for (int& fd : wakeFd)
+	/* the write end first, and out of wake()'s reach before it is closed: a process() that a host
+	 * still calls meanwhile writes nothing, rather than into a pipe without a reader (SIGPIPE) */
+	for (int i : {1, 0})
 	{
+		const int fd = wakeFd[i];
+		wakeFd[i] = -1;
 		if (fd >= 0)
 			close (fd);
-		fd = -1;
 	}
 	if (mem)
 		plug_shmClose (mem);
