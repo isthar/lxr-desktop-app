@@ -14,6 +14,7 @@
  */
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -49,6 +50,26 @@ TEST(P3_shm_header)
 	s->magic = 0;
 	ASSERT_EQ(plug_shmCheck(s, err, sizeof err), -1);
 	ASSERT_TRUE(strstr(err, "LCHP") != NULL);
+	/* the version is this one, the size another layout's */
+	plug_shmInit(s, 48000.0, 512);
+	s->size = (uint32_t)sizeof(plug_shm_t) - 8u;
+	ASSERT_EQ(plug_shmCheck(s, err, sizeof err), -1);
+	char want[40];
+	snprintf(want, sizeof want, "version 1 size %u,", (unsigned)sizeof(plug_shm_t) - 8u);
+	ASSERT_TRUE(strstr(err, want) != NULL);
+	/* the bounds: 8,000-384,000 Hz, blocks of 1-8,192 frames */
+	const struct
+	{
+		double rate;
+		uint32_t block;
+		int check;
+	} b[] = { { 8000.0, 1, 0 }, { 384000.0, 8192, 0 }, { 7999.5, 512, -1 }, { 384000.5, 512, -1 },
+		{ 48000.0, 8193, -1 }, { NAN, 512, -1 } };
+	for (unsigned i = 0; i < sizeof b / sizeof b[0]; i++)
+	{
+		plug_shmInit(s, b[i].rate, b[i].block);
+		ASSERT_EQ(plug_shmCheck(s, err, sizeof err), b[i].check);
+	}
 	munmap(s, sizeof *s);
 }
 
