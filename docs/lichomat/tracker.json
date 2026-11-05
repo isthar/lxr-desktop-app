@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 19:16",
+    "updated": "2026-11-05 19:52",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7 grupa C (E6.33–E6.34) i szkic wtyczki (E9.1)",
     "branch": "timing-core",
-    "head": "897a534",
+    "head": "e43379e",
     "next": "E6.33–E6.34, potem E6.35–E6.36; E9.1 szkic wtyczki do Twoich poprawek, potem E9.2 prototyp; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13 (A czy B), poprawki szkicu v0.7, CI; sprzęt (H12, E8.1)",
-    "updated_at": "2026-11-05T19:16:00+01:00",
-    "now": "E6.35: implementer grupy D v0.7 (od 19:15); E9.2: planista pisze i sprawdza plan prototypu wtyczki (od 18:00)"
+    "updated_at": "2026-11-05T19:52:00+01:00",
+    "now": "E6.35–E6.36: lekki przegląd grupy D (od 19:50); E9.2: planista pisze i sprawdza plan prototypu wtyczki (od 18:00)"
   },
   "epics": [
     {
@@ -757,9 +757,9 @@
     {
       "id": "E6.36",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "v0.7 zad. 9: dokumenty dla Ciebie (U38–U41, szkic notatek wydania, instrukcja), raport M20; lekki przegląd",
-      "updated": "2026-11-04"
+      "updated": "2026-11-05"
     },
     {
       "id": "E6.37",
@@ -4379,6 +4379,11 @@
       "n": 611,
       "at": "2026-11-05 19:16",
       "text": "E6.33 i E6.34 zrobione (v0.7 zad. 6–7, 8cea498..c922e12): interfejs i emulator po lekkim przeglądzie. Nowy test emulatora V07_screensaver: kliknięcie przy wygaszonym ekranie tylko go budzi. Host 135/135, emulator 353/353, ASan emulatora 324/324, 41 nagrań wzorcowych (38 starych bez zmian). E6.35 start: grupa D (zad. 8 README, fuzzing, dema, odbiór; zad. 9 Twoje dokumenty)."
+    },
+    {
+      "n": 612,
+      "at": "2026-11-05 19:52",
+      "text": "E6.35 (v0.7 zad. 8), e4104c0, i E6.36 (zad. 9), e43379e: README v0.7, fuzzing 4 800 renderów bez znalezisk, dema hihatów z szablonami (build/wt-v07/build/demo/v07-hats-*.wav), Twoje dokumenty: lista sprawdzeń z U38–U41, notatki wydania 0.7 (szkic), instrukcja 0.7, raport M20. Start lekkiego przeglądu grupy D: liczby wobec pomiarów, procedury U38–U41 wobec kodu."
     }
   ]
 }
