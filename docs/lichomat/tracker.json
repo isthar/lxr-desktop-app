@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-05 23:30",
+    "updated": "2026-11-05 23:51",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "20a812e",
+    "head": "62609d2",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T23:30:00+01:00",
+    "updated_at": "2026-11-05T23:51:00+01:00",
     "now": "E9.18–E9.19: implementer poprawia wyniki przeglądu wtyczki (od 23:30)"
   },
   "epics": [
@@ -4562,6 +4562,11 @@
       "n": 631,
       "at": "2026-11-05 23:30",
       "text": "E9.18–E9.19: pełny przegląd wtyczki. Kod zgodny z planem, ale jeden błąd buildu: paczka LICHOMAT.vst3 mogła zawierać starą wersję silnika. Do tego luki ważne w Live: po restarcie silnika w trakcie grania perkusja milczałaby do zawinięcia pętli (test tego brakował); przy zawieszonym silniku bounce albo freeze nigdy by się nie skończył; logi kasowane przy zamknięciu setu; zapis stanu w trakcie grania bez testu. Implementer poprawia, każdą rzecz od testu."
+    },
+    {
+      "n": 632,
+      "at": "2026-11-05 23:51",
+      "text": "E9.18–E9.19 przegląd, 1635ba7, 4841dc7, d22fa69, 4ae652b, 141bac9: paczka wtyczki zawsze ma bieżący silnik (nowy test P10_plugin_helper); wtyczka zeruje wyjście przed upływem opóźnienia, a host testowy wypełnia bufory, żeby to sprawdzić; log każdej instancji zostaje po zamknięciu w BASE/logs (32 najnowsze); host testowy w tempie rzeczywistym działa jak urządzenie audio; nowy test P10_plugin_beats: po zabiciu silnika w trakcie grania perkusja wraca w rytm."
     }
   ]
 }
