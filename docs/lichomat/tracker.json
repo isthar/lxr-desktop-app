@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 00:48",
+    "updated": "2026-11-05 01:11",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "v0.7: E6.30 (rdzeń)",
     "branch": "timing-core",
-    "head": "95aaeb5",
+    "head": "79f5c93",
     "next": "E6.30 (rdzeń v0.7); czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T00:48:00+01:00",
-    "now": "E6.30: implementer wprowadza zmiany z przeglądu jakości (od 00:50); potem recenzent sprawdza poprawki i start grupy B (E6.31)"
+    "updated_at": "2026-11-05T01:11:00+01:00",
+    "now": "E6.30: recenzent jakości sprawdza poprawki (od 01:15); potem E6.30 zrobione i start grupy B (E6.31)"
   },
   "epics": [
     {
@@ -4255,6 +4255,16 @@
       "n": 592,
       "at": "2026-11-05 00:48",
       "text": "E6.30 (v0.7 zad. 3): przegląd jakości: rdzeń bez błędów, bezpieczny przy przerwaniach (każdy odczyt własnego szablonu to jeden bajt). Recenzent puścił 15 mutantów, 4 przeżyły, czyli 3 luki w testach: głośność uderzeń we wczesnej części kroku, szablon głośności z właściwego wzorca, nagrywanie przy tempie ścieżki innym niż x1 (to ostatnie zostało z v0.6). Przyjmuję też jego optymalizację: wczesna część bez przesunięcia kończy się od razu, wynik bit w bit ten sam, ok. 0,23 % najgorszego bloku mniej w typowym przypadku. Implementer wprowadza, każde w osobnym commicie."
+    },
+    {
+      "n": 593,
+      "at": "2026-11-05 01:02",
+      "text": "E6.30 (v0.7 zad. 3) jakość, c742142, dd2d7fb, 7e2fb79, a8a5680, f640634, dc3d86e; E6.38 e703d78: 3 luki w testach zamknięte (wczesna część kroku, wzorzec szablonu głośności, nagrywanie przy tempie ścieżki), komentarze, sprawdzenia rozmiarów tablic przy kompilacji, odczyt DST w teście E413 też z wiersza, który stał 100 ms, i optymalizacja B. Implementer puszcza pełną bramkę."
+    },
+    {
+      "n": 594,
+      "at": "2026-11-05 01:11",
+      "text": "E6.30 (v0.7 zad. 3), dc3d86e: pełna bramka po poprawkach z przeglądu jakości przechodzi: host 132/132, ASan 132/132, emulator 346/346, ASan emulatora 317/317, 38 nagrań wzorcowych bez zmian, 0 ostrzeżeń, 10 sprawdzeń firmware PASS. Optymalizacja B bit w bit: 1000 ziaren w 4 ustawieniach daje te same skróty przed i po. Obraz 339 780 B, budżet bez zmian (469 140 z 471 032 B). Recenzent jakości sprawdza poprawki."
     }
   ]
 }
