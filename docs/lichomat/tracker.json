@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 01:11",
+    "updated": "2026-11-05 01:18",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "v0.7: E6.30 (rdzeń)",
+    "focus": "v0.7: grupa B (E6.31, E6.32)",
     "branch": "timing-core",
-    "head": "79f5c93",
-    "next": "E6.30 (rdzeń v0.7); czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
-    "updated_at": "2026-11-05T01:11:00+01:00",
-    "now": "E6.30: recenzent jakości sprawdza poprawki (od 01:15); potem E6.30 zrobione i start grupy B (E6.31)"
+    "head": "79a443a",
+    "next": "E6.31–E6.32 (klej, pliki), potem pełny przegląd; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów, B13, poprawki szkicu v0.7, CI; sprzęt, gdy będziesz go mieć (H12, E8.1)",
+    "updated_at": "2026-11-05T01:18:00+01:00",
+    "now": "E6.31: implementer grupy B (zad. 4 i 5) pracuje (od 01:25)"
   },
   "epics": [
     {
@@ -708,16 +708,16 @@
     {
       "id": "E6.30",
       "epic": "E6",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "v0.7 zad. 3: rdzeń: vtmpl(), własne szablony, jedna pozycja q, seqc_velScale(), seqc_velDb(); testy vel_scale, vel_templates, own_templates; pełny przegląd",
-      "updated": "2026-11-04"
+      "updated": "2026-11-05"
     },
     {
       "id": "E6.31",
       "epic": "E6",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "v0.7 zad. 4: klej: vtpl w RAM, własne szablony, zapis szablonu (to, co słychać, Q36), zerowanie mikrotimingu; test own_capture",
-      "updated": "2026-11-04"
+      "updated": "2026-11-05"
     },
     {
       "id": "E6.32",
@@ -4265,6 +4265,11 @@
       "n": 594,
       "at": "2026-11-05 01:11",
       "text": "E6.30 (v0.7 zad. 3), dc3d86e: pełna bramka po poprawkach z przeglądu jakości przechodzi: host 132/132, ASan 132/132, emulator 346/346, ASan emulatora 317/317, 38 nagrań wzorcowych bez zmian, 0 ostrzeżeń, 10 sprawdzeń firmware PASS. Optymalizacja B bit w bit: 1000 ziaren w 4 ustawieniach daje te same skróty przed i po. Obraz 339 780 B, budżet bez zmian (469 140 z 471 032 B). Recenzent jakości sprawdza poprawki."
+    },
+    {
+      "n": 595,
+      "at": "2026-11-05 01:18",
+      "text": "E6.30 zrobione (v0.7 zad. 3, 4612cf5..dc3d86e): recenzent jakości zatwierdził poprawki, optymalizacja B sprawdzona drugi raz (3 × 1000 ziaren, te same skróty). Rdzeń: szablony głośności of8, ful, dep, qtr i us1–us4, jedna pozycja na oba szablony, wzmocnienie z dwóch tablic Q15 bez powf. E6.31 start: grupa B (v0.7 zad. 4 klej i zad. 5 pliki), jeden implementer, potem pełny przegląd."
     }
   ]
 }
