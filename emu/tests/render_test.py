@@ -1533,6 +1533,28 @@ def V07_ui(t):
           % [T for T, _ in d1['steps'][:16]])
     no_copies_left()
 
+@case
+def V07_screensaver(t):
+    # sav's click on a dark screen (Task 6, light review of group C): with the screensaver on and the
+    # cursor on sav at us1, two idle minutes start it (the LCD no longer shows the page); a click then
+    # only wakes the screen, as it leaves edit mode alone: the page reads sav us1 again, nothing is
+    # captured and /tmp gets no USERTPL.LCH. A 125 s render, its own case so that V07_ui stays fast
+    seed, log, keep = t.seed(), t.path('panel.log'), t.path('K')
+    script = t.script('0ms press voice1\n+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
+                      '+200ms encoder +13\n+200ms mark sav\n+100ms param track_tpl_save=1\n+100ms encoder -1\n'
+                      '+100ms encoder +1\n+200ms mark sav1\n+122s mark ss\n+100ms push\n+1000ms mark woke\n')
+    t.render(seed, ['--no-start', '--seconds', '125', '--param', 'screensaver_on_off=1', '--panel-log', log,
+                    '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'vtp.vdp.SAV', rows['sav1'][0]) and re.match(r'off.100.us1', rows['sav1'][1]),
+          'sav at us1: %r' % rows['sav1'])
+    check(not rows['ss'][0].startswith('vtp'), 'the screensaver after two idle minutes: %r' % rows['ss'])
+    check(re.match(r'vtp.vdp.SAV', rows['woke'][0]) and re.match(r'off.100.us1', rows['woke'][1]),
+          'after the click on the dark screen: %r' % rows['woke'])
+    check(not glob.glob(os.path.join(keep, 'TMP', 'USERTPL.LCH')), 'no capture on the dark screen: TMP holds %r'
+          % sorted(os.listdir(os.path.join(keep, 'TMP'))))
+    no_copies_left()
+
 def name_table(text, table):
     """the strings of a name table of MenuText.h, without its #if USE_CODEC_EQ entries (off in the build)"""
     body = text.split('const char %s[][16] =' % table, 1)[1].split('};', 1)[0]
