@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-05 21:29",
+    "updated": "2026-11-05 21:35",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "2962593",
+    "head": "12dcef4",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-05T21:29:00+01:00",
-    "now": "E9.16: implementer silnika wtyczki (od 21:29); potem pełny przegląd"
+    "updated_at": "2026-11-05T21:35:00+01:00",
+    "now": "E9.16: pełny przegląd silnika wtyczki (od 21:35)"
   },
   "epics": [
     {
@@ -4507,6 +4507,11 @@
       "n": 620,
       "at": "2026-11-05 21:29",
       "text": "E9.13–E9.15 zrobione (wtyczka zad. 3–5, przegląd zamknięty, 3a02cc4..15f14d8): 11 poprawek, każda od testu; 34 testy, 35 z 38 mutantów pada (pozostałe: równoważny, wyścig jednej ramki, kolejność pamięci). Pod obciążeniem test pamięci współdzielonej 288/288. E9.16 start: silnik lichomat-engine (zad. 6), potem pełny przegląd; wartości zmierzone w planie starym kodem zegara implementer mierzy od nowa."
+    },
+    {
+      "n": 621,
+      "at": "2026-11-05 21:35",
+      "text": "E9.16 (wtyczka zad. 6), 7a9f8aa: silnik lichomat-engine zacommitowany. Wyjście bit w bit takie jak z renderera (617 984 ramki, 55 uderzeń w miejscu opóźnienia), przy dowolnym rozmiarze bloku. Z przeliczaniem na 44,1, 48 i 96 kHz różnica najwyżej 1 LSB. Cztery silniki naraz bez niedoboru próbek; Release liczy 137 razy szybciej niż czas rzeczywisty; start z przygotowaniem karty 0,25–0,33 s. 43 testy, 0 ostrzeżeń. Start pełnego przeglądu silnika."
     }
   ]
 }
