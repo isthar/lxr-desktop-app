@@ -39,6 +39,8 @@ static void block(plug_clock_t *c, const plug_transport_t *t, uint64_t at, uint3
 	{
 		if (i > 0 && out[i].offset < out[i - 1].offset)
 			abort();	/* the messages come in frame order */
+		if (out[i].offset >= frames)
+			abort();	/* inside the block */
 		evs[nev++] = (ev_t){ at + out[i].offset, out[i].len, { out[i].b[0], out[i].b[1], out[i].b[2] } };
 	}
 }
@@ -324,6 +326,65 @@ TEST(P4_clock_locate)
 	ASSERT_EQ(evs[i + 3].b[0], 0xF8);
 	ASSERT_EQ(evs[i + 3].frame, 20u * 512u + 4800u);	/* clock 60, position 2.5 */
 	ASSERT_EQ(count(0xFC), 1);
+}
+
+/* 120 BPM at 48 kHz from 0 in blocks of 512, the host's position d quarter notes off from block
+ * 10 on */
+static void shifted(double d)
+{
+	plug_clock_t c;
+	plug_clockInit(&c, 48000.0);
+	nev = 0;
+	for (unsigned b = 0; b < 20; b++)
+	{
+		const plug_transport_t t = playing(120.0, (double)(b * 512u) / 24000.0 + (b >= 10 ? d : 0.0));
+		block(&c, &t, b * 512u, 512);
+	}
+}
+
+TEST(P4_clock_jump)
+{
+	/* a jump is a position more than half a clock (1/48 quarter note, 500 frames) from the one
+	 * expected: 0.6 of a clock either way is one, at block 10's first frame; 0.444 is not */
+	const double d[] = { 0.025, -0.025 };
+	for (unsigned i = 0; i < 2; i++)
+	{
+		shifted(d[i]);
+		ASSERT_EQ(count(0xFC), 1);
+		unsigned k = 0;
+		while (evs[k].b[0] != 0xFC)
+			k++;
+		ASSERT_EQ(evs[k].frame, 5120);
+		ASSERT_EQ(evs[k + 1].b[0], 0xF2);
+		ASSERT_EQ(evs[k + 1].b[1], 1);	/* 0.2383 or 0.1883 quarter notes: 16th 1 */
+		ASSERT_EQ(evs[k + 2].b[0], 0xFB);
+		shifted(d[i] * 0.74);
+		ASSERT_EQ(count(0xFC) + count(0xF2) + count(0xFB), 0);
+		ASSERT_EQ(count(0xF8), i == 0 ? 11 : 10);	/* clock 10 at 9,556, or clock 9 at 9,444 the last */
+	}
+}
+
+TEST(P4_clock_late_report)
+{
+	/* The host reports block 3 300 frames late (a rounding; less than half a clock): clock 2, at
+	 * frame 2,000, then falls after that block, and block 4, reported on time, starts after it: it
+	 * is due before the block and goes out at its first frame, 2,048. Each clock once, in order. */
+	plug_clock_t c;
+	plug_clockInit(&c, 48000.0);
+	nev = 0;
+	for (unsigned b = 0; b < 8; b++)
+	{
+		const double late = b == 3 ? 300.0 : 0.0;
+		const plug_transport_t t = playing(120.0, ((double)(b * 512u) - late) / 24000.0);
+		block(&c, &t, b * 512u, 512);
+	}
+	ASSERT_EQ(count(0xFC) + count(0xF2) + count(0xFB), 0);
+	ASSERT_EQ(nev, 6);	/* Start, clocks 0-4 before 4,096 */
+	ASSERT_EQ(evs[1].frame, 0);
+	ASSERT_EQ(evs[2].frame, 1000);
+	ASSERT_EQ(evs[3].frame, 2048);
+	ASSERT_EQ(evs[4].frame, 3000);
+	ASSERT_EQ(evs[5].frame, 4000);
 }
 
 TEST(P4_clock_tempo)
