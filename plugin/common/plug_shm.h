@@ -110,10 +110,12 @@ void plug_shmInit(plug_shm_t *s, double rate, uint32_t maxBlock);
 int plug_shmCheck(const plug_shm_t *s, char *err, size_t n);
 
 /** Create a shared memory object, unlink its name, size, map and initialise it. Returns the
- * mapping and its descriptor in *fd (close-on-exec), or NULL with the problem in err. */
+ * mapping and its descriptor in *fd (close-on-exec), or NULL with the problem in err. A name left
+ * by a dead process of the same pid is taken over, once. */
 plug_shm_t *plug_shmCreate(double rate, uint32_t maxBlock, int *fd, char *err, size_t n);
 
-/** map the object of descriptor fd (the engine: fd 5); NULL with the problem in err */
+/** map the object of descriptor fd (the engine: fd 5); NULL with the problem in err, also for an
+ * object smaller than plug_shm_t (another layout's) */
 plug_shm_t *plug_shmMap(int fd, char *err, size_t n);
 
 /** unmap */

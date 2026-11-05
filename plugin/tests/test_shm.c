@@ -73,6 +73,51 @@ TEST(P3_shm_header)
 	munmap(s, sizeof *s);
 }
 
+TEST(P3_shm_create)
+{
+	char err[200], name[32];
+	/* A smaller object, as a peer of another layout would make, with a header of this version: the
+	 * map refuses it with the sizes, before anything reads past its end. */
+	snprintf(name, sizeof name, "/lchpt.%d", (int)getpid());
+	const int f = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
+	ASSERT_TRUE(f >= 0);
+	shm_unlink(name);
+	ASSERT_EQ(ftruncate(f, 4096), 0);
+	uint32_t *h = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, f, 0);
+	ASSERT_TRUE(h != MAP_FAILED);
+	h[0] = PLUG_SHM_MAGIC;
+	h[1] = PLUG_SHM_VERSION;
+	h[2] = 4096;
+	munmap(h, 4096);
+	ASSERT_TRUE(plug_shmMap(f, err, sizeof err) == NULL);
+	char want[40];
+	snprintf(want, sizeof want, "size %zu", sizeof(plug_shm_t));
+	ASSERT_TRUE(strstr(err, want) != NULL);
+	close(f);
+	/* Names this process's next create takes, left by a dead process of the same pid between its
+	 * shm_open() and shm_unlink(): the create takes the one it meets over, once. */
+	for (unsigned k = 0; k < 16; k++)
+	{
+		snprintf(name, sizeof name, "/lchp.%d.%u", (int)getpid(), k);
+		const int g = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
+		if (g >= 0)
+			close(g);
+	}
+	int fd = -1;
+	plug_shm_t *s = plug_shmCreate(48000.0, 512, &fd, err, sizeof err);
+	if (!s)
+		printf("%s\n", err);
+	for (unsigned k = 0; k < 16; k++)
+	{
+		snprintf(name, sizeof name, "/lchp.%d.%u", (int)getpid(), k);
+		shm_unlink(name);
+	}
+	ASSERT_TRUE(s != NULL);
+	ASSERT_EQ(plug_shmCheck(s, err, sizeof err), 0);
+	plug_shmClose(s);
+	close(fd);
+}
+
 TEST(P3_shm_events)
 {
 	plug_shm_t *s = anon();
@@ -277,6 +322,9 @@ TEST(P3_shm_processes)
 	ASSERT_EQ(pipe(wake), 0);
 	ASSERT_EQ(pipe(life), 0);
 	ASSERT_EQ(fcntl(wake[1], F_SETFL, O_NONBLOCK), 0);
+	/* a child that ends early closes the wake pipe: the parent then gets EPIPE, stops, and the test
+	 * reports the child's exit code instead of dying of SIGPIPE */
+	void (*const pipeWas)(int) = signal(SIGPIPE, SIG_IGN);
 	const pid_t pid = fork();
 	if (pid == 0)
 	{
@@ -305,7 +353,8 @@ TEST(P3_shm_processes)
 			w++;
 		}
 		plug_publish(s, w);
-		(void)!write(wake[1], "w", 1);
+		if (write(wake[1], "w", 1) < 0 && errno == EPIPE)
+			break;	/* the child is gone */
 		static float l[N_EVENTS / 1000], r[N_EVENTS / 1000];
 		const uint64_t end = plug_load(&s->audioEnd);
 		while (checked < end)
@@ -321,8 +370,10 @@ TEST(P3_shm_processes)
 	close(wake[1]);	/* the child ends */
 	int status = 0;
 	ASSERT_EQ(waitpid(pid, &status, 0), pid);
+	signal(SIGPIPE, pipeWas);
 	ASSERT_TRUE(WIFEXITED(status));
-	ASSERT_EQ(WEXITSTATUS(status), 0);
+	ASSERT_EQ(WEXITSTATUS(status), 0);	/* 3: no mapping, 4: an event out of order, 5: events missing */
+	ASSERT_EQ(checked, N_EVENTS);
 	/* the child held life[1]; it is closed now: the read end gives EOF */
 	char c;
 	ASSERT_EQ(read(life[0], &c, 1), 0);
@@ -340,6 +391,7 @@ TEST(P3_shm_killed)
 	if (pid == 0)
 	{
 		close(life[0]);
+		alarm(30);	/* the parent kills it; if the test fails before, it ends by itself */
 		for (;;)
 			pause();
 	}

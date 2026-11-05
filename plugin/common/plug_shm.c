@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 _Static_assert(sizeof(plug_event_t) == 16, "plug_event_t is 16 bytes");
@@ -57,6 +58,20 @@ int plug_shmCheck(const plug_shm_t *s, char *err, size_t n)
 
 plug_shm_t *plug_shmMap(int fd, char *err, size_t n)
 {
+	/* a smaller object is another layout's: say so, as plug_shmCheck() would, rather than fail to
+	 * map it (or read past its end) */
+	struct stat st;
+	if (fstat(fd, &st) != 0)
+	{
+		snprintf(err, n, "fstat of the shared memory: %s", strerror(errno));
+		return NULL;
+	}
+	if (st.st_size < (off_t)sizeof(plug_shm_t))
+	{
+		snprintf(err, n, "shared memory: an object of %lld bytes, this engine needs version %u size %zu",
+			(long long)st.st_size, PLUG_SHM_VERSION, sizeof(plug_shm_t));
+		return NULL;
+	}
 	void *p = mmap(NULL, sizeof(plug_shm_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (p == MAP_FAILED)
 	{
@@ -71,16 +86,29 @@ plug_shm_t *plug_shmCreate(double rate, uint32_t maxBlock, int *fd, char *err, s
 	static unsigned counter;
 	char name[32];	/* macOS allows 31 characters */
 	snprintf(name, sizeof name, "/lchp.%d.%u", (int)getpid(), __atomic_fetch_add(&counter, 1u, __ATOMIC_RELAXED));
-	const int f = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
+	int f = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
+	if (f < 0 && errno == EEXIST)
+	{
+		/* left by a process of this pid that died between shm_open() and shm_unlink(): the name has
+		 * this pid, so no live process has it. Taken over once. */
+		shm_unlink(name);
+		f = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
+	}
 	if (f < 0)
 	{
 		snprintf(err, n, "shm_open %s: %s", name, strerror(errno));
 		return NULL;
 	}
 	shm_unlink(name);	/* the descriptors keep it */
-	if (ftruncate(f, (off_t)sizeof(plug_shm_t)) != 0 || fcntl(f, F_SETFD, FD_CLOEXEC) != 0)
+	if (ftruncate(f, (off_t)sizeof(plug_shm_t)) != 0)
 	{
 		snprintf(err, n, "ftruncate %s: %s", name, strerror(errno));
+		close(f);
+		return NULL;
+	}
+	if (fcntl(f, F_SETFD, FD_CLOEXEC) != 0)
+	{
+		snprintf(err, n, "fcntl %s: %s", name, strerror(errno));
 		close(f);
 		return NULL;
 	}
