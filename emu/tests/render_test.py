@@ -2127,6 +2127,117 @@ def V06_record(t):
         print('%s: d %r, recorded T %r' % (gid, d, T))
     no_copies_left()
 
+VEL_TEMPLATES = {   # the draft's table (2026-11-04-v0.7-draft.md 2.2): dB at 100 % on the 16ths of a bar
+    1: (-10, -15, 0, -14, -10, -14, 0, -13, -10, -16, 0, -14, -10, -15, 0, -13),   # of8
+    2: (-7, -15, 0, -5, -7, -9, -1, -10, -7, -14, 0, -7, -6, -10, -1, -10),         # ful
+    3: (-14, -12, 0, -19, -14, -11, 0, -19, -15, -12, 0, -16, -13, -12, 0, -21),    # dep
+    4: (-5, -15, 0, -20, -6, -17, 0, -16, -5, -17, 0, -15, -6, -17, -1, -16),        # qtr
+}
+
+def vel_template(vel, db, pct):
+    """plan v0.7 V7-4 in Python: vel x 10^(dB x pct / 2000), dB floored at -42, rounded half up,
+    1..127; a vel of 0, dB >= 0 or pct 0 leave vel"""
+    if vel == 0 or db >= 0 or pct == 0:
+        return vel
+    x = vel * 10 ** (max(db, -42) * pct / 2000.0)
+    return max(1, min(127, int(math.floor(x + 0.5))))
+
+def trig_frames(path, voice):
+    """the frame of each hit of voice in a --trig-log, as emu_onsets.py reads it: the last record of
+    each block serial, at its time + 128 frames; the one-shot records are left out"""
+    last, order = {}, []
+    with open(path) as f:
+        for line in f:
+            w = line.split()
+            if len(w) != 6 or int(w[1]) != voice or w[2] == 'oneshot':
+                continue
+            if w[3] not in last:
+                order.append(w[3])
+            last[w[3]] = int(w[0]) * 113 / 552960.0 + 128
+    return [last[s] for s in order]
+
+def hit_peaks(wav, channel, frames, before=8, after=220):
+    """the largest |sample| of channel from before frames ahead of each frame to after frames past
+    it; the hits whose window passes the end are left out"""
+    ch, a = samples(wav)
+    c = ('L1', 'R1', 'L2', 'R2').index(channel)
+    total = len(a) // ch
+    out = []
+    for f in frames:
+        lo, hi = int(f) - before, int(f) + after
+        if hi > total:
+            break
+        out.append(max(abs(a[i * ch + c]) for i in range(lo, hi)))
+    return out
+
+@case
+def V07_levels(t):
+    # G23 (plan v0.7 Task 7, V7-18): Drum 1's click on all 16 steps at 127 with vtp of8 at 100, 50
+    # and 200 %. Each hit's peak on L1, in dB against the median of the 0 dB steps' peaks, is within
+    # 0.5 dB of the formula's integer velocity computed here from the table (at 200 % step 10's -32
+    # dB is 3, -32.54 dB), and at 50 and 100 % within 0.5 dB of the table itself; no peak clips
+    for gid, pct in (('G23_velocity', 100), ('G23_velocity_50', 50), ('G23_velocity_200', 200)):
+        card, opts, script = golden(t, gid)
+        log = t.path(gid + '.log')
+        s, wav, _ = t.render(card, opts + ['--trig-log', log, '--events', script])
+        check(s['vsched']['late'] == 0, '%s: vsched %r' % (gid, s['vsched']))
+        peaks = hit_peaks(wav, 'L1', trig_frames(log, 0))
+        check(len(peaks) >= 32, '%s: %d hits of voice 1' % (gid, len(peaks)))
+        tab = VEL_TEMPLATES[1]
+        loud = sorted(p for k, p in enumerate(peaks) if tab[k % 16] == 0)
+        ref = loud[len(loud) // 2]
+        check(ref > 0 and max(peaks) < 30000, '%s: the 0 dB peaks %r' % (gid, loud))
+        worst = worst_table = 0.0
+        for k, p in enumerate(peaks):
+            db = tab[k % 16]
+            got = 20 * math.log10(p / ref) if p else -120.0
+            want = 20 * math.log10(vel_template(127, db, pct) / 127.0)
+            worst, worst_table = max(worst, abs(got - want)), max(worst_table, abs(got - db * pct / 100.0))
+            check(abs(got - want) <= 0.5, '%s: hit %d (step %d) at %.2f dB, the formula %.2f'
+                  % (gid, k, k % 16 + 1, got, want))
+            if pct <= 100:
+                check(abs(got - db * pct / 100.0) <= 0.5, '%s: hit %d at %.2f dB, the table %.2f'
+                      % (gid, k, got, db * pct / 100.0))
+        print('%s: %d hits, 0 dB peak %d, worst %.3f dB from the formula, %.3f from the table'
+              % (gid, len(peaks), ref, worst, worst_table))
+
+@case
+def V07_capture(t):
+    # the own template through the panel (plan v0.7 Task 7, V7-6, V7-9..V7-12, V7-14) on the groove
+    # card's pattern 0: sav us1 on Drum 1 takes its 16 steps' T (the model's, groove_card()), the
+    # clear page's micro sets them to 0 with the flam kept, and tpl us1 at 100 % plays them again:
+    # L1's onsets are G20_micro's ticks within 2 frames. The project save after the playback writes
+    # USERTPL.LCH (134 bytes: LCHM 1 4, us1's T and 0 dB, us2-us4 empty) and pattern 0 with Drum 1's T
+    # all 0, the flam of step 7 and tpl (8, 100)
+    card = groove_card(groove_script())
+    steps = card[(0, 0)]['steps']
+    groove_dir = os.path.join(t.root, 'emu', 'tests', 'cards', 'groove')
+    keep, log = t.path('K'), t.path('panel.log')
+    script = t.script('0ms press voice1\n+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
+                      '+200ms encoder +13\n+200ms mark sav\n+100ms param track_tpl_save=1\n+100ms push\n'
+                      '+300ms mark saved\n+100ms down shift\n+20ms press copy\n+150ms encoder +9\n'
+                      '+200ms mark clear\n+100ms push\n+100ms up shift\n+200ms mark cleared\n'
+                      '+100ms param track_tpl=8\n+100ms param track_tpl_amt=100\n+200ms press start\n'
+                      '+8050ms press start\n+300ms save-project 0\n')
+    start = 2.39     # the script's press start: the sum of its times before it, in seconds
+    _, wav, _ = t.render(groove_dir, ['--pattern', '0', '--bpm', '120', '--no-start', '--seconds', '11.6',
+                                      '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'vtp.vdp.SAV', rows['sav'][0]), 'the encoder on sav: %r' % rows['sav'])
+    check(re.match(r'off.100.---', rows['saved'][1]), 'sav after the click: %r' % rows['saved'])
+    check(rows['clear'][0].startswith('clear [micro]?'), 'the clear page: %r' % rows['clear'])
+    check(not rows['cleared'][0].startswith('clear'), 'after the clear: %r' % rows['cleared'])
+    ticks_check(t, wav, 'L1', groove_ticks(card, 0, 0, 64, 120), 120, '--from', start - 0.05, '--to', start + 8.04)
+    tpl = one_file(keep, 'USERTPL.LCH')
+    want = b'LCHM\x01\x04' + bytes(steps.get(s, (0, 0))[0] & 0xFF for s in range(16)) + bytes(16) + bytes(96)
+    check(tpl == want, 'USERTPL.LCH: %r, not %r' % (tpl, want))
+    pat = one_file(keep, '00-*.PAT')
+    check(len(pat) == 3941, 'pattern 0: %d bytes' % len(pat))
+    d1 = pat_tracks(pat)[0]
+    check(all(T == 0 for T, _ in d1['steps']), 'Drum 1 T after the clear: %r' % d1['steps'][:16])
+    check(d1['steps'][6][1] == 1 and d1['tpl'] == (8, 100), 'flam %r, tpl %r' % (d1['steps'][6], d1['tpl']))
+    no_copies_left()
+
 def kept_report(t, p, head):
     """stderr of an exit 3 or 4 (plan P2): the line that starts with head and ends in
     'at cycle C', then 32 trail lines, then the card copy's folder, which exists
