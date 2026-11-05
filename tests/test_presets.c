@@ -1854,6 +1854,11 @@ TEST(pattern_block3_values_out_of_range)
 	ASSERT_EQ(seq_patternSet.vtpl[5][4].amount, 25);
 }
 
+/* spec review of group B (V7-3): the stand-ins of seq_setUserTemplates() and
+ * seq_clearUserTemplates() count their calls, so the load tests see that the loader writes the
+ * own templates through the setters, which mask interrupts, and not around them */
+static int userSetCalls, userClearCalls;
+
 /** the own templates with values over their ranges: timing -84..+84, velocity -42..0 */
 static void fillUser(uint8_t salt)
 {
@@ -1882,8 +1887,11 @@ TEST(user_templates_project_round_trip)
 	ASSERT_EQ(memcmp(card[i].data + 6, saved, sizeof saved), 0);
 	ASSERT_TRUE(find("/tmp/usertpl.lch") < 0);
 	memset(seq_userTemplates, 0x11, sizeof seq_userTemplates);
+	userSetCalls = userClearCalls = 0;
 	ASSERT_EQ(preset_loadProject(0, 1), FR_OK);
 	ASSERT_EQ(memcmp(seq_userTemplates, saved, sizeof saved), 0);
+	ASSERT_EQ(userSetCalls, 1);				/* through the setter */
+	ASSERT_EQ(userClearCalls, 0);
 }
 
 TEST(user_templates_absent_or_empty)
@@ -1895,11 +1903,16 @@ TEST(user_templates_absent_or_empty)
 	ASSERT_TRUE(find("/proj00/usertpl.lch") < 0);
 	static const UserTemplate none[USER_TEMPLATES];
 	fillUser(1);
+	userSetCalls = userClearCalls = 0;
 	ASSERT_EQ(preset_loadProject(0, 1), FR_OK);
 	ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+	ASSERT_EQ(userClearCalls, 1);				/* through the clear */
+	ASSERT_EQ(userSetCalls, 0);
 	fillUser(2);
+	userClearCalls = 0;
 	ASSERT_EQ(preset_createProject(0), FR_OK);
 	ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+	ASSERT_EQ(userClearCalls, 1);
 }
 
 TEST(user_templates_tmp_after_a_capture)
@@ -1915,8 +1928,10 @@ TEST(user_templates_tmp_after_a_capture)
 	ASSERT_EQ(preset_saveUserTemplates(1), FR_OK);
 	ASSERT_TRUE(find("/tmp/usertpl.lch") >= 0);
 	memset(seq_userTemplates, 0, sizeof seq_userTemplates);
+	userSetCalls = userClearCalls = 0;
 	ASSERT_EQ(loadTmpFolderFiles(), FR_OK);
 	ASSERT_EQ(memcmp(seq_userTemplates, saved, sizeof saved), 0);
+	ASSERT_EQ(userSetCalls, 1);				/* through the setter */
 	memset(seq_userTemplates, 0, sizeof seq_userTemplates);		/* emptied in this session */
 	ASSERT_EQ(preset_saveUserTemplates(1), FR_OK);
 	ASSERT_EQ(card[find("/tmp/usertpl.lch")].len, 134);
@@ -1926,8 +1941,10 @@ TEST(user_templates_tmp_after_a_capture)
 	ASSERT_EQ(f_unlink("usertpl.lch"), FR_OK);
 	fillUser(7);
 	memcpy(saved, seq_userTemplates, sizeof saved);
+	userSetCalls = userClearCalls = 0;
 	ASSERT_EQ(loadTmpFolderFiles(), FR_OK);
 	ASSERT_EQ(memcmp(seq_userTemplates, saved, sizeof saved), 0);
+	ASSERT_EQ(userSetCalls + userClearCalls, 0);		/* no file: not touched */
 }
 
 TEST(user_templates_bad_files)
@@ -2185,8 +2202,8 @@ uint8_t seq_muteScenes[MUTE_SCENES];	/* LICHOMAT v0.3 (plan P7) */
 void seq_clearMuteScenes(void) { clearScenesCalls++; memset(seq_muteScenes, 0, MUTE_SCENES); }
 void seq_setMuteSceneQuant(uint8_t step) { sceneQuant = step; }
 UserTemplate seq_userTemplates[USER_TEMPLATES];	/* LICHOMAT v0.7 (plan v0.7 Task 5) */
-void seq_setUserTemplates(const UserTemplate *t) { memcpy(seq_userTemplates, t, sizeof seq_userTemplates); }
-void seq_clearUserTemplates(void) { memset(seq_userTemplates, 0, sizeof seq_userTemplates); }
+void seq_setUserTemplates(const UserTemplate *t) { userSetCalls++; memcpy(seq_userTemplates, t, sizeof seq_userTemplates); }
+void seq_clearUserTemplates(void) { userClearCalls++; memset(seq_userTemplates, 0, sizeof seq_userTemplates); }
 void soundengine_process(void) {}
 void uart_checkAndParse(void) {}
 uint8_t buttonHandler_getMode(void) { return 0; }
