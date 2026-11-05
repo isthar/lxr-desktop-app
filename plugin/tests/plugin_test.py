@@ -239,6 +239,21 @@ def same_files(a, b):
     return 'differ from byte %d (frame %d) of %d, %d' % (i, (i - 44) // 4, len(x), len(y))
 
 
+def ninja_inputs(build, target):
+    """the explicit inputs of target's build statement in build/build.ninja"""
+    with open(os.path.join(build, 'build.ninja')) as f:
+        text = f.read().replace('$\n', '')    # ninja's line continuation
+    for line in text.split('\n'):
+        if line.startswith('build %s:' % target):
+            ins = []
+            for w in line.split(':', 1)[1].split()[1:]:    # after the rule
+                if w in ('|', '||'):
+                    break
+                ins.append(w)
+            return ins
+    raise Fail('no build statement for %s in build.ninja' % target)
+
+
 # --- the engine (Task 6) ------------------------------------------------------------------
 
 @case
@@ -249,6 +264,21 @@ def P6_engine_version(t):
     check('Not affiliated with Erica Synths.' in out, 'the notices')
     p = subprocess.run([t.a.engine, '--bogus'], capture_output=True, text=True)
     check(p.returncode == 1 and p.stderr.startswith('usage: lichomat-engine'), 'usage: %d %r' % (p.returncode, p.stderr))
+
+
+@case
+def P6_engine_objects(t):
+    # P-2: the engine's firmware, device and renderer objects are lichomat-render's own object files, built with its
+    # flags, so the bit-exact cases compare the same code: every object the engine links that is not its own is one
+    # that lichomat-render links
+    eng = [o for o in ninja_inputs(t.a.build, 'lichomat-engine') if o.endswith('.o')]
+    ren = set(ninja_inputs(t.a.build, 'emu/lichomat-render'))
+    own = [o for o in eng if o.startswith(('CMakeFiles/lichomat-engine.dir/', 'CMakeFiles/plug_common_san.dir/'))]
+    other = [o for o in eng if o not in own]
+    print('the engine links %d objects: %d its own, %d of lichomat-render\'s' % (len(eng), len(own), len(set(other) & ren)))
+    check(len(other) > 50 and any(o.endswith('/render_fw.c.o') for o in other), 'the emulator\'s objects: %r' % other)
+    stray = [o for o in other if o not in ren]
+    check(not stray, 'objects lichomat-render does not link: %s' % stray)
 
 
 @case

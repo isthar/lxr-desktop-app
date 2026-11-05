@@ -88,12 +88,10 @@ plugin_add_test(test_time IDS P5_time_native P5_time_integer P5_time_covering P5
 
 # --- lichomat-engine (Task 6) --------------------------------------------------------------
 target_sources(plug_common PRIVATE common/plug_spawn.c)
-add_library(eng_fw OBJECT "${LXR_ROOT}/emu/render/render_fw.c")	# the renderer's direct calls
-target_link_libraries(eng_fw PRIVATE emu_fw_headers)
-target_include_directories(eng_fw PRIVATE "${LXR_ROOT}/emu/core" "${LXR_ROOT}/emu/render")
-target_compile_options(eng_fw PRIVATE -Wall -Wextra -Werror)
+# the renderer's direct calls: lichomat-render's own object of render_fw.c, with its flags (P-2,
+# P6_engine_objects)
 add_executable(lichomat-engine engine/eng_main.c engine/eng_run.c engine/eng_resample.c
-    $<TARGET_OBJECTS:eng_fw> $<TARGET_OBJECTS:plug_common_san> ${PLUGIN_DEVICE_OBJECTS})
+    $<TARGET_OBJECTS:lichomat-render_fw> $<TARGET_OBJECTS:plug_common_san> ${PLUGIN_DEVICE_OBJECTS})
 target_include_directories(lichomat-engine PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/engine"
     "${LXR_ROOT}/emu/core" "${LXR_ROOT}/emu/render" "${LXR_ROOT}/emu/common")
 target_compile_options(lichomat-engine PRIVATE ${PLUGIN_FLAGS} ${PLUGIN_SAN_FLAGS} -ffp-contract=off -fno-fast-math)
@@ -121,7 +119,7 @@ function(plugin_py_tests)
         set_tests_properties(${id} PROPERTIES TIMEOUT 600 LABELS plugin)
     endforeach()
 endfunction()
-plugin_py_tests(P6_engine_version P6_engine_native P6_engine_blocks P6_engine_paced P6_engine_seed P6_engine_epoch
+plugin_py_tests(P6_engine_version P6_engine_objects P6_engine_native P6_engine_blocks P6_engine_paced P6_engine_seed P6_engine_epoch
     P6_engine_quit P7_engine_resampled P7_engine_realtime)
 set_tests_properties(P6_engine_paced P7_engine_realtime PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
 
