@@ -15,6 +15,7 @@ the repository.
 """
 import argparse
 import array
+import fcntl
 import fractions
 import math
 import os
@@ -579,12 +580,16 @@ def plan(t, name, lines, rate=RATE_TEXT, block=128, frames=None, card=True):
     return path
 
 
-def host(t, plan_path, env=None):
+def host_env(t, env=None):
     e = dict(os.environ)
     e['LICHOMAT_PLUGIN_HOME'] = t.path('home')
     e['LICHOMAT_EMU_HOME'] = t.path('no-emu')	# no LICHOMAT Emu card unless a case gives one
     e.update(env or {})
-    p = subprocess.run([t.a.host, plan_path], capture_output=True, text=True, timeout=600, env=e)
+    return e
+
+
+def host(t, plan_path, env=None):
+    p = subprocess.run([t.a.host, plan_path], capture_output=True, text=True, timeout=600, env=host_env(t, env))
     print(p.stdout.strip())
     if p.returncode != 0:
         raise Fail('lichomat-plughost exited %d:\n%s%s' % (p.returncode, p.stdout, p.stderr))
@@ -845,6 +850,60 @@ def P10_plugin_setstate(t):
     check(not instance_dirs(t.path('home')), 'instance folders left: %r' % instance_dirs(t.path('home')))
 
 
+@case
+def P10_plugin_stale(t):
+    # P-18: a folder of BASE left by a host that died (its lock held by nobody, older than a minute) is removed by the
+    # next instance; one whose lock an instance holds is kept however old, and so is a young one (an instance being
+    # made); the new instance's own folder goes at its end
+    home = t.path('home')
+    names = {'stale': 'a' * 16, 'held': 'b' * 16, 'young': 'c' * 16}
+    for n in names.values():
+        os.makedirs(os.path.join(home, n, 'card', 'TMP'))
+        with open(os.path.join(home, n, 'card', 'TMP', 'X.BIN'), 'w') as f:
+            f.write('x')
+        open(os.path.join(home, n, 'lock'), 'w').close()
+    old = time.time() - 120
+    for k in ('stale', 'held'):
+        os.utime(os.path.join(home, names[k]), (old, old))
+    with open(os.path.join(home, names['held'], 'lock'), 'r+') as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        host(t, plan(t, 's.txt', ['out ' + t.path('s.wav')], frames=12800))
+    left = sorted(instance_dirs(home))
+    print('left in BASE: %s (%s)' % (left, ', '.join('%s %s' % (k, n[:4]) for k, n in names.items())))
+    check(left == sorted([names['held'], names['young']]), 'left %r' % left)
+    for k in ('held', 'young'):
+        check(os.path.isfile(os.path.join(home, names[k], 'card', 'TMP', 'X.BIN')), 'the %s folder\'s card' % k)
+
+
+@case
+def P10_plugin_policy(t):
+    # P-15: the engine's thread takes the time-constraint policy when the host plays in real time (ps -M: 97R, as
+    # P6_engine_paced) and not offline (31T), the host paced in both
+    for mode in ('realtime', 'offline'):
+        p = None
+        try:
+            p = subprocess.Popen([t.a.host, plan(t, mode + '.txt', ['mode ' + mode, 'paced', 'play 4800 120 0',
+                                                                    'out ' + t.path(mode + '.wav')], rate=48000, block=256,
+                                                 frames=48000 * 3)],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=host_env(t))
+            time.sleep(1.5)
+            kids = subprocess.run(['pgrep', '-P', str(p.pid)], capture_output=True, text=True).stdout.split()
+            check(len(kids) == 1, '%s: the host\'s children %r' % (mode, kids))
+            rows = subprocess.run(['ps', '-M', '-p', kids[0]], capture_output=True, text=True).stdout.split('\n')
+            pri = rows[1].split()[5] if len(rows) > 1 and len(rows[1].split()) > 5 else '?'
+            out, err = p.communicate(timeout=120)
+            check(p.returncode == 0, '%s: the host exited %d: %s%s' % (mode, p.returncode, out, err))
+        finally:
+            if p is not None and p.poll() is None:
+                p.kill()
+                p.wait()
+        print('%s: the engine\'s main thread at priority %s' % (mode, pri))
+        if mode == 'realtime':
+            check(pri.endswith('R') and pri[:-1].isdigit() and int(pri[:-1]) >= 90, 'real time: %r' % rows[:2])
+        else:
+            check(pri.endswith('T') and pri[:-1].isdigit() and int(pri[:-1]) < 50, 'offline: %r' % rows[:2])
+
+
 def longest_silence(x):
     best = run = 0
     for v in x:
@@ -868,6 +927,29 @@ def P10_plugin_kill(t):
     check(silent >= 4800 and back is not None and back < 144000 + 72000, 'silent %d, back at %r' % (silent, back))
 
 
+def beats_through(t, what, at, frames):
+    """Real time, paced, 48 kHz, blocks of 256: the init card's four on the floor as the slave of a transport playing
+    from 0 at 120 BPM, no notes, the plan line what ('kill' or 'hang') at frame at. Prints and returns (the latency,
+    the onsets before at + latency, their beats, the onsets after, the beats from the first one back on, the log)."""
+    init = os.path.join(t.a.root, 'emu', 'tests', 'cards', 'init')
+    lines = ['card ' + init, 'mode realtime', 'paced', 'play 0 120 0', '%s %d' % (what, at), 'out ' + t.path('beats.wav')]
+    lat, _ = host(t, plan(t, 'beats.txt', lines, rate=48000, block=256, frames=frames, card=False))
+    _, _, x = wav(t.path('beats.wav'))
+    on = attacks(x[0::2])
+    beats = [b + lat[0] for b in beat_frames(48000.0, 256, frames, 120.0, frames, 120.0, float('inf'))]
+    before = [o for o in on if o < at + lat[0]]
+    after = [o for o in on if o >= at + lat[0]]
+    want = [w for w in beats if w < at + lat[0]]
+    back = [w for w in beats if after and w >= after[0] - 1 and w < frames - 64]
+    print('latency %d; %d onsets before the %s (%d beats), the first after it at %.3f s, %d after (%d beats)'
+          % (lat[0], len(before), what, len(want), (after[0] if after else 0) / 48000, len(after), len(back)))
+    print('onset - (beat + latency): before %r, after %r' % (sorted(set(o - w for o, w in zip(before, want))),
+                                                            sorted(set(o - w for o, w in zip(after, back)))))
+    log = ''.join(instance_logs(t.path('home')).values())
+    print('the log: %s' % '; '.join(re.findall(r'engine \d+ ended \([^)]*\): [^;]*; underruns \d+', log)))
+    return lat[0], before, want, after, back, log
+
+
 @case
 def P10_plugin_beats(t):
     # real time, paced, 48 kHz, blocks of 256: the init card's four on the floor as the slave of a playing transport,
@@ -877,27 +959,54 @@ def P10_plugin_beats(t):
     # +2: the voices start on every second engine frame, 2.18 host frames at 48 kHz, and the new engine's epoch puts
     # that grid anywhere among the host's frames (the first engine's is frame 0). The underruns in the instance's log
     # tell a busy machine from a fault
-    frames, kill = 48000 * 6, 144000
-    init = os.path.join(t.a.root, 'emu', 'tests', 'cards', 'init')
-    lines = ['card ' + init, 'mode realtime', 'paced', 'play 0 120 0', 'kill %d' % kill, 'out ' + t.path('beats.wav')]
-    lat, _ = host(t, plan(t, 'beats.txt', lines, rate=48000, block=256, frames=frames, card=False))
-    _, _, x = wav(t.path('beats.wav'))
-    on = attacks(x[0::2])
-    beats = [b + lat[0] for b in beat_frames(48000.0, 256, frames, 120.0, frames, 120.0, float('inf'))]
-    before = [o for o in on if o < kill + lat[0]]
-    after = [o for o in on if o >= kill + lat[0]]
-    want = [w for w in beats if w < kill + lat[0]]
-    back = [w for w in beats if after and w >= after[0] - 1 and w < frames - 64]
-    print('latency %d; %d onsets before the kill (%d beats), the first after it at %.3f s, %d after (%d beats)'
-          % (lat[0], len(before), len(want), (after[0] if after else 0) / 48000, len(after), len(back)))
-    print('onset - (beat + latency): before %r, after %r' % (sorted(set(o - w for o, w in zip(before, want))),
-                                                            sorted(set(o - w for o, w in zip(after, back)))))
-    log = ''.join(instance_logs(t.path('home')).values())
-    print('the log: %s' % '; '.join(re.findall(r'engine \d+ ended \([^)]*\): [^;]*; underruns \d+', log)))
+    kill = 144000
+    _, before, want, after, back, _ = beats_through(t, 'kill', kill, 48000 * 6)
     check(len(before) == len(want) and all(-1 <= o - w <= 1 for o, w in zip(before, want)), 'before the kill: %r' % before)
     check(after and after[0] < kill + 72000, 'no beat within 1.5 s of the kill: %r' % after[:3])
     check(len(after) == len(back) and all(-2 <= o - w <= 2 for o, w in zip(after, back)), 'after the kill: %r, beats %r'
           % (after, back))
+
+
+@case
+def P10_plugin_hang(t):
+    # P-16, a hang: the engine stopped (SIGSTOP) at 3 s, as a firmware that hangs. The monitor sees it take no events
+    # while the plugin publishes them, kills it 2 s later and starts a new one after 0.5 s: the beats come back within
+    # 4 s of the hang, on their frames as in P10_plugin_beats, and the log says why the engine ended
+    hang = 144000
+    _, before, want, after, back, log = beats_through(t, 'hang', hang, 48000 * 8)
+    check(len(before) == len(want) and all(-1 <= o - w <= 1 for o, w in zip(before, want)), 'before the hang: %r' % before)
+    check(after and hang + 96000 < after[0] < hang + 192000, 'the first beat after the hang: %r' % after[:3])
+    check(len(after) == len(back) and all(-2 <= o - w <= 2 for o, w in zip(after, back)), 'after the hang: %r, beats %r'
+          % (after, back))
+    check(re.search(r'ended \(signal 9\): it hung \(2 s without taking events\)', log), 'the log: %r' % log)
+
+
+@case
+def P10_plugin_crashes(t):
+    # P-16, a crash loop: real time, paced, 48 kHz, the engine killed every second from 1 s to 7 s. The plugin starts
+    # a new engine 0.5 s or more after each death (the log's times), and after the fifth death within a minute gives
+    # up: 5 engines, the Engine parameter "failed", silence from the fifth kill on
+    lines = ['mode realtime', 'paced', 'play 4800 120 0', 'out ' + t.path('c.wav')] + ['kill %d' % (48000 * k) for k in range(1, 8)]
+    lines += ['note %d 0 48 127' % (12000 * k + 1000) for k in range(40)]
+    _, out = host(t, plan(t, 'c.txt', lines, rate=48000, block=256, frames=48000 * 8))
+    log = ''.join(instance_logs(t.path('home')).values())
+    print(log.strip())
+
+    def when(line):
+        h, m, sec = line.split()[1].split(':')
+        return int(h) * 3600 + int(m) * 60 + float(sec)
+    lines = log.splitlines()
+    started = [when(l) for l in lines if re.search(r' engine \d+ started on ', l)]
+    ended = [when(l) for l in lines if re.search(r' engine \d+ ended \(signal 9\): it died', l)]
+    gaps = [s - e for e, s in zip(ended, started[1:])]
+    _, _, x = wav(t.path('c.wav'))
+    last = max((i for i in range(0, len(x), 2) if abs(x[i]) >= 4000), default=0) // 2
+    print('%d engines started, %d killed; from each death to the next start %s s; the last sound at %.2f s'
+          % (len(started), len(ended), ', '.join('%.3f' % g for g in gaps), last / 48000))
+    check(len(started) == 5 and len(ended) == 5 and 'not started again: 5 deaths in a minute' in log, 'the log')
+    check(len(gaps) == 4 and all(g >= 0.5 for g in gaps), 'the back-off: %r' % gaps)
+    check('engine failed' in out, 'the Engine parameter: %r' % out)
+    check(last < 48000 * 5 + 1000, 'sound after the fifth kill, at frame %d' % last)
 
 
 @case

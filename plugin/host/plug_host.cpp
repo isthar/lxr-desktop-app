@@ -17,14 +17,16 @@
  *   play FRAME TEMPO PPQ   stop FRAME        tempo FRAME TEMPO  loop START END (quarter notes)
  *   note FRAME CH PITCH VELOCITY (0-127; 0 is a Note Off)
  *   kill FRAME             SIGKILL every engine of this process
+ *   hang FRAME             SIGSTOP every engine of this process (a firmware that hangs)
  *   renew FRAME I          terminate instance I and put a new one in its place
  *   setstate FRAME FILE    give instance 0 the state FILE while it plays (a preset, a paste, an undo)
  *   rtcheck                count the calls of process() that the interposer (plug_rtcheck) sees
  *   mode realtime|offline  the ProcessSetup's mode (default offline: the plugin waits for its engine)
  *   paced                  each block at its wall-clock time, as an audio device gives it: the
  *                          thread takes the time-constraint policy of the block's period
- * Instance I > 0 writes FILE-I.wav. The summary on stdout gives each instance's latency. Before each
- * process() the output buffers are filled with 0.5, as a host may leave anything in them.
+ * Instance I > 0 writes FILE-I.wav. The summary on stdout gives each instance's latency and the
+ * Engine parameter it last reported. Before each process() the output buffers are filled with
+ * 0.5, as a host may leave anything in them.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -95,7 +97,7 @@ struct Plan
 	double loopStart = 0, loopEnd = 0;
 	std::vector<NoteCmd> notes;
 	std::vector<TransportCmd> transport;
-	std::vector<uint64_t> kills;
+	std::vector<uint64_t> kills, hangs;
 	std::vector<std::pair<uint64_t, int>> renews;
 	std::vector<std::pair<uint64_t, std::string>> setstates;
 };
@@ -139,6 +141,7 @@ Plan readPlan (const char* path)
 		else if (cmd == "stop") { TransportCmd t {0, TransportCmd::Stop, 0, 0}; ok = !!(s >> t.frame); p.transport.push_back (t); }
 		else if (cmd == "tempo") { TransportCmd t {0, TransportCmd::Tempo, 0, 0}; ok = !!(s >> t.frame >> t.tempo); p.transport.push_back (t); }
 		else if (cmd == "kill") { uint64_t k; ok = !!(s >> k); p.kills.push_back (k); }
+		else if (cmd == "hang") { uint64_t k; ok = !!(s >> k); p.hangs.push_back (k); }
 		else if (cmd == "renew") { uint64_t k; int i; ok = !!(s >> k >> i); p.renews.push_back ({k, i}); }
 		else if (cmd == "setstate") { uint64_t k; std::string fn; ok = !!(s >> k >> fn); p.setstates.push_back ({k, fn}); }
 		else ok = false;
@@ -357,14 +360,15 @@ uint64_t machAt (uint64_t t0, double seconds)
 	return t0 + (uint64_t)(seconds * 1e9 * (double)tb.denom / (double)tb.numer);
 }
 
-void killEngines ()
+/* sig to every child of this process: the engines */
+void signalEngines (int sig)
 {
 	pid_t kids[64];
 	memset (kids, 0, sizeof kids);
 	(void)proc_listchildpids (getpid (), kids, sizeof kids);
 	for (pid_t k : kids)
 		if (k > 0)
-			kill (k, SIGKILL);
+			kill (k, sig);
 }
 
 } // namespace
@@ -425,7 +429,7 @@ int main (int argc, char** argv)
 	plug_clock_t expect;
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
-	size_t nextNote = 0, nextKill = 0, nextRenew = 0, nextSet = 0;
+	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0;
 	unsigned long long processCalls = 0;
 	if (p.paced)
 		paceAsDevice (p);
@@ -437,8 +441,13 @@ int main (int argc, char** argv)
 		const uint32_t n = (uint32_t)std::min<uint64_t> ((uint64_t)p.block, p.frames - f);
 		while (nextKill < p.kills.size () && p.kills[nextKill] <= f)
 		{
-			killEngines ();
+			signalEngines (SIGKILL);
 			nextKill++;
+		}
+		while (nextHang < p.hangs.size () && p.hangs[nextHang] <= f)
+		{
+			signalEngines (SIGSTOP);
+			nextHang++;
 		}
 		while (nextRenew < p.renews.size () && p.renews[nextRenew].first <= f)
 		{
@@ -534,7 +543,9 @@ int main (int argc, char** argv)
 	for (size_t i = 0; i < inst.size (); i++)
 	{
 		writeWav (i == 0 ? p.out : p.out.substr (0, p.out.size () - 4) + "-" + std::to_string (i) + ".wav", *inst[i], p.rate);
-		printf ("lichomat-plughost: instance %zu: latency %u, %zu frames\n", i, inst[i]->latency, inst[i]->l.size ());
+		static const char* const states[4] = {"stopped", "starting", "running", "failed"};
+		printf ("lichomat-plughost: instance %zu: latency %u, %zu frames, engine %s\n", i, inst[i]->latency,
+		        inst[i]->l.size (), states[std::lround (inst[i]->engine * 3.0) & 3]);
 		close (*inst[i]);
 	}
 	if (!p.script.empty ())
