@@ -20,6 +20,7 @@ import math
 import os
 import shutil
 import signal
+import struct
 import subprocess
 import sys
 import time
@@ -536,6 +537,32 @@ def P10_plugin_validator(t):
     print('\n'.join(result))
     check(p.returncode == 0 and result and result[-1].endswith(' 0 tests failed'), 'the validator: %d %r' % (p.returncode, result))
     check(not os.listdir(t.path('home')), 'instance folders left: %r' % os.listdir(t.path('home')))
+
+
+def macho_uuid(path):
+    """the LC_UUID of a thin 64-bit Mach-O: the linker's hash of the image, which signing leaves alone"""
+    with open(path, 'rb') as f:
+        head = f.read(32)
+        magic, _, _, _, ncmds, size = struct.unpack('<IiiIII', head[:24])
+        check(magic == 0xFEEDFACF, '%s is not a thin 64-bit Mach-O' % path)
+        cmds = f.read(size)
+    at = 0
+    for _ in range(ncmds):
+        cmd, n = struct.unpack('<II', cmds[at:at + 8])
+        if cmd == 0x1B:    # LC_UUID
+            return cmds[at + 8:at + 24].hex()
+        at += n
+    raise Fail('%s has no LC_UUID' % path)
+
+
+@case
+def P10_plugin_helper(t):
+    # the bundle's Contents/Helpers/lichomat-engine is the engine the build made last (the bundle is linked again,
+    # and the helper copied again, whenever the engine changes), so every P10 case tests the current engine
+    helper = os.path.join(t.a.bundle, 'Contents', 'Helpers', 'lichomat-engine')
+    a, b = macho_uuid(helper), macho_uuid(t.a.engine)
+    print('the bundle\'s helper %s, the built engine %s' % (a, b))
+    check(a == b, 'the bundle holds another engine than the one built')
 
 
 # --- the VST3 bundle through lichomat-plughost (Task 9) -----------------------------------

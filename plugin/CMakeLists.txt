@@ -149,8 +149,10 @@ configure_file(vst3/Info.plist.in "${CMAKE_BINARY_DIR}/LICHOMAT-Info.plist" @ONL
 set_target_properties(LICHOMAT PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${CMAKE_BINARY_DIR}/LICHOMAT-Info.plist")
 # Before the link, the engine into Contents/Helpers and the licences into Contents/Resources (the MIT
 # licence asks for its notice with every copy); after the SDK's steps (moduleinfo.json), the signature
-# of the helper and then of the whole bundle, ad hoc
+# of the helper and then of the whole bundle, ad hoc. The bundle is linked again whenever the engine
+# is (LINK_DEPENDS), so that these steps copy and sign the current engine (P10_plugin_helper)
 add_dependencies(LICHOMAT lichomat-engine)
+set_property(TARGET LICHOMAT APPEND PROPERTY LINK_DEPENDS "$<TARGET_FILE:lichomat-engine>")
 add_custom_command(TARGET LICHOMAT PRE_LINK
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Helpers"
         "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Resources"
@@ -166,6 +168,8 @@ add_custom_command(TARGET LICHOMAT POST_BUILD
 set(PLUGIN_BUNDLE_TEST ${PLUGIN_TEST} --bundle $<TARGET_BUNDLE_DIR:LICHOMAT> --validator $<TARGET_FILE:validator>)
 add_test(NAME P10_plugin_validator COMMAND ${PLUGIN_BUNDLE_TEST} P10_plugin_validator)
 set_tests_properties(P10_plugin_validator PROPERTIES TIMEOUT 600 LABELS plugin)
+add_test(NAME P10_plugin_helper COMMAND ${PLUGIN_BUNDLE_TEST} P10_plugin_helper)
+set_tests_properties(P10_plugin_helper PROPERTIES TIMEOUT 600 LABELS plugin)
 
 # --- lichomat-plughost, the test host, and the real-time check (Task 9) ---------------------
 add_executable(lichomat-plughost host/plug_host.cpp "${SDK_ROOT}/public.sdk/source/vst/hosting/module_mac.mm"
