@@ -133,7 +133,7 @@ tresult PLUGIN_API Processor::setActive (TBool state)
 		channel = PLUG_VALUE_NONE;
 		const uint64_t gen = restoreGen.load (std::memory_order_acquire);
 		restoreValues (gen != restoreSeen.load (std::memory_order_relaxed) ? stateValues : hostValues);
-		restoreSeen.store (gen, std::memory_order_relaxed);
+		restoreSeen.store (gen, std::memory_order_release);
 		if (folder.valid ()
 		    && !link.start (processSetup.sampleRate, (uint32_t)processSetup.maxSamplesPerBlock,
 		                    processSetup.processMode == kRealtime, folder.card (), logOf (folder), logOf (folder), err))
@@ -195,6 +195,8 @@ void Processor::restoreValues (const std::atomic<int>* from)
 	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
 		v[i] = from[i].load (std::memory_order_relaxed);
 	plug_paramsRestore (&params, v);
+	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+		hostValues[i].store (params.p[i].want, std::memory_order_relaxed);	/* so a getState before any block holds them */
 }
 
 /* The host's parameter changes and the engine's values of a block as MIDI into paramMidi (plan E9.4,
@@ -296,7 +298,7 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 		/* the old engine still runs, and its report would count as the new card's first: none is taken until
 		 * the next engine's epoch is set (plug_paramsEngine; plug_paramsReport ignores frames before it) */
 		params.epoch = UINT64_MAX;
-		restoreSeen.store (gen, std::memory_order_relaxed);
+		restoreSeen.store (gen, std::memory_order_release);
 	}
 	const bool running = s && state == PLUG_ENGINE_RUNNING;
 	if (running)
@@ -318,7 +320,12 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 		return kResultOk;
 	}
 	if (data.numSamples < 0 || data.numOutputs < 1 || data.outputs[0].numChannels < 2)
+	{
+		/* a block that is not played: the host's changes are still its values (a getState holds them), and a
+		 * new engine gets them by its first report */
+		(void)paramsOf (data, s, false, 0);
 		return kResultOk;
+	}
 	const uint32_t n = (uint32_t)data.numSamples;
 	plug_transport_t t {};
 	if (const ProcessContext* c = data.processContext)
@@ -429,7 +436,7 @@ tresult PLUGIN_API Processor::getState (IBStream* state)
 	}
 	/* the parameters' values after the card (plan E9.4): those of the host, else those of the last
 	 * state set, which no block has taken yet */
-	const bool pending = restoreGen.load (std::memory_order_acquire) != restoreSeen.load (std::memory_order_relaxed);
+	const bool pending = restoreGen.load (std::memory_order_acquire) != restoreSeen.load (std::memory_order_acquire);
 	int v[PLUG_PARAM_COUNT];
 	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
 		v[i] = (pending ? stateValues : hostValues)[i].load (std::memory_order_relaxed);

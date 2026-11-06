@@ -1682,6 +1682,30 @@ def P10_plugin_async_state(t):
     check([got[i] for i in ids] == [want[i] for i in ids], 'the state after holds the old card\'s values')
 
 
+@case
+def P10_plugin_early_state(t):
+    # getState before any block holds the values: right after setState (the state's, which no block has taken yet) and
+    # right after setActive (the same, 36 of them), then a block with no output bus (which the plugin does not play)
+    # still takes the host's changes: a getState after it holds the parameter. Before the fix the first two held a
+    # values block of 0 values
+    lines = ['note %d 0 48 127' % (20000 * k + 5000) for k in range(12)]
+    host(t, plan(t, 'make.txt', lines + ['param 0 10 40', 'param 0 50 20', 'param 0 33 10', 'out ' + t.path('make.wav'),
+                                         'state-out ' + t.path('state.bin')], frames=blocks_frames(1)))
+    want = lchv(t.path('state.bin'))
+    host(t, plan(t, 'early.txt', ['state-in ' + t.path('state.bin'), 'state-early ' + t.path('early.bin'),
+                                  'out ' + t.path('early.wav')], card=False, frames=blocks_frames(1)))
+    for name in ('early.bin.set', 'early.bin'):
+        got = lchv(t.path(name))
+        print('%s: %d values, ids 10, 33, 50: %r (the state: %d values, %r)' % (name, len(got), [got.get(i) for i in (10, 33, 50)],
+                                                                         len(want), [want.get(i) for i in (10, 33, 50)]))
+        check(len(got) == 36 and got == want, '%s holds %r' % (name, got))
+    host(t, plan(t, 'blind.txt', ['param 0 10 40', 'no-outputs 0', 'out ' + t.path('blind.wav'),
+                                  'state-out ' + t.path('blind.bin')], frames=128))
+    got = lchv(t.path('blind.bin'))
+    print('after a block with no outputs and a change of id 10 to 40: %r' % got)
+    check(got == {10: 40}, 'the block with no outputs lost the host\'s change: %r' % got)
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

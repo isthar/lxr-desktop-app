@@ -120,6 +120,8 @@ struct Plan
 	std::vector<uint64_t> kills, hangs;
 	std::vector<std::pair<uint64_t, int>> renews;
 	std::vector<std::pair<uint64_t, std::string>> setstates, asyncSets;	/* asyncSets: setState from a thread of its own */
+	std::string stateEarly;		/* getState right after setState (FILE.set) and right after setActive (FILE), before any block */
+	std::vector<uint64_t> noOutputs;	/* the block from each frame with no output bus at all */
 	bool nullOut2 = false;		/* Out 2 (inactive) with null sample buffers, as the SDK allows */
 	std::vector<uint64_t> nullOut1;	/* the block from each frame with Out 1's left channel null */
 };
@@ -175,6 +177,8 @@ Plan readPlan (const char* path)
 		else if (cmd == "kill") { uint64_t k; ok = !!(s >> k); p.kills.push_back (k); }
 		else if (cmd == "hang") { uint64_t k; ok = !!(s >> k); p.hangs.push_back (k); }
 		else if (cmd == "renew") { uint64_t k; int i; ok = !!(s >> k >> i); p.renews.push_back ({k, i}); }
+		else if (cmd == "state-early") ok = !!(s >> p.stateEarly);
+		else if (cmd == "no-outputs") { uint64_t k; ok = !!(s >> k); p.noOutputs.push_back (k); }
 		else if (cmd == "null-out2") p.nullOut2 = true;
 		else if (cmd == "null-out1") { uint64_t k; ok = !!(s >> k); p.nullOut1.push_back (k); }
 		else if (cmd == "setstate-async") { uint64_t k; std::string fn; ok = !!(s >> k >> fn); p.asyncSets.push_back ({k, fn}); }
@@ -262,6 +266,16 @@ std::vector<uint8_t> readFile (const std::string& path)
 	return std::vector<uint8_t> ((std::istreambuf_iterator<char> (f)), std::istreambuf_iterator<char> ());
 }
 
+/* getState into a file */
+void saveState (Instance& in, const std::string& path)
+{
+	IPtr<MemoryStream> m = owned (new MemoryStream);
+	if (in.component->getState (m) != kResultOk)
+		die ("getState failed");
+	std::ofstream o (path, std::ios::binary);
+	o.write (m->getData (), (std::streamsize)m->getSize ());
+}
+
 /* a component at the plan's rate and block, with its state, active and processing */
 void open (Instance& in, const VST3::Hosting::PluginFactory& factory, const VST3::Hosting::ClassInfo& ci, const Plan& p)
 {
@@ -293,9 +307,13 @@ void open (Instance& in, const VST3::Hosting::PluginFactory& factory, const VST3
 		IPtr<MemoryStream> m = owned (new MemoryStream (state.data (), (TSize)state.size ()));
 		if (in.component->setState (m) != kResultOk)
 			die ("setState refused the card");
+		if (!p.stateEarly.empty ())
+			saveState (in, p.stateEarly + ".set");
 	}
 	if (in.component->setActive (true) != kResultOk)
 		die ("setActive refused");
+	if (!p.stateEarly.empty ())
+		saveState (in, p.stateEarly);
 	in.latency = in.processor->getLatencySamples ();
 	in.processor->setProcessing (true);
 	in.data.prepare (*in.component, p.block, kSample32);
@@ -496,7 +514,7 @@ int main (int argc, char** argv)
 	plug_clock_t expect;
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
-	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextNull1 = 0, nextAsync = 0;
+	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextNull1 = 0, nextAsync = 0, nextNoOut = 0;
 	std::vector<std::thread> asyncThreads;
 	unsigned long long processCalls = 0;
 	if (p.paced)
@@ -646,6 +664,10 @@ int main (int argc, char** argv)
 				keep[1] = in->data.outputs[1].channelBuffers32[1];
 				in->data.outputs[1].channelBuffers32[0] = in->data.outputs[1].channelBuffers32[1] = nullptr;
 			}
+			const bool noOuts = nextNoOut < p.noOutputs.size () && p.noOutputs[nextNoOut] <= f;
+			const int32 numOuts = in->data.numOutputs;
+			if (noOuts)
+				in->data.numOutputs = 0;
 			if (blind1)
 			{
 				keep[2] = in->data.outputs[0].channelBuffers32[0];
@@ -663,6 +685,7 @@ int main (int argc, char** argv)
 			}
 			if (blind1)
 				in->data.outputs[0].channelBuffers32[0] = keep[2];
+			in->data.numOutputs = numOuts;
 			processCalls++;
 			readEngineParam (*in);
 			readReports (*in, (size_t)(&in - &inst[0]), f, p.echo);
@@ -680,6 +703,8 @@ int main (int argc, char** argv)
 		}
 		if (nextNull1 < p.nullOut1.size () && p.nullOut1[nextNull1] <= f)
 			nextNull1++;
+		if (nextNoOut < p.noOutputs.size () && p.noOutputs[nextNoOut] <= f)
+			nextNoOut++;
 	}
 	for (auto& th : asyncThreads)
 		th.join ();
