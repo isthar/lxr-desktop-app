@@ -292,11 +292,12 @@ set(PLUGIN_AU_TEST ${PLUGIN_HOST_TEST} --component $<TARGET_BUNDLE_DIR:LICHOMAT_
 foreach(id P13_au_info P13_au_checks P13_au_native P13_au_latency P13_au_onsets P13_au_buses P13_au_buses48
         P13_au_out2_pull P13_au_one_output P13_au_params P13_au_outputs P13_au_state P13_au_params_state
         P13_au_vst3_state P13_au_setstate P13_au_renew P13_au_ramp P13_au_offline_switch P13_au_kill
-        P13_au_params_restart P13_au_notify P13_au_rt P13_au_rtparams P13_au_noalloc P13_au_set_state)
+        P13_au_params_restart P13_au_notify P13_au_rt P13_au_rtparams P13_au_noalloc P13_au_set_state P13_au_midi_async)
     add_test(NAME ${id} COMMAND ${PLUGIN_AU_TEST} ${id})
     set_tests_properties(${id} PROPERTIES TIMEOUT 600 LABELS plugin)
 endforeach()
-set_tests_properties(P13_au_kill P13_au_params_restart P13_au_notify P13_au_rt P13_au_rtparams PROPERTIES RUN_SERIAL TRUE)	# paced
+set_tests_properties(P13_au_kill P13_au_params_restart P13_au_notify P13_au_rt P13_au_rtparams P13_au_midi_async
+    PROPERTIES RUN_SERIAL TRUE)	# paced
 
 # --- the licence gate and the name scan (Task 10) ---------------------------------------------
 add_test(NAME P11_licence COMMAND ${PLUGIN_HOST_TEST} P11_licence)

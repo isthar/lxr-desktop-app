@@ -4,7 +4,8 @@
  * The AU's event list and parameter changes for the VST3 processor (plan E9.7 Task 4): the
  * interfaces process() reads (IEventList, IParameterChanges, IParamValueQueue) over fixed arrays,
  * so that filling and clearing them on the render thread never allocates. A queue's points are
- * kept in the order of their offsets (equal offsets in the order they came), as VST3 asks.
+ * kept in the order of their offsets (equal offsets in the order they came), as VST3 asks. And the
+ * queue that takes the host's notes from any thread to the render thread (AuNoteQueue).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -14,6 +15,9 @@
  * the repository.
  */
 #pragma once
+
+#include <atomic>
+#include <cstdint>
 
 #include "pluginterfaces/base/funknownimpl.h"
 #include "pluginterfaces/vst/ivstevents.h"
@@ -50,6 +54,82 @@ public:
 private:
 	Steinberg::Vst::Event events[kMax] {};
 	Steinberg::int32 count = 0;
+};
+
+/** The host's Note Ons and Offs, from any thread (MusicDevice.h: the render thread before its render, at an offset;
+ * another thread at offset 0), to the render thread, which takes them at the start of its render: a bounded queue of
+ * many producers and one consumer (D. Vyukov's) over kSize fixed cells, each with a sequence number. A push takes the
+ * tail's position with a compare-and-swap (relaxed), writes its cell, then publishes it with a release store of the
+ * cell's sequence; the consumer reads a cell after an acquire load of its sequence and frees it for the next lap with a
+ * release store. No allocation, lock, wait or system call on either side; a push into a full queue fails. Positions are
+ * 64 bits: they do not wrap */
+class AuNoteQueue
+{
+public:
+	static constexpr uint32_t kSize = 1024;	/**< a power of two */
+
+	struct Note
+	{
+		bool on;
+		uint8_t channel, pitch, velocity;
+		uint32_t frame;
+	};
+
+	AuNoteQueue ()
+	{
+		for (uint32_t i = 0; i < kSize; i++)
+			cells[i].seq.store (i, std::memory_order_relaxed);
+	}
+
+	/** any thread's: false when the queue is full */
+	bool push (const Note& n) noexcept
+	{
+		uint64_t pos = tail.load (std::memory_order_relaxed);
+		for (;;)
+		{
+			Cell& c = cells[pos & (kSize - 1)];
+			const uint64_t seq = c.seq.load (std::memory_order_acquire);
+			if (seq == pos)
+			{
+				if (tail.compare_exchange_weak (pos, pos + 1, std::memory_order_relaxed, std::memory_order_relaxed))
+				{
+					c.note = n;
+					c.seq.store (pos + 1, std::memory_order_release);
+					return true;
+				}
+			}
+			else if (seq < pos)
+				return false;	/* the cell still holds the note of the lap before: full */
+			else
+				pos = tail.load (std::memory_order_relaxed);	/* another producer took pos */
+		}
+	}
+
+	/** the consumer's: the next published note and its position (false when there is none yet) */
+	bool pop (Note& n, uint64_t& at) noexcept
+	{
+		Cell& c = cells[head & (kSize - 1)];
+		if (c.seq.load (std::memory_order_acquire) != head + 1)
+			return false;
+		n = c.note;
+		at = head;
+		c.seq.store (head + kSize, std::memory_order_release);
+		head++;
+		return true;
+	}
+
+	/** the position the next push takes: everything before it was pushed */
+	uint64_t end () const noexcept { return tail.load (std::memory_order_acquire); }
+
+private:
+	struct Cell
+	{
+		std::atomic<uint64_t> seq;
+		Note note;
+	};
+	Cell cells[kSize];
+	std::atomic<uint64_t> tail {0};
+	uint64_t head = 0;	/**< the consumer's alone */
 };
 
 /** one parameter's points of a cycle, at most kMax (more are dropped) */

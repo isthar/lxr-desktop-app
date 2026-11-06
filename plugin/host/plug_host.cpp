@@ -275,68 +275,6 @@ void close (Instance& in)
 	in.provider = nullptr;
 }
 
-/* The descriptors of POSIX shared memory objects in this process: the plugin keeps the one it shares with its
- * engine open, its name unlinked (plug_shmCreate()) */
-std::set<int> shmDescriptors ()
-{
-	std::set<int> out;
-	const int bytes = proc_pidinfo (getpid (), PROC_PIDLISTFDS, 0, nullptr, 0);
-	if (bytes <= 0)
-		return out;
-	std::vector<proc_fdinfo> fds ((size_t)bytes / sizeof (proc_fdinfo) + 16u);
-	const int got = proc_pidinfo (getpid (), PROC_PIDLISTFDS, 0, fds.data (), (int)(fds.size () * sizeof (proc_fdinfo)));
-	for (int i = 0; got > 0 && i < got / (int)sizeof (proc_fdinfo); i++)
-		if (fds[(size_t)i].proc_fdtype == PROX_FDTYPE_PSHM)
-			out.insert (fds[(size_t)i].proc_fd);
-	return out;
-}
-
-/* the events an instance pushed into its engine's ring: a mapping of its shared memory of our own (read only) */
-struct RingTap
-{
-	const plug_shm_t* s = nullptr;
-	uint64_t next = 0;	/* the next event to read */
-	std::map<uint64_t, std::vector<std::string>> lines;
-
-	/* the object among the descriptors that were not there before: the instance's */
-	void find (const std::set<int>& before)
-	{
-		for (int fd : shmDescriptors ())
-		{
-			struct stat st;
-			if (before.count (fd) || fstat (fd, &st) != 0 || st.st_size < (off_t)sizeof (plug_shm_t))
-				continue;
-			void* m = mmap (nullptr, sizeof (plug_shm_t), PROT_READ, MAP_SHARED, fd, 0);
-			if (m == MAP_FAILED)
-				continue;
-			const plug_shm_t* x = (const plug_shm_t*)m;
-			if (__atomic_load_n (&x->magic, __ATOMIC_ACQUIRE) == PLUG_SHM_MAGIC && x->version == PLUG_SHM_VERSION
-			    && x->size == sizeof (plug_shm_t))
-			{
-				s = x;
-				next = plug_load (&x->evWrite);
-				return;
-			}
-			munmap (m, sizeof (plug_shm_t));
-		}
-		die ("events: no shared memory of the plugin among this process's descriptors");
-	}
-
-	/* the events written since the last read: the plugin writes them in process() on this thread, and the engine
-	 * only takes them (evRead), so the slots stay as written until the next process() */
-	void read ()
-	{
-		const uint64_t w = plug_load (&s->evWrite);
-		for (; next < w; next++)
-		{
-			const plug_event_t& e = s->ev[next & (PLUG_EVENT_SLOTS - 1u)];
-			char b[16];
-			snprintf (b, sizeof b, e.len == 3 ? "%02X %02X %02X" : e.len == 2 ? "%02X %02X" : "%02X", e.b[0], e.b[1], e.b[2]);
-			lines[e.frame].push_back (b);
-		}
-	}
-};
-
 /* process() with 0 frames every 10 ms until the instance reports its engine running */
 void waitRunning (Instance& in, ProcessContext& ctx)
 {

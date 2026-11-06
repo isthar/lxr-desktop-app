@@ -2330,6 +2330,42 @@ def P13_au_set_state(t):
     check(d is None, 'the restored instance plays otherwise: %s' % d)
 
 
+def ring_notes(path):
+    """the Note Ons and Note Offs of an events file (the MIDI the plugin gave its engine): ([(pitch, velocity)], offs)"""
+    ons, offs = [], 0
+    for line in open(path):
+        b = [int(x, 16) for x in line.split('f usb ')[1].split()]
+        k = 0
+        while k < len(b):
+            n = 1 if b[k] >= 0xF8 else 2 if (b[k] & 0xF0) in (0xC0, 0xD0) else 3
+            if (b[k] & 0xF0) == 0x90 and b[k + 2] > 0:
+                ons.append((b[k + 1], b[k + 2]))
+            elif (b[k] & 0xF0) in (0x80, 0x90):
+                offs += 1
+            k += n
+    return ons, offs
+
+
+@case
+def P13_au_midi_async(t):
+    # MusicDeviceMIDIEvent from a thread that is not the render thread (MusicDevice.h allows it, at offset 0) while the
+    # AU renders: real time, paced, 48 kHz in blocks of 128; from 1 s a thread of its own sends 500 Note Ons, each with
+    # its Note Off, one every 2 ms, each Note On of its own pitch and velocity. The MIDI the processor gave its engine
+    # (its event ring) holds every one of them once, none lost and none twice
+    lines = ['mode realtime', 'paced', 'notes-async 48000 500', 'events ' + t.path('ring.txt'), 'out ' + t.path('m.wav')]
+    _, out = au_host(t, au_plan(t, 'm.txt', lines, rate=48000, block=128, frames=48000 * 4))
+    ons, offs = ring_notes(t.path('ring.txt'))
+    want = sorted((36 + k // 100, 1 + k % 100) for k in range(500))
+    got = sorted(ons)
+    lost = sorted(set(want) - set(got))
+    twice = sorted(x for x in set(got) if got.count(x) > 1)
+    print('500 Note Ons and Offs from another thread: %d Note Ons and %d Note Offs reached the engine; lost %d %r, twice '
+          '%d %r' % (len(ons), offs, len(lost), lost[:8], len(twice), twice[:8]))
+    check('notes-async at 48000: 500 Note Ons and Offs sent, 0 refused' in out, 'the sender: %r' % out[-400:])
+    check(got == want and offs == 500, 'the notes: %d Note Ons, %d Note Offs, %d lost, %d twice' % (len(ons), offs, len(lost),
+                                                                                                 len(twice)))
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

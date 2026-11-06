@@ -3,8 +3,8 @@
  *
  * lichomat-auhost, the AU's test host (plan E9.7 Task 5). It plays lichomat-plughost's plans
  * (host_plan.h; plug_host.cpp's header names the commands; those of the VST3's own interfaces, a
- * flush, null buffers, the controller, the event ring, states from another thread or before any
- * block, it refuses) through LICHOMAT.component loaded into
+ * flush, null buffers, the controller, states from another thread or before any block, it refuses)
+ * through LICHOMAT.component loaded into
  * its own process: it reads the bundle's AudioComponents entry and registers the component's
  * factory for this process alone (AudioComponentRegister(): nothing is installed, nothing is
  * registered with the system), then plays the timeline as an AU host does: the transport through
@@ -14,13 +14,18 @@
  * Out 1 and, with bus2, of Out 2 after it. Its output is lichomat-plughost's: each instance's WAV
  * files, the script of the MIDI the plugin must have given its engine, and the same summary lines.
  * The values the plugin reports are the AU's parameter values after each block: at the first block
- * every one, then each one that changed; the values the host's listener heard of are counted.
+ * every one, then each one that changed; the values the host's listener heard of are counted. With
+ * events, the MIDI instance 0 gave its engine, read from its event ring after each block (host_plan.h).
  *
  * Its own plan commands:
  *   pull2 START END   render Out 2 only in the blocks from frame START to frame END
  *   outputs 1         take one output element: Out 1 alone
  *   noalloc           kAudioUnitProperty_ShouldAllocateBuffer 0 on every output element before
  *                     AudioUnitInitialize: the AU renders into the host's buffers only
+ *   notes-async FRAME COUNT   from FRAME a thread of its own sends instance 0 COUNT Note Ons, each with its
+ *                     Note Off, one every 2 ms, at offset 0 (MusicDevice.h: a thread that is not the
+ *                     render thread), while the blocks run: Note On k of pitch 36 + k / 100 and velocity
+ *                     1 + k % 100, channel 1
  *   set-end ID VALUE  AudioUnitSetParameter of ID to VALUE (0..its max) after the last block, with no
  *                     render after it, before the state-out
  *   offline FRAME 0|1 set kAudioUnitProperty_OfflineRender of every instance at FRAME, while it plays
@@ -82,6 +87,7 @@ struct AuPlan
 	std::vector<RampCmd> ramps;
 	std::vector<std::pair<uint64_t, UInt32>> offline;
 	std::vector<std::pair<uint32_t, int>> setsAtEnd;
+	std::vector<std::pair<uint64_t, int>> notesAsync;
 	UInt32 outputs = 2;
 	bool info = false, checks = false, noalloc = false;
 };
@@ -605,6 +611,13 @@ int main (int argc, char** argv)
 			a.info = true;
 		else if (cmd == "noalloc")
 			a.noalloc = true;
+		else if (cmd == "notes-async")
+		{
+			uint64_t at = 0;
+			int count = 0;
+			ok = !!(s >> at >> count) && count > 0 && count <= 1000;
+			a.notesAsync.push_back ({at, count});
+		}
 		else if (cmd == "set-end")
 		{
 			uint32_t id = 0;
@@ -621,11 +634,11 @@ int main (int argc, char** argv)
 	/* lichomat-plughost's commands of the VST3's own interfaces (plan E9.4's reviews): AU v2 has no flush, no null
 	 * buffers of a bus, no edit controller; the event ring and the states from another thread or before any block are
 	 * the VST3 host's checks of the processor. Not played here */
-	if (!p.flushes.empty () || !p.emptyFlushes.empty () || !p.rawPoints.empty () || !p.controller.empty () || !p.events.empty ()
+	if (!p.flushes.empty () || !p.emptyFlushes.empty () || !p.rawPoints.empty () || !p.controller.empty ()
 	    || !p.stateEarly.empty () || !p.noOutputs.empty () || p.nullOut2 || p.nullOut2Left || !p.nullOut1.empty ()
 	    || !p.asyncSets.empty ())
-		die ("plan: a command of lichomat-plughost alone (flush, flush-empty, param-at, controller, events, state-early, "
-		     "no-outputs, null-out2, null-out2-left, null-out1, setstate-async)");
+		die ("plan: a command of lichomat-plughost alone (flush, flush-empty, param-at, controller, state-early, no-outputs, "
+		     "null-out2, null-out2-left, null-out1, setstate-async)");
 	AudioComponentDescription desc {};
 	const AudioComponent comp = load (p.bundle, desc);
 	using RtFn = void (*) (int);
@@ -648,10 +661,14 @@ int main (int argc, char** argv)
 			die ("rtcheck: the probe counted " + std::to_string (probe) + " calls, not 2");
 	}
 	std::vector<std::unique_ptr<Instance>> inst;
+	RingTap tap;
 	for (int i = 0; i < p.instances; i++)
 	{
+		const std::set<int> before = i == 0 && !p.events.empty () ? shmDescriptors () : std::set<int> ();
 		inst.push_back (std::make_unique<Instance> ());
 		open (*inst.back (), comp, desc, p, a);
+		if (i == 0 && !p.events.empty ())
+			tap.find (before);
 	}
 	if (a.info)
 		printInfo (*inst[0], p.rate);
@@ -665,6 +682,8 @@ int main (int argc, char** argv)
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
 	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextOffline = 0, nextRamp = 0;
+	size_t nextAsyncNotes = 0;
+	std::vector<std::thread> threads;
 	unsigned long long processCalls = 0;
 	static AudioUnitParameterEvent events[1024];
 	bool wasPlaying = false;
@@ -703,6 +722,26 @@ int main (int argc, char** argv)
 			printf ("%s: setstate at %llu: %s in %.3f s\n", gName, (unsigned long long)f, r == noErr ? "ok" : "refused",
 			        std::chrono::duration<double> (std::chrono::steady_clock::now () - w0).count ());
 			nextSet++;
+		}
+		while (nextAsyncNotes < a.notesAsync.size () && a.notesAsync[nextAsyncNotes].first <= f)
+		{
+			/* a host's other thread (a MIDI input, a UI keyboard): at offset 0, while this thread renders */
+			const int count = a.notesAsync[nextAsyncNotes].second;
+			const uint64_t at = f;
+			AudioUnit u = inst[0]->au;
+			threads.emplace_back ([u, count, at] {
+				int refused = 0;
+				for (int k = 0; k < count; k++)
+				{
+					const UInt32 pitch = 36u + (UInt32)k / 100u, vel = 1u + (UInt32)k % 100u;
+					refused += MusicDeviceMIDIEvent (u, 0x90, pitch, vel, 0) != noErr;
+					refused += MusicDeviceMIDIEvent (u, 0x80, pitch, 0, 0) != noErr;
+					std::this_thread::sleep_for (std::chrono::milliseconds (2));
+				}
+				printf ("%s: notes-async at %llu: %d Note Ons and Offs sent, %d refused\n", gName, (unsigned long long)at, count,
+				        refused);
+			});
+			nextAsyncNotes++;
 		}
 		while (nextOffline < a.offline.size () && a.offline[nextOffline].first <= f)
 		{
@@ -823,6 +862,8 @@ int main (int argc, char** argv)
 			if (r != noErr)
 				die ("AudioUnitRender failed: " + std::to_string ((int)r));
 			processCalls++;
+			if (tap.s && idx == 0)
+				tap.read ();
 			in.echo.clear ();
 			readReports (in, idx, f, p.echo);
 			in.l.insert (in.l.end (), in.out[0].begin (), in.out[0].begin () + n);
@@ -836,6 +877,8 @@ int main (int argc, char** argv)
 			}
 		}
 	}
+	for (auto& th : threads)
+		th.join ();
 	for (auto& [id, v] : a.setsAtEnd)
 		for (auto& in : inst)
 			if (AudioUnitSetParameter (in->au, id, kAudioUnitScope_Global, 0, plug_auValue ((unsigned)plug_paramIndex (id), (uint8_t)v), 0)
@@ -865,6 +908,20 @@ int main (int argc, char** argv)
 			printf ("%s: instance %zu: heard%s\n", gName, i, heard.c_str ());
 		}
 		close (*inst[i]);
+	}
+	if (!p.events.empty ())
+	{
+		FILE* s = fopen (p.events.c_str (), "w");
+		if (!s)
+			die ("cannot write " + p.events);
+		for (auto& [frame, msgs] : tap.lines)
+		{
+			fprintf (s, "%lluf usb", (unsigned long long)frame);
+			for (auto& b : msgs)
+				fprintf (s, " %s", b.c_str ());
+			fputc ('\n', s);
+		}
+		fclose (s);
 	}
 	if (!p.script.empty ())
 	{

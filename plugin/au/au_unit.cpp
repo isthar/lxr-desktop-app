@@ -405,23 +405,18 @@ public:
 
 	/* --- notes ---------------------------------------------------------------------------------- */
 
+	/* Note Ons and Offs from any thread (MusicDevice.h: the render thread before its render, at an offset in it;
+	 * another thread at offset 0) into the note queue, which the next render takes. The offset is the host's: the AU
+	 * does not tell the render thread by its id, as a host may render on more than one thread */
 	OSStatus HandleNoteOn (UInt8 channel, UInt8 note, UInt8 velocity, UInt32 frame) noexcept override
 	{
-		Event e {};
-		e.type = Event::kNoteOnEvent;
-		e.sampleOffset = (int32)frame;
-		e.noteOn = {(int16)channel, (int16)note, 0.0f, (float)velocity / 127.0f, 0, -1};
-		events.addEvent (e);
+		notes.push ({true, channel, note, velocity, frame});
 		return noErr;
 	}
 
 	OSStatus HandleNoteOff (UInt8 channel, UInt8 note, UInt8 velocity, UInt32 frame) noexcept override
 	{
-		Event e {};
-		e.type = Event::kNoteOffEvent;
-		e.sampleOffset = (int32)frame;
-		e.noteOff = {(int16)channel, (int16)note, (float)velocity / 127.0f, -1, 0.0f};
-		events.addEvent (e);
+		notes.push ({false, channel, note, velocity, frame});
 		return noErr;
 	}
 
@@ -650,6 +645,7 @@ private:
 		float* ch[2][2];
 		for (UInt32 b = 0; b < 2; b++)
 			channelsOf (b, bus, n, outs, ch[b]);
+		takeNotes ();
 		heldFrames = n;
 		hostPoints (n);
 		ProcessContext ctx;
@@ -679,6 +675,30 @@ private:
 		events.clear ();
 		inParams.clear ();
 		outParams.clear ();
+	}
+
+	/* the notes the host gave since the last render, into this cycle's events (as many as one list holds; the rest
+	 * wait for the next render) */
+	void takeNotes () noexcept
+	{
+		lichomat::AuNoteQueue::Note m {};
+		uint64_t at = 0;
+		while (events.getEventCount () < lichomat::AuEvents::kMax && notes.pop (m, at))
+		{
+			Event e {};
+			e.sampleOffset = (int32)(m.frame > 0x7FFFFFFFu ? 0x7FFFFFFFu : m.frame);
+			if (m.on)
+			{
+				e.type = Event::kNoteOnEvent;
+				e.noteOn = {(int16)m.channel, (int16)m.pitch, 0.0f, (float)m.velocity / 127.0f, 0, -1};
+			}
+			else
+			{
+				e.type = Event::kNoteOffEvent;
+				e.noteOff = {(int16)m.channel, (int16)m.pitch, (float)m.velocity / 127.0f, -1, 0.0f};
+			}
+			events.addEvent (e);
+		}
 	}
 
 	float* ownChannel (UInt32 b, UInt32 c) noexcept { return own.data () + (2 * b + c) * (size_t)maxFrames; }
@@ -757,7 +777,8 @@ private:
 	std::vector<float> own;
 	bool held[2] {};					/**< the element's frames of this time stamp are in own (the render thread's) */
 	UInt32 heldFrames = 0;
-	lichomat::AuEvents events;
+	lichomat::AuNoteQueue notes;		/**< the host's notes, from any thread */
+	lichomat::AuEvents events;			/**< the notes of the cycle being rendered (the render thread's) */
 	lichomat::AuParamChanges inParams, outParams;
 	/** the host's last set of each parameter: a generation (24 bits), the offset (24), the value (8) */
 	std::atomic<uint64_t> slots[PLUG_PARAM_COUNT];
