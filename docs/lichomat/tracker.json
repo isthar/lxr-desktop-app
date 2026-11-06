@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 03:29",
+    "updated": "2026-11-06 05:53",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Prototyp wtyczki gotowy (M21); v0.7 gotowe (M20)",
+    "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (plan gotowy, wdrożenie)",
     "branch": "timing-core",
-    "head": "cf0e100",
-    "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie potem: E9.3 po Twoim P4, E9.4",
-    "updated_at": "2026-11-06T03:29:00+01:00",
-    "now": "E9.4: plan dwóch wyjść i parametrów wtyczki (od 03:29)"
+    "head": "785052f",
+    "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.4 grupy A–D, potem E9.3 po Twoim P4",
+    "updated_at": "2026-11-06T05:53:00+01:00",
+    "now": "E9.4 grupa A (zad. 1–4: stan wyjściowy, konwerter 4 kanałów, pamięć wspólna v2, oba wyjścia silnika): implementacja (od 05:53)"
   },
   "epics": [
     {
@@ -4764,6 +4764,11 @@
       "n": 646,
       "at": "2026-11-06 03:29",
       "text": "E9.4 start: dwie szyny stereo (Out 1 i Out 2 jak gniazda LXR, głos według audio_out kitu) i ok. 30 parametrów do automatyki z Live, w tym wybór wzorca, z wartościami odsyłanymi z firmware. Decyzje w szkicu wtyczki, §7. AU czeka na Twoją zgodę na pobranie AudioUnitSDK Apple'a. Najpierw plan, sprawdzany na kopii roboczej."
+    },
+    {
+      "n": 647,
+      "at": "2026-11-06 05:53",
+      "text": "E9.4: plan gotowy (docs/superpowers/plans/2026-11-06-plugin-buses-parameters.md, 11 zadań = E9.31–E9.41), sprawdzony na kopii roboczej: kod każdego zadania odtworzony z tekstu planu, testy wtyczki 92/92 w Debug i Release. 36 parametrów zamiast ok. 30: hi-hat ma dwa decaye, a wyjście każdego głosu to jedyny sposób, by bez panelu wysłać głos na Out 2. Bez shuffle i rozmiaru pogłosu (firmware zmienia je tylko z menu). Parametry idą do firmware jako CC, NRPN i Program Change co do próbki, na globalnym kanale firmware; firmware i emulator bez zmian. Q40: po wczytaniu kitu gra wartość z kitu (sprawdzasz w P10)."
     }
   ]
 }
