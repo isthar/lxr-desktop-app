@@ -3,8 +3,8 @@
  *
  * lichomat-auhost, the AU's test host (plan E9.7 Task 5). It plays lichomat-plughost's plans
  * (host_plan.h; plug_host.cpp's header names the commands; those of the VST3's own interfaces, a
- * flush, null buffers, the controller, states from another thread or before any block, it refuses)
- * through LICHOMAT.component loaded into
+ * flush, raw points, null buffers, no outputs, the controller, it refuses; setstate-async and
+ * state-early are the AU's ClassInfo) through LICHOMAT.component loaded into
  * its own process: it reads the bundle's AudioComponents entry and registers the component's
  * factory for this process alone (AudioComponentRegister(): nothing is installed, nothing is
  * registered with the system), then plays the timeline as an AU host does: the transport through
@@ -16,6 +16,9 @@
  * The values the plugin reports are the AU's parameter values after each block: at the first block
  * every one, then each one that changed; the values the host's listener heard of are counted. With
  * events, the MIDI instance 0 gave its engine, read from its event ring after each block (host_plan.h).
+ * setstate-async sets instance 0's ClassInfo from a thread of its own while the blocks run;
+ * state-early reads its ClassInfo right after the card's (FILE.set, before AudioUnitInitialize) and
+ * right after AudioUnitInitialize (FILE), before any render.
  *
  * Its own plan commands:
  *   pull2 START END   render Out 2 only in the blocks from frame START to frame END
@@ -376,8 +379,20 @@ void printInfo (const Instance& in, double rate)
 	        gName, (unsigned)outs, names.c_str (), ch[0].inChannels, ch[0].outChannels, lat * rate, tail);
 }
 
-/* a component at the plan's rate and block, with its state, initialized */
-void open (Instance& in, AudioComponent comp, const AudioComponentDescription& desc, const Plan& p, const AuPlan& a)
+std::vector<uint8_t> stateOf (Instance& in);
+
+void writeFile (const std::string& path, const std::vector<uint8_t>& b)
+{
+	std::ofstream o (path, std::ios::binary);
+	o.write ((const char*)b.data (), (std::streamsize)b.size ());
+	if (!o)
+		die ("cannot write " + path);
+}
+
+/* a component at the plan's rate and block, with its state, initialized (first: the plan's first instance, the
+ * first time) */
+void open (Instance& in, AudioComponent comp, const AudioComponentDescription& desc, const Plan& p, const AuPlan& a,
+           bool first = false)
 {
 	if (AudioComponentInstanceNew (comp, &in.au) != noErr)
 		die ("AudioComponentInstanceNew failed");
@@ -419,8 +434,12 @@ void open (Instance& in, AudioComponent comp, const AudioComponentDescription& d
 		if (r != noErr)
 			die ("setState refused the card");
 	}
+	if (!p.stateEarly.empty () && first)
+		writeFile (p.stateEarly + ".set", stateOf (in));
 	if (AudioUnitInitialize (in.au) != noErr)
 		die ("AudioUnitInitialize failed");
+	if (!p.stateEarly.empty () && first)
+		writeFile (p.stateEarly, stateOf (in));
 	Float64 lat = 0.0;
 	UInt32 size = sizeof lat;
 	AudioUnitGetProperty (in.au, kAudioUnitProperty_Latency, kAudioUnitScope_Global, 0, &lat, &size);
@@ -802,10 +821,9 @@ int main (int argc, char** argv)
 	 * buffers of a bus, no edit controller; the event ring and the states from another thread or before any block are
 	 * the VST3 host's checks of the processor. Not played here */
 	if (!p.flushes.empty () || !p.emptyFlushes.empty () || !p.rawPoints.empty () || !p.controller.empty ()
-	    || !p.stateEarly.empty () || !p.noOutputs.empty () || p.nullOut2 || p.nullOut2Left || !p.nullOut1.empty ()
-	    || !p.asyncSets.empty ())
-		die ("plan: a command of lichomat-plughost alone (flush, flush-empty, param-at, controller, state-early, no-outputs, "
-		     "null-out2, null-out2-left, null-out1, setstate-async)");
+	    || !p.noOutputs.empty () || p.nullOut2 || p.nullOut2Left || !p.nullOut1.empty ())
+		die ("plan: a command of lichomat-plughost alone (flush, flush-empty, param-at, controller, no-outputs, null-out2, "
+		     "null-out2-left, null-out1)");
 	AudioComponentDescription desc {};
 	const AudioComponent comp = load (p.bundle, desc);
 	using RtFn = void (*) (int);
@@ -833,7 +851,7 @@ int main (int argc, char** argv)
 	{
 		const std::set<int> before = i == 0 && !p.events.empty () ? shmDescriptors () : std::set<int> ();
 		inst.push_back (std::make_unique<Instance> ());
-		open (*inst.back (), comp, desc, p, a);
+		open (*inst.back (), comp, desc, p, a, i == 0);
 		if (i == 0 && !p.events.empty ())
 			tap.find (before);
 	}
@@ -866,7 +884,7 @@ int main (int argc, char** argv)
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
 	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextOffline = 0, nextRamp = 0;
-	size_t nextAsyncNotes = 0, nextAsyncOffline = 0, nextHostSet = 0;
+	size_t nextAsyncNotes = 0, nextAsyncOffline = 0, nextHostSet = 0, nextAsyncSet = 0;
 	unsigned long long renders0 = 0, flagged0 = 0, flaggedLoud0 = 0;
 	std::vector<std::thread> threads;
 	unsigned long long processCalls = 0;
@@ -949,6 +967,32 @@ int main (int argc, char** argv)
 				        longest);
 			});
 			nextAsyncOffline++;
+		}
+		while (nextAsyncSet < p.asyncSets.size () && p.asyncSets[nextAsyncSet].first <= f)
+		{
+			/* a host's thread loading a project while this one renders: each ClassInfo in turn (FILE+FILE+...) */
+			std::vector<std::vector<uint8_t>> states;
+			const std::string& files = p.asyncSets[nextAsyncSet].second;
+			for (size_t x = 0, y; x <= files.size (); x = y + 1)
+			{
+				y = std::min (files.find ('+', x), files.size ());
+				states.push_back (readFile (files.substr (x, y - x)));
+			}
+			AudioUnit u = inst[0]->au;
+			const uint64_t at = f;
+			threads.emplace_back ([states, u, at, desc] {
+				for (size_t k = 0; k < states.size (); k++)
+				{
+					CFDictionaryRef ci = classInfo (desc, states[k]);
+					const auto w0 = std::chrono::steady_clock::now ();
+					const OSStatus r = AudioUnitSetProperty (u, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &ci, sizeof ci);
+					CFRelease (ci);
+					printf ("%s: setstate-async at %llu (%zu of %zu): %s in %.3f s\n", gName, (unsigned long long)at, k + 1,
+					        states.size (), r == noErr ? "ok" : "refused",
+					        std::chrono::duration<double> (std::chrono::steady_clock::now () - w0).count ());
+				}
+			});
+			nextAsyncSet++;
 		}
 		while (nextOffline < a.offline.size () && a.offline[nextOffline].first <= f)
 		{
@@ -1148,11 +1192,7 @@ int main (int argc, char** argv)
 			    != noErr)
 				die ("set-end " + std::to_string (id) + " refused");
 	if (!p.stateOut.empty ())
-	{
-		const std::vector<uint8_t> st = stateOf (*inst[0]);
-		std::ofstream o (p.stateOut, std::ios::binary);
-		o.write ((const char*)st.data (), (std::streamsize)st.size ());
-	}
+		writeFile (p.stateOut, stateOf (*inst[0]));
 	std::this_thread::sleep_for (std::chrono::milliseconds (100));	/* the plugin's notifier, every 20 ms */
 	for (size_t i = 0; i < inst.size (); i++)
 	{

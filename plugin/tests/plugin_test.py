@@ -2101,7 +2101,7 @@ def au(fn):
 
 
 for _name in ('native', 'latency', 'onsets', 'buses', 'buses48', 'params', 'outputs', 'state', 'params_state', 'setstate',
-              'renew', 'kill', 'params_restart', 'rt', 'rtparams'):
+              'renew', 'kill', 'params_restart', 'rt', 'rtparams', 'async_state', 'double_state', 'frame_order'):
     CASES['P13_au_' + _name] = au(CASES['P10_plugin_' + _name])
 
 
@@ -2486,6 +2486,24 @@ def P13_au_notes_block(t):
         check(d is None, 'Out %s: %s' % ('2' if f else '1', d))
     _, _, x = wav(t.path('a.wav'))
     check(sum(1 for v in x if abs(v) >= 4000) > 100, 'no sound: the case shows nothing')
+
+
+@case
+def P13_au_early_state(t):
+    # The AU's ClassInfo before any render holds the values: right after a ClassInfo was set, before
+    # AudioUnitInitialize (the state's, which no render has taken yet), and right after AudioUnitInitialize (the same,
+    # 36 of them): P10_plugin_early_state's first part, through the AU
+    lines = ['note %d 0 48 127' % (20000 * k + 5000) for k in range(12)]
+    au_host(t, au_plan(t, 'make.txt', lines + ['param 0 10 40', 'param 0 50 20', 'param 0 33 10', 'out ' + t.path('make.wav'),
+                                               'state-out ' + t.path('state.bin')], frames=blocks_frames(1)))
+    want = lchv(t.path('state.bin'))
+    au_host(t, au_plan(t, 'early.txt', ['state-in ' + t.path('state.bin'), 'state-early ' + t.path('early.bin'),
+                                        'out ' + t.path('early.wav')], card=False, frames=blocks_frames(1)))
+    for name in ('early.bin.set', 'early.bin'):
+        got = lchv(t.path(name))
+        print('%s: %d values, ids 10, 33, 50: %r (the state: %d values, %r)' % (name, len(got), [got.get(i) for i in (10, 33, 50)],
+                                                                         len(want), [want.get(i) for i in (10, 33, 50)]))
+        check(len(got) == 36 and got == want, '%s holds %r' % (name, got))
 
 
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
