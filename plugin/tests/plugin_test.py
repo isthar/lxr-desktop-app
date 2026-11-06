@@ -2469,6 +2469,25 @@ def P13_au_set_order(t):
           'the AU reports %r, the VST3 %r' % (reports(aout)[1:], reports(vout)[1:]))
 
 
+@case
+def P13_au_notes_block(t):
+    # Notes in one render cycle, also at one frame, reach the firmware each at its frame and in their order: the onset
+    # card's voices all take note 48 on channel 1 (the firmware's default globals), so in the block from 99,968 a Note On
+    # at 100,000 of velocity 127, another at that frame of velocity 50 (the voices retriggered softer), and one at
+    # 100,060 of velocity 90; then the same three a block later, the soft one last. The AU's Out 1 and Out 2 are the
+    # VST3's, byte for byte
+    notes = ['note 100000 0 48 127', 'note 100000 0 48 50', 'note 100060 0 48 90',
+             'note 110000 0 48 90', 'note 110040 0 48 127', 'note 110040 0 48 50']
+    host(t, plan(t, 'v.plan', notes + ['bus2', 'out ' + t.path('v.wav')], frames=blocks_frames(3)))
+    au_host(t, au_plan(t, 'a.plan', notes + ['bus2', 'out ' + t.path('a.wav')], frames=blocks_frames(3)))
+    for f in ('', '-out2'):
+        d = same_files(t.path('v%s.wav' % f), t.path('a%s.wav' % f))
+        print('three notes a block, two at one frame: Out %s %s the VST3\'s' % ('2' if f else '1', '==' if d is None else d))
+        check(d is None, 'Out %s: %s' % ('2' if f else '1', d))
+    _, _, x = wav(t.path('a.wav'))
+    check(sum(1 for v in x if abs(v) >= 4000) > 100, 'no sound: the case shows nothing')
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
