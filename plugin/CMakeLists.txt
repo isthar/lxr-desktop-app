@@ -210,6 +210,52 @@ set_tests_properties(P10_plugin_validator PROPERTIES TIMEOUT 600 LABELS plugin)
 add_test(NAME P10_plugin_helper COMMAND ${PLUGIN_BUNDLE_TEST} P10_plugin_helper)
 set_tests_properties(P10_plugin_helper PROPERTIES TIMEOUT 600 LABELS plugin)
 
+# --- the AU, LICHOMAT.component (plan E9.7 Task 4) ------------------------------------------------
+# An AU v2 instrument of Apple's AudioUnitSDK (au/au_unit.cpp) around the VST3's own processor, the
+# engine link and the card folder, compiled into it again. Its codes (A-12): type aumu, subtype Lcht,
+# manufacturer Lchm; its version the project's as an AU's integer (0.2.0 is 512). The component
+# exports its factory alone. C++23: the AudioUnitSDK's headers are written in it
+set(PLUG_AU_SUBTYPE Lcht)
+set(PLUG_AU_MANUFACTURER Lchm)
+math(EXPR PLUG_AU_VERSION "${PROJECT_VERSION_MAJOR} * 65536 + ${PROJECT_VERSION_MINOR} * 256 + ${PROJECT_VERSION_PATCH}")
+configure_file(au/Info.plist.in "${CMAKE_BINARY_DIR}/LICHOMAT-AU-Info.plist" @ONLY)
+add_library(LICHOMAT_AU MODULE au/au_unit.cpp vst3/plugin_processor.cpp vst3/plugin_link.cpp vst3/plugin_card.cpp
+    "${SDK_ROOT}/public.sdk/source/common/memorystream.cpp" $<TARGET_OBJECTS:plug_common> $<TARGET_OBJECTS:plug_card>)
+set_target_properties(LICHOMAT_AU PROPERTIES BUNDLE TRUE BUNDLE_EXTENSION component OUTPUT_NAME LICHOMAT
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_BINARY_DIR}/LICHOMAT-AU-Info.plist" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/AU"
+    CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+target_include_directories(LICHOMAT_AU PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/vst3" "${PLUGIN_DIR}/au"
+    "${LXR_ROOT}/emu/core")
+target_compile_options(LICHOMAT_AU PRIVATE ${PLUGIN_FLAGS})
+target_link_libraries(LICHOMAT_AU PRIVATE ausdk sdk)
+target_link_options(LICHOMAT_AU PRIVATE "LINKER:-exported_symbol,_LichomatAUFactory")
+# as the VST3's bundle: the engine into Contents/Helpers and the notices into Contents/Resources, the
+# AudioUnitSDK's Apache-2.0 licence among them, before the link; the helper and the bundle signed ad hoc
+# after it; linked again whenever the engine or a notice changes (P13_au_helper, P11_licence)
+add_dependencies(LICHOMAT_AU lichomat-engine)
+set_property(TARGET LICHOMAT_AU APPEND PROPERTY LINK_DEPENDS "$<TARGET_FILE:lichomat-engine>" ${PLUGIN_NOTICES}
+    "${AUSDK_ROOT}/LICENSE.txt")
+add_custom_command(TARGET LICHOMAT_AU PRE_LINK
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT_AU>/Helpers"
+        "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT_AU>/Resources"
+    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:lichomat-engine>" "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT_AU>/Helpers/lichomat-engine"
+    COMMAND ${CMAKE_COMMAND} -E copy "${LXR_ROOT}/LICENSE" "${LXR_ROOT}/NOTICE.md" "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT_AU>/Resources/"
+    COMMAND ${CMAKE_COMMAND} -E copy "${PLUGIN_DIR}/third_party/vst3sdk/LICENSE.txt"
+        "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT_AU>/Resources/VST3-SDK-LICENSE.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy "${AUSDK_ROOT}/LICENSE.txt"
+        "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT_AU>/Resources/AudioUnitSDK-LICENSE.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy "${LXR_ROOT}/emu/libm/LICENSE"
+        "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT_AU>/Resources/LICENSE.arm-optimized-routines"
+    COMMAND /bin/sh -c "head -n 18 '${LXR_ROOT}/Middlewares/Third_Party/FatFs/src/ff.h' > '$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT_AU>/Resources/LICENSE.fatfs'"
+    VERBATIM)
+add_custom_command(TARGET LICHOMAT_AU POST_BUILD
+    COMMAND codesign --force --sign - "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT_AU>/Helpers/lichomat-engine"
+    COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:LICHOMAT_AU>"
+    VERBATIM)
+set(PLUGIN_COMPONENT_TEST ${PLUGIN_TEST} --component $<TARGET_BUNDLE_DIR:LICHOMAT_AU>)
+add_test(NAME P13_au_helper COMMAND ${PLUGIN_COMPONENT_TEST} P13_au_helper)
+set_tests_properties(P13_au_helper PROPERTIES TIMEOUT 600 LABELS plugin)
+
 # --- lichomat-plughost, the test host, and the real-time check (Task 9) ---------------------
 add_executable(lichomat-plughost host/plug_host.cpp "${SDK_ROOT}/public.sdk/source/vst/hosting/module_mac.mm"
     "${SDK_ROOT}/public.sdk/source/vst/hosting/plugprovider.cpp" "${SDK_ROOT}/public.sdk/source/common/memorystream.cpp"

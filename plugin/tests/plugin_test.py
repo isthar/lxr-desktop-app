@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """The LICHOMAT plugin's scenario tests (plan E9.2): the engine through plug_drive against
-lichomat-render, and (from Task 9) the VST3 bundle through lichomat-plughost.
+lichomat-render, (from Task 9) the VST3 bundle through lichomat-plughost, and (plan E9.7) the AU
+through lichomat-auhost, which plays the same plans.
 
-    plugin_test.py --root R --build B --render R --engine E --drive D [--host H --bundle V] --work W CASE
+    plugin_test.py --root R --build B --render R --engine E --drive D [--host H --bundle V]
+                   [--auhost A --component C] --work W CASE
 
 Each case prints what it measured and exits 0 when it passes, 1 when it fails.
 
@@ -19,6 +21,7 @@ import fcntl
 import fractions
 import math
 import os
+import plistlib
 import re
 import shutil
 import signal
@@ -2054,6 +2057,40 @@ def P10_plugin_offsets(t):
     check(diff == 0 and loud > 100, '%d samples differ from the renderer' % diff)
 
 
+# --- the AU through lichomat-auhost (plan E9.7) ---------------------------------------------------
+
+def plug_version(t):
+    """the plugin's version, x.y.z, from the engine's first line"""
+    out = t.run([t.a.engine, '--version']).stdout
+    return re.match(r'lichomat-engine (\d+)\.(\d+)\.(\d+),', out).groups()
+
+
+@case
+def P13_au_helper(t):
+    # The component holds the engine the build made last, is signed (codesign --verify --deep --strict) and exports its
+    # factory alone; its Info.plist: org.lichomat.au, the plugin's version, and one AudioComponents entry, an instrument
+    # (aumu) of subtype Lcht and manufacturer Lchm (an uppercase letter: Apple keeps the lowercase codes), named
+    # "LICHOMAT: LICHOMAT", its version as an integer, the factory LichomatAUFactory, not sandbox safe (it starts a process)
+    c = t.a.component
+    a, b = macho_uuid(os.path.join(c, 'Contents', 'Helpers', 'lichomat-engine')), macho_uuid(t.a.engine)
+    print('the component\'s helper %s, the built engine %s' % (a, b))
+    check(a == b, 'the component holds another engine than the one built')
+    t.run(['codesign', '--verify', '--deep', '--strict', c])
+    syms = t.run(['nm', '-gU', os.path.join(c, 'Contents', 'MacOS', 'LICHOMAT')]).stdout.split()
+    print('exported: %r' % syms[2::3])
+    check(syms[2::3] == ['_LichomatAUFactory'], 'the component exports %r' % syms[2::3])
+    with open(os.path.join(c, 'Contents', 'Info.plist'), 'rb') as f:
+        info = plistlib.load(f)
+    x, y, z = plug_version(t)
+    comps = info.get('AudioComponents', [])
+    print('Info.plist: %s %s, %r' % (info.get('CFBundleIdentifier'), info.get('CFBundleShortVersionString'), comps))
+    check(info.get('CFBundleIdentifier') == 'org.lichomat.au' and info.get('CFBundleShortVersionString') == '%s.%s.%s' % (x, y, z)
+          and info.get('CFBundleExecutable') == 'LICHOMAT' and info.get('CFBundlePackageType') == 'BNDL', 'the bundle %r' % info)
+    want = {'type': 'aumu', 'subtype': 'Lcht', 'manufacturer': 'Lchm', 'name': 'LICHOMAT: LICHOMAT', 'description': 'LICHOMAT',
+            'version': int(x) * 65536 + int(y) * 256 + int(z), 'factoryFunction': 'LichomatAUFactory', 'tags': ['Drums']}
+    check(len(comps) == 1 and comps[0] == want, 'AudioComponents %r' % comps)
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
@@ -2074,7 +2111,7 @@ def main():
     ap = argparse.ArgumentParser()
     for o in ('root', 'build', 'render', 'engine', 'drive', 'resample', 'work'):
         ap.add_argument('--' + o, required=True)
-    for o in ('host', 'bundle', 'validator', 'rtcheck'):
+    for o in ('host', 'bundle', 'validator', 'rtcheck', 'component', 'auhost'):
         ap.add_argument('--' + o)
     ap.add_argument('case', choices=sorted(CASES))
     a = ap.parse_args()
