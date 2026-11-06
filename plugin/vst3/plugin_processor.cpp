@@ -421,7 +421,13 @@ tresult PLUGIN_API Processor::getState (IBStream* state)
 		fprintf (stderr, "LICHOMAT: getState: %s\n", e);
 		return kResultFalse;
 	}
-	return kResultOk;
+	/* the parameters' values after the card (plan E9.4): those of the host, else those of the last
+	 * state set, which no block has taken yet */
+	const bool pending = restoreGen.load (std::memory_order_acquire) != restoreSeen.load (std::memory_order_relaxed);
+	int v[PLUG_PARAM_COUNT];
+	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+		v[i] = (pending ? stateValues : hostValues)[i].load (std::memory_order_relaxed);
+	return plug_paramsWrite (streamPut, state, v) == 0 ? kResultOk : kResultFalse;
 }
 
 tresult PLUGIN_API Processor::setState (IBStream* state)
@@ -431,15 +437,16 @@ tresult PLUGIN_API Processor::setState (IBStream* state)
 	if (!state || !fresh.create (err))
 		return kResultFalse;
 	char e[512];
-	if (plug_archiveRead (fresh.card ().c_str (), streamGet, state, e, sizeof e) != 0)
+	int v[PLUG_PARAM_COUNT];
+	if (plug_archiveRead (fresh.card ().c_str (), streamGet, state, e, sizeof e) != 0
+	    || (plug_paramsRead (streamGet, state, v) != 0 && snprintf (e, sizeof e, "the parameters' values are damaged") > 0))
 	{
 		fprintf (stderr, "LICHOMAT: setState: %s\n", e);
 		fresh.remove ();
 		return kResultFalse;
 	}
-	/* a new card: its own values, none of the host's (plan E9.4); the audio thread takes them */
 	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
-		stateValues[i].store (-1, std::memory_order_relaxed);
+		stateValues[i].store (v[i], std::memory_order_relaxed);
 	restoreGen.fetch_add (1, std::memory_order_release);
 	if (active)
 		link.restart (fresh.card (), logOf (fresh), logOf (fresh));

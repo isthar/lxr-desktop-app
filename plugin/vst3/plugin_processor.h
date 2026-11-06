@@ -9,7 +9,8 @@
  * the host has activated Out 2, else Out 1 is their sum; the reported latency is plug_latency().
  * The firmware's values that changed by themselves go to the host as output parameter changes.
  * In real time it never waits; offline (kOffline: Live's bounce, freeze and export) it waits for
- * the engine. The state is the card folder as an LCHS archive (plug_archive.h).
+ * the engine. The state is the card folder as an LCHS archive (plug_archive.h) and the
+ * parameters' values after it (plug_params.h).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only

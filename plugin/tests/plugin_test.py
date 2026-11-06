@@ -1593,6 +1593,38 @@ def P10_plugin_rtparams(t):
     check(calls == 3750 and bad == 0 and writes == calls, line[0])
 
 
+@case
+def P10_plugin_params_state(t):
+    # The values the host has are in the state, after the card (LCHV, all 36: those it set and those the plugin
+    # reported): a new host restoring it plays as a host that sets them at frame 0, byte for byte, and reports them
+    # at its first block. A state of the prototype (the card only) is taken with no values (every case that gives a
+    # card does that); a damaged LCHV block is refused
+    lines = ['note %d 0 48 127' % (20000 * k + 5000) for k in range(12)]
+    host(t, plan(t, 'make.txt', lines + ['param 0 10 40', 'param 0 50 20', 'param 0 33 10', 'out ' + t.path('make.wav'),
+                                         'state-out ' + t.path('state.bin')], frames=blocks_frames(1)))
+    data = open(t.path('state.bin'), 'rb').read()
+    at = data.rfind(b'LCHV')
+    values = dict(struct.unpack('<IB', data[k:k + 5]) for k in range(at + 12, len(data), 5))
+    print('the state: %d bytes, the values block at %d: %d values, ids 10, 33, 50: %r' % (len(data), at, len(values),
+                                                                                       [values.get(i) for i in (10, 33, 50)]))
+    check(at > 0 and data[at:at + 12] == b'LCHV\x01\x00\x00\x00\x24\x00\x00\x00' and len(data) == at + 12 + 36 * 5
+          and values.get(10) == 40 and values.get(33) == 10 and values.get(50) == 20, 'the values block %r' % data[at:at + 12])
+    _, ref = host(t, plan(t, 'ref.txt', lines + ['param 0 10 40', 'param 0 50 20', 'param 0 33 10', 'out ' + t.path('ref.wav')]))
+    _, got = host(t, plan(t, 'got.txt', lines + ['state-in ' + t.path('state.bin'), 'out ' + t.path('got.wav')], card=False))
+    d = same_files(t.path('ref.wav'), t.path('got.wav'))
+    check(d is None, 'the restored values: %s' % d)
+    first = reports(got)[0]
+    print('the restored instance reports at frame %d: %r' % (first[0], {k: first[1][k] for k in (10, 33, 50)}))
+    check(first[0] == 0 and first[1].get(10) == 40 and first[1].get(50) == 20 and first[1].get(33) == 10, 'reports %r' % (first,))
+    with open(t.path('bad.bin'), 'wb') as f:
+        f.write(data[:at] + b'LCHV\x02\x00\x00\x00\x00\x00\x00\x00')
+    p = subprocess.run([t.a.host, plan(t, 'bad.txt', ['state-in ' + t.path('bad.bin'), 'out ' + t.path('bad.wav')],
+                                         card=False)], capture_output=True, text=True, timeout=600, env=host_env(t))
+    print('a damaged values block: exit %d, %s' % (p.returncode, p.stderr.strip()))
+    check(p.returncode == 1 and 'setState refused' in p.stderr, 'the damaged block was taken')
+    check(not instance_dirs(t.path('home')), 'instance folders left: %r' % instance_dirs(t.path('home')))
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
