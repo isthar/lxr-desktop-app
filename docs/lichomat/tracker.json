@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 13:17",
+    "updated": "2026-11-06 13:18",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.7: wtyczka AU (plan gotowy; odświeżenie pod d0534b1, potem wdrożenie)",
     "branch": "timing-core",
-    "head": "b6bfa95",
+    "head": "f85a924",
     "next": "Czeka na Ciebie: szkic wydania na GitHubie (sprawdź i kliknij Publish), E8.12–E8.13 wtyczka w Abletonie (P1–P10, można od razu na 0.2.0), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.7 AU, potem E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T13:17:00+01:00",
-    "now": ""
+    "updated_at": "2026-11-06T13:18:00+01:00",
+    "now": "E9.7: odświeżenie planu AU pod d0534b1 (od 13:22)"
   },
   "epics": [
     {
@@ -4919,6 +4919,11 @@
       "n": 663,
       "at": "2026-11-06 13:17",
       "text": "E9.4 (dwa wyjścia, 36 parametrów) zrobione: plugin-v07 d0534b1, wtyczka 0.2.0, 111 testów w Debug i Release, walidator 47/0, emulator i firmware bez zmian. E9.41: Twoje sprawdzenia P9–P10 w docs/lichomat/plugin-checks.md (E8.13). E9.8: szkic wydania na GitHubie gotowy (tag emu-0.7-vst3-0.2.0, zipy emulatora 0.7 i VST3 0.2.0, SHA256SUMS sprawdzone po pobraniu); Publish klikasz Ty."
+    },
+    {
+      "n": 664,
+      "at": "2026-11-06 13:18",
+      "text": "E9.7: odświeżanie planu AU pod d0534b1 (powtórka wszystkich zadań planu na kopii, poprawki tekstu planu tam, gdzie kod VST3 się zmienił)."
     }
   ]
 }
