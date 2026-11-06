@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 09:20",
+    "updated": "2026-11-06 10:30",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (plan gotowy, wdrożenie)",
+    "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (zad. 1–9 i poprawki gotowe; przegląd poprawek, potem zad. 10 i szkic wydania E9.8)",
     "branch": "timing-core",
-    "head": "5e9d378",
-    "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.4 grupy C–D, plan AU (E9.7), potem E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T09:20:00+01:00",
-    "now": "E9.4: poprawki i testy z przeglądu C (od 09:14)"
+    "head": "26e9b58",
+    "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: przegląd poprawek E9.4, zad. 10 (wersja 0.2.0), szkic wydania na GitHubie (E9.8), potem AU (E9.7) i E9.3 po Twoim P4",
+    "updated_at": "2026-11-06T10:30:00+01:00",
+    "now": "E9.37–E9.39: niezależny przegląd poprawek z przeglądu C, z mutantami (od 10:33)"
   },
   "epics": [
     {
@@ -4887,6 +4887,11 @@
       "n": 658,
       "at": "2026-11-06 09:20",
       "text": "E9.7: plan AU gotowy (docs/superpowers/plans/2026-11-06-plugin-au.md, 7 zadań = E9.71–E9.77), sprawdzony na kopii roboczej: 119/119 testów w Debug i Release. Wybór: własna cienka warstwa AU v2 (ok. 900 linii) wokół procesora VST3; gra bajt w bajt to samo co VST3 i ma 0 zakazanych wywołań w wątku audio. Wrapper AU z SDK VST3 też się buduje, ale zmierzony zawodzi: Out 1 od razu bez sumy, wartości tylko przez timer, offline cisza, 82 zakazane wywołania. Wdrożenie po E9.4; przedtem odświeżę plan o poprawki z przeglądów."
+    },
+    {
+      "n": 659,
+      "at": "2026-11-06 10:30",
+      "text": "E9.37–E9.39: poprawki i testy z przeglądu C w 9 commitach (0da2e5d..95252e7): pusty bufor Out 2 już nie wywraca hosta, stan ustawiony w trakcie grania daje nowej karcie jej własne wartości, getState przed pierwszym blokiem ma wartości, zmiany z flush idą po Start i zmianie wzorca, kanał zerowany dla nowego silnika; 9 nowych testów, 109/109 w Debug i Release. Do sprawdzenia: rzadki błąd testu P10_plugin_params_restart pod obciążeniem."
     }
   ]
 }
