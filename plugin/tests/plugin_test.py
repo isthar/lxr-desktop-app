@@ -2506,6 +2506,24 @@ def P13_au_early_state(t):
         check(len(got) == 36 and got == want, '%s holds %r' % (name, got))
 
 
+@case
+def P13_au_rt_out2(t):
+    # The render thread under the interposer, paced in real time for 10 s at 48 kHz in blocks of 128, through the AU's
+    # paths of its review: Out 2 pulled every block after Out 1 (its frames from the SDK's cache), every pull through the
+    # render guard, the notes through the note queue, 500 of them from another thread (notes-async, one every 2 ms from
+    # 1 s): no allocation, lock, wait, read or sleep on the render thread, one write (the wake-up) per render cycle
+    lines = ['mode realtime', 'paced', 'rtcheck', 'bus2', 'notes-async 48000 500', 'out ' + t.path('rt.wav')] + TIMELINE
+    _, out = au_host(t, au_plan(t, 'rt.txt', lines, rate=48000, block=128, frames=480000),
+                     env={'DYLD_INSERT_LIBRARIES': t.a.rtcheck})
+    line = [l for l in out.splitlines() if 'rtcheck:' in l and 'process calls' in l]
+    check(line, 'no rtcheck line in %r' % out)
+    print(line[0])
+    w = line[0].split()
+    calls, bad, writes = int(w[2]), int(w[5]), int(w[8])
+    check(calls == 3750 and bad == 0 and writes == calls, line[0])
+    check('notes-async at 48000: 500 Note Ons and Offs sent, 0 refused' in out, 'the sender')
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
