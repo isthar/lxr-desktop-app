@@ -7,7 +7,7 @@
     "head": "47c9d26",
     "next": "Czeka na Ciebie: szkic wydania na GitHubie (sprawdź i kliknij Publish), E8.12–E8.13 wtyczka w Abletonie (P1–P10, można od razu na 0.2.0), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.7 AU, potem E9.3 po Twoim P4",
     "updated_at": "2026-11-06T13:55:00+01:00",
-    "now": "E9.7: wdrożenie AU, grupa A: zad. 1–3 = E9.71–E9.73 (stan wyjściowy, AudioUnitSDK w repo, parametry i Out 2 w C) (od 14:00)"
+    "now": "E9.7: wdrożenie AU, grupa A: zad. 1–3 = E9.71–E9.73 (stan wyjściowy, AudioUnitSDK w repo, parametry i Out 2 w C) (od 13:56)"
   },
   "epics": [
     {
@@ -1135,21 +1135,21 @@
     {
       "id": "E9.71",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka AU zad. 1: stan wyjściowy na plugin-v07 po E9.4",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.72",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka AU zad. 2: AudioUnitSDK w repozytorium (przypięty: 30 plików, 348 KB, sumy kontrolne), biblioteka ausdk, licencja Apache 2.0 w bramce licencji",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.73",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka AU zad. 3: widok parametrów w AU (wartości jak na wyświetlaczu) i reguła Out 2",
       "updated": "2026-11-06"
     },
