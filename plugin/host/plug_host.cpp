@@ -31,6 +31,8 @@
  *                          test cards')
  *   echo                   give each parameter value the plugin reports back to it as a change at
  *                          the next block's first frame, as a host may
+ *   events FILE            the MIDI instance 0 gave its engines, read from its event ring after each
+ *                          process() (the shared memory it keeps open), as usb lines at host frames
  * Instance I > 0 writes FILE-I.wav (and FILE-I-out2.wav). The summary on stdout gives each
  * instance's latency and the Engine parameter it last reported, and a line for each block in which
  * an instance reported parameter values: "lichomat-plughost: instance I: frame F: ID=VALUE ...".
@@ -57,8 +59,12 @@
 #include <mach/thread_policy.h>
 #include <map>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <string>
+#include <sys/mman.h>
+#include <sys/proc_info.h>
+#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -66,6 +72,7 @@
 #include "plug_archive.h"
 #include "plug_clock.h"
 #include "plug_params.h"
+#include "plug_shm.h"
 #include "plug_time.h"
 #include "plugin_points.h"
 #include "pluginterfaces/base/ustring.h"
@@ -126,6 +133,7 @@ struct Plan
 	struct RawPoint { uint64_t frame; int32_t offset; uint32_t id; int value; };
 	std::vector<RawPoint> rawPoints;	/* a point of the block at frame with the sample offset as given, in or out of the block */
 	std::string controller;		/* a file for the controller's parameters: infos, values, strings */
+	std::string events;			/* the MIDI instance 0 pushed into its engine's ring */
 	std::string stateEarly;		/* getState right after setState (FILE.set) and right after setActive (FILE), before any block */
 	std::vector<ParamCmd> flushes;	/* changes given in a flush (process() with 0 frames) right before the block from each frame */
 	std::vector<uint64_t> noOutputs;	/* the block from each frame with no output bus at all */
@@ -201,6 +209,7 @@ Plan readPlan (const char* path)
 			p.rawPoints.push_back (c);
 		}
 		else if (cmd == "controller") ok = !!(s >> p.controller);
+		else if (cmd == "events") ok = !!(s >> p.events);
 		else if (cmd == "state-early") ok = !!(s >> p.stateEarly);
 		else if (cmd == "no-outputs") { uint64_t k; ok = !!(s >> k); p.noOutputs.push_back (k); }
 		else if (cmd == "null-out2") p.nullOut2 = true;
@@ -213,6 +222,9 @@ Plan readPlan (const char* path)
 	}
 	if (p.bundle.empty () || p.out.empty () || !p.frames || p.block < 1 || p.instances < 1)
 		die ("plan: bundle, out, frames, block and instances are needed");
+	for (auto& r : p.renews)
+		if (!p.events.empty () && r.second == 0)
+			die ("plan: events and a renew of instance 0 (a new ring, frames from 0 again)");
 	return p;
 }
 
@@ -434,6 +446,68 @@ void close (Instance& in)
 	in.provider = nullptr;
 }
 
+/* The descriptors of POSIX shared memory objects in this process: the plugin keeps the one it shares with its
+ * engine open, its name unlinked (plug_shmCreate()) */
+std::set<int> shmDescriptors ()
+{
+	std::set<int> out;
+	const int bytes = proc_pidinfo (getpid (), PROC_PIDLISTFDS, 0, nullptr, 0);
+	if (bytes <= 0)
+		return out;
+	std::vector<proc_fdinfo> fds ((size_t)bytes / sizeof (proc_fdinfo) + 16u);
+	const int got = proc_pidinfo (getpid (), PROC_PIDLISTFDS, 0, fds.data (), (int)(fds.size () * sizeof (proc_fdinfo)));
+	for (int i = 0; got > 0 && i < got / (int)sizeof (proc_fdinfo); i++)
+		if (fds[(size_t)i].proc_fdtype == PROX_FDTYPE_PSHM)
+			out.insert (fds[(size_t)i].proc_fd);
+	return out;
+}
+
+/* the events an instance pushed into its engine's ring: a mapping of its shared memory of our own (read only) */
+struct RingTap
+{
+	const plug_shm_t* s = nullptr;
+	uint64_t next = 0;	/* the next event to read */
+	std::map<uint64_t, std::vector<std::string>> lines;
+
+	/* the object among the descriptors that were not there before: the instance's */
+	void find (const std::set<int>& before)
+	{
+		for (int fd : shmDescriptors ())
+		{
+			struct stat st;
+			if (before.count (fd) || fstat (fd, &st) != 0 || st.st_size < (off_t)sizeof (plug_shm_t))
+				continue;
+			void* m = mmap (nullptr, sizeof (plug_shm_t), PROT_READ, MAP_SHARED, fd, 0);
+			if (m == MAP_FAILED)
+				continue;
+			const plug_shm_t* x = (const plug_shm_t*)m;
+			if (__atomic_load_n (&x->magic, __ATOMIC_ACQUIRE) == PLUG_SHM_MAGIC && x->version == PLUG_SHM_VERSION
+			    && x->size == sizeof (plug_shm_t))
+			{
+				s = x;
+				next = plug_load (&x->evWrite);
+				return;
+			}
+			munmap (m, sizeof (plug_shm_t));
+		}
+		die ("events: no shared memory of the plugin among this process's descriptors");
+	}
+
+	/* the events written since the last read: the plugin writes them in process() on this thread, and the engine
+	 * only takes them (evRead), so the slots stay as written until the next process() */
+	void read ()
+	{
+		const uint64_t w = plug_load (&s->evWrite);
+		for (; next < w; next++)
+		{
+			const plug_event_t& e = s->ev[next & (PLUG_EVENT_SLOTS - 1u)];
+			char b[16];
+			snprintf (b, sizeof b, e.len == 3 ? "%02X %02X %02X" : e.len == 2 ? "%02X %02X" : "%02X", e.b[0], e.b[1], e.b[2]);
+			lines[e.frame].push_back (b);
+		}
+	}
+};
+
 /* process() with 0 frames every 10 ms until the instance reports its engine running */
 void waitRunning (Instance& in, ProcessContext& ctx)
 {
@@ -575,10 +649,14 @@ int main (int argc, char** argv)
 			die ("rtcheck: the probe counted " + std::to_string (probe) + " calls, not 2");
 	}
 	std::vector<std::unique_ptr<Instance>> inst;
+	RingTap tap;
 	for (int i = 0; i < p.instances; i++)
 	{
+		const std::set<int> before = i == 0 && !p.events.empty () ? shmDescriptors () : std::set<int> ();
 		inst.push_back (std::make_unique<Instance> ());
 		open (*inst.back (), factory, cls, p);
+		if (i == 0 && !p.events.empty ())
+			tap.find (before);
 	}
 	if (!p.controller.empty ())
 		dumpController (*inst[0], p.controller);
@@ -808,6 +886,8 @@ int main (int argc, char** argv)
 			in->processor->process (in->data);
 			if (rtInside)
 				rtInside (0);
+			if (tap.s && &in == &inst[0])
+				tap.read ();
 			if (keep[0])
 			{
 				in->data.outputs[1].channelBuffers32[0] = keep[0];
@@ -882,6 +962,20 @@ int main (int argc, char** argv)
 	{
 		FILE* s = fopen (p.script.c_str (), "w");
 		for (auto& [frame, msgs] : script)
+		{
+			fprintf (s, "%lluf usb", (unsigned long long)frame);
+			for (auto& b : msgs)
+				fprintf (s, " %s", b.c_str ());
+			fputc ('\n', s);
+		}
+		fclose (s);
+	}
+	if (!p.events.empty ())
+	{
+		FILE* s = fopen (p.events.c_str (), "w");
+		if (!s)
+			die ("cannot write " + p.events);
+		for (auto& [frame, msgs] : tap.lines)
 		{
 			fprintf (s, "%lluf usb", (unsigned long long)frame);
 			for (auto& b : msgs)

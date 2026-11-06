@@ -57,7 +57,7 @@ public:
 
 private:
 	unsigned notesOf (Steinberg::Vst::IEventList* events, Steinberg::int32 frames);
-	unsigned paramsOf (Steinberg::Vst::ProcessData& data, plug_shm_t* s, bool running, uint32_t frames);
+	unsigned paramsOf (Steinberg::Vst::ProcessData& data, plug_shm_t* s, bool running, uint32_t frames, unsigned& owed);
 	void showValues (Steinberg::Vst::ProcessData& data);
 	void restoreValues (const std::atomic<int>* from);
 	void reportState (Steinberg::Vst::ProcessData& data, uint64_t state);
@@ -73,6 +73,10 @@ private:
 	uint32_t margin = 0;
 	uint64_t frames = 0;		/**< host frames since the activation */
 	uint64_t runningPid = 0;	/**< the engine taken last (one of the state restored last): the clock and the parameters' */
+	uint32_t holdFrames = 0;	/**< 1,024 frames at 48 kHz (21.3 ms) at the host's rate: a value given to the firmware
+								 * has settled by then */
+	uint64_t resumeAt = 0;		/**< the host frame before which a new engine's slave and the host's notes wait */
+	bool firstAwaited = false;	/**< the new engine's first report, still to come, sets resumeAt */
 	pid_t waitedInVain = -2;	/**< the engine an offline wait gave up on (-1: none ran): no more waits for it */
 	int reported = -1;			/**< the engine state last sent to the controller */
 	bool active = false;

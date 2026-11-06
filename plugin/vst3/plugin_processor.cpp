@@ -125,6 +125,9 @@ tresult PLUGIN_API Processor::setActive (TBool state)
 		plug_clockInit (&clock, processSetup.sampleRate);
 		frames = 0;
 		runningPid = 0;
+		holdFrames = (uint32_t)std::ceil (processSetup.sampleRate * 1024.0 / 48000.0);
+		resumeAt = 0;
+		firstAwaited = false;
 		waitedInVain = -2;
 		reported = -1;
 		/* the parameters: a value settles within a quarter of a second; the host keeps its values
@@ -203,8 +206,9 @@ void Processor::restoreValues (const std::atomic<int>* from)
  * plug_params.h): first, at the block's first frame, those the host gave when there was no channel to send them on
  * (no engine, or a flush), then the host's of the block, to the engine when it runs (else kept for it), then the
  * engine's values compared with the host's. A flush or a block that is not played (n 0) only takes the host's
- * changes: they are its values and wait for the next block. Returns the MIDI count. */
-unsigned Processor::paramsOf (ProcessData& data, plug_shm_t* s, bool running, uint32_t n)
+ * changes: they are its values and wait for the next block. Returns the MIDI count; owed, the messages of the host's
+ * values the engine did not have (the pending ones and those of a first report), all at the block's first frame. */
+unsigned Processor::paramsOf (ProcessData& data, plug_shm_t* s, bool running, uint32_t n, unsigned& owed)
 {
 	plug_values_t v;
 	const bool live = running && n > 0;
@@ -213,10 +217,15 @@ unsigned Processor::paramsOf (ProcessData& data, plug_shm_t* s, bool running, ui
 		channel = v.channel;
 	const uint8_t ch = live ? channel : (uint8_t)PLUG_VALUE_NONE;
 	unsigned nm = plug_paramsPending (&params, ch, frames, paramMidi, kMaxMidi);
+	owed = nm;
 	const unsigned np = pointsOf (data.inputParameterChanges, (int32)n, points, kMaxMidi);
 	nm = plug_paramsHost (&params, points, np, frames, ch, paramMidi, nm, kMaxMidi);
 	if (have)
+	{
+		const unsigned before = nm;
 		nm = plug_paramsReport (&params, v.values, v.frame, frames, channel, paramMidi, nm, kMaxMidi);
+		owed += nm - before;
+	}
 	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
 		if (hostValues[i].load (std::memory_order_relaxed) != params.p[i].want)
 			hostValues[i].store (params.p[i].want, std::memory_order_relaxed);
@@ -319,6 +328,15 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 			plug_clockReset (&clock);	/* a new engine: the slave starts afresh */
 			plug_paramsEngine (&params, plug_load (&s->epoch));	/* and gets the host's values */
 			channel = PLUG_VALUE_NONE;	/* the new card's own global channel, from its first values: not the old one's */
+			/* The host's values that the new engine lacks reach it at a block's first frame (its first report, the
+			 * pending ones), and the firmware takes a few milliseconds to settle a value: a note then plays with the
+			 * card's (a voice the host set silent clicks at the card's volume). So its slave does not start, nor do
+			 * the host's notes go to it (they are left out, as while no engine runs), before holdFrames after that
+			 * frame; the slave then resumes at the 16th the transport has reached, on the beat grid. Not when that
+			 * report gives it nothing, nor for the first engine of an offline activation (a bounce, a freeze, an
+			 * export, which would lose its first 16th) */
+			firstAwaited = !(offline && runningPid == 0);
+			resumeAt = firstAwaited ? frames + holdFrames : 0;	/* at most so long without a report */
 			runningPid = pid;
 		}
 		running = pid == runningPid;
@@ -328,7 +346,8 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 		/* a flush (the host's changes between blocks) or a block that is not played: the host's changes are its
 		 * values (a getState holds them), sent at the next block's first frame after its transport messages (a
 		 * new engine gets them by its first report) */
-		(void)paramsOf (data, s, running, 0);
+		unsigned owed = 0;
+		(void)paramsOf (data, s, running, 0, owed);
 		return kResultOk;
 	}
 	const uint32_t n = (uint32_t)data.numSamples;
@@ -343,9 +362,16 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 		t.cycleStart = c->cycleStartMusic;
 		t.cycleEnd = c->cycleEndMusic;
 	}
-	const unsigned nc = plug_clockBlock (&clock, &t, n, clocks, kMaxMidi);
-	const unsigned nn = notesOf (data.inputEvents, (int32)n);
-	const unsigned np = paramsOf (data, s, running, n);
+	unsigned owed = 0;
+	const unsigned np = paramsOf (data, s, running, n, owed);
+	if (firstAwaited && params.synced)
+	{
+		firstAwaited = false;	/* the new engine's first report, in this block */
+		resumeAt = owed ? frames + holdFrames : frames;
+	}
+	const bool held = running && frames < resumeAt;
+	const unsigned nc = held ? 0u : plug_clockBlock (&clock, &t, n, clocks, kMaxMidi);
+	const unsigned nn = held ? 0u : notesOf (data.inputEvents, (int32)n);
 	showValues (data);
 	if (running)
 		for (unsigned i = 0, j = 0, k = 0; i < nc || j < nn || k < np;)
