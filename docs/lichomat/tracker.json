@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 12:01",
+    "updated": "2026-11-06 12:25",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (zad. 1–9 i poprawki gotowe; przegląd poprawek, potem zad. 10 i szkic wydania E9.8)",
     "branch": "timing-core",
-    "head": "f9026db",
+    "head": "b84fa10",
     "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: przegląd poprawek E9.4, zad. 10 (wersja 0.2.0), szkic wydania na GitHubie (E9.8), potem AU (E9.7) i E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T12:01:00+01:00",
-    "now": "E9.37–E9.39: krótki przegląd 5 poprawek (restart, dwa setState), z mutantami (od 12:05)"
+    "updated_at": "2026-11-06T12:25:00+01:00",
+    "now": "E9.4: ostatnie poprawki i zad. 10 (E9.40): wersja 0.2.0, README, końcowe bramki (od 12:58)"
   },
   "epics": [
     {
@@ -4902,6 +4902,11 @@
       "n": 661,
       "at": "2026-11-06 12:01",
       "text": "E9.37–E9.39: poprawki z przeglądu poprawek C w 5 commitach (a580e9b..97783be): po nowym silniku zegar wznawia się 1024 ramki (21 ms) po wartościach z Live, więc test restartu już nie jest losowy (10 z 10, 0 głośnych próbek); dwa setState pod rząd dają drugiej karcie jej wartości; Out 2 z jednym pustym kanałem wyzerowany; 5 luk w testach zamkniętych. 111/111 w Debug i Release."
+    },
+    {
+      "n": 662,
+      "at": "2026-11-06 12:25",
+      "text": "E9.37–E9.39: krótki przegląd 5 poprawek zatwierdzony z uwagami (19 mutantów, 16 zabitych). Do poprawy razem z zad. 10: rzadka utrata wartości po awarii silnika (jedna linijka), testy wstrzymania przy 96 kHz i startu offline od ramki 0, zabezpieczenie setActive, dłuższy komunikat błędu. Znane ograniczenie 0.2.0: przy eksporcie z nowego silnika nuta w pierwszej ramce może przez 2–3 ms grać z wartością z karty."
     }
   ]
 }
