@@ -69,7 +69,7 @@ int main(int argc, char **argv)
 	const uint64_t frames = strtoull(argv[4], NULL, 10);
 	eng_resample_t r;
 	char err[160];
-	if (eng_resampleOpen(&r, rate, err, sizeof err) != 0)
+	if (eng_resampleOpen(&r, rate, 2, err, sizeof err) != 0)
 	{
 		fprintf(stderr, "plug_resample_wav: %s\n", err);
 		return 1;

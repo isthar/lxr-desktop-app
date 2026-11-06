@@ -32,25 +32,31 @@ static OSStatus eng_input(AudioConverterRef c, UInt32 *packets, AudioBufferList 
 	}
 	if (*packets > left)
 		*packets = left;
-	io->mBuffers[0].mData = &r->in[2u * r->used];
-	io->mBuffers[0].mDataByteSize = *packets * 2u * (UInt32)sizeof(float);
-	io->mBuffers[0].mNumberChannels = 2;
+	io->mBuffers[0].mData = &r->in[r->channels * r->used];
+	io->mBuffers[0].mDataByteSize = *packets * r->channels * (UInt32)sizeof(float);
+	io->mBuffers[0].mNumberChannels = r->channels;
 	r->used += *packets;
 	return noErr;
 }
 
-int eng_resampleOpen(eng_resample_t *r, double rate, char *err, size_t n)
+int eng_resampleOpen(eng_resample_t *r, double rate, unsigned channels, char *err, size_t n)
 {
 	memset(r, 0, sizeof *r);
+	if (channels != 2u && channels != ENG_RESAMPLE_CHANNELS)
+	{
+		snprintf(err, n, "the converter takes 2 or 4 channels, not %u", channels);
+		return -1;
+	}
+	r->channels = channels;
 	AudioStreamBasicDescription in;
 	memset(&in, 0, sizeof in);
 	in.mSampleRate = 353125.0 / 8.0;
 	in.mFormatID = kAudioFormatLinearPCM;
 	in.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
 	in.mBitsPerChannel = 32;
-	in.mChannelsPerFrame = 2;
+	in.mChannelsPerFrame = channels;
 	in.mFramesPerPacket = 1;
-	in.mBytesPerFrame = in.mBytesPerPacket = 2u * (UInt32)sizeof(float);
+	in.mBytesPerFrame = in.mBytesPerPacket = channels * (UInt32)sizeof(float);
 	AudioStreamBasicDescription out = in;
 	out.mSampleRate = rate;
 	AudioConverterRef c;
@@ -79,10 +85,10 @@ int eng_resampleOpen(eng_resample_t *r, double rate, char *err, size_t n)
 	return 0;
 }
 
-int eng_resamplePush(eng_resample_t *r, const float *lr, void (*fn)(void *ctx, const float *lr, uint32_t frames),
+int eng_resamplePush(eng_resample_t *r, const float *x, void (*fn)(void *ctx, const float *x, uint32_t frames),
 	void *ctx)
 {
-	memcpy(r->in, lr, sizeof r->in);
+	memcpy(r->in, x, r->channels * ENG_RESAMPLE_IN * sizeof(float));
 	r->have = ENG_RESAMPLE_IN;
 	r->used = 0;
 	for (;;)
@@ -90,8 +96,8 @@ int eng_resamplePush(eng_resample_t *r, const float *lr, void (*fn)(void *ctx, c
 		UInt32 packets = ENG_RESAMPLE_OUT;
 		AudioBufferList abl;
 		abl.mNumberBuffers = 1;
-		abl.mBuffers[0].mNumberChannels = 2;
-		abl.mBuffers[0].mDataByteSize = (UInt32)sizeof r->out;
+		abl.mBuffers[0].mNumberChannels = r->channels;
+		abl.mBuffers[0].mDataByteSize = r->channels * ENG_RESAMPLE_OUT * (UInt32)sizeof(float);
 		abl.mBuffers[0].mData = r->out;
 		const OSStatus st = AudioConverterFillComplexBuffer((AudioConverterRef)r->conv, eng_input, r, &packets, &abl, NULL);
 		if (packets)

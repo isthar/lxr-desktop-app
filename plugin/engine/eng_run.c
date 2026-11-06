@@ -268,7 +268,7 @@ void eng_run(plug_shm_t *s, int wake, const char *card)
 	plug_store(&s->pid, (uint64_t)getpid());
 	plug_store(&s->state, PLUG_ENGINE_BOOTING);
 	char err[256];
-	if (!E.native && eng_resampleOpen(&E.rs, s->rate, err, sizeof err) != 0)
+	if (!E.native && eng_resampleOpen(&E.rs, s->rate, 2, err, sizeof err) != 0)
 		eng_fail(4, err);
 	emu_config_t cfg;
 	emu_configDefaults(&cfg);

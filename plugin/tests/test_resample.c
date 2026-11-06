@@ -36,7 +36,7 @@ static double delayAt(double rate)
 {
 	eng_resample_t r;
 	char err[160];
-	if (eng_resampleOpen(&r, rate, err, sizeof err) != 0)
+	if (eng_resampleOpen(&r, rate, 2, err, sizeof err) != 0)
 		return -1.0;
 	out = calloc(2u * 8u * 64u * BLOCKS, sizeof *out);
 	nout = 0;
@@ -80,10 +80,80 @@ TEST(P7_converter_open)
 {
 	eng_resample_t r;
 	char err[160];
-	ASSERT_EQ(eng_resampleOpen(&r, 48000.0, err, sizeof err), 0);
+	ASSERT_EQ(eng_resampleOpen(&r, 48000.0, 2, err, sizeof err), 0);
 	eng_resampleClose(&r);
-	ASSERT_EQ(eng_resampleOpen(&r, -1.0, err, sizeof err), -1);
+	ASSERT_EQ(eng_resampleOpen(&r, -1.0, 2, err, sizeof err), -1);
 	ASSERT_TRUE(strstr(err, "AudioConverterNew") != NULL);
+	ASSERT_EQ(eng_resampleOpen(&r, 48000.0, 3, err, sizeof err), -1);
+	ASSERT_TRUE(strstr(err, "2 or 4 channels") != NULL);
+}
+
+/* the frames a converter gives, into a buffer of its own */
+typedef struct
+{
+	float *x;
+	uint32_t frames;
+	unsigned channels;
+} sink_t;
+
+static void into(void *ctx, const float *x, uint32_t frames)
+{
+	sink_t *k = ctx;
+	memcpy(&k->x[k->channels * k->frames], x, k->channels * frames * sizeof *x);
+	k->frames += frames;
+}
+
+TEST(P7_converter_channels)
+{
+	/* plan E9.4: four channels converted at once (the engine's: the device's two outputs) are each pair
+	 * converted apart (plug_resample_wav's, two at a time), sample for sample, at 44.1, 48 and 96 kHz */
+	const double rates[] = { 44100.0, 48000.0, 96000.0 };
+	for (unsigned k = 0; k < 3; k++)
+	{
+		eng_resample_t r4, ra, rb;
+		char err[160];
+		ASSERT_EQ(eng_resampleOpen(&r4, rates[k], 4, err, sizeof err), 0);
+		ASSERT_EQ(eng_resampleOpen(&ra, rates[k], 2, err, sizeof err), 0);
+		ASSERT_EQ(eng_resampleOpen(&rb, rates[k], 2, err, sizeof err), 0);
+		sink_t s4 = { calloc(4u * 4u * 64u * BLOCKS, sizeof(float)), 0, 4 };
+		sink_t sa = { calloc(2u * 4u * 64u * BLOCKS, sizeof(float)), 0, 2 };
+		sink_t sb = { calloc(2u * 4u * 64u * BLOCKS, sizeof(float)), 0, 2 };
+		uint32_t seed = 12345u;
+		for (unsigned b = 0; b < BLOCKS; b++)
+		{
+			float in4[4 * 64], ina[2 * 64], inb[2 * 64];
+			for (unsigned i = 0; i < 4 * 64; i++)
+			{
+				seed = seed * 1664525u + 1013904223u;
+				in4[i] = (float)(int16_t)(seed >> 16) / 32768.0f;	/* a device sample */
+			}
+			for (unsigned i = 0; i < 64; i++)
+			{
+				ina[2 * i] = in4[4 * i];
+				ina[2 * i + 1] = in4[4 * i + 1];
+				inb[2 * i] = in4[4 * i + 2];
+				inb[2 * i + 1] = in4[4 * i + 3];
+			}
+			ASSERT_EQ(eng_resamplePush(&r4, in4, into, &s4), 0);
+			ASSERT_EQ(eng_resamplePush(&ra, ina, into, &sa), 0);
+			ASSERT_EQ(eng_resamplePush(&rb, inb, into, &sb), 0);
+		}
+		eng_resampleClose(&r4);
+		eng_resampleClose(&ra);
+		eng_resampleClose(&rb);
+		uint32_t differ = 0;
+		for (uint32_t i = 0; i < s4.frames && i < sa.frames; i++)
+			differ += s4.x[4 * i] != sa.x[2 * i] || s4.x[4 * i + 1] != sa.x[2 * i + 1] || s4.x[4 * i + 2] != sb.x[2 * i]
+				|| s4.x[4 * i + 3] != sb.x[2 * i + 1];
+		printf("P7_converter_channels: %.0f Hz: %u frames of four channels, %u and %u of two, %u differ\n", rates[k],
+			s4.frames, sa.frames, sb.frames, differ);
+		ASSERT_TRUE(s4.frames == sa.frames && sa.frames == sb.frames);
+		ASSERT_TRUE(fabs((double)s4.frames - BLOCKS * 64.0 * rates[k] / PLUG_ENGINE_RATE) <= 1.0);
+		ASSERT_EQ(differ, 0);
+		free(s4.x);
+		free(sa.x);
+		free(sb.x);
+	}
 }
 
 TEST_MAIN()
