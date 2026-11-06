@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 00:32",
+    "updated": "2026-11-06 01:01",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "fdedb60",
+    "head": "d357470",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-06T00:32:00+01:00",
-    "now": "E9.18–E9.19: recenzent sprawdza poprawki wtyczki (od 00:32)"
+    "updated_at": "2026-11-06T01:01:00+01:00",
+    "now": "E9.19: naprawa dwóch niestabilnych testów wtyczki (od 01:01)"
   },
   "epics": [
     {
@@ -4577,6 +4577,11 @@
       "n": 634,
       "at": "2026-11-06 00:32",
       "text": "E9.18–E9.19 przegląd, 3244a72, 40395fe i komplet: wszystkie 12 punktów z przeglądu wtyczki domknięte w 14 commitach, każdy od testu. Nowe testy: zawieszony silnik zastąpiony po 2 s; po 5 awariach w minutę wtyczka się poddaje i milknie, zamiast restartować bez końca; sprzątanie folderów; priorytet wątku; nieudany start; render offline z zawieszonym silnikiem kończy się w 30 s zamiast nigdy. Wtyczka ma 71 testów, walidator 47/0. Recenzent sprawdza poprawki."
+    },
+    {
+      "n": 635,
+      "at": "2026-11-06 01:01",
+      "text": "E9.18–E9.19: recenzent sprawdził poprawki. Kod wtyczki w porządku, wszystkie mutanty z przeglądu padają. Dwa nowe testy są jednak niestabilne: P10_plugin_hang (błąd w dopasowaniu rytmu po restarcie, 2 na 9 przebiegów) i P10_plugin_offline_hang (wyścig ze startem silnika, 3 na 5). Wtyczka sama zachowała się poprawnie we wszystkich przebiegach. Implementer robi testy deterministycznymi, bez poszerzania tolerancji, i domyka dwa drobne mutanty."
     }
   ]
 }
