@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 21:33",
+    "updated": "2026-11-06 22:17",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.7: wtyczka AU (plan gotowy; odświeżenie pod d0534b1, potem wdrożenie)",
     "branch": "timing-core",
-    "head": "b93263f",
+    "head": "41ded2e",
     "next": "Czeka na Ciebie: E8.12–E8.13 wtyczka w Live (P1–P10; Twój Live wygasł: testuje znajomy, albo REAPER), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.7 AU, potem E9.3 po P4",
-    "updated_at": "2026-11-06T21:33:00+01:00",
-    "now": "E9.74–E9.75: poprawki po przeglądzie poprawek AU (od 21:33)"
+    "updated_at": "2026-11-06T22:17:00+01:00",
+    "now": "E9.76: zad. 6 AU, README, instalacja z auval, bramki (od 22:17)"
   },
   "epics": [
     {
@@ -1156,21 +1156,21 @@
     {
       "id": "E9.74",
       "epic": "E9",
-      "status": "w toku",
+      "status": "gotowe",
       "title": "Wtyczka AU zad. 4: komponent LICHOMAT.component (własna cienka warstwa AU v2 na MusicDeviceBase wokół procesora VST3)",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.75",
       "epic": "E9",
-      "status": "w toku",
+      "status": "gotowe",
       "title": "Wtyczka AU zad. 5: host testowy AU (lichomat-auhost): 15 scenariuszy VST3 przez AU (bajt w bajt to samo) i 8 własnych, wątek audio 0 zakazanych wywołań",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.76",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka AU zad. 6: README, instalacja z auval (przy błędzie wraca poprzedni komponent), odinstalowanie, końcowe bramki",
       "updated": "2026-11-06"
     },
@@ -4974,6 +4974,11 @@
       "n": 674,
       "at": "2026-11-06 21:33",
       "text": "E9.74–E9.75: przegląd poprawek AU: do zmiany. Ważne: ruch suwaka tuż przed wczytaniem presetu (bez renderu między nimi) gra na wczytanym stanie i zostaje w zapisie; 2 drobne i 2 luki w testach. Mutanty 34, 27 zabite. Poprawki zlecone"
+    },
+    {
+      "n": 675,
+      "at": "2026-11-06 22:17",
+      "text": "E9.74–E9.75 gotowe: poprawki po drugim przeglądzie (09b077c..626e718): preset wczytany po ruchu suwaka wygrywa, reset zrzuca tylko nuty, dwa nowe testy; PLUGIN-CHECK 156/156 w obu buildach; mój przegląd: OK. E9.76 (zad. 6) w toku"
     }
   ]
 }
