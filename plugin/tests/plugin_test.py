@@ -1720,6 +1720,18 @@ def P10_plugin_null_out2(t):
     check(all(v == 16384 for v in left), 'the null channel was written')
     check(not others and loud > 100000, 'Out 1 differs from the renderer in %d samples' % len(others))
     check('engine running' in out, 'the engine did not run to the end')
+    # Out 2 (inactive) with one null channel and one the host filled (0.5): that one comes back zero, and the bus is
+    # flagged silent in every block (plughost counts the silence over the channels it gave). Before the fix it held
+    # the host's 0.5 and no flags were set
+    lat, out = host(t, plan(t, 'left.txt', TIMELINE + ['null-out2-left', 'out ' + t.path('left.wav')]))
+    m = re.search(r'out2 (\d+) blocks, (\d+) flagged, (\d+) flagged but not silent, (\d+) other flags', out)
+    check(m, 'no silence line in %r' % out)
+    b2, f2, n2, o2 = (int(x) for x in m.groups())
+    n, diff, loud = shifted_equal(wav(t.path('left.wav'))[2], b, lat[0] - 128)
+    print('Out 2 with its left channel null: %d blocks, %d flagged silent, %d of them not silent, %d other flags; Out 1: '
+          '%d frames compared, %d differ' % (b2, f2, n2, o2, n, diff))
+    check(b2 > 3000 and f2 == b2 and n2 == 0 and o2 == 0, 'Out 2 with one null channel: %r' % (m.groups(),))
+    check(diff == 0 and loud > 100000, 'Out 1 with Out 2\'s left channel null: %d differ' % diff)
 
 
 def lchv(path):

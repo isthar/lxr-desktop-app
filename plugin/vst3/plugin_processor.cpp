@@ -421,13 +421,15 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 					ch[c][i] = 0.0f;
 	}
 	data.outputs[0].silenceFlags = copied ? 0 : 3;
-	if (hasOut2)
+	if (data.numOutputs > 1)
 	{
-		if (!split)
-			for (unsigned c = 0; c < 2; c++)
-				for (uint32_t i = 0; i < n; i++)
-					data.outputs[1].channelBuffers32[c][i] = 0.0f;
-		data.outputs[1].silenceFlags = split && copied ? 0 : 3;
+		/* Out 2 not split: silent, each channel the host gave zeroed (also when the other one is null), and flagged */
+		AudioBusBuffers& o2 = data.outputs[1];
+		if (!split && o2.channelBuffers32)
+			for (int32 c = 0; c < o2.numChannels; c++)
+				for (uint32_t i = 0; o2.channelBuffers32[c] && i < n; i++)
+					o2.channelBuffers32[c][i] = 0.0f;
+		o2.silenceFlags = split && copied ? 0 : 3;
 	}
 	frames += n;
 	return kResultOk;

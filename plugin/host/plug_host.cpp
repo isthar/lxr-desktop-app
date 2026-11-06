@@ -138,6 +138,7 @@ struct Plan
 	std::vector<ParamCmd> flushes;	/* changes given in a flush (process() with 0 frames) right before the block from each frame */
 	std::vector<uint64_t> noOutputs;	/* the block from each frame with no output bus at all */
 	bool nullOut2 = false;		/* Out 2 (inactive) with null sample buffers, as the SDK allows */
+	bool nullOut2Left = false;	/* Out 2 with its left channel null, its right one given (filled with 0.5) */
 	std::vector<uint64_t> nullOut1;	/* the block from each frame with Out 1's left channel null */
 };
 
@@ -213,6 +214,7 @@ Plan readPlan (const char* path)
 		else if (cmd == "state-early") ok = !!(s >> p.stateEarly);
 		else if (cmd == "no-outputs") { uint64_t k; ok = !!(s >> k); p.noOutputs.push_back (k); }
 		else if (cmd == "null-out2") p.nullOut2 = true;
+		else if (cmd == "null-out2-left") p.nullOut2Left = true;
 		else if (cmd == "null-out1") { uint64_t k; ok = !!(s >> k); p.nullOut1.push_back (k); }
 		else if (cmd == "setstate-async") { uint64_t k; std::string fn; ok = !!(s >> k >> fn); p.asyncSets.push_back ({k, fn}); }
 		else if (cmd == "setstate") { uint64_t k; std::string fn; ok = !!(s >> k >> fn); p.setstates.push_back ({k, fn}); }
@@ -864,11 +866,15 @@ int main (int argc, char** argv)
 			/* buffers a plugin must not touch: an inactive bus may have null ones, and so may a channel */
 			Sample32* keep[3] = {nullptr, nullptr, nullptr};
 			const bool blind1 = nextNull1 < p.nullOut1.size () && p.nullOut1[nextNull1] <= f;
-			if (p.nullOut2 && in->data.numOutputs > 1)
+			if ((p.nullOut2 || p.nullOut2Left) && in->data.numOutputs > 1)
 			{
 				keep[0] = in->data.outputs[1].channelBuffers32[0];
-				keep[1] = in->data.outputs[1].channelBuffers32[1];
-				in->data.outputs[1].channelBuffers32[0] = in->data.outputs[1].channelBuffers32[1] = nullptr;
+				in->data.outputs[1].channelBuffers32[0] = nullptr;
+				if (p.nullOut2)
+				{
+					keep[1] = in->data.outputs[1].channelBuffers32[1];
+					in->data.outputs[1].channelBuffers32[1] = nullptr;
+				}
 			}
 			const bool noOuts = nextNoOut < p.noOutputs.size () && p.noOutputs[nextNoOut] <= f;
 			const int32 numOuts = in->data.numOutputs;
@@ -888,21 +894,15 @@ int main (int argc, char** argv)
 				rtInside (0);
 			if (tap.s && &in == &inst[0])
 				tap.read ();
-			if (keep[0])
-			{
-				in->data.outputs[1].channelBuffers32[0] = keep[0];
-				in->data.outputs[1].channelBuffers32[1] = keep[1];
-			}
-			if (blind1)
-				in->data.outputs[0].channelBuffers32[0] = keep[2];
-			in->data.numOutputs = numOuts;
 			processCalls++;
+			/* the silence of each bus the plugin was given, over the channels it was given (a null one holds what the
+			 * host left in its buffer) */
 			for (int32 b = 0; b < in->data.numOutputs && b < 2; b++)
 			{
 				const AudioBusBuffers& bus = in->data.outputs[b];
 				bool silent = true;
 				for (int32 c = 0; c < bus.numChannels; c++)
-					for (uint32_t i = 0; i < n; i++)
+					for (uint32_t i = 0; bus.channelBuffers32[c] && i < n; i++)
 						silent = silent && bus.channelBuffers32[c][i] == 0.0f;
 				unsigned* k = in->silence[b];
 				k[0]++;
@@ -914,6 +914,13 @@ int main (int argc, char** argv)
 				else if (bus.silenceFlags != 0)
 					k[3]++;
 			}
+			if (keep[0])
+				in->data.outputs[1].channelBuffers32[0] = keep[0];
+			if (keep[1])
+				in->data.outputs[1].channelBuffers32[1] = keep[1];
+			if (blind1)
+				in->data.outputs[0].channelBuffers32[0] = keep[2];
+			in->data.numOutputs = numOuts;
 			readEngineParam (*in);
 			readReports (*in, (size_t)(&in - &inst[0]), f, p.echo);
 			const float* l = in->data.outputs[0].channelBuffers32[0];
