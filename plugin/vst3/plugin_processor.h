@@ -3,12 +3,13 @@
  *
  * The LICHOMAT plugin's audio processor (plan E9.2 Task 8): two stereo outputs, Out 1 and Out 2
  * (plan E9.4), one event input. Each block it turns the host's transport into MIDI clock
- * (plug_clock.h) and the block's notes into MIDI, writes both into the engine's ring at their
- * frames, publishes the block, wakes the engine, and plays the ring plug_readOffset() frames
- * behind: Out 1 and Out 2 are the device's outputs when the host has activated Out 2, else Out 1
- * is their sum; the reported latency is plug_latency(). In real time it never waits; offline
- * (kOffline: Live's bounce, freeze and export) it waits for the engine. The state is the card
- * folder as an LCHS archive (plug_archive.h).
+ * (plug_clock.h), the block's notes and the host's parameter changes into MIDI (plug_params.h),
+ * writes them into the engine's ring at their frames, publishes the block, wakes the engine, and
+ * plays the ring plug_readOffset() frames behind: Out 1 and Out 2 are the device's outputs when
+ * the host has activated Out 2, else Out 1 is their sum; the reported latency is plug_latency().
+ * The firmware's values that changed by themselves go to the host as output parameter changes.
+ * In real time it never waits; offline (kOffline: Live's bounce, freeze and export) it waits for
+ * the engine. The state is the card folder as an LCHS archive (plug_archive.h).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -22,6 +23,7 @@
 #include <atomic>
 
 #include "plug_clock.h"
+#include "plug_params.h"
 #include "plugin_card.h"
 #include "plugin_link.h"
 #include "public.sdk/source/vst/vstaudioeffect.h"
@@ -50,10 +52,13 @@ public:
 	Steinberg::tresult PLUGIN_API getState (Steinberg::IBStream* state) SMTG_OVERRIDE;
 	Steinberg::tresult PLUGIN_API setState (Steinberg::IBStream* state) SMTG_OVERRIDE;
 
-	static constexpr unsigned kMaxMidi = 1024;	/**< MIDI messages of one block: clocks and notes */
+	static constexpr unsigned kMaxMidi = 1024;	/**< MIDI messages of one block: clocks, notes, parameters */
 
 private:
 	unsigned notesOf (Steinberg::Vst::IEventList* events, Steinberg::int32 frames);
+	unsigned paramsOf (Steinberg::Vst::ProcessData& data, plug_shm_t* s, bool running, uint32_t frames);
+	void showValues (Steinberg::Vst::ProcessData& data);
+	void restoreValues (const std::atomic<int>* from);
 	void reportState (Steinberg::Vst::ProcessData& data, uint64_t state);
 	const std::string& logOf (const CardFolder& f);
 	void offlineWait (plug_shm_t* s, uint64_t audioEnd);
@@ -71,8 +76,18 @@ private:
 	int reported = -1;			/**< the engine state last sent to the controller */
 	bool active = false;
 	std::atomic<bool> out2Active {false};	/**< the host activated Out 2 */
+	plug_params_t params {};	/**< the audio thread's: the parameters' step with the firmware */
+	uint8_t channel = PLUG_VALUE_NONE;	/**< the firmware's global MIDI channel, from its last values */
+	/** the host's values (params' want), for getState() and a new activation; the audio thread writes them */
+	std::atomic<int> hostValues[PLUG_PARAM_COUNT];
+	/** the values of the last state set, for the audio thread, which takes them when restoreGen moves */
+	std::atomic<int> stateValues[PLUG_PARAM_COUNT];
+	std::atomic<uint64_t> restoreGen {0};
+	std::atomic<uint64_t> restoreSeen {0};	/**< the audio thread's (and setActive()'s, while it does not run) */
 	plug_midi_t clocks[kMaxMidi];
 	plug_midi_t notes[kMaxMidi];
+	plug_midi_t paramMidi[kMaxMidi];
+	plug_paramPoint_t points[kMaxMidi];
 };
 
 } // namespace lichomat

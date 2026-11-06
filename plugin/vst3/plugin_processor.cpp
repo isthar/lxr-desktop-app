@@ -20,6 +20,7 @@
 #include "plug_archive.h"
 #include "plug_time.h"
 #include "plugin_ids.h"
+#include "plugin_points.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
@@ -34,6 +35,12 @@ Processor::Processor ()
 {
 	setControllerClass (kControllerUID);
 	processContextRequirements.needTempo ().needTransportState ().needProjectTimeMusic ().needCycleMusic ();
+	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+	{
+		hostValues[i].store (-1);
+		stateValues[i].store (-1);
+	}
+	plug_paramsInit (&params, 0);
 }
 
 FUnknown* Processor::create (void*)
@@ -120,6 +127,13 @@ tresult PLUGIN_API Processor::setActive (TBool state)
 		runningPid = 0;
 		waitedInVain = -2;
 		reported = -1;
+		/* the parameters: a value settles within a quarter of a second; the host keeps its values
+		 * through a new activation, or takes those of a state set since */
+		plug_paramsInit (&params, (uint64_t)(processSetup.sampleRate / 4.0));
+		channel = PLUG_VALUE_NONE;
+		const uint64_t gen = restoreGen.load (std::memory_order_acquire);
+		restoreValues (gen != restoreSeen.load (std::memory_order_relaxed) ? stateValues : hostValues);
+		restoreSeen.store (gen, std::memory_order_relaxed);
 		if (folder.valid ()
 		    && !link.start (processSetup.sampleRate, (uint32_t)processSetup.maxSamplesPerBlock,
 		                    processSetup.processMode == kRealtime, folder.card (), logOf (folder), logOf (folder), err))
@@ -172,6 +186,51 @@ unsigned Processor::notesOf (IEventList* events, int32 n)
 		notes[k] = plug_midi_t {off, 3, {st, pitch, vel}};
 	}
 	return count;
+}
+
+/* values (-1: none) for the host and the next engine */
+void Processor::restoreValues (const std::atomic<int>* from)
+{
+	int v[PLUG_PARAM_COUNT];
+	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+		v[i] = from[i].load (std::memory_order_relaxed);
+	plug_paramsRestore (&params, v);
+}
+
+/* The host's parameter changes and the engine's values of a block as MIDI into paramMidi (plan E9.4,
+ * plug_params.h): the host's to the engine when running (else kept for it), the engine's values
+ * compared with the host's. Returns the MIDI count. */
+unsigned Processor::paramsOf (ProcessData& data, plug_shm_t* s, bool running, uint32_t n)
+{
+	plug_values_t v;
+	const bool have = running && n > 0 && plug_valuesRead (s, &v);	/* a flush (n 0) only gives the host's */
+	if (have)
+		channel = v.channel;
+	const unsigned np = pointsOf (data.inputParameterChanges, (int32)n, points, kMaxMidi);
+	unsigned nm = plug_paramsHost (&params, points, np, frames, running ? channel : (uint8_t)PLUG_VALUE_NONE, paramMidi,
+	                               0, kMaxMidi);
+	if (have)
+		nm = plug_paramsReport (&params, v.values, v.frame, frames, channel, paramMidi, nm, kMaxMidi);
+	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+		if (hostValues[i].load (std::memory_order_relaxed) != params.p[i].want)
+			hostValues[i].store (params.p[i].want, std::memory_order_relaxed);
+	return nm;
+}
+
+/* the values the host is to get, as output parameter changes at the block's first frame */
+void Processor::showValues (ProcessData& data)
+{
+	if (!data.outputParameterChanges)
+		return;
+	unsigned from = 0;
+	uint8_t v = 0;
+	for (int i; (i = plug_paramsToShow (&params, &from, &v)) >= 0;)
+	{
+		int32 index = 0, point = 0;
+		IParamValueQueue* q = data.outputParameterChanges->addParameterData (plug_params[i].id, index);
+		if (q && q->addPoint (0, (double)v / plug_params[i].max, point) == kResultOk)
+			params.p[i].shown = 1;
+	}
 }
 
 void Processor::reportState (ProcessData& data, uint64_t state)
@@ -230,9 +289,12 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 		offlineWait (s, 0);	/* running, so that the first block's events reach it */
 	const uint64_t state = s ? plug_load (&s->state) : PLUG_ENGINE_NONE;
 	reportState (data, state);
-	if (data.numSamples <= 0 || data.numOutputs < 1 || data.outputs[0].numChannels < 2)
-		return kResultOk;
-	const uint32_t n = (uint32_t)data.numSamples;
+	const uint64_t gen = restoreGen.load (std::memory_order_acquire);
+	if (gen != restoreSeen.load (std::memory_order_relaxed))
+	{
+		restoreValues (stateValues);	/* a state set while active: its values */
+		restoreSeen.store (gen, std::memory_order_relaxed);
+	}
 	const bool running = s && state == PLUG_ENGINE_RUNNING;
 	if (running)
 	{
@@ -240,9 +302,21 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 		if (pid != runningPid)
 		{
 			plug_clockReset (&clock);	/* a new engine: the slave starts afresh */
+			plug_paramsEngine (&params, plug_load (&s->epoch));	/* and gets the host's values */
 			runningPid = pid;
 		}
 	}
+	if (data.numSamples == 0)
+	{
+		/* a flush: the host's parameter changes between blocks, at the next block's first frame */
+		const unsigned np = paramsOf (data, s, running, 0);
+		for (unsigned k = 0; running && k < np; k++)
+			(void)plug_evPush (s, frames, paramMidi[k].b, paramMidi[k].len);
+		return kResultOk;
+	}
+	if (data.numSamples < 0 || data.numOutputs < 1 || data.outputs[0].numChannels < 2)
+		return kResultOk;
+	const uint32_t n = (uint32_t)data.numSamples;
 	plug_transport_t t {};
 	if (const ProcessContext* c = data.processContext)
 	{
@@ -256,11 +330,16 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 	}
 	const unsigned nc = plug_clockBlock (&clock, &t, n, clocks, kMaxMidi);
 	const unsigned nn = notesOf (data.inputEvents, (int32)n);
+	const unsigned np = paramsOf (data, s, running, n);
+	showValues (data);
 	if (running)
-		for (unsigned i = 0, j = 0; i < nc || j < nn;)
+		for (unsigned i = 0, j = 0, k = 0; i < nc || j < nn || k < np;)
 		{
-			/* the transport's messages first at a frame: Start before a note on the downbeat */
-			const plug_midi_t& m = (j == nn || (i < nc && clocks[i].offset <= notes[j].offset)) ? clocks[i++] : notes[j++];
+			/* at a frame the transport's messages first (Start before a note on the downbeat), then the
+			 * parameters (a note plays with the value set at its frame), then the notes */
+			const uint32_t oc = i < nc ? clocks[i].offset : UINT32_MAX, op = k < np ? paramMidi[k].offset : UINT32_MAX;
+			const uint32_t on = j < nn ? notes[j].offset : UINT32_MAX;
+			const plug_midi_t& m = (oc <= op && oc <= on) ? clocks[i++] : (op <= on) ? paramMidi[k++] : notes[j++];
 			(void)plug_evPush (s, frames + m.offset, m.b, m.len);
 		}
 	if (s)
@@ -358,6 +437,10 @@ tresult PLUGIN_API Processor::setState (IBStream* state)
 		fresh.remove ();
 		return kResultFalse;
 	}
+	/* a new card: its own values, none of the host's (plan E9.4); the audio thread takes them */
+	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+		stateValues[i].store (-1, std::memory_order_relaxed);
+	restoreGen.fetch_add (1, std::memory_order_release);
 	if (active)
 		link.restart (fresh.card (), logOf (fresh), logOf (fresh));
 	CardFolder old;

@@ -1456,6 +1456,143 @@ def P10_plugin_buses48(t):
         check(diff == 0 and loud > 10000, 'Out %d: %d differ' % (k // 2 + 1, diff))
 
 
+def reports(out):
+    """the parameter values the plugin reported, as [(frame, {id: value})], from plughost's lines"""
+    rows = []
+    for l in out.splitlines():
+        m = re.match(r'lichomat-plughost: instance 0: frame (\d+):((?: \d+=\d+)+)$', l)
+        if m:
+            rows.append((int(m.group(1)), dict((int(a), int(b)) for a, b in (w.split('=') for w in m.group(2).split()))))
+    return rows
+
+
+# the onset card stopped, a Note On of Drum 1's note every 20,000 frames, and the host's changes: Drum 1's volume
+# (id 10) 40 at 30,000, its filter (30) 48 at 52,000, the DJ filter (50) 20 at 60,000, the reverb level (51) 112 at
+# 90,000, then pattern 1 (id 1) at 100,000, which the firmware plays at once with its kit (stopped), and Drum 2's
+# decay (41) as a ramp of a step every 1,000 frames from 120,000
+PARAM_PLAN = (['note %d 0 48 127' % (20000 * k + 5000) for k in range(25)]
+              + ['param 30000 10 40', 'param 52000 30 48', 'param 60000 50 20', 'param 90000 51 112', 'param 100000 1 1']
+              + ['param %d 41 %d' % (120000 + 1000 * k, 20 + 3 * k) for k in range(30)])
+
+
+@case
+def P10_plugin_params(t):
+    # The host's parameter changes reach the firmware at their frames: at 44,140.625 Hz, offline, blocks of 128, the
+    # plugin's output is lichomat-render's for the MIDI the plugin gave its engine (plughost's script, which has the
+    # CCs, NRPNs and the Program Change at the changes' frames), byte for byte. The plugin reports every value at its
+    # first block (the host has none yet), then only those the firmware changed by itself: pattern 1's kit, loaded
+    # with it, sets Drum 1's volume and filter and the reverb level back to the kit's, reported within 1,024 frames of
+    # the load or, for a value the host gave less than a quarter of a second before (the reverb level at 90,000), of
+    # the end of that time (plug_params.h, settle), each once; the values the host set are not reported back. With echo
+    # (the host gives every reported value back to the plugin) the output and the reports are the same: no loop
+    runs = {}
+    for name, extra in (('plain', []), ('echo', ['echo'])):
+        script = t.path(name + '.txt')
+        lat, out = host(t, plan(t, name + '.plan', PARAM_PLAN + extra + ['out ' + t.path(name + '.wav'), 'script ' + script],
+                                frames=blocks_frames(6)))
+        runs[name] = (lat[0], reports(out), script)
+    lat, rep, script = runs['plain']
+    t.render(t.card('render'), script, 6, t.path('render.wav'))
+    _, _, a = wav(t.path('plain.wav'))
+    _, _, b = wav(t.path('render.wav'))
+    n, diff, loud = shifted_equal(a, b, lat - 128)
+    with open(script) as f:
+        text = f.read()
+    ccs, nrpns, pcs = text.count(' B0 '), text.count(' B0 63 '), text.count(' C0 ')
+    print('latency %d, %d frames compared, %d differ; the script: %d CC messages (%d NRPNs), %d Program Changes'
+          % (lat, n, diff, ccs, nrpns, pcs))
+    check(diff == 0 and loud > 1000 and nrpns == 2 and pcs == 1 and ccs == 2 + 2 * 3 + 30, 'differ %d, %r' % (diff, (ccs, nrpns, pcs)))
+    # the block a report reaches the host in depends on how far the engine has run when the plugin reads its table
+    # (offline it runs ahead freely): the frames are bounded, the values exact, each parameter reported once
+    settle = int(RATE / 4)
+    for name in ('plain', 'echo'):
+        rows = runs[name][1]
+        later = {}
+        for _, v in rows[1:]:
+            later.update(v)
+        ids = [i for _, v in rows[1:] for i in v]
+        frames = [f for f, _ in rows[1:]]
+        print('%s: the first report at frame %d, %d values; then %r at frames %r' % (name, rows[0][0], len(rows[0][1]),
+                                                                                  later, frames))
+        check(rows[0][0] == 0 and len(rows[0][1]) == 36, '%s: the first report %r' % (name, rows[:1]))
+        check(later == {10: 127, 30: 127, 51: 0} and len(ids) == len(set(ids)), '%s: the later reports %r' % (name, rows[1:]))
+        check(all(100000 <= f < 100000 + 1024 or 90000 + settle <= f < 90000 + settle + 1024 for f in frames),
+              '%s: the later reports at frames %r' % (name, frames))
+    _, _, e = wav(t.path('echo.wav'))
+    check(e == a, 'with echo the output differs')
+    print('with echo: the same output and the same reports')
+    log = ''.join(instance_logs(t.path('home')).values())
+    said = re.findall(r'parameters: [^\n]*', log)
+    print('the logs: %r' % sorted(set(said)))
+    check(len(said) == 2 and all(x == 'parameters: MIDI channel 1, receive filter: CC on, Program Change on' for x in said),
+          'the logs %r' % said)
+
+
+@case
+def P10_plugin_outputs(t):
+    # A voice moved to out 2 by its output parameter (id 60, Drum 1 Output, St2) on the init card, whose voices all
+    # play on out 1: Out 2 silent before the change (the mixer takes it at once, not after the voice queue's 128
+    # frames), then Drum 1, and Out 1 the others, each the renderer's, byte for byte
+    init = os.path.join(t.a.root, 'emu', 'tests', 'cards', 'init')
+    out = t.path('init.wav')
+    lines = ['card ' + init, 'bus2', 'play 0 120 0', 'param 100000 60 1', 'out ' + out, 'script ' + t.path('init.txt')]
+    lat, _ = host(t, plan(t, 'init.plan', lines, card=False, frames=blocks_frames(6)))
+    for name, wavname in (('out1', out), ('out2', out[:-4] + '-out2.wav')):
+        r = t.path('render-%s.wav' % name)
+        t.run([t.a.render, '--card', t.card('i' + name, 'init'), '--bpm', 'mid', '--no-start', '--as-booted', '--stereo', name,
+               '--seconds', '6', '--events', t.path('init.txt'), '--out', r])
+        _, _, a = wav(wavname)
+        _, _, b = wav(r)
+        n, diff, loud = shifted_equal(a, b, lat[0] - 128)
+        early = sum(1 for v in a[:2 * (100000 + lat[0] - 128)] if v)  # the read offset: the mixer takes it at once
+        print('init, Drum 1 to St2 at 100,000, %s: %d frames compared, %d differ, %d samples not 0 (%d before the change)'
+              % (name, n, diff, loud, early))
+        check(diff == 0 and loud > 10000, 'init, %s: %d differ' % (name, diff))
+        check(name == 'out1' or early == 0, 'Out 2 before the change: %d samples' % early)
+
+
+@case
+def P10_plugin_params_restart(t):
+    # A new engine (here after a kill) gets the host's values: real time, paced, 48 kHz, the init card's four on the
+    # floor, every voice's volume 0 from frame 0 (before the transport plays): silent before the kill at 3 s and
+    # silent after it, though the new engine starts on the card's kit (volume 127) and plays the beats again
+    init = os.path.join(t.a.root, 'emu', 'tests', 'cards', 'init')
+    vols = ['param 0 %d 0' % i for i in range(10, 16)]
+    lines = ['card ' + init, 'mode realtime', 'paced', 'play 4800 120 0', 'kill 144000', 'out ' + t.path('r.wav')]
+    host(t, plan(t, 'quiet.txt', lines + vols, rate=48000, block=256, frames=48000 * 6, card=False))
+    host(t, plan(t, 'loud.txt', lines[:-1] + ['out ' + t.path('l.wav')], rate=48000, block=256, frames=48000 * 6, card=False))
+    _, _, q = wav(t.path('r.wav'))
+    _, _, l = wav(t.path('l.wav'))
+    before = sum(1 for v in q[:2 * 144000] if abs(v) >= 1000)
+    after = sum(1 for v in q[2 * 144000:] if abs(v) >= 1000)
+    loud = sum(1 for v in l[2 * 144000:] if abs(v) >= 1000)
+    log = ''.join(instance_logs(t.path('home')).values())
+    print('volumes 0: %d loud samples before the kill, %d after; without them %d after; engines started %d'
+          % (before, after, loud, len(re.findall(r'engine \d+ started on ', log)) ))
+    check(before == 0 and after == 0 and loud > 10000, 'before %d, after %d, without %d' % (before, after, loud))
+
+
+@case
+def P10_plugin_rtparams(t):
+    # the audio thread under the interposer with automation running: P10_plugin_rt's 10 s, and every block a change of
+    # four parameters (two CCs, an NRPN, the pattern every second): no allocation, lock, wait, read or sleep inside
+    # process(), one write per call
+    auto = []
+    for k in range(3750):
+        f = 128 * k + 17
+        auto += ['param %d 10 %d' % (f, k % 128), 'param %d 30 %d' % (f, 127 - k % 128), 'param %d 50 %d' % (f, (5 * k) % 128)]
+        if k % 375 == 0:
+            auto.append('param %d 1 %d' % (f, (k // 375) % 4))
+    lines = ['mode realtime', 'paced', 'rtcheck', 'out ' + t.path('rt.wav')] + TIMELINE + auto
+    _, out = host(t, plan(t, 'rt.txt', lines, rate=48000, block=128, frames=480000),
+                  env={'DYLD_INSERT_LIBRARIES': t.a.rtcheck})
+    line = [l for l in out.splitlines() if 'rtcheck:' in l and 'process calls' in l]
+    check(line, 'no rtcheck line in %r' % out)
+    w = line[0].split()
+    calls, bad, writes = int(w[2]), int(w[5]), int(w[8])
+    check(calls == 3750 and bad == 0 and writes == calls, line[0])
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

@@ -25,6 +25,7 @@
 #include <sys/wait.h>
 #include <vector>
 
+#include "plug_params.h"
 #include "plug_spawn.h"
 
 namespace lichomat {
@@ -208,6 +209,7 @@ void EngineLink::monitor ()
 		const char* why = "it died";
 		char waited[64];	/* why, for a vain offline wait */
 		bool stall = false;
+		bool told = false;	/* the parameters' MIDI channel and filter are in the log */
 		for (;;)
 		{
 			struct pollfd p = {life[0], POLLIN, 0};
@@ -240,6 +242,18 @@ void EngineLink::monitor ()
 			}
 			const double now = wallNow ();
 			const uint64_t st = plug_load (&mem->state), frontier = plug_load (&mem->frontier);
+			plug_values_t v;
+			if (!told && st == PLUG_ENGINE_RUNNING && plug_valuesRead (mem, &v))
+			{
+				/* plan E9.4: the parameters reach the firmware on its global channel, through its filter */
+				told = true;
+				if (v.channel == PLUG_VALUE_NONE)
+					note ("parameters: the firmware has no global MIDI channel; the host cannot set them");
+				else
+					note ("parameters: MIDI channel %u, receive filter: CC %s, Program Change %s", v.channel + 1u,
+					      (v.rxFilter & 4u) ? "on" : "off (the host cannot set them)",
+					      (v.rxFilter & 8u) ? "on" : "off (the host cannot set the pattern)");
+			}
 			const uint64_t audioEnd = plug_load (&mem->audioEnd);
 			if (frontier != lastFrontier || audioEnd != lastEnd)
 			{

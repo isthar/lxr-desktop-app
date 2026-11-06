@@ -208,7 +208,7 @@ add_executable(lichomat-plughost host/plug_host.cpp "${SDK_ROOT}/public.sdk/sour
     "${SDK_ROOT}/public.sdk/source/vst/hosting/plugprovider.cpp" "${SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
     $<TARGET_OBJECTS:plug_common> $<TARGET_OBJECTS:plug_card>)
 set_source_files_properties("${SDK_ROOT}/public.sdk/source/vst/hosting/module_mac.mm" PROPERTIES COMPILE_FLAGS "-fobjc-arc")
-target_include_directories(lichomat-plughost PRIVATE "${PLUGIN_DIR}/common" "${LXR_ROOT}/emu/core")
+target_include_directories(lichomat-plughost PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/vst3" "${LXR_ROOT}/emu/core")
 target_compile_options(lichomat-plughost PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${PLUGIN_FLAGS}> "SHELL:-ivfsoverlay ${PLUGIN_OVERLAY}")
 target_compile_features(lichomat-plughost PRIVATE cxx_std_17)
 target_link_libraries(lichomat-plughost PRIVATE sdk_hosting "-framework Cocoa")
@@ -218,12 +218,13 @@ set(PLUGIN_HOST_TEST ${PLUGIN_BUNDLE_TEST} --host $<TARGET_FILE:lichomat-plughos
 foreach(id P10_plugin_native P10_plugin_onsets P10_plugin_latency P10_plugin_resampled P10_plugin_state P10_plugin_app_card
         P10_plugin_renew P10_plugin_kill P10_plugin_rt P10_plugin_logs P10_plugin_beats P10_plugin_setstate
         P10_plugin_hang P10_plugin_crashes P10_plugin_stale P10_plugin_policy P10_plugin_spawn_fail P10_plugin_nonblock
-        P10_plugin_offline_hang P10_plugin_buses P10_plugin_buses48)
+        P10_plugin_offline_hang P10_plugin_buses P10_plugin_buses48 P10_plugin_params P10_plugin_outputs
+        P10_plugin_params_restart P10_plugin_rtparams)
     add_test(NAME ${id} COMMAND ${PLUGIN_HOST_TEST} ${id})
     set_tests_properties(${id} PROPERTIES TIMEOUT 600 LABELS plugin)
 endforeach()
 set_tests_properties(P10_plugin_kill P10_plugin_rt P10_plugin_beats P10_plugin_hang P10_plugin_crashes P10_plugin_policy
-    P10_plugin_spawn_fail P10_plugin_offline_hang PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
+    P10_plugin_spawn_fail P10_plugin_offline_hang P10_plugin_params_restart P10_plugin_rtparams PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
 
 # --- the licence gate and the name scan (Task 10) ---------------------------------------------
 add_test(NAME P11_licence COMMAND ${PLUGIN_HOST_TEST} P11_licence)

@@ -25,9 +25,17 @@
  *   paced                  each block at its wall-clock time, as an audio device gives it: the
  *                          thread takes the time-constraint policy of the block's period
  *   bus2                   activate Out 2 (plan E9.4): each instance writes it as FILE-out2.wav
+ *   param FRAME ID VALUE   set parameter ID (plug_params.h) to VALUE (0..its max) at FRAME, every
+ *                          instance; the script gets the MIDI the plugin must give its engine
+ *   channel CH             the firmware's global MIDI channel (0-15) for that MIDI (default 0, the
+ *                          test cards')
+ *   echo                   give each parameter value the plugin reports back to it as a change at
+ *                          the next block's first frame, as a host may
  * Instance I > 0 writes FILE-I.wav (and FILE-I-out2.wav). The summary on stdout gives each
- * instance's latency and the Engine parameter it last reported. Before each process() the output
- * buffers are filled with 0.5, as a host may leave anything in them.
+ * instance's latency and the Engine parameter it last reported, and a line for each block in which
+ * an instance reported parameter values: "lichomat-plughost: instance I: frame F: ID=VALUE ...".
+ * Before each process() the output buffers are filled with 0.5, as a host may leave anything in
+ * them.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -57,7 +65,9 @@
 
 #include "plug_archive.h"
 #include "plug_clock.h"
+#include "plug_params.h"
 #include "plug_time.h"
+#include "plugin_points.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
@@ -80,6 +90,13 @@ struct NoteCmd
 	int ch, pitch, vel;
 };
 
+struct ParamCmd
+{
+	uint64_t frame;
+	uint32_t id;
+	int value;
+};
+
 struct TransportCmd
 {
 	uint64_t frame;
@@ -94,9 +111,11 @@ struct Plan
 	int block = 128;
 	uint64_t frames = 0;
 	int instances = 1;
-	bool loop = false, rtcheck = false, offline = true, paced = false, bus2 = false;
+	bool loop = false, rtcheck = false, offline = true, paced = false, bus2 = false, echo = false;
+	int channel = 0;
 	double loopStart = 0, loopEnd = 0;
 	std::vector<NoteCmd> notes;
+	std::vector<ParamCmd> params;
 	std::vector<TransportCmd> transport;
 	std::vector<uint64_t> kills, hangs;
 	std::vector<std::pair<uint64_t, int>> renews;
@@ -136,6 +155,15 @@ Plan readPlan (const char* path)
 		else if (cmd == "rtcheck") p.rtcheck = true;
 		else if (cmd == "paced") p.paced = true;
 		else if (cmd == "bus2") p.bus2 = true;
+		else if (cmd == "echo") p.echo = true;
+		else if (cmd == "channel") ok = !!(s >> p.channel) && p.channel >= 0 && p.channel < 16;
+		else if (cmd == "param")
+		{
+			ParamCmd c;
+			ok = !!(s >> c.frame >> c.id >> c.value) && plug_paramIndex (c.id) >= 0 && c.value >= 0
+			     && c.value <= plug_params[plug_paramIndex (c.id)].max;
+			p.params.push_back (c);
+		}
 		else if (cmd == "mode") { std::string m; ok = !!(s >> m) && (m == "realtime" || m == "offline"); p.offline = m == "offline"; }
 		else if (cmd == "loop") ok = !!(s >> p.loopStart >> p.loopEnd), p.loop = true;
 		else if (cmd == "note") { NoteCmd n; ok = !!(s >> n.frame >> n.ch >> n.pitch >> n.vel); p.notes.push_back (n); }
@@ -194,10 +222,13 @@ struct Instance
 	FUnknownPtr<IAudioProcessor> processor;
 	HostProcessData data;
 	EventList events {512};
-	ParameterChanges outParams {8};
+	ParameterChanges inParams {64};
+	ParameterChanges outParams {64};	/* the Engine parameter and every one of plug_params.h in one block */
 	double engine = 0.0;	/* the Engine parameter: 2/3 running */
 	std::vector<float> l, r, l2, r2;
 	uint32_t latency = 0;
+	plug_params_t mirror {};	/* the plugin's step with its engine, for the script (plug_params.h) */
+	std::vector<std::pair<uint32_t, double>> echo;	/* reported values for the next block */
 };
 
 int memPut (void* ctx, const void* p, size_t n)
@@ -264,8 +295,35 @@ void open (Instance& in, const VST3::Hosting::PluginFactory& factory, const VST3
 	in.processor->setProcessing (true);
 	in.data.prepare (*in.component, p.block, kSample32);
 	in.data.inputEvents = &in.events;
+	in.data.inputParameterChanges = &in.inParams;
 	in.data.outputParameterChanges = &in.outParams;
 	in.engine = 0.0;
+	plug_paramsInit (&in.mirror, 0);
+	in.echo.clear ();
+}
+
+/* the parameter values instance i reported in the block at frame: printed, into its mirror (the
+ * plugin's report sets the value it gives the engine), and kept for an echo */
+void readReports (Instance& in, size_t i, uint64_t frame, bool echo)
+{
+	std::string line;
+	for (int32 k = 0; k < in.outParams.getParameterCount (); k++)
+	{
+		IParamValueQueue* q = in.outParams.getParameterData (k);
+		ParamValue v;
+		int32 off;
+		const int idx = q ? plug_paramIndex (q->getParameterId ()) : -1;
+		if (idx < 0 || q->getPointCount () < 1 || q->getPoint (q->getPointCount () - 1, off, v) != kResultOk)
+			continue;
+		const uint8_t plain = plug_paramValue ((unsigned)idx, v);
+		line += " " + std::to_string (plug_params[idx].id) + "=" + std::to_string (plain);
+		in.mirror.p[idx].want = in.mirror.p[idx].sent = plain;
+		in.mirror.p[idx].shown = 1;
+		if (echo)
+			in.echo.push_back ({plug_params[idx].id, v});
+	}
+	if (!line.empty ())
+		printf ("lichomat-plughost: instance %zu: frame %llu:%s\n", i, (unsigned long long)frame, line.c_str ());
 }
 
 void close (Instance& in)
@@ -433,7 +491,7 @@ int main (int argc, char** argv)
 	plug_clock_t expect;
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
-	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0;
+	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0;
 	unsigned long long processCalls = 0;
 	if (p.paced)
 		paceAsDevice (p);
@@ -484,11 +542,44 @@ int main (int argc, char** argv)
 		/* the expected MIDI: the same generator, the same note conversion (plugin_processor.cpp) */
 		plug_midi_t m[1024];
 		const unsigned nm = plug_clockBlock (&expect, &t, n, m, 1024);
-		for (unsigned i = 0; i < nm; i++)
-		{
+		auto put = [&script, f] (const plug_midi_t& x) {
 			char b[16];
-			snprintf (b, sizeof b, m[i].len == 3 ? "%02X %02X %02X" : "%02X", m[i].b[0], m[i].b[1], m[i].b[2]);
-			script[f + m[i].offset].push_back (b);
+			snprintf (b, sizeof b, x.len == 3 ? "%02X %02X %02X" : x.len == 2 ? "%02X %02X" : "%02X", x.b[0], x.b[1], x.b[2]);
+			script[f + x.offset].push_back (b);
+		};
+		for (unsigned i = 0; i < nm; i++)
+			put (m[i]);
+		/* the parameters: the plan's changes in this block, and the echo of the last block's reports;
+		 * the MIDI the plugin must give its engine, from instance 0's mirror of its step */
+		for (auto& in : inst)
+		{
+			in->inParams.clearQueue ();
+			for (auto& [id, v] : in->echo)
+			{
+				int32 index = 0, point = 0;
+				if (IParamValueQueue* q = in->inParams.addParameterData (id, index))
+					q->addPoint (0, v, point);
+			}
+			in->echo.clear ();
+		}
+		while (nextParam < p.params.size () && p.params[nextParam].frame < f + n)
+		{
+			const ParamCmd& c = p.params[nextParam++];
+			const double v = (double)c.value / plug_params[plug_paramIndex (c.id)].max;
+			for (auto& in : inst)
+			{
+				int32 index = 0, point = 0;
+				if (IParamValueQueue* q = in->inParams.addParameterData (c.id, index))
+					q->addPoint ((int32)(c.frame - f), v, point);
+			}
+		}
+		{
+			static plug_paramPoint_t pts[1024];
+			static plug_midi_t pm[1024];
+			const unsigned np = lichomat::pointsOf (&inst[0]->inParams, (int32)n, pts, 1024);
+			const unsigned nq = plug_paramsHost (&inst[0]->mirror, pts, np, f, (uint8_t)p.channel, pm, 0, 1024);
+			for (unsigned i = 0; i < nq; i++)
+				put (pm[i]);
 		}
 		for (auto& in : inst)
 			in->events.clear ();
@@ -532,6 +623,7 @@ int main (int argc, char** argv)
 				rtInside (0);
 			processCalls++;
 			readEngineParam (*in);
+			readReports (*in, (size_t)(&in - &inst[0]), f, p.echo);
 			const float* l = in->data.outputs[0].channelBuffers32[0];
 			const float* r = in->data.outputs[0].channelBuffers32[1];
 			in->l.insert (in->l.end (), l, l + n);
