@@ -1,5 +1,5 @@
 <!--
-  LICHOMAT: sprawdzenia prototypu wtyczki w Abletonie (tracker E9.21, P1–P8).
+  LICHOMAT: sprawdzenia wtyczki w Abletonie (tracker E9.21, P1–P8; E9.41, P9–P10).
 
   Copyright (C) 2026 Tomasz Krzywicki
   SPDX-License-Identifier: GPL-3.0-only
@@ -65,3 +65,37 @@ Każdy punkt: co zrobić, co powinno się stać, co zapisać.
 - **Brak dźwięku w P3–P4.** Sprawdź w Monitorze aktywności, czy działa `lichomat-engine`, i zajrzyj do logu.
 - **Karta.** Nowa instancja bierze kartę z `~/Library/Application Support/LICHOMAT Plugin/Card` (kopiuje ją). Bez niej bierze kartę LICHOMAT Emu, a bez obu startuje na karcie init bez wzorców.
 - **Silnik wciąż pada.** Po 5 awariach w ciągu minuty, albo 3 zawieszeniach w ciągu 10 minut, wtyczka się poddaje i milknie. Live działa dalej. Wtedy przyślij log.
+
+## E9.4: dwa wyjścia i parametry (P9–P10)
+
+| | |
+|---|---|
+| Wersja | gałąź `plugin-v07`, `d0534b1` (2026-11-06), wtyczka 0.2.0 z firmware LICHOMAT 0.7 |
+| Co nowego | Dwa wyjścia stereo „Out 1” i „Out 2”, jak dwa gniazda urządzenia. 36 parametrów do automatyki: wzorzec; głośność, panorama, filtr, decay i wyjście każdego głosu (hi-hat osobno zamknięty i otwarty); filtr DJ; poziom i decay pogłosu; ilość FX. Wartości, które firmware zmienia samo (np. kit wczytany razem ze wzorcem), Live pokazuje sam |
+| Czego nie ma | Shuffle i rozmiaru pogłosu (firmware zmienia je tylko z własnego menu), AU, własnego okna. CC i Program Change z klipów MIDI nadal nie trafiają do firmware; parametry tak |
+| Czas | ok. 15 min |
+
+### Przed sprawdzeniami
+
+1. **Instalacja nowej wersji.** Zamknij Live. W Terminalu:
+
+   ```bash
+   cd /Users/tk/Code/lxr/build/wt-plugin-v07 && plugin/tools/install_plugin.sh
+   ```
+
+   - Na końcu ma być `47 tests passed, 0 tests failed`. Jeśli skrypt napisze `FAILED`, przyślij mi `build/plugin-release.install.log`.
+   - Nowa wersja zastępuje poprzednią: w Live to ta sama wtyczka, sety z P1–P8 otwierają się z nią (z wartościami z karty).
+   - Karta startowa zostaje: `~/Library/Application Support/LICHOMAT Plugin/Card`, karta „init”. Wszystkie głosy grają na wyjściu 1, a na pierwszym wzorcu na krokach 1, 5, 9 i 13.
+2. **Live** jak w P1–P8: 48 kHz, bufor 128 albo 256 próbek, w menu Options włączone „Delay Compensation”.
+3. **Parametry w Live.** Wtyczka nie ma okna, więc Live pokazuje jej parametry jako suwaki: rozwiń je trójkątem w nagłówku urządzenia LICHOMAT. Każdy parametr jest też na liście automatyki ścieżki (w aranżacji: przycisk „A”, potem wybór urządzenia LICHOMAT i parametru). Wartości są takie, jak na wyświetlaczu urządzenia: panorama −63..64, wzorzec 1–64, wyjście głosu St1, St2, L1, R1, L2, R2 albo FX.
+
+### Sprawdzenia
+
+| # | Co zrobić | Co powinno się stać | Zapisz |
+|---|---|---|---|
+| **P9** (6 min) | Ścieżka MIDI z LICHOMAT, transport gra (sekwencer karty, cztery ćwierćnuty). (a) Parametr **Drum 1 Output** ustaw na **St2**. (b) Dodaj ścieżkę audio; w jej „Audio From” wybierz ścieżkę LICHOMAT, a pod spodem **Out 2**; Monitor „In”. (c) Usuń tę ścieżkę audio. (d) Drum 1 Output z powrotem na **St1**. | (a) Nic się nie zmienia: dopóki Live nie bierze dźwięku z Out 2, ścieżka LICHOMAT gra oba wyjścia razem. (b) Drum 1 gra już tylko na nowej ścieżce, a ścieżka LICHOMAT bez niego (wskaźniki poziomu obu ścieżek). (c) Drum 1 wraca na ścieżkę LICHOMAT albo milknie (zależy od tego, czy Live wyłącza wtedy Out 2). (d) Drum 1 gra na ścieżce LICHOMAT, Out 2 nic. | Co słychać po (a), (b), (c) i (d). Najważniejsze (a): jeśli Drum 1 zniknął już wtedy, Live włącza Out 2 od razu i trzeba to zmienić we wtyczce. |
+| **P10** (10 min) | W aranżacji na ścieżce LICHOMAT, transport od taktu 1: (a) automatyka **Drum 1 Volume** od 127 na początku taktu 1 do 0 na początku taktu 3, dalej 0; odtwórz. (b) Bez automatyki przesuń ręką **Reverb Level** na ok. 100 i **DJ Filter** w lewo, potem w prawo. (c) Automatyka **Pattern**: na trzeciej ćwierćnucie taktu 3 wartość 2, na trzeciej ćwierćnucie taktu 6 znów 1; odtwórz od taktu 1. (d) „Freeze” ścieżki i odsłuch. (e) Usuń automatykę Drum 1 Volume, ustaw ręką **Hi-hat Volume** na 40, zapisz set, zamknij Live, otwórz set. | (a) Drum 1 cichnie płynnie razem z linią automatyki. (b) Pogłos słychać; filtr DJ zamyka górę albo dół. (c) Od taktu 4 gra wzorzec 2 (na karcie init sam Drum 1 na ćwierćnuty), od taktu 7 znów wzorzec 1: firmware zmienia wzorzec na końcu grającego, jak z Program Change na urządzeniu. Razem ze wzorcem wczytuje jego kit, więc parametry wracają do wartości kitu i Live dostaje je od wtyczki: suwak Reverb Level wraca na 0, a Drum 1 Volume na 127, choć jego automatyka z (a) stoi na 0 (Drum 1 znów głośno). (d) Zamrożona ścieżka gra to samo co (c). (e) Hi-hat Volume pokazuje 40 i hi-hat gra ciszej, jak przed zapisem. | Czy (a)–(e) jak opisano. Przy (c): czy Drum 1 po zmianie wzorca gra głośno; czy przy Drum 1 Volume zapaliła się w Live czerwona lampka (automatyka nadpisana) albo przycisk „Re-Enable Automation”; i co wolisz po wczytaniu kitu: wartość z kitu (jak teraz, jak na urządzeniu) czy ostatnią z automatyki Live'a. |
+
+Jeśli parametr nie działa: w logu instancji (`~/Library/Application Support/LICHOMAT Plugin/logs/<id>.log`, jak w P8) jest linia `parameters: MIDI channel …, receive filter: …`. Na karcie init: `MIDI channel 1, receive filter: CC on, Program Change on`. Przyślij mi tę linię z logiem.
+
+Znane ograniczenie: przy eksporcie, bounce'ie albo freeze z nowo wstawionej wtyczki (nowy silnik offline) wartości z seta dochodzą do firmware w pierwszej ramce, razem ze startem transportu. Jeśli jakiś parametr mocno różni się od wartości z kitu (np. głos ściszony do 0), nuta dokładnie w tej ramce może przez 2–3 ms zagrać z wartością z kitu. Jeśli to usłyszysz, zapisz przy P10 (d).
