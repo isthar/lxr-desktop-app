@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-06 19:25",
+    "updated": "2026-11-06 20:18",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.7: wtyczka AU (plan gotowy; odświeżenie pod d0534b1, potem wdrożenie)",
     "branch": "timing-core",
-    "head": "ff6dd7b",
+    "head": "6440a6b",
     "next": "Czeka na Ciebie: E8.12–E8.13 wtyczka w Live (P1–P10; Twój Live wygasł: testuje znajomy, albo REAPER), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.7 AU, potem E9.3 po P4",
-    "updated_at": "2026-11-06T19:25:00+01:00",
+    "updated_at": "2026-11-06T20:18:00+01:00",
     "now": "E9.74–E9.75: poprawki z przeglądu jakości AU (od 15:27)"
   },
   "epics": [
@@ -926,14 +926,14 @@
       "id": "E8.12",
       "epic": "E8",
       "status": "do zrobienia",
-      "title": "Twoje sprawdzenia prototypu wtyczki w Abletonie P1–P8 (ok. 20 min, docs/lichomat/plugin-checks.md); instalacja jednym poleceniem: cd /Users/tk/Code/lxr/build/wt-plugin && plugin/tools/install_plugin.sh (przy zamkniętym Live); wyniki zapisujesz na stronie arkusza (https://claude.ai/artifact/KsRmojvMf42Sr3GMxkD8bd, sekcja „Wtyczka w Abletonie”). Można od razu na wersji 0.2.0 (instalacja: cd /Users/tk/Code/lxr/build/wt-plugin-v07 && plugin/tools/install_plugin.sh): P1–P8 sprawdza się tak samo, potem P9–P10 (E8.13); Twój Live wygasł (06.11): wtyczkę 0.2.0 z wydania testuje znajomy na swoim Live; jego wyniki (albo P1–P10 z jego odpowiedziami) zamykają ten wiersz. Bez Live'a u Ciebie: REAPER (60 dni pełnej wersji za darmo), a ja przepiszę sprawdzenia pod niego",
+      "title": "Twoje sprawdzenia prototypu wtyczki w Abletonie P1–P8 (ok. 20 min, docs/lichomat/plugin-checks.md); instalacja jednym poleceniem: cd /Users/tk/Code/lxr/build/wt-plugin && plugin/tools/install_plugin.sh (przy zamkniętym Live); wyniki zapisujesz na stronie arkusza (https://claude.ai/artifact/KsRmojvMf42Sr3GMxkD8bd, sekcja „Wtyczka w Abletonie”). Można od razu na wersji 0.2.0 (instalacja: cd /Users/tk/Code/lxr/build/wt-plugin-v07 && plugin/tools/install_plugin.sh): P1–P8 sprawdza się tak samo, potem P9–P10 (E8.13); Twój Live wygasł (06.11): wtyczkę 0.2.0 z wydania testuje znajomy na swoim Live; karta testu dla niego (instalacja z zipa, karta startowa, P1–P10, wzór odpowiedzi): https://github.com/isthar/lxr-desktop-app/blob/timing-core/docs/lichomat/plugin-test.md; odpowiedzi znajomego zamykają ten wiersz. Bez Live'a u Ciebie: REAPER (60 dni pełnej wersji za darmo), a ja przepiszę sprawdzenia pod niego",
       "updated": "2026-11-06"
     },
     {
       "id": "E8.13",
       "epic": "E8",
       "status": "do zrobienia",
-      "title": "Twoje sprawdzenia wtyczki 0.2.0 w Abletonie P9–P10: dwa wyjścia i parametry (ok. 15 min, docs/lichomat/plugin-checks.md, sekcja „E9.4: dwa wyjścia i parametry”); instalacja przy zamkniętym Live: cd /Users/tk/Code/lxr/build/wt-plugin-v07 && plugin/tools/install_plugin.sh. Przy P10 (c) napisz, co wolisz po wczytaniu kitu: wartość z kitu czy z automatyki (Q40); Twój Live wygasł (06.11): wtyczkę 0.2.0 z wydania testuje znajomy na swoim Live; jego wyniki (albo P1–P10 z jego odpowiedziami) zamykają ten wiersz. Bez Live'a u Ciebie: REAPER (60 dni pełnej wersji za darmo), a ja przepiszę sprawdzenia pod niego",
+      "title": "Twoje sprawdzenia wtyczki 0.2.0 w Abletonie P9–P10: dwa wyjścia i parametry (ok. 15 min, docs/lichomat/plugin-checks.md, sekcja „E9.4: dwa wyjścia i parametry”); instalacja przy zamkniętym Live: cd /Users/tk/Code/lxr/build/wt-plugin-v07 && plugin/tools/install_plugin.sh. Przy P10 (c) napisz, co wolisz po wczytaniu kitu: wartość z kitu czy z automatyki (Q40); Twój Live wygasł (06.11): wtyczkę 0.2.0 z wydania testuje znajomy na swoim Live; karta testu dla niego (instalacja z zipa, karta startowa, P1–P10, wzór odpowiedzi): https://github.com/isthar/lxr-desktop-app/blob/timing-core/docs/lichomat/plugin-test.md; odpowiedzi znajomego zamykają ten wiersz. Bez Live'a u Ciebie: REAPER (60 dni pełnej wersji za darmo), a ja przepiszę sprawdzenia pod niego",
       "updated": "2026-11-06"
     },
     {
@@ -4959,6 +4959,11 @@
       "n": 671,
       "at": "2026-11-06 19:25",
       "text": "E8.12, E8.13, E9.77: Twoja licencja Live wygasła; wtyczkę 0.2.0 testuje znajomy na swoim Live. Sprawdzenia P1–P11 mogą przejść przez niego albo przez REAPER (60 dni za darmo); Logic ma już tylko 30-dniową próbę w Creator Studio"
+    },
+    {
+      "n": 672,
+      "at": "2026-11-06 20:18",
+      "text": "E8.12–E8.13: karta testu dla znajomego, docs/lichomat/plugin-test.md: instalacja z zipa wydania, karta startowa „init” jednym poleceniem (bez niej instalacja z zipa startuje z pustymi wzorcami), P1–P10 i wzór odpowiedzi"
     }
   ]
 }
