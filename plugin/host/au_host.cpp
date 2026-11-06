@@ -42,6 +42,12 @@
  *                     the MIDI the plugin must give its engine, as for param
  *   set-end ID VALUE  AudioUnitSetParameter of ID to VALUE (0..its max) after the last block, with no
  *                     render after it, before the state-out
+ *   snap FRAME        instance 0's ClassInfo (the AU's own, with its lichomat-state) read before FRAME's block
+ *   set-restore FRAME ID VALUE   before FRAME's block of instance 0 (FRAME 0: after the last block, before the
+ *                     set-end and the state-out): AudioUnitSetParameter of ID to VALUE (below 0: none) at offset 0,
+ *                     then the ClassInfo of snap given back, with no render between
+ *   set-refused FRAME ID VALUE   set-restore with the ClassInfo of snap damaged (its values block of another
+ *                     version), which the AU refuses
  *   offline FRAME 0|1 set kAudioUnitProperty_OfflineRender of every instance at FRAME, while it plays
  *   offline-async FRAME COUNT   from FRAME a thread of its own sets instance 0's OfflineRender COUNT times,
  *                     1 and 0 in turn, one every 50 ms, while the blocks run; the summary counts the
@@ -118,6 +124,8 @@ struct AuPlan
 	std::string staleNote;
 	std::vector<uint64_t> floods;
 	std::vector<ParamCmd> sets;
+	uint64_t snap = UINT64_MAX;
+	std::vector<std::pair<ParamCmd, bool>> setRestores;	/* set-restore, and set-refused (true) */
 	UInt32 outputs = 2;
 	bool info = false, checks = false, noalloc = false;
 };
@@ -274,6 +282,25 @@ CFDictionaryRef classInfo (const AudioComponentDescription& desc, const std::vec
 	CFDataRef data = CFDataCreate (nullptr, state.data (), (CFIndex)state.size ());
 	CFDictionarySetValue (d, kStateKey, data);
 	CFRelease (data);
+	return d;
+}
+
+/* a copy of a ClassInfo whose lichomat-state the processor refuses: its values block of another version, which
+ * plug_paramsRead() does not read (nullptr: the state has no values block) */
+CFDictionaryRef damaged (CFPropertyListRef ci)
+{
+	CFDataRef st = (CFDataRef)CFDictionaryGetValue ((CFDictionaryRef)ci, kStateKey);
+	if (!st || CFGetTypeID (st) != CFDataGetTypeID ())
+		return nullptr;
+	std::vector<uint8_t> bytes (CFDataGetBytePtr (st), CFDataGetBytePtr (st) + CFDataGetLength (st));
+	const size_t at = std::string (bytes.begin (), bytes.end ()).rfind ("LCHV");
+	if (at == std::string::npos || at + 12 > bytes.size ())
+		return nullptr;
+	bytes[at + 4] = 2;
+	CFMutableDictionaryRef d = CFDictionaryCreateMutableCopy (nullptr, 0, (CFDictionaryRef)ci);
+	CFDataRef bad = CFDataCreate (nullptr, bytes.data (), (CFIndex)bytes.size ());
+	CFDictionarySetValue (d, kStateKey, bad);
+	CFRelease (bad);
 	return d;
 }
 
@@ -644,17 +671,9 @@ void runChecks (Instance& in, const Plan& p, const AuPlan& a)
 		        "Drum 1's volume set to 100");
 		CFMutableDictionaryRef none = CFDictionaryCreateMutableCopy (nullptr, 0, (CFDictionaryRef)at40);
 		CFDictionaryRemoveValue (none, kStateKey);
-		CFMutableDictionaryRef damaged = CFDictionaryCreateMutableCopy (nullptr, 0, (CFDictionaryRef)at40);
-		CFDataRef st = (CFDataRef)CFDictionaryGetValue (damaged, kStateKey);
-		std::vector<uint8_t> bytes (CFDataGetBytePtr (st), CFDataGetBytePtr (st) + CFDataGetLength (st));
-		const std::string text (bytes.begin (), bytes.end ());
-		const size_t at = text.rfind ("LCHV");
-		expect (at != std::string::npos && at + 12 <= bytes.size (), "the state's values block");
-		bytes[at + 4] = 2;	/* a version this plugin does not read: plug_paramsRead() refuses it */
-		CFDataRef bad = CFDataCreate (nullptr, bytes.data (), (CFIndex)bytes.size ());
-		CFDictionarySetValue (damaged, kStateKey, bad);
-		CFRelease (bad);
-		for (auto [d, what] : {std::pair<CFDictionaryRef, const char*> {none, "without lichomat-state"}, {damaged, "with a damaged state"}})
+		CFDictionaryRef bad = damaged (at40);
+		expect (bad, "the state's values block");
+		for (auto [d, what] : {std::pair<CFDictionaryRef, const char*> {none, "without lichomat-state"}, {bad, "with a damaged state"}})
 		{
 			expect (AudioUnitSetProperty (in.au, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &d, sizeof d) != noErr,
 			        std::string ("a ClassInfo ") + what + " taken");
@@ -662,7 +681,7 @@ void runChecks (Instance& in, const Plan& p, const AuPlan& a)
 			                                       std::to_string (param (in, 10)) + ", not 100");
 		}
 		CFRelease (none);
-		CFRelease (damaged);
+		CFRelease (bad);
 		CFRelease (at40);
 		expect (AudioUnitSetParameter (in.au, 10, kAudioUnitScope_Global, 0, in.shown[plug_paramIndex (10)], 0) == noErr,
 		        "Drum 1's volume back");
@@ -741,6 +760,29 @@ std::vector<uint8_t> stateOf (Instance& in)
 	return out;
 }
 
+/* the plan's set-restore (refused false) or set-refused: a set of the parameter at offset 0 (none for a value below
+ * 0), then the snapshot given back as the ClassInfo, damaged for set-refused, with no render between */
+void setRestore (Instance& in, const ParamCmd& c, bool refused, CFPropertyListRef snap, uint64_t f)
+{
+	if (!snap)
+		die ("set-restore: no snap before it");
+	const int k = plug_paramIndex (c.id);
+	if (c.value >= 0
+	    && AudioUnitSetParameter (in.au, c.id, kAudioUnitScope_Global, 0, plug_auValue ((unsigned)k, (uint8_t)c.value), 0) != noErr)
+		die ("set-restore: the set refused");
+	CFDictionaryRef ci = refused ? damaged (snap) : (CFDictionaryRef)CFRetain (snap);
+	if (!ci)
+		die ("set-refused: the snapshot has no values block");
+	const OSStatus r = AudioUnitSetProperty (in.au, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &ci, sizeof ci);
+	CFRelease (ci);
+	if ((r != noErr) != refused)
+		die (std::string ("set-restore: the ClassInfo ") + (refused ? "taken" : "refused: ") + std::to_string ((int)r));
+	in.shown[k] = param (in, c.id);	/* the host's own value, not a report */
+	printf ("%s: %s at %llu: %s, then the ClassInfo %s; the AU's value of %u %g\n", gName, refused ? "set-refused" : "set-restore",
+	        (unsigned long long)f, c.value >= 0 ? ("a set to " + std::to_string (c.value)).c_str () : "no set",
+	        refused ? "refused" : "taken", (unsigned)c.id, in.shown[k]);
+}
+
 } // namespace
 
 int main (int argc, char** argv)
@@ -803,6 +845,15 @@ int main (int argc, char** argv)
 			ok = !!(s >> c.frame >> c.id >> c.value) && plug_paramIndex (c.id) >= 0 && c.value >= 0
 			     && c.value <= plug_params[plug_paramIndex (c.id)].max;
 			a.sets.push_back (c);
+		}
+		else if (cmd == "snap")
+			ok = !!(s >> a.snap);
+		else if (cmd == "set-restore" || cmd == "set-refused")
+		{
+			ParamCmd c {};
+			ok = !!(s >> c.frame >> c.id >> c.value) && plug_paramIndex (c.id) >= 0 && c.value >= -1
+			     && c.value <= plug_params[plug_paramIndex (c.id)].max;
+			a.setRestores.push_back ({c, cmd == "set-refused"});
 		}
 		else if (cmd == "set-end")
 		{
@@ -886,6 +937,7 @@ int main (int argc, char** argv)
 	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextOffline = 0, nextRamp = 0;
 	size_t nextAsyncNotes = 0, nextAsyncOffline = 0, nextHostSet = 0, nextAsyncSet = 0;
 	unsigned long long renders0 = 0, flagged0 = 0, flaggedLoud0 = 0;
+	CFPropertyListRef snap = nullptr;	/* the plan's snap */
 	std::vector<std::thread> threads;
 	unsigned long long processCalls = 0;
 	static AudioUnitParameterEvent events[1024];
@@ -1123,6 +1175,16 @@ int main (int argc, char** argv)
 			/* a host's buffers hold anything: the plugin must write every frame (P10_plugin_native) */
 			for (auto& b : in.out)
 				std::fill (b.begin (), b.begin () + n, 0.5f);
+			if (idx == 0 && a.snap >= f && a.snap < f + n)
+			{
+				UInt32 size = sizeof snap;
+				if (AudioUnitGetProperty (in.au, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &snap, &size) != noErr || !snap)
+					die ("snap: no ClassInfo");
+				printf ("%s: snap at %llu\n", gName, (unsigned long long)f);
+			}
+			for (auto& [c, refused] : a.setRestores)
+				if (idx == 0 && c.frame > 0 && c.frame >= f && c.frame < f + n)
+					setRestore (in, c, refused, snap, f);
 			if (rtInside)
 				rtInside (1);
 			for (auto& [id, v] : in.echo)
@@ -1186,6 +1248,11 @@ int main (int argc, char** argv)
 	if (!a.offlineAsync.empty ())
 		printf ("%s: instance 0: %llu renders, %llu flagged silent, %llu flagged but not silent\n", gName, renders0, flagged0,
 		        flaggedLoud0);
+	for (auto& [c, refused] : a.setRestores)
+		if (c.frame == 0)
+			setRestore (*inst[0], c, refused, snap, p.frames);
+	if (snap)
+		CFRelease (snap);
 	for (auto& [id, v] : a.setsAtEnd)
 		for (auto& in : inst)
 			if (AudioUnitSetParameter (in->au, id, kAudioUnitScope_Global, 0, plug_auValue ((unsigned)plug_paramIndex (id), (uint8_t)v), 0)

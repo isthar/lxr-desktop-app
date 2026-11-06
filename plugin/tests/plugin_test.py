@@ -2524,6 +2524,43 @@ def P13_au_rt_out2(t):
     check('notes-async at 48000: 500 Note Ons and Offs sent, 0 refused' in out, 'the sender')
 
 
+@case
+def P13_au_set_restore(t):
+    # A host's set followed by a ClassInfo given back with no render between (a knob moved, then a preset loaded before
+    # the next render): the state given back wins. Drum 1's volume scheduled to 40 at frame 0, the ClassInfo read at
+    # 10,000 (snap: 40); then Drum 1's volume set to 100 and the snapshot given back: A after the last block, the state
+    # saved after it with no render between, holds 40; B before the block of 100,032 plays as C, which gives the snapshot
+    # back alone, byte for byte, with C's reports, and its state holds 40. The same set with the snapshot damaged (its
+    # values block of another version, which the AU refuses) is kept: D after the last block, the state holds 100; E
+    # before the block of 100,032 plays as F, the set alone at that block's first frame, and its state holds 100. G: a set
+    # the processor took (100 at 20,000), a scheduled 20 at 50,000, then the damaged snapshot alone before the block of
+    # 100,032: the taken set is not given again, G plays as H (without the snapshot) and its state holds 20
+    lines = ['note %d 0 48 127' % (5000 * k + 2500) for k in range(40)] + ['param 0 10 40', 'snap 10000']
+    runs = {'A': ['set-restore 0 10 100'], 'B': ['set-restore 100032 10 100'], 'C': ['set-restore 100032 10 -1'],
+            'D': ['set-refused 0 10 100'], 'E': ['set-refused 100032 10 100'], 'F': ['set 99968 10 100'],
+            'G': ['set 20000 10 100', 'param 50000 10 20', 'set-refused 100032 10 -1'],
+            'H': ['set 20000 10 100', 'param 50000 10 20']}
+    outs, held = {}, {}
+    for k, extra in runs.items():
+        _, outs[k] = au_host(t, au_plan(t, k + '.txt', lines + extra + ['out ' + t.path(k + '.wav'),
+                                                                        'state-out ' + t.path(k + '.bin')],
+                                        frames=blocks_frames(5)))
+        held[k] = lchv(t.path(k + '.bin')).get(10)
+    same = dict((x + y, same_files(t.path(x + '.wav'), t.path(y + '.wav'))) for x, y in ('BC', 'EF', 'GH'))
+    print('Drum 1\'s volume in the states: %s' % ', '.join('%s %r' % kv for kv in sorted(held.items())))
+    for xy, d in sorted(same.items()):
+        print('%s against %s: %s; reports %r and %r' % (xy[0], xy[1], 'the same' if d is None else d, reports(outs[xy[0]])[1:],
+                                                       reports(outs[xy[1]])[1:]))
+    check(held['A'] == 40, 'A: a set, then the snapshot given back: the state holds %r, not 40' % held['A'])
+    check(same['BC'] is None and held['B'] == 40 and reports(outs['B']) == reports(outs['C']),
+          'B: a set, then the snapshot given back, then rendering: %s, the state holds %r' % (same['BC'], held['B']))
+    check(held['D'] == 100, 'D: a set, then a damaged snapshot refused: the state holds %r, not 100' % held['D'])
+    check(same['EF'] is None and held['E'] == 100 and reports(outs['E']) == reports(outs['F']),
+          'E: a set, then a damaged snapshot refused, then rendering: %s, the state holds %r' % (same['EF'], held['E']))
+    check(same['GH'] is None and held['G'] == 20 and reports(outs['G']) == reports(outs['H']),
+          'G: a damaged snapshot refused after a set taken: %s, the state holds %r' % (same['GH'], held['G']))
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

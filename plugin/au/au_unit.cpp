@@ -80,6 +80,8 @@ public:
 			s.store (0);
 		for (auto& g : taken)
 			g.store (0);
+		for (auto& g : voided)
+			g.store (0);
 		for (auto& p : pending)
 			p.store (false);
 	}
@@ -265,9 +267,8 @@ public:
 		const OSStatus r = MusicDeviceBase::SetParameter (id, scope, element, plug_auValue ((unsigned)i, plain), offset);
 		if (r != noErr)
 			return r;
-		const uint64_t gen = (uint64_t)(setGen.fetch_add (1, std::memory_order_relaxed) + 1) & 0xFFFFFFu;
 		const uint64_t at = offset > 0xFFFFFFu ? 0xFFFFFFu : offset;
-		slots[i].store (gen << 40 | at << 8 | plain, std::memory_order_release);
+		slots[i].store (nextGen () << 40 | at << 8 | plain, std::memory_order_release);
 		return noErr;
 	}
 
@@ -417,7 +418,7 @@ public:
 	 * render has taken yet (a knob turned, then the project saved) go into its values block here. A slot counts as
 	 * taken when the render thread published its generation (after the process() that took it) before getState():
 	 * taken[] is read first, then the slot, so a slot taken while the state is read is put in as well, with the same
-	 * value; a set after the slot's read is not in this state */
+	 * value; a set after the slot's read is not in this state, nor one that a ClassInfo restored after it voided */
 	OSStatus SaveState (CFPropertyListRef* out) override
 	{
 		CFPropertyListRef base = nullptr;
@@ -430,7 +431,8 @@ public:
 		{
 			const uint32_t t = taken[i].load (std::memory_order_acquire);
 			const uint64_t s = slots[i].load (std::memory_order_acquire);
-			set[i] = (uint32_t)(s >> 40) != t ? (int)(s & 0xFFu) : -1;
+			const uint32_t gen = (uint32_t)(s >> 40);
+			set[i] = gen != t && gen != voided[i].load (std::memory_order_acquire) ? (int)(s & 0xFFu) : -1;
 			any = any || set[i] >= 0;
 		}
 		IPtr<MemoryStream> m = owned (new MemoryStream);
@@ -453,7 +455,12 @@ public:
 	}
 
 	/* A ClassInfo refused changes nothing: what AUBase's part requires is checked first, then the processor takes the
-	 * state (it refuses one it cannot read, with nothing changed), and only then AUBase restores the AU's values */
+	 * state (it refuses one it cannot read, with nothing changed), and only then AUBase restores the AU's values.
+	 * A ClassInfo taken wins over the host's sets before it that no render has taken yet (a knob moved, then a preset
+	 * loaded): their slots are voided first, so that neither the next render (hostPoints()) nor a save (SaveState())
+	 * puts them over the state; a set after the void is newer than the state and goes to the processor. A ClassInfo the
+	 * processor refuses gives each slot it voided that no render had taken back, with a new generation (the next render
+	 * takes it as before), unless a newer set took the slot meanwhile */
 	OSStatus RestoreState (CFPropertyListRef plist) override
 	{
 		if (!plist || CFGetTypeID (plist) != CFDictionaryGetTypeID ())
@@ -465,8 +472,25 @@ public:
 		CFDataRef bytes = static_cast<CFDataRef> (data);
 		IPtr<MemoryStream> m = owned (new MemoryStream (const_cast<UInt8*> (CFDataGetBytePtr (bytes)),
 		                                                (TSize)CFDataGetLength (bytes)));
+		bool untaken[PLUG_PARAM_COUNT];
+		for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+		{
+			const uint32_t t = taken[i].load (std::memory_order_acquire);
+			const uint32_t gen = (uint32_t)(slots[i].load (std::memory_order_acquire) >> 40);
+			voided[i].store (gen, std::memory_order_release);
+			untaken[i] = gen != 0 && gen != t;
+		}
 		if (proc->setState (m) != kResultOk)
+		{
+			for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+			{
+				uint64_t s = slots[i].load (std::memory_order_acquire);
+				if (untaken[i] && (uint32_t)(s >> 40) == voided[i].load (std::memory_order_relaxed))
+					slots[i].compare_exchange_strong (s, nextGen () << 40 | (s & 0xFFFFFFFFFFu), std::memory_order_release,
+					                                  std::memory_order_relaxed);
+			}
 			return kAudioUnitErr_InvalidPropertyValue;
+		}
 		return MusicDeviceBase::RestoreState (plist);
 	}
 
@@ -537,6 +561,12 @@ private:
 				return false;
 			std::this_thread::sleep_for (std::chrono::microseconds (100));
 		}
+	}
+
+	/* a slot's next generation, 1 to 2^24 - 1 (24 bits): 0 is a slot never set, and so is voided[]'s first */
+	uint64_t nextGen () noexcept
+	{
+		return (uint64_t)(setGen.fetch_add (1, std::memory_order_relaxed) % 0xFFFFFFu) + 1;
 	}
 
 	OSStatus setUp ()
@@ -693,6 +723,8 @@ private:
 			if (gen == seen[i])
 				continue;
 			seen[i] = gen;
+			if (gen == voided[i].load (std::memory_order_acquire))
+				continue;	/* a set before a ClassInfo taken (RestoreState()) */
 			const int32 at = (int32)((s >> 8) & 0xFFFFFFu);
 			point (plug_params[i].id, at > last ? last : at, (double)(s & 0xFFu) / plug_params[i].max);
 		}
@@ -1000,6 +1032,7 @@ private:
 	std::atomic<uint32_t> setGen {0};
 	uint32_t seen[PLUG_PARAM_COUNT] {};	/**< the generation of each slot that the render thread took */
 	std::atomic<uint32_t> taken[PLUG_PARAM_COUNT];	/**< seen, published after the process() that took it */
+	std::atomic<uint32_t> voided[PLUG_PARAM_COUNT];	/**< the generation of each slot when a ClassInfo was last given */
 	AudioUnitParameterEvent schedule[kMaxScheduled];
 	UInt32 scheduled = 0;
 	std::atomic<uint64_t> notesFrom {0};	/**< the queue's notes before this position came before a reset */
