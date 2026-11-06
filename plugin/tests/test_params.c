@@ -162,6 +162,27 @@ TEST(P12_params_first_report)
 	ASSERT_EQ(plug_paramsReport(&ps, fw, 700, 700, CH, out, 0, 16), 0);
 }
 
+TEST(P12_params_new_engine)
+{
+	/* a value the host gave to the first engine is given to the second, whose first report has the
+	 * firmware's own: sent == want is not enough, it must have been sent since the new epoch */
+	plug_params_t ps;
+	plug_paramsInit(&ps, SETTLE);
+	plug_paramsEngine(&ps, 0);
+	uint8_t fw[PLUG_PARAM_COUNT];
+	fwValues(fw);
+	plug_midi_t out[16];
+	ASSERT_EQ(plug_paramsReport(&ps, fw, 0, 0, CH, out, 0, 16), 0);
+	const plug_paramPoint_t a[] = { { I_VOL1, 0, 40 } };
+	ASSERT_EQ(plug_paramsHost(&ps, a, 1, 100, CH, out, 0, 16), 1);
+	ASSERT_TRUE(ps.p[I_VOL1].sent == 40 && ps.p[I_VOL1].sentFrame == 100);
+	plug_paramsEngine(&ps, 10000);
+	ASSERT_EQ(fw[I_VOL1], 127);
+	ASSERT_EQ(plug_paramsReport(&ps, fw, 10000, 10000, CH, out, 0, 16), 1);
+	ASSERT_TRUE(out[0].offset == 0 && out[0].n == 3 && out[0].b[0] == 0xB3 && out[0].b[1] == 89 && out[0].b[2] == 40);
+	ASSERT_TRUE(ps.p[I_VOL1].sent == 40 && ps.p[I_VOL1].sentFrame == 10000);
+}
+
 TEST(P12_params_own_change)
 {
 	/* after the first report: a value the firmware changed by itself goes to the host, but not one the
