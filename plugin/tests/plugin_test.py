@@ -70,16 +70,19 @@ class T:
             raise Fail('%s exited %d:\n%s%s' % (os.path.basename(cmd[0]), p.returncode, p.stdout, p.stderr))
         return p
 
-    def render(self, card, script, seconds, out):
-        self.run([self.a.render, '--card', card, '--bpm', 'mid', '--no-start', '--as-booted', '--stereo', 'sum',
-                  '--seconds', str(seconds), '--events', script, '--out', out])
+    def render(self, card, script, seconds, out, stereo='sum'):
+        """lichomat-render as the engine runs it: --stereo sum, out1 or out2, or None for its four channels"""
+        self.run([self.a.render, '--card', card, '--bpm', 'mid', '--no-start', '--as-booted']
+                 + (['--stereo', stereo] if stereo else []) + ['--seconds', str(seconds), '--events', script, '--out', out])
 
-    def drive(self, card, rate, block, script, frames, out, realtime=None, preroll=False):
+    def drive(self, card, rate, block, script, frames, out, realtime=None, preroll=False, split=False):
         cmd = [self.a.drive, self.a.engine, card, str(rate), str(block), script, str(frames), out]
         if realtime is not None:
             cmd += ['realtime', str(realtime)]
         if preroll:
             cmd += ['preroll']
+        if split:
+            cmd += ['split']
         line = self.run(cmd).stdout.strip()
         print(line)
         return parse_drive(line)
@@ -532,6 +535,56 @@ def P7_engine_realtime(t):
         s = parse_drive(out)
         check(p.returncode == 0 and all(s.get(k) == 0 for k in ('underruns', 'late', 'dropped', 'full')),
               'engine %d: %s' % (i, out))
+
+
+# --- the two outputs and the parameters in the engine (plan E9.4) ----------------------------------
+
+def channels(x, n, k):
+    """channel k of the interleaved samples x of n channels"""
+    return x[k::n]
+
+
+@case
+def P6_engine_split(t):
+    # the engine's four channels: plug_drive's split WAV at 44,140.625 Hz is lichomat-render's four-channel WAV (L1,
+    # R1, L2, R2) byte for byte, blocks of 128 and 37; the onset card plays on both outputs (Drum 1 on out 1, the
+    # voices on out 2)
+    script = write_script(t, 'script.txt')
+    frames = blocks_frames(6)
+    t.render(t.card('render'), script, 6, t.path('render4.wav'), stereo=None)
+    _, n, x = wav(t.path('render4.wav'))
+    loud = [sum(1 for v in channels(x, 4, k) if abs(v) >= 4000) for k in range(4)]
+    print('the render: %d channels, samples at 4,000 or more per channel %r' % (n, loud))
+    check(n == 4 and loud[0] > 1000 and loud[2] > 1000 and loud[3] > 1000, 'both outputs loud: %r' % loud)
+    for b in (128, 37):
+        out = t.path('split-%d.wav' % b)
+        s = t.drive(t.card('s%d' % b), RATE_TEXT, b, script, frames, out, split=True)
+        check(s.get('late') == 0 and s.get('dropped') == 0, 'blocks of %d: counters %r' % (b, s))
+        d = same_files(t.path('render4.wav'), out)
+        check(d is None, 'blocks of %d: the four channels %s' % (b, d))
+    print('blocks of 128, 37: the four channels == render')
+
+
+@case
+def P7_engine_split(t):
+    # 48 kHz: the engine converts the four channels at once; each output is the renderer's out1 and out2 through the
+    # same converter two channels at a time (plug_resample_wav) within 2 LSB, as P7_engine_resampled's sum
+    seconds, rate = 6, 48000
+    frames = int(blocks_frames(seconds) * fractions.Fraction(rate) / RATE) - 256
+    t.drive(t.card('d'), str(rate), 256, write_script(t, 'drive.txt', rate), frames, t.path('drive4.wav'), split=True)
+    _, n, d = wav(t.path('drive4.wav'))
+    check(n == 4, '%d channels' % n)
+    for k, out in ((0, 'out1'), (2, 'out2')):
+        t.render(t.card('r' + out), write_script(t, 'render-%s.txt' % out, rate, render=True), seconds,
+                 t.path('render-%s.wav' % out), stereo=out)
+        t.run([t.a.resample, t.path('render-%s.wav' % out), str(rate), t.path('ref-%s.wav' % out), str(frames)])
+        _, _, ref = wav(t.path('ref-%s.wav' % out))
+        a = [v for pair in zip(channels(d, 4, k), channels(d, 4, k + 1)) for v in pair]
+        check(len(a) == len(ref), '%s: %d and %d samples' % (out, len(a), len(ref)))
+        worst = max(abs(x - y) for x, y in zip(a, ref))
+        loud = sum(1 for x in a if abs(x) >= 4000)
+        print('%s at %d Hz: %d frames, %d samples at 4,000 or more, the largest difference %d LSB' % (out, rate, frames, loud, worst))
+        check(worst <= 2 and loud > 1000, '%s: the largest difference %d LSB' % (out, worst))
 
 
 # --- the bundle (Task 8) ----------------------------------------------------------------------

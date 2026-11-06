@@ -4,9 +4,11 @@
  * The engine's test driver (plan E9.2 Task 6): the plugin's side of the shared memory without
  * the VST 3 layer. It starts lichomat-engine on a card, waits until it runs (epoch 0), then
  * plays a script of lichomat-render's usb lines ("<frame>f usb XX ..", host frames) in blocks,
- * and writes the ring's frames [0, FRAMES) as a 16-bit stereo WAV.
+ * and writes the ring's frames [0, FRAMES) as a 16-bit WAV: the stereo sum of the two outputs,
+ * as the plugin's Out 1 without Out 2, or with split the four channels L1 R1 L2 R2, as
+ * lichomat-render without --stereo (plan E9.4).
  *
- *   plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN | preroll]
+ *   plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN | preroll] [split]
  *
  * Without realtime it waits for each frame; with it, it paces the blocks by the wall clock,
  * reads each block plug_readOffset(RATE, BLOCK, MARGIN) frames behind as the plugin does, and
@@ -100,17 +102,27 @@ static void readInto(plug_shm_t *s, uint64_t from, uint32_t n, float *const *ch,
 
 int main(int argc, char **argv)
 {
-	const int realtime = argc == 10 && !strcmp(argv[8], "realtime");
-	const int preroll = argc == 9 && !strcmp(argv[8], "preroll");
-	if (argc != 8 && !realtime && !preroll)
+	int realtime = 0, preroll = 0, split = 0, bad = argc < 8;
+	uint32_t margin = 0;
+	for (int a = 8; a < argc && !bad; a++)
 	{
-		fprintf(stderr, "usage: plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN | preroll]\n");
+		if (!strcmp(argv[a], "realtime") && a + 1 < argc)
+			realtime = 1, margin = (uint32_t)strtoul(argv[++a], NULL, 10);
+		else if (!strcmp(argv[a], "preroll"))
+			preroll = 1;
+		else if (!strcmp(argv[a], "split"))
+			split = 1;
+		else
+			bad = 1;
+	}
+	if (bad || (realtime && preroll))
+	{
+		fprintf(stderr, "usage: plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN | preroll] [split]\n");
 		return 1;
 	}
 	const double rate = strtod(argv[3], NULL);
 	const uint32_t block = (uint32_t)strtoul(argv[4], NULL, 10);
 	const uint64_t frames = strtoull(argv[6], NULL, 10);
-	const uint32_t margin = realtime ? (uint32_t)strtoul(argv[9], NULL, 10) : 0u;
 	const int native = plug_isNative(rate);
 	/* the script */
 	FILE *sf = fopen(argv[5], "r");
@@ -240,7 +252,7 @@ int main(int argc, char **argv)
 			if (end > base + got)
 			{
 				const uint64_t to = end - base < frames ? end - base : frames;
-				readInto(s, base + got, (uint32_t)(to - got), ch, got, 0);
+				readInto(s, base + got, (uint32_t)(to - got), ch, got, split);
 				got = to;
 			}
 			if (end != lastEnd)
@@ -277,7 +289,7 @@ int main(int argc, char **argv)
 				const uint32_t take = from + block > frames ? (uint32_t)(frames > from ? frames - from : 0u) : block;
 				const uint64_t before = s->underruns;
 				if (take)
-					readInto(s, from, take, ch, from, 0);
+					readInto(s, from, take, ch, from, split);
 				if (s->underruns != before)
 				{
 					if (!firstMiss)
@@ -296,7 +308,7 @@ int main(int argc, char **argv)
 			if (end > base + got)
 			{
 				const uint64_t to = end - base < frames ? end - base : frames;
-				readInto(s, base + got, (uint32_t)(to - got), ch, got, 0);
+				readInto(s, base + got, (uint32_t)(to - got), ch, got, split);
 				got = to;
 			}
 		}
@@ -314,25 +326,24 @@ int main(int argc, char **argv)
 	int status = 0;
 	waitpid(pid, &status, 0);
 	FILE *o = fopen(argv[7], "wb");
-	const uint32_t data = (uint32_t)(frames * 4u);
+	const unsigned nch = split ? PLUG_AUDIO_CHANNELS : 2u;
+	const uint32_t data = (uint32_t)(frames * 2u * nch);
 	fwrite("RIFF", 1, 4, o);
 	put32(o, 36u + data);
 	fwrite("WAVEfmt ", 1, 8, o);
 	put32(o, 16);
 	put16(o, 1);
-	put16(o, 2);
+	put16(o, nch);
 	const uint32_t hz = native ? 44141u : (uint32_t)rate;
 	put32(o, hz);
-	put32(o, hz * 4u);
-	put16(o, 4);
+	put32(o, hz * 2u * nch);
+	put16(o, 2u * nch);
 	put16(o, 16);
 	fwrite("data", 1, 4, o);
 	put32(o, data);
 	for (uint64_t i = 0; i < frames; i++)
-	{
-		put16(o, (uint16_t)sample(ch[0][i], native));
-		put16(o, (uint16_t)sample(ch[1][i], native));
-	}
+		for (unsigned c = 0; c < nch; c++)
+			put16(o, (uint16_t)sample(ch[c][i], native));
 	fclose(o);
 	printf("plug_drive: epoch %llu, %llu frames, late %llu, dropped %llu, ring full %llu, underruns %llu (blocks from "
 		"%llu to %llu); start %.3f s, play %.3f s (%.1fx real time), engine exit %d\n",

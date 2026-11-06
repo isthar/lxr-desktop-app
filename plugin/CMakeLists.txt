@@ -122,7 +122,7 @@ function(plugin_py_tests)
     endforeach()
 endfunction()
 plugin_py_tests(P6_engine_version P6_engine_objects P6_engine_native P6_engine_blocks P6_engine_paced P6_engine_seed P6_engine_epoch
-    P6_engine_quit P6_engine_orphan P7_engine_resampled P7_engine_realtime)
+    P6_engine_quit P6_engine_orphan P7_engine_resampled P7_engine_realtime P6_engine_split P7_engine_split)
 set_tests_properties(P6_engine_paced P7_engine_realtime PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
 
 # --- the card archive (the plugin's state, Task 7) -------------------------------------------
