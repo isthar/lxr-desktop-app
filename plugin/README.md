@@ -137,8 +137,8 @@ margin      = 128 host frames
   Song Position and Continue: the sequencer restarts from the new 16th.
 - No parameters but the read-only "Engine": MIDI CC and Program Change are not mapped yet (VST3
   hands them to a plugin as parameters), and the plugin has no window.
-- The latency stays within 10 ms above the voice queue's 2.90 ms only with host buffers of up to
-  256 frames (table above).
+- At 44.1 and 48 kHz the latency stays within 10 ms above the voice queue's 2.90 ms only with host
+  buffers of up to 256 frames (table above).
 - The plugin's process installs no signal handler; the engine runs in its own process, so a
   firmware fault ends the engine, not the host.
 
