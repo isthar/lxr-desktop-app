@@ -20,6 +20,7 @@ import json, os, re, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 CHK = os.path.join(ROOT, 'docs', 'lichomat', 'hardware-checklist.md')
+PLUG = os.path.join(ROOT, 'docs', 'lichomat', 'plugin-checks.md')	# E9.21/E8.12: the plugin's P1-P8 in Live
 
 
 def squash(s):
@@ -49,6 +50,17 @@ def parse_checks():
             for row in re.findall(r'^\| (U\d) \| (.*?) \|$', body, flags=re.M):
                 out[row[0]] = {'title': 'firmware changes F1–F12', 'expected': [row[1]],
                                'record': out[cid]['record']}
+    return out
+
+
+def parse_plugin_checks():
+    """P1-P8 of plugin-checks.md: one table row each, | **Pn** (t) | do | expected | record |"""
+    out = {}
+    for m in re.finditer(r'^\| \*\*(P\d)\*\* \(([^)]*)\) \| (.*?) \| (.*?) \| (.*?) \|$',
+                         open(PLUG, encoding='utf-8').read(), flags=re.M):
+        cid, t, do, exp, rec = m.groups()
+        out[cid] = {'title': squash(do), 'expected': [squash(exp)], 'record': [squash(rec)], 'time': t}
+    assert sorted(out) == ['P%d' % i for i in range(1, 9)], sorted(out)
     return out
 
 
@@ -205,11 +217,29 @@ SECTIONS = [
      ]},
     {'id': 'later6', 'title': 'Po H12: 0.6', 'time': '', 'file': 'later-0.6',
      'items': [it('l6-u37', 'U37', '**U37**: CPU z szablonami i `mic`, z pogłosem w ostatecznej częstotliwości, na `H12 CPU`')]},
+    # E8.12: the plugin prototype in Ableton Live; no LXR needed (docs/lichomat/plugin-checks.md)
+    {'id': 'plugin', 'title': 'Wtyczka w Abletonie (bez LXR)', 'time': 'ok. 20 min', 'file': None, 'star': True,
+     'intro': 'Prototyp LICHOMAT.vst3, gałąź `plugin`. Instalacja przy zamkniętym Live: '
+              '`cd /Users/tk/Code/lxr/build/wt-plugin && plugin/tools/install_plugin.sh` (na końcu `47 tests passed, 0 tests failed`). '
+              'Live 12, 48 kHz, bufor 128 albo 256, Options → Delay Compensation włączone. Opis kroków: `docs/lichomat/plugin-checks.md`; '
+              'logi: `~/Library/Application Support/LICHOMAT Plugin/logs/`.',
+     'items': [
+         it('plug-install', None, 'Instalacja (`plugin/tools/install_plugin.sh`, Live zamknięty): `47 tests passed, 0 tests failed`', True, 'do'),
+         it('plug-p1', 'P1', '**P1** Live widzi LICHOMAT (Plug-Ins → VST3)', True),
+         it('plug-p2', 'P2', '**P2** urządzenie na ścieżce MIDI, proces `lichomat-engine`', True),
+         it('plug-p3', 'P3', '**P3** klip z C2 na ósemki „i”: równo z metronomem', True),
+         it('plug-p4', 'P4', '**P4** tempo 120 → 140, start od taktu 3, pętla 1 takt', True),
+         it('plug-p5', 'P5', '**P5** dwie instancje', True),
+         it('plug-p6', 'P6', '**P6** zapis i otwarcie setu', True),
+         it('plug-p7', 'P7', '**P7** Resampling na siatce, Freeze', True),
+         it('plug-p8', 'P8', '**P8** usunięcie i cofnięcie, nowe urządzenie, zabicie silnika', True),
+     ]},
 ]
 
 
 def main():
     checks = parse_checks()
+    checks.update(parse_plugin_checks())
     used = {i['check'] for s in SECTIONS for i in s['items'] if i['check']}
     missing = [c for c in used if c not in checks]
     assert not missing, missing
