@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-06 08:47",
+    "updated": "2026-11-06 09:02",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (plan gotowy, wdrożenie)",
     "branch": "timing-core",
-    "head": "74c4bb8",
+    "head": "0b913b2",
     "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.4 grupy C–D, plan AU (E9.7), potem E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T08:47:00+01:00",
+    "updated_at": "2026-11-06T09:02:00+01:00",
     "now": "E9.4: przegląd jakości zad. 7–9 z mutantami i P10_plugin_beats (od 08:47); E9.7: plan AU na kopii roboczej (od 07:38)"
   },
   "epics": [
@@ -1123,6 +1123,13 @@
       "epic": "E9",
       "status": "w toku",
       "title": "Wtyczka AU v2 (instrument aumu) dla Logic i innych hostów AU: ten sam silnik, dwa wyjścia, 36 parametrów i stan co VST3 0.2.0; AudioUnitSDK Apple'a 1.4.0 (Apache 2.0) pobrany za Twoją zgodą 06.11 i przypięty w repozytorium; bez instalacji u mnie (testy ładują komponent w procesie), auval w skrypcie instalacyjnym u Ciebie. Szkic §8; plan teraz, wdrożenie po E9.4 (zad. N = E9.(70+N))",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.8",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Szkic wydania na GitHubie (Twoja decyzja 06.11): w forku isthar/lxr-desktop-app, tag na gałęzi plugin-v07, emulator LICHOMAT Emu 0.7 i wtyczka VST3 0.2.0 jako zipy na Maca z Apple Silicon (podpis ad hoc, bez notaryzacji), sumy SHA-256, opis: nieoficjalne, bez związku z Erica Synths, GPL-3.0, źródło pod tym tagiem. Po E9.4 (wszystkie testy). Szkic widzisz tylko Ty; „Publish” klikasz sam. AU (E9.7) dojdzie później",
       "updated": "2026-11-06"
     }
   ],
@@ -4816,6 +4823,11 @@
       "n": 655,
       "at": "2026-11-06 08:47",
       "text": "E9.37–E9.39: przegląd zgodności przeszedł (wszystkie 17 plików bajt w bajt jak tekst planu, 36 parametrów w Live sprawdzonych z tabelą). Wskazał cztery luki w samym projekcie planu. Najważniejsza: stan ustawiony w trakcie grania (preset, cofnięcie) mógłby dać nowej karcie wartości starej karty. Sprawdza to przegląd jakości, razem z P10_plugin_beats."
+    },
+    {
+      "n": 656,
+      "at": "2026-11-06 09:02",
+      "text": "E9.8: Twoja decyzja: szkic wydania na GitHubie (fork isthar/lxr-desktop-app, tag na plugin-v07) z emulatorem 0.7 i wtyczką VST3 0.2.0, gdy E9.4 przejdzie wszystkie testy. Szkic widzisz tylko Ty; publikujesz sam przyciskiem Publish."
     }
   ]
 }
