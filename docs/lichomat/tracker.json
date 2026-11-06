@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 05:53",
+    "updated": "2026-11-06 06:23",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (plan gotowy, wdrożenie)",
     "branch": "timing-core",
-    "head": "785052f",
+    "head": "34aba07",
     "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.4 grupy A–D, potem E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T05:53:00+01:00",
-    "now": "E9.4 grupa A (zad. 1–4: stan wyjściowy, konwerter 4 kanałów, pamięć wspólna v2, oba wyjścia silnika): implementacja (od 05:53)"
+    "updated_at": "2026-11-06T06:23:00+01:00",
+    "now": "E9.4 grupa A: lekki przegląd z mutantami (od 06:23)"
   },
   "epics": [
     {
@@ -1044,28 +1044,28 @@
     {
       "id": "E9.31",
       "epic": "E9",
-      "status": "do zrobienia",
-      "title": "Wtyczka E9.4 zad. 1: stan wyjściowy na plugin-v07 (wtyczka 72 testy, emulator 353, firmware 135)",
+      "status": "zrobione",
+      "title": "Wtyczka E9.4 zad. 1: stan wyjściowy na plugin-v07: wtyczka 72/72 (Debug i Release), walidator 47/0, emulator 353, firmware 135, ostrzeżeń 0",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.32",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka E9.4 zad. 2: konwerter częstotliwości na 2 albo 4 kanały naraz",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.33",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka E9.4 zad. 3: pamięć wspólna w wersji 2: cztery kanały (oba wyjścia urządzenia) i tabela wartości z firmware; suma bit w bit jak w prototypie; silnik i wtyczka innej wersji odmawiają sobie nawzajem",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.34",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka E9.4 zad. 4: oba wyjścia silnika sprawdzone od końca do końca (plug_drive split, bit w bit z rendererem przy 44,1 i 48 kHz)",
       "updated": "2026-11-06"
     },
@@ -4769,6 +4769,11 @@
       "n": 647,
       "at": "2026-11-06 05:53",
       "text": "E9.4: plan gotowy (docs/superpowers/plans/2026-11-06-plugin-buses-parameters.md, 11 zadań = E9.31–E9.41), sprawdzony na kopii roboczej: kod każdego zadania odtworzony z tekstu planu, testy wtyczki 92/92 w Debug i Release. 36 parametrów zamiast ok. 30: hi-hat ma dwa decaye, a wyjście każdego głosu to jedyny sposób, by bez panelu wysłać głos na Out 2. Bez shuffle i rozmiaru pogłosu (firmware zmienia je tylko z menu). Parametry idą do firmware jako CC, NRPN i Program Change co do próbki, na globalnym kanale firmware; firmware i emulator bez zmian. Q40: po wczytaniu kitu gra wartość z kitu (sprawdzasz w P10)."
+    },
+    {
+      "n": 648,
+      "at": "2026-11-06 06:23",
+      "text": "E9.31–E9.34 (grupa A): stan wyjściowy zgodny z planem; konwerter na 4 kanały (be9c4f1), pamięć wspólna w wersji 2 (0eed718), oba wyjścia silnika (e60ca6c) na plugin-v07. Oba wyjścia silnika bit w bit z rendererem (44 140,625 Hz) i przez konwerter przy 48 kHz (różnica 0 LSB); testy wtyczki 77/77 w Debug i Release, ostrzeżeń 0. Wszystkie liczby jak w planie."
     }
   ]
 }
