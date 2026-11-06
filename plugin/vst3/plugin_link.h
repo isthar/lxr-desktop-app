@@ -38,12 +38,13 @@ public:
 	/* the host's main thread */
 
 	/** map the memory and start the monitor, which starts the engine on card; realtime: the host
-	 * plays in real time; false with err */
+	 * plays in real time; gen: the processor's count of restored states that card is of (engineGen());
+	 * false with err */
 	bool start (double rate, uint32_t maxBlock, bool realtime, const std::string& card, const std::string& engineLog,
-	            const std::string& pluginLog, std::string& err);
-	/** the engine starts again on another card, also after a failure; returns once a new engine is
-	 * started on it, or could not be (at most 3 s) */
-	void restart (const std::string& card, const std::string& engineLog, const std::string& pluginLog);
+	            const std::string& pluginLog, uint64_t gen, std::string& err);
+	/** the engine starts again on another card, of restored state gen, also after a failure; returns
+	 * once a new engine is started on it, or could not be (at most 3 s) */
+	void restart (const std::string& card, const std::string& engineLog, const std::string& pluginLog, uint64_t gen);
 	/** end the engine (quit, then SIGKILL after 2 s), the monitor, the memory */
 	void stop ();
 
@@ -58,6 +59,11 @@ public:
 
 	/** the running engine's pid, -1 when none */
 	pid_t pid () const { return enginePid.load (); }
+	/** The gen (start(), restart()) of the card of the engine started last. The monitor stores it once the
+	 * engine before is gone and the memory's state is none, before it starts the next one (release), and an
+	 * engine stores its pid before its state: so an engine that the audio thread sees running in the memory
+	 * after loading this (acquire) is of this gen. */
+	uint64_t engineGen () const { return spawnedGen.load (std::memory_order_acquire); }
 
 	/* the processor offline (it may wait) */
 
@@ -89,8 +95,10 @@ private:
 	std::atomic<bool> offlineWaiting {false};
 	std::atomic<pid_t> stalledPid {-1};
 	std::atomic<double> stalledFor {0.0};
+	std::atomic<uint64_t> spawnedGen {0};	/**< engineGen() */
 	std::mutex paths;	/* the monitor thread and restart(); never the audio thread */
 	std::string card, engineLog, pluginLog, engine;
+	uint64_t cardGen = 0;	/**< card's gen */
 };
 
 } // namespace lichomat

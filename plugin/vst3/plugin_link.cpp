@@ -75,7 +75,7 @@ void EngineLink::note (const char* fmt, ...)
 }
 
 bool EngineLink::start (double rate, uint32_t maxBlock, bool realtime, const std::string& cardDir,
-                        const std::string& eLog, const std::string& pLog, std::string& err)
+                        const std::string& eLog, const std::string& pLog, uint64_t gen, std::string& err)
 {
 	stop ();
 	char e[256];
@@ -96,6 +96,7 @@ bool EngineLink::start (double rate, uint32_t maxBlock, bool realtime, const std
 	{
 		std::lock_guard<std::mutex> g (paths);
 		card = cardDir;
+		cardGen = gen;
 		engineLog = eLog;
 		pluginLog = pLog;
 		engine = enginePath ();
@@ -108,11 +109,12 @@ bool EngineLink::start (double rate, uint32_t maxBlock, bool realtime, const std
 	return true;
 }
 
-void EngineLink::restart (const std::string& cardDir, const std::string& eLog, const std::string& pLog)
+void EngineLink::restart (const std::string& cardDir, const std::string& eLog, const std::string& pLog, uint64_t gen)
 {
 	{
 		std::lock_guard<std::mutex> g (paths);
 		card = cardDir;
+		cardGen = gen;
 		engineLog = eLog;
 		pluginLog = pLog;
 	}
@@ -179,14 +181,19 @@ void EngineLink::monitor ()
 		fcntl (life[0], F_SETFD, FD_CLOEXEC);
 		fcntl (life[1], F_SETFD, FD_CLOEXEC);
 		std::string c, log, exe;
+		uint64_t gen;
 		{
 			std::lock_guard<std::mutex> g (paths);
 			c = card;
+			gen = cardGen;
 			log = engineLog;
 			exe = engine;
 		}
 		plug_store (&mem->quit, 0);
 		plug_store (&mem->state, PLUG_ENGINE_NONE);
+		/* the engine before is gone and the state none: the gen of this one's card, before it can run (engineGen()) */
+		spawnedGen.store (gen, std::memory_order_release);
+		std::atomic_thread_fence (std::memory_order_seq_cst);	/* and before the spawn's own stores */
 		char err[256];
 		/* no log (BASE/logs could not be made): the engine's output goes nowhere rather than stop it */
 		const pid_t pid = plug_spawnEngine (exe.c_str (), c.c_str (), wakeFd[0], life[1], memFd,

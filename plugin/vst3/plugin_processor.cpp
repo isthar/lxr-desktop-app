@@ -136,7 +136,7 @@ tresult PLUGIN_API Processor::setActive (TBool state)
 		restoreSeen.store (gen, std::memory_order_release);
 		if (folder.valid ()
 		    && !link.start (processSetup.sampleRate, (uint32_t)processSetup.maxSamplesPerBlock,
-		                    processSetup.processMode == kRealtime, folder.card (), logOf (folder), logOf (folder), err))
+		                    processSetup.processMode == kRealtime, folder.card (), logOf (folder), logOf (folder), gen, err))
 			fprintf (stderr, "LICHOMAT: the engine cannot start: %s\n", err.c_str ());
 		active = true;
 	}
@@ -293,6 +293,8 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 	const bool offline = processSetup.processMode == kOffline;
 	if (offline && s && data.numSamples > 0)
 		offlineWait (s, 0);	/* running, so that the first block's events reach it */
+	/* the gen of the card of the engine started last, before the memory's state and pid (EngineLink::engineGen()) */
+	const uint64_t engineGen = link.engineGen ();
 	const uint64_t state = s ? plug_load (&s->state) : PLUG_ENGINE_NONE;
 	reportState (data, state);
 	const uint64_t gen = restoreGen.load (std::memory_order_acquire);
@@ -304,17 +306,22 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 		params.epoch = UINT64_MAX;
 		restoreSeen.store (gen, std::memory_order_release);
 	}
-	const bool running = s && state == PLUG_ENGINE_RUNNING;
+	bool running = s && state == PLUG_ENGINE_RUNNING;
 	if (running)
 	{
 		const uint64_t pid = plug_load (&s->pid);
-		if (pid != runningPid)
+		/* a new engine, if it plays the card of the state restored last: one started for an earlier state (a host
+		 * that sets two in a row; the monitor ends it once it sees the second restart) is not taken, and is as none
+		 * until the engine of the last one runs, else its first report would give that state's missing values the
+		 * earlier card's */
+		if (pid != runningPid && engineGen == gen)
 		{
 			plug_clockReset (&clock);	/* a new engine: the slave starts afresh */
 			plug_paramsEngine (&params, plug_load (&s->epoch));	/* and gets the host's values */
 			channel = PLUG_VALUE_NONE;	/* the new card's own global channel, from its first values: not the old one's */
 			runningPid = pid;
 		}
+		running = pid == runningPid;
 	}
 	if (data.numSamples <= 0 || data.numOutputs < 1 || data.outputs[0].numChannels < 2)
 	{
@@ -458,9 +465,9 @@ tresult PLUGIN_API Processor::setState (IBStream* state)
 	}
 	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
 		stateValues[i].store (v[i], std::memory_order_relaxed);
-	restoreGen.fetch_add (1, std::memory_order_release);
+	const uint64_t gen = restoreGen.fetch_add (1, std::memory_order_release) + 1u;
 	if (active)
-		link.restart (fresh.card (), logOf (fresh), logOf (fresh));
+		link.restart (fresh.card (), logOf (fresh), logOf (fresh), gen);	/* an engine of this gen (process()) */
 	CardFolder old;
 	old.take (folder);
 	folder.take (fresh);

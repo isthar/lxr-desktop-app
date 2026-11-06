@@ -1683,6 +1683,42 @@ def P10_plugin_async_state(t):
 
 
 @case
+def P10_plugin_double_state(t):
+    # Two states set one right after the other from one thread while blocks run (a host loading a project, then
+    # another): the second card's values. The init card runs (real time, paced, 48 kHz); at 48,000 the init card's
+    # prototype state and then the fx card's (cards only, no values) are set from a thread of their own, and the final
+    # getState holds the fx card's FX Amount (id 53) and outputs (60-65). The engine of the first state boots before the
+    # monitor sees the second restart (its poll is 100 ms): before the fix the processor took that engine as the new
+    # card's, its first report gave the second state's missing values the init card's, and the fx card's engine got
+    # them: 0 and 0 0 0 0 0 0, not 64 and 6 6 6 6 0 0
+    cards = os.path.join(t.a.root, 'emu', 'tests', 'cards')
+    protos = []
+    for card in ('init', 'fx'):
+        host(t, plan(t, 'make-%s.txt' % card, ['card ' + os.path.join(cards, card), 'out ' + t.path('make.wav'),
+                                               'state-out ' + t.path(card + '.bin')], card=False, rate=48000, block=256,
+                     frames=12800))
+        data = open(t.path(card + '.bin'), 'rb').read()
+        with open(t.path(card + '-proto.bin'), 'wb') as f:
+            f.write(data[:data.rfind(b'LCHV')])
+        protos.append(t.path(card + '-proto.bin'))
+    want = lchv(t.path('fx.bin'))
+    ids = [53] + list(range(60, 66))
+    _, out = host(t, plan(t, 'run.txt', ['card ' + os.path.join(cards, 'init'), 'mode realtime', 'paced',
+                                         'setstate-async 48000 ' + '+'.join(protos), 'out ' + t.path('run.wav'),
+                                         'state-out ' + t.path('after.bin')], card=False, rate=48000, block=256,
+                          frames=48000 * 4))
+    got = lchv(t.path('after.bin'))
+    sets = [l for l in out.splitlines() if 'setstate-async' in l]
+    log = ''.join(x for x in instance_logs(t.path('home')).values() if 'a new card' in x)
+    print('%s; engines started %d; the fx card: FX Amount %d, outputs %r; the state after: FX Amount %d, outputs %r'
+          % ('; '.join(sets), len(re.findall(r'engine \d+ started on ', log)), want[53], [want[i] for i in range(60, 66)],
+             got[53], [got[i] for i in range(60, 66)]))
+    check(len(sets) == 2 and all(': ok in ' in l for l in sets), 'the setStates %r' % sets)
+    check(want[53] == 64 and [want[i] for i in range(60, 66)] == [6, 6, 6, 6, 0, 0], 'the fx card\'s values %r' % want)
+    check([got[i] for i in ids] == [want[i] for i in ids], 'the state after holds the first card\'s values')
+
+
+@case
 def P10_plugin_early_state(t):
     # getState before any block holds the values: right after setState (the state's, which no block has taken yet) and
     # right after setActive (the same, 36 of them), then a block with no output bus (which the plugin does not play)

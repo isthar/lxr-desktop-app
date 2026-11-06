@@ -72,7 +72,7 @@ private:
 	uint32_t readOffset = 0;
 	uint32_t margin = 0;
 	uint64_t frames = 0;		/**< host frames since the activation */
-	uint64_t runningPid = 0;	/**< the engine that the clock generator last started */
+	uint64_t runningPid = 0;	/**< the engine taken last (one of the state restored last): the clock and the parameters' */
 	pid_t waitedInVain = -2;	/**< the engine an offline wait gave up on (-1: none ran): no more waits for it */
 	int reported = -1;			/**< the engine state last sent to the controller */
 	bool active = false;

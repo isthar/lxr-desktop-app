@@ -121,7 +121,8 @@ struct Plan
 	std::vector<TransportCmd> transport;
 	std::vector<uint64_t> kills, hangs;
 	std::vector<std::pair<uint64_t, int>> renews;
-	std::vector<std::pair<uint64_t, std::string>> setstates, asyncSets;	/* asyncSets: setState from a thread of its own */
+	/* asyncSets: setState from a thread of its own, of FILE or of each of FILE+FILE+... one right after the other */
+	std::vector<std::pair<uint64_t, std::string>> setstates, asyncSets;
 	struct RawPoint { uint64_t frame; int32_t offset; uint32_t id; int value; };
 	std::vector<RawPoint> rawPoints;	/* a point of the block at frame with the sample offset as given, in or out of the block */
 	std::string controller;		/* a file for the controller's parameters: infos, values, strings */
@@ -630,16 +631,26 @@ int main (int argc, char** argv)
 		}
 		while (nextAsync < p.asyncSets.size () && p.asyncSets[nextAsync].first <= f)
 		{
-			/* as a host's state loading thread does it, while blocks run */
-			auto st = std::make_shared<std::vector<uint8_t>> (readFile (p.asyncSets[nextAsync].second));
+			/* as a host's state loading thread does it, while blocks run: each state of the line in turn, the next
+			 * as soon as the last setState returned */
+			auto sts = std::make_shared<std::vector<std::vector<uint8_t>>> ();
+			for (size_t a = 0, b; a <= p.asyncSets[nextAsync].second.size (); a = b + 1)
+			{
+				b = std::min (p.asyncSets[nextAsync].second.find ('+', a), p.asyncSets[nextAsync].second.size ());
+				sts->push_back (readFile (p.asyncSets[nextAsync].second.substr (a, b - a)));
+			}
 			IComponent* comp = inst[0]->component.get ();
 			const uint64_t at = f;
-			asyncThreads.emplace_back ([st, comp, at] {
-				IPtr<MemoryStream> m = owned (new MemoryStream (st->data (), (TSize)st->size ()));
-				const auto w0 = std::chrono::steady_clock::now ();
-				const tresult r = comp->setState (m);
-				printf ("lichomat-plughost: setstate-async at %llu: %s in %.3f s\n", (unsigned long long)at,
-				        r == kResultOk ? "ok" : "refused", std::chrono::duration<double> (std::chrono::steady_clock::now () - w0).count ());
+			asyncThreads.emplace_back ([sts, comp, at] {
+				for (size_t k = 0; k < sts->size (); k++)
+				{
+					IPtr<MemoryStream> m = owned (new MemoryStream ((*sts)[k].data (), (TSize)(*sts)[k].size ()));
+					const auto w0 = std::chrono::steady_clock::now ();
+					const tresult r = comp->setState (m);
+					printf ("lichomat-plughost: setstate-async at %llu (%zu of %zu): %s in %.3f s\n", (unsigned long long)at,
+					        k + 1, sts->size (), r == kResultOk ? "ok" : "refused",
+					        std::chrono::duration<double> (std::chrono::steady_clock::now () - w0).count ());
+				}
 			});
 			nextAsync++;
 		}
