@@ -243,6 +243,8 @@ struct Instance
 	ParameterChanges outParams {64};	/* the Engine parameter and every one of plug_params.h in one block */
 	double engine = 0.0;	/* the Engine parameter: 2/3 running */
 	std::vector<float> l, r, l2, r2;
+	/* per bus: blocks, blocks flagged silent (silenceFlags 3), flagged but not silent, flags other than 0 and 3 */
+	unsigned silence[2][4] = {{0, 0, 0, 0}, {0, 0, 0, 0}};
 	uint32_t latency = 0;
 	plug_params_t mirror {};	/* the plugin's step with its engine, for the script (plug_params.h) */
 	std::vector<std::pair<uint32_t, double>> echo;	/* reported values for the next block */
@@ -712,6 +714,8 @@ int main (int argc, char** argv)
 				keep[2] = in->data.outputs[0].channelBuffers32[0];
 				in->data.outputs[0].channelBuffers32[0] = nullptr;
 			}
+			for (int32 b = 0; b < in->data.numOutputs; b++)
+				in->data.outputs[b].silenceFlags = 0xFFFF;	/* the plugin sets them every block */
 			if (rtInside)
 				rtInside (1);
 			in->processor->process (in->data);
@@ -726,6 +730,23 @@ int main (int argc, char** argv)
 				in->data.outputs[0].channelBuffers32[0] = keep[2];
 			in->data.numOutputs = numOuts;
 			processCalls++;
+			for (int32 b = 0; b < in->data.numOutputs && b < 2; b++)
+			{
+				const AudioBusBuffers& bus = in->data.outputs[b];
+				bool silent = true;
+				for (int32 c = 0; c < bus.numChannels; c++)
+					for (uint32_t i = 0; i < n; i++)
+						silent = silent && bus.channelBuffers32[c][i] == 0.0f;
+				unsigned* k = in->silence[b];
+				k[0]++;
+				if (bus.silenceFlags == 3)
+				{
+					k[1]++;
+					k[2] += silent ? 0u : 1u;
+				}
+				else if (bus.silenceFlags != 0)
+					k[3]++;
+			}
 			readEngineParam (*in);
 			readReports (*in, (size_t)(&in - &inst[0]), f, p.echo);
 			const float* l = in->data.outputs[0].channelBuffers32[0];
@@ -764,6 +785,10 @@ int main (int argc, char** argv)
 		static const char* const states[4] = {"stopped", "starting", "running", "failed"};
 		printf ("lichomat-plughost: instance %zu: latency %u, %zu frames, engine %s\n", i, inst[i]->latency,
 		        inst[i]->l.size (), states[std::lround (inst[i]->engine * 3.0) & 3]);
+		printf ("lichomat-plughost: instance %zu: silence: out1 %u blocks, %u flagged, %u flagged but not silent, %u other flags; "
+		        "out2 %u blocks, %u flagged, %u flagged but not silent, %u other flags\n", i, inst[i]->silence[0][0],
+		        inst[i]->silence[0][1], inst[i]->silence[0][2], inst[i]->silence[0][3], inst[i]->silence[1][0],
+		        inst[i]->silence[1][1], inst[i]->silence[1][2], inst[i]->silence[1][3]);
 		close (*inst[i]);
 	}
 	if (!p.script.empty ())

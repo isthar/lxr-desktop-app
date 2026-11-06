@@ -1737,6 +1737,32 @@ def P10_plugin_flush_order(t):
     check(other > 100000, 'the change does not matter (%d samples): the test shows nothing' % other)
 
 
+@case
+def P10_plugin_silence(t):
+    # The silence flags of both buses, offline at 44,140.625 Hz in blocks of 128, the onset card (Drum 1 on out 1, the
+    # others on out 2): a flagged block (3) is all zeros and a block with sound is not flagged, on every bus, and the
+    # flags are only 0 or 3. Out 2 inactive (sum): Out 2 is flagged in every block and Out 1 has sound in blocks of
+    # its own. Out 2 active (split): both buses have blocks with sound and blocks flagged silent (before the engine's
+    # first frames reach the host, and between notes)
+    rows = {}
+    for mode, extra in (('sum', []), ('split', ['bus2'])):
+        _, out = host(t, plan(t, mode + '.plan', TIMELINE + extra + ['out ' + t.path(mode + '.wav')]))
+        line = [l for l in out.splitlines() if ': silence: ' in l]
+        check(len(line) == 1, 'no silence line in %r' % out)
+        m = re.search(r'out1 (\d+) blocks, (\d+) flagged, (\d+) flagged but not silent, (\d+) other flags; out2 (\d+) blocks, '
+                      r'(\d+) flagged, (\d+) flagged but not silent, (\d+) other flags', line[0])
+        check(m, line[0])
+        rows[mode] = [int(x) for x in m.groups()]
+    for mode in ('sum', 'split'):
+        b1, f1, n1, o1, b2, f2, n2, o2 = rows[mode]
+        check(b1 == b2 and b1 > 3000 and n1 == 0 and n2 == 0 and o1 == 0 and o2 == 0, '%s: %r' % (mode, rows[mode]))
+        check(0 < f1 < b1, '%s: Out 1 flagged %d of %d blocks' % (mode, f1, b1))
+    b1, f1, n1, o1, b2, f2, n2, o2 = rows['sum']
+    check(f2 == b2, 'sum: Out 2 flagged %d of %d blocks' % (f2, b2))
+    b1, f1, n1, o1, b2, f2, n2, o2 = rows['split']
+    check(0 < f2 < b2, 'split: Out 2 flagged %d of %d blocks (a bus with sound is not silent)' % (f2, b2))
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
