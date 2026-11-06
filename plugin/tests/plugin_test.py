@@ -933,23 +933,28 @@ def bundle_copy(t, name):
 
 @case
 def P10_plugin_spawn_fail(t):
-    # The engine cannot be started (its file is missing): the instance reports "failed", and a state given later
-    # (Live's preset load) starts an engine on the new card once the file is back, and setState returns at once.
-    # Real time, paced, 48 kHz: the helper is put back once the log has the failure, the state given at 2 s; a Note
-    # On every 0.25 s from 2.1 s on sounds
+    # The engine cannot be started (its file is missing): the instance reports "failed". A state given while the file
+    # is still missing (Live's preset load) is taken at once, the start on its card fails again and the instance stays
+    # failed, silent; one given once the file is back starts an engine on the new card, and setState returns at once.
+    # Real time, paced, 48 kHz: states at 1 s and at 3 s, the helper put back once the log has the second failure; a
+    # Note On every 0.25 s from 1.1 s on, silent until the engine runs
     bundle, helper = bundle_copy(t, 'LICHOMAT.vst3')
     os.remove(helper)
     host(t, plan(t, 'make.txt', ['out ' + t.path('make.wav'), 'state-out ' + t.path('onset.bin')], frames=12800))
-    at = 96000
-    lines = ['mode realtime', 'paced', 'out ' + t.path('f.wav'), 'setstate %d %s' % (at, t.path('onset.bin'))]
-    lines += ['note %d 0 48 127' % (at + 4800 + 12000 * k) for k in range(8)]
+    at1, at2 = 48000, 144000
+    lines = ['mode realtime', 'paced', 'out ' + t.path('f.wav'), 'setstate %d %s' % (at1, t.path('onset.bin')),
+             'setstate %d %s' % (at2, t.path('onset.bin'))]
+    lines += ['note %d 0 48 127' % (at1 + 4800 + 12000 * k) for k in range(16)]
     p = None
+
+    def failures():
+        return sum(x.count('cannot start the engine') for x in instance_logs(t.path('home')).values())
     try:
-        p = subprocess.Popen([t.a.host, plan(t, 'f.txt', lines, rate=48000, block=256, frames=48000 * 4, bundle=bundle)],
+        p = subprocess.Popen([t.a.host, plan(t, 'f.txt', lines, rate=48000, block=256, frames=48000 * 5, bundle=bundle)],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=host_env(t))
         t0 = time.monotonic()
-        while not any('cannot start the engine' in x for x in instance_logs(t.path('home')).values()):
-            check(p.poll() is None and time.monotonic() - t0 < 1.8, 'no spawn failure in the log in time')
+        while failures() < 2:
+            check(p.poll() is None and time.monotonic() - t0 < 2.8, 'not two spawn failures in the log in time')
             time.sleep(0.02)
         shutil.copy2(os.path.join(t.a.bundle, 'Contents', 'Helpers', 'lichomat-engine'), helper)
         out, err = p.communicate(timeout=120)
@@ -963,11 +968,16 @@ def P10_plugin_spawn_fail(t):
     print(log.strip())
     took = [float(l.split(' in ')[1].split()[0]) for l in out.splitlines() if 'setstate at' in l]
     _, _, x = wav(t.path('f.wav'))
-    loud = sum(1 for v in x[2 * at::2] if abs(v) >= 4000)
-    print('setState after the failure: %s s; %d loud frames after it' % (took, loud))
-    check(took and took[0] < 1.0, 'setState took %r s' % took)
-    check(re.search(r'cannot start the engine: posix_spawn .*: No such file or directory', log)
-          and re.search(r'engine \d+ started on ', log), 'the log')
+    between = sum(1 for v in x[2 * at1:2 * at2:2] if abs(v) >= 4000)
+    loud = sum(1 for v in x[2 * at2::2] if abs(v) >= 4000)
+    print('setState with the file missing, then back: %s s; loud frames between them %d, after the second %d'
+          % (took, between, loud))
+    check(len(took) == 2 and all(w < 1.0 for w in took), 'setState took %r s' % took)
+    lines = log.splitlines()
+    fails = [i for i, l in enumerate(lines) if 'cannot start the engine: posix_spawn' in l and 'No such file or directory' in l]
+    starts = [i for i, l in enumerate(lines) if re.search(r' engine \d+ started on ', l)]
+    check(len(fails) == 2 and len(starts) == 1 and starts[0] > fails[1], 'the log')
+    check(between == 0, 'sound while the engine could not start: %d loud frames' % between)
     check(loud > 1000 and 'engine running' in out, 'no engine on the new card: %d loud frames, %r' % (loud, out))
 
 
