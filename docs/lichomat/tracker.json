@@ -1031,7 +1031,7 @@
       "id": "E9.4",
       "epic": "E9",
       "status": "w toku",
-      "title": "Wtyczka: dwie szyny stereo (Out 1, Out 2 jak gniazda LXR; bez drugiej suma na Out 1) i ok. 30 parametrów do automatyki (głośność, panorama, filtr i decay głosów, filtr DJ, pogłos, delay, shuffle, wybór wzorca), wartości odsyłane z firmware; na plugin-v07. AU osobno, po Twojej zgodzie na pobranie AudioUnitSDK. Szkic §7, potem plan",
+      "title": "Wtyczka: dwa wyjścia stereo (Out 1, Out 2 jak gniazda LXR; bez włączonego Out 2 suma na Out 1) i 36 parametrów do automatyki: wzorzec; głośność, panorama, filtr, decay i wyjście każdego głosu; filtr DJ; poziom i decay pogłosu; ilość FX. Wartości odsyłane z firmware bez pętli i zapisane w secie; na plugin-v07, wersja 0.2.0. Plan: docs/superpowers/plans/2026-11-06-plugin-buses-parameters.md (zad. 1–11 = E9.31–E9.41). Bez shuffle i rozmiaru pogłosu (firmware zmienia je tylko z menu) i bez AU (czeka na Twoją zgodę na pobranie AudioUnitSDK)",
       "updated": "2026-11-06"
     },
     {
@@ -1039,6 +1039,83 @@
       "epic": "E9",
       "status": "zrobione",
       "title": "Wtyczka z firmware v0.7: gałąź plugin-v07 (728dfff, scalenie bez konfliktów), wszystkie testy: firmware 135, emulator 353, 41 nagrań wzorcowych, wtyczka 72/72, walidator 47/0; przez wtyczkę bit w bit jak renderer v0.7; demo z szablonem of8 na hihatach (build/wt-plugin-v07/build/demo-plugin-v07/). Ta sama tożsamość wtyczki w Live co plugin (zastąpi ją po instalacji); do wymiany po Twoich P1–P8",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.31",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka E9.4 zad. 1: stan wyjściowy na plugin-v07 (wtyczka 72 testy, emulator 353, firmware 135)",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.32",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka E9.4 zad. 2: konwerter częstotliwości na 2 albo 4 kanały naraz",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.33",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka E9.4 zad. 3: pamięć wspólna w wersji 2: cztery kanały (oba wyjścia urządzenia) i tabela wartości z firmware; suma bit w bit jak w prototypie; silnik i wtyczka innej wersji odmawiają sobie nawzajem",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.34",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka E9.4 zad. 4: oba wyjścia silnika sprawdzone od końca do końca (plug_drive split, bit w bit z rendererem przy 44,1 i 48 kHz)",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.35",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka E9.4 zad. 5: 36 parametrów (plug_params): ich CC, NRPN i Program Change, uzgadnianie wartości z Live i z firmware bez sprzężenia zwrotnego, blok wartości w stanie",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.36",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka E9.4 zad. 6: silnik po każdym bloku czyta wartości parametrów z pamięci firmware i przy starcie sprawdza tabelę parametrów z Parameters.h",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.37",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka E9.4 zad. 7: Out 1 i Out 2 we wtyczce; bez włączonego Out 2 suma na Out 1",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.38",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka E9.4 zad. 8: parametry we wtyczce: suwaki i automatyka w Live, MIDI do firmware co do próbki, wartości z firmware z powrotem do Live, log kanału MIDI",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.39",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka E9.4 zad. 9: wartości parametrów w secie (blok LCHV po karcie); stare sety otwierają się z wartościami z karty",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.40",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka E9.4 zad. 10: README, wersja 0.2.0, końcowe bramki",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.41",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka E9.4 zad. 11: Twoje sprawdzenia P9–P10 (dwa wyjścia, parametry), HANDOFF, tracker",
       "updated": "2026-11-06"
     }
   ],
@@ -1446,6 +1523,14 @@
       "question": "Po restarcie silnika wtyczki tuż po szesnastce pierwsze dwa uderzenia wypadają do 20 ramek (0,4 ms) za wcześnie, bo zegar tej szesnastki wychodzi spóźniony, a slave dopasowuje tempo do krótszego odstępu. Zagrać tę szesnastkę spóźnioną czy ją pominąć?",
       "assumption": "Zagrać spóźnioną.",
       "answer": "Moja decyzja według Twojej reguły z 29.10: zagrać spóźnioną. Pominięcie gubi cały krok (ten sam błąd co zgubiony downbeat, który naprawił przegląd grupy B), a 0,4 ms jest niesłyszalne. Dwa pierwsze uderzenia po restarcie mają w testach własną, zmierzoną granicę −20..+2 ramki, trzecie znów ±2. LXR z takim strumieniem zegara zachowałby się tak samo. Tryb „host” (E9.3) tego nie ma.",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "Q40",
+      "status": "zamknięte",
+      "question": "Kit wczytany razem ze wzorcem ustawia swoje wartości także parametrom, które Live automatyzuje (gdy linia automatyki stoi, Live nie wysyła nowego punktu). Co ma wtedy grać: wartość z kitu czy ostatnia wartość z automatyki Live'a?",
+      "assumption": "Wartość z kitu.",
+      "answer": "Moja decyzja według Twojej reguły z 29.10: wartość z kitu, tak jak gra urządzenie sterowane z zewnętrznego sekwencera; wtyczka pokazuje ją w Live, do następnego punktu automatyki. Sprawdzasz to w P10 (c). Jeśli Live oznaczy przez to automatykę jako nadpisaną albo wolisz wartość z automatyki, zmiana to jedna reguła w plug_params.c (wartość z Live'a wygrywa przy każdym odczycie, nie tylko po starcie silnika).",
       "updated": "2026-11-06"
     }
   ],
