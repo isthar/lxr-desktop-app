@@ -68,7 +68,9 @@
 #include "plug_params.h"
 #include "plug_time.h"
 #include "plugin_points.h"
+#include "pluginterfaces/base/ustring.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
+#include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "public.sdk/source/common/memorystream.h"
@@ -120,6 +122,7 @@ struct Plan
 	std::vector<uint64_t> kills, hangs;
 	std::vector<std::pair<uint64_t, int>> renews;
 	std::vector<std::pair<uint64_t, std::string>> setstates, asyncSets;	/* asyncSets: setState from a thread of its own */
+	std::string controller;		/* a file for the controller's parameters: infos, values, strings */
 	std::string stateEarly;		/* getState right after setState (FILE.set) and right after setActive (FILE), before any block */
 	std::vector<ParamCmd> flushes;	/* changes given in a flush (process() with 0 frames) right before the block from each frame */
 	std::vector<uint64_t> noOutputs;	/* the block from each frame with no output bus at all */
@@ -185,6 +188,7 @@ Plan readPlan (const char* path)
 			     && c.value <= plug_params[plug_paramIndex (c.id)].max;
 			p.flushes.push_back (c);
 		}
+		else if (cmd == "controller") ok = !!(s >> p.controller);
 		else if (cmd == "state-early") ok = !!(s >> p.stateEarly);
 		else if (cmd == "no-outputs") { uint64_t k; ok = !!(s >> k); p.noOutputs.push_back (k); }
 		else if (cmd == "null-out2") p.nullOut2 = true;
@@ -284,6 +288,55 @@ void saveState (Instance& in, const std::string& path)
 		die ("getState failed");
 	std::ofstream o (path, std::ios::binary);
 	o.write (m->getData (), (std::streamsize)m->getSize ());
+}
+
+/* The plugin's controller through the SDK's interface, as a host's generic editor uses it: for every parameter
+ * but the Engine's, its info, and for each value 0..steps the normalized value, the plain value back, the text,
+ * and the plain value of that text; and the plain values of values outside 0-1 and between two steps; and the answers
+ * to texts that are no value of it */
+void dumpController (Instance& in, const std::string& path)
+{
+	IPtr<IEditController> c = in.provider->getControllerPtr ();
+	if (!c)
+		die ("the plugin has no controller");
+	FILE* f = fopen (path.c_str (), "w");
+	if (!f)
+		die ("cannot write " + path);
+	auto ascii = [] (const String128 s) {
+		char b[128];
+		UString128 (s).toAscii (b, sizeof b);
+		return std::string (b);
+	};
+	for (int32 k = 0; k < c->getParameterCount (); k++)
+	{
+		ParameterInfo info {};
+		if (c->getParameterInfo (k, info) != kResultOk || info.id == 0)
+			continue;
+		fprintf (f, "info %u steps %d default %.17g flags %d title %s\n", info.id, info.stepCount, info.defaultNormalizedValue,
+		         info.flags, ascii (info.title).c_str ());
+		for (int32 v = 0; v <= info.stepCount; v++)
+		{
+			const ParamValue n = c->plainParamToNormalized (info.id, v);
+			String128 text {};
+			c->getParamStringByValue (info.id, n, text);
+			ParamValue back = -1;
+			const tresult r = c->getParamValueByString (info.id, text, back);
+			fprintf (f, "value %u %d %.17g %.17g %s %.17g\n", info.id, v, n, c->normalizedParamToPlain (info.id, n),
+			         ascii (text).c_str (), r == kResultOk ? c->normalizedParamToPlain (info.id, back) : -1.0);
+		}
+		const double st = info.stepCount;
+		fprintf (f, "edge %u %.17g %.17g %.17g %.17g\n", info.id, c->normalizedParamToPlain (info.id, -0.5),
+		         c->normalizedParamToPlain (info.id, 1.5), c->normalizedParamToPlain (info.id, 3.4 / st),
+		         c->normalizedParamToPlain (info.id, 3.6 / st));
+		for (const char* bad : {"x", "", "9999", "-9999", "St9", "1.5x"})
+		{
+			String128 text {};
+			UString128 (text).fromAscii (bad);
+			ParamValue out = 0;
+			fprintf (f, "bad %u '%s' %d\n", info.id, bad, c->getParamValueByString (info.id, text, out) == kResultOk ? 1 : 0);
+		}
+	}
+	fclose (f);
 }
 
 /* a component at the plan's rate and block, with its state, active and processing */
@@ -515,6 +568,8 @@ int main (int argc, char** argv)
 		inst.push_back (std::make_unique<Instance> ());
 		open (*inst.back (), factory, cls, p);
 	}
+	if (!p.controller.empty ())
+		dumpController (*inst[0], p.controller);
 	ProcessContext ctx {};
 	ctx.sampleRate = p.rate;
 	for (auto& in : inst)

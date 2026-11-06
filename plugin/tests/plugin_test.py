@@ -1800,6 +1800,60 @@ def P10_plugin_frame_order(t):
     check(other > 1000, 'the two orders sound alike (%d samples): the case shows nothing' % other)
 
 
+# the 36 parameters of the plugin as the user sees them: id -> (steps, how a value shows)
+def controller_table():
+    fixed = {1: (63, lambda v: str(v + 1)), 50: (127, str), 51: (127, str), 52: (127, str), 53: (100, str)}
+    outs = ['St1', 'St2', 'L1', 'R1', 'L2', 'R2', 'FX']
+    table = dict(fixed)
+    for i in range(6):
+        table[10 + i] = (127, str)                          # volumes
+        table[20 + i] = (127, lambda v: str(v - 63))        # pans: -63 to 64
+        table[30 + i] = (127, str)                          # filters
+        table[60 + i] = (6, lambda v: outs[v])              # outputs
+    for i in range(7):
+        table[40 + i] = (127, str)                          # decays
+    return table
+
+
+@case
+def P10_plugin_controller(t):
+    # The plugin's controller, through the SDK's IEditController as a host's generic editor uses it, for all 36
+    # parameters: the step count, toPlain(toNormalized(v)) == v for every value, the text of every value (the pattern
+    # 1-64, the pans -63 to 64, the outputs St1 to FX, the others as they are), the value of that text, a value outside
+    # 0-1 is the nearest end and one between two steps the nearest step, and a text that is no value is refused
+    table = controller_table()
+    dump = t.path('controller.txt')
+    host(t, plan(t, 'plan.txt', ['controller ' + dump, 'out ' + t.path('c.wav')], card=False, frames=128))
+    info, values, edge, bad = {}, {}, {}, {}
+    for l in open(dump):
+        w = l.split()
+        if w[0] == 'info':
+            info[int(w[1])] = (int(w[3]), float(w[5]), int(w[7]))
+        elif w[0] == 'value':
+            values.setdefault(int(w[1]), []).append((int(w[2]), float(w[3]), float(w[4]), w[5], float(w[6])))
+        elif w[0] == 'edge':
+            edge[int(w[1])] = [float(x) for x in w[2:6]]
+        elif w[0] == 'bad':
+            bad.setdefault(int(w[1]), []).append(int(w[-1]))
+    check(sorted(info) == sorted(table) and len(table) == 36, 'the parameters %r' % sorted(info))
+    counted = 0
+    for pid, (steps, show) in sorted(table.items()):
+        check(info[pid][0] == steps and info[pid][2] & 1, 'id %d: info %r' % (pid, info[pid]))
+        rows = values[pid]
+        check(len(rows) == steps + 1, 'id %d: %d values' % (pid, len(rows)))
+        for v, norm, back, text, fromtext in rows:
+            check(abs(norm - v / steps) < 1e-12, 'id %d value %d: normalized %r' % (pid, v, norm))
+            check(back == v, 'id %d value %d: toPlain(toNormalized) = %r' % (pid, v, back))
+            check(text == show(v), 'id %d value %d shows %r, not %r' % (pid, v, text, show(v)))
+            check(fromtext == v, 'id %d: the text %r is value %r, not %d' % (pid, text, fromtext, v))
+            counted += 1
+        check(edge[pid][:2] == [0.0, float(steps)] and edge[pid][2:] == [3.0, 4.0], 'id %d: edges %r' % (pid, edge[pid]))
+        check(bad[pid] == [0] * 6, 'id %d: texts taken that are no value: %r' % (pid, bad[pid]))
+    print('%d parameters, %d values: toPlain(toNormalized(v)) == v, the texts and their values as shown to the user; '
+          'pan %r..%r, pattern %r..%r, outputs %r' % (len(table), counted, values[20][0][3], values[20][-1][3], values[1][0][3],
+                                                    values[1][-1][3], [r[3] for r in values[60]]))
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
