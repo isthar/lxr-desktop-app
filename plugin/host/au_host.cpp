@@ -50,7 +50,8 @@
  *   checks            before playing, what auval checks of an instrument and can be checked here:
  *                     initialized again at another rate (the latency follows), the formats while
  *                     uninitialized (a second output element made after Out 1's format takes it, a
- *                     format of Out 1 alone sets both), every writable
+ *                     format of Out 1 alone sets both, a rate outside 8-384 kHz and a maximum of frames
+ *                     per slice of 0 or above 8,192 refused when set), every writable
  *                     parameter's minimum, maximum and default set and scheduled and read back, the
  *                     Engine refusing a set, a value outside a parameter's range or between its steps
  *                     set and scheduled and read back as the device takes it (clamped, rounded), a
@@ -534,6 +535,25 @@ void runChecks (Instance& in, const Plan& p, const AuPlan& a)
 		expect (AudioUnitSetProperty (in.au, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &f, sizeof f) == noErr
 		            && format (1).mSampleRate == p.rate,
 		        "Out 1's format alone: Out 2 at " + std::to_string (format (1).mSampleRate) + " Hz");
+		/* what the processor cannot take (its setupProcessing()) is refused when set, not at AudioUnitInitialize */
+		for (double r : {7999.0, 384001.0})
+		{
+			AudioStreamBasicDescription g = f;
+			g.mSampleRate = r;
+			expect (AudioUnitSetProperty (in.au, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &g, sizeof g) != noErr
+			            && format (0).mSampleRate == p.rate,
+			        "a rate of " + std::to_string (r) + " taken");
+		}
+		for (UInt32 m : {0u, 8193u})
+		{
+			UInt32 now = 0, size = sizeof now;
+			expect (AudioUnitSetProperty (in.au, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &m, sizeof m)
+			                != noErr
+			            && AudioUnitGetProperty (in.au, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &now, &size)
+			                   == noErr
+			            && now == (UInt32)p.block,
+			        "a maximum of " + std::to_string (m) + " frames per slice taken");
+		}
 		expect (AudioUnitInitialize (in.au) == noErr, "AudioUnitInitialize after the formats");
 	}
 	/* every writable parameter: its minimum, maximum and default, set and scheduled, read back */

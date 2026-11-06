@@ -141,9 +141,12 @@ public:
 		return scope == kAudioUnitScope_Output && !IsInitialized ();
 	}
 
+	/* two channels, at a rate the processor takes (its setupProcessing(): 8-384 kHz): a host learns of another one
+	 * when it sets it, not at Initialize() */
 	bool ValidFormat (AudioUnitScope scope, AudioUnitElement element, const AudioStreamBasicDescription& f) override
 	{
-		return MusicDeviceBase::ValidFormat (scope, element, f) && f.mChannelsPerFrame == 2;
+		return MusicDeviceBase::ValidFormat (scope, element, f) && f.mChannelsPerFrame == 2 && f.mSampleRate >= 8000.0
+		       && f.mSampleRate <= 384000.0;
 	}
 
 	/* one sample rate for both outputs: a host that sets one sets both */
@@ -386,6 +389,16 @@ public:
 			return r;
 		}
 		return MusicDeviceBase::SetProperty (id, scope, element, in, size);
+	}
+
+	/* a maximum of frames per slice the processor takes (its setupProcessing(): 1-8,192), else refused when set, not at
+	 * Initialize(). The SDK sets this property itself (DispatchSetProperty() is not virtual), so the refusal takes the
+	 * SDK's own error path: an exception that the dispatcher (AUMethodSetProperty()) turns into the call's result */
+	void SetMaxFramesPerSlice (UInt32 n) override
+	{
+		if (n < 1 || n > 8192)
+			ausdk::ThrowQuiet (kAudioUnitErr_InvalidPropertyValue);
+		MusicDeviceBase::SetMaxFramesPerSlice (n);
 	}
 
 	/* a tail of 0 s (plan A-14): the voices sound only while the notes the host sends play them, and a tail would make
