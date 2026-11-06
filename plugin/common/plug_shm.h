@@ -167,7 +167,7 @@ static inline float plug_sum(float a, float b)
  * into ch[1] (ch[2] and ch[3] unused). A frame the engine has not written, or has written over
  * (more than PLUG_AUDIO_FRAMES - 1 before audioEnd, also while it was copied), is 0; one that it
  * should have written by now (from its epoch on, while it runs) counts in underruns. Returns the
- * frames copied from the ring. */
+ * frames copied from the ring. A NULL ch[i] among those used is not written (a host's null buffer). */
 uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *const ch[PLUG_AUDIO_CHANNELS], int sum);
 
 /** a copy of the engine's last values: 1, or 0 when it has written none or was writing them */

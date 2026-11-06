@@ -1625,6 +1625,30 @@ def P10_plugin_params_state(t):
     check(not instance_dirs(t.path('home')), 'instance folders left: %r' % instance_dirs(t.path('home')))
 
 
+@case
+def P10_plugin_null_out2(t):
+    # An inactive bus may have null sample buffers (ivstaudioprocessor.h:191-193), and a channel may be null: Out 2 given
+    # null buffers the whole run (inactive), and Out 1's left channel null for the block at 5,120 (an unwritten
+    # buffer). No crash; Out 1 is lichomat-render's --stereo sum (P10_plugin_native) but for that block's left channel,
+    # which the plugin left as the host had it (0.5), and its right channel is the renderer's
+    script = t.path('script.txt')
+    lat, out = host(t, plan(t, 'plan.txt', TIMELINE + ['null-out2', 'null-out1 5120', 'out ' + t.path('plugin.wav'),
+                                                       'script ' + script]))
+    t.render(t.card('render'), script, 12, t.path('render.wav'))
+    _, _, a = wav(t.path('plugin.wav'))
+    _, _, b = wav(t.path('render.wav'))
+    shift = lat[0] - 128
+    n, diff, loud = shifted_equal(a, b, shift)
+    blind = range(5120, 5248)
+    left = [a[2 * f] for f in blind]
+    others = [i for i in range(2 * n) if a[2 * shift + i] != b[i] and not (i % 2 == 0 and (i // 2 + shift) in blind)]
+    print('latency %d, %d frames compared, %d differ; left of the block at 5,120 untouched: %d of 128; other differences: %d'
+          % (lat[0], n, diff, sum(1 for v in left if v == 16384), len(others)))
+    check(all(v == 16384 for v in left), 'the null channel was written')
+    check(not others and loud > 100000, 'Out 1 differs from the renderer in %d samples' % len(others))
+    check('engine running' in out, 'the engine did not run to the end')
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

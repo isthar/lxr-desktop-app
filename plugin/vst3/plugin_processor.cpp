@@ -351,16 +351,19 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 	}
 	/* Out 1 and Out 2 the device's outputs when the host activated Out 2 and gave its buffers, else
 	 * Out 1 their sum (the prototype's output) and Out 2, if given, silent */
-	const bool hasOut2 = data.numOutputs > 1 && data.outputs[1].numChannels >= 2 && data.outputs[1].channelBuffers32;
+	const bool hasOut2 = data.numOutputs > 1 && data.outputs[1].numChannels >= 2 && data.outputs[1].channelBuffers32
+	                     && data.outputs[1].channelBuffers32[0] && data.outputs[1].channelBuffers32[1];
 	const bool split = hasOut2 && out2Active.load (std::memory_order_relaxed);
-	float* ch[PLUG_AUDIO_CHANNELS] = {data.outputs[0].channelBuffers32[0], data.outputs[0].channelBuffers32[1],
+	/* a null channel (an unwritten buffer; the SDK allows it for an inactive bus) is not written */
+	float** out1 = data.outputs[0].channelBuffers32;
+	float* ch[PLUG_AUDIO_CHANNELS] = {out1 ? out1[0] : nullptr, out1 ? out1[1] : nullptr,
 	                                   split ? data.outputs[1].channelBuffers32[0] : nullptr,
 	                                   split ? data.outputs[1].channelBuffers32[1] : nullptr};
 	const unsigned outs = split ? PLUG_AUDIO_CHANNELS : 2u;
 	uint32_t copied = 0;
 	const uint32_t skip = frames >= readOffset ? 0u : (uint32_t)std::min<uint64_t> (n, readOffset - frames);
 	for (unsigned c = 0; c < outs; c++)
-		for (uint32_t i = 0; i < skip; i++)
+		for (uint32_t i = 0; ch[c] && i < skip; i++)
 			ch[c][i] = 0.0f;
 	if (skip < n)
 	{
@@ -373,7 +376,7 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 		}
 		else
 			for (unsigned c = 0; c < outs; c++)
-				for (uint32_t i = skip; i < n; i++)
+				for (uint32_t i = skip; ch[c] && i < n; i++)
 					ch[c][i] = 0.0f;
 	}
 	data.outputs[0].silenceFlags = copied ? 0 : 3;

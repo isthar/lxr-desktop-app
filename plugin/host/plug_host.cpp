@@ -120,6 +120,8 @@ struct Plan
 	std::vector<uint64_t> kills, hangs;
 	std::vector<std::pair<uint64_t, int>> renews;
 	std::vector<std::pair<uint64_t, std::string>> setstates;
+	bool nullOut2 = false;		/* Out 2 (inactive) with null sample buffers, as the SDK allows */
+	std::vector<uint64_t> nullOut1;	/* the block from each frame with Out 1's left channel null */
 };
 
 [[noreturn]] void die (const std::string& what)
@@ -173,6 +175,8 @@ Plan readPlan (const char* path)
 		else if (cmd == "kill") { uint64_t k; ok = !!(s >> k); p.kills.push_back (k); }
 		else if (cmd == "hang") { uint64_t k; ok = !!(s >> k); p.hangs.push_back (k); }
 		else if (cmd == "renew") { uint64_t k; int i; ok = !!(s >> k >> i); p.renews.push_back ({k, i}); }
+		else if (cmd == "null-out2") p.nullOut2 = true;
+		else if (cmd == "null-out1") { uint64_t k; ok = !!(s >> k); p.nullOut1.push_back (k); }
 		else if (cmd == "setstate") { uint64_t k; std::string fn; ok = !!(s >> k >> fn); p.setstates.push_back ({k, fn}); }
 		else ok = false;
 		if (!ok)
@@ -491,7 +495,7 @@ int main (int argc, char** argv)
 	plug_clock_t expect;
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
-	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0;
+	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextNull1 = 0;
 	unsigned long long processCalls = 0;
 	if (p.paced)
 		paceAsDevice (p);
@@ -616,11 +620,32 @@ int main (int argc, char** argv)
 				for (int32 c = 0; c < in->data.outputs[b].numChannels; c++)
 					for (uint32_t i = 0; i < n; i++)
 						in->data.outputs[b].channelBuffers32[c][i] = 0.5f;
+			/* buffers a plugin must not touch: an inactive bus may have null ones, and so may a channel */
+			Sample32* keep[3] = {nullptr, nullptr, nullptr};
+			const bool blind1 = nextNull1 < p.nullOut1.size () && p.nullOut1[nextNull1] <= f;
+			if (p.nullOut2 && in->data.numOutputs > 1)
+			{
+				keep[0] = in->data.outputs[1].channelBuffers32[0];
+				keep[1] = in->data.outputs[1].channelBuffers32[1];
+				in->data.outputs[1].channelBuffers32[0] = in->data.outputs[1].channelBuffers32[1] = nullptr;
+			}
+			if (blind1)
+			{
+				keep[2] = in->data.outputs[0].channelBuffers32[0];
+				in->data.outputs[0].channelBuffers32[0] = nullptr;
+			}
 			if (rtInside)
 				rtInside (1);
 			in->processor->process (in->data);
 			if (rtInside)
 				rtInside (0);
+			if (keep[0])
+			{
+				in->data.outputs[1].channelBuffers32[0] = keep[0];
+				in->data.outputs[1].channelBuffers32[1] = keep[1];
+			}
+			if (blind1)
+				in->data.outputs[0].channelBuffers32[0] = keep[2];
 			processCalls++;
 			readEngineParam (*in);
 			readReports (*in, (size_t)(&in - &inst[0]), f, p.echo);
@@ -636,6 +661,8 @@ int main (int argc, char** argv)
 				in->r2.insert (in->r2.end (), r2, r2 + n);
 			}
 		}
+		if (nextNull1 < p.nullOut1.size () && p.nullOut1[nextNull1] <= f)
+			nextNull1++;
 	}
 	if (!p.stateOut.empty ())
 	{

@@ -175,18 +175,22 @@ uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *co
 			const float *p = s->audio[f & (PLUG_AUDIO_FRAMES - 1u)];
 			if (sum)
 			{
-				ch[0][i] = plug_sum(p[0], p[2]);
-				ch[1][i] = plug_sum(p[1], p[3]);
+				if (ch[0])
+					ch[0][i] = plug_sum(p[0], p[2]);
+				if (ch[1])
+					ch[1][i] = plug_sum(p[1], p[3]);
 			}
 			else
 				for (unsigned c = 0; c < PLUG_AUDIO_CHANNELS; c++)
-					ch[c][i] = p[c];
+					if (ch[c])
+						ch[c][i] = p[c];
 			copied++;
 		}
 		else
 		{
 			for (unsigned c = 0; c < outs; c++)
-				ch[c][i] = 0.0f;
+				if (ch[c])
+					ch[c][i] = 0.0f;
 			if (running && f >= start && f >= end)
 				missing++;
 		}
@@ -204,7 +208,8 @@ uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *co
 			if (f >= start && f < end && end - f < PLUG_AUDIO_FRAMES && f + PLUG_AUDIO_FRAMES <= now)
 			{
 				for (unsigned c = 0; c < outs; c++)
-					ch[c][i] = 0.0f;
+					if (ch[c])
+						ch[c][i] = 0.0f;
 				copied--;
 			}
 		}
