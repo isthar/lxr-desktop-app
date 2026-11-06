@@ -495,6 +495,54 @@ def P6_engine_orphan(t):
 
 
 @case
+def P6_engine_refuses(t):
+    # An engine run on shared memory of another layout refuses it with exit 2 and says why, before it touches
+    # the card: (a) an object of this version's size whose header says version 1 (plug_shmCheck()), (b) an object
+    # of the version-1 layout's size (plug_shmMap()). The file is fd 5, as the plugin's shared memory is.
+    magic, v1_bytes = 0x5048434C, 327824
+    full = 590040	# sizeof(plug_shm_t) of version 2 (P3_shm_create checks it)
+    cases = [('v1header', full, struct.pack('<III', magic, 1, full),
+              'version 1 size %d, this engine needs version 2 size %d' % (full, full)),
+             ('v1size', v1_bytes, struct.pack('<III', magic, 1, v1_bytes),
+              'an object of %d bytes, this engine needs version 2 size %d' % (v1_bytes, full))]
+    for name, size, head, said in cases:
+        card = t.card(name)
+        shm = t.path(name + '.shm')
+        with open(shm, 'wb') as f:
+            f.write(head)
+            f.truncate(size)
+        wake_r, wake_w = os.pipe()
+        life_r, life_w = os.pipe()
+        fd = os.open(shm, os.O_RDWR)
+        src = (wake_r, life_w, fd)
+
+        def place():
+            high = [fcntl.fcntl(x, fcntl.F_DUPFD, 10) for x in src]	# clear of 3, 4, 5, then onto them
+            for want, h in zip((3, 4, 5), high):
+                os.dup2(h, want)
+            for h in high:
+                os.close(h)
+
+        p = None
+        try:
+            p = subprocess.Popen([t.a.engine, '--card', card], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True, pass_fds=(3, 4, 5), preexec_fn=place)
+            try:
+                out, err = p.communicate(timeout=20)
+            except subprocess.TimeoutExpired:
+                raise Fail('%s: the engine did not end within 20 s' % name)
+            check(p.returncode == 2, '%s: exit %r, not 2:\n%s%s' % (name, p.returncode, out, err))
+            check(said in err, '%s: stderr does not say "%s":\n%s' % (name, said, err))
+            print('%s: exit 2, "%s"' % (name, err.strip()))
+        finally:
+            kill_all([p], card)
+            for x in src:
+                os.close(x)
+            os.close(wake_w)
+            os.close(life_r)
+
+
+@case
 def P7_engine_resampled(t):
     # 44.1, 48 and 96 kHz: the engine's output is the renderer's for the same input times through the same
     # converter, 64 frames a push (plug_resample_wav), within 2 LSB: the renderer's WAV rounds (L1 + L2) / 2
