@@ -48,6 +48,9 @@
  *                     then the ClassInfo of snap given back, with no render between
  *   set-refused FRAME ID VALUE   set-restore with the ClassInfo of snap damaged (its values block of another
  *                     version), which the AU refuses
+ *   sched-reset FRAME before FRAME's block of instance 0: Drum 1's volume (id 10) scheduled to 20 at offset 0, then
+ *                     AudioUnitReset, then the block as planned; the AU's value of id 10 is printed after the
+ *                     last block
  *   offline FRAME 0|1 set kAudioUnitProperty_OfflineRender of every instance at FRAME, while it plays
  *   offline-async FRAME COUNT   from FRAME a thread of its own sets instance 0's OfflineRender COUNT times,
  *                     1 and 0 in turn, one every 50 ms, while the blocks run; the summary counts the
@@ -125,6 +128,7 @@ struct AuPlan
 	std::vector<uint64_t> floods;
 	std::vector<ParamCmd> sets;
 	uint64_t snap = UINT64_MAX;
+	uint64_t schedReset = UINT64_MAX;
 	std::vector<std::pair<ParamCmd, bool>> setRestores;	/* set-restore, and set-refused (true) */
 	UInt32 outputs = 2;
 	bool info = false, checks = false, noalloc = false;
@@ -848,6 +852,8 @@ int main (int argc, char** argv)
 		}
 		else if (cmd == "snap")
 			ok = !!(s >> a.snap);
+		else if (cmd == "sched-reset")
+			ok = !!(s >> a.schedReset);
 		else if (cmd == "set-restore" || cmd == "set-refused")
 		{
 			ParamCmd c {};
@@ -1185,6 +1191,20 @@ int main (int argc, char** argv)
 			for (auto& [c, refused] : a.setRestores)
 				if (idx == 0 && c.frame > 0 && c.frame >= f && c.frame < f + n)
 					setRestore (in, c, refused, snap, f);
+			if (idx == 0 && a.schedReset >= f && a.schedReset < f + n)
+			{
+				/* a scheduled event is the AU's value at once; a reset (a host stops or jumps) before the render */
+				AudioUnitParameterEvent e {};
+				e.scope = kAudioUnitScope_Global;
+				e.parameter = 10;
+				e.eventType = kParameterEvent_Immediate;
+				e.eventValues.immediate.value = 20.0f;
+				if (AudioUnitScheduleParameters (in.au, &e, 1) != noErr || AudioUnitReset (in.au, kAudioUnitScope_Global, 0) != noErr)
+					die ("sched-reset: refused");
+				in.shown[plug_paramIndex (10)] = param (in, 10);	/* the host's own value, not a report */
+				printf ("%s: sched-reset at %llu: 10 scheduled to 20, then AudioUnitReset; the AU's value of 10 %g\n", gName,
+				        (unsigned long long)f, in.shown[plug_paramIndex (10)]);
+			}
 			if (rtInside)
 				rtInside (1);
 			for (auto& [id, v] : in.echo)
@@ -1260,6 +1280,8 @@ int main (int argc, char** argv)
 				die ("set-end " + std::to_string (id) + " refused");
 	if (!p.stateOut.empty ())
 		writeFile (p.stateOut, stateOf (*inst[0]));
+	if (a.schedReset != UINT64_MAX)
+		printf ("%s: sched-reset: the AU's value of 10 after the last block %g\n", gName, param (*inst[0], 10));
 	std::this_thread::sleep_for (std::chrono::milliseconds (100));	/* the plugin's notifier, every 20 ms */
 	for (size_t i = 0; i < inst.size (); i++)
 	{

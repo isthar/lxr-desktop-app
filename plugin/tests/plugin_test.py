@@ -2561,6 +2561,26 @@ def P13_au_set_restore(t):
           'G: a damaged snapshot refused after a set taken: %s, the state holds %r' % (same['GH'], held['G']))
 
 
+@case
+def P13_au_sched_reset(t):
+    # A scheduled parameter event is the AU's value at once (AudioUnitGetParameter), so a reset (AudioUnitReset: a host
+    # stops or jumps) does not drop it: it drops the notes given before it, and the processor takes the scheduled events
+    # at the next render. Drum 1's volume scheduled to 20 before the block of 50,000, then AudioUnitReset, then the block
+    # rendered: the output is the VST3's with the point 20 at that block's first frame, byte for byte, and the AU's value
+    # after the last block is the state's, 20
+    notes = ['note %d 0 48 127' % (5000 * k + 2500) for k in range(26)]
+    host(t, plan(t, 'v.txt', notes + ['param 49920 10 20', 'out ' + t.path('v.wav')], frames=blocks_frames(3)))
+    _, out = au_host(t, au_plan(t, 'a.txt', notes + ['sched-reset 50000', 'out ' + t.path('a.wav'),
+                                                     'state-out ' + t.path('a.bin')], frames=blocks_frames(3)))
+    m = re.search(r"sched-reset: the AU's value of 10 after the last block (\S+)", out)
+    held = lchv(t.path('a.bin')).get(10)
+    d = same_files(t.path('v.wav'), t.path('a.wav'))
+    print('a scheduled event, then a reset: %s the VST3\'s point; the AU\'s value %s, the state\'s %r'
+          % ('==' if d is None else d, m.group(1) if m else None, held))
+    check(m and float(m.group(1)) == held == 20, 'the AU\'s value %s, the state\'s %r' % (m.group(1) if m else None, held))
+    check(d is None, 'the output %s' % d)
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
