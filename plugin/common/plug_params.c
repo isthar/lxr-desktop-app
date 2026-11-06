@@ -108,6 +108,7 @@ void plug_paramsInit(plug_params_t *ps, uint64_t settle)
 	{
 		ps->p[i].want = -1;
 		ps->p[i].sent = -1;
+		ps->p[i].first = 1;
 	}
 	ps->settle = settle;
 }
@@ -116,6 +117,8 @@ void plug_paramsEngine(plug_params_t *ps, uint64_t epoch)
 {
 	ps->epoch = epoch;
 	ps->synced = 0;
+	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+		ps->p[i].first = 1;
 }
 
 void plug_paramsRestore(plug_params_t *ps, const int *values)
@@ -128,6 +131,7 @@ void plug_paramsRestore(plug_params_t *ps, const int *values)
 		p->shown = 0;
 		p->sent = -1;
 		p->sentFrame = 0;
+		p->first = 1;
 	}
 	ps->synced = 0;
 }
@@ -186,7 +190,6 @@ unsigned plug_paramsReport(plug_params_t *ps, const uint8_t *values, uint64_t fr
 {
 	if (frame < ps->epoch)
 		return n;	/* an earlier engine's */
-	const int first = !ps->synced;
 	ps->synced = 1;
 	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
 	{
@@ -195,6 +198,9 @@ unsigned plug_paramsReport(plug_params_t *ps, const uint8_t *values, uint64_t fr
 		/* a value beyond the range (a card's own) is its max, as the host can show it */
 		const uint8_t fw = values[i] > plug_params[i].max ? plug_params[i].max : values[i];
 		plug_paramSync_t *p = &ps->p[i];
+		/* the engine's first report of this parameter: one that has no value for it (above) does not count */
+		const int first = p->first;
+		p->first = 0;
 		if (p->want == fw)
 		{
 			if (first)

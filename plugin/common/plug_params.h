@@ -77,6 +77,7 @@ typedef struct plug_paramSync
 	int shown;				/**< 1: the host has want */
 	int sent;				/**< the value last given to the engine; -1: none */
 	uint64_t sentFrame;		/**< the host frame it was given at */
+	int first;				/**< 1: the running engine has not reported this parameter yet (its first report is to come) */
 } plug_paramSync_t;
 
 /** every parameter's step, and the engine they follow */

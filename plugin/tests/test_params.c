@@ -183,6 +183,43 @@ TEST(P12_params_new_engine)
 	ASSERT_TRUE(ps.p[I_VOL1].sent == 40 && ps.p[I_VOL1].sentFrame == 10000);
 }
 
+TEST(P12_params_unknown)
+{
+	/* a value the engine cannot report yet (PLUG_VALUE_NONE) is not its first report of that parameter: the
+	 * host's value waits, and goes to the engine with the first report that has one */
+	plug_params_t ps;
+	plug_paramsInit(&ps, SETTLE);
+	int values[PLUG_PARAM_COUNT];
+	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+		values[i] = -1;
+	values[I_VOL1] = 40;
+	plug_paramsRestore(&ps, values);
+	plug_paramsEngine(&ps, 0);
+	uint8_t fw[PLUG_PARAM_COUNT];
+	fwValues(fw);
+	fw[I_VOL1] = PLUG_VALUE_NONE;
+	plug_midi_t out[16];
+	ASSERT_EQ(plug_paramsReport(&ps, fw, 0, 0, CH, out, 0, 16), 0);
+	ASSERT_TRUE(ps.p[I_VOL1].want == 40 && ps.p[I_VOL1].sent == -1);
+	fw[I_VOL1] = 127;
+	ASSERT_EQ(plug_paramsReport(&ps, fw, 64, 64, CH, out, 0, 16), 1);
+	ASSERT_TRUE(out[0].offset == 0 && out[0].b[1] == 89 && out[0].b[2] == 40);
+	ASSERT_TRUE(ps.p[I_VOL1].want == 40 && ps.p[I_VOL1].sent == 40 && ps.p[I_VOL1].sentFrame == 64);
+	/* the engine took it; and the next difference is a later report's, the firmware's own */
+	fw[I_VOL1] = 40;
+	ASSERT_EQ(plug_paramsReport(&ps, fw, 128, 128, CH, out, 0, 16), 0);
+	fw[I_VOL1] = 90;
+	ASSERT_EQ(plug_paramsReport(&ps, fw, 64 + SETTLE, 64 + SETTLE, CH, out, 0, 16), 0);
+	ASSERT_TRUE(ps.p[I_VOL1].want == 90 && ps.p[I_VOL1].shown == 0);
+	/* a new engine: pending again for every parameter */
+	plug_paramsEngine(&ps, 5000);
+	fw[I_VOL1] = PLUG_VALUE_NONE;
+	ASSERT_EQ(plug_paramsReport(&ps, fw, 5000, 5000, CH, out, 0, 16), 0);
+	fw[I_VOL1] = 127;
+	ASSERT_EQ(plug_paramsReport(&ps, fw, 5064, 5064, CH, out, 0, 16), 1);
+	ASSERT_TRUE(out[0].b[1] == 89 && out[0].b[2] == 90);
+}
+
 TEST(P12_params_own_change)
 {
 	/* after the first report: a value the firmware changed by itself goes to the host, but not one the
