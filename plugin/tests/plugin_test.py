@@ -2409,6 +2409,29 @@ def P13_au_stale_note(t):
     check(loud['init'] == 0 and loud['reset'] == 0, 'a stale Note On played: %r' % loud)
 
 
+@case
+def P13_au_drops(t):
+    # More than the AU takes in one render cycle, in the block at 50,000: 2,000 Note Offs (its note queue holds 1,024)
+    # and 300 scheduled events of Drum 1's volume (a cycle holds 256, a parameter 64 points), event k of value 7k mod
+    # 128. The AU drops what does not fit, counts it and says so off the render thread (its notifier, at most once a
+    # second), and keeps its value of the parameter the one the processor got: the last event it took (k 255: 121),
+    # which the state holds
+    notes = ['note %d 0 48 127' % (20000 * k + 5000) for k in range(4)]
+    _, out = au_host(t, au_plan(t, 'f.txt', notes + ['flood 50000', 'out ' + t.path('f.wav'), 'state-out ' + t.path('f.bin')],
+                                frames=blocks_frames(2)))
+    said = re.findall(r"LICHOMAT: dropped what the host gave beyond a render cycle's room: (\d+) notes \(1,024 queued\), "
+                      r"(\d+) scheduled parameter events \(256 a cycle\), (\d+) parameter points \(64 a parameter\)", out)
+    total = [sum(int(x[k]) for x in said) for k in range(3)]
+    m = re.search(r"flood at \d+: the AU's value of 10 is (\S+)", out)
+    v = lchv(t.path('f.bin'))
+    print('the log: %d lines, %d notes, %d scheduled events, %d points dropped; the AU\'s value %s, the state\'s %r'
+          % (len(said), total[0], total[1], total[2], m.group(1) if m else None, v.get(10)))
+    # the notifier may say it in two lines, the second a second later or when it stops, if it woke between the drops
+    check(1 <= len(said) <= 2 and total == [976, 44, 192], 'the log %r' % said)
+    check(m and float(m.group(1)) == 121 and v.get(10) == 121, 'the AU\'s value %s, the processor\'s %r'
+          % (m.group(1) if m else None, v.get(10)))
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

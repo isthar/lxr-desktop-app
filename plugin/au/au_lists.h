@@ -132,7 +132,9 @@ private:
 	uint64_t head = 0;	/**< the consumer's alone */
 };
 
-/** one parameter's points of a cycle, at most kMax (more are dropped) */
+/** one parameter's points of a cycle, at most kMax: when full, a point at or after the last replaces it (the value the
+ * parameter ends the cycle with is the last one given), and an earlier one is dropped; addPoint() is kResultFalse for
+ * either */
 class AuParamQueue
 : public Steinberg::U::ImplementsNonDestroyable<Steinberg::U::Directly<Steinberg::Vst::IParamValueQueue>>
 {
@@ -157,7 +159,15 @@ public:
 	                                        Steinberg::int32& index) override
 	{
 		if (count >= kMax)
+		{
+			if (offset >= offsets[count - 1])
+			{
+				offsets[count - 1] = offset;
+				values[count - 1] = value;
+				index = count - 1;
+			}
 			return Steinberg::kResultFalse;
+		}
 		Steinberg::int32 k = count++;
 		while (k > 0 && offsets[k - 1] > offset)
 		{
@@ -210,12 +220,12 @@ public:
 		return &queues[count++];
 	}
 
-	/** a point of parameter id */
-	void add (Steinberg::Vst::ParamID id, Steinberg::int32 offset, Steinberg::Vst::ParamValue value)
+	/** a point of parameter id: false when a point was lost (AuParamQueue::addPoint()) */
+	bool add (Steinberg::Vst::ParamID id, Steinberg::int32 offset, Steinberg::Vst::ParamValue value)
 	{
 		Steinberg::int32 index = 0, point = 0;
-		if (Steinberg::Vst::IParamValueQueue* q = addParameterData (id, index))
-			q->addPoint (offset, value, point);
+		Steinberg::Vst::IParamValueQueue* q = addParameterData (id, index);
+		return q && q->addPoint (offset, value, point) == Steinberg::kResultOk;
 	}
 
 	void clear () { count = 0; }

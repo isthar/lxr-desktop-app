@@ -30,6 +30,10 @@
  *                     before AudioUnitUninitialize and AudioUnitInitialize (init), before AudioUnitReset
  *                     (reset), or after them (after), before playing; no 0-frame renders before the first
  *                     block (offline, the first block waits for the engine)
+ *   flood FRAME       in the block of FRAME more than the AU takes in a render cycle, on the render thread
+ *                     before its render: 2,000 Note Offs of note 48 at offset 0 and 300 scheduled events of
+ *                     Drum 1's volume (id 10), event k of value 7k mod 128 at offset k x block / 300; the AU's
+ *                     value of id 10 after that block is printed
  *   set-end ID VALUE  AudioUnitSetParameter of ID to VALUE (0..its max) after the last block, with no
  *                     render after it, before the state-out
  *   offline FRAME 0|1 set kAudioUnitProperty_OfflineRender of every instance at FRAME, while it plays
@@ -99,6 +103,7 @@ struct AuPlan
 	std::vector<std::pair<uint64_t, int>> notesAsync;
 	std::vector<std::pair<uint64_t, int>> offlineAsync;
 	std::string staleNote;
+	std::vector<uint64_t> floods;
 	UInt32 outputs = 2;
 	bool info = false, checks = false, noalloc = false;
 };
@@ -669,6 +674,12 @@ int main (int argc, char** argv)
 			ok = !!(s >> at >> count) && count > 0 && count <= 1000;
 			a.offlineAsync.push_back ({at, count});
 		}
+		else if (cmd == "flood")
+		{
+			uint64_t at = 0;
+			ok = !!(s >> at);
+			a.floods.push_back (at);
+		}
 		else if (cmd == "stale-note")
 			ok = !!(s >> a.staleNote) && (a.staleNote == "init" || a.staleNote == "reset" || a.staleNote == "after");
 		else if (cmd == "notes-async")
@@ -937,6 +948,18 @@ int main (int argc, char** argv)
 			          (unsigned)c.vel);
 			script[c.frame].push_back (b);
 		}
+		const bool flood = std::any_of (a.floods.begin (), a.floods.end (), [f, n] (uint64_t x) { return x >= f && x < f + n; });
+		static AudioUnitParameterEvent floodEvents[300];
+		for (UInt32 k = 0; flood && k < 300; k++)
+		{
+			AudioUnitParameterEvent& e = floodEvents[k];
+			e = AudioUnitParameterEvent {};
+			e.scope = kAudioUnitScope_Global;
+			e.parameter = 10;
+			e.eventType = kParameterEvent_Immediate;
+			e.eventValues.immediate.bufferOffset = k * n / 300u;
+			e.eventValues.immediate.value = (float)((7u * k) % 128u);
+		}
 		bool pull2 = p.bus2;
 		for (auto& [from, to] : a.pull2)
 			pull2 = pull2 || (f >= from && f < to);
@@ -954,6 +977,12 @@ int main (int argc, char** argv)
 				AudioUnitScheduleParameters (in.au, events, ne);
 			for (unsigned k = 0; k < nn; k++)
 				MusicDeviceMIDIEvent (in.au, notes[k][0], notes[k][1], notes[k][2], noteAt[k]);
+			if (flood)
+			{
+				for (int k = 0; k < 2000; k++)
+					MusicDeviceMIDIEvent (in.au, 0x80, 48, 0, 0);
+				AudioUnitScheduleParameters (in.au, floodEvents, 300);
+			}
 			AudioUnitRenderActionFlags flags1 = 0, flags2 = 0;
 			OSStatus r = renderBus (in, 0, n, (Float64)f, &flags1);
 			if (r == noErr && pull2)
@@ -975,6 +1004,12 @@ int main (int argc, char** argv)
 			processCalls++;
 			if (tap.s && idx == 0)
 				tap.read ();
+			if (flood)
+			{
+				in.shown[plug_paramIndex (10)] = param (in, 10);	/* the host's own value, not a report */
+				printf ("%s: instance %zu: flood at %llu: the AU's value of 10 is %g\n", gName, idx, (unsigned long long)f,
+				        in.shown[plug_paramIndex (10)]);
+			}
 			in.echo.clear ();
 			readReports (in, idx, f, p.echo);
 			in.l.insert (in.l.end (), in.out[0].begin (), in.out[0].begin () + n);

@@ -267,8 +267,13 @@ public:
 			const AudioUnitParameterEvent& e = events[k];
 			if (e.scope != kAudioUnitScope_Global || e.element != 0 || plug_paramIndex (e.parameter) < 0)
 				continue;
-			if (scheduled < kMaxScheduled)
-				schedule[scheduled++] = e;
+			if (scheduled >= kMaxScheduled)
+			{
+				/* dropped, and so not the AU's value either: it stays the one the processor gets */
+				dropped[kDroppedScheduled].fetch_add (1, std::memory_order_relaxed);
+				continue;
+			}
+			schedule[scheduled++] = e;
 			const float last = e.eventType == kParameterEvent_Immediate ? e.eventValues.immediate.value
 			                                                             : e.eventValues.ramp.endValue;
 			Globals ()->SetParameterRT (e.parameter, last);
@@ -442,13 +447,15 @@ public:
 	 * does not tell the render thread by its id, as a host may render on more than one thread */
 	OSStatus HandleNoteOn (UInt8 channel, UInt8 note, UInt8 velocity, UInt32 frame) noexcept override
 	{
-		notes.push ({true, channel, note, velocity, frame});
+		if (!notes.push ({true, channel, note, velocity, frame}))
+			dropped[kDroppedNotes].fetch_add (1, std::memory_order_relaxed);
 		return noErr;
 	}
 
 	OSStatus HandleNoteOff (UInt8 channel, UInt8 note, UInt8 velocity, UInt32 frame) noexcept override
 	{
-		notes.push ({false, channel, note, velocity, frame});
+		if (!notes.push ({false, channel, note, velocity, frame}))
+			dropped[kDroppedNotes].fetch_add (1, std::memory_order_relaxed);
 		return noErr;
 	}
 
@@ -657,7 +664,7 @@ private:
 				continue;
 			seen[i] = gen;
 			const int32 at = (int32)((s >> 8) & 0xFFFFFFu);
-			inParams.add (plug_params[i].id, at > last ? last : at, (double)(s & 0xFFu) / plug_params[i].max);
+			point (plug_params[i].id, at > last ? last : at, (double)(s & 0xFFu) / plug_params[i].max);
 		}
 		for (UInt32 k = 0; k < scheduled; k++)
 		{
@@ -667,7 +674,7 @@ private:
 			if (e.eventType == kParameterEvent_Immediate)
 			{
 				const int32 at = (int32)e.eventValues.immediate.bufferOffset;
-				inParams.add (e.parameter, at > last ? last : at, plug_auPlain (i, e.eventValues.immediate.value) / max);
+				point (e.parameter, at > last ? last : at, plug_auPlain (i, e.eventValues.immediate.value) / max);
 				continue;
 			}
 			/* a ramp: its value at the cycle's first frame it covers and at its last */
@@ -680,11 +687,18 @@ private:
 				const double x = ((double)f - r.startBufferOffset) / d;
 				return r.startValue + (r.endValue - r.startValue) * (x < 0.0 ? 0.0 : x > 1.0 ? 1.0 : x);
 			};
-			inParams.add (e.parameter, a, plug_auPlain (i, at (a)) / max);
+			point (e.parameter, a, plug_auPlain (i, at (a)) / max);
 			if (b > a)
-				inParams.add (e.parameter, b, plug_auPlain (i, b == endAt ? r.endValue : at (b)) / max);
+				point (e.parameter, b, plug_auPlain (i, b == endAt ? r.endValue : at (b)) / max);
 		}
 		scheduled = 0;
+	}
+
+	/* a point of the host's for the processor; one lost (more than a queue holds) is counted */
+	void point (ParamID id, int32 offset, ParamValue value) noexcept
+	{
+		if (!inParams.add (id, offset, value))
+			dropped[kDroppedPoints].fetch_add (1, std::memory_order_relaxed);
 	}
 
 	/* the values the processor reported: into the AU's own, and the host's listeners are told */
@@ -874,11 +888,32 @@ private:
 				memcpy (to, ownChannel (bus, c), k * sizeof (float));
 	}
 
+	/* off the render thread: what the AU dropped (more than a render cycle holds), at most once a second, and once
+	 * more when the notifier stops */
+	void sayDropped (bool now)
+	{
+		const auto t = std::chrono::steady_clock::now ();
+		if (!now && t - saidAt < std::chrono::seconds (1))
+			return;
+		uint32_t n[kDroppedKinds];
+		for (unsigned k = 0; k < kDroppedKinds; k++)
+			n[k] = dropped[k].exchange (0, std::memory_order_relaxed);
+		if (!n[kDroppedNotes] && !n[kDroppedScheduled] && !n[kDroppedPoints])
+			return;
+		saidAt = t;
+		fprintf (stderr,
+		         "LICHOMAT: dropped what the host gave beyond a render cycle's room: %u notes (1,024 queued), %u scheduled "
+		         "parameter events (256 a cycle), %u parameter points (64 a parameter)\n",
+		         (unsigned)n[kDroppedNotes], (unsigned)n[kDroppedScheduled], (unsigned)n[kDroppedPoints]);
+	}
+
 	/* off the render thread: the host's listeners learn of each value the processor reported */
 	void notifyLoop ()
 	{
+		saidAt = std::chrono::steady_clock::now () - std::chrono::seconds (2);
 		while (!stopNotify.load ())
 		{
+			sayDropped (false);
 			for (unsigned k = 0; k < kSlots; k++)
 				if (pending[k].exchange (false, std::memory_order_relaxed))
 				{
@@ -888,6 +923,7 @@ private:
 				}
 			std::this_thread::sleep_for (std::chrono::milliseconds (20));
 		}
+		sayDropped (true);
 	}
 
 	IPtr<lichomat::Processor> proc;
@@ -920,6 +956,11 @@ private:
 	uint32_t resetsSeen = 0;				/**< those the schedule has seen (the render thread's) */
 	std::atomic<bool> pending[kSlots];	/**< reported values the listeners are to hear of */
 	std::atomic<bool> stopNotify {true};
+	/** what the render path dropped since the notifier said so: notes beyond the queue, scheduled events beyond a
+	 * cycle's 256, points beyond a parameter's 64 (relaxed counters) */
+	enum { kDroppedNotes, kDroppedScheduled, kDroppedPoints, kDroppedKinds };
+	std::atomic<uint32_t> dropped[kDroppedKinds] {};
+	std::chrono::steady_clock::time_point saidAt {};	/**< the notifier's */
 	std::thread notifier;
 };
 
