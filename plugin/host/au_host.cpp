@@ -49,7 +49,9 @@
  *   checks            before playing, what auval checks of an instrument and can be checked here:
  *                     initialized again at another rate (the latency follows), every writable
  *                     parameter's minimum, maximum and default set and scheduled and read back, the
- *                     Engine refusing a set, a render of more frames than the maximum refused, a
+ *                     Engine refusing a set, a value outside a parameter's range or between its steps
+ *                     set and scheduled and read back as the device takes it (clamped, rounded), a
+ *                     render of more frames than the maximum refused, a
  *                     ClassInfo refused (without lichomat-state, or with a state the processor refuses)
  *                     leaving the AU's values as they were, the ClassInfo read and given back
  *
@@ -521,6 +523,24 @@ void runChecks (Instance& in, const Plan& p, const AuPlan& a)
 		in.shown[i] = info.defaultValue;
 	}
 	expect (AudioUnitSetParameter (in.au, PLUG_AU_ENGINE, kAudioUnitScope_Global, 0, 1.0f, 0) != noErr, "the Engine took a set");
+	/* a value outside the range or between the steps is the device's (plug_auPlain(): clamped, rounded): Drum 1's
+	 * volume 0..127, its pan -63..64 */
+	for (auto [id, v, want] : {std::tuple<AudioUnitParameterID, float, float> {10, 1000.0f, 127.0f}, {10, -5.0f, 0.0f}, {10, 10.4f, 10.0f},
+	                           {10, 64.5f, 65.0f}, {20, -100.0f, -63.0f}, {20, 99.0f, 64.0f}, {20, -0.6f, -1.0f}})
+	{
+		expect (AudioUnitSetParameter (in.au, id, kAudioUnitScope_Global, 0, v, 0) == noErr && param (in, id) == want,
+		        "set " + std::to_string (id) + " to " + std::to_string (v) + ": reads " + std::to_string (param (in, id)));
+		AudioUnitParameterEvent e {};
+		e.scope = kAudioUnitScope_Global;
+		e.parameter = id;
+		e.eventType = kParameterEvent_Immediate;
+		e.eventValues.immediate.value = v;
+		AudioUnitSetParameter (in.au, id, kAudioUnitScope_Global, 0, 0.0f, 0);
+		expect (AudioUnitScheduleParameters (in.au, &e, 1) == noErr && param (in, id) == want,
+		        "scheduled " + std::to_string (id) + " at " + std::to_string (v) + ": reads " + std::to_string (param (in, id)));
+	}
+	for (AudioUnitParameterID id : {10u, 20u})
+		AudioUnitSetParameter (in.au, id, kAudioUnitScope_Global, 0, in.shown[plug_paramIndex (id)], 0);
 	/* more frames than the maximum: refused */
 	expect (renderBus (in, 0, (UInt32)p.block + 1, -1000000.0) == kAudioUnitErr_TooManyFramesToProcess, "a render too long");
 	/* a ClassInfo refused changes nothing: one without lichomat-state, and one whose state the processor refuses (its

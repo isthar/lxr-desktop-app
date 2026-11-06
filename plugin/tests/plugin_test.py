@@ -2176,7 +2176,7 @@ def P13_au_checks(t):
     _, out = au_host(t, au_plan(t, 'checks.txt', ['checks', 'note 1000 0 48 127', 'out ' + t.path('c.wav')], frames=12800))
     line = [l for l in out.splitlines() if 'checks:' in l]
     print(line[0] if line else out)
-    check(line == ['lichomat-auhost: checks: 234 passed'], 'checks %r' % line)
+    check(line == ['lichomat-auhost: checks: 248 passed'], 'checks %r' % line)
     _, _, x = wav(t.path('c.wav'))
     check(any(abs(v) >= 4000 for v in x), 'no sound after the checks')
 

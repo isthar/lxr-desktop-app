@@ -239,21 +239,23 @@ public:
 		return noErr;
 	}
 
-	/* A host's set, from any thread: the value goes to the AU's own (GetParameter()) and, as a point
-	 * at its offset in the next render cycle, to the processor (the last set of a parameter in a cycle
-	 * wins: AU v2's SetParameter() is a value, not an event). */
+	/* A host's set, from any thread: the value as the device takes it (plug_auPlain(): clamped to the range,
+	 * rounded to a step) goes to the AU's own (GetParameter()) and, as a point at its offset in the next render
+	 * cycle, to the processor (the last set of a parameter in a cycle wins: AU v2's SetParameter() is a value, not an
+	 * event). */
 	OSStatus SetParameter (AudioUnitParameterID id, AudioUnitScope scope, AudioUnitElement element,
 	                       AudioUnitParameterValue value, UInt32 offset) noexcept override
 	{
 		const int i = plug_paramIndex (id);
 		if (scope != kAudioUnitScope_Global || element != 0 || i < 0)
 			return kAudioUnitErr_InvalidParameter;	/* the Engine is read only */
-		const OSStatus r = MusicDeviceBase::SetParameter (id, scope, element, value, offset);
+		const uint8_t plain = plug_auPlain ((unsigned)i, value);
+		const OSStatus r = MusicDeviceBase::SetParameter (id, scope, element, plug_auValue ((unsigned)i, plain), offset);
 		if (r != noErr)
 			return r;
 		const uint64_t gen = (uint64_t)(setGen.fetch_add (1, std::memory_order_relaxed) + 1) & 0xFFFFFFu;
 		const uint64_t at = offset > 0xFFFFFFu ? 0xFFFFFFu : offset;
-		slots[i].store (gen << 40 | at << 8 | plug_auPlain ((unsigned)i, value), std::memory_order_release);
+		slots[i].store (gen << 40 | at << 8 | plain, std::memory_order_release);
 		return noErr;
 	}
 
@@ -276,7 +278,8 @@ public:
 			schedule[scheduled++] = e;
 			const float last = e.eventType == kParameterEvent_Immediate ? e.eventValues.immediate.value
 			                                                             : e.eventValues.ramp.endValue;
-			Globals ()->SetParameterRT (e.parameter, last);
+			const unsigned i = (unsigned)plug_paramIndex (e.parameter);
+			Globals ()->SetParameterRT (e.parameter, plug_auValue (i, plug_auPlain (i, last)));	/* as the device takes it */
 		}
 		return noErr;
 	}
