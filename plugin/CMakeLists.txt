@@ -93,7 +93,9 @@ target_sources(plug_common PRIVATE common/plug_spawn.c)
 add_executable(lichomat-engine engine/eng_main.c engine/eng_run.c engine/eng_resample.c
     $<TARGET_OBJECTS:lichomat-render_fw> $<TARGET_OBJECTS:plug_common_san> ${PLUGIN_DEVICE_OBJECTS})
 target_include_directories(lichomat-engine PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/engine"
-    "${LXR_ROOT}/emu/core" "${LXR_ROOT}/emu/render" "${LXR_ROOT}/emu/common")
+    "${LXR_ROOT}/emu/core" "${LXR_ROOT}/emu/render" "${LXR_ROOT}/emu/common" "${CMAKE_BINARY_DIR}")
+# --version names the commit, from the render_build.h that emu_render_build rewrites when it changes
+add_dependencies(lichomat-engine emu_render_build)
 target_compile_options(lichomat-engine PRIVATE ${PLUGIN_FLAGS} ${PLUGIN_SAN_FLAGS} -ffp-contract=off -fno-fast-math)
 target_link_options(lichomat-engine PRIVATE ${PLUGIN_SAN_FLAGS} "LINKER:-stack_size,0x800000")
 target_link_libraries(lichomat-engine PRIVATE "-framework AudioToolbox" "-framework CoreFoundation")

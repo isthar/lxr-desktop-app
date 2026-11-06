@@ -284,6 +284,13 @@ def P6_engine_version(t):
     print(out.strip())
     check(out.startswith('lichomat-engine 0.1.0, the engine of the LICHOMAT plugin\n'), 'the first line')
     check('Not affiliated with Erica Synths.' in out, 'the notices')
+    # the commit it was built from, which the source line of the notices ("at the commit above") points to, as
+    # lichomat-render prints it: a commit of the repository
+    m = re.search(r'^Runs LICHOMAT [0-9.]+\. Built from commit ([0-9a-f]{12})\.$', out, re.MULTILINE)
+    check(m, 'no "Built from commit" line')
+    known = subprocess.run(['git', '-C', t.a.root, 'cat-file', '-e', m.group(1) + '^{commit}'], capture_output=True)
+    check(known.returncode == 0, 'commit %s is not in the repository' % m.group(1))
+    check(out.index(m.group(0)) < out.index('Source: '), 'the commit after the source line')
     p = subprocess.run([t.a.engine, '--bogus'], capture_output=True, text=True)
     check(p.returncode == 1 and p.stderr.startswith('usage: lichomat-engine'), 'usage: %d %r' % (p.returncode, p.stderr))
 

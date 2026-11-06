@@ -159,8 +159,15 @@ margin      = 128 host frames
 GPL-3.0-only with the additional permission and terms in `NOTICE.md`, as the rest of LICHOMAT;
 `LICENSE` and `NOTICE.md` are also in the bundle's `Contents/Resources/`. The corresponding source
 of a build is this repository at the commit it was built from, the vendored SDK included:
-`https://github.com/isthar/lxr-desktop-app`, branch `plugin`. If you received the plugin without
-it, ask the person who gave it to you for that commit, or build it from the repository yourself.
+`https://github.com/isthar/lxr-desktop-app`, branch `plugin`. The bundle's engine names that commit:
+
+```bash
+~/Library/Audio/Plug-Ins/VST3/LICHOMAT.vst3/Contents/Helpers/lichomat-engine --version
+```
+
+prints, after its name, `Runs LICHOMAT 0.6. Built from commit <12 hex digits>.` If you received
+the plugin without its source, ask the person who gave it to you for that commit, or build it from
+the repository yourself.
 
 Third-party code, each with its notice in the bundle's `Contents/Resources/`:
 

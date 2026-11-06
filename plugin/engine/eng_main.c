@@ -38,6 +38,7 @@
 #include "emu_notices.h"
 #include "eng_run.h"
 #include "plug_notices.h"
+#include "render_build.h"
 
 extern char **environ;
 
@@ -94,6 +95,9 @@ static void eng_version(void)
 {
 	printf("lichomat-engine %s, the engine of the LICHOMAT plugin\n", PLUG_VERSION);
 	printf("%s\n", PLUG_TAGLINE);
+	/* the commit, read at every build by the emulator's emu_render_build (render_build.h), as
+	 * lichomat-render prints it: the notices' source line points to it */
+	printf("Runs LICHOMAT %s. Built from commit %s.\n", EMU_RENDER_VERSION, EMU_RENDER_COMMIT);
 	for (size_t i = 0; i < EMU_LEGAL_COUNT; i++)
 		printf("%s\n", emu_legal[i]);
 }
