@@ -86,6 +86,12 @@ target_sources(plug_common PRIVATE common/plug_time.c)
 target_sources(plug_common_san PRIVATE common/plug_time.c)
 plugin_add_test(test_time IDS P5_time_native P5_time_integer P5_time_covering P5_time_latency P5_time_margin P5_time_wide)
 
+# --- the parameters (plan E9.4 Task 5) --------------------------------------------------------
+target_sources(plug_common PRIVATE common/plug_params.c)
+target_sources(plug_common_san PRIVATE common/plug_params.c)
+plugin_add_test(test_params IDS P12_params_table P12_params_midi P12_params_host P12_params_first_report P12_params_own_change
+    P12_params_restore P12_params_state)
+
 # --- lichomat-engine (Task 6) --------------------------------------------------------------
 target_sources(plug_common PRIVATE common/plug_spawn.c)
 # the renderer's direct calls: lichomat-render's own object of render_fw.c, with its flags (P-2,
