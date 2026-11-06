@@ -110,8 +110,15 @@ static void readInto(plug_shm_t *s, uint64_t from, uint32_t n, float *const *ch,
 static void dumpValues(plug_shm_t *s, FILE *f, plug_values_t *last)
 {
 	plug_values_t v;
-	if (!f || !plug_valuesRead(s, &v))
+	if (!f)
 		return;
+	/* a copy, never a skip: while the engine writes (or is descheduled inside the write) it does not run on */
+	for (const double t0 = wall(); !plug_valuesRead(s, &v);)
+	{
+		if (wall() - t0 > 1.0)
+			return;
+		nanosleep(&(const struct timespec){ 0, 10000L }, NULL);
+	}
 	if (last->frame != UINT64_MAX && !memcmp(v.values, last->values, sizeof v.values) && v.channel == last->channel
 		&& v.rxFilter == last->rxFilter)
 		return;
@@ -307,6 +314,7 @@ int main(int argc, char **argv)
 				i += len;
 			}
 		}
+		dumpValues(s, vf, &lastValues);	/* the engine cannot pass n - 127 before the publish */
 		plug_publish(s, n + block);
 		(void)!write(wake[1], "w", 1);
 		dumpValues(s, vf, &lastValues);
