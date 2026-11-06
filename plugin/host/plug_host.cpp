@@ -122,6 +122,8 @@ struct Plan
 	std::vector<uint64_t> kills, hangs;
 	std::vector<std::pair<uint64_t, int>> renews;
 	std::vector<std::pair<uint64_t, std::string>> setstates, asyncSets;	/* asyncSets: setState from a thread of its own */
+	struct RawPoint { uint64_t frame; int32_t offset; uint32_t id; int value; };
+	std::vector<RawPoint> rawPoints;	/* a point of the block at frame with the sample offset as given, in or out of the block */
 	std::string controller;		/* a file for the controller's parameters: infos, values, strings */
 	std::string stateEarly;		/* getState right after setState (FILE.set) and right after setActive (FILE), before any block */
 	std::vector<ParamCmd> flushes;	/* changes given in a flush (process() with 0 frames) right before the block from each frame */
@@ -187,6 +189,15 @@ Plan readPlan (const char* path)
 			ok = !!(s >> c.frame >> c.id >> c.value) && plug_paramIndex (c.id) >= 0 && c.value >= 0
 			     && c.value <= plug_params[plug_paramIndex (c.id)].max;
 			p.flushes.push_back (c);
+		}
+		else if (cmd == "param-at")
+		{
+			Plan::RawPoint c;
+			long long o = 0;
+			ok = !!(s >> c.frame >> o >> c.id >> c.value) && plug_paramIndex (c.id) >= 0 && c.value >= 0
+			     && c.value <= plug_params[plug_paramIndex (c.id)].max && o >= INT32_MIN && o <= INT32_MAX;
+			c.offset = (int32_t)o;
+			p.rawPoints.push_back (c);
 		}
 		else if (cmd == "controller") ok = !!(s >> p.controller);
 		else if (cmd == "state-early") ok = !!(s >> p.stateEarly);
@@ -579,7 +590,7 @@ int main (int argc, char** argv)
 	plug_clock_t expect;
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
-	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextNull1 = 0, nextAsync = 0, nextNoOut = 0, nextFlush = 0;
+	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextNull1 = 0, nextAsync = 0, nextNoOut = 0, nextFlush = 0, nextRaw = 0;
 	std::vector<std::thread> asyncThreads;
 	unsigned long long processCalls = 0;
 	if (p.paced)
@@ -702,6 +713,16 @@ int main (int argc, char** argv)
 				int32 index = 0, point = 0;
 				if (IParamValueQueue* q = in->inParams.addParameterData (c.id, index))
 					q->addPoint ((int32)(c.frame - f), v, point);
+			}
+		}
+		while (nextRaw < p.rawPoints.size () && p.rawPoints[nextRaw].frame < f + n)
+		{
+			const Plan::RawPoint& c = p.rawPoints[nextRaw++];
+			for (auto& in : inst)
+			{
+				int32 index = 0, point = 0;
+				if (IParamValueQueue* q = in->inParams.addParameterData (c.id, index))
+					q->addPoint (c.offset, (double)c.value / plug_params[plug_paramIndex (c.id)].max, point);
 			}
 		}
 		{

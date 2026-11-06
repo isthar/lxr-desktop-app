@@ -1854,6 +1854,35 @@ def P10_plugin_controller(t):
                                                     values[1][-1][3], [r[3] for r in values[60]]))
 
 
+@case
+def P10_plugin_offsets(t):
+    # A host's points may lie outside the block (the SDK does not forbid it): at a negative offset, at n (128) or
+    # more, and at the ends of the int32 range. No crash; the point is the block's nearest frame (0 or n - 1: the
+    # script has the CC at frame 1,024 for a point at -5, at 2,175 for 128 and 3,199 for 100,000, 4,223 for 2^31 - 1 and
+    # 5,120 for -2^31) and the plugin's output is the renderer's for that script
+    points = [(1024, -5, 10, 40), (2048, 128, 10, 50), (3072, 100000, 10, 60), (4096, 2147483647, 11, 70),
+              (5120, -2147483648, 12, 80)]
+    want = {10: [(1024, 40), (2175, 50), (3199, 60)], 11: [(4223, 70)], 12: [(5120, 80)]}
+    lines = ['note %d 0 48 127' % (1000 * k + 500) for k in range(8)]
+    lines += ['param-at %d %d %d %d' % p for p in points]
+    script = t.path('script.txt')
+    lat, _ = host(t, plan(t, 'plan.txt', lines + ['out ' + t.path('o.wav'), 'script ' + script], frames=blocks_frames(1)))
+    found = {}
+    for l in open(script):
+        w = l.split()
+        for k in range(2, len(w) - 2):
+            if w[k] == 'B0' and w[k + 1] in ('59', '5A', '5B'):
+                found.setdefault({'59': 10, '5A': 11, '5B': 12}[w[k + 1]], []).append((int(w[0][:-1]), int(w[k + 2], 16)))
+    print('the points at the edges of the block, in the script: %r' % found)
+    check(found == want, 'the script has %r, not %r' % (found, want))
+    t.render(t.card('render'), script, 1, t.path('render.wav'))
+    _, _, a = wav(t.path('o.wav'))
+    _, _, b = wav(t.path('render.wav'))
+    n, diff, loud = shifted_equal(a, b, lat[0] - 128)
+    print('%d frames compared, %d differ' % (n, diff))
+    check(diff == 0 and loud > 100, '%d samples differ from the renderer' % diff)
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
