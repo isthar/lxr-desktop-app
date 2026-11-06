@@ -287,7 +287,7 @@ def ninja_inputs(build, target):
 def P6_engine_version(t):
     out = t.run([t.a.engine, '--version']).stdout
     print(out.strip())
-    check(out.startswith('lichomat-engine 0.1.0, the engine of the LICHOMAT plugin\n'), 'the first line')
+    check(out.startswith('lichomat-engine 0.2.0, the engine of the LICHOMAT plugin\n'), 'the first line')
     check('Not affiliated with Erica Synths.' in out, 'the notices')
     # the commit it was built from, which the source line of the notices ("at the commit above") points to, as
     # lichomat-render prints it: a commit of the repository

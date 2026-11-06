@@ -17,7 +17,7 @@
 
 #define PLUG_NAME "LICHOMAT"
 #define PLUG_VENDOR "LICHOMAT"
-#define PLUG_VERSION "0.1.0"
+#define PLUG_VERSION "0.2.0"
 #define PLUG_TAGLINE "LICHOMAT plugin prototype: the LICHOMAT firmware in a separate engine process"
 #define PLUG_SDK_NOTICE "VST 3 SDK: Copyright (c) 2026, Steinberg Media Technologies GmbH. MIT licence."
 

@@ -18,7 +18,7 @@
 cmake_minimum_required(VERSION 3.25)	# the VST 3 SDK's minimum
 set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING "The plugin is built for arm64 only")
 set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0 CACHE STRING "macOS 13 or later, as the emulator")
-project(lichomat_plugin VERSION 0.1.0 LANGUAGES C CXX OBJCXX)
+project(lichomat_plugin VERSION 0.2.0 LANGUAGES C CXX OBJCXX)
 
 get_filename_component(LXR_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 set(PLUGIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}")

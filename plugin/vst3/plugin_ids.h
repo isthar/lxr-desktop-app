@@ -22,7 +22,8 @@ static const Steinberg::FUID kProcessorUID (0x7A3C1E54, 0x9B2D4F61, 0x8E0A5C37, 
 static const Steinberg::FUID kControllerUID (0x2F8B6D13, 0xC4E1A970, 0x5D3F82B6, 0x9A7C0E45);
 
 /** the engine's state, read only: 0 stopped, 1 starting, 2 running, 3 failed (the steps of a list
- * of 4, plug_shm.h's PLUG_ENGINE_* in that order) */
+ * of 4, plug_shm.h's PLUG_ENGINE_* in that order). The automatable parameters' ids are in
+ * plug_params.c (plan E9.4); none is 0, and none may ever change */
 enum : Steinberg::Vst::ParamID
 {
 	kParamEngine = 0

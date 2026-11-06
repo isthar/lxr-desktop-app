@@ -17,21 +17,36 @@ and not affiliated with, approved or supported by the maker of the device.
 ## What it does
 
 - **One engine process per instance.** The plugin (`LICHOMAT.vst3`) is a thin layer in the host's
-  process; `Contents/Helpers/lichomat-engine` runs the firmware. They share memory (an event ring
-  and an audio ring) and two pipes: one wakes the engine each block, the other's end tells the
-  plugin that the engine is gone. An engine that dies or hangs is started again after 0.5 s, the
-  plugin silent meanwhile; after 5 deaths in a minute, or 3 stalls in 10 minutes (an engine that
-  hung, did not start in 30 s or kept an offline render waiting 10 s), it gives up (the read-only
-  parameter "Engine" shows "failed").
+  process; `Contents/Helpers/lichomat-engine` runs the firmware. They share memory (an event ring,
+  an audio ring of the device's four channels and a table of the firmware's parameter values) and
+  two pipes: one wakes the engine each block, the other's end tells the plugin that the engine is
+  gone. An engine that dies or hangs is started again after 0.5 s, the plugin silent meanwhile;
+  after 5 deaths in a minute, or 3 stalls in 10 minutes (an engine that hung, did not start in 30 s
+  or kept an offline render waiting 10 s), it gives up (the read-only parameter "Engine" shows
+  "failed").
 - **Sync** is MIDI clock with Song Position, made from the host's transport at the exact frames:
   Start at position 0, Song Position and Continue elsewhere, and Stop, Song Position and Continue
-  at a jump (a loop's end). The firmware plays as a MIDI-clock slave.
+  at a jump (a loop's end). The firmware plays as a MIDI-clock slave. Each new engine (the first,
+  one started again, one for a state set while active) first gets the host's parameter values that
+  differ from its card's; when any did, its clock waits at least 1,024 frames at 48 kHz (21.3 ms
+  at any rate, rounded up to whole blocks) after them and then resumes on the next 16th, and the
+  host's notes in that time are left out; not so for the first engine of an offline render (see
+  "Known limits").
 - **Notes** from the host (Note On, Note Off) go to the firmware as USB MIDI at their frames.
-- **Output:** one stereo bus, the sum of the device's out 1 and out 2 at -6 dB.
-- **Rate:** the firmware runs at 44,140.625 Hz; the engine resamples to the host's rate with
-  Apple's AudioConverter. At exactly 44,140.625 Hz (the test host) nothing is resampled and the
-  output is `lichomat-render --stereo sum`'s, bit for bit.
-- **State:** the instance's card folder as one archive (`LCHS`) in the host's set.
+- **Outputs:** two stereo buses, "Out 1" and "Out 2", the device's two outputs: each voice plays
+  where its kit's output (St1, St2, L1, R1, L2, R2 or FX) puts it. Until the host activates Out 2
+  (in Live: a track that takes its audio from LICHOMAT's Out 2), Out 1 is the sum of both at
+  -6 dB, the prototype's one output, and Out 2 is silent.
+- **Parameters:** 36 automatable parameters (below). A change from the host goes to the firmware
+  as MIDI at its frame, on the firmware's global MIDI channel, as from an external controller. A
+  value the firmware changes by itself (a kit or a pattern loaded) goes back to the host, which then
+  shows what plays; a value the host set is not sent back to it.
+- **Rate:** the firmware runs at 44,140.625 Hz; the engine resamples the four channels to the
+  host's rate with Apple's AudioConverter. At exactly 44,140.625 Hz (the test host) nothing is
+  resampled: Out 1 is `lichomat-render --stereo sum`'s output bit for bit, or with Out 2 active,
+  Out 1 and Out 2 are `--stereo out1`'s and `--stereo out2`'s.
+- **State:** the instance's card folder as one archive (`LCHS`) and the parameters' values
+  (`LCHV`) in the host's set. A set saved with the prototype (0.1.0) opens with the card's values.
 - **Offline** (bounce, freeze, export) the plugin waits for its engine, 10 s at most for each
   engine.
 
@@ -85,7 +100,7 @@ tests set it).
 | Path | What |
 |---|---|
 | `BASE/<id>/` | an instance's folder, while it lives: `card/` (its engine's card) and `lock` |
-| `BASE/logs/<id>.log` | an instance's log: each engine started and ended (exit, signal, why), underruns, late events; it outlives the instance. The newest 32 logs are kept |
+| `BASE/logs/<id>.log` | an instance's log: each engine started and ended (exit, signal, why), underruns, late events, the parameters' MIDI channel and receive filter; it outlives the instance. The newest 32 logs are kept |
 | `BASE/Card` | the start card of a new instance, if present |
 
 An instance removes its folder when the host closes it. A folder whose lock nobody holds and that
@@ -102,6 +117,32 @@ is older than a minute is left from a host that died, and the next instance remo
 
 The card is copied in the card's order (the files' birth times, which the firmware's directory
 listings follow). An instance whose set holds its state starts on that state's card instead.
+
+## Parameters
+
+On the firmware's global MIDI channel (channel 1 on the test cards and the `init` card); the
+firmware takes CCs and NRPNs with its receive filter's CC on, the Program Change with its Program
+Change on, and the instance's log says once per engine what it found. An NRPN is CC 99 (the number
+divided by 128), CC 98 (the rest) and CC 6 (the value). The ids are the host's keys for a set's
+automation: they never change.
+
+| Id | Parameter | MIDI | Values |
+|---|---|---|---|
+| 1 | Pattern | Program Change | 1-64 (sent as 0-63): the next pattern; stopped, it plays at once, else at the end of the one that plays, and with the pattern mode "auto" (the cards') its kit comes with it |
+| 10-15 | Drum 1, Drum 2, Drum 3, Snare, Cymbal, Hi-hat Volume | CC 89-94 | 0-127 |
+| 20-25 | ... Pan | CC 95, 96, 97, 100, 101, 102 | -63..64 |
+| 30-35 | ... Filter | CC 38-43 | 0-127 |
+| 40-45 | ... Decay (the hi-hat's closed decay) | CC 51, 53, 55, 57, 59, 61 | 0-127 |
+| 46 | Hi-hat Open Decay | CC 62 | 0-127 |
+| 50 | DJ Filter | NRPN 96 | 0-127, 63-65 flat |
+| 51 | Reverb Level | NRPN 98 | 0-127 |
+| 52 | Reverb Decay | NRPN 116 | 0-127 |
+| 53 | FX Amount | NRPN 108 | 0-100: the kit's FX, the delay's level when that is the delay |
+| 60-65 | Drum 1 ... Hi-hat Output | NRPN 87-92 | St1, St2, L1, R1, L2, R2, FX |
+
+Shuffle and the reverb's size are not among them: the firmware sets them only from its own menu,
+not over MIDI. A value the host gives settles within a quarter of a second; a change of the
+firmware's own in that time (a kit loaded just after an automation point) reaches the host then.
 
 ## Latency
 
@@ -132,11 +173,21 @@ margin      = 128 host frames
 
 - macOS 13 or later on Apple silicon (arm64) only; VST3 only.
 - A prototype: its checks in Ableton Live (loading, sync, latency, state, freeze and export,
-  dropouts) are the owner's, and not all are done yet.
+  dropouts, the two outputs and the parameters) are the owner's, and not all are done yet.
 - A jump of the transport (a loop's end, a locate while playing) reaches the firmware as Stop,
   Song Position and Continue: the sequencer restarts from the new 16th.
-- No parameters but the read-only "Engine": MIDI CC and Program Change are not mapped yet (VST3
-  hands them to a plugin as parameters), and the plugin has no window.
+- MIDI CCs and Program Changes in the host's clips do not reach the firmware: VST3 hands them to
+  a plugin as parameters, and the plugin maps none of them to its own; its automatable parameters
+  do (above). The plugin has no window.
+- Out 1 is the sum only while the host has not activated Out 2: a host that activates every bus
+  at once gets out 1 alone on Out 1 (the owner's check P9 shows what Live does).
+- A value the firmware changes by itself goes to the host as the plugin's own change; a host may
+  take that as the user's (in Live, an automated parameter may then show its automation as
+  overridden: the owner's check P10).
+- The first engine of an offline render (a bounce, an export or a freeze from a new activation)
+  gets the set's values at the render's first frame, with the transport, and the firmware takes a
+  few milliseconds to settle them: a note at that very frame can play at the card's level for 2-3 ms
+  where a value differs much from the card's (a voice turned to 0).
 - At 44.1 and 48 kHz the latency stays within 10 ms above the voice queue's 2.90 ms only with host
   buffers of up to 256 frames (table above).
 - The plugin's process installs no signal handler; the engine runs in its own process, so a
@@ -146,11 +197,11 @@ margin      = 128 host frames
 
 | Path | What |
 |---|---|
-| `common/` | C shared by the plugin, the engine and the tests: the shared memory, MIDI clock from a transport, time and latency, the card archive, starting the engine |
-| `engine/` | `lichomat-engine`: the renderer's prelude, the tier hook that feeds the events, the resampler |
-| `vst3/` | the VST3 processor, controller, factory, the engine link and the instance folders |
+| `common/` | C shared by the plugin, the engine and the tests: the shared memory, MIDI clock from a transport, time and latency, the parameters and their step with the firmware (`plug_params`), the card archive, starting the engine |
+| `engine/` | `lichomat-engine`: the renderer's prelude, the tier hook that feeds the events and reports the firmware's values, the resampler, the reads of the firmware's memory (`eng_fw.c`, its one file with firmware headers) |
+| `vst3/` | the VST3 processor, controller, factory, the engine link, the instance folders, a block's parameter changes as points (`plugin_points.h`) |
 | `host/` | `lichomat-plughost`, the test host on the SDK's hosting classes |
-| `tests/` | the unit tests (P3-P8), `sdk_pin.py` (P2, the SDK's pin), `plugin_test.py` (P6, P7, P10, P11), its tools `plug_drive` (the engine without the plugin) and `plug_resample_wav` (the converter on a WAV), the real-time check `plug_rtcheck.c`, the licence gate `plugin_licence_gate.py` |
+| `tests/` | the unit tests (P3-P8, P12), `sdk_pin.py` (P2, the SDK's pin), `plugin_test.py` (P6, P7, P10, P11), its tools `plug_drive` (the engine without the plugin) and `plug_resample_wav` (the converter on a WAV), the real-time check `plug_rtcheck.c`, the licence gate `plugin_licence_gate.py` |
 | `tools/` | `plugin_check.sh` (the gate), `install_plugin.sh`, `vendor_vst3sdk.sh` |
 | `third_party/vst3sdk/` | the VST 3 SDK 3.8.1 (build 84), the part the plugin builds with, pinned by `SHA256SUMS` |
 
