@@ -1183,6 +1183,22 @@ def P10_plugin_rt(t):
     check(calls == 3750 and bad == 0 and writes == calls, line[0])
 
 
+# --- the licence gate and the name scan (Task 10) ----------------------------------------------
+
+@case
+def P11_licence(t):
+    # the licence gate over the plugin's build (plugin_licence_gate.py): every source the build reads GPL-3.0-only or
+    # allowed (the vendored VST 3 SDK, MIT), the main.h overlay on every compile command but the SDK's, the bundle's
+    # files with the licences and notices in it, and the name scan of the bundle's two binaries, the built engine, the
+    # test host, plug_drive and the real-time check
+    contents = os.path.join(t.a.bundle, 'Contents')
+    binaries = [os.path.join(contents, 'MacOS', 'LICHOMAT'), os.path.join(contents, 'Helpers', 'lichomat-engine'),
+                t.a.engine, t.a.host, t.a.drive, t.a.rtcheck]
+    out = t.run([sys.executable, os.path.join(t.a.root, 'plugin', 'tests', 'plugin_licence_gate.py'), '--bundle',
+                 t.a.bundle, t.a.root, t.a.build] + binaries).stdout
+    print(out.strip())
+
+
 def main():
     ap = argparse.ArgumentParser()
     for o in ('root', 'build', 'render', 'engine', 'drive', 'resample', 'work'):

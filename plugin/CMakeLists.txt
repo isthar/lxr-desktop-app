@@ -192,3 +192,7 @@ foreach(id P10_plugin_native P10_plugin_onsets P10_plugin_latency P10_plugin_res
 endforeach()
 set_tests_properties(P10_plugin_kill P10_plugin_rt P10_plugin_beats P10_plugin_hang P10_plugin_crashes P10_plugin_policy
     P10_plugin_spawn_fail P10_plugin_offline_hang PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
+
+# --- the licence gate and the name scan (Task 10) ---------------------------------------------
+add_test(NAME P11_licence COMMAND ${PLUGIN_HOST_TEST} P11_licence)
+set_tests_properties(P11_licence PROPERTIES TIMEOUT 600 LABELS plugin)
