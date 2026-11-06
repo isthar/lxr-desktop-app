@@ -357,9 +357,12 @@ void printInfo (const Instance& in, double rate)
 	AudioUnitGetProperty (in.au, kAudioUnitProperty_SupportedNumChannels, kAudioUnitScope_Global, 0, ch, &size);
 	Float64 lat = 0.0, tail = 0.0;
 	size = sizeof lat;
-	AudioUnitGetProperty (in.au, kAudioUnitProperty_Latency, kAudioUnitScope_Global, 0, &lat, &size);
+	if (AudioUnitGetProperty (in.au, kAudioUnitProperty_Latency, kAudioUnitScope_Global, 0, &lat, &size) != noErr)
+		die ("no kAudioUnitProperty_Latency");
 	size = sizeof tail;
-	AudioUnitGetProperty (in.au, kAudioUnitProperty_TailTime, kAudioUnitScope_Global, 0, &tail, &size);
+	const OSStatus t = AudioUnitGetProperty (in.au, kAudioUnitProperty_TailTime, kAudioUnitScope_Global, 0, &tail, &size);
+	if (t != noErr)
+		die ("no kAudioUnitProperty_TailTime: " + std::to_string ((int)t));
 	printf ("%s: info: outputs %u: %s; channels %d in, %d out; kAudioUnitProperty_Latency %.0f frames; TailTime %g s\n",
 	        gName, (unsigned)outs, names.c_str (), ch[0].inChannels, ch[0].outChannels, lat * rate, tail);
 }

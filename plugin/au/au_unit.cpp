@@ -379,6 +379,11 @@ public:
 		return MusicDeviceBase::SetProperty (id, scope, element, in, size);
 	}
 
+	/* a tail of 0 s (plan A-14): the voices sound only while the notes the host sends play them, and a tail would make
+	 * a host extend a bounce. Supported, so that a host that asks gets 0, not an error */
+	bool SupportsTail () noexcept override { return true; }
+	Float64 GetTailTime () noexcept override { return 0.0; }
+
 	Float64 GetLatency () noexcept override
 	{
 		return rate > 0.0 ? (Float64)proc->getLatencySamples () / rate : 0.0;
