@@ -6586,7 +6586,7 @@ INTERPOSE(r_write, write);
 
 **Files:** Create `plugin/tests/plugin_licence_gate.py`, `plugin/tools/install_plugin.sh`, `plugin/README.md`; modify `plugin/tests/plugin_test.py`, `plugin/CMakeLists.txt` (append).
 
-- [ ] **Step 1: the failing test.** In `plugin/tests/plugin_test.py`, after Task 9's section and before `def main():`:
+- [x] **Step 1: the failing test.** In `plugin/tests/plugin_test.py`, after Task 9's section and before `def main():`:
 
 ```python
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
@@ -6608,7 +6608,7 @@ set_tests_properties(P11_licence PROPERTIES TIMEOUT 600 LABELS plugin)
 ```
 
   Run PLUGIN with `-R P11`. Expected: `0% tests passed`, and `FAIL P11_licence: python3… exited 2` (`plugin_licence_gate.py` is missing).
-- [ ] **Step 2: the gate** (P-5). `plugin/tests/plugin_licence_gate.py`:
+- [x] **Step 2: the gate** (P-5). `plugin/tests/plugin_licence_gate.py`:
 
 ```python
 #!/usr/bin/env python3
@@ -6684,7 +6684,7 @@ if __name__ == '__main__':
 ```
 
   Run PLUGIN with `-R P11` and `ctest --test-dir build/plugin -R P11 -V | grep 'licence gate:'`. Expected: `100% tests passed, 0 tests failed out of 1`; `licence gate: 504 files, 126 compile commands and 4 binaries pass` (Debug and Release).
-- [ ] **Step 3: the install** (P-18). `plugin/tools/install_plugin.sh`:
+- [x] **Step 3: the install** (P-18). `plugin/tools/install_plugin.sh`:
 
 ```bash
 #!/bin/bash
@@ -6801,8 +6801,8 @@ SDK (MIT, Steinberg Media Technologies GmbH; its licence is in the bundle's
 the plugin uses no VST logo.
 ````
 
-- [ ] **Step 4: the final gates.** PLUGIN-CHECK (T 49, both builds), EMU-CHECK (346), CHECK (as in Task 1), and `git diff a856883 --stat -- . ':!plugin'` shows `emu/CMakeLists.txt | 6 ++++++` and nothing else.
-- [ ] **Step 5: install.** First try it with a scratch `HOME` (nothing of the owner's is touched), then for real:
+- [x] **Step 4: the final gates.** PLUGIN-CHECK (T 49, both builds), EMU-CHECK (346), CHECK (as in Task 1), and `git diff a856883 --stat -- . ':!plugin'` shows `emu/CMakeLists.txt | 6 ++++++` and nothing else.
+- [x] **Step 5: install.** First try it with a scratch `HOME` (nothing of the owner's is touched), then for real:
 
 ```bash
 cd /Users/tk/Code/lxr/build/wt-plugin && chmod +x plugin/tools/install_plugin.sh && T=$(mktemp -d) && HOME=$T plugin/tools/install_plugin.sh && ls "$T/Library/Audio/Plug-Ins/VST3" && rm -rf -- "$T"
@@ -6810,7 +6810,7 @@ cd /Users/tk/Code/lxr/build/wt-plugin && plugin/tools/install_plugin.sh && ls ~/
 ```
 
   Expected (both): `install_plugin: …/LICHOMAT.vst3, Signature=adhoc`, `install_plugin: the start card …/LICHOMAT Plugin/Card (emu/tests/cards/init)` (only when it was missing), `Result: 47 tests passed, 0 tests failed`; then `LICHOMAT.vst3` and `Card`. If `~/Library/Audio/Plug-Ins/VST3` held other plugins, they are still there.
-- [ ] **Step 6: commit** `plugin Task 10 (E9.20): the licence gate over the plugin, the install with an ad hoc signature, README; P11` with `plugin/tests/plugin_licence_gate.py plugin/tools/install_plugin.sh plugin/README.md plugin/tests/plugin_test.py plugin/CMakeLists.txt`; record the gates' lines and the bundle's SHA-256 (`shasum -a 256 build/plugin-release/VST3/Release/LICHOMAT.vst3/Contents/MacOS/LICHOMAT`); push. **Review: light**, with a grep of every new string for the makers' names and a check of every number in README against the tests' output.
+- [x] **Step 6: commit** `plugin Task 10 (E9.20): the licence gate over the plugin, the install with an ad hoc signature, README; P11` with `plugin/tests/plugin_licence_gate.py plugin/tools/install_plugin.sh plugin/README.md plugin/tests/plugin_test.py plugin/CMakeLists.txt`; record the gates' lines and the bundle's SHA-256 (`shasum -a 256 build/plugin-release/VST3/Release/LICHOMAT.vst3/Contents/MacOS/LICHOMAT`); push. **Review: light**, with a grep of every new string for the makers' names and a check of every number in README against the tests' output.
 
 ---
 
@@ -6818,9 +6818,9 @@ cd /Users/tk/Code/lxr/build/wt-plugin && plugin/tools/install_plugin.sh && ls ~/
 
 **Files:** Create `docs/lichomat/plugin-checks.md` (Polish); modify `docs/lichomat/HANDOFF.md`, `docs/lichomat/tracker.json` (on `timing-core`, in `/Users/tk/Code/lxr`).
 
-- [ ] **Step 1: the checks.** `docs/lichomat/plugin-checks.md` with the GPL header and the section "Twoje sprawdzenia w Abletonie (P1–P8)" below, word for word, filled with the plugin branch's head and Task 10's install date.
-- [ ] **Step 2: handoff and tracker.** `docs/lichomat/HANDOFF.md`: a row for the plugin prototype (branch `plugin` and its head, 49 plugin ids, the latency table's 48 kHz rows, the open owner checks P1–P8, the install path). `python3 tools/tracker_note.py "E9.2 (prototyp wtyczki) zrobione: …"`, row E9.2 done with the head, and the owner's check as open; `python3 tools/tracker_export.py` and the upload of every file it reports.
-- [ ] **Step 3: commit** on `timing-core`: `Docs E9.2: the plugin prototype's owner checks P1-P8, handoff, tracker` with those files by name. **Review: light**, every number against Tasks 6–10's recorded output.
+- [x] **Step 1: the checks.** `docs/lichomat/plugin-checks.md` with the GPL header and the section "Twoje sprawdzenia w Abletonie (P1–P8)" below, word for word, filled with the plugin branch's head and Task 10's install date.
+- [x] **Step 2: handoff and tracker.** `docs/lichomat/HANDOFF.md`: a row for the plugin prototype (branch `plugin` and its head, 49 plugin ids, the latency table's 48 kHz rows, the open owner checks P1–P8, the install path). `python3 tools/tracker_note.py "E9.2 (prototyp wtyczki) zrobione: …"`, row E9.2 done with the head, and the owner's check as open; `python3 tools/tracker_export.py` and the upload of every file it reports.
+- [x] **Step 3: commit** on `timing-core`: `Docs E9.2: the plugin prototype's owner checks P1-P8, handoff, tracker` with those files by name. **Review: light**, every number against Tasks 6–10's recorded output.
 
 ---
 
@@ -6891,3 +6891,4 @@ Jeśli w P3–P4 nic nie słychać: plik `engine.log` z tego samego folderu. Wł
 - Re-check fixes `be149d0`..`07fb5b1`: the beats after a restart are paired from the nearest one, and the 48 kHz converter's ringing before an attack (up to 6 frames ≥ 500 before the first ≥ 1,000) is no missed onset; `P10_plugin_offline_hang` hangs its engines deterministically (a wrapper helper `kill -STOP`s every engine from its second start) and checks the wait the processor logs as it measured it ("the plugin waited 10.000 s"); `P10_plugin_spawn_fail` gives a state while the engine still cannot start (0.049 s); `P10_plugin_stale`'s unremovable entry is a top-level `zz` listed after `lock`. 20 of 20 reruns of each flaky case; PLUGIN-CHECK twice in a row 71 of 71. Equivalent survivors kept: `merge_notes_first`, `note_order_reversed`, `vel0_noteon`, the second-wait skip. **Tasks 8–9 done.**
 
 **Task 10 (E9.20), `78bb439`, review fixes `983c754`..`37aaf6c`.** The bundle carries the notices of Arm Optimized Routines and FatFs, which the engine links, and P11 requires them (10 files); the install script stages and checks the bundle before replacing the old one, prints `FAILED (<step>)` and leaves the old bundle as it was, refuses while a `lichomat-engine` runs, rejects unknown options before building, logs to `build/plugin-release.install.log`; README's 10 ms limit holds at 44.1 and 48 kHz; `lichomat-engine --version` names its commit (`P6_engine_version`); P11 refuses symlinks and empty folders. Only temporary destinations were used. Open: `P10_plugin_hang`'s first beat after an engine restart lands 8 or 19 frames early in some runs (others within ±2); being traced before any decision on its bound.
+- `bfad91d`: the cause, found deterministically (the test host offline; a setState at frame S restarts the engine at exactly S): a restart 0.1–0.5 clock after a 16th gets that 16th's Song Position and its clock at once (`plug_clock.c:58`, the half-clock rule), late by up to half a clock, and the slave's tempo fit (`seqc_dueTime()`) makes the next two beats early until it settles (−6 at 0.128 clock, −19 at 0.48; from 0.512 on ±2). The device would do the same with that clock stream. **Q39 (decided by Claude): the passed 16th is played late rather than dropped; the first two beats after an engine restart have their own measured bound, −20..+2 frames (≈ 0.4 ms at 48 kHz), the third on −2..+2; the host mode (E9.3) has no such first interval.** PLUGIN-CHECK 72 of 72 in both builds. **Tasks 10–11 done; E9.2, the prototype, done.**

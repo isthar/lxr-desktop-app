@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 02:47",
+    "updated": "2026-11-06 03:01",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
+    "focus": "Prototyp wtyczki gotowy (M21); v0.7 gotowe (M20)",
     "branch": "timing-core",
-    "head": "0bc5955",
-    "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-06T02:47:00+01:00",
-    "now": "E9.20: śledztwo w P10_plugin_hang (od 02:47)"
+    "head": "a9ccdac",
+    "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie potem: E9.3 po Twoim P4, E9.4",
+    "updated_at": "2026-11-06T03:01:00+01:00",
+    "now": "Zaparkowane: nic nie działa w tle"
   },
   "epics": [
     {
@@ -923,6 +923,13 @@
       "updated": "2026-11-04"
     },
     {
+      "id": "E8.12",
+      "epic": "E8",
+      "status": "do zrobienia",
+      "title": "Twoje sprawdzenia prototypu wtyczki w Abletonie P1–P8 (ok. 20 min, docs/lichomat/plugin-checks.md); instalacja jednym poleceniem: cd /Users/tk/Code/lxr/build/wt-plugin && plugin/tools/install_plugin.sh (przy zamkniętym Live)",
+      "updated": "2026-11-06"
+    },
+    {
       "id": "E9.1",
       "epic": "E9",
       "status": "zrobione",
@@ -932,9 +939,9 @@
     {
       "id": "E9.2",
       "epic": "E9",
-      "status": "w toku",
-      "title": "Prototyp: jedna instancja, VST3 i AU, nuty MIDI odpalają głosy, sekwencer idzie za tempem i pozycją Abletona, wyjście stereo; walidatory (VST3 validator, auval) i rendery bez hosta; Twój test w Abletonie",
-      "updated": "2026-11-05"
+      "status": "zrobione",
+      "title": "Prototyp wtyczki: VST3, silnik w osobnym procesie na instancję, stereo, nuty MIDI z próbką, synchronizacja przez MIDI clock z transportu Live'a, karta i stan w secie na instancję, bez okna; 72 testy, walidator Steinberga 47/0; gałąź plugin (bfad91d). Twoje sprawdzenia: E8.12",
+      "updated": "2026-11-06"
     },
     {
       "id": "E9.11",
@@ -1009,7 +1016,7 @@
     {
       "id": "E9.21",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Wtyczka zad. 11: Twoje sprawdzenia w Abletonie P1–P8, HANDOFF, tracker",
       "updated": "2026-11-06"
     },
@@ -1141,6 +1148,12 @@
       "date": "2026-11-05",
       "title": "v0.7: dynamika groove gotowa w kodzie (E6.26–E6.36)",
       "summary": "Szablony głośności na ścieżkę: vtp of8, ful, dep, qtr z pomiaru hihatów albumu referencyjnego i us1–us4, głębokość vdp 0–200 %. Własne szablony zapisywane z tego, co gra (sav, Q36), strona clear micro, blok 3 w .pat i USERTPL.LCH. Bez szablonu v0.7 gra bit w bit jak 0.6: 38 nagrań wzorcowych bez zmian. Trzy nowe nagrania poziomów zgadzają się ze wzorem do 0,15 dB. Host 135 testów, emulator 353, fuzzing 4 800 renderów bez znalezisk. Przeglądy znalazły i naprawiły błąd zapisu przy pełnej karcie. CPU 1,10 % najgorszego bloku (Q37). Pamięć: budżet 470 188 z 471 032 B. Twoje sprawdzenia: U38–U41 (ok. 30 min, po sesji 0.6). Raport: docs/lichomat/reports/M20-v0.7-groove-dynamics.md; notatki wydania: docs/lichomat/release-notes-v0.7.md (szkic). Nic nie jest otagowane ani wydane."
+    },
+    {
+      "id": "M21",
+      "date": "2026-11-06",
+      "title": "Prototyp wtyczki do Abletona (VST3) gotowy (E9.1, E9.2, E9.11–E9.21)",
+      "summary": "LICHOMAT.vst3: ten sam kod firmware co na LXR, w osobnym procesie lichomat-engine dla każdej instancji (błąd silnika nie zamknie Live'a; wtyczka milknie i wraca po ok. 0,7 s). Stereo, nuty MIDI co do próbki, sekwencer idzie za transportem Live'a przez MIDI clock (pętla, tempo, start od taktu). Stan w secie, bounce i freeze czekają na silnik. Przez host testowy gra bit w bit jak renderer emulatora; 72 testy, walidator Steinberga 47/0, sprawdzanie czasu rzeczywistego wątku audio. Przeglądy znalazły i naprawiły m.in. gubiony downbeat po zawinięciu pętli, lawinę zegara za taktem 1024, nieaktualny silnik w paczce i brak limitu czekania przy zawieszonym silniku. Instalacja jednym poleceniem; Twoje sprawdzenia P1–P8: docs/lichomat/plugin-checks.md (E8.12). Następne: tryb host (E9.3, szkic), AU i osobne wyjścia (E9.4), panel (E9.5)."
     }
   ],
   "questions": [
@@ -1412,6 +1425,14 @@
       "assumption": "Równolegle.",
       "answer": "Twoje „lecisz” (05.11, 17:35), kolejność moja według reguły z 29.10: równolegle. Wtyczka nie rusza firmware ani gałęzi v0.7, więc jej szkic i prototyp idą obok grupy C v0.7 (E6.33–E6.34). Najpierw szkic z rekomendacjami (E9.1) do Twoich poprawek, potem prototyp (E9.2).",
       "updated": "2026-11-05"
+    },
+    {
+      "id": "Q39",
+      "status": "zamknięte",
+      "question": "Po restarcie silnika wtyczki tuż po szesnastce pierwsze dwa uderzenia wypadają do 20 ramek (0,4 ms) za wcześnie, bo zegar tej szesnastki wychodzi spóźniony, a slave dopasowuje tempo do krótszego odstępu. Zagrać tę szesnastkę spóźnioną czy ją pominąć?",
+      "assumption": "Zagrać spóźnioną.",
+      "answer": "Moja decyzja według Twojej reguły z 29.10: zagrać spóźnioną. Pominięcie gubi cały krok (ten sam błąd co zgubiony downbeat, który naprawił przegląd grupy B), a 0,4 ms jest niesłyszalne. Dwa pierwsze uderzenia po restarcie mają w testach własną, zmierzoną granicę −20..+2 ramki, trzecie znów ±2. LXR z takim strumieniem zegara zachowałby się tak samo. Tryb „host” (E9.3) tego nie ma.",
+      "updated": "2026-11-06"
     }
   ],
   "log": [
@@ -4619,6 +4640,11 @@
       "n": 641,
       "at": "2026-11-06 02:47",
       "text": "E9.20 przegląd, 983c754, 44c5f04, 17ef3b7, 8151e35, 37aaf6c: paczka ma licencje Arm Optimized Routines i FatFs, a bramka ich wymaga. Skrypt instalacji sprawdza nową wtyczkę w folderze tymczasowym, zanim zastąpi starą; przy błędzie pisze FAILED i zostawia poprzednią; odmawia przy otwartym Live z wtyczką. lichomat-engine --version podaje commit. Otwarte: w P10_plugin_hang pierwsze uderzenie po restarcie silnika czasem wypada 8 albo 19 ramek (0,2–0,4 ms) za wcześnie, przy oknie ±2. Nie poszerzam tolerancji na ślepo; implementer szuka przyczyny."
+    },
+    {
+      "n": 642,
+      "at": "2026-11-06 03:01",
+      "text": "E9.20, E9.21 i E9.2 zrobione, kamień milowy M21: prototyp wtyczki do Abletona gotowy (gałąź plugin, bfad91d). Ostatnie: przyczyna wcześniejszego pierwszego uderzenia po restarcie silnika znaleziona deterministycznie (zegar szesnastki po wznowieniu wychodzi spóźniony, slave dopasowuje tempo do krótszego odstępu; LXR zrobiłby to samo), Q39: szesnastka grana spóźniona, a nie pominięta; dwa uderzenia po restarcie mają własną zmierzoną granicę, do 0,4 ms. 72 testy w Debug i Release, walidator 47/0. Czeka na Ciebie E8.12: instalacja jednym poleceniem i P1–P8 w Abletonie (docs/lichomat/plugin-checks.md)."
     }
   ]
 }
