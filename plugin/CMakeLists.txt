@@ -147,12 +147,16 @@ target_compile_options(LICHOMAT PRIVATE ${PLUGIN_FLAGS})
 target_compile_features(LICHOMAT PRIVATE cxx_std_17)
 configure_file(vst3/Info.plist.in "${CMAKE_BINARY_DIR}/LICHOMAT-Info.plist" @ONLY)
 set_target_properties(LICHOMAT PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${CMAKE_BINARY_DIR}/LICHOMAT-Info.plist")
-# Before the link, the engine into Contents/Helpers and the licences into Contents/Resources (the MIT
-# licence asks for its notice with every copy); after the SDK's steps (moduleinfo.json), the signature
-# of the helper and then of the whole bundle, ad hoc. The bundle is linked again whenever the engine
-# is (LINK_DEPENDS), so that these steps copy and sign the current engine (P10_plugin_helper)
+# Before the link, the engine into Contents/Helpers and the licences into Contents/Resources: ours, the
+# VST 3 SDK's (MIT asks for its notice with every copy) and those of the code the engine links from the
+# emulator, Arm Optimized Routines (emu_libm) and FatFs (ff.h), as the app's bundle has them
+# (emu/CMakeLists.txt); after the SDK's steps (moduleinfo.json), the signature of the helper and then of
+# the whole bundle, ad hoc. The bundle is linked again whenever the engine or one of these files changes
+# (LINK_DEPENDS), so that these steps copy and sign the current ones (P10_plugin_helper, P11_licence)
+set(PLUGIN_NOTICES "${LXR_ROOT}/LICENSE" "${LXR_ROOT}/NOTICE.md" "${PLUGIN_DIR}/third_party/vst3sdk/LICENSE.txt"
+    "${LXR_ROOT}/emu/libm/LICENSE" "${LXR_ROOT}/Middlewares/Third_Party/FatFs/src/ff.h")
 add_dependencies(LICHOMAT lichomat-engine)
-set_property(TARGET LICHOMAT APPEND PROPERTY LINK_DEPENDS "$<TARGET_FILE:lichomat-engine>")
+set_property(TARGET LICHOMAT APPEND PROPERTY LINK_DEPENDS "$<TARGET_FILE:lichomat-engine>" ${PLUGIN_NOTICES})
 add_custom_command(TARGET LICHOMAT PRE_LINK
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Helpers"
         "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Resources"
@@ -160,6 +164,9 @@ add_custom_command(TARGET LICHOMAT PRE_LINK
     COMMAND ${CMAKE_COMMAND} -E copy "${LXR_ROOT}/LICENSE" "${LXR_ROOT}/NOTICE.md" "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Resources/"
     COMMAND ${CMAKE_COMMAND} -E copy "${PLUGIN_DIR}/third_party/vst3sdk/LICENSE.txt"
         "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Resources/VST3-SDK-LICENSE.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy "${LXR_ROOT}/emu/libm/LICENSE"
+        "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Resources/LICENSE.arm-optimized-routines"
+    COMMAND /bin/sh -c "head -n 18 '${LXR_ROOT}/Middlewares/Third_Party/FatFs/src/ff.h' > '$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Resources/LICENSE.fatfs'"
     VERBATIM)
 add_custom_command(TARGET LICHOMAT POST_BUILD
     COMMAND codesign --force --sign - "$<TARGET_BUNDLE_CONTENT_DIR:LICHOMAT>/Helpers/lichomat-engine"

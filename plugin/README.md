@@ -152,9 +152,14 @@ of a build is this repository at the commit it was built from, the vendored SDK 
 `https://github.com/isthar/lxr-desktop-app`, branch `plugin`. If you received the plugin without
 it, ask the person who gave it to you for that commit, or build it from the repository yourself.
 
-Third-party code: the VST 3 SDK (MIT, Copyright (c) 2026, Steinberg Media Technologies GmbH; its
-licence is in `plugin/third_party/vst3sdk/LICENSE.txt` and in the bundle as
-`Contents/Resources/VST3-SDK-LICENSE.txt`), and through the emulator Arm Optimized Routines (MIT)
-and FatFs `ff.h` and `integer.h` (ChaN's licence). VST is a trademark of Steinberg Media
-Technologies GmbH; the plugin uses no VST logo. The names of the device and its maker belong to
-their owner and are used here only to say what the firmware runs on; see `NOTICE.md`.
+Third-party code, each with its notice in the bundle's `Contents/Resources/`:
+
+| Code | Licence | In the repository | In the bundle |
+|---|---|---|---|
+| the VST 3 SDK (the plugin and the test host), Steinberg Media Technologies GmbH | MIT | `plugin/third_party/vst3sdk/LICENSE.txt` | `VST3-SDK-LICENSE.txt` |
+| Arm Optimized Routines (the engine's maths, `emu/libm/`), Arm Limited | MIT OR Apache-2.0 WITH LLVM-exception | `emu/libm/LICENSE` | `LICENSE.arm-optimized-routines` |
+| FatFs `ff.h` and `integer.h` (the firmware's card), ChaN | ChaN's FatFs licence | the first 18 lines of `Middlewares/Third_Party/FatFs/src/ff.h` | `LICENSE.fatfs` |
+
+VST is a trademark of Steinberg Media Technologies GmbH; the plugin uses no VST logo. The names of
+the device and its maker belong to their owner and are used here only to say what the firmware
+runs on; see `NOTICE.md`.

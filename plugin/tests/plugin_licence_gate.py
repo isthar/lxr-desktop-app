@@ -7,8 +7,11 @@ emulator's M21 (emu/tests/licence_gate.py) with these additions:
 - the SDK's own compile commands need not pass the main.h overlay: they include no firmware
   header. Every other command of the build must;
 - with --bundle, the bundle holds exactly its files: the plugin and the engine, Info.plist and
-  moduleinfo.json (whose texts name no maker), and in Contents/Resources the repository's LICENSE
-  and NOTICE.md and the SDK's MIT licence as VST3-SDK-LICENSE.txt, each byte for byte its source.
+  moduleinfo.json (whose texts name no maker), and in Contents/Resources the notices of all the code
+  in it, each byte for byte its source: the repository's LICENSE and NOTICE.md, the VST 3 SDK's MIT
+  licence (VST3-SDK-LICENSE.txt), and those of the code the engine links from the emulator, as the
+  app's bundle has them: Arm Optimized Routines' (LICENSE.arm-optimized-routines, emu/libm/LICENSE)
+  and FatFs' (LICENSE.fatfs, the first 18 lines of ff.h).
 
     plugin_licence_gate.py [--bundle LICHOMAT.vst3] <repository root> <build dir> <binary>...
 
@@ -28,7 +31,8 @@ import os
 import sys
 
 SDK = os.path.join('plugin', 'third_party', 'vst3sdk') + os.sep
-# the bundle's files, and for the copied ones their source in the repository
+# the bundle's files, and for the copied ones their source in the repository: a path, or (a path, the
+# number of its first lines)
 BUNDLE = {
     'Contents/Info.plist': None,
     'Contents/MacOS/LICHOMAT': None,
@@ -37,6 +41,8 @@ BUNDLE = {
     'Contents/Resources/LICENSE': 'LICENSE',
     'Contents/Resources/NOTICE.md': 'NOTICE.md',
     'Contents/Resources/VST3-SDK-LICENSE.txt': SDK + 'LICENSE.txt',
+    'Contents/Resources/LICENSE.arm-optimized-routines': os.path.join('emu', 'libm', 'LICENSE'),
+    'Contents/Resources/LICENSE.fatfs': (os.path.join('Middlewares', 'Third_Party', 'FatFs', 'src', 'ff.h'), 18),
     'Contents/_CodeSignature/CodeResources': None,
 }
 # the bundle's texts that the host shows or reads: they name no maker
@@ -81,9 +87,12 @@ def check_bundle(g, root, bundle, errors):
     for f, src in sorted(BUNDLE.items()):
         if src is None or f not in found:
             continue
-        with open(os.path.join(bundle, f), 'rb') as a, open(os.path.join(root, src), 'rb') as b:
-            if a.read() != b.read():
-                errors.append('the bundle\'s %s is not %s' % (f, src))
+        path, lines = src if isinstance(src, tuple) else (src, None)
+        with open(os.path.join(bundle, f), 'rb') as a, open(os.path.join(root, path), 'rb') as b:
+            want = b.read() if lines is None else b''.join(b.readlines()[:lines])
+            if a.read() != want:
+                errors.append('the bundle\'s %s is not %s%s' % (f, path, '' if lines is None else
+                                                                 ' (its first %d lines)' % lines))
     with open(os.path.join(root, SDK, 'LICENSE.txt')) as f:
         if not f.readline().startswith('MIT License'):
             errors.append('%sLICENSE.txt is not the MIT licence' % SDK)
