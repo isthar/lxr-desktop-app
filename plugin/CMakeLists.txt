@@ -281,6 +281,23 @@ set_tests_properties(P10_plugin_kill P10_plugin_rt P10_plugin_beats P10_plugin_h
     P10_plugin_spawn_fail P10_plugin_offline_hang P10_plugin_params_restart P10_plugin_rtparams P10_plugin_async_state
     P10_plugin_double_state PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
 
+# --- lichomat-auhost, the AU's test host, and the scenarios through the AU (plan E9.7 Task 5) ------
+add_executable(lichomat-auhost host/au_host.cpp "${SDK_ROOT}/public.sdk/source/vst/hosting/parameterchanges.cpp"
+    $<TARGET_OBJECTS:plug_common> $<TARGET_OBJECTS:plug_card>)
+target_include_directories(lichomat-auhost PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/vst3" "${LXR_ROOT}/emu/core")
+target_compile_options(lichomat-auhost PRIVATE ${PLUGIN_FLAGS})
+target_compile_features(lichomat-auhost PRIVATE cxx_std_17)
+target_link_libraries(lichomat-auhost PRIVATE sdk_hosting "-framework AudioToolbox" "-framework CoreFoundation")
+set(PLUGIN_AU_TEST ${PLUGIN_HOST_TEST} --component $<TARGET_BUNDLE_DIR:LICHOMAT_AU> --auhost $<TARGET_FILE:lichomat-auhost>)
+foreach(id P13_au_info P13_au_checks P13_au_native P13_au_latency P13_au_onsets P13_au_buses P13_au_buses48
+        P13_au_out2_pull P13_au_one_output P13_au_params P13_au_outputs P13_au_state P13_au_params_state
+        P13_au_vst3_state P13_au_setstate P13_au_renew P13_au_ramp P13_au_offline_switch P13_au_kill
+        P13_au_params_restart P13_au_notify P13_au_rt P13_au_rtparams)
+    add_test(NAME ${id} COMMAND ${PLUGIN_AU_TEST} ${id})
+    set_tests_properties(${id} PROPERTIES TIMEOUT 600 LABELS plugin)
+endforeach()
+set_tests_properties(P13_au_kill P13_au_params_restart P13_au_notify P13_au_rt P13_au_rtparams PROPERTIES RUN_SERIAL TRUE)	# paced
+
 # --- the licence gate and the name scan (Task 10) ---------------------------------------------
 add_test(NAME P11_licence COMMAND ${PLUGIN_HOST_TEST} P11_licence)
 set_tests_properties(P11_licence PROPERTIES TIMEOUT 600 LABELS plugin)

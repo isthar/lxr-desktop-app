@@ -1463,7 +1463,7 @@ def reports(out):
     """the parameter values the plugin reported, as [(frame, {id: value})], from plughost's lines"""
     rows = []
     for l in out.splitlines():
-        m = re.match(r'lichomat-plughost: instance 0: frame (\d+):((?: \d+=\d+)+)$', l)
+        m = re.match(r'lichomat-(?:plughost|auhost): instance 0: frame (\d+):((?: \d+=\d+)+)$', l)
         if m:
             rows.append((int(m.group(1)), dict((int(a), int(b)) for a, b in (w.split('=') for w in m.group(2).split()))))
     return rows
@@ -2089,6 +2089,208 @@ def P13_au_helper(t):
     want = {'type': 'aumu', 'subtype': 'Lcht', 'manufacturer': 'Lchm', 'name': 'LICHOMAT: LICHOMAT', 'description': 'LICHOMAT',
             'version': int(x) * 65536 + int(y) * 256 + int(z), 'factoryFunction': 'LichomatAUFactory', 'tags': ['Drums']}
     check(len(comps) == 1 and comps[0] == want, 'AudioComponents %r' % comps)
+
+
+def au(fn):
+    """fn, a case of the VST3, through the AU: lichomat-auhost and LICHOMAT.component in place of lichomat-plughost
+    and LICHOMAT.vst3, the same plans and the same checks"""
+    def run(t):
+        t.a.host, t.a.bundle = t.a.auhost, t.a.component
+        fn(t)
+    return run
+
+
+for _name in ('native', 'latency', 'onsets', 'buses', 'buses48', 'params', 'outputs', 'state', 'params_state', 'setstate',
+              'renew', 'kill', 'params_restart', 'rt', 'rtparams'):
+    CASES['P13_au_' + _name] = au(CASES['P10_plugin_' + _name])
+
+
+def au_plan(t, name, lines, **kw):
+    """plan() for lichomat-auhost: the component in place of the VST3 bundle"""
+    return plan(t, name, lines, bundle=t.a.component, **kw)
+
+
+def au_host(t, plan_path, env=None):
+    """host() with lichomat-auhost: (the latencies, its output)"""
+    vst3 = t.a.host
+    t.a.host = t.a.auhost
+    try:
+        return host(t, plan_path, env)
+    finally:
+        t.a.host = vst3
+
+
+VOICES = ['Drum 1', 'Drum 2', 'Drum 3', 'Snare', 'Cymbal', 'Hi-hat']
+OUTPUTS = 'St1|St2|L1|R1|L2|R2|FX'
+
+
+def au_params():
+    """the AU's parameters as the device shows them (plan E9.4 "The parameters"): (id, name, min, max, default, strings)"""
+    rows = [(0, 'Engine', 0, 3, 0, 'stopped|starting|running|failed'), (1, 'Pattern', 1, 64, 1, None)]
+    rows += [(10 + k, v + ' Volume', 0, 127, 127, None) for k, v in enumerate(VOICES)]
+    rows += [(20 + k, v + ' Pan', -63, 64, 0, None) for k, v in enumerate(VOICES)]
+    rows += [(30 + k, v + ' Filter', 0, 127, d, None) for k, (v, d) in enumerate(zip(VOICES, (127, 127, 127, 127, 68, 104)))]
+    rows += [(40 + k, v + ' Decay', 0, 127, d, None) for k, (v, d) in enumerate(zip(VOICES[:5], (21, 13, 3, 10, 107)))]
+    rows += [(45, 'Hi-hat Closed Decay', 0, 127, 5, None), (46, 'Hi-hat Open Decay', 0, 127, 17, None),
+             (50, 'DJ Filter', 0, 127, 64, None), (51, 'Reverb Level', 0, 127, 0, None), (52, 'Reverb Decay', 0, 127, 64, None),
+             (53, 'FX Amount', 0, 100, 0, None)]
+    rows += [(60 + k, v + ' Output', 0, 6, 0, OUTPUTS) for k, v in enumerate(VOICES)]
+    return rows
+
+
+@case
+def P13_au_info(t):
+    # The AU's 37 parameters are the VST3's, with their ids, names and values as the device shows them: the read-only
+    # Engine, the pattern 1-64, pans -63..64, the outputs and the Engine indexed with their names, each value's string
+    # (ParameterStringFromValue) that number or name and read back (ParameterValueFromString); two stereo outputs
+    # "Out 1" and "Out 2", no input; the latency the VST3 reports (385 at 44,140.625 Hz in blocks of 128), no tail
+    _, out = au_host(t, au_plan(t, 'info.txt', ['info', 'out ' + t.path('info.wav')], frames=1280))
+    got = {}
+    for l in out.splitlines():
+        m = re.match(r'lichomat-auhost: info: param (\d+) "([^"]+)" (\S+)\.\.(\S+) default (\S+) unit (\d+) (r|rw)(s?) '
+                     r'strings (\S+) shows (\S+)$', l)
+        if m:
+            got[int(m.group(1))] = m.groups()[1:]
+    rows = au_params()
+    print('%d parameters, ids %r' % (len(got), sorted(got)))
+    check(sorted(got) == [r[0] for r in rows], 'the ids %r' % sorted(got))
+    for pid, name, lo, hi, default, strings in rows:
+        names = strings.split('|') if strings else None
+        show = '|'.join(names[v - lo] if names else str(v) for v in (lo, default, hi))
+        want = (name, str(lo), str(hi), str(default), '1' if strings else '0', 'r' if pid == 0 else 'rw', 's', strings or '-', show)
+        check(got[pid] == want, 'parameter %d: %r, not %r' % (pid, got[pid], want))
+    line = [l for l in out.splitlines() if 'info: outputs' in l]
+    print(line[0] if line else out)
+    check(line and line[0].endswith('outputs 2: Out 1, Out 2; channels 0 in, 2 out; kAudioUnitProperty_Latency 385 frames; '
+                                    'TailTime 0 s'), 'the outputs %r' % line)
+    check('lichomat-auhost: component aumu Lcht Lchm "LICHOMAT: LICHOMAT"' in out, 'the component line')
+
+
+@case
+def P13_au_checks(t):
+    # What auval checks of an instrument and can be checked without installing it: initialized again at 48 kHz and
+    # back (the latency follows the rate), every writable parameter's minimum, maximum and default set and scheduled and
+    # read back, the read-only Engine refusing a set, a render of more frames than the maximum refused, the ClassInfo read
+    # and given back while initialized; then it plays. auval itself runs in the install (install_plugin.sh)
+    _, out = au_host(t, au_plan(t, 'checks.txt', ['checks', 'note 1000 0 48 127', 'out ' + t.path('c.wav')], frames=12800))
+    line = [l for l in out.splitlines() if 'checks:' in l]
+    print(line[0] if line else out)
+    check(line == ['lichomat-auhost: checks: 226 passed'], 'checks %r' % line)
+    _, _, x = wav(t.path('c.wav'))
+    check(any(abs(v) >= 4000 for v in x), 'no sound after the checks')
+
+
+@case
+def P13_au_out2_pull(t):
+    # AU v2 has no bus activation: Out 2 counts as used while the host renders it. The onset card (Drum 1 on out 1, the
+    # other voices on out 2) at 44,140.625 Hz in blocks of 128, Out 2 rendered only in the blocks from A to B: Out 1 is the
+    # sum (the VST3's Out 1 without Out 2) up to the block after A, the device's out 1 (the VST3's Out 1 with Out 2) from
+    # it to two blocks after B, the sum again after; Out 2 is the VST3's Out 2 from the block after A to B (the block at A
+    # was rendered as the sum, its Out 2 silent) and silent where it is not rendered
+    A, B = 100096, 300032
+    for name, extra in (('sum', []), ('split', ['bus2'])):
+        host(t, plan(t, name + '.txt', TIMELINE + extra + ['out ' + t.path(name + '.wav')]))
+    au_host(t, au_plan(t, 'pull.txt', TIMELINE + ['pull2 %d %d' % (A, B), 'out ' + t.path('pull.wav')]))
+    _, _, total = wav(t.path('sum.wav'))
+    _, _, split = wav(t.path('split.wav'))
+    _, _, split2 = wav(t.path('split-out2.wav'))
+    _, _, out1 = wav(t.path('pull.wav'))
+    _, _, out2 = wav(t.path('pull-out2.wav'))
+    a, b = 2 * (A + 128), 2 * (B + 256)
+    print('Out 1: the sum to %d, out 1 to %d, the sum after; Out 2: out 2 from %d to %d' % (A + 128, B + 256, A + 128, B))
+    check(out1[:a] == total[:a] and out1[a:b] == split[a:b] and out1[b:] == total[b:], 'Out 1')
+    check(total[a:b] != split[a:b] and any(split2[a:2 * B]), 'the two runs differ there')
+    check(not any(out2[:a]) and out2[a:2 * B] == split2[a:2 * B] and not any(out2[2 * B:]), 'Out 2')
+
+
+@case
+def P13_au_one_output(t):
+    # A host that takes one output element (Out 1 alone) gets the sum on it: the VST3's Out 1 without Out 2, byte for byte
+    host(t, plan(t, 'vst3.txt', TIMELINE + ['out ' + t.path('vst3.wav')]))
+    _, out = au_host(t, au_plan(t, 'one.txt', TIMELINE + ['outputs 1', 'info', 'out ' + t.path('one.wav')]))
+    check('info: outputs 1: Out 1;' in out, 'one output element: %r' % [l for l in out.splitlines() if 'outputs' in l])
+    d = same_files(t.path('vst3.wav'), t.path('one.wav'))
+    print('one output element: Out 1 == the VST3\'s sum' if d is None else d)
+    check(d is None, 'Out 1 of one element %s' % d)
+
+
+@case
+def P13_au_vst3_state(t):
+    # The AU's state is the VST3's: its ClassInfo holds the processor's bytes (LCHS, LCHV) under "lichomat-state", next to
+    # the keys every AU state has. The same plan through both gives the same output and the same state bytes, and each
+    # format restores the other's state and plays as the other does with it
+    lines = ['note %d 0 48 127' % (20000 * k + 5000) for k in range(12)] + ['param 0 10 40', 'param 0 33 10']
+    host(t, plan(t, 'v.txt', lines + ['out ' + t.path('v.wav'), 'state-out ' + t.path('v.bin')], frames=blocks_frames(1)))
+    _, out = au_host(t, au_plan(t, 'a.txt', lines + ['out ' + t.path('a.wav'), 'state-out ' + t.path('a.bin')],
+                             frames=blocks_frames(1)))
+    keys = [l for l in out.splitlines() if 'classinfo keys' in l]
+    print(keys[0] if keys else out)
+    check(keys == ['lichomat-auhost: classinfo keys: data element-name lichomat-state manufacturer name subtype type version'], 'keys %r' % keys)
+    check(same_files(t.path('v.wav'), t.path('a.wav')) is None, 'the AU plays otherwise than the VST3')
+    check(same_files(t.path('v.bin'), t.path('a.bin')) is None, 'the AU\'s state bytes differ from the VST3\'s')
+    rest = ['note %d 0 48 127' % (20000 * k + 5000) for k in range(12)]
+    host(t, plan(t, 'va.txt', rest + ['state-in ' + t.path('a.bin'), 'out ' + t.path('va.wav')], card=False))
+    au_host(t, au_plan(t, 'av.txt', rest + ['state-in ' + t.path('v.bin'), 'out ' + t.path('av.wav')], card=False))
+    d = same_files(t.path('va.wav'), t.path('av.wav'))
+    print('the state, %d bytes, the same in both; the VST3 with the AU\'s state == the AU with the VST3\'s' % os.path.getsize(t.path('v.bin')))
+    check(d is None, 'restored across formats %s' % d)
+
+
+@case
+def P13_au_notify(t):
+    # The host's listeners hear of the values the plugin reports, from its notifier thread (never the render thread): real
+    # time, paced, 48 kHz, the onset card stopped; every value once at the first block; Drum 1's volume set to 40 at 0.5 s
+    # (the host's own: not heard), then pattern 1 at 1 s, whose kit sets it back to 127: heard a second time
+    lines = ['mode realtime', 'paced', 'param 24064 10 40', 'param 48128 1 1', 'out ' + t.path('n.wav')]
+    _, out = au_host(t, au_plan(t, 'n.txt', lines, rate=48000, block=256, frames=48000 * 2))
+    heard = [l for l in out.splitlines() if ': heard' in l]
+    print(heard[0] if heard else out)
+    counts = dict((int(a), int(b)) for a, b in (w.split(':') for w in heard[0].split('heard')[1].split()))
+    ids = [r[0] for r in au_params()]
+    check(sorted(counts) == ids and counts[10] == 2 and all(counts[i] == 1 for i in ids if i not in (0, 10)) and counts[0] >= 1,
+          'heard %r' % counts)
+    rep = reports(out)
+    check(rep and rep[-1][1] == {10: 127} and rep[-1][0] >= 48128, 'the reports %r' % rep[1:])
+
+
+@case
+def P13_au_ramp(t):
+    # A scheduled ramp reaches the firmware as its two ends in the block it was given in, at their frames: Drum 1's
+    # volume from 100 to 20 over 50 frames inside one block, and from 20 to 120 over 100 frames from 100 frames into a
+    # block of 128, of which the block holds 28 (its end there 20 + 100 x 27 / 100 = 47). The AU's output is the VST3's
+    # with those points, byte for byte
+    notes = ['note %d 0 48 127' % (100000 + 2000 * k) for k in range(16)]
+    points = ['param 100010 10 100', 'param 100059 10 20', 'param 120164 10 20', 'param 120191 10 47']
+    script = t.path('v.txt')
+    host(t, plan(t, 'v.plan', notes + points + ['out ' + t.path('v.wav'), 'script ' + script], frames=blocks_frames(4)))
+    au_host(t, au_plan(t, 'a.plan', notes + ['ramp 100010 10 100 20 50', 'ramp 120164 10 20 120 100', 'out ' + t.path('a.wav')],
+                       frames=blocks_frames(4)))
+    with open(script) as f:
+        ccs = [l.split()[0] + ' ' + ' '.join(l.split()[2:]) for l in f if ' B0 59 ' in l]
+    print('the VST3\'s points as MIDI: %r' % ccs)
+    check(ccs == ['100010f B0 59 64', '100059f B0 59 14', '120191f B0 59 2F'], 'the points %r' % ccs)
+    d = same_files(t.path('v.wav'), t.path('a.wav'))
+    print('the AU\'s ramps == the VST3\'s points' if d is None else d)
+    check(d is None, 'the ramps %s' % d)
+
+
+@case
+def P13_au_offline_switch(t):
+    # A host that turns offline rendering on while the AU plays (a bounce): the processor takes the new mode with a new
+    # setup and a new engine (as a VST3 host's setupProcessing() for an export), and waits for it from then on, so that
+    # a Note On after the switch sounds at its frame plus the latency (one less on an odd frame), as P10_plugin_renew's
+    switch, note = 88064, 88064 + 1001
+    lines = ['mode realtime', 'offline %d 1' % switch, 'note %d 0 48 127' % note, 'note %d 0 48 0' % (note + 3000),
+             'out ' + t.path('s.wav')]
+    lat, out = au_host(t, au_plan(t, 's.txt', lines, frames=blocks_frames(3)))
+    _, _, x = wav(t.path('s.wav'))
+    left = x[0::2]
+    on = next((i for i in range(switch, len(left)) if abs(left[i]) >= 4000), None)
+    log = ''.join(instance_logs(t.path('home')).values())
+    engines = re.findall(r'engine \d+ started on ', log)
+    print('offline from %d: the Note On at %d sounds at %r (latency %d); engines started %d' % (switch, note, on, lat[0], len(engines)))
+    check('offline at %d: 1' % switch in out and len(engines) == 2, 'the switch: %d engines' % len(engines))
+    check(on in (note + lat[0], note + lat[0] - 1), 'the note at %r' % on)
 
 
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
