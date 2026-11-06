@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 07:41",
+    "updated": "2026-11-06 08:19",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (plan gotowy, wdrożenie)",
     "branch": "timing-core",
-    "head": "7161c4f",
+    "head": "e37ab60",
     "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.4 grupy C–D, plan AU (E9.7), potem E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T07:41:00+01:00",
-    "now": "E9.4: poprawki i testy z przeglądu B, potem grupa C (od 07:41); E9.7: plan AU na kopii roboczej (od 07:38)"
+    "updated_at": "2026-11-06T08:19:00+01:00",
+    "now": "E9.4 grupa C (zad. 7–9: Out 1 i Out 2, parametry w Live, wartości w secie): implementacja (od 08:19); E9.7: plan AU na kopii roboczej (od 07:38)"
   },
   "epics": [
     {
@@ -1072,35 +1072,35 @@
     {
       "id": "E9.35",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Wtyczka E9.4 zad. 5: 36 parametrów (plug_params, 8b34177): CC, NRPN i Program Change, uzgadnianie wartości z Live i z firmware bez sprzężenia zwrotnego, blok wartości w stanie; zgodne z planem, 36 wierszy sprawdzonych z numerami w firmware",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.36",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Wtyczka E9.4 zad. 6: silnik czyta wartości parametrów z pamięci firmware po każdym bloku i sprawdza tabelę parametrów przy starcie (47799d0); parametry przez silnik bajt w bajt jak renderer z tym samym MIDI",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.37",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka E9.4 zad. 7: Out 1 i Out 2 we wtyczce; bez włączonego Out 2 suma na Out 1",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.38",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka E9.4 zad. 8: parametry we wtyczce: suwaki i automatyka w Live, MIDI do firmware co do próbki, wartości z firmware z powrotem do Live, log kanału MIDI",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.39",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka E9.4 zad. 9: wartości parametrów w secie (blok LCHV po karcie); stare sety otwierają się z wartościami z karty",
       "updated": "2026-11-06"
     },
@@ -4801,6 +4801,11 @@
       "n": 652,
       "at": "2026-11-06 07:41",
       "text": "E9.35–E9.36: przegląd zgodności przeszedł (każdy plik jak tekst planu). Przegląd jakości (26 mutantów) znalazł jedną ważną rzecz: narzędzie testowe gubiło czasem odczyt raportu silnika, więc test parametrów mógłby rzadko przekroczyć swoją granicę 512 ramek. Poprawka jest w narzędziu, granica zostaje. Do tego jeden uśpiony błąd (pierwszy raport per parametr) i pięć brakujących testów. Wszystko idzie osobnymi commitami przed grupą C. Wąskie okno przy wczytaniu kitu dopisane do Q40."
+    },
+    {
+      "n": 653,
+      "at": "2026-11-06 08:19",
+      "text": "E9.35–E9.36 zrobione: poprawki i testy z przeglądu B na plugin-v07 (548cc21..2a80fa1), testy wtyczki 93/93, ostrzeżeń 0. Nowy test sprawdza kartę z innym globalnym kanałem MIDI (10) i innym filtrem odbioru: wtyczka czyta je z firmware i CC na kanale 10 dociera. Do obserwacji: P10_plugin_beats (test z prototypu, liczony według zegara) dwa razy nie przeszedł pod obciążeniem, sam przechodzi."
     }
   ]
 }

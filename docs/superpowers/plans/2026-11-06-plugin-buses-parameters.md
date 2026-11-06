@@ -5162,7 +5162,7 @@ Jeśli parametr nie działa: w logu instancji (`~/Library/Application Support/LI
   - with them a real fault (Minor): `plug_valuesWrite()` took the count it found as even, and nothing resets it for a new engine, so an engine killed between its two stores left every later engine's tables unreadable (`plug_valuesRead()` 0) for the instance's life. Fixed: the writer starts from the next even count;
   - M23 (the engine ignoring `plug_shmCheck()`) and M24 (exit 1 instead of 2): the refusal was reasoned, not tested;
   - M17, M18 (the converter's stride and output channel count): equivalent at these constants.
-  Gap commits before group B: `P3_shm_seqlock` (a killed writer's odd count; a reader beside a writer only ever accepts whole tables) and `P6_engine_refuses` (exit 2 on a version-1 header and on a version-1-sized object). Every later T is 2 higher than the plan's: Task 5 86, Task 6 87, Task 7 89, Task 8 93, Tasks 9–10 94.
+  Gap commits before group B: `P3_shm_seqlock` (a killed writer's odd count; a reader beside a writer only ever accepts whole tables) and `P6_engine_refuses` (exit 2 on a version-1 header and on a version-1-sized object). Every later T is 2 higher than the plan's: Task 5 86, Task 6 87 (and 8 higher after review B's gaps, below).
 
 ### Group B (Tasks 5–6), 2026-11-06
 
@@ -5174,3 +5174,12 @@ Jeśli parametr nie działa: w logu instancji (`~/Library/Application Support/LI
   - *Minor, by design:* a host point equal to the last value sent, in the few blocks between a firmware change and its report, is not sent again, and the report then gives the host the firmware's value. Not changed: a fix interacts with the echo rule; recorded under Q40 and Risks.
   - *Gaps:* `P12_params_new_engine` (the `sentFrame >= epoch` condition), `P12_params_lchv` (the count's and version's upper bytes), `P12_engine_table` (`eng_fwCheck` over every row; split as `eng_fwCheckTable()`), `P6_engine_late_epoch` (the hook's frame with the epoch), `P6_engine_channel` (a card with another global channel and receive filter; time-boxed).
   - Sound: frame units, restart, old reports, NaN and range, `LCHV` bounds, the hook only reads (every value whole), the real-time path.
+- **Gap commits of review B** (`548cc21`..`2a80fa1`, 8 commits):
+  - `548cc21` the driver's read retries (Debug frames unchanged: 30016, 52032, 60032, 90048, 200064);
+  - `b092fa5` + `d37c9c7` `P12_params_new_engine` (`b092fa5` alone does not build: `.n` for `.len`, the id not registered; `d37c9c7` fixes both, no amend);
+  - `d0a5bcf` per-parameter first report (`int first` in `plug_paramSync_t`, signatures unchanged), `P12_params_unknown`;
+  - `76a353a` `P12_params_lchv`;
+  - `a53f0ec` `eng_fwCheckTable()`, `P12_engine_table` (new executable `test_engfw`);
+  - `e78007f` `P6_engine_late_epoch` (epoch 6,208: the same offsets as `P6_engine_params`);
+  - `2a80fa1` `P6_engine_channel` (the onset card with `GLO.CFG` bytes 21, 14, 15 = 10, 11, 5: reported channel 9, receive filter 5; a CC on channel 10 reaches the firmware).
+  Every mutant of the review killed but one: the engine not calling `eng_fwCheck()` at all (no test reaches that call without an engine built with a wrong table; the table check itself is covered by `P12_engine_table`). T 93; every later T is 8 higher than the plan's (Task 7 95, Task 8 99, Tasks 9–10 100). `P10_plugin_beats` failed twice in a Release PLUGIN-CHECK under load and passed alone and on rerun: a watch item.
