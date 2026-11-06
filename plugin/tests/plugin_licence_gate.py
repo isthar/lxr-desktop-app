@@ -3,8 +3,9 @@
 emulator's M21 (emu/tests/licence_gate.py) with these additions:
 
 - the vendored VST 3 SDK, plugin/third_party/vst3sdk/, is allowed (MIT; its LICENSE.txt goes into
-  the bundle's Contents/Resources);
-- the SDK's own compile commands need not pass the main.h overlay: they include no firmware
+  the bundle's Contents/Resources), and (plan E9.7) Apple's AudioUnitSDK,
+  plugin/third_party/AudioUnitSDK/ (Apache-2.0; its LICENSE.txt goes into the component's);
+- the SDKs' own compile commands need not pass the main.h overlay: they include no firmware
   header. Every other command of the build must;
 - with --bundle, the bundle holds exactly its files, no symbolic link and no empty folder: the
   plugin and the engine, Info.plist and moduleinfo.json (whose texts name no maker), and in
@@ -32,6 +33,7 @@ import os
 import sys
 
 SDK = os.path.join('plugin', 'third_party', 'vst3sdk') + os.sep
+AUSDK = os.path.join('plugin', 'third_party', 'AudioUnitSDK') + os.sep
 # the bundle's files, and for the copied ones their source in the repository: a path, or (a path, the
 # number of its first lines)
 BUNDLE = {
@@ -55,19 +57,20 @@ def gate(root):
     g = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(g)
     g.ALLOWED.append((SDK, 'Steinberg VST 3 SDK, MIT'))
+    g.ALLOWED.append((AUSDK, 'Apple AudioUnitSDK, Apache-2.0'))
     return g
 
 
 def check_overlay(root, build, errors):
-    """licence_gate.check_overlay() less the SDK's commands"""
+    """licence_gate.check_overlay() less the SDKs' commands"""
     overlay = os.path.join(build, 'main_overlay.yaml')
-    sdk = os.path.realpath(os.path.join(root, SDK))
+    sdks = [os.path.realpath(os.path.join(root, d)) + os.sep for d in (SDK, AUSDK)]
     with open(os.path.join(build, 'compile_commands.json')) as f:
         commands = json.load(f)
     checked = 0
     for c in commands:
         path = os.path.realpath(c['file'])
-        if os.sep + 'emu' + os.sep + 'libm' + os.sep in c['file'] or path.startswith(sdk + os.sep):
+        if os.sep + 'emu' + os.sep + 'libm' + os.sep in c['file'] or any(path.startswith(d) for d in sdks):
             continue
         checked += 1
         if '-ivfsoverlay ' + overlay not in c['command']:

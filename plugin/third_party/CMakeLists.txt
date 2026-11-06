@@ -39,3 +39,21 @@ smtg_create_public_sdk_hosting_target()
 set_target_properties(base pluginterfaces sdk_common sdk sdk_hosting PROPERTIES SYSTEM TRUE)
 add_subdirectory("${SDK_ROOT}/public.sdk/samples/vst-hosting/validator" validator)
 add_subdirectory("${SDK_ROOT}/public.sdk/samples/vst-utilities/moduleinfotool" moduleinfotool)
+
+# Apple's AudioUnitSDK 1.4.0 (plan E9.7 A-3, A-4), built from plugin/third_party/AudioUnitSDK as a
+# static library for the AU: the sources of an AU v2 instrument (MusicDeviceBase and what it needs),
+# in C++23, the standard the SDK is written in (std::expected). Its Xcode project is not used: there
+# is no Xcode, and nothing of the SDK is run but this code. Its headers are system headers to our
+# targets, as the VST 3 SDK's
+set(AUSDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/AudioUnitSDK")
+set(AUSDK_ROOT "${AUSDK_ROOT}" PARENT_SCOPE)
+add_library(ausdk STATIC
+    "${AUSDK_ROOT}/src/AudioUnitSDK/AUBase.cpp" "${AUSDK_ROOT}/src/AudioUnitSDK/AUBuffer.cpp"
+    "${AUSDK_ROOT}/src/AudioUnitSDK/AUBufferAllocator.cpp" "${AUSDK_ROOT}/src/AudioUnitSDK/AUInputElement.cpp"
+    "${AUSDK_ROOT}/src/AudioUnitSDK/AUMIDIBase.cpp" "${AUSDK_ROOT}/src/AudioUnitSDK/AUOutputElement.cpp"
+    "${AUSDK_ROOT}/src/AudioUnitSDK/AUPlugInDispatch.cpp" "${AUSDK_ROOT}/src/AudioUnitSDK/AUScopeElement.cpp"
+    "${AUSDK_ROOT}/src/AudioUnitSDK/ComponentBase.cpp" "${AUSDK_ROOT}/src/AudioUnitSDK/MusicDeviceBase.cpp")
+target_include_directories(ausdk SYSTEM PUBLIC "${AUSDK_ROOT}/include")
+set_target_properties(ausdk PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+target_link_libraries(ausdk PUBLIC "-framework AudioToolbox" "-framework CoreAudio" "-framework CoreFoundation"
+    "-framework CoreMIDI")

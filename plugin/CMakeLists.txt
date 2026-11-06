@@ -64,6 +64,8 @@ function(plugin_add_test name)
 endfunction()
 add_test(NAME P2_sdk_pin COMMAND ${Python3_EXECUTABLE} "${PLUGIN_DIR}/tests/sdk_pin.py" "${LXR_ROOT}")
 set_tests_properties(P2_sdk_pin PROPERTIES LABELS plugin)
+add_test(NAME P2_ausdk_pin COMMAND ${Python3_EXECUTABLE} "${PLUGIN_DIR}/tests/sdk_pin.py" "${LXR_ROOT}" AudioUnitSDK)
+set_tests_properties(P2_ausdk_pin PROPERTIES LABELS plugin)
 
 # --- the code the plugin, the engine and the tests share (Tasks 3-6) -----------------------
 add_library(plug_common OBJECT common/plug_shm.c)
