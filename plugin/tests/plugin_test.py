@@ -1884,8 +1884,9 @@ def P10_plugin_silence(t):
     # The silence flags of both buses, offline at 44,140.625 Hz in blocks of 128, the onset card (Drum 1 on out 1, the
     # others on out 2): a flagged block (3) is all zeros and a block with sound is not flagged, on every bus, and the
     # flags are only 0 or 3. Out 2 inactive (sum): Out 2 is flagged in every block and Out 1 has sound in blocks of
-    # its own. Out 2 active (split): both buses have blocks with sound and blocks flagged silent (before the engine's
-    # first frames reach the host, and between notes)
+    # its own. Out 2 active (split): both buses have blocks with sound and blocks flagged silent: those before the
+    # engine's first frames reach the host (the read offset). A block the engine played is not flagged, also a silent
+    # one between notes: the flags mark the blocks with no frame from the engine (copied ? 0 : 3), not every silent one
     rows = {}
     for mode, extra in (('sum', []), ('split', ['bus2'])):
         _, out = host(t, plan(t, mode + '.plan', TIMELINE + extra + ['out ' + t.path(mode + '.wav')]))

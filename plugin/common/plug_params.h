@@ -78,8 +78,12 @@ typedef struct plug_paramSync
 	int sent;				/**< the value last given to the engine; -1: none */
 	uint64_t sentFrame;		/**< the host frame it was given at */
 	int first;				/**< 1: the running engine has not reported this parameter yet (its first report is to come) */
-	int pending;			/**< 1: the host's value was taken with no channel to send it on (no running engine, or a
-							 * flush) and is to go to the engine, at the next block's first frame (plug_paramsPending()) */
+	int pending;			/**< 1: the host's value is to go to the engine at the next block's first frame
+							 * (plug_paramsPending()): a host point taken with no channel to send it on (no running
+							 * engine, or a flush) or no room for its MIDI, or a new engine's first report that found it
+							 * lacking and could not send it (no channel, no room). 0 once it is sent, or when the engine
+							 * has it (a host point equal to sent, a report equal to want), when the firmware changed it
+							 * by itself, and when a state is restored */
 } plug_paramSync_t;
 
 /** every parameter's step, and the engine they follow */
@@ -117,9 +121,10 @@ typedef struct plug_paramPoint
 unsigned plug_paramsHost(plug_params_t *ps, const plug_paramPoint_t *pts, unsigned npts, uint64_t frame0, uint8_t ch,
 	plug_midi_t *out, unsigned n, unsigned max);
 
-/** The values taken with no channel (plug_paramsHost() with ch PLUG_VALUE_NONE: no running engine, or a flush
- * between blocks) go to the engine in the next block, at its first frame: after that block's transport messages
- * and before its own points and notes (B-12's order). Writes the MIDI of every pending parameter as
+/** The pending values (plug_paramSync_t's pending: host points taken with no channel, as plug_paramsHost() with ch
+ * PLUG_VALUE_NONE when no engine runs or in a flush between blocks, or with no room, and values a first report could
+ * not send) go to the engine in the next block, at its first frame: after that block's transport messages and before
+ * its own points and notes (B-12's order). Writes the MIDI of every pending parameter as
  * plug_paramsHost() would, at offset 0, in the table's order, into out[0..max) (an NRPN's three messages all or none;
  * the rest stay pending), and returns the count. Each one sent counts as given to the engine at host frame frame
  * (sent, sentFrame), so the first report of a new engine does not give it a second time. With ch PLUG_VALUE_NONE
