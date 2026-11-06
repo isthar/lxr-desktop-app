@@ -718,6 +718,32 @@ def P6_engine_late_epoch(t):
         check(f is not None and f - (epoch + at) <= 512, '%s: %r' % (name, f))
 
 
+@case
+def P6_engine_channel(t):
+    # The card's own global MIDI channel and receive filter, not the fixtures' (channel 1, all): glo.cfg of a copy
+    # holds the global channel 10 (stored as 10, the firmware's channel 9) and a transmit filter 11 that is not the
+    # receive filter 5. The engine reports channel 9 and rx 5, and a CC on channel 10 reaches the firmware: Drum 1's
+    # volume 40 shows from its frame
+    card = t.card('chan')
+    glo = os.path.join(card, 'PROJ00', 'GLO.CFG')
+    with open(glo, 'rb') as f:
+        b = bytearray(f.read())
+    check(len(b) == 30 and b[14] == 15 and b[15] == 15 and b[21] == 0, 'glo.cfg is not the fixture\'s: %r' % bytes(b))
+    b[14], b[15], b[21] = 11, 5, 10	# transmit filter, receive filter, global channel
+    with open(glo, 'wb') as f:
+        f.write(b)
+    script = param_script(t, 'script.txt', ['30000f usb B9 59 28'])
+    t.drive(card, RATE_TEXT, 128, script, blocks_frames(3), t.path('chan.wav'), values=t.path('values.txt'))
+    rows = []
+    for line in open(t.path('values.txt')):
+        w = line.split()
+        rows.append((int(w[0][:-1]), [int(v) for v in w[1:-4]], int(w[-3]), int(w[-1])))
+    print('channel %d, rx %d; Drum 1 Volume %d at the end' % (rows[0][2], rows[0][3], rows[-1][1][1]))
+    check(all(r[2] == 9 and r[3] == 5 for r in rows), 'channel and receive filter %r' % ([r[2:] for r in rows],))
+    f = next((f for f, v, _, _ in rows if v[1] == 40), None)
+    check(f is not None and 0 <= f - 30000 <= 512, 'Drum 1 Volume 40 from frame %r' % f)
+
+
 # --- the bundle (Task 8) ----------------------------------------------------------------------
 
 @case
