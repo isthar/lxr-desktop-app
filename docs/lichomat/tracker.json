@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 07:38",
+    "updated": "2026-11-06 07:41",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (plan gotowy, wdrożenie)",
     "branch": "timing-core",
-    "head": "821d50e",
+    "head": "7161c4f",
     "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.4 grupy C–D, plan AU (E9.7), potem E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T07:38:00+01:00",
-    "now": "E9.4: przegląd jakości zad. 2–6 (od 07:10); E9.7: plan AU na kopii roboczej (od 07:38)"
+    "updated_at": "2026-11-06T07:41:00+01:00",
+    "now": "E9.4: poprawki i testy z przeglądu B, potem grupa C (od 07:41); E9.7: plan AU na kopii roboczej (od 07:38)"
   },
   "epics": [
     {
@@ -1073,14 +1073,14 @@
       "id": "E9.35",
       "epic": "E9",
       "status": "w toku",
-      "title": "Wtyczka E9.4 zad. 5: 36 parametrów (plug_params): ich CC, NRPN i Program Change, uzgadnianie wartości z Live i z firmware bez sprzężenia zwrotnego, blok wartości w stanie",
+      "title": "Wtyczka E9.4 zad. 5: 36 parametrów (plug_params, 8b34177): CC, NRPN i Program Change, uzgadnianie wartości z Live i z firmware bez sprzężenia zwrotnego, blok wartości w stanie; zgodne z planem, 36 wierszy sprawdzonych z numerami w firmware",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.36",
       "epic": "E9",
       "status": "w toku",
-      "title": "Wtyczka E9.4 zad. 6: silnik po każdym bloku czyta wartości parametrów z pamięci firmware i przy starcie sprawdza tabelę parametrów z Parameters.h",
+      "title": "Wtyczka E9.4 zad. 6: silnik czyta wartości parametrów z pamięci firmware po każdym bloku i sprawdza tabelę parametrów przy starcie (47799d0); parametry przez silnik bajt w bajt jak renderer z tym samym MIDI",
       "updated": "2026-11-06"
     },
     {
@@ -1537,7 +1537,7 @@
       "status": "zamknięte",
       "question": "Kit wczytany razem ze wzorcem ustawia swoje wartości także parametrom, które Live automatyzuje (gdy linia automatyki stoi, Live nie wysyła nowego punktu). Co ma wtedy grać: wartość z kitu czy ostatnia wartość z automatyki Live'a?",
       "assumption": "Wartość z kitu.",
-      "answer": "Moja decyzja według Twojej reguły z 29.10: wartość z kitu, tak jak gra urządzenie sterowane z zewnętrznego sekwencera; wtyczka pokazuje ją w Live, do następnego punktu automatyki. Sprawdzasz to w P10 (c). Jeśli Live oznaczy przez to automatykę jako nadpisaną albo wolisz wartość z automatyki, zmiana to jedna reguła w plug_params.c (wartość z Live'a wygrywa przy każdym odczycie, nie tylko po starcie silnika).",
+      "answer": "Moja decyzja według Twojej reguły z 29.10: wartość z kitu, tak jak gra urządzenie sterowane z zewnętrznego sekwencera; wtyczka pokazuje ją w Live, do następnego punktu automatyki. Sprawdzasz to w P10 (c). Jeśli Live oznaczy przez to automatykę jako nadpisaną albo wolisz wartość z automatyki, zmiana to jedna reguła w plug_params.c (wartość z Live'a wygrywa przy każdym odczycie, nie tylko po starcie silnika). Wąskie okno, które zostaje (przegląd B): jeśli w ciągu kilku bloków po wczytaniu kitu Live przyśle punkt równy wartości wysłanej ostatnio, wtyczka go nie powtórzy, a Live dostanie wartość z kitu; następny inny punkt automatyki wygrywa.",
       "updated": "2026-11-06"
     }
   ],
@@ -4796,6 +4796,11 @@
       "n": 651,
       "at": "2026-11-06 07:38",
       "text": "E9.7 start: wtyczka AU v2. Twoja zgoda na pobranie o 07:35; pobrany AudioUnitSDK Apple'a 1.4.0 (bd98b31, Apache 2.0, 50 plików, 668 KB) do build/AudioUnitSDK, nic więcej. Decyzje w szkicu wtyczki, §8: ten sam silnik, dwa wyjścia, 36 parametrów i stan co VST3 0.2.0; najpierw sprawdzam wrapper AU z SDK VST3 bez Xcode, inaczej własna warstwa na AudioUnitSDK; testy bez instalacji, auval w skrypcie instalacyjnym u Ciebie (P11)."
+    },
+    {
+      "n": 652,
+      "at": "2026-11-06 07:41",
+      "text": "E9.35–E9.36: przegląd zgodności przeszedł (każdy plik jak tekst planu). Przegląd jakości (26 mutantów) znalazł jedną ważną rzecz: narzędzie testowe gubiło czasem odczyt raportu silnika, więc test parametrów mógłby rzadko przekroczyć swoją granicę 512 ramek. Poprawka jest w narzędziu, granica zostaje. Do tego jeden uśpiony błąd (pierwszy raport per parametr) i pięć brakujących testów. Wszystko idzie osobnymi commitami przed grupą C. Wąskie okno przy wczytaniu kitu dopisane do Q40."
     }
   ]
 }
