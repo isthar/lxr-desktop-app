@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 02:07",
+    "updated": "2026-11-06 02:27",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "2c6f348",
+    "head": "c557853",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-06T02:07:00+01:00",
-    "now": "E9.21: lekki przegląd zad. 10–11 wtyczki (od 02:07)"
+    "updated_at": "2026-11-06T02:27:00+01:00",
+    "now": "E9.20: implementer poprawia licencje i instalację wtyczki (od 02:27)"
   },
   "epics": [
     {
@@ -4592,6 +4592,11 @@
       "n": 637,
       "at": "2026-11-06 02:07",
       "text": "E9.20 zrobione (wtyczka zad. 10), 78bb439: bramka licencji obejmuje paczkę wtyczki, silnik i host testowy; README; skrypt instalacji sprawdzony tylko w folderze tymczasowym. Końcowe bramki: wtyczka 72/72 w Debug i Release, emulator 346/346, firmware 125/125, walidator 47/0; poza folderem plugin/ zmienione tylko 6 linii emu/CMakeLists.txt. E9.21 start: Twoja lista sprawdzeń P1–P8 (docs/lichomat/plugin-checks.md) w lekkim przeglądzie."
+    },
+    {
+      "n": 638,
+      "at": "2026-11-06 02:27",
+      "text": "E9.20–E9.21: lekki przegląd. P3 potwierdzone renderem (każdy głos karty init słucha nuty 48 na kanale 1), opóźnienia się zgadzają, reguły poddania się i ścieżki logów też. Do poprawy: w paczce brakowało licencji Arm Optimized Routines i FatFs; skrypt instalacji usuwał starą wtyczkę przed sprawdzeniem nowej i milczał przy błędzie; w P4 napisałem, że po zmianie tempa sekwencer dogania po kilku uderzeniach, a w testach idzie za nowym tempem od razu; liczniki trzasków trafiają do logu dopiero przy końcu silnika. Listę P1–P8 już poprawiłem, implementer poprawia wtyczkę."
     }
   ]
 }
