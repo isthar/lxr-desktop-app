@@ -29,6 +29,10 @@
  *   set-end ID VALUE  AudioUnitSetParameter of ID to VALUE (0..its max) after the last block, with no
  *                     render after it, before the state-out
  *   offline FRAME 0|1 set kAudioUnitProperty_OfflineRender of every instance at FRAME, while it plays
+ *   offline-async FRAME COUNT   from FRAME a thread of its own sets instance 0's OfflineRender COUNT times,
+ *                     1 and 0 in turn, one every 50 ms, while the blocks run; the summary counts the
+ *                     renders of instance 0 that the AU flagged silent
+ *                     (kAudioUnitRenderAction_OutputIsSilence) and those of them that were not
  *   ramp FRAME ID FROM TO FRAMES   a scheduled ramp of parameter ID from FROM to TO (its AU values,
  *                     the device's numbers) over FRAMES frames from FRAME, given in FRAME's block (the
  *                     script has no MIDI for it: a case compares the output with points of the VST3)
@@ -88,6 +92,7 @@ struct AuPlan
 	std::vector<std::pair<uint64_t, UInt32>> offline;
 	std::vector<std::pair<uint32_t, int>> setsAtEnd;
 	std::vector<std::pair<uint64_t, int>> notesAsync;
+	std::vector<std::pair<uint64_t, int>> offlineAsync;
 	UInt32 outputs = 2;
 	bool info = false, checks = false, noalloc = false;
 };
@@ -429,8 +434,9 @@ void close (Instance& in)
 	in.au = nullptr;
 }
 
-/* Out 1 (bus 0) or Out 2 (bus 1) of a block of n frames at sample time t into in.out */
-OSStatus renderBus (Instance& in, UInt32 bus, UInt32 n, Float64 t)
+/* Out 1 (bus 0) or Out 2 (bus 1) of a block of n frames at sample time t into in.out; the AU's render flags into
+ * flagsOut */
+OSStatus renderBus (Instance& in, UInt32 bus, UInt32 n, Float64 t, AudioUnitRenderActionFlags* flagsOut = nullptr)
 {
 	struct
 	{
@@ -449,7 +455,10 @@ OSStatus renderBus (Instance& in, UInt32 bus, UInt32 n, Float64 t)
 	ts.mSampleTime = t;
 	ts.mFlags = kAudioTimeStampSampleTimeValid;
 	AudioUnitRenderActionFlags flags = 0;
-	return AudioUnitRender (in.au, &flags, &ts, bus, n, &b.list);
+	const OSStatus r = AudioUnitRender (in.au, &flags, &ts, bus, n, &b.list);
+	if (flagsOut)
+		*flagsOut = flags;
+	return r;
 }
 
 /* what auval checks of an instrument and this host can check (the plan's checks) */
@@ -611,6 +620,13 @@ int main (int argc, char** argv)
 			a.info = true;
 		else if (cmd == "noalloc")
 			a.noalloc = true;
+		else if (cmd == "offline-async")
+		{
+			uint64_t at = 0;
+			int count = 0;
+			ok = !!(s >> at >> count) && count > 0 && count <= 1000;
+			a.offlineAsync.push_back ({at, count});
+		}
 		else if (cmd == "notes-async")
 		{
 			uint64_t at = 0;
@@ -682,7 +698,8 @@ int main (int argc, char** argv)
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
 	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextOffline = 0, nextRamp = 0;
-	size_t nextAsyncNotes = 0;
+	size_t nextAsyncNotes = 0, nextAsyncOffline = 0;
+	unsigned long long renders0 = 0, flagged0 = 0, flaggedLoud0 = 0;
 	std::vector<std::thread> threads;
 	unsigned long long processCalls = 0;
 	static AudioUnitParameterEvent events[1024];
@@ -742,6 +759,28 @@ int main (int argc, char** argv)
 				        refused);
 			});
 			nextAsyncNotes++;
+		}
+		while (nextAsyncOffline < a.offlineAsync.size () && a.offlineAsync[nextAsyncOffline].first <= f)
+		{
+			/* a host's main thread turning offline rendering on and off (a bounce) while this thread renders */
+			const int count = a.offlineAsync[nextAsyncOffline].second;
+			const uint64_t at = f;
+			AudioUnit u = inst[0]->au;
+			threads.emplace_back ([u, count, at] {
+				int ok = 0;
+				double longest = 0.0;
+				for (int k = 0; k < count; k++)
+				{
+					const UInt32 on = (UInt32)((k + 1) % 2);
+					const auto w0 = std::chrono::steady_clock::now ();
+					ok += AudioUnitSetProperty (u, kAudioUnitProperty_OfflineRender, kAudioUnitScope_Global, 0, &on, sizeof on) == noErr;
+					longest = std::max (longest, std::chrono::duration<double> (std::chrono::steady_clock::now () - w0).count ());
+					std::this_thread::sleep_for (std::chrono::milliseconds (50));
+				}
+				printf ("%s: offline-async at %llu: %d sets, %d taken, the longest %.3f s\n", gName, (unsigned long long)at, count, ok,
+				        longest);
+			});
+			nextAsyncOffline++;
 		}
 		while (nextOffline < a.offline.size () && a.offline[nextOffline].first <= f)
 		{
@@ -854,13 +893,24 @@ int main (int argc, char** argv)
 				AudioUnitScheduleParameters (in.au, events, ne);
 			for (unsigned k = 0; k < nn; k++)
 				MusicDeviceMIDIEvent (in.au, notes[k][0], notes[k][1], notes[k][2], noteAt[k]);
-			OSStatus r = renderBus (in, 0, n, (Float64)f);
+			AudioUnitRenderActionFlags flags1 = 0, flags2 = 0;
+			OSStatus r = renderBus (in, 0, n, (Float64)f, &flags1);
 			if (r == noErr && pull2)
-				r = renderBus (in, 1, n, (Float64)f);
+				r = renderBus (in, 1, n, (Float64)f, &flags2);
 			if (rtInside)
 				rtInside (0);
 			if (r != noErr)
 				die ("AudioUnitRender failed: " + std::to_string ((int)r));
+			if (idx == 0 && !a.offlineAsync.empty ())
+			{
+				renders0++;
+				if (flags1 & kAudioUnitRenderAction_OutputIsSilence)
+				{
+					flagged0++;
+					flaggedLoud0 += std::any_of (in.out[0].begin (), in.out[0].begin () + n, [] (float x) { return x != 0.0f; })
+					                || std::any_of (in.out[1].begin (), in.out[1].begin () + n, [] (float x) { return x != 0.0f; });
+				}
+			}
 			processCalls++;
 			if (tap.s && idx == 0)
 				tap.read ();
@@ -879,6 +929,9 @@ int main (int argc, char** argv)
 	}
 	for (auto& th : threads)
 		th.join ();
+	if (!a.offlineAsync.empty ())
+		printf ("%s: instance 0: %llu renders, %llu flagged silent, %llu flagged but not silent\n", gName, renders0, flagged0,
+		        flaggedLoud0);
 	for (auto& [id, v] : a.setsAtEnd)
 		for (auto& in : inst)
 			if (AudioUnitSetParameter (in->au, id, kAudioUnitScope_Global, 0, plug_auValue ((unsigned)plug_paramIndex (id), (uint8_t)v), 0)

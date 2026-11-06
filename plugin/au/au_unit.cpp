@@ -46,6 +46,12 @@ const CFStringRef kStateKey = CFSTR ("lichomat-state");
 constexpr unsigned kSlots = PLUG_PARAM_COUNT + 1;	/**< the 36 parameters and the Engine, last */
 constexpr UInt32 kMaxScheduled = 256;				/**< scheduled parameter events of one render cycle */
 
+/** the render guard's states (LichomatAU::guard) */
+enum : uint32_t { kIdle, kRendering, kSettingUp };
+/** the longest a setup waits for a render in progress: one offline render waits at most 10 s for its engine
+ * (plugin_processor.cpp, offlineWait()) */
+constexpr auto kSetupWait = std::chrono::seconds (11);
+
 const char* const kEngineNames[4] = {"stopped", "starting", "running", "failed"};
 
 CFStringRef cfString (const char* s)
@@ -290,7 +296,7 @@ public:
 			switch (id)
 			{
 				case kAudioUnitProperty_OfflineRender:
-					*static_cast<UInt32*> (out) = offline ? 1 : 0;
+					*static_cast<UInt32*> (out) = offline.load (std::memory_order_relaxed) ? 1 : 0;
 					return noErr;
 				case kAudioUnitProperty_ParameterStringFromValue:
 				{
@@ -319,6 +325,10 @@ public:
 		return MusicDeviceBase::GetProperty (id, scope, element, out);
 	}
 
+	/* OfflineRender is the one property a host may set while the AU is initialized that touches the processor: the
+	 * SDK refuses a stream format, an element count, a maximum of frames per slice and ShouldAllocateBuffer then
+	 * (AUBase.cpp: IsStreamFormatWritable(), SetBusCount(), CanSetMaxFrames(), :818), and a ClassInfo goes to the
+	 * processor's setState(), which a render may run beside (P13_au_setstate) */
 	OSStatus SetProperty (AudioUnitPropertyID id, AudioUnitScope scope, AudioUnitElement element, const void* in,
 	                      UInt32 size) override
 	{
@@ -327,16 +337,25 @@ public:
 			if (size < sizeof (UInt32))
 				return kAudioUnitErr_InvalidPropertyValue;
 			const bool now = *static_cast<const UInt32*> (in) != 0;
-			if (now == offline)
+			if (now == offline.load (std::memory_order_relaxed))
 				return noErr;
-			offline = now;
 			if (!IsInitialized ())
+			{
+				offline.store (now, std::memory_order_relaxed);
 				return noErr;
+			}
 			/* the processor's mode is its setup's: a new setup, and a new engine (as a VST3 host's
-			 * setupProcessing() for a freeze or an export) */
+			 * setupProcessing() for a freeze or an export), never under a render: the SDK takes no lock
+			 * for Render (AUPlugInDispatch.cpp), and setActive(false) unmaps the memory a process()
+			 * reads. A render meanwhile is silent (RenderBus()) */
+			if (!holdRenders ())
+				return kAudioUnitErr_CannotDoInCurrentContext;
+			offline.store (now, std::memory_order_relaxed);
 			proc->setProcessing (false);
 			proc->setActive (false);
-			return setUp ();
+			const OSStatus r = setUp ();
+			guard.store (kIdle, std::memory_order_release);
+			return r;
 		}
 		return MusicDeviceBase::SetProperty (id, scope, element, in, size);
 	}
@@ -422,13 +441,28 @@ public:
 
 	/* --- rendering ------------------------------------------------------------------------------ */
 
-	OSStatus RenderBus (AudioUnitRenderActionFlags&, const AudioTimeStamp& ts, UInt32 bus, UInt32 n) noexcept override
+	/* The render guard: a pull runs only from idle to rendering (an acquire compare-and-swap, no wait), and a setup
+	 * while initialized (OfflineRender) only from idle to setting up; a pull that finds a setup in progress outputs
+	 * silence and flags it, and so does every later pull of that time stamp */
+	OSStatus RenderBus (AudioUnitRenderActionFlags& flags, const AudioTimeStamp& ts, UInt32 bus, UInt32 n) noexcept override
 	{
+		uint32_t idle = kIdle;
+		if (!guard.compare_exchange_strong (idle, kRendering, std::memory_order_acquire, std::memory_order_relaxed))
+		{
+			if (NeedsToRender (ts))
+				silentStamp = true;
+			silence (bus, n, flags);
+			return noErr;
+		}
 		if (NeedsToRender (ts))
 			render (bus, n);
-		deliver (bus, n);
+		if (silentStamp)
+			silence (bus, n, flags);
+		else
+			deliver (bus, n);
 		if (bus == 1)
 			plug_auPulled (&buses);
+		guard.store (kIdle, std::memory_order_release);
 		return noErr;
 	}
 
@@ -440,9 +474,24 @@ private:
 			Output (1).SetName (CFSTR ("Out 2"));
 	}
 
+	/* the render guard from idle to setting up: waits while a render runs, at most kSetupWait */
+	bool holdRenders ()
+	{
+		const auto until = std::chrono::steady_clock::now () + kSetupWait;
+		for (;;)
+		{
+			uint32_t idle = kIdle;
+			if (guard.compare_exchange_weak (idle, kSettingUp, std::memory_order_acquire, std::memory_order_relaxed))
+				return true;
+			if (std::chrono::steady_clock::now () > until)
+				return false;
+			std::this_thread::sleep_for (std::chrono::microseconds (100));
+		}
+	}
+
 	OSStatus setUp ()
 	{
-		ProcessSetup setup {offline ? kOffline : kRealtime, kSample32, (int32)maxFrames, rate};
+		ProcessSetup setup {offline.load (std::memory_order_relaxed) ? kOffline : kRealtime, kSample32, (int32)maxFrames, rate};
 		if (proc->setupProcessing (setup) != kResultOk)
 			return kAudioUnitErr_FormatNotSupported;
 		out2 = false;
@@ -635,6 +684,7 @@ private:
 
 	void render (UInt32 bus, UInt32 n)
 	{
+		silentStamp = false;
 		const UInt32 outs = Outputs ().GetNumberOfElements ();
 		const bool split = plug_auRender (&buses) && outs > 1;
 		if (split != out2)
@@ -657,7 +707,7 @@ private:
 			out[b].channelBuffers32 = ch[b];
 		}
 		ProcessData d;
-		d.processMode = offline ? kOffline : kRealtime;
+		d.processMode = offline.load (std::memory_order_relaxed) ? kOffline : kRealtime;
 		d.symbolicSampleSize = kSample32;
 		d.numSamples = (int32)n;
 		d.numInputs = 0;
@@ -699,6 +749,21 @@ private:
 			}
 			events.addEvent (e);
 		}
+	}
+
+	/* the pulled element silent, its buffers as prepared for this pull (the SDK's cache or the host's), and flagged */
+	void silence (UInt32 bus, UInt32 n, AudioUnitRenderActionFlags& flags) noexcept
+	{
+		flags |= kAudioUnitRenderAction_OutputIsSilence;
+		auto el = Outputs ().GetElementOrError<ausdk::AUOutputElement> (bus);
+		if (!el)
+			return;
+		auto l = el->GetBufferListOrError ();
+		if (!l)
+			return;
+		for (UInt32 c = 0; c < l->mNumberBuffers; c++)
+			if (void* to = l->mBuffers[c].mData)
+				memset (to, 0, n * sizeof (float) < l->mBuffers[c].mDataByteSize ? n * sizeof (float) : l->mBuffers[c].mDataByteSize);
 	}
 
 	float* ownChannel (UInt32 b, UInt32 c) noexcept { return own.data () + (2 * b + c) * (size_t)maxFrames; }
@@ -769,9 +834,13 @@ private:
 	IPtr<lichomat::Processor> proc;
 	double rate = 0.0;
 	UInt32 maxFrames = 0;
-	bool offline = false;
-	bool out2 = false;					/**< the processor's Out 2 is active (the render thread's) */
-	plug_auBuses_t buses {0, 0};		/**< the render thread's */
+	std::atomic<bool> offline {false};	/**< set while uninitialized, or with the render guard held */
+	/** the render guard: kIdle, kRendering (a pull, on the render thread) or kSettingUp (OfflineRender set while
+	 * initialized); what the render thread and a setup share below is written only while it is held */
+	std::atomic<uint32_t> guard {kIdle};
+	bool silentStamp = false;			/**< this time stamp's first pull found a setup in progress (the render thread's) */
+	bool out2 = false;					/**< the processor's Out 2 is active (the render thread's, and a setup's) */
+	plug_auBuses_t buses {0, 0};		/**< the render thread's, and a setup's */
 	/** the AU's own cache, two channels of the maximum frames per element: an element's frames when the host gives
 	 * its buffers with each pull (ShouldAllocateBuffer 0), and Out 2's when the host took one element */
 	std::vector<float> own;

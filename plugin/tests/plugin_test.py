@@ -2366,6 +2366,32 @@ def P13_au_midi_async(t):
                                                                                                  len(twice)))
 
 
+@case
+def P13_au_offline_async(t):
+    # A host that turns offline rendering on and off from another thread while the render thread renders (a bounce
+    # started from its main thread): real time, paced, 48 kHz in blocks of 128, a Note On every 0.1 s; from 1 s a thread
+    # of its own sets OfflineRender 20 times, 1 and 0 in turn, one every 50 ms. The AU sets the processor up again
+    # (a new engine) never under a render: a render that finds it being set up is silent and flagged so
+    # (kAudioUnitRenderAction_OutputIsSilence), every other is the processor's. No crash, every set taken, renders
+    # flagged (each setup stops an engine and starts one), none flagged that is not silent, and the engine of the last
+    # setup plays the notes after the switches
+    lines = ['mode realtime', 'paced', 'offline-async 48000 20', 'out ' + t.path('o.wav')]
+    lines += ['note %d 0 48 127' % (4800 * k + 100) for k in range(40)]
+    _, out = au_host(t, au_plan(t, 'o.txt', lines, rate=48000, block=128, frames=48000 * 4))
+    sets = [l for l in out.splitlines() if 'offline-async at' in l]
+    m = re.search(r'instance 0: (\d+) renders, (\d+) flagged silent, (\d+) flagged but not silent', out)
+    _, _, x = wav(t.path('o.wav'))
+    late = sum(1 for v in x[2 * 48000 * 3:] if abs(v) >= 4000)
+    log = ''.join(instance_logs(t.path('home')).values())
+    engines = len(re.findall(r'engine \d+ started on ', log))
+    print('%s; %s; engines started %d; loud samples after 3 s: %d' % (sets[0] if sets else out[-300:], m.group(0) if m else '-',
+                                                                     engines, late))
+    check(sets and ': 20 sets, 20 taken' in sets[0], 'the sets %r' % sets)
+    check(m and int(m.group(1)) == 1500 and int(m.group(2)) > 0 and int(m.group(3)) == 0,
+          'the renders: %r' % ((m.groups() if m else out[-400:]),))
+    check(late > 1000 and 'engine running' in out, 'no sound after the switches: %d' % late)
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
