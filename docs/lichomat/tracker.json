@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 02:27",
+    "updated": "2026-11-06 02:28",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "c557853",
+    "head": "dd33bb6",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-06T02:27:00+01:00",
-    "now": "E9.20: implementer poprawia licencje i instalację wtyczki (od 02:27)"
+    "updated_at": "2026-11-06T02:28:00+01:00",
+    "now": "E9.20: implementer poprawia licencje i instalację wtyczki; E9.3: rozpoznanie rdzenia pod tryb host (od 02:28)"
   },
   "epics": [
     {
@@ -1011,6 +1011,13 @@
       "epic": "E9",
       "status": "w toku",
       "title": "Wtyczka zad. 11: Twoje sprawdzenia w Abletonie P1–P8, HANDOFF, tracker",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.3",
+      "epic": "E9",
+      "status": "w toku",
+      "title": "Tryb „host” w seq_core: pozycja, tempo i pętla prosto z transportu Live'a, co do próbki, zamiast MIDI clock; uderzenia przesunięte przed „raz” na początku pętli nie giną; LXR tego nie wywołuje, więc jego gra się nie zmienia. Najpierw rozpoznanie i szkic",
       "updated": "2026-11-06"
     }
   ],
@@ -4597,6 +4604,11 @@
       "n": 638,
       "at": "2026-11-06 02:27",
       "text": "E9.20–E9.21: lekki przegląd. P3 potwierdzone renderem (każdy głos karty init słucha nuty 48 na kanale 1), opóźnienia się zgadzają, reguły poddania się i ścieżki logów też. Do poprawy: w paczce brakowało licencji Arm Optimized Routines i FatFs; skrypt instalacji usuwał starą wtyczkę przed sprawdzeniem nowej i milczał przy błędzie; w P4 napisałem, że po zmianie tempa sekwencer dogania po kilku uderzeniach, a w testach idzie za nowym tempem od razu; liczniki trzasków trafiają do logu dopiero przy końcu silnika. Listę P1–P8 już poprawiłem, implementer poprawia wtyczkę."
+    },
+    {
+      "n": 639,
+      "at": "2026-11-06 02:28",
+      "text": "E9.3 start: rozpoznanie rdzenia seq_core pod tryb „host” (pozycja i pętla z transportu Live'a co do próbki), potem szkic do Twoich poprawek. Równolegle implementer kończy poprawki zad. 10 wtyczki."
     }
   ]
 }
