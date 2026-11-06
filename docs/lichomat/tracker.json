@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 02:40",
+    "updated": "2026-11-06 02:47",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "47fa6f0",
+    "head": "0bc5955",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-06T02:40:00+01:00",
-    "now": "E9.20: implementer kończy poprawki zad. 10 wtyczki (od 02:27)"
+    "updated_at": "2026-11-06T02:47:00+01:00",
+    "now": "E9.20: śledztwo w P10_plugin_hang (od 02:47)"
   },
   "epics": [
     {
@@ -4614,6 +4614,11 @@
       "n": 640,
       "at": "2026-11-06 02:40",
       "text": "E9.3: szkic trybu „host” gotowy (docs/superpowers/specs/2026-11-06-host-sync-draft.md). Rekomendacje: trzeci tryb synchronizacji, w którym rdzeń liczy czas jak w trybie wewnętrznym, ale z punktem zaczepienia ustawianym w każdym bloku z Live'a; przeskok pętli jako przewidziany skok, na tym samym mechanizmie co powrót na początek wzorca, więc uderzenia przed „raz” i po końcu pętli nie giną; nowe wejście emulatora zamiast MIDI; wszystko tylko w buildzie emulatora i wtyczki, obraz LXR bit w bit ten sam. Plan czeka na Twoje P4: jeśli prototyp w pętli Ci wystarcza, E9.3 może poczekać za E9.4."
+    },
+    {
+      "n": 641,
+      "at": "2026-11-06 02:47",
+      "text": "E9.20 przegląd, 983c754, 44c5f04, 17ef3b7, 8151e35, 37aaf6c: paczka ma licencje Arm Optimized Routines i FatFs, a bramka ich wymaga. Skrypt instalacji sprawdza nową wtyczkę w folderze tymczasowym, zanim zastąpi starą; przy błędzie pisze FAILED i zostawia poprzednią; odmawia przy otwartym Live z wtyczką. lichomat-engine --version podaje commit. Otwarte: w P10_plugin_hang pierwsze uderzenie po restarcie silnika czasem wypada 8 albo 19 ramek (0,2–0,4 ms) za wcześnie, przy oknie ±2. Nie poszerzam tolerancji na ślepo; implementer szuka przyczyny."
     }
   ]
 }
