@@ -51,21 +51,31 @@ the part of the VST 3 SDK it uses is in `plugin/third_party/vst3sdk/`.
 
 ## Install and uninstall
 
+Quit Live first: the script refuses while a `lichomat-engine` runs (Live with the plugin in a set).
+From the repository's root:
+
 ```bash
 plugin/tools/install_plugin.sh                 # into ~/Library/Audio/Plug-Ins/VST3
 plugin/tools/install_plugin.sh --uninstall     # removes ~/Library/Audio/Plug-Ins/VST3/LICHOMAT.vst3
 plugin/tools/install_plugin.sh --help          # prints the destination, touches nothing
 ```
 
-The install builds the Release bundle, copies it to the destination (a folder given as the first
-argument, or `LICHOMAT_VST3_DIR`, else `~/Library/Audio/Plug-Ins/VST3`), replacing an earlier
-`LICHOMAT.vst3` there, checks its ad hoc signature with `codesign --verify --deep --strict` and
-runs the SDK's validator on it. If the plugin has no start card yet it puts the `init` fixture
-(four on the floor on all seven voices) into `BASE/Card`. Live finds the plugin after a rescan of
-its plug-ins, or at its next start.
+The install builds the Release bundle (the build's output in `build/plugin-release.install.log`),
+copies it to a temporary folder and checks it there: its ad hoc signature with
+`codesign --verify --deep --strict` and the SDK's validator (its `Result:` line is printed). Only
+a bundle that passes replaces an earlier `LICHOMAT.vst3` in the destination (a folder given as the
+first argument, or `LICHOMAT_VST3_DIR`, else `~/Library/Audio/Plug-Ins/VST3`); on any failure it
+prints `install_plugin: FAILED (...), <destination> is as it was; see <log>` and the earlier bundle
+stays. An unknown option stops it before it builds anything. If the plugin has no start card yet it
+puts the `init` fixture (four on the floor on all seven voices) into `BASE/Card`.
 
-The uninstall removes the bundle only. The plugin's folder `BASE` (the start card and the logs)
-stays; remove `~/Library/Application Support/LICHOMAT Plugin` by hand to remove them too.
+In Live: Settings > Plug-Ins, turn on "Use VST3 Plug-in System Folders" (the plugin is in
+`~/Library/Audio/Plug-Ins/VST3`), then Rescan, or start Live again. LICHOMAT, an instrument, is then
+among the browser's Plug-Ins, under its vendor name LICHOMAT.
+
+The uninstall (Live quit too) removes the bundle only. The plugin's folder `BASE` (the start card
+and the logs) stays; remove `~/Library/Application Support/LICHOMAT Plugin` by hand to remove them
+too.
 
 ## Folders and logs
 
