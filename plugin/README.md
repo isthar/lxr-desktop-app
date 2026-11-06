@@ -174,13 +174,15 @@ engine per instance, the same outputs, parameters, latency and state.
   Parameter events the host schedules (`AudioUnitScheduleParameters`) reach the firmware at their
   frames, a ramp as its two ends; a value set (`AudioUnitSetParameter`) at its offset in the next
   render, the last one of a parameter in a render winning.
-- **Notes** are the host's MIDI Note Ons and Offs (`MusicDeviceMIDIEvent`) at their offsets (from any thread, through a lock-free queue the render thread empties; a reset drops the notes queued before it). The AU
-  declares no MIDI 2.0 protocol, so hosts send it MIDI 1.0. As for the VST3, other MIDI from the
-  host (CCs, Program Changes) does not reach the firmware.
+- **Notes** are the host's MIDI Note Ons and Offs (`MusicDeviceMIDIEvent`) at their offsets (from
+  any thread, through a lock-free queue the render thread empties; a reset drops the notes queued
+  before it). The AU declares no MIDI 2.0 protocol, so hosts send it MIDI 1.0. As for the VST3,
+  other MIDI from the host (CCs, Program Changes) does not reach the firmware.
 - **Sync** comes from the host callbacks: the beat and the tempo, the transport state (its second
   form if the host has it) with the cycle. A host without them gets notes but no sync.
 - **State:** the AU's ClassInfo holds the VST3's state bytes (`LCHS` and `LCHV`) under the key
-  `lichomat-state`, next to the keys every AU's state has. A ClassInfo given back wins over the values set before it that no render has taken yet; a value set after it reaches the firmware.
+  `lichomat-state`, next to the keys every AU's state has. A ClassInfo given back wins over the
+  values set before it that no render has taken yet; a value set after it reaches the firmware.
 - **Latency** is the VST3's, with the host's maximum frames per render
   (`kAudioUnitProperty_MaximumFramesPerSlice`) as the largest block. **Offline** rendering
   (`kAudioUnitProperty_OfflineRender`, Logic's bounce) waits for the engine as the VST3's offline
