@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 06:23",
+    "updated": "2026-11-06 06:40",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (plan gotowy, wdrożenie)",
     "branch": "timing-core",
-    "head": "34aba07",
+    "head": "fe2d527",
     "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.4 grupy A–D, potem E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T06:23:00+01:00",
-    "now": "E9.4 grupa A: lekki przegląd z mutantami (od 06:23)"
+    "updated_at": "2026-11-06T06:40:00+01:00",
+    "now": "E9.4: luki z przeglądu A, potem grupa B (zad. 5–6: 36 parametrów, odczyt wartości z firmware), implementacja (od 06:40)"
   },
   "epics": [
     {
@@ -1051,22 +1051,22 @@
     {
       "id": "E9.32",
       "epic": "E9",
-      "status": "w toku",
-      "title": "Wtyczka E9.4 zad. 2: konwerter częstotliwości na 2 albo 4 kanały naraz",
+      "status": "zrobione",
+      "title": "Wtyczka E9.4 zad. 2: konwerter częstotliwości na 2 albo 4 kanały naraz (be9c4f1): cztery kanały naraz dają to samo co każda para osobno, 0 różnych ramek przy 44,1, 48 i 96 kHz",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.33",
       "epic": "E9",
-      "status": "w toku",
-      "title": "Wtyczka E9.4 zad. 3: pamięć wspólna w wersji 2: cztery kanały (oba wyjścia urządzenia) i tabela wartości z firmware; suma bit w bit jak w prototypie; silnik i wtyczka innej wersji odmawiają sobie nawzajem",
+      "status": "zrobione",
+      "title": "Wtyczka E9.4 zad. 3: pamięć wspólna w wersji 2 (0eed718): cztery kanały, suma bit w bit jak w prototypie, tabela wartości z firmware; silnik i wtyczka innej wersji odmawiają sobie nawzajem",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.34",
       "epic": "E9",
-      "status": "w toku",
-      "title": "Wtyczka E9.4 zad. 4: oba wyjścia silnika sprawdzone od końca do końca (plug_drive split, bit w bit z rendererem przy 44,1 i 48 kHz)",
+      "status": "zrobione",
+      "title": "Wtyczka E9.4 zad. 4: oba wyjścia silnika (e60ca6c): plug_drive split bit w bit z rendererem przy 44 140,625 Hz, przez konwerter przy 48 kHz różnica 0 LSB",
       "updated": "2026-11-06"
     },
     {
@@ -4774,6 +4774,11 @@
       "n": 648,
       "at": "2026-11-06 06:23",
       "text": "E9.31–E9.34 (grupa A): stan wyjściowy zgodny z planem; konwerter na 4 kanały (be9c4f1), pamięć wspólna w wersji 2 (0eed718), oba wyjścia silnika (e60ca6c) na plugin-v07. Oba wyjścia silnika bit w bit z rendererem (44 140,625 Hz) i przez konwerter przy 48 kHz (różnica 0 LSB); testy wtyczki 77/77 w Debug i Release, ostrzeżeń 0. Wszystkie liczby jak w planie."
+    },
+    {
+      "n": 649,
+      "at": "2026-11-06 06:40",
+      "text": "E9.32–E9.34: lekki przegląd grupy A zatwierdził kod (każdy plik bajt w bajt jak tekst planu; 25 mutantów). Znalazł jeden rzadki błąd: po zabiciu silnika w trakcie zapisu tabeli wartości kolejne silniki tej instancji nie raportowałyby wartości do końca jej życia. Poprawka i dwa brakujące testy (P3_shm_seqlock, P6_engine_refuses) idą osobnymi commitami przed zad. 5."
     }
   ]
 }

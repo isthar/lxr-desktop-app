@@ -5152,3 +5152,14 @@ Jeśli parametr nie działa: w logu instancji (`~/Library/Application Support/LI
 
 (Filled in during execution: measured values that differ from this plan, review findings and their fixes, tracker notes.)
 
+### Group A (Tasks 1–4), 2026-11-06
+
+- **Task 1 (E9.31):** as planned. PLUGIN-CHECK 72/72 in Debug and Release, 0 warnings; EMU-CHECK 353 (`R5_dev_input` skips by design: it needs the microphone permission); CHECK 135 and 353, `== compiler warnings: 0`, `memory: ITCM 13744/16384 B (83.9%, free 2640)  DTCM 107396/131072 B (81.9%, rest is stack)  RAM 362792/393216 B (92.3%, free 30424)  image 343996/1015808 B (33.9%)`, `budget: DTCM+RAM 470188/471032 B, DTCM 107396/107900 B, RAM 362792/389120 B OK`; validator `Result: 47 tests passed, 0 tests failed`. EMU-CHECK's `tail -n 3` shows the skip list, not the count: read the count with grep.
+- **Task 2 (E9.32) `be9c4f1`, Task 3 (E9.33) `0eed718`, Task 4 (E9.34) `e60ca6c`:** every number as planned (T 73, 75, 77; M3, M4 exactly). One edit did not apply as written: `plug_shm.h` edit 1 of 7, whose old text ends at "two processes." with a newline where the file's line goes on; applied without the newline, same wording.
+- **Light review A:** approved; every file byte for byte the plan's text re-applied. 25 mutants; the survivors:
+  - M4 (the writer's odd count `q + 1` → `q + 2`) and M6 (the reader's re-check → `return 1`): no test of the seqlock under concurrent writes;
+  - with them a real fault (Minor): `plug_valuesWrite()` took the count it found as even, and nothing resets it for a new engine, so an engine killed between its two stores left every later engine's tables unreadable (`plug_valuesRead()` 0) for the instance's life. Fixed: the writer starts from the next even count;
+  - M23 (the engine ignoring `plug_shmCheck()`) and M24 (exit 1 instead of 2): the refusal was reasoned, not tested;
+  - M17, M18 (the converter's stride and output channel count): equivalent at these constants.
+  Gap commits before group B: `P3_shm_seqlock` (a killed writer's odd count; a reader beside a writer only ever accepts whole tables) and `P6_engine_refuses` (exit 2 on a version-1 header and on a version-1-sized object). Every later T is 2 higher than the plan's: Task 5 86, Task 6 87, Task 7 89, Task 8 93, Tasks 9–10 94.
+
