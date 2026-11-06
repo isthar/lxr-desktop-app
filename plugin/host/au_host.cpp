@@ -54,7 +54,8 @@
  *                     initialized again at another rate (the latency follows), the formats while
  *                     uninitialized (a second output element made after Out 1's format takes it, a
  *                     format of Out 1 alone sets both, a rate outside 8-384 kHz and a maximum of frames
- *                     per slice of 0 or above 8,192 refused when set), every writable
+ *                     per slice of 0 or above 8,192 refused when set, a stream of 1 or 4 channels
+ *                     refused), every writable
  *                     parameter's minimum, maximum and default set and scheduled and read back, the
  *                     Engine refusing a set, a value outside a parameter's range or between its steps
  *                     set and scheduled and read back as the device takes it (clamped, rounded), a
@@ -557,6 +558,14 @@ void runChecks (Instance& in, const Plan& p, const AuPlan& a)
 			                   == noErr
 			            && now == (UInt32)p.block,
 			        "a maximum of " + std::to_string (m) + " frames per slice taken");
+		}
+		for (UInt32 c : {1u, 4u})
+		{
+			AudioStreamBasicDescription g = f;
+			g.mChannelsPerFrame = c;
+			expect (AudioUnitSetProperty (in.au, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &g, sizeof g) != noErr
+			            && format (0).mChannelsPerFrame == 2,
+			        "a stream of " + std::to_string (c) + " channels taken");
 		}
 		expect (AudioUnitInitialize (in.au) == noErr, "AudioUnitInitialize after the formats");
 	}
