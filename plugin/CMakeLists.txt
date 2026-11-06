@@ -90,7 +90,7 @@ plugin_add_test(test_time IDS P5_time_native P5_time_integer P5_time_covering P5
 target_sources(plug_common PRIVATE common/plug_params.c)
 target_sources(plug_common_san PRIVATE common/plug_params.c)
 plugin_add_test(test_params IDS P12_params_table P12_params_midi P12_params_host P12_params_first_report P12_params_own_change
-    P12_params_restore P12_params_state)
+    P12_params_restore P12_params_state P12_params_new_engine)
 
 # --- lichomat-engine (Task 6) --------------------------------------------------------------
 target_sources(plug_common PRIVATE common/plug_spawn.c)

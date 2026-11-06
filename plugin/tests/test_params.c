@@ -179,7 +179,7 @@ TEST(P12_params_new_engine)
 	plug_paramsEngine(&ps, 10000);
 	ASSERT_EQ(fw[I_VOL1], 127);
 	ASSERT_EQ(plug_paramsReport(&ps, fw, 10000, 10000, CH, out, 0, 16), 1);
-	ASSERT_TRUE(out[0].offset == 0 && out[0].n == 3 && out[0].b[0] == 0xB3 && out[0].b[1] == 89 && out[0].b[2] == 40);
+	ASSERT_TRUE(out[0].offset == 0 && out[0].len == 3 && out[0].b[0] == 0xB3 && out[0].b[1] == 89 && out[0].b[2] == 40);
 	ASSERT_TRUE(ps.p[I_VOL1].sent == 40 && ps.p[I_VOL1].sentFrame == 10000);
 }
 
