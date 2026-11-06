@@ -19,6 +19,8 @@
  * Its own plan commands:
  *   pull2 START END   render Out 2 only in the blocks from frame START to frame END
  *   outputs 1         take one output element: Out 1 alone
+ *   noalloc           kAudioUnitProperty_ShouldAllocateBuffer 0 on every output element before
+ *                     AudioUnitInitialize: the AU renders into the host's buffers only
  *   offline FRAME 0|1 set kAudioUnitProperty_OfflineRender of every instance at FRAME, while it plays
  *   ramp FRAME ID FROM TO FRAMES   a scheduled ramp of parameter ID from FROM to TO (its AU values,
  *                     the device's numbers) over FRAMES frames from FRAME, given in FRAME's block (the
@@ -78,7 +80,7 @@ struct AuPlan
 	std::vector<RampCmd> ramps;
 	std::vector<std::pair<uint64_t, UInt32>> offline;
 	UInt32 outputs = 2;
-	bool info = false, checks = false;
+	bool info = false, checks = false, noalloc = false;
 };
 
 /* the transport of the block being rendered, for the host callbacks */
@@ -352,6 +354,12 @@ void open (Instance& in, AudioComponent comp, const AudioComponentDescription& d
 	f.mBitsPerChannel = 32;
 	for (UInt32 b = 0; b < a.outputs; b++)
 		set (in, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, b, &f, sizeof f, "StreamFormat");
+	if (a.noalloc)
+	{
+		const UInt32 no = 0;
+		for (UInt32 b = 0; b < a.outputs; b++)
+			set (in, kAudioUnitProperty_ShouldAllocateBuffer, kAudioUnitScope_Output, b, &no, sizeof no, "ShouldAllocateBuffer");
+	}
 	const UInt32 maxFrames = (UInt32)p.block;
 	set (in, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &maxFrames, sizeof maxFrames,
 	     "MaximumFramesPerSlice");
@@ -592,6 +600,8 @@ int main (int argc, char** argv)
 			ok = !!(s >> a.outputs) && (a.outputs == 1 || a.outputs == 2);
 		else if (cmd == "info")
 			a.info = true;
+		else if (cmd == "noalloc")
+			a.noalloc = true;
 		else if (cmd == "checks")
 			a.checks = true;
 		else

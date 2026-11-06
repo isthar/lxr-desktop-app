@@ -25,6 +25,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <thread>
 #include <vector>
 
@@ -96,7 +97,7 @@ public:
 			if (Output (b).GetStreamFormat ().mSampleRate != rate)
 				return kAudioUnitErr_FormatNotSupported;
 		maxFrames = GetMaxFramesPerSlice ();
-		spare.assign (2 * (size_t)maxFrames, 0.0f);
+		own.assign (4 * (size_t)maxFrames, 0.0f);	/* here, not on the render thread */
 		OSStatus r = setUp ();
 		if (r != noErr)
 			return r;
@@ -410,6 +411,7 @@ public:
 	{
 		if (NeedsToRender (ts))
 			render (bus, n);
+		deliver (bus, n);
 		if (bus == 1)
 			plug_auPulled (&buses);
 		return noErr;
@@ -586,19 +588,8 @@ private:
 		}
 		float* ch[2][2];
 		for (UInt32 b = 0; b < 2; b++)
-		{
-			if (b < outs)
-			{
-				AudioBufferList& l = b == bus ? Output (b).GetBufferList () : Output (b).PrepareBuffer (n);
-				ch[b][0] = static_cast<float*> (l.mBuffers[0].mData);
-				ch[b][1] = static_cast<float*> (l.mBuffers[1].mData);
-			}
-			else
-			{
-				ch[b][0] = spare.data ();
-				ch[b][1] = spare.data () + maxFrames;
-			}
-		}
+			channelsOf (b, bus, n, outs, ch[b]);
+		heldFrames = n;
 		hostPoints (n);
 		ProcessContext ctx;
 		hostContext (ctx);
@@ -626,6 +617,55 @@ private:
 		outParams.clear ();
 	}
 
+	float* ownChannel (UInt32 b, UInt32 c) noexcept { return own.data () + (2 * b + c) * (size_t)maxFrames; }
+
+	/* Where output element b's frames of a render go, on the first pull of a time stamp (bus's). The SDK prepared the
+	 * pulled element's buffers (its cache, or the host's with one element); another element renders into its cache,
+	 * which its later pull copies (AUBase.h:658-683). An element the host told not to allocate one
+	 * (ShouldAllocateBuffer 0), whose buffers come with each pull, renders into the AU's own cache, which every pull of
+	 * it copies (deliver()); so does Out 2 when the host took one element, and it is not given. Only the SDK's calls
+	 * that return an error, none that throws (RenderBus() is noexcept) */
+	void channelsOf (UInt32 b, UInt32 bus, UInt32 n, UInt32 outs, float** ch) noexcept
+	{
+		held[b] = false;
+		ch[0] = ownChannel (b, 0);
+		ch[1] = ownChannel (b, 1);
+		if (b >= outs)
+			return;
+		auto el = Outputs ().GetElementOrError<ausdk::AUOutputElement> (b);
+		if (!el)
+			return;
+		if (!el->WillAllocateBuffer ())
+		{
+			held[b] = true;
+			return;
+		}
+		auto l = b == bus ? el->GetBufferListOrError () : el->PrepareBufferOrError (n);
+		if (l && l->mNumberBuffers >= 2)
+		{
+			ch[0] = static_cast<float*> (l->mBuffers[0].mData);
+			ch[1] = static_cast<float*> (l->mBuffers[1].mData);
+		}
+	}
+
+	/* a pull of an element whose frames wait in the AU's own cache: into the buffers the host gave for it (a null
+	 * channel left as it is) */
+	void deliver (UInt32 bus, UInt32 n) noexcept
+	{
+		if (bus > 1 || !held[bus])
+			return;
+		auto el = Outputs ().GetElementOrError<ausdk::AUOutputElement> (bus);
+		if (!el)
+			return;
+		auto l = el->GetBufferListOrError ();
+		if (!l || l->mNumberBuffers < 2)
+			return;
+		const UInt32 k = n < heldFrames ? n : heldFrames;
+		for (UInt32 c = 0; c < 2; c++)
+			if (void* to = l->mBuffers[c].mData)
+				memcpy (to, ownChannel (bus, c), k * sizeof (float));
+	}
+
 	/* off the render thread: the host's listeners learn of each value the processor reported */
 	void notifyLoop ()
 	{
@@ -648,7 +688,11 @@ private:
 	bool offline = false;
 	bool out2 = false;					/**< the processor's Out 2 is active (the render thread's) */
 	plug_auBuses_t buses {0, 0};		/**< the render thread's */
-	std::vector<float> spare;			/**< Out 2's buffers when the host took one output element */
+	/** the AU's own cache, two channels of the maximum frames per element: an element's frames when the host gives
+	 * its buffers with each pull (ShouldAllocateBuffer 0), and Out 2's when the host took one element */
+	std::vector<float> own;
+	bool held[2] {};					/**< the element's frames of this time stamp are in own (the render thread's) */
+	UInt32 heldFrames = 0;
 	lichomat::AuEvents events;
 	lichomat::AuParamChanges inParams, outParams;
 	/** the host's last set of each parameter: a generation (24 bits), the offset (24), the value (8) */

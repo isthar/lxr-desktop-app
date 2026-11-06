@@ -2293,6 +2293,22 @@ def P13_au_offline_switch(t):
     check(on in (note + lat[0], note + lat[0] - 1), 'the note at %r' % on)
 
 
+@case
+def P13_au_noalloc(t):
+    # A host that renders into its own buffers and tells the AU not to allocate any (ShouldAllocateBuffer 0 on both
+    # output elements before AudioUnitInitialize): the AU keeps the frames of the element not pulled in a cache of its
+    # own until that element's pull, and plays as it does with buffers of its own, byte for byte: Out 1 alone, Out 1 and
+    # Out 2 every block, and Out 2 rendered only from A to B (P13_au_out2_pull's)
+    A, B = 100096, 300032
+    for name, extra in (('one', []), ('both', ['bus2']), ('pull', ['pull2 %d %d' % (A, B)])):
+        au_host(t, au_plan(t, name + '.txt', TIMELINE + extra + ['out ' + t.path(name + '.wav')]))
+        au_host(t, au_plan(t, name + '-na.txt', TIMELINE + extra + ['noalloc', 'out ' + t.path(name + '-na.wav')]))
+        for f in [''] + (['-out2'] if extra else []):
+            d = same_files(t.path(name + f + '.wav'), t.path(name + '-na' + f + '.wav'))
+            print('%s%s: without the AU\'s buffers %s' % (name, f, 'the same' if d is None else d))
+            check(d is None, '%s%s without the AU\'s buffers %s' % (name, f, d))
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
