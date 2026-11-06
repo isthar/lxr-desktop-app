@@ -9,13 +9,16 @@ the repository.
 
 # LICHOMAT plugin (prototype)
 
-A VST3 instrument for Ableton Live on macOS with Apple silicon that plays LICHOMAT, unofficial
-custom firmware for the Erica Synths LXR-02: the same firmware code as on the device, run by the
+A VST3 and Audio Unit instrument for Ableton Live, Logic and other hosts on macOS with Apple
+silicon that plays LICHOMAT, unofficial custom firmware for the Erica Synths LXR-02: the same firmware code as on the device, run by the
 emulator's virtual device (`emu/`). It is an unofficial emulation, not a product of Erica Synths,
 and not affiliated with, approved or supported by the maker of the device.
 
 ## What it does
 
+- **Two formats, one plugin:** `LICHOMAT.vst3` and `LICHOMAT.component`, an Audio Unit v2
+  instrument (below, "The Audio Unit"). Both are the same processor, engine, outputs, parameters
+  and state; a set's state from one opens in the other.
 - **One engine process per instance.** The plugin (`LICHOMAT.vst3`) is a thin layer in the host's
   process; `Contents/Helpers/lichomat-engine` runs the firmware. They share memory (an event ring,
   an audio ring of the device's four channels and a table of the firmware's parameter values) and
@@ -61,36 +64,47 @@ source tools/env.sh
 plugin/tools/plugin_check.sh         # Debug with UBSan and Release, every test, 0 warnings
 ```
 
-The bundle is then `build/plugin-release/VST3/Release/LICHOMAT.vst3`. The build needs no network:
-the part of the VST 3 SDK it uses is in `plugin/third_party/vst3sdk/`.
+The bundles are then `build/plugin-release/VST3/Release/LICHOMAT.vst3` and
+`build/plugin-release/AU/LICHOMAT.component`. The build needs no network and no Xcode: the parts of
+the VST 3 SDK and of Apple's AudioUnitSDK it uses are in `plugin/third_party/vst3sdk/` and
+`plugin/third_party/AudioUnitSDK/`, each pinned by its `SHA256SUMS`.
 
 ## Install and uninstall
 
-Quit Live first: the script refuses while a `lichomat-engine` runs (Live with the plugin in a set).
-From the repository's root:
+Quit Live and Logic first: the script refuses while a `lichomat-engine` runs (a host with the
+plugin in a set). From the repository's root:
 
 ```bash
-plugin/tools/install_plugin.sh                 # into ~/Library/Audio/Plug-Ins/VST3
-plugin/tools/install_plugin.sh --uninstall     # removes ~/Library/Audio/Plug-Ins/VST3/LICHOMAT.vst3
-plugin/tools/install_plugin.sh --help          # prints the destination, touches nothing
+plugin/tools/install_plugin.sh                 # into ~/Library/Audio/Plug-Ins/VST3 and .../Components
+plugin/tools/install_plugin.sh --uninstall     # removes LICHOMAT.vst3 and LICHOMAT.component there
+plugin/tools/install_plugin.sh --help          # prints the destinations, touches nothing
 ```
 
-The install builds the Release bundle (the build's output in `build/plugin-release.install.log`),
-copies it to a temporary folder and checks it there: its ad hoc signature with
-`codesign --verify --deep --strict` and the SDK's validator (its `Result:` line is printed). Only
-a bundle that passes replaces an earlier `LICHOMAT.vst3` in the destination (a folder given as the
-first argument, or `LICHOMAT_VST3_DIR`, else `~/Library/Audio/Plug-Ins/VST3`); on any failure it
-prints `install_plugin: FAILED (...), <destination> is as it was; see <log>` and the earlier bundle
-stays. An unknown option stops it before it builds anything. If the plugin has no start card yet it
-puts the `init` fixture (four on the floor on all seven voices) into `BASE/Card`.
+The install builds the Release bundles (the build's output in `build/plugin-release.install.log`),
+copies them to a temporary folder and checks them there: their ad hoc signatures with
+`codesign --verify --deep --strict` and the VST 3 SDK's validator (its `Result:` line is printed).
+Then the component replaces an earlier `LICHOMAT.component` in `LICHOMAT_COMPONENT_DIR`, else
+`~/Library/Audio/Plug-Ins/Components`, and Apple's validator runs on it there, the only place it can
+find it: `auval -v aumu Lcht Lchm` (its `AU VALIDATION SUCCEEDED.` line is printed; if it does not
+find the new component yet, the script restarts the system's `AudioComponentRegistrar` and asks
+again once). A component that fails is taken out and the earlier one put back. Only then does the
+VST3 bundle replace an earlier `LICHOMAT.vst3` in the destination (a folder given as the first
+argument, or `LICHOMAT_VST3_DIR`, else `~/Library/Audio/Plug-Ins/VST3`). On any failure it prints
+`install_plugin: FAILED (...), ...; see <log>`, saying which bundle is as it was, and the earlier
+bundles stay. An unknown option stops it before it builds anything. If the plugin has no start card
+yet it puts the `init` fixture (four on the floor on all seven voices) into `BASE/Card`.
 
 In Live: Settings > Plug-Ins, turn on "Use VST3 Plug-in System Folders" (the plugin is in
 `~/Library/Audio/Plug-Ins/VST3`), then Rescan, or start Live again. LICHOMAT, an instrument, is then
 among the browser's Plug-Ins, under its vendor name LICHOMAT.
 
-The uninstall (Live quit too) removes the bundle only. The plugin's folder `BASE` (the start card
-and the logs) stays; remove `~/Library/Application Support/LICHOMAT Plugin` by hand to remove them
-too.
+In Logic: Logic checks new Audio Units when it starts (Settings > Plug-in Manager lists LICHOMAT
+under its manufacturer LICHOMAT); the instrument is then in a software instrument track's menu,
+AU Instruments > LICHOMAT > LICHOMAT, as Stereo or Multi-Output.
+
+The uninstall (Live and Logic quit too) removes the two bundles only. The plugin's folder `BASE`
+(the start card and the logs) stays; remove `~/Library/Application Support/LICHOMAT Plugin` by hand
+to remove them too.
 
 ## Folders and logs
 
@@ -144,6 +158,36 @@ Shuffle and the reverb's size are not among them: the firmware sets them only fr
 not over MIDI. A value the host gives settles within a quarter of a second; a change of the
 firmware's own in that time (a kit loaded just after an automation point) reaches the host then.
 
+## The Audio Unit
+
+`LICHOMAT.component` is an AU v2 instrument of type `aumu`, subtype `Lcht`, manufacturer `Lchm`,
+"LICHOMAT: LICHOMAT", built on Apple's AudioUnitSDK around the VST3's processor (`au/`): the same
+engine per instance, the same outputs, parameters, latency and state.
+
+- **Out 1 and Out 2** are its two output elements. AU v2 has no bus activation: Out 2 counts as
+  used while the host renders it. Until then, and from two render cycles after the host stops,
+  Out 1 is the sum of both outputs, as the VST3's Out 1 before Out 2 is activated. A host may also
+  take one output element (Out 1 alone, always the sum).
+- **Parameters** have the VST3's ids, and their values are the device's numbers: the pattern
+  1-64, a pan -63..64, a voice's output St1 ... FX by name. A value the firmware changes by itself
+  becomes the parameter's value at once and the host's listeners hear of it within 20 ms.
+  Parameter events the host schedules (`AudioUnitScheduleParameters`) reach the firmware at their
+  frames, a ramp as its two ends; a value set (`AudioUnitSetParameter`) at its offset in the next
+  render, the last one of a parameter in a render winning.
+- **Notes** are the host's MIDI Note Ons and Offs (`MusicDeviceMIDIEvent`) at their offsets (from any thread, through a lock-free queue the render thread empties; a reset drops the notes queued before it). The AU
+  declares no MIDI 2.0 protocol, so hosts send it MIDI 1.0. As for the VST3, other MIDI from the
+  host (CCs, Program Changes) does not reach the firmware.
+- **Sync** comes from the host callbacks: the beat and the tempo, the transport state (its second
+  form if the host has it) with the cycle. A host without them gets notes but no sync.
+- **State:** the AU's ClassInfo holds the VST3's state bytes (`LCHS` and `LCHV`) under the key
+  `lichomat-state`, next to the keys every AU's state has. A ClassInfo given back wins over the values set before it that no render has taken yet; a value set after it reaches the firmware.
+- **Latency** is the VST3's, with the host's maximum frames per render
+  (`kAudioUnitProperty_MaximumFramesPerSlice`) as the largest block. **Offline** rendering
+  (`kAudioUnitProperty_OfflineRender`, Logic's bounce) waits for the engine as the VST3's offline
+  mode does; the AU takes it before or after it is initialized.
+- The component is not sandbox safe: it starts a process and writes `BASE`. A sandboxed host runs
+  it out of its own process or not at all.
+
 ## Latency
 
 An event at host frame m sounds at frame m + the reported latency (one frame less on an odd
@@ -171,7 +215,7 @@ margin      = 128 host frames
 
 ## Known limits
 
-- macOS 13 or later on Apple silicon (arm64) only; VST3 only.
+- macOS 13 or later on Apple silicon (arm64) only; VST3 and AU v2 (no AU v3, no CLAP).
 - A prototype: its checks in Ableton Live (loading, sync, latency, state, freeze and export,
   dropouts, the two outputs and the parameters) are the owner's, and not all are done yet.
 - A jump of the transport (a loop's end, a locate while playing) reaches the firmware as Stop,
@@ -184,6 +228,9 @@ margin      = 128 host frames
 - A value the firmware changes by itself goes to the host as the plugin's own change; a host may
   take that as the user's (in Live, an automated parameter may then show its automation as
   overridden: the owner's check P10).
+- The AU's latency counts the host's maximum frames per render, which a host may set larger than
+  the blocks it renders (Logic's process buffer): the latency is then that much larger, and
+  compensated as any.
 - The first engine of an offline render (a bounce, an export or a freeze from a new activation)
   gets the set's values at the render's first frame, with the transport, and the firmware takes a
   few milliseconds to settle them: a note at that very frame can play at the card's level for 2-3 ms
@@ -200,16 +247,18 @@ margin      = 128 host frames
 | `common/` | C shared by the plugin, the engine and the tests: the shared memory, MIDI clock from a transport, time and latency, the parameters and their step with the firmware (`plug_params`), the card archive, starting the engine |
 | `engine/` | `lichomat-engine`: the renderer's prelude, the tier hook that feeds the events and reports the firmware's values, the resampler, the reads of the firmware's memory (`eng_fw.c`, its one file with firmware headers) |
 | `vst3/` | the VST3 processor, controller, factory, the engine link, the instance folders, a block's parameter changes as points (`plugin_points.h`) |
-| `host/` | `lichomat-plughost`, the test host on the SDK's hosting classes |
-| `tests/` | the unit tests (P3-P8, P12), `sdk_pin.py` (P2, the SDK's pin), `plugin_test.py` (P6, P7, P10, P11), its tools `plug_drive` (the engine without the plugin) and `plug_resample_wav` (the converter on a WAV), the real-time check `plug_rtcheck.c`, the licence gate `plugin_licence_gate.py` |
-| `tools/` | `plugin_check.sh` (the gate), `install_plugin.sh`, `vendor_vst3sdk.sh` |
+| `au/` | the Audio Unit: `au_unit.cpp` (a MusicDeviceBase around the VST3's processor), `au_lists.h` (its fixed event list and parameter changes), its `Info.plist.in`; `common/plug_au.c` holds its pure functions |
+| `host/` | `lichomat-plughost`, the test host on the SDK's hosting classes, and `lichomat-auhost`, the AU's, which loads the component into its own process only; `host_plan.h`, what they share |
+| `tests/` | the unit tests (P3-P8, P12, P13), `sdk_pin.py` (P2, the SDKs' pins), `plugin_test.py` (P6, P7, P10, P11, P13), its tools `plug_drive` (the engine without the plugin) and `plug_resample_wav` (the converter on a WAV), the real-time check `plug_rtcheck.c`, the licence gate `plugin_licence_gate.py` |
+| `tools/` | `plugin_check.sh` (the gate), `install_plugin.sh`, `vendor_vst3sdk.sh`, `vendor_ausdk.sh` |
 | `third_party/vst3sdk/` | the VST 3 SDK 3.8.1 (build 84), the part the plugin builds with, pinned by `SHA256SUMS` |
+| `third_party/AudioUnitSDK/` | Apple's AudioUnitSDK 1.4.0, its headers, sources and licence, pinned by `SHA256SUMS` |
 
 ## Licence and source
 
 GPL-3.0-only with the additional permission and terms in `NOTICE.md`, as the rest of LICHOMAT;
-`LICENSE` and `NOTICE.md` are also in the bundle's `Contents/Resources/`. The corresponding source
-of a build is this repository at the commit it was built from, the vendored SDK included:
+`LICENSE` and `NOTICE.md` are also in the bundles' `Contents/Resources/`. The corresponding source
+of a build is this repository at the commit it was built from, the vendored SDKs included:
 `https://github.com/isthar/lxr-desktop-app`, branch `plugin-v07` (the plugin with LICHOMAT 0.7; branch
 `plugin` has it with 0.6). The bundle's engine names that commit:
 
@@ -217,15 +266,17 @@ of a build is this repository at the commit it was built from, the vendored SDK 
 ~/Library/Audio/Plug-Ins/VST3/LICHOMAT.vst3/Contents/Helpers/lichomat-engine --version
 ```
 
-prints, after its name, `Runs LICHOMAT 0.7. Built from commit <12 hex digits>.` If you received
+prints, after its name, `Runs LICHOMAT 0.7. Built from commit <12 hex digits>.` (the component's
+`Contents/Helpers/lichomat-engine` the same). If you received
 the plugin without its source, ask the person who gave it to you for that commit, or build it from
 the repository yourself.
 
-Third-party code, each with its notice in the bundle's `Contents/Resources/`:
+Third-party code, each with its notice in the bundles' `Contents/Resources/`:
 
-| Code | Licence | In the repository | In the bundle |
+| Code | Licence | In the repository | In the bundles |
 |---|---|---|---|
-| the VST 3 SDK (the plugin and the test host), Steinberg Media Technologies GmbH | MIT | `plugin/third_party/vst3sdk/LICENSE.txt` | `VST3-SDK-LICENSE.txt` |
+| the VST 3 SDK (the plugin, the AU's processor and the test hosts), Steinberg Media Technologies GmbH | MIT | `plugin/third_party/vst3sdk/LICENSE.txt` | `VST3-SDK-LICENSE.txt` |
+| AudioUnitSDK (the AU), Apple Inc. | Apache-2.0 | `plugin/third_party/AudioUnitSDK/LICENSE.txt` | `AudioUnitSDK-LICENSE.txt` (the component only) |
 | Arm Optimized Routines (the engine's maths, `emu/libm/`), Arm Limited | MIT OR Apache-2.0 WITH LLVM-exception | `emu/libm/LICENSE` | `LICENSE.arm-optimized-routines` |
 | FatFs `ff.h` and `integer.h` (the firmware's card), ChaN | ChaN's FatFs licence | the first 18 lines of `Middlewares/Third_Party/FatFs/src/ff.h` | `LICENSE.fatfs` |
 

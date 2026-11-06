@@ -305,5 +305,5 @@ set_tests_properties(P13_au_kill P13_au_params_restart P13_au_notify P13_au_rt P
     PROPERTIES RUN_SERIAL TRUE)	# paced
 
 # --- the licence gate and the name scan (Task 10) ---------------------------------------------
-add_test(NAME P11_licence COMMAND ${PLUGIN_HOST_TEST} P11_licence)
+add_test(NAME P11_licence COMMAND ${PLUGIN_AU_TEST} P11_licence)
 set_tests_properties(P11_licence PROPERTIES TIMEOUT 600 LABELS plugin)

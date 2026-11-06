@@ -2628,14 +2628,15 @@ def P13_au_offline_between(t):
 @case
 def P11_licence(t):
     # the licence gate over the plugin's build (plugin_licence_gate.py): every source the build reads GPL-3.0-only or
-    # allowed (the vendored VST 3 SDK, MIT), the main.h overlay on every compile command but the SDK's, the bundle's
-    # files with the licences and notices in it, and the name scan of the bundle's two binaries, the built engine, the
-    # test host, plug_drive and the real-time check
-    contents = os.path.join(t.a.bundle, 'Contents')
-    binaries = [os.path.join(contents, 'MacOS', 'LICHOMAT'), os.path.join(contents, 'Helpers', 'lichomat-engine'),
-                t.a.engine, t.a.host, t.a.drive, t.a.rtcheck]
+    # allowed (the vendored VST 3 SDK, MIT; the AudioUnitSDK, Apache-2.0), the main.h overlay on every compile command
+    # but the SDKs', the files of the bundle and of the component with the licences and notices in them, and the name
+    # scan of their binaries, the built engine, the test hosts, plug_drive and the real-time check
+    binaries = []
+    for b in (t.a.bundle, t.a.component):
+        binaries += [os.path.join(b, 'Contents', 'MacOS', 'LICHOMAT'), os.path.join(b, 'Contents', 'Helpers', 'lichomat-engine')]
+    binaries += [t.a.engine, t.a.host, t.a.auhost, t.a.drive, t.a.rtcheck]
     out = t.run([sys.executable, os.path.join(t.a.root, 'plugin', 'tests', 'plugin_licence_gate.py'), '--bundle',
-                 t.a.bundle, t.a.root, t.a.build] + binaries).stdout
+                 t.a.bundle, '--component', t.a.component, t.a.root, t.a.build] + binaries).stdout
     print(out.strip())
 
 

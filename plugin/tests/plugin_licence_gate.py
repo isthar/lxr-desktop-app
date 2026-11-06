@@ -13,12 +13,15 @@ emulator's M21 (emu/tests/licence_gate.py) with these additions:
   repository's LICENSE and NOTICE.md, the VST 3 SDK's MIT
   licence (VST3-SDK-LICENSE.txt), and those of the code the engine links from the emulator, as the
   app's bundle has them: Arm Optimized Routines' (LICENSE.arm-optimized-routines, emu/libm/LICENSE)
-  and FatFs' (LICENSE.fatfs, the first 18 lines of ff.h).
+  and FatFs' (LICENSE.fatfs, the first 18 lines of ff.h);
+- with --component, the same of the AU's LICHOMAT.component: the AU and the engine, Info.plist, and
+  the same notices with the AudioUnitSDK's Apache-2.0 licence (AudioUnitSDK-LICENSE.txt) among them.
 
-    plugin_licence_gate.py [--bundle LICHOMAT.vst3] <repository root> <build dir> <binary>...
+    plugin_licence_gate.py [--bundle LICHOMAT.vst3] [--component LICHOMAT.component]
+                           <repository root> <build dir> <binary>...
 
 The binaries are name-scanned as M21 does: the bundle's Contents/MacOS/LICHOMAT and
-Contents/Helpers/lichomat-engine, the engine, the test host and the test tools.
+Contents/Helpers/lichomat-engine, the component's, the engine, the test hosts and the test tools.
 
 Copyright (C) 2026 Tomasz Krzywicki
 SPDX-License-Identifier: GPL-3.0-only
@@ -48,7 +51,10 @@ BUNDLE = {
     'Contents/Resources/LICENSE.fatfs': (os.path.join('Middlewares', 'Third_Party', 'FatFs', 'src', 'ff.h'), 18),
     'Contents/_CodeSignature/CodeResources': None,
 }
-# the bundle's texts that the host shows or reads: they name no maker
+# the AU's component: the VST3 bundle's notices and the AudioUnitSDK's licence, no moduleinfo.json
+COMPONENT = dict((f, src) for f, src in BUNDLE.items() if f != 'Contents/Resources/moduleinfo.json')
+COMPONENT['Contents/Resources/AudioUnitSDK-LICENSE.txt'] = AUSDK + 'LICENSE.txt'
+# the bundles' texts that the host shows or reads: they name no maker
 TEXTS = ('Contents/Info.plist', 'Contents/Resources/moduleinfo.json')
 
 
@@ -78,8 +84,8 @@ def check_overlay(root, build, errors):
     return checked
 
 
-def check_bundle(g, root, bundle, errors):
-    """the bundle's files, its licences and notices, and the names in its texts"""
+def check_bundle(g, root, bundle, errors, files=BUNDLE):
+    """the bundle's files (files: BUNDLE or COMPONENT), its licences and notices, and the names in its texts"""
     found = set()
     for d, dirs, names in os.walk(bundle):
         rel = os.path.relpath(d, bundle).replace(os.sep, '/')
@@ -90,11 +96,11 @@ def check_bundle(g, root, bundle, errors):
                 errors.append('the bundle\'s %s is a symbolic link' % os.path.join(rel, n).replace(os.sep, '/'))
         for n in names:
             found.add(os.path.relpath(os.path.join(d, n), bundle).replace(os.sep, '/'))
-    for f in sorted(found - set(BUNDLE)):
+    for f in sorted(found - set(files)):
         errors.append('the bundle holds %s, which is not one of its files' % f)
-    for f in sorted(set(BUNDLE) - found):
+    for f in sorted(set(files) - found):
         errors.append('the bundle has no %s' % f)
-    for f, src in sorted(BUNDLE.items()):
+    for f, src in sorted(files.items()):
         if src is None or f not in found:
             continue
         path, lines = src if isinstance(src, tuple) else (src, None)
@@ -106,6 +112,9 @@ def check_bundle(g, root, bundle, errors):
     with open(os.path.join(root, SDK, 'LICENSE.txt')) as f:
         if not f.readline().startswith('MIT License'):
             errors.append('%sLICENSE.txt is not the MIT licence' % SDK)
+    with open(os.path.join(root, AUSDK, 'LICENSE.txt')) as f:
+        if [l.strip() for l in f.readlines()[1:3]] != ['Apache License', 'Version 2.0, January 2004']:
+            errors.append('%sLICENSE.txt is not the Apache License 2.0' % AUSDK)
     for f in TEXTS:
         if f in found:
             with open(os.path.join(bundle, f), encoding='utf-8', errors='replace') as t:
@@ -117,9 +126,13 @@ def check_bundle(g, root, bundle, errors):
 
 def main():
     args = sys.argv[1:]
-    bundle = None
-    if len(args) > 1 and args[0] == '--bundle':
-        bundle, args = args[1], args[2:]
+    bundle = component = None
+    while len(args) > 1 and args[0] in ('--bundle', '--component'):
+        if args[0] == '--bundle':
+            bundle = args[1]
+        else:
+            component = args[1]
+        args = args[2:]
     if len(args) < 3:
         raise SystemExit(__doc__)
     root, build, binaries = args[0], args[1], args[2:]
@@ -128,14 +141,16 @@ def main():
     files = g.check_files(root, build, errors)
     commands = check_overlay(root, build, errors)
     held = check_bundle(g, root, bundle, errors) if bundle else 0
+    au = check_bundle(g, root, component, errors, COMPONENT) if component else 0
     g.check_names(root, build, binaries, errors)
     for e in errors:
         print('licence gate: ' + e)
     if errors:
         print('licence gate: %d errors' % len(errors))
         sys.exit(1)
-    print('licence gate: %d files, %d compile commands, %s and %d binaries pass'
-          % (files, commands, 'the bundle\'s %d files' % held if bundle else 'no bundle', len(binaries)))
+    print('licence gate: %d files, %d compile commands, %s, %s and %d binaries pass'
+          % (files, commands, 'the bundle\'s %d files' % held if bundle else 'no bundle',
+             'the component\'s %d files' % au if component else 'no component', len(binaries)))
 
 
 if __name__ == '__main__':
