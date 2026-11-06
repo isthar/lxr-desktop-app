@@ -266,7 +266,8 @@ void plug_audioWrite(plug_shm_t *s, const float *x, uint32_t frames)
 void plug_valuesWrite(plug_shm_t *s, uint64_t frame, const uint8_t *values, unsigned n, uint8_t channel,
 	uint8_t rxFilter)
 {
-	const uint64_t q = __atomic_load_n(&s->valuesSeq, __ATOMIC_RELAXED);
+	/* a killed writer may have left the count odd: the next write starts from the next even count */
+	const uint64_t q = (__atomic_load_n(&s->valuesSeq, __ATOMIC_RELAXED) + 1u) & ~(uint64_t)1u;
 	__atomic_store_n(&s->valuesSeq, q + 1u, __ATOMIC_RELAXED);
 	__atomic_thread_fence(__ATOMIC_RELEASE);
 	__atomic_store_n(&s->valuesFrame, frame, __ATOMIC_RELAXED);

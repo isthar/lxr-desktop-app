@@ -17,10 +17,13 @@
 #include <fcntl.h>
 #include <math.h>
 #include <poll.h>
+#include <pthread.h>
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "plug_shm.h"
@@ -240,6 +243,88 @@ TEST(P3_shm_values)
 	ASSERT_EQ(plug_valuesRead(s, &v), 0);
 	s->valuesSeq = 4;
 	ASSERT_EQ(plug_valuesRead(s, &v), 1);
+	munmap(s, sizeof *s);
+}
+
+typedef struct seqWriter
+{
+	plug_shm_t *s;
+	int done;
+	uint64_t writes;
+} seqWriter_t;
+
+static uint64_t nowMs(void)
+{
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return (uint64_t)t.tv_sec * 1000u + (uint64_t)t.tv_nsec / 1000000u;
+}
+
+/* frame k, every byte k & 0x7F, for about 200 ms */
+static void *seqWrite(void *arg)
+{
+	seqWriter_t *w = arg;
+	const uint64_t t0 = nowMs();
+	uint8_t v[PLUG_VALUES];
+	uint64_t k = 1;
+	do
+	{
+		for (unsigned i = 0; i < 64; i++, k++)
+		{
+			memset(v, (int)(k & 0x7Fu), sizeof v);
+			plug_valuesWrite(w->s, k, v, PLUG_VALUES, (uint8_t)(k & 0x7Fu), (uint8_t)(k & 0x7Fu));
+		}
+	} while (nowMs() - t0 < 200u);
+	w->writes = k - 1;
+	__atomic_store_n(&w->done, 1, __ATOMIC_RELEASE);
+	return NULL;
+}
+
+TEST(P3_shm_seqlock)
+{
+	/* (a) a writer killed between its two count stores left the count odd: the next engine on the
+	 * memory (the plugin's monitor reuses it) must still write complete tables */
+	plug_shm_t *s = anon();
+	plug_values_t v;
+	s->valuesSeq = 5;
+	const uint8_t a[3] = { 9, 8, 7 };
+	plug_valuesWrite(s, 777, a, 3, 2, 0x0C);
+	ASSERT_EQ(plug_valuesRead(s, &v), 1);
+	ASSERT_EQ(v.frame, 777);
+	ASSERT_EQ(v.values[0], 9);
+	ASSERT_EQ(v.values[1], 8);
+	ASSERT_EQ(v.values[2], 7);
+	ASSERT_EQ(v.values[3], 0xFF);
+	ASSERT_EQ(v.channel, 2);
+	ASSERT_EQ(v.rxFilter, 0x0C);
+	ASSERT_EQ(s->valuesSeq & 1u, 0);
+	munmap(s, sizeof *s);
+
+	/* (b) a writer thread and a reader: a table that is read is whole */
+	s = anon();
+	seqWriter_t w = { s, 0, 0 };
+	pthread_t th;
+	ASSERT_EQ(pthread_create(&th, NULL, seqWrite, &w), 0);
+	uint64_t reads = 0, ok = 0, bad = 0;
+	const uint64_t t0 = nowMs();
+	while (!__atomic_load_n(&w.done, __ATOMIC_ACQUIRE) && nowMs() - t0 < 5000u)
+	{
+		reads++;
+		if (!plug_valuesRead(s, &v))
+			continue;
+		ok++;
+		const uint8_t e = (uint8_t)(v.frame & 0x7Fu);
+		for (unsigned i = 0; i < PLUG_VALUES; i++)
+			if (v.values[i] != e)
+				bad++;
+		if (v.channel != e || v.rxFilter != e)
+			bad++;
+	}
+	ASSERT_EQ(pthread_join(th, NULL), 0);
+	fprintf(stderr, "P3_shm_seqlock: %llu writes, %llu reads, %llu successful, %llu torn\n", (unsigned long long)w.writes,
+		(unsigned long long)reads, (unsigned long long)ok, (unsigned long long)bad);
+	ASSERT_EQ(bad, 0);
+	ASSERT_TRUE(ok > 0);
 	munmap(s, sizeof *s);
 }
 
