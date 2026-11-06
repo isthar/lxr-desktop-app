@@ -257,7 +257,8 @@ public:
 	/* A host's set, from any thread: the value as the device takes it (plug_auPlain(): clamped to the range,
 	 * rounded to a step) goes to the AU's own (GetParameter()) and, as a point at its offset in the next render
 	 * cycle, to the processor (the last set of a parameter in a cycle wins: AU v2's SetParameter() is a value, not an
-	 * event). */
+	 * event). The slot first, then the AU's value: a render that has not seen the slot yet does not put a scheduled
+	 * value over this one (hostPoints()). The SDK's set cannot fail here: the constructor made every parameter */
 	OSStatus SetParameter (AudioUnitParameterID id, AudioUnitScope scope, AudioUnitElement element,
 	                       AudioUnitParameterValue value, UInt32 offset) noexcept override
 	{
@@ -265,12 +266,9 @@ public:
 		if (scope != kAudioUnitScope_Global || element != 0 || i < 0)
 			return kAudioUnitErr_InvalidParameter;	/* the Engine is read only */
 		const uint8_t plain = plug_auPlain ((unsigned)i, value);
-		const OSStatus r = MusicDeviceBase::SetParameter (id, scope, element, plug_auValue ((unsigned)i, plain), offset);
-		if (r != noErr)
-			return r;
 		const uint64_t at = offset > 0xFFFFFFu ? 0xFFFFFFu : offset;
 		slots[i].store (nextGen () << 40 | at << 8 | plain, std::memory_order_release);
-		return noErr;
+		return MusicDeviceBase::SetParameter (id, scope, element, plug_auValue ((unsigned)i, plain), offset);
 	}
 
 	/* scheduled events, on the render thread before the cycle they belong to: each one a point (a ramp
@@ -765,14 +763,18 @@ private:
 		scheduled = 0;
 		/* A parameter with scheduled events ends the cycle on its last point (in the order of the frames), as the
 		 * processor does: ScheduleParameter() gave the AU the value of the host's last call, which a set at a later
-		 * frame, or a ramp's end beyond the cycle, is not */
+		 * frame, or a ramp's end beyond the cycle, is not. But not one whose slot moved since the read above: a set
+		 * from another thread meanwhile is newer than this cycle and is the AU's value already (SetParameter() stores
+		 * the slot before the value); the next render gives it to the processor. A set between this load and the store
+		 * below is not seen, a window of a few instructions that no test can time */
 		for (int32 q = 0; q < inParams.getParameterCount (); q++)
 		{
 			IParamValueQueue* pq = inParams.getParameterData (q);
 			const int i = pq ? plug_paramIndex (pq->getParameterId ()) : -1;
 			int32 off = 0;
 			ParamValue v = 0.0;
-			if (i >= 0 && fromSchedule[i] && pq->getPoint (pq->getPointCount () - 1, off, v) == kResultOk)
+			if (i >= 0 && fromSchedule[i] && (uint32_t)(slots[i].load (std::memory_order_acquire) >> 40) == seen[i]
+			    && pq->getPoint (pq->getPointCount () - 1, off, v) == kResultOk)
 				Globals ()->SetParameterRT (pq->getParameterId (), plug_auValue ((unsigned)i, plug_paramValue ((unsigned)i, v)));
 		}
 	}
