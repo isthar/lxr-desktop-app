@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 03:04",
+    "updated": "2026-11-06 03:27",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Prototyp wtyczki gotowy (M21); v0.7 gotowe (M20)",
     "branch": "timing-core",
-    "head": "b347b63",
+    "head": "71ec573",
     "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie potem: E9.3 po Twoim P4, E9.4",
-    "updated_at": "2026-11-06T03:04:00+01:00",
-    "now": "E9.6: scalanie v0.7 do plugin-v07 i testy (od 03:04)"
+    "updated_at": "2026-11-06T03:27:00+01:00",
+    "now": "Zaparkowane: nic nie działa w tle"
   },
   "epics": [
     {
@@ -1030,8 +1030,8 @@
     {
       "id": "E9.6",
       "epic": "E9",
-      "status": "w toku",
-      "title": "Wtyczka z firmware v0.7 (szablony głośności, własne szablony): v0.7 scalone na osobnej gałęzi plugin-v07, wszystkie testy wtyczki, emulatora i firmware; gałąź plugin do Twojego testu zostaje bez zmian",
+      "status": "zrobione",
+      "title": "Wtyczka z firmware v0.7: gałąź plugin-v07 (728dfff, scalenie bez konfliktów), wszystkie testy: firmware 135, emulator 353, 41 nagrań wzorcowych, wtyczka 72/72, walidator 47/0; przez wtyczkę bit w bit jak renderer v0.7; demo z szablonem of8 na hihatach (build/wt-plugin-v07/build/demo-plugin-v07/). Ta sama tożsamość wtyczki w Live co plugin (zastąpi ją po instalacji); do wymiany po Twoich P1–P8",
       "updated": "2026-11-06"
     }
   ],
@@ -4662,6 +4662,11 @@
       "n": 644,
       "at": "2026-11-06 03:04",
       "text": "E9.6 start: v0.7 scalane do wtyczki na osobnej gałęzi plugin-v07 (worktree build/wt-plugin-v07), z pełnym zestawem testów. Gałąź plugin, którą rano zainstalujesz, zostaje bez zmian. Błąd fw 1.7 z appMain.c:671 (start nie sprawdza wyniku wczytania projektu) zostawiam na później: poprawka zmieniłaby zachowanie startu na pustej karcie."
+    },
+    {
+      "n": 645,
+      "at": "2026-11-06 03:27",
+      "text": "E9.6 zrobione: wtyczka z firmware v0.7 na gałęzi plugin-v07 (728dfff). Scalenie bez konfliktów; wszystkie testy przechodzą (firmware 135, emulator 353, 41 nagrań wzorcowych, wtyczka 72/72, walidator 47/0). Przez wtyczkę bit w bit jak renderer v0.7. Demo: hihat z szablonem of8 przez wtyczkę przy 48 kHz, akcenty w kolejności z tabeli (build/wt-plugin-v07/build/demo-plugin-v07/). Ta sama tożsamość w Live co wersja 0.6, więc po Twoich P1–P8 może ją po prostu zastąpić."
     }
   ]
 }
