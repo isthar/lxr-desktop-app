@@ -75,7 +75,7 @@ class T:
         self.run([self.a.render, '--card', card, '--bpm', 'mid', '--no-start', '--as-booted']
                  + (['--stereo', stereo] if stereo else []) + ['--seconds', str(seconds), '--events', script, '--out', out])
 
-    def drive(self, card, rate, block, script, frames, out, realtime=None, preroll=False, split=False):
+    def drive(self, card, rate, block, script, frames, out, realtime=None, preroll=False, split=False, values=None):
         cmd = [self.a.drive, self.a.engine, card, str(rate), str(block), script, str(frames), out]
         if realtime is not None:
             cmd += ['realtime', str(realtime)]
@@ -83,6 +83,8 @@ class T:
             cmd += ['preroll']
         if split:
             cmd += ['split']
+        if values:
+            cmd += ['values', values]
         line = self.run(cmd).stdout.strip()
         print(line)
         return parse_drive(line)
@@ -305,7 +307,8 @@ def P6_engine_objects(t):
     # that lichomat-render links
     eng = [o for o in ninja_inputs(t.a.build, 'lichomat-engine') if o.endswith('.o')]
     ren = set(ninja_inputs(t.a.build, 'emu/lichomat-render'))
-    own = [o for o in eng if o.startswith(('CMakeFiles/lichomat-engine.dir/', 'CMakeFiles/plug_common_san.dir/'))]
+    own = [o for o in eng if o.startswith(('CMakeFiles/lichomat-engine.dir/', 'CMakeFiles/plug_common_san.dir/',
+                                          'CMakeFiles/eng_fw.dir/'))]
     other = [o for o in eng if o not in own]
     print('the engine links %d objects: %d its own, %d of lichomat-render\'s' % (len(eng), len(own), len(set(other) & ren)))
     check(len(other) > 50 and any(o.endswith('/render_fw.c.o') for o in other), 'the emulator\'s objects: %r' % other)
@@ -633,6 +636,62 @@ def P7_engine_split(t):
         loud = sum(1 for x in a if abs(x) >= 4000)
         print('%s at %d Hz: %d frames, %d samples at 4,000 or more, the largest difference %d LSB' % (out, rate, frames, loud, worst))
         check(worst <= 2 and loud > 1000, '%s: the largest difference %d LSB' % (out, worst))
+
+
+# a script of the plugin's parameters as MIDI on channel 1 (the fixture cards' global channel, 0): Drum 1's volume
+# (CC 89) and filter (CC 38) and three voices' decays (CC 51, 53, 57), the DJ filter (NRPN 96) and the reverb level
+# (NRPN 98) at their frames, then the pattern (Program Change 1): the next pattern at once, played from the end of
+# the one that plays
+PARAM_SCRIPT = ['30000f usb B0 59 28', '52000f usb B0 26 30', '60000f usb B0 63 00 B0 62 60 B0 06 14',
+                '70000f usb B0 33 7F B0 35 7F B0 39 7F', '90000f usb B0 63 00 B0 62 62 B0 06 70', '200000f usb C0 01']
+
+
+def param_script(t, name, lines):
+    """write_script()'s script and lines merged, one line per frame"""
+    merged = {}
+    for l in open(write_script(t, name + '.base', None)).read().split('\n') + lines:
+        if l.strip():
+            f, rest = l.split(' usb ')
+            merged.setdefault(int(f[:-1]), []).append(rest)
+    p = t.path(name)
+    with open(p, 'w') as f:
+        f.write(''.join('%df usb %s\n' % (k, ' '.join(merged[k])) for k in sorted(merged)))
+    return p
+
+
+@case
+def P6_engine_params(t):
+    # The parameters reach the firmware as MIDI at their frames, as from an external controller: with PARAM_SCRIPT the
+    # engine is lichomat-render byte for byte, and the output differs from the script without them. The engine's
+    # values (plug_drive's values file) show each change within 512 frames of its frame: Drum 1's volume 40 from
+    # frame 30,000, its filter 48 from 52,000, the DJ filter 20 from 60,000, the reverb level 112 from 90,000 and
+    # the next pattern 1 from 200,000; the firmware's global channel is 0, its receive filter 15 (all)
+    script = param_script(t, 'script.txt', PARAM_SCRIPT)
+    plain = write_script(t, 'plain.txt')
+    frames = blocks_frames(6)
+    t.render(t.card('render'), script, 6, t.path('render.wav'))
+    t.render(t.card('plain'), plain, 6, t.path('plain.wav'))
+    s = t.drive(t.card('drive'), RATE_TEXT, 128, script, frames, t.path('drive.wav'), values=t.path('values.txt'))
+    check(s.get('late') == 0 and s.get('dropped') == 0, 'counters %r' % s)
+    d = same_files(t.path('render.wav'), t.path('drive.wav'))
+    check(d is None, 'the engine and the renderer %s' % d)
+    check(same_files(t.path('render.wav'), t.path('plain.wav')) is not None, 'the parameters changed nothing')
+    rows = []
+    for line in open(t.path('values.txt')):
+        w = line.split()
+        rows.append((int(w[0][:-1]), [int(v) for v in w[1:-4]], int(w[-3]), int(w[-1])))
+    print('%d changes of the values; the first at frame %d: %r, channel %d, rx %d' % (len(rows), rows[0][0], rows[0][1],
+                                                                                   rows[0][2], rows[0][3]))
+
+    def first(index, value, after):
+        return next((f for f, v, _, _ in rows if f >= after and v[index] == value), None)
+    seen = {'Drum 1 Volume': (1, 40, 30000), 'Drum 1 Filter': (13, 48, 52000), 'DJ Filter': (26, 20, 60000),
+            'Reverb Level': (27, 112, 90000), 'Pattern': (0, 1, 200000)}
+    for name, (i, v, at) in sorted(seen.items()):
+        f = first(i, v, at)
+        print('%s = %d: from frame %s (sent at %d)' % (name, v, f, at))
+        check(f is not None and f - at <= 512, '%s: %r' % (name, f))
+    check(rows[0][2] == 0 and rows[0][3] == 15, 'channel and filter %r' % (rows[0][2:],))
 
 
 # --- the bundle (Task 8) ----------------------------------------------------------------------

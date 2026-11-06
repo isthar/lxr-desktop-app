@@ -96,7 +96,13 @@ plugin_add_test(test_params IDS P12_params_table P12_params_midi P12_params_host
 target_sources(plug_common PRIVATE common/plug_spawn.c)
 # the renderer's direct calls: lichomat-render's own object of render_fw.c, with its flags (P-2,
 # P6_engine_objects)
-add_executable(lichomat-engine engine/eng_main.c engine/eng_run.c engine/eng_resample.c
+# the engine's reads of the firmware's memory (plan E9.4): the one file of the engine that includes
+# firmware headers, with the flags every such object has (emu_fw_headers), as render_fw.c
+add_library(eng_fw OBJECT engine/eng_fw.c)
+target_link_libraries(eng_fw PRIVATE emu_fw_headers)
+target_include_directories(eng_fw PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/engine")
+target_compile_options(eng_fw PRIVATE -Wall -Wextra -Werror)
+add_executable(lichomat-engine engine/eng_main.c engine/eng_run.c engine/eng_resample.c $<TARGET_OBJECTS:eng_fw>
     $<TARGET_OBJECTS:lichomat-render_fw> $<TARGET_OBJECTS:plug_common_san> ${PLUGIN_DEVICE_OBJECTS})
 target_include_directories(lichomat-engine PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/engine"
     "${LXR_ROOT}/emu/core" "${LXR_ROOT}/emu/render" "${LXR_ROOT}/emu/common" "${CMAKE_BINARY_DIR}")
@@ -128,7 +134,7 @@ function(plugin_py_tests)
     endforeach()
 endfunction()
 plugin_py_tests(P6_engine_version P6_engine_objects P6_engine_native P6_engine_blocks P6_engine_paced P6_engine_seed P6_engine_epoch
-    P6_engine_quit P6_engine_orphan P7_engine_resampled P7_engine_realtime P6_engine_split P7_engine_split)
+    P6_engine_quit P6_engine_orphan P7_engine_resampled P7_engine_realtime P6_engine_split P7_engine_split P6_engine_params)
 set_tests_properties(P6_engine_paced P7_engine_realtime PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
 plugin_py_tests(P6_engine_refuses)
 

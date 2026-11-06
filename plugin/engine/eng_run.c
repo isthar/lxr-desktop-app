@@ -27,6 +27,7 @@
 #include <unistd.h>
 
 #include "emu_core.h"
+#include "eng_fw.h"
 #include "eng_resample.h"
 #include "plug_time.h"
 #include "render_fw.h"
@@ -34,6 +35,8 @@
 #define ENG_C100 21600000ull	/* 100 ms, the renderer's settle (render_main.c:38) */
 #define ENG_AHEAD 66u			/* engine frames past now whose events the next hook may need */
 #define ENG_PACKETS 16u			/* USB-MIDI packets in one transfer (emu_core.h:143) */
+
+_Static_assert(PLUG_PARAM_COUNT <= PLUG_VALUES, "the shared memory holds every parameter's value");
 
 static struct
 {
@@ -105,6 +108,14 @@ static void eng_ring(void *ctx, const float *x, uint32_t frames)
 	plug_audioWrite(E.s, x, frames);
 }
 
+/* the firmware's values at host frame frame (plan E9.4): read from its memory (eng_fw.c) */
+static void eng_values(uint64_t frame)
+{
+	uint8_t v[PLUG_PARAM_COUNT], channel, rx;
+	eng_fwValues(v, &channel, &rx);
+	plug_valuesWrite(E.s, frame, v, PLUG_PARAM_COUNT, channel, rx);
+}
+
 static int eng_t0Due(uint64_t t)
 {
 	return t - E.preludeEnd >= ENG_C100 && (E.busyLast == 0 || t - E.busyLast > ENG_C100);
@@ -131,6 +142,7 @@ static void eng_sink(void *ctx, uint64_t t, const int16_t *o1, const int16_t *o2
 		plug_audioBegin(E.s, E.epoch);
 		plug_store(&E.s->epoch, E.epoch);
 		plug_store(&E.s->frontier, E.epoch);
+		eng_values(E.epoch);	/* before running: the plugin's first block of this engine has them */
 		plug_store(&E.s->state, PLUG_ENGINE_RUNNING);
 		E.phase = 2;
 		/* in real time only: a time-constraint thread that computes for longer than its share, as an
@@ -244,12 +256,13 @@ static void eng_waitFor(uint64_t need)
 static void eng_hook(void *ctx, uint64_t now, emu_hookReason_t why)
 {
 	(void)ctx;
-	(void)why;
 	if (E.phase != 2)
 		return;
 	const uint64_t need = plug_framesToCycles(ENG_AHEAD, PLUG_ENGINE_RATE) + (now - E.t0);
 	eng_waitFor(E.epoch + plug_framesCovering(need, E.rate));
 	eng_inject(plug_load(&E.s->hostFrames));
+	if (why == EMU_HOOK_BLOCK)
+		eng_values(E.epoch + plug_framesCovering(now - E.t0, E.rate));
 }
 
 /* --- the prelude ---------------------------------------------------------------------- */

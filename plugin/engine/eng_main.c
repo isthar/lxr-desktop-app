@@ -13,8 +13,8 @@
  * With --card, a missing or empty card folder is seeded first, by a process of its own: the
  * firmware powers on once per process (emu_firmware.c:66-74). A thread of its own ends the engine
  * when the plugin's process goes away, whatever the firmware's thread does. Exit codes: 0 the
- * plugin ended it or went away, 1 usage, 2 the card or the shared memory, 3 a firmware fault or a
- * fault signal, 4 the converter.
+ * plugin ended it or went away, 1 usage, 2 the card, the shared memory (another version's: plan
+ * E9.4) or the parameter table, 3 a firmware fault or a fault signal, 4 the converter.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -36,6 +36,7 @@
 #include <unistd.h>
 
 #include "emu_notices.h"
+#include "eng_fw.h"
 #include "eng_run.h"
 #include "plug_notices.h"
 #include "render_build.h"
@@ -197,6 +198,13 @@ int main(int argc, char **argv)
 	if (!eng_shm || plug_shmCheck(eng_shm, err, sizeof err) != 0)
 	{
 		fprintf(stderr, "lichomat-engine: %s\n", err);
+		return 2;
+	}
+	if (eng_fwCheck(err, sizeof err) != 0)
+	{
+		/* plan E9.4: a parameter the plugin would set is not the firmware's; reported, so not started again */
+		fprintf(stderr, "lichomat-engine: %s\n", err);
+		plug_store(&eng_shm->state, PLUG_ENGINE_FAILED);
 		return 2;
 	}
 	const int empty = eng_cardEmpty(card);

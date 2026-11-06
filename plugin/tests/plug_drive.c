@@ -9,7 +9,12 @@
  * lichomat-render without --stereo (plan E9.4).
  *
  *   plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN | preroll] [split]
+ *       [values FILE]
  *
+ * With values, each change of the engine's report of the firmware's values goes into FILE as a
+ * line "<frame>f <value> ... channel <c> rx <bits>" (plug_params[] order), the frame the report's;
+ * the driver then keeps the engine within two blocks and 128 frames of what it published (not
+ * 8,192), so that it reads every report about once a block.
  * Without realtime it waits for each frame; with it, it paces the blocks by the wall clock,
  * reads each block plug_readOffset(RATE, BLOCK, MARGIN) frames behind as the plugin does, and
  * counts the underruns.
@@ -43,6 +48,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "plug_params.h"
 #include "plug_shm.h"
 #include "plug_spawn.h"
 #include "plug_time.h"
@@ -100,10 +106,27 @@ static void readInto(plug_shm_t *s, uint64_t from, uint32_t n, float *const *ch,
 	(void)plug_audioRead(s, from, n, p, !split);
 }
 
+/* the engine's values into f when they changed since last */
+static void dumpValues(plug_shm_t *s, FILE *f, plug_values_t *last)
+{
+	plug_values_t v;
+	if (!f || !plug_valuesRead(s, &v))
+		return;
+	if (last->frame != UINT64_MAX && !memcmp(v.values, last->values, sizeof v.values) && v.channel == last->channel
+		&& v.rxFilter == last->rxFilter)
+		return;
+	*last = v;
+	fprintf(f, "%lluf", (unsigned long long)v.frame);
+	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+		fprintf(f, " %u", v.values[i]);
+	fprintf(f, " channel %u rx %u\n", v.channel, v.rxFilter);
+}
+
 int main(int argc, char **argv)
 {
 	int realtime = 0, preroll = 0, split = 0, bad = argc < 8;
 	uint32_t margin = 0;
+	FILE *vf = NULL;
 	for (int a = 8; a < argc && !bad; a++)
 	{
 		if (!strcmp(argv[a], "realtime") && a + 1 < argc)
@@ -112,17 +135,22 @@ int main(int argc, char **argv)
 			preroll = 1;
 		else if (!strcmp(argv[a], "split"))
 			split = 1;
+		else if (!strcmp(argv[a], "values") && a + 1 < argc)
+			bad = (vf = fopen(argv[++a], "w")) == NULL;
 		else
 			bad = 1;
 	}
 	if (bad || (realtime && preroll))
 	{
-		fprintf(stderr, "usage: plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN | preroll] [split]\n");
+		fprintf(stderr, "usage: plug_drive ENGINE CARD RATE BLOCK SCRIPT FRAMES OUT.wav [realtime MARGIN | preroll] [split] "
+			"[values FILE]\n");
 		return 1;
 	}
 	const double rate = strtod(argv[3], NULL);
 	const uint32_t block = (uint32_t)strtoul(argv[4], NULL, 10);
 	const uint64_t frames = strtoull(argv[6], NULL, 10);
+	plug_values_t lastValues;
+	lastValues.frame = UINT64_MAX;
 	const int native = plug_isNative(rate);
 	/* the script */
 	FILE *sf = fopen(argv[5], "r");
@@ -243,7 +271,7 @@ int main(int argc, char **argv)
 	{
 		/* waiting: at most 8,192 frames ahead of the engine's audio, so that neither ring overflows
 		 * and the engine has no more to play than the frames asked for */
-		while (!realtime && n + block > plug_load(&s->audioEnd) + 8192u)
+		while (!realtime && n + block > plug_load(&s->audioEnd) + (vf ? 2u * block + 128u : 8192u))
 		{
 			struct pollfd p = { life[0], POLLIN, 0 };
 			if (poll(&p, 1, 0) > 0)
@@ -255,6 +283,7 @@ int main(int argc, char **argv)
 				readInto(s, base + got, (uint32_t)(to - got), ch, got, split);
 				got = to;
 			}
+			dumpValues(s, vf, &lastValues);
 			if (end != lastEnd)
 			{
 				lastEnd = end;
@@ -280,6 +309,7 @@ int main(int argc, char **argv)
 		}
 		plug_publish(s, n + block);
 		(void)!write(wake[1], "w", 1);
+		dumpValues(s, vf, &lastValues);
 		if (realtime)
 		{
 			/* the plugin's read of the block [n, n + block): plug_readOffset() frames behind */
@@ -325,6 +355,8 @@ int main(int argc, char **argv)
 	close(wake[1]);
 	int status = 0;
 	waitpid(pid, &status, 0);
+	if (vf)
+		fclose(vf);
 	FILE *o = fopen(argv[7], "wb");
 	const unsigned nch = split ? PLUG_AUDIO_CHANNELS : 2u;
 	const uint32_t data = (uint32_t)(frames * 2u * nch);

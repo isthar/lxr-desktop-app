@@ -2,7 +2,8 @@
  * eng_run.h
  *
  * The engine of the LICHOMAT plugin (plan E9.2 Task 6): the firmware on the virtual device,
- * fed from the plugin's event ring and writing the plugin's audio ring.
+ * fed from the plugin's event ring and writing the plugin's audio ring: the device's two stereo
+ * outputs, and after each block the firmware's values of the plugin's parameters (plan E9.4).
  *
  * - The prelude is lichomat-render's for --no-start --bpm mid --as-booted (render_main.c:
  *   1005-1047): the boot, the settle, the edit PAR_BPM = 1 (MIDI clock sync), the same direct
@@ -15,6 +16,8 @@
  *   66 engine frames past now, and hands every published event to the device at its cycle: the
  *   messages of one frame as one USB transfer. No input comes late. The wait is unpaced: the
  *   engine runs as soon as the plugin has published.
+ * - After each block request, and at t0 before it reports running, the hook writes the
+ *   firmware's values (eng_fw.c) at the host frame of now (plan E9.4).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
