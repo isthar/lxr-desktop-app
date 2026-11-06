@@ -1414,6 +1414,48 @@ def P10_plugin_rt(t):
     check(calls == 3750 and bad == 0 and writes == calls, line[0])
 
 
+# --- the two outputs and the parameters through the plugin (plan E9.4) ------------------------------
+
+@case
+def P10_plugin_buses(t):
+    # Out 2 activated: at 44,140.625 Hz, offline, blocks of 128 and 100, the plugin's Out 1 is lichomat-render's
+    # --stereo out1 and its Out 2 --stereo out2 for the MIDI the plugin gave its engine, from frame latency - 128 on,
+    # byte for byte, both loud (the onset card: Drum 1 on out 1, the other voices on out 2). Out 1 without Out 2 is
+    # the sum (P10_plugin_native)
+    for block in (128, 100):
+        script = t.path('script%d.txt' % block)
+        out = t.path('plugin%d.wav' % block)
+        lat, _ = host(t, plan(t, 'plan%d.txt' % block, TIMELINE + ['bus2', 'out ' + out, 'script ' + script], block=block))
+        for name, wavname in (('out1', out), ('out2', out[:-4] + '-out2.wav')):
+            t.render(t.card('%s%d' % (name, block)), script, 12, t.path('render-%s%d.wav' % (name, block)), stereo=name)
+            _, _, a = wav(wavname)
+            _, _, b = wav(t.path('render-%s%d.wav' % (name, block)))
+            n, diff, loud = shifted_equal(a, b, lat[0] - 128)
+            print('blocks of %d, %s: latency %d, %d frames compared, %d differ, %d samples not 0' % (block, name, lat[0], n,
+                                                                                                     diff, loud))
+            check(diff == 0 and loud > 10000, 'blocks of %d, %s: %d samples differ' % (block, name, diff))
+            check(all(x == 0 for x in a[:2 * (lat[0] - 128)]), '%s: sound before the latency' % name)
+
+
+@case
+def P10_plugin_buses48(t):
+    # Out 2 activated at 48 kHz, blocks of 512: Out 1 and Out 2 from plug_readOffset() on are the engine's four
+    # channels through plug_drive (split) for the same MIDI, byte for byte
+    script = t.path('s48.txt')
+    out = t.path('p48.wav')
+    host(t, plan(t, 'plan48.txt', TIMELINE + ['bus2', 'out ' + out, 'script ' + script], rate=48000, block=512,
+                 frames=480000))
+    t.drive(t.card('d48'), '48000', 512, script, 478000, t.path('d48.wav'), split=True)
+    _, _, d = wav(t.path('d48.wav'))
+    read = 512 + 128 + 3
+    for k, wavname in ((0, out), (2, out[:-4] + '-out2.wav')):
+        _, _, a = wav(wavname)
+        b = [v for pair in zip(channels(d, 4, k), channels(d, 4, k + 1)) for v in pair]
+        n, diff, loud = shifted_equal(a, b, read)
+        print('Out %d at 48 kHz: %d frames compared, %d differ, %d samples not 0' % (k // 2 + 1, n, diff, loud))
+        check(diff == 0 and loud > 10000, 'Out %d: %d differ' % (k // 2 + 1, diff))
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

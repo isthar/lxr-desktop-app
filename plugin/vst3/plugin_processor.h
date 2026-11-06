@@ -1,13 +1,14 @@
 /*
  * plugin_processor.h
  *
- * The LICHOMAT plugin's audio processor (plan E9.2 Task 8): one stereo output, one event input.
- * Each block it turns the host's transport into MIDI clock (plug_clock.h) and the block's notes
- * into MIDI, writes both into the engine's ring at their frames, publishes the block, wakes the
- * engine, and plays the ring plug_readOffset() frames behind; the reported latency is
- * plug_latency(). In real time it never waits; offline (kOffline: Live's bounce, freeze and
- * export) it waits for the engine. The state is the card folder as an LCHS archive
- * (plug_archive.h).
+ * The LICHOMAT plugin's audio processor (plan E9.2 Task 8): two stereo outputs, Out 1 and Out 2
+ * (plan E9.4), one event input. Each block it turns the host's transport into MIDI clock
+ * (plug_clock.h) and the block's notes into MIDI, writes both into the engine's ring at their
+ * frames, publishes the block, wakes the engine, and plays the ring plug_readOffset() frames
+ * behind: Out 1 and Out 2 are the device's outputs when the host has activated Out 2, else Out 1
+ * is their sum; the reported latency is plug_latency(). In real time it never waits; offline
+ * (kOffline: Live's bounce, freeze and export) it waits for the engine. The state is the card
+ * folder as an LCHS archive (plug_archive.h).
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -17,6 +18,8 @@
  * the repository.
  */
 #pragma once
+
+#include <atomic>
 
 #include "plug_clock.h"
 #include "plugin_card.h"
@@ -39,6 +42,8 @@ public:
 	Steinberg::tresult PLUGIN_API canProcessSampleSize (Steinberg::int32 symbolicSampleSize) SMTG_OVERRIDE;
 	Steinberg::tresult PLUGIN_API setupProcessing (Steinberg::Vst::ProcessSetup& setup) SMTG_OVERRIDE;
 	Steinberg::tresult PLUGIN_API setActive (Steinberg::TBool state) SMTG_OVERRIDE;
+	Steinberg::tresult PLUGIN_API activateBus (Steinberg::Vst::MediaType type, Steinberg::Vst::BusDirection dir,
+	                                           Steinberg::int32 index, Steinberg::TBool state) SMTG_OVERRIDE;
 	Steinberg::tresult PLUGIN_API process (Steinberg::Vst::ProcessData& data) SMTG_OVERRIDE;
 	Steinberg::uint32 PLUGIN_API getLatencySamples () SMTG_OVERRIDE { return latency; }
 	Steinberg::uint32 PLUGIN_API getTailSamples () SMTG_OVERRIDE { return Steinberg::Vst::kInfiniteTail; }
@@ -65,6 +70,7 @@ private:
 	pid_t waitedInVain = -2;	/**< the engine an offline wait gave up on (-1: none ran): no more waits for it */
 	int reported = -1;			/**< the engine state last sent to the controller */
 	bool active = false;
+	std::atomic<bool> out2Active {false};	/**< the host activated Out 2 */
 	plug_midi_t clocks[kMaxMidi];
 	plug_midi_t notes[kMaxMidi];
 };

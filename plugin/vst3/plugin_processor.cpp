@@ -46,7 +46,10 @@ tresult PLUGIN_API Processor::initialize (FUnknown* context)
 	const tresult r = AudioEffect::initialize (context);
 	if (r != kResultOk)
 		return r;
-	addAudioOutput (STR16 ("Out"), SpeakerArr::kStereo);
+	/* the device's two outputs (plan E9.4): Out 2 inactive until the host activates it, and Out 1 the
+	 * sum of both meanwhile */
+	addAudioOutput (STR16 ("Out 1"), SpeakerArr::kStereo, kMain, BusInfo::kDefaultActive);
+	addAudioOutput (STR16 ("Out 2"), SpeakerArr::kStereo, kAux, 0);
 	addEventInput (STR16 ("MIDI In"), 16);
 	CardFolder::cleanStale ();
 	return kResultOk;
@@ -62,9 +65,17 @@ tresult PLUGIN_API Processor::terminate ()
 tresult PLUGIN_API Processor::setBusArrangements (SpeakerArrangement* inputs, int32 numIns, SpeakerArrangement* outputs,
                                                    int32 numOuts)
 {
-	if (numIns == 0 && numOuts == 1 && outputs[0] == SpeakerArr::kStereo)
+	if (numIns == 0 && numOuts == 2 && outputs[0] == SpeakerArr::kStereo && outputs[1] == SpeakerArr::kStereo)
 		return AudioEffect::setBusArrangements (inputs, numIns, outputs, numOuts);
 	return kResultFalse;
+}
+
+tresult PLUGIN_API Processor::activateBus (MediaType type, BusDirection dir, int32 index, TBool state)
+{
+	const tresult r = AudioEffect::activateBus (type, dir, index, state);
+	if (r == kResultTrue && type == kAudio && dir == kOutput && index == 1)
+		out2Active.store (state != 0);
+	return r;
 }
 
 tresult PLUGIN_API Processor::canProcessSampleSize (int32 symbolicSampleSize)
@@ -259,24 +270,42 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 		if (offline && frames + n > readOffset)
 			offlineWait (s, frames + n - readOffset);
 	}
-	float* l = data.outputs[0].channelBuffers32[0];
-	float* r = data.outputs[0].channelBuffers32[1];
+	/* Out 1 and Out 2 the device's outputs when the host activated Out 2 and gave its buffers, else
+	 * Out 1 their sum (the prototype's output) and Out 2, if given, silent */
+	const bool hasOut2 = data.numOutputs > 1 && data.outputs[1].numChannels >= 2 && data.outputs[1].channelBuffers32;
+	const bool split = hasOut2 && out2Active.load (std::memory_order_relaxed);
+	float* ch[PLUG_AUDIO_CHANNELS] = {data.outputs[0].channelBuffers32[0], data.outputs[0].channelBuffers32[1],
+	                                   split ? data.outputs[1].channelBuffers32[0] : nullptr,
+	                                   split ? data.outputs[1].channelBuffers32[1] : nullptr};
+	const unsigned outs = split ? PLUG_AUDIO_CHANNELS : 2u;
 	uint32_t copied = 0;
 	const uint32_t skip = frames >= readOffset ? 0u : (uint32_t)std::min<uint64_t> (n, readOffset - frames);
-	for (uint32_t i = 0; i < skip; i++)
-		l[i] = r[i] = 0.0f;
+	for (unsigned c = 0; c < outs; c++)
+		for (uint32_t i = 0; i < skip; i++)
+			ch[c][i] = 0.0f;
 	if (skip < n)
 	{
 		if (s)
 		{
-			float* const at[PLUG_AUDIO_CHANNELS] = {l + skip, r + skip, nullptr, nullptr};
-			copied = plug_audioRead (s, frames + skip - readOffset, n - skip, at, 1);	/* the outputs' sum */
+			float* at[PLUG_AUDIO_CHANNELS];
+			for (unsigned c = 0; c < PLUG_AUDIO_CHANNELS; c++)
+				at[c] = ch[c] ? ch[c] + skip : nullptr;
+			copied = plug_audioRead (s, frames + skip - readOffset, n - skip, at, split ? 0 : 1);
 		}
 		else
-			for (uint32_t i = skip; i < n; i++)
-				l[i] = r[i] = 0.0f;
+			for (unsigned c = 0; c < outs; c++)
+				for (uint32_t i = skip; i < n; i++)
+					ch[c][i] = 0.0f;
 	}
 	data.outputs[0].silenceFlags = copied ? 0 : 3;
+	if (hasOut2)
+	{
+		if (!split)
+			for (unsigned c = 0; c < 2; c++)
+				for (uint32_t i = 0; i < n; i++)
+					data.outputs[1].channelBuffers32[c][i] = 0.0f;
+		data.outputs[1].silenceFlags = split && copied ? 0 : 3;
+	}
 	frames += n;
 	return kResultOk;
 }

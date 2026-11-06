@@ -24,9 +24,10 @@
  *   mode realtime|offline  the ProcessSetup's mode (default offline: the plugin waits for its engine)
  *   paced                  each block at its wall-clock time, as an audio device gives it: the
  *                          thread takes the time-constraint policy of the block's period
- * Instance I > 0 writes FILE-I.wav. The summary on stdout gives each instance's latency and the
- * Engine parameter it last reported. Before each process() the output buffers are filled with
- * 0.5, as a host may leave anything in them.
+ *   bus2                   activate Out 2 (plan E9.4): each instance writes it as FILE-out2.wav
+ * Instance I > 0 writes FILE-I.wav (and FILE-I-out2.wav). The summary on stdout gives each
+ * instance's latency and the Engine parameter it last reported. Before each process() the output
+ * buffers are filled with 0.5, as a host may leave anything in them.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -93,7 +94,7 @@ struct Plan
 	int block = 128;
 	uint64_t frames = 0;
 	int instances = 1;
-	bool loop = false, rtcheck = false, offline = true, paced = false;
+	bool loop = false, rtcheck = false, offline = true, paced = false, bus2 = false;
 	double loopStart = 0, loopEnd = 0;
 	std::vector<NoteCmd> notes;
 	std::vector<TransportCmd> transport;
@@ -134,6 +135,7 @@ Plan readPlan (const char* path)
 		else if (cmd == "script") ok = !!(s >> p.script);
 		else if (cmd == "rtcheck") p.rtcheck = true;
 		else if (cmd == "paced") p.paced = true;
+		else if (cmd == "bus2") p.bus2 = true;
 		else if (cmd == "mode") { std::string m; ok = !!(s >> m) && (m == "realtime" || m == "offline"); p.offline = m == "offline"; }
 		else if (cmd == "loop") ok = !!(s >> p.loopStart >> p.loopEnd), p.loop = true;
 		else if (cmd == "note") { NoteCmd n; ok = !!(s >> n.frame >> n.ch >> n.pitch >> n.vel); p.notes.push_back (n); }
@@ -194,7 +196,7 @@ struct Instance
 	EventList events {512};
 	ParameterChanges outParams {8};
 	double engine = 0.0;	/* the Engine parameter: 2/3 running */
-	std::vector<float> l, r;
+	std::vector<float> l, r, l2, r2;
 	uint32_t latency = 0;
 };
 
@@ -236,6 +238,8 @@ void open (Instance& in, const VST3::Hosting::PluginFactory& factory, const VST3
 	if (in.processor->setupProcessing (setup) != kResultOk)
 		die ("setupProcessing refused");
 	in.component->activateBus (kAudio, kOutput, 0, true);
+	if (p.bus2)
+		in.component->activateBus (kAudio, kOutput, 1, true);
 	in.component->activateBus (kEvent, kInput, 0, true);
 	std::vector<uint8_t> state;
 	if (!p.stateIn.empty ())
@@ -304,13 +308,13 @@ void put32 (FILE* f, uint32_t v)
 	put16 (f, v >> 16);
 }
 
-void writeWav (const std::string& path, const Instance& in, double rate)
+void writeWav (const std::string& path, const std::vector<float>& l, const std::vector<float>& r, double rate)
 {
 	FILE* f = fopen (path.c_str (), "wb");
 	if (!f)
 		die ("cannot write " + path);
 	const bool native = plug_isNative (rate);
-	const uint32_t frames = (uint32_t)in.l.size (), data = frames * 4u, hz = native ? 44141u : (uint32_t)rate;
+	const uint32_t frames = (uint32_t)l.size (), data = frames * 4u, hz = native ? 44141u : (uint32_t)rate;
 	fwrite ("RIFF", 1, 4, f);
 	put32 (f, 36u + data);
 	fwrite ("WAVEfmt ", 1, 8, f);
@@ -324,7 +328,7 @@ void writeWav (const std::string& path, const Instance& in, double rate)
 	fwrite ("data", 1, 4, f);
 	put32 (f, data);
 	for (uint32_t i = 0; i < frames; i++)
-		for (float x : {in.l[i], in.r[i]})
+		for (float x : {l[i], r[i]})
 		{
 			/* native: floor, lichomat-render's (L1 + L2) >> 1 exactly; else the nearest */
 			double v = native ? std::floor ((double)x * 32768.0) : std::floor ((double)x * 32768.0 + 0.5);
@@ -517,8 +521,10 @@ int main (int argc, char** argv)
 			in->data.numSamples = (int32)n;
 			in->data.processContext = &ctx;
 			/* a host's buffers hold anything: the plugin must write every frame (P10_plugin_native) */
-			for (uint32_t i = 0; i < n; i++)
-				in->data.outputs[0].channelBuffers32[0][i] = in->data.outputs[0].channelBuffers32[1][i] = 0.5f;
+			for (int32 b = 0; b < in->data.numOutputs; b++)
+				for (int32 c = 0; c < in->data.outputs[b].numChannels; c++)
+					for (uint32_t i = 0; i < n; i++)
+						in->data.outputs[b].channelBuffers32[c][i] = 0.5f;
 			if (rtInside)
 				rtInside (1);
 			in->processor->process (in->data);
@@ -530,6 +536,13 @@ int main (int argc, char** argv)
 			const float* r = in->data.outputs[0].channelBuffers32[1];
 			in->l.insert (in->l.end (), l, l + n);
 			in->r.insert (in->r.end (), r, r + n);
+			if (p.bus2)
+			{
+				const float* l2 = in->data.outputs[1].channelBuffers32[0];
+				const float* r2 = in->data.outputs[1].channelBuffers32[1];
+				in->l2.insert (in->l2.end (), l2, l2 + n);
+				in->r2.insert (in->r2.end (), r2, r2 + n);
+			}
 		}
 	}
 	if (!p.stateOut.empty ())
@@ -542,7 +555,10 @@ int main (int argc, char** argv)
 	}
 	for (size_t i = 0; i < inst.size (); i++)
 	{
-		writeWav (i == 0 ? p.out : p.out.substr (0, p.out.size () - 4) + "-" + std::to_string (i) + ".wav", *inst[i], p.rate);
+		const std::string base = p.out.substr (0, p.out.size () - 4) + (i == 0 ? "" : "-" + std::to_string (i));
+		writeWav (base + ".wav", inst[i]->l, inst[i]->r, p.rate);
+		if (p.bus2)
+			writeWav (base + "-out2.wav", inst[i]->l2, inst[i]->r2, p.rate);
 		static const char* const states[4] = {"stopped", "starting", "running", "failed"};
 		printf ("lichomat-plughost: instance %zu: latency %u, %zu frames, engine %s\n", i, inst[i]->latency,
 		        inst[i]->l.size (), states[std::lround (inst[i]->engine * 3.0) & 3]);

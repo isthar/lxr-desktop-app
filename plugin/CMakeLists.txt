@@ -218,7 +218,7 @@ set(PLUGIN_HOST_TEST ${PLUGIN_BUNDLE_TEST} --host $<TARGET_FILE:lichomat-plughos
 foreach(id P10_plugin_native P10_plugin_onsets P10_plugin_latency P10_plugin_resampled P10_plugin_state P10_plugin_app_card
         P10_plugin_renew P10_plugin_kill P10_plugin_rt P10_plugin_logs P10_plugin_beats P10_plugin_setstate
         P10_plugin_hang P10_plugin_crashes P10_plugin_stale P10_plugin_policy P10_plugin_spawn_fail P10_plugin_nonblock
-        P10_plugin_offline_hang)
+        P10_plugin_offline_hang P10_plugin_buses P10_plugin_buses48)
     add_test(NAME ${id} COMMAND ${PLUGIN_HOST_TEST} ${id})
     set_tests_properties(${id} PROPERTIES TIMEOUT 600 LABELS plugin)
 endforeach()
