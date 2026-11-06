@@ -2432,6 +2432,23 @@ def P13_au_drops(t):
           % (m.group(1) if m else None, v.get(10)))
 
 
+@case
+def P13_au_set(t):
+    # A host's set at an offset (AudioUnitSetParameter on the render thread before its render, at a frame inside the
+    # block) reaches the firmware at that frame: the AU's output is the VST3's for the same changes as points, byte for
+    # byte, with Drum 1 sounding when each change comes (a Note On 10 frames before it, after its block's first frame):
+    # Drum 1's volume, its filter, the DJ filter, pattern 1 (a Program Change, the kit's values reported back) and Drum 2's
+    # decay
+    changes = [(30100, 10, 40), (52077, 30, 48), (60111, 50, 20), (100003, 1, 1), (120050, 41, 30)]
+    notes = sorted([20000 * k + 5000 for k in range(12)] + [c[0] - 10 for c in changes])
+    lines = ['note %d 0 48 127' % f for f in notes]
+    host(t, plan(t, 'v.plan', lines + ['param %d %d %d' % c for c in changes] + ['out ' + t.path('v.wav')]))
+    _, out = au_host(t, au_plan(t, 'a.plan', lines + ['set %d %d %d' % c for c in changes] + ['out ' + t.path('a.wav')]))
+    d = same_files(t.path('v.wav'), t.path('a.wav'))
+    print('the AU\'s sets at their offsets %s the VST3\'s points; reports %r' % ('==' if d is None else d, reports(out)[1:]))
+    check(d is None, 'the sets %s' % d)
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

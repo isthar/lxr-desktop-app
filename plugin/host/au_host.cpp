@@ -10,7 +10,7 @@
  * registered with the system), then plays the timeline as an AU host does: the transport through
  * the host callbacks (beat and tempo; the transport state, both forms, with the cycle), the notes
  * through MusicDeviceMIDIEvent() at their offsets, the plan's parameter changes through
- * AudioUnitScheduleParameters(), an echo through AudioUnitSetParameter(), and AudioUnitRender() of
+ * AudioUnitScheduleParameters(), its sets and an echo through AudioUnitSetParameter(), and AudioUnitRender() of
  * Out 1 and, with bus2, of Out 2 after it. Its output is lichomat-plughost's: each instance's WAV
  * files, the script of the MIDI the plugin must have given its engine, and the same summary lines.
  * The values the plugin reports are the AU's parameter values after each block: at the first block
@@ -34,6 +34,9 @@
  *                     before its render: 2,000 Note Offs of note 48 at offset 0 and 300 scheduled events of
  *                     Drum 1's volume (id 10), event k of value 7k mod 128 at offset k x block / 300; the AU's
  *                     value of id 10 after that block is printed
+ *   set FRAME ID VALUE   AudioUnitSetParameter of ID to VALUE (0..its max) at FRAME's offset in its
+ *                     block, on the render thread before its render, every instance; the script gets
+ *                     the MIDI the plugin must give its engine, as for param
  *   set-end ID VALUE  AudioUnitSetParameter of ID to VALUE (0..its max) after the last block, with no
  *                     render after it, before the state-out
  *   offline FRAME 0|1 set kAudioUnitProperty_OfflineRender of every instance at FRAME, while it plays
@@ -110,6 +113,7 @@ struct AuPlan
 	std::vector<std::pair<uint64_t, int>> offlineAsync;
 	std::string staleNote;
 	std::vector<uint64_t> floods;
+	std::vector<ParamCmd> sets;
 	UInt32 outputs = 2;
 	bool info = false, checks = false, noalloc = false;
 };
@@ -765,6 +769,13 @@ int main (int argc, char** argv)
 			ok = !!(s >> at >> count) && count > 0 && count <= 1000;
 			a.notesAsync.push_back ({at, count});
 		}
+		else if (cmd == "set")
+		{
+			ParamCmd c {};
+			ok = !!(s >> c.frame >> c.id >> c.value) && plug_paramIndex (c.id) >= 0 && c.value >= 0
+			     && c.value <= plug_params[plug_paramIndex (c.id)].max;
+			a.sets.push_back (c);
+		}
 		else if (cmd == "set-end")
 		{
 			uint32_t id = 0;
@@ -846,7 +857,7 @@ int main (int argc, char** argv)
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
 	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextOffline = 0, nextRamp = 0;
-	size_t nextAsyncNotes = 0, nextAsyncOffline = 0;
+	size_t nextAsyncNotes = 0, nextAsyncOffline = 0, nextHostSet = 0;
 	unsigned long long renders0 = 0, flagged0 = 0, flaggedLoud0 = 0;
 	std::vector<std::thread> threads;
 	unsigned long long processCalls = 0;
@@ -985,6 +996,20 @@ int main (int argc, char** argv)
 				in->shown[k] = e.eventValues.immediate.value;	/* the host's own value, not a report */
 			}
 		}
+		std::vector<std::pair<const ParamCmd*, UInt32>> blockSets;
+		while (nextHostSet < a.sets.size () && a.sets[nextHostSet].frame < f + n)
+		{
+			const ParamCmd& c = a.sets[nextHostSet++];
+			const int k = plug_paramIndex (c.id);
+			blockSets.push_back ({&c, (UInt32)(c.frame - f)});
+			for (auto& in : inst)
+			{
+				int32 index = 0, point = 0;
+				if (IParamValueQueue* q = in->points.addParameterData (c.id, index))
+					q->addPoint ((int32)(c.frame - f), (double)c.value / plug_params[k].max, point);
+				in->shown[k] = plug_auValue ((unsigned)k, (uint8_t)c.value);	/* the host's own value, not a report */
+			}
+		}
 		while (nextRamp < a.ramps.size () && a.ramps[nextRamp].frame < f + n && ne < 1024)
 		{
 			const RampCmd& r = a.ramps[nextRamp++];
@@ -1049,6 +1074,10 @@ int main (int argc, char** argv)
 				rtInside (1);
 			for (auto& [id, v] : in.echo)
 				AudioUnitSetParameter (in.au, id, kAudioUnitScope_Global, 0, v, 0);
+			for (auto& [c, offset] : blockSets)
+				if (AudioUnitSetParameter (in.au, c->id, kAudioUnitScope_Global, 0,
+				                           plug_auValue ((unsigned)plug_paramIndex (c->id), (uint8_t)c->value), offset) != noErr)
+					die ("AudioUnitSetParameter refused the set at " + std::to_string (c->frame));
 			if (ne)
 				AudioUnitScheduleParameters (in.au, events, ne);
 			for (unsigned k = 0; k < nn; k++)
