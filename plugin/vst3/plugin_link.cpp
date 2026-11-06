@@ -206,6 +206,7 @@ void EngineLink::monitor ()
 		double lastMove = started;
 		uint64_t lastFrontier = plug_load (&mem->frontier), lastEnd = plug_load (&mem->audioEnd);
 		const char* why = "it died";
+		char waited[64];	/* why, for a vain offline wait */
 		bool stall = false;
 		for (;;)
 		{
@@ -251,7 +252,10 @@ void EngineLink::monitor ()
 			    plug_load (&mem->hostFrames) > frontier + (uint64_t)(mem->rate / 2.0) || offlineWaiting.load ();
 			const char* stalled = nullptr;
 			if (stalledPid.load () == pid)
-				stalled = "the plugin waited 10 s for it";
+			{
+				snprintf (waited, sizeof waited, "the plugin waited %.3f s for it", stalledFor.load ());
+				stalled = waited;
+			}
 			else if (st == PLUG_ENGINE_RUNNING && behind && now - lastMove > 2.0)
 				stalled = "it hung (2 s without taking events)";
 			else if (st != PLUG_ENGINE_RUNNING && now - started > 30.0)

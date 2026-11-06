@@ -198,10 +198,11 @@ void Processor::offlineWait (plug_shm_t* s, uint64_t audioEnd)
 		const uint64_t st = plug_load (&s->state);
 		if (st == PLUG_ENGINE_FAILED || (st == PLUG_ENGINE_RUNNING && plug_load (&s->audioEnd) >= audioEnd))
 			break;
-		if (monotonicNow () - t0 >= 10.0)
+		const double waited = monotonicNow () - t0;
+		if (waited >= 10.0)
 		{
 			waitedInVain = link.pid ();
-			link.stalled (waitedInVain);
+			link.stalled (waitedInVain, waited);
 			break;
 		}
 		struct timespec d = {0, 100000L};

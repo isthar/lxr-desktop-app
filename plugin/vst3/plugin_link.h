@@ -63,8 +63,13 @@ public:
 
 	/** the processor waits for the engine, or no longer (the monitor's hang rule) */
 	void waiting (bool on) { offlineWaiting.store (on); }
-	/** the processor waited 10 s in vain for engine pid: the monitor ends it, a stall */
-	void stalled (pid_t pid) { stalledPid.store (pid); }
+	/** the processor waited seconds (10 s or a little more) in vain for engine pid: the monitor ends
+	 * it, a stall, and logs the wait */
+	void stalled (pid_t pid, double seconds)
+	{
+		stalledFor.store (seconds);
+		stalledPid.store (pid);
+	}
 
 	/** lichomat-engine next to the plugin's binary: Contents/Helpers/ of the bundle */
 	static std::string enginePath ();
@@ -83,6 +88,7 @@ private:
 	std::atomic<pid_t> enginePid {-1};
 	std::atomic<bool> offlineWaiting {false};
 	std::atomic<pid_t> stalledPid {-1};
+	std::atomic<double> stalledFor {0.0};
 	std::mutex paths;	/* the monitor thread and restart(); never the audio thread */
 	std::string card, engineLog, pluginLog, engine;
 };
