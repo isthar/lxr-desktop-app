@@ -2170,12 +2170,13 @@ def P13_au_info(t):
 def P13_au_checks(t):
     # What auval checks of an instrument and can be checked without installing it: initialized again at 48 kHz and
     # back (the latency follows the rate), every writable parameter's minimum, maximum and default set and scheduled and
-    # read back, the read-only Engine refusing a set, a render of more frames than the maximum refused, the ClassInfo read
-    # and given back while initialized; then it plays. auval itself runs in the install (install_plugin.sh)
+    # read back, the read-only Engine refusing a set, a render of more frames than the maximum refused, a ClassInfo
+    # refused (without lichomat-state, or with a state the processor refuses) leaving the AU's values as they were, the
+    # ClassInfo read and given back while initialized; then it plays. auval itself runs in the install (install_plugin.sh)
     _, out = au_host(t, au_plan(t, 'checks.txt', ['checks', 'note 1000 0 48 127', 'out ' + t.path('c.wav')], frames=12800))
     line = [l for l in out.splitlines() if 'checks:' in l]
     print(line[0] if line else out)
-    check(line == ['lichomat-auhost: checks: 226 passed'], 'checks %r' % line)
+    check(line == ['lichomat-auhost: checks: 234 passed'], 'checks %r' % line)
     _, _, x = wav(t.path('c.wav'))
     check(any(abs(v) >= 4000 for v in x), 'no sound after the checks')
 

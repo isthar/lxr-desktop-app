@@ -41,8 +41,9 @@
  *   checks            before playing, what auval checks of an instrument and can be checked here:
  *                     initialized again at another rate (the latency follows), every writable
  *                     parameter's minimum, maximum and default set and scheduled and read back, the
- *                     Engine refusing a set, a render of more frames than the maximum refused, the
- *                     ClassInfo read and given back
+ *                     Engine refusing a set, a render of more frames than the maximum refused, a
+ *                     ClassInfo refused (without lichomat-state, or with a state the processor refuses)
+ *                     leaving the AU's values as they were, the ClassInfo read and given back
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -512,6 +513,42 @@ void runChecks (Instance& in, const Plan& p, const AuPlan& a)
 	expect (AudioUnitSetParameter (in.au, PLUG_AU_ENGINE, kAudioUnitScope_Global, 0, 1.0f, 0) != noErr, "the Engine took a set");
 	/* more frames than the maximum: refused */
 	expect (renderBus (in, 0, (UInt32)p.block + 1, -1000000.0) == kAudioUnitErr_TooManyFramesToProcess, "a render too long");
+	/* a ClassInfo refused changes nothing: one without lichomat-state, and one whose state the processor refuses (its
+	 * values block of another version), each with the AU's data of Drum 1's volume at 40, while it is 100 */
+	{
+		CFPropertyListRef at40 = nullptr;
+		UInt32 size = sizeof at40;
+		expect (AudioUnitSetParameter (in.au, 10, kAudioUnitScope_Global, 0, 40.0f, 0) == noErr
+		            && AudioUnitGetProperty (in.au, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &at40, &size) == noErr
+		            && at40,
+		        "the ClassInfo with Drum 1's volume at 40");
+		expect (AudioUnitSetParameter (in.au, 10, kAudioUnitScope_Global, 0, 100.0f, 0) == noErr && param (in, 10) == 100.0f,
+		        "Drum 1's volume set to 100");
+		CFMutableDictionaryRef none = CFDictionaryCreateMutableCopy (nullptr, 0, (CFDictionaryRef)at40);
+		CFDictionaryRemoveValue (none, kStateKey);
+		CFMutableDictionaryRef damaged = CFDictionaryCreateMutableCopy (nullptr, 0, (CFDictionaryRef)at40);
+		CFDataRef st = (CFDataRef)CFDictionaryGetValue (damaged, kStateKey);
+		std::vector<uint8_t> bytes (CFDataGetBytePtr (st), CFDataGetBytePtr (st) + CFDataGetLength (st));
+		const std::string text (bytes.begin (), bytes.end ());
+		const size_t at = text.rfind ("LCHV");
+		expect (at != std::string::npos && at + 12 <= bytes.size (), "the state's values block");
+		bytes[at + 4] = 2;	/* a version this plugin does not read: plug_paramsRead() refuses it */
+		CFDataRef bad = CFDataCreate (nullptr, bytes.data (), (CFIndex)bytes.size ());
+		CFDictionarySetValue (damaged, kStateKey, bad);
+		CFRelease (bad);
+		for (auto [d, what] : {std::pair<CFDictionaryRef, const char*> {none, "without lichomat-state"}, {damaged, "with a damaged state"}})
+		{
+			expect (AudioUnitSetProperty (in.au, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &d, sizeof d) != noErr,
+			        std::string ("a ClassInfo ") + what + " taken");
+			expect (param (in, 10) == 100.0f, std::string ("a ClassInfo ") + what + " refused, Drum 1's volume " +
+			                                       std::to_string (param (in, 10)) + ", not 100");
+		}
+		CFRelease (none);
+		CFRelease (damaged);
+		CFRelease (at40);
+		expect (AudioUnitSetParameter (in.au, 10, kAudioUnitScope_Global, 0, in.shown[plug_paramIndex (10)], 0) == noErr,
+		        "Drum 1's volume back");
+	}
 	/* the ClassInfo read and given back */
 	CFPropertyListRef ci = nullptr;
 	UInt32 size = sizeof ci;

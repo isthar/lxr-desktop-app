@@ -406,20 +406,22 @@ public:
 		return noErr;
 	}
 
+	/* A ClassInfo refused changes nothing: what AUBase's part requires is checked first, then the processor takes the
+	 * state (it refuses one it cannot read, with nothing changed), and only then AUBase restores the AU's values */
 	OSStatus RestoreState (CFPropertyListRef plist) override
 	{
 		if (!plist || CFGetTypeID (plist) != CFDictionaryGetTypeID ())
 			return kAudioUnitErr_InvalidPropertyValue;
-		const void* data = CFDictionaryGetValue (static_cast<CFDictionaryRef> (plist), kStateKey);
-		if (!data || CFGetTypeID (data) != CFDataGetTypeID ())
+		const auto d = static_cast<CFDictionaryRef> (plist);
+		const void* data = CFDictionaryGetValue (d, kStateKey);
+		if (!data || CFGetTypeID (data) != CFDataGetTypeID () || !ours (d))
 			return kAudioUnitErr_InvalidPropertyValue;
-		const OSStatus r = MusicDeviceBase::RestoreState (plist);
-		if (r != noErr)
-			return r;
 		CFDataRef bytes = static_cast<CFDataRef> (data);
 		IPtr<MemoryStream> m = owned (new MemoryStream (const_cast<UInt8*> (CFDataGetBytePtr (bytes)),
 		                                                (TSize)CFDataGetLength (bytes)));
-		return proc->setState (m) == kResultOk ? OSStatus (noErr) : OSStatus (kAudioUnitErr_InvalidPropertyValue);
+		if (proc->setState (m) != kResultOk)
+			return kAudioUnitErr_InvalidPropertyValue;
+		return MusicDeviceBase::RestoreState (plist);
 	}
 
 	/* --- notes ---------------------------------------------------------------------------------- */
@@ -501,6 +503,24 @@ private:
 			return kAudioUnitErr_FailedInitialization;
 		proc->setProcessing (true);
 		return noErr;
+	}
+
+	/* what AUBase::RestoreState() requires of a ClassInfo before it changes anything (AUBase.cpp:1815-1850): no part
+	 * key, the version 0, this AU's subtype and manufacturer */
+	bool ours (CFDictionaryRef d)
+	{
+		const AudioComponentDescription desc = GetComponentDescription ();
+		auto number = [d] (CFStringRef key, SInt32& v) {
+			const void* n = CFDictionaryGetValue (d, key);
+			if (!n || CFGetTypeID (n) != CFNumberGetTypeID ())
+				return false;
+			CFNumberGetValue (static_cast<CFNumberRef> (n), kCFNumberSInt32Type, &v);
+			return true;
+		};
+		SInt32 version = -1, subtype = 0, manufacturer = 0;
+		return !CFDictionaryContainsKey (d, CFSTR (kAUPresetPartKey)) && number (CFSTR (kAUPresetVersionKey), version)
+		       && version == 0 && number (CFSTR (kAUPresetSubtypeKey), subtype) && (UInt32)subtype == desc.componentSubType
+		       && number (CFSTR (kAUPresetManufacturerKey), manufacturer) && (UInt32)manufacturer == desc.componentManufacturer;
 	}
 
 	/* the values set[] (-1: none) into a state's values block, which the processor's getState() writes last (LCHV,
