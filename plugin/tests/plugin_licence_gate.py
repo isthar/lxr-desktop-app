@@ -6,9 +6,10 @@ emulator's M21 (emu/tests/licence_gate.py) with these additions:
   the bundle's Contents/Resources);
 - the SDK's own compile commands need not pass the main.h overlay: they include no firmware
   header. Every other command of the build must;
-- with --bundle, the bundle holds exactly its files: the plugin and the engine, Info.plist and
-  moduleinfo.json (whose texts name no maker), and in Contents/Resources the notices of all the code
-  in it, each byte for byte its source: the repository's LICENSE and NOTICE.md, the VST 3 SDK's MIT
+- with --bundle, the bundle holds exactly its files, no symbolic link and no empty folder: the
+  plugin and the engine, Info.plist and moduleinfo.json (whose texts name no maker), and in
+  Contents/Resources the notices of all the code in it, each byte for byte its source: the
+  repository's LICENSE and NOTICE.md, the VST 3 SDK's MIT
   licence (VST3-SDK-LICENSE.txt), and those of the code the engine links from the emulator, as the
   app's bundle has them: Arm Optimized Routines' (LICENSE.arm-optimized-routines, emu/libm/LICENSE)
   and FatFs' (LICENSE.fatfs, the first 18 lines of ff.h).
@@ -77,7 +78,13 @@ def check_overlay(root, build, errors):
 def check_bundle(g, root, bundle, errors):
     """the bundle's files, its licences and notices, and the names in its texts"""
     found = set()
-    for d, _, names in os.walk(bundle):
+    for d, dirs, names in os.walk(bundle):
+        rel = os.path.relpath(d, bundle).replace(os.sep, '/')
+        if not dirs and not names:
+            errors.append('the bundle has an empty folder %s' % rel)
+        for n in dirs + names:
+            if os.path.islink(os.path.join(d, n)):
+                errors.append('the bundle\'s %s is a symbolic link' % os.path.join(rel, n).replace(os.sep, '/'))
         for n in names:
             found.add(os.path.relpath(os.path.join(d, n), bundle).replace(os.sep, '/'))
     for f in sorted(found - set(BUNDLE)):

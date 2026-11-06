@@ -150,7 +150,7 @@ margin      = 128 host frames
 | `engine/` | `lichomat-engine`: the renderer's prelude, the tier hook that feeds the events, the resampler |
 | `vst3/` | the VST3 processor, controller, factory, the engine link and the instance folders |
 | `host/` | `lichomat-plughost`, the test host on the SDK's hosting classes |
-| `tests/` | the unit tests (P3-P8), `plugin_test.py` (P6, P7, P10, P11), `plug_drive`, the real-time check, the licence gate |
+| `tests/` | the unit tests (P3-P8), `sdk_pin.py` (P2, the SDK's pin), `plugin_test.py` (P6, P7, P10, P11), its tools `plug_drive` (the engine without the plugin) and `plug_resample_wav` (the converter on a WAV), the real-time check `plug_rtcheck.c`, the licence gate `plugin_licence_gate.py` |
 | `tools/` | `plugin_check.sh` (the gate), `install_plugin.sh`, `vendor_vst3sdk.sh` |
 | `third_party/vst3sdk/` | the VST 3 SDK 3.8.1 (build 84), the part the plugin builds with, pinned by `SHA256SUMS` |
 
