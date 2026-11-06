@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 14:43",
+    "updated": "2026-11-06 15:00",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.7: wtyczka AU (plan gotowy; odświeżenie pod d0534b1, potem wdrożenie)",
     "branch": "timing-core",
-    "head": "7825d5a",
+    "head": "ee2517d",
     "next": "Czeka na Ciebie: szkic wydania na GitHubie (sprawdź i kliknij Publish), E8.12–E8.13 wtyczka w Abletonie (P1–P10, można od razu na 0.2.0), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.7 AU, potem E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T14:43:00+01:00",
-    "now": "E9.75: host testowy lichomat-auhost i 24 scenariusze przez AU (grupa C) (od 14:43)"
+    "updated_at": "2026-11-06T15:00:00+01:00",
+    "now": "E9.74–E9.75: przegląd jakości AU z mutantami (od 15:00)"
   },
   "epics": [
     {
@@ -4939,6 +4939,11 @@
       "n": 667,
       "at": "2026-11-06 14:43",
       "text": "E9.74: komponent LICHOMAT.component zrobiony (277fe07): AU v2 aumu Lcht Lchm wokół procesora VST3, podpis ad hoc, jeden eksport _LichomatAUFactory; 115/115 w Debug i Release; kod bajt w bajt z planu. Przegląd jakości z mutantami po zad. 5 (potrzebuje scenariuszy AU). Start E9.75: host testowy lichomat-auhost i scenariusze."
+    },
+    {
+      "n": 668,
+      "at": "2026-11-06 15:00",
+      "text": "E9.75: host testowy lichomat-auhost i 24 scenariusze zrobione (6e19c1d): AU gra bajt w bajt jak VST3 we wszystkich porównaniach, 0 zakazanych wywołań w wątku renderu; 138/138 w Debug i Release; kod bajt w bajt z planu. Teraz przegląd jakości zad. 4–5 z mutantami."
     }
   ]
 }
