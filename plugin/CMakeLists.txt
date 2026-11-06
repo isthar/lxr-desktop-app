@@ -74,7 +74,7 @@ add_library(plug_common_san OBJECT common/plug_shm.c)
 target_include_directories(plug_common_san PUBLIC "${PLUGIN_DIR}/common")
 target_compile_options(plug_common_san PRIVATE ${PLUGIN_FLAGS} ${PLUGIN_SAN_FLAGS})
 plugin_add_test(test_shm IDS P3_shm_header P3_shm_create P3_shm_events P3_shm_audio P3_shm_new_engine P3_shm_overwritten P3_shm_overrun
-    P3_shm_processes P3_shm_killed)
+    P3_shm_processes P3_shm_killed P3_shm_split P3_shm_values)
 
 target_sources(plug_common PRIVATE common/plug_clock.c)
 target_sources(plug_common_san PRIVATE common/plug_clock.c)

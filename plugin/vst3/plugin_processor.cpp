@@ -268,7 +268,10 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 	if (skip < n)
 	{
 		if (s)
-			copied = plug_audioRead (s, frames + skip - readOffset, n - skip, l + skip, r + skip);
+		{
+			float* const at[PLUG_AUDIO_CHANNELS] = {l + skip, r + skip, nullptr, nullptr};
+			copied = plug_audioRead (s, frames + skip - readOffset, n - skip, at, 1);	/* the outputs' sum */
+		}
 		else
 			for (uint32_t i = skip; i < n; i++)
 				l[i] = r[i] = 0.0f;

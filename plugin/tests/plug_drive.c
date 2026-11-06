@@ -88,6 +88,16 @@ static int16_t sample(float x, int native)
 	return (int16_t)(v > 32767.0 ? 32767.0 : v < -32768.0 ? -32768.0 : v);
 }
 
+/* the ring's frames [from, from + n) into ch[c][at...]: the sum into ch[0] and ch[1], or with split
+ * the four channels */
+static void readInto(plug_shm_t *s, uint64_t from, uint32_t n, float *const *ch, uint64_t at, int split)
+{
+	float *p[PLUG_AUDIO_CHANNELS];
+	for (unsigned c = 0; c < PLUG_AUDIO_CHANNELS; c++)
+		p[c] = &ch[c][at];
+	(void)plug_audioRead(s, from, n, p, !split);
+}
+
 int main(int argc, char **argv)
 {
 	const int realtime = argc == 10 && !strcmp(argv[8], "realtime");
@@ -210,7 +220,9 @@ int main(int argc, char **argv)
 			lines[i].frame += base;
 	}
 	/* play */
-	float *l = calloc(frames + block, sizeof *l), *r = calloc(frames + block, sizeof *r);
+	float *ch[PLUG_AUDIO_CHANNELS];
+	for (unsigned c = 0; c < PLUG_AUDIO_CHANNELS; c++)
+		ch[c] = calloc(frames + block, sizeof(float));
 	uint64_t got = 0, firstMiss = 0, lastMiss = 0, lastEnd = 0;
 	double lastMove = wall();
 	unsigned next = 0;
@@ -228,7 +240,7 @@ int main(int argc, char **argv)
 			if (end > base + got)
 			{
 				const uint64_t to = end - base < frames ? end - base : frames;
-				(void)plug_audioRead(s, base + got, (uint32_t)(to - got), &l[got], &r[got]);
+				readInto(s, base + got, (uint32_t)(to - got), ch, got, 0);
 				got = to;
 			}
 			if (end != lastEnd)
@@ -265,7 +277,7 @@ int main(int argc, char **argv)
 				const uint32_t take = from + block > frames ? (uint32_t)(frames > from ? frames - from : 0u) : block;
 				const uint64_t before = s->underruns;
 				if (take)
-					(void)plug_audioRead(s, from, take, &l[from], &r[from]);
+					readInto(s, from, take, ch, from, 0);
 				if (s->underruns != before)
 				{
 					if (!firstMiss)
@@ -284,7 +296,7 @@ int main(int argc, char **argv)
 			if (end > base + got)
 			{
 				const uint64_t to = end - base < frames ? end - base : frames;
-				(void)plug_audioRead(s, base + got, (uint32_t)(to - got), &l[got], &r[got]);
+				readInto(s, base + got, (uint32_t)(to - got), ch, got, 0);
 				got = to;
 			}
 		}
@@ -318,8 +330,8 @@ int main(int argc, char **argv)
 	put32(o, data);
 	for (uint64_t i = 0; i < frames; i++)
 	{
-		put16(o, (uint16_t)sample(l[i], native));
-		put16(o, (uint16_t)sample(r[i], native));
+		put16(o, (uint16_t)sample(ch[0][i], native));
+		put16(o, (uint16_t)sample(ch[1][i], native));
 	}
 	fclose(o);
 	printf("plug_drive: epoch %llu, %llu frames, late %llu, dropped %llu, ring full %llu, underruns %llu (blocks from "

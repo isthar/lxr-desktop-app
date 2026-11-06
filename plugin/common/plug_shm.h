@@ -2,8 +2,9 @@
  * plug_shm.h
  *
  * The shared memory between the LICHOMAT plugin and its engine process (plan E9.2 Task 3): a
- * versioned header, a ring of MIDI events from the plugin to the engine and a ring of stereo
- * audio frames from the engine to the plugin. Each ring has one producer and one consumer, in
+ * versioned header, a ring of MIDI events from the plugin to the engine, a ring of audio frames
+ * from the engine to the plugin (the device's two stereo outputs, plan E9.4) and the engine's
+ * report of the firmware's parameter values. Each ring has one producer and one consumer, in
  * two processes. The counters only grow, and each side writes only its own fields; they are
  * plain 64-bit integers read and written with the __atomic builtins, so the header is the same
  * in C11 and C++17.
@@ -22,6 +23,12 @@
  *   either process dies.
  * - The engine's death is not in the memory: the plugin sees it as the end of a pipe
  *   (plugin_link.cpp), and then writes the engine's state itself.
+ * - Values: after each block the engine writes the firmware's values of plug_params.h's
+ *   parameters, its MIDI channel and receive filter, and the host frame they are of, under a
+ *   sequence count that is odd while it writes; the plugin takes a copy whose count did not move.
+ * - Version 2 (plan E9.4): four audio channels and the values. The plugin and its engine come
+ *   from one bundle; an engine of another version refuses the memory (plug_shmCheck(), and
+ *   plug_shmMap() for a smaller object) with exit 2, which the plugin logs.
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -41,9 +48,11 @@ extern "C" {
 #endif
 
 #define PLUG_SHM_MAGIC 0x5048434Cu	/**< "LCHP" in memory */
-#define PLUG_SHM_VERSION 1u
+#define PLUG_SHM_VERSION 2u
 #define PLUG_EVENT_SLOTS 4096u		/**< a power of two */
 #define PLUG_AUDIO_FRAMES 32768u	/**< a power of two; 0.68 s at 48 kHz, far more than any latency */
+#define PLUG_AUDIO_CHANNELS 4u		/**< out 1 L, out 1 R, out 2 L, out 2 R */
+#define PLUG_VALUES 48u				/**< the value table's slots (plug_params.h uses PLUG_PARAM_COUNT) */
 
 /** the engine's state, written by the engine, and by the plugin once the engine is gone */
 enum
@@ -90,9 +99,24 @@ typedef struct plug_shm
 	uint64_t late;			/**< inputs that reached the firmware after their time */
 	uint64_t dropped;		/**< events left out: before the epoch, or a message without a USB-MIDI code
 							 * index number (F0, F4, F5, F7, or a data byte for a status) */
+	uint64_t valuesSeq;		/**< odd while the engine writes the values */
+	uint64_t valuesFrame;	/**< the host frame the firmware had reached */
+	uint8_t values[PLUG_VALUES];	/**< plug_params[] order; 0xFF: none */
+	uint8_t channel;		/**< the firmware's global MIDI channel 0-15, 0xFF: none */
+	uint8_t rxFilter;		/**< the firmware's MIDI receive filter: bit 2 CC, bit 3 Program Change */
+	uint8_t pad1[6];
 	plug_event_t ev[PLUG_EVENT_SLOTS];
-	float audio[PLUG_AUDIO_FRAMES][2];
+	float audio[PLUG_AUDIO_FRAMES][PLUG_AUDIO_CHANNELS];	/**< the device's int16 outputs / 32,768 */
 } plug_shm_t;
+
+/** a copy of the engine's values */
+typedef struct plug_values
+{
+	uint64_t frame;
+	uint8_t values[PLUG_VALUES];
+	uint8_t channel;
+	uint8_t rxFilter;
+} plug_values_t;
 
 static inline uint64_t plug_load(const uint64_t *p)
 {
@@ -131,11 +155,23 @@ int plug_evPush(plug_shm_t *s, uint64_t frame, const uint8_t *b, uint8_t len);
 /** every event before hostFrames is written */
 void plug_publish(plug_shm_t *s, uint64_t hostFrames);
 
-/** Copy the frames [from, from + frames) into l and r. A frame the engine has not written, or has
- * written over (more than PLUG_AUDIO_FRAMES - 1 before audioEnd, also while it was copied), is 0;
- * one that it should have written by now (from its epoch on, while it runs) counts in underruns.
- * Returns the frames copied from the ring. */
-uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *l, float *r);
+/** the stereo sum of the two outputs at -6 dB, as the prototype's one output: (a + b) / 2, exact
+ * for the device's samples (a and b are multiples of 2^-15) */
+static inline float plug_sum(float a, float b)
+{
+	return (a + b) * 0.5f;
+}
+
+/** Copy the frames [from, from + frames): with sum 0, out 1 L and R into ch[0] and ch[1] and out 2
+ * L and R into ch[2] and ch[3]; with sum 1, plug_sum() of the outputs' L into ch[0] and of their R
+ * into ch[1] (ch[2] and ch[3] unused). A frame the engine has not written, or has written over
+ * (more than PLUG_AUDIO_FRAMES - 1 before audioEnd, also while it was copied), is 0; one that it
+ * should have written by now (from its epoch on, while it runs) counts in underruns. Returns the
+ * frames copied from the ring. */
+uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *const ch[PLUG_AUDIO_CHANNELS], int sum);
+
+/** a copy of the engine's last values: 1, or 0 when it has written none or was writing them */
+int plug_valuesRead(plug_shm_t *s, plug_values_t *v);
 
 /* --- the engine's side --- */
 
@@ -151,8 +187,14 @@ void plug_evSkipAll(plug_shm_t *s);
 /** an engine's first frame: the audio ring starts at epoch, empty */
 void plug_audioBegin(plug_shm_t *s, uint64_t epoch);
 
-/** append frames, interleaved L R, at audioEnd, publishing audioEnd after each */
-void plug_audioWrite(plug_shm_t *s, const float *lr, uint32_t frames);
+/** append frames, PLUG_AUDIO_CHANNELS floats each (L1 R1 L2 R2), at audioEnd, publishing audioEnd
+ * after each */
+void plug_audioWrite(plug_shm_t *s, const float *x, uint32_t frames);
+
+/** the firmware's values at host frame frame: n of them (at most PLUG_VALUES; the rest 0xFF), its
+ * global channel and receive filter */
+void plug_valuesWrite(plug_shm_t *s, uint64_t frame, const uint8_t *values, unsigned n, uint8_t channel,
+	uint8_t rxFilter);
 
 #ifdef __cplusplus
 }

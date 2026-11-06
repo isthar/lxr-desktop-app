@@ -155,8 +155,9 @@ void plug_publish(plug_shm_t *s, uint64_t hostFrames)
 	plug_store(&s->hostFrames, hostFrames);
 }
 
-uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *l, float *r)
+uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *const ch[PLUG_AUDIO_CHANNELS], int sum)
 {
+	const unsigned outs = sum ? 2u : PLUG_AUDIO_CHANNELS;
 	/* audioEnd first: the engine stores audioStart before it, so a new engine's start is seen with
 	 * its end or after it, and a range with start > end is empty */
 	const uint64_t end = plug_load(&s->audioEnd);
@@ -172,13 +173,20 @@ uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *l,
 		if (f >= start && f < end && end - f < PLUG_AUDIO_FRAMES)
 		{
 			const float *p = s->audio[f & (PLUG_AUDIO_FRAMES - 1u)];
-			l[i] = p[0];
-			r[i] = p[1];
+			if (sum)
+			{
+				ch[0][i] = plug_sum(p[0], p[2]);
+				ch[1][i] = plug_sum(p[1], p[3]);
+			}
+			else
+				for (unsigned c = 0; c < PLUG_AUDIO_CHANNELS; c++)
+					ch[c][i] = p[c];
 			copied++;
 		}
 		else
 		{
-			l[i] = r[i] = 0.0f;
+			for (unsigned c = 0; c < outs; c++)
+				ch[c][i] = 0.0f;
 			if (running && f >= start && f >= end)
 				missing++;
 		}
@@ -195,7 +203,8 @@ uint32_t plug_audioRead(plug_shm_t *s, uint64_t from, uint32_t frames, float *l,
 			const uint64_t f = from + i;
 			if (f >= start && f < end && end - f < PLUG_AUDIO_FRAMES && f + PLUG_AUDIO_FRAMES <= now)
 			{
-				l[i] = r[i] = 0.0f;
+				for (unsigned c = 0; c < outs; c++)
+					ch[c][i] = 0.0f;
 				copied--;
 			}
 		}
@@ -236,7 +245,7 @@ void plug_audioBegin(plug_shm_t *s, uint64_t epoch)
 	plug_store(&s->audioEnd, epoch);
 }
 
-void plug_audioWrite(plug_shm_t *s, const float *lr, uint32_t frames)
+void plug_audioWrite(plug_shm_t *s, const float *x, uint32_t frames)
 {
 	/* Frame by frame: audioEnd = g, published, then frame g over frame g - PLUG_AUDIO_FRAMES, the
 	 * release fence ordering the two for plug_audioRead(), which loads audioEnd again after it
@@ -246,8 +255,38 @@ void plug_audioWrite(plug_shm_t *s, const float *lr, uint32_t frames)
 	{
 		__atomic_thread_fence(__ATOMIC_RELEASE);
 		float *p = s->audio[end & (PLUG_AUDIO_FRAMES - 1u)];
-		p[0] = lr[2u * i];
-		p[1] = lr[2u * i + 1u];
+		for (unsigned c = 0; c < PLUG_AUDIO_CHANNELS; c++)
+			p[c] = x[PLUG_AUDIO_CHANNELS * i + c];
 		plug_store(&s->audioEnd, end + 1u);
 	}
+}
+
+/* The values under a sequence count (a seqlock): odd while written. The bytes are relaxed atomics,
+ * ordered by the fences, so that neither side reads a byte the other writes as a plain one. */
+void plug_valuesWrite(plug_shm_t *s, uint64_t frame, const uint8_t *values, unsigned n, uint8_t channel,
+	uint8_t rxFilter)
+{
+	const uint64_t q = __atomic_load_n(&s->valuesSeq, __ATOMIC_RELAXED);
+	__atomic_store_n(&s->valuesSeq, q + 1u, __ATOMIC_RELAXED);
+	__atomic_thread_fence(__ATOMIC_RELEASE);
+	__atomic_store_n(&s->valuesFrame, frame, __ATOMIC_RELAXED);
+	for (unsigned i = 0; i < PLUG_VALUES; i++)
+		__atomic_store_n(&s->values[i], i < n ? values[i] : (uint8_t)0xFFu, __ATOMIC_RELAXED);
+	__atomic_store_n(&s->channel, channel, __ATOMIC_RELAXED);
+	__atomic_store_n(&s->rxFilter, rxFilter, __ATOMIC_RELAXED);
+	__atomic_store_n(&s->valuesSeq, q + 2u, __ATOMIC_RELEASE);
+}
+
+int plug_valuesRead(plug_shm_t *s, plug_values_t *v)
+{
+	const uint64_t q = __atomic_load_n(&s->valuesSeq, __ATOMIC_ACQUIRE);
+	if (q == 0 || (q & 1u))
+		return 0;
+	v->frame = __atomic_load_n(&s->valuesFrame, __ATOMIC_RELAXED);
+	for (unsigned i = 0; i < PLUG_VALUES; i++)
+		v->values[i] = __atomic_load_n(&s->values[i], __ATOMIC_RELAXED);
+	v->channel = __atomic_load_n(&s->channel, __ATOMIC_RELAXED);
+	v->rxFilter = __atomic_load_n(&s->rxFilter, __ATOMIC_RELAXED);
+	__atomic_thread_fence(__ATOMIC_ACQUIRE);
+	return __atomic_load_n(&s->valuesSeq, __ATOMIC_RELAXED) == q;
 }

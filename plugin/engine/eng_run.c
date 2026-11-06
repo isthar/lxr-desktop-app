@@ -99,10 +99,10 @@ static int eng_threadRealtime(double periodSec)
 
 /* --- the output ------------------------------------------------------------------- */
 
-static void eng_ring(void *ctx, const float *lr, uint32_t frames)
+static void eng_ring(void *ctx, const float *x, uint32_t frames)
 {
 	(void)ctx;
-	plug_audioWrite(E.s, lr, frames);
+	plug_audioWrite(E.s, x, frames);
 }
 
 static int eng_t0Due(uint64_t t)
@@ -111,8 +111,9 @@ static int eng_t0Due(uint64_t t)
 }
 
 /* the audio sink: t0 as the renderer finds it (render_main.c:355-380), then each block as the
- * stereo sum, (L1 + L2) / 65536 and (R1 + R2) / 65536: the renderer's --stereo sum before its
- * shift, exactly, and -6 dB of the device's two outputs added */
+ * device's two outputs, L1 R1 L2 R2, each sample / 32,768 (plan E9.4): exact, so that the plugin's
+ * sum of them, plug_sum(), is the prototype's (L1 + L2) / 65,536, the renderer's --stereo sum
+ * before its shift */
 static void eng_sink(void *ctx, uint64_t t, const int16_t *o1, const int16_t *o2)
 {
 	(void)ctx;
@@ -139,12 +140,17 @@ static void eng_sink(void *ctx, uint64_t t, const int16_t *o1, const int16_t *o2
 	}
 	if (E.phase != 2)
 		return;
-	float lr[2u * EMU_BLOCK_FRAMES];
-	for (unsigned i = 0; i < 2u * EMU_BLOCK_FRAMES; i++)
-		lr[i] = (float)((int32_t)o1[i] + o2[i]) * (1.0f / 65536.0f);
+	float x[PLUG_AUDIO_CHANNELS * EMU_BLOCK_FRAMES];
+	for (unsigned i = 0; i < EMU_BLOCK_FRAMES; i++)
+	{
+		x[4u * i] = (float)o1[2u * i] * (1.0f / 32768.0f);
+		x[4u * i + 1u] = (float)o1[2u * i + 1u] * (1.0f / 32768.0f);
+		x[4u * i + 2u] = (float)o2[2u * i] * (1.0f / 32768.0f);
+		x[4u * i + 3u] = (float)o2[2u * i + 1u] * (1.0f / 32768.0f);
+	}
 	if (E.native)
-		plug_audioWrite(E.s, lr, EMU_BLOCK_FRAMES);
-	else if (eng_resamplePush(&E.rs, lr, eng_ring, NULL) != 0)
+		plug_audioWrite(E.s, x, EMU_BLOCK_FRAMES);
+	else if (eng_resamplePush(&E.rs, x, eng_ring, NULL) != 0)
 		eng_fail(4, "the sample-rate converter failed");
 }
 
@@ -268,7 +274,7 @@ void eng_run(plug_shm_t *s, int wake, const char *card)
 	plug_store(&s->pid, (uint64_t)getpid());
 	plug_store(&s->state, PLUG_ENGINE_BOOTING);
 	char err[256];
-	if (!E.native && eng_resampleOpen(&E.rs, s->rate, 2, err, sizeof err) != 0)
+	if (!E.native && eng_resampleOpen(&E.rs, s->rate, PLUG_AUDIO_CHANNELS, err, sizeof err) != 0)
 		eng_fail(4, err);
 	emu_config_t cfg;
 	emu_configDefaults(&cfg);
