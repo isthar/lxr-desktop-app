@@ -1,5 +1,5 @@
 <!--
-  LICHOMAT: sprawdzenia wtyczki w Abletonie (tracker E9.21, P1–P8; E9.41, P9–P10).
+  LICHOMAT: sprawdzenia wtyczki w Abletonie i Logic (tracker E9.21, P1–P8; E9.41, P9–P10; E9.77, P11).
 
   Copyright (C) 2026 Tomasz Krzywicki
   SPDX-License-Identifier: GPL-3.0-only
@@ -99,3 +99,37 @@ Każdy punkt: co zrobić, co powinno się stać, co zapisać.
 Jeśli parametr nie działa: w logu instancji (`~/Library/Application Support/LICHOMAT Plugin/logs/<id>.log`, jak w P8) jest linia `parameters: MIDI channel …, receive filter: …`. Na karcie init: `MIDI channel 1, receive filter: CC on, Program Change on`. Przyślij mi tę linię z logiem.
 
 Znane ograniczenie: przy eksporcie, bounce'ie albo freeze z nowo wstawionej wtyczki (nowy silnik offline) wartości z seta dochodzą do firmware w pierwszej ramce, razem ze startem transportu. Jeśli jakiś parametr mocno różni się od wartości z kitu (np. głos ściszony do 0), nuta dokładnie w tej ramce może przez 2–3 ms zagrać z wartością z kitu. Jeśli to usłyszysz, zapisz przy P10 (d).
+
+## E9.7: Audio Unit (P11)
+
+| | |
+|---|---|
+| Wersja | gałąź `plugin-v07`, `420d4a9` (2026-11-06), wtyczka 0.2.0 z firmware LICHOMAT 0.7: `LICHOMAT.vst3` i nowy `LICHOMAT.component` |
+| Co nowego | LICHOMAT jako Audio Unit (AU v2, instrument) dla Logic i innych hostów AU: ten sam silnik, te same dwa wyjścia, te same 36 parametrów i stan w secie co VST3. W Logic: producent „LICHOMAT”, wtyczka „LICHOMAT”. Kody AU: `aumu Lcht Lchm` |
+| Czego nie ma | AU v3 i własnego okna. CC i Program Change z regionów MIDI nie trafiają do firmware, jak w VST3; parametry tak |
+| Czas | ok. 15 min w Logic, opcjonalnie 5 min w Live |
+
+### Przed sprawdzeniem
+
+1. **Instalacja.** Zamknij Live i Logic. W Terminalu:
+
+   ```bash
+   cd /Users/tk/Code/lxr/build/wt-plugin-v07 && plugin/tools/install_plugin.sh
+   ```
+
+   - Skrypt instaluje obie wtyczki: `~/Library/Audio/Plug-Ins/VST3/LICHOMAT.vst3` i `~/Library/Audio/Plug-Ins/Components/LICHOMAT.component`.
+   - Po drodze uruchamia walidator Apple'a `auval` na zainstalowanym komponencie. Pod koniec mają być dwie linie: `Result: 47 tests passed, 0 tests failed` (VST3) i `AU VALIDATION SUCCEEDED.` (AU).
+   - Jeśli system nie widzi jeszcze nowego komponentu, skrypt uruchamia ponownie systemową usługę `AudioComponentRegistrar` i pyta jeszcze raz. To normalne.
+   - Jeśli skrypt napisze `FAILED`, przyślij mi `build/plugin-release.install.log` (jest w nim cały wynik `auval`). Poprzednie wersje wtyczek zostają wtedy na miejscu.
+2. **Logic:** projekt 48 kHz, w Ustawieniach → Audio bufor 128 albo 256 próbek. Przy pierwszym starcie po instalacji Logic sam sprawdza nowe AU; w Ustawieniach → Menedżer wtyczek (Plug-in Manager) LICHOMAT ma mieć zgodność „pomyślnie zweryfikowano” („successfully validated”).
+
+### Sprawdzenie
+
+| # | Co zrobić | Co powinno się stać | Zapisz |
+|---|---|---|---|
+| **P11** (15 min) | **(a)** Instalacja jak wyżej. **(b) Logic:** ścieżka instrumentu programowego, w slocie instrumentu AU Instruments → LICHOMAT → LICHOMAT → **Stereo**. Region MIDI 1 takt z nutą **C2** na każdą ósemkę „i” (2., 4., 6., 8. ósemka), kanał 1. Odtwarzanie od taktu 1 przy 120 BPM, w trakcie tempo 140, potem Cycle na 1 takt i kilka przejść. **(c)** Druga ścieżka z LICHOMAT, tym razem **Multi-Output**. W jego oknie (widok Controls) parametr **Drum 1 Output** na **St2**. Posłuchaj, potem w mikserze przyciskiem „+” na kanale instrumentu dodaj kanał aux dla wyjść 3–4. **(d)** Na ścieżce z (b) automatyka **Drum 1 Volume** od 127 na początku taktu 1 do 0 na początku taktu 3, odtwórz; potem „Bounce in Place” tej ścieżki i odsłuch. **(e)** Zapisz projekt, zamknij Logic, otwórz projekt. | (a) Dwie linie z końca skryptu jak wyżej. (b) Słychać nuty z regionu i sekwencer karty równo z metronomem; po zmianie tempa sekwencer po kilku uderzeniach idzie za nowym; Cycle wraca na początek taktu. (c) Przed dodaniem aux kanał LICHOMAT gra wszystko (oba wyjścia razem). Po dodaniu aux Drum 1 gra tylko na kanale aux, reszta na kanale LICHOMAT. (d) Drum 1 cichnie razem z linią automatyki; odbity plik gra to samo i nie jest cichy. (e) Obie ścieżki grają jak przed zapisem: karta i wartości parametrów są w projekcie, Drum 1 Output w (c) dalej na St2. | Co słychać w (b)–(e). Najważniejsze (c): czy Drum 1 zniknął z kanału LICHOMAT już **przed** dodaniem aux (wtedy Logic pobiera oba wyjścia od razu i trzeba to zmienić we wtyczce). W (d): czy odbicie nie jest ciche. |
+| **P11 (f)** opcjonalnie (5 min) | **Live z AU:** Ustawienia → Plug-Ins: włącz „Use Audio Units v2”, potem Rescan. W przeglądarce: Plug-Ins → Audio Units → LICHOMAT. Ścieżka MIDI z tym LICHOMAT i klip z P3. | Gra jak VST3 w P3–P4. | Czy się załadował i czy gra; jeśli nie, komunikat Live'a. |
+
+Jeśli nie masz Logic ani innego hosta AU, zrób tylko (a) i, jeśli chcesz, (f). Wynik `auval` z (a) sprawdza tylko interfejs AU, nie dźwięk, wyjścia ani automatykę; (b)–(e) zostaną otwarte do czasu, aż będzie host AU.
+
+Jeśli coś nie działa: log instancji `~/Library/Application Support/LICHOMAT Plugin/logs/<id>.log` z najnowszą datą (jak w P8). Jeśli Logic nie pokazuje LICHOMAT: Menedżer wtyczek → zaznacz LICHOMAT → „Reset & Rescan Selection”, i przyślij mi tekst z kolumny zgodności.
