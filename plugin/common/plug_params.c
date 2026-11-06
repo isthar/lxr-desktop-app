@@ -222,7 +222,10 @@ unsigned plug_paramsReport(plug_params_t *ps, const uint8_t *values, uint64_t fr
 			if (p->sent == p->want && p->sentFrame >= ps->epoch)
 				p->pending = 0;
 			else if (ch == PLUG_VALUE_NONE || !send(ps, i, (uint8_t)p->want, 0, frame0, ch, out, &n, max))
+			{
 				p->pending = 1;	/* no channel or no room: the next block's first frame */
+				p->sent = -1;	/* this engine has not got it (what was sent went to the one before) */
+			}
 			continue;
 		}
 		if (!first && p->sent >= 0 && frame < p->sentFrame + ps->settle)

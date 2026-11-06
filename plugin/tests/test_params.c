@@ -286,6 +286,40 @@ TEST(P12_params_new_engine)
 	ASSERT_EQ(plug_paramsReport(&ps, fw, 10000, 10000, CH, out, 0, 16), 1);
 	ASSERT_TRUE(out[0].offset == 0 && out[0].len == 3 && out[0].b[0] == 0xB3 && out[0].b[1] == 89 && out[0].b[2] == 40);
 	ASSERT_TRUE(ps.p[I_VOL1].sent == 40 && ps.p[I_VOL1].sentFrame == 10000);
+
+	/* the same with no room in the first report's block (a crash or hang restart, same card): the value the old
+	 * engine got is owed to the new one, so neither the next block's pending values (want == sent) nor a host point
+	 * equal to it after a flush (v == sent) may count it as given; the next report must not take the card's value */
+	for (int path = 0; path < 2; path++)
+	{
+		plug_params_t q;
+		plug_paramsInit(&q, SETTLE);
+		plug_paramsEngine(&q, 0);
+		ASSERT_EQ(plug_paramsReport(&q, fw, 0, 0, CH, out, 0, 16), 0);
+		ASSERT_EQ(plug_paramsHost(&q, a, 1, 100, CH, out, 0, 16), 1);
+		uint8_t had[PLUG_PARAM_COUNT];
+		memcpy(had, fw, sizeof had);
+		had[I_VOL1] = 40;
+		ASSERT_EQ(plug_paramsReport(&q, had, 5000, 5000, CH, out, 0, 16), 0);	/* the old engine has it */
+		plug_paramsEngine(&q, 10000);
+		ASSERT_EQ(plug_paramsReport(&q, fw, 10000, 10000, CH, out, 0, 0), 0);	/* no room */
+		ASSERT_TRUE(q.p[I_VOL1].pending && q.p[I_VOL1].want == 40);
+		unsigned n;
+		if (path == 0)
+			n = plug_paramsPending(&q, CH, 10128, out, 16);
+		else
+		{
+			/* a flush takes the host's 40 with no channel, then the next block sends what is pending */
+			ASSERT_EQ(plug_paramsHost(&q, a, 1, 10128, PLUG_VALUE_NONE, out, 0, 16), 0);
+			n = plug_paramsPending(&q, CH, 10128, out, 16);
+		}
+		ASSERT_EQ(n, 1);
+		ASSERT_TRUE(out[0].offset == 0 && out[0].b[0] == 0xB3 && out[0].b[1] == 89 && out[0].b[2] == 40);
+		ASSERT_TRUE(q.p[I_VOL1].sent == 40 && q.p[I_VOL1].sentFrame == 10128 && !q.p[I_VOL1].pending);
+		/* the next report, before the engine took it: in flight, the host keeps 40 */
+		ASSERT_EQ(plug_paramsReport(&q, fw, 10128, 10128, CH, out, 0, 16), 0);
+		ASSERT_TRUE(q.p[I_VOL1].want == 40 && q.p[I_VOL1].shown);
+	}
 }
 
 TEST(P12_params_unknown)
