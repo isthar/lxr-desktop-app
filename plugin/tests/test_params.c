@@ -362,4 +362,34 @@ TEST(P12_params_state)
 		ASSERT_EQ(back[i], -1);
 }
 
+TEST(P12_params_lchv)
+{
+	/* every byte of the version and the count counts: a value that differs from the good one in byte 2 or 3 only is
+	 * refused, with entries behind it that would read fine as the good one */
+	static const uint8_t entries[10] = { 0x0A, 0, 0, 0, 0x28, 0x0B, 0, 0, 0, 0x14 };
+	int back[PLUG_PARAM_COUNT];
+	static const struct { const char *what; uint8_t version[4], count[4]; int result; } c[] = {
+		{ "good", { 1, 0, 0, 0 }, { 2, 0, 0, 0 }, 0 },
+		{ "count byte 2", { 1, 0, 0, 0 }, { 2, 0, 1, 0 }, -1 },
+		{ "count byte 3", { 1, 0, 0, 0 }, { 2, 0, 0, 1 }, -1 },
+		{ "version byte 2", { 1, 0, 1, 0 }, { 2, 0, 0, 0 }, -1 },
+		{ "version byte 3", { 1, 0, 0, 1 }, { 2, 0, 0, 0 }, -1 },
+		{ "version byte 1", { 1, 1, 0, 0 }, { 2, 0, 0, 0 }, -1 },
+		{ "count byte 1", { 1, 0, 0, 0 }, { 2, 1, 0, 0 }, -1 },
+	};
+	for (unsigned k = 0; k < sizeof c / sizeof c[0]; k++)
+	{
+		memcpy(buf, "LCHV", 4);
+		memcpy(buf + 4, c[k].version, 4);
+		memcpy(buf + 8, c[k].count, 4);
+		memcpy(buf + 12, entries, 10);
+		len = 22;
+		at = 0;
+		const int r = plug_paramsRead(get, NULL, back);
+		if (r != c[k].result)
+			printf("%s: %d, not %d\n", c[k].what, r, c[k].result);
+		ASSERT_EQ(r, c[k].result);
+	}
+}
+
 TEST_MAIN()
