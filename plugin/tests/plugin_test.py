@@ -1701,12 +1701,13 @@ def P10_plugin_params_state(t):
 @case
 def P10_plugin_null_out2(t):
     # An inactive bus may have null sample buffers (ivstaudioprocessor.h:191-193), and a channel may be null: Out 2 given
-    # null buffers the whole run (inactive), and Out 1's left channel null for the block at 5,120 (an unwritten
-    # buffer). No crash; Out 1 is lichomat-render's --stereo sum (P10_plugin_native) but for that block's left channel,
-    # which the plugin left as the host had it (0.5), and its right channel is the renderer's
+    # null buffers the whole run (inactive), and Out 1's left channel null for the block at 0 (within the read offset,
+    # which the plugin writes as silence) and for the block at 5,120 (an unwritten buffer). No crash; Out 1 is
+    # lichomat-render's --stereo sum (P10_plugin_native) but for those blocks' left channel, which the plugin left as
+    # the host had it (0.5), and its right channel is the renderer's
     script = t.path('script.txt')
-    lat, out = host(t, plan(t, 'plan.txt', TIMELINE + ['null-out2', 'null-out1 5120', 'out ' + t.path('plugin.wav'),
-                                                       'script ' + script]))
+    lat, out = host(t, plan(t, 'plan.txt', TIMELINE + ['null-out2', 'null-out1 0', 'null-out1 5120',
+                                                       'out ' + t.path('plugin.wav'), 'script ' + script]))
     t.render(t.card('render'), script, 12, t.path('render.wav'))
     _, _, a = wav(t.path('plugin.wav'))
     _, _, b = wav(t.path('render.wav'))
@@ -1718,6 +1719,8 @@ def P10_plugin_null_out2(t):
     print('latency %d, %d frames compared, %d differ; left of the block at 5,120 untouched: %d of 128; other differences: %d'
           % (lat[0], n, diff, sum(1 for v in left if v == 16384), len(others)))
     check(all(v == 16384 for v in left), 'the null channel was written')
+    check(all(a[2 * f] == 16384 for f in range(128)) and not any(a[2 * f + 1] for f in range(128)),
+          'the block at 0: the null channel was written, or the other one not silent')
     check(not others and loud > 100000, 'Out 1 differs from the renderer in %d samples' % len(others))
     check('engine running' in out, 'the engine did not run to the end')
     # Out 2 (inactive) with one null channel and one the host filled (0.5): that one comes back zero, and the bus is
@@ -1732,6 +1735,18 @@ def P10_plugin_null_out2(t):
           '%d frames compared, %d differ' % (b2, f2, n2, o2, n, diff))
     check(b2 > 3000 and f2 == b2 and n2 == 0 and o2 == 0, 'Out 2 with one null channel: %r' % (m.groups(),))
     check(diff == 0 and loud > 100000, 'Out 1 with Out 2\'s left channel null: %d differ' % diff)
+    # Out 1's left channel null in the first block after a restart (a setState of the onset card's own state at 4.5 s):
+    # the frames it reads lie before the new engine's first one, which plug_audioRead() writes as silence, not through
+    # a null channel; that channel stays as the host had it and the right one is silent
+    host(t, plan(t, 'make.txt', ['out ' + t.path('make.wav'), 'state-out ' + t.path('onset.bin')], frames=12800))
+    at = 198656
+    _, out = host(t, plan(t, 'restart.txt', TIMELINE + ['null-out2', 'setstate %d %s' % (at, t.path('onset.bin')),
+                                                         'null-out1 %d' % at, 'out ' + t.path('restart.wav')]))
+    r = wav(t.path('restart.wav'))[2]
+    print('the block at %d, the first after a restart: left untouched %d of 128, right silent %d of 128'
+          % (at, sum(1 for f in range(at, at + 128) if r[2 * f] == 16384), sum(1 for f in range(at, at + 128) if r[2 * f + 1] == 0)))
+    check(all(r[2 * f] == 16384 and r[2 * f + 1] == 0 for f in range(at, at + 128)) and 'engine running' in out,
+          'the block after the restart: the null channel was written, or the other one not silent')
 
 
 def lchv(path):
@@ -1833,11 +1848,14 @@ def P10_plugin_flush_order(t):
     # first frame after the Start, as the same change inside the block at frame 0 is (B-12: transport, parameters,
     # notes): pattern 1 (a Program Change) in a flush before the Start block at 4,480 is what the renderer plays for the
     # plughost's script, where the Program Change follows the Start at that frame, byte for byte, and the very output of
-    # the change given in the block. The firmware switches the pattern at once when the Program Change comes first and
-    # at the end of the playing pattern when it follows the Start: the two differ in 395,798 samples (init card)
+    # the change given in the block; so is it with a second flush (no changes) before that block, which must not send
+    # what the first took (a flush has no channel: its MIDI would be lost). The firmware switches the pattern at once
+    # when the Program Change comes first and at the end of the playing pattern when it follows the Start: the two
+    # differ in 395,798 samples (init card)
     init = os.path.join(t.a.root, 'emu', 'tests', 'cards', 'init')
     runs = {}
-    for name, extra in (('flush', ['flush 4480 1 1']), ('inblock', ['param 4480 1 1']), ('none', [])):
+    for name, extra in (('flush', ['flush 4480 1 1']), ('inblock', ['param 4480 1 1']), ('none', []),
+                        ('twice', ['flush 4480 1 1', 'flush-empty 4480'])):
         script = t.path(name + '.txt')
         lat, _ = host(t, plan(t, name + '.plan', ['card ' + init, 'play 4480 120 0', 'out ' + t.path(name + '.wav'),
                                                     'script ' + script] + extra, card=False, frames=blocks_frames(10)))
@@ -1850,11 +1868,14 @@ def P10_plugin_flush_order(t):
     b = wav(t.path('render.wav'))[2]
     n, diff, loud = shifted_equal(runs['flush'], b, lat[0] - 128)
     same = same_files(t.path('flush.wav'), t.path('inblock.wav'))
+    twice = same_files(t.path('twice.wav'), t.path('inblock.wav'))
     other = sum(1 for x, y in zip(runs['flush'], runs['none']) if x != y)
-    print('flush vs the renderer: %d frames compared, %d differ; flush vs the change in the block: %s; flush vs no change: '
-          '%d samples differ' % (n, diff, 'the same' if same is None else same, other))
+    print('flush vs the renderer: %d frames compared, %d differ; flush vs the change in the block: %s; two flushes: %s; '
+          'flush vs no change: %d samples differ' % (n, diff, 'the same' if same is None else same,
+                                                      'the same' if twice is None else twice, other))
     check(diff == 0 and loud > 10000, '%d samples differ from the renderer' % diff)
     check(same is None, 'the flush plays another output than the change in the block: %s' % same)
+    check(twice is None, 'with a second flush the change is lost or moved: %s' % twice)
     check(other > 100000, 'the change does not matter (%d samples): the test shows nothing' % other)
 
 

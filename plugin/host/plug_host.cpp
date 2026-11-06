@@ -136,6 +136,7 @@ struct Plan
 	std::string events;			/* the MIDI instance 0 pushed into its engine's ring */
 	std::string stateEarly;		/* getState right after setState (FILE.set) and right after setActive (FILE), before any block */
 	std::vector<ParamCmd> flushes;	/* changes given in a flush (process() with 0 frames) right before the block from each frame */
+	std::vector<uint64_t> emptyFlushes;	/* a flush with no changes right before the block from each frame, after its flush */
 	std::vector<uint64_t> noOutputs;	/* the block from each frame with no output bus at all */
 	bool nullOut2 = false;		/* Out 2 (inactive) with null sample buffers, as the SDK allows */
 	bool nullOut2Left = false;	/* Out 2 with its left channel null, its right one given (filled with 0.5) */
@@ -200,6 +201,7 @@ Plan readPlan (const char* path)
 			     && c.value <= plug_params[plug_paramIndex (c.id)].max;
 			p.flushes.push_back (c);
 		}
+		else if (cmd == "flush-empty") { uint64_t k; ok = !!(s >> k); p.emptyFlushes.push_back (k); }
 		else if (cmd == "param-at")
 		{
 			Plan::RawPoint c;
@@ -671,7 +673,7 @@ int main (int argc, char** argv)
 	plug_clock_t expect;
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
-	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextNull1 = 0, nextAsync = 0, nextNoOut = 0, nextFlush = 0, nextRaw = 0;
+	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextNull1 = 0, nextAsync = 0, nextNoOut = 0, nextFlush = 0, nextRaw = 0, nextEmpty = 0;
 	std::vector<std::thread> asyncThreads;
 	unsigned long long processCalls = 0;
 	if (p.paced)
@@ -760,6 +762,22 @@ int main (int argc, char** argv)
 			while (nextFlush < p.flushes.size () && p.flushes[nextFlush].frame <= f)
 				nextFlush++;
 			printf ("lichomat-plughost: flush before %llu: %u changes\n", (unsigned long long)f, nFlush);
+		}
+		if (nextEmpty < p.emptyFlushes.size () && p.emptyFlushes[nextEmpty] <= f)
+		{
+			/* a second flush before the same block, with no changes: what the first took waits for the block */
+			for (auto& in : inst)
+			{
+				in->inParams.clearQueue ();
+				in->outParams.clearQueue ();
+				in->events.clear ();
+				in->data.numSamples = 0;
+				in->data.processContext = &ctx;
+				in->processor->process (in->data);
+			}
+			while (nextEmpty < p.emptyFlushes.size () && p.emptyFlushes[nextEmpty] <= f)
+				nextEmpty++;
+			printf ("lichomat-plughost: an empty flush before %llu\n", (unsigned long long)f);
 		}
 		const plug_transport_t t = tl.block (f, n);
 		ctx.state = ProcessContext::kTempoValid | ProcessContext::kProjectTimeMusicValid;

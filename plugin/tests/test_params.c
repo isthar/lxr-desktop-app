@@ -113,10 +113,14 @@ TEST(P12_params_host)
 	const plug_paramPoint_t pan[] = { { I_PAN4, 3, 9 } };
 	ASSERT_EQ(plug_paramsHost(&ps, pan, 1, 3000, PLUG_VALUE_NONE, out, 0, 16), 0);
 	ASSERT_TRUE(ps.p[I_PAN4].want == 9 && ps.p[I_PAN4].sent == -1 && ps.p[I_PAN4].shown == 1);
-	/* full: an NRPN's three messages all or none */
+	/* full: an NRPN's three messages all or none; the one left out is pending, for the next block's first frame */
 	const plug_paramPoint_t two[] = { { I_VOL1, 0, 1 }, { I_DJ, 0, 2 } };
 	ASSERT_EQ(plug_paramsHost(&ps, two, 2, 4000, CH, out, 0, 3), 1);
 	ASSERT_EQ(ps.p[I_DJ].sent, 21);	/* left out: still the last it got */
+	ASSERT_TRUE(ps.p[I_DJ].pending && !ps.p[I_VOL1].pending);
+	/* with Drum 4's pan, taken with no channel above, in the table's order */
+	ASSERT_EQ(plug_paramsPending(&ps, CH, 4100, out, 16), 4);
+	ASSERT_TRUE(out[0].b[2] == 9 && out[3].b[1] == 6 && out[3].b[2] == 2 && ps.p[I_DJ].sent == 2 && !ps.p[I_DJ].pending);
 	/* a value beyond the parameter's range is its max; an index beyond the table is left out */
 	const plug_paramPoint_t big[] = { { I_FX, 0, 120 }, { PLUG_PARAM_COUNT, 0, 1 } };
 	ASSERT_EQ(plug_paramsHost(&ps, big, 2, 5000, CH, out, 0, 16), 3);
@@ -184,6 +188,24 @@ TEST(P12_params_pending)
 	ASSERT_TRUE(r.p[I_VOL1].pending && r.p[I_VOL1].sent == -1);
 	ASSERT_EQ(plug_paramsPending(&r, CH, 700, out, 16), 1);
 	ASSERT_TRUE(out[0].b[1] == 89 && out[0].b[2] == 40 && r.p[I_VOL1].sent == 40);
+	/* a restored value, not pending (a first report is to give it), whose first report has no channel, then one with no
+	 * room: the report makes it pending, and it goes out at the next block's first frame */
+	for (int room = 0; room < 2; room++)
+	{
+		plug_params_t u;
+		plug_paramsInit(&u, SETTLE);
+		int restored[PLUG_PARAM_COUNT];
+		for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+			restored[i] = -1;
+		restored[I_VOL1] = 40;
+		plug_paramsRestore(&u, restored);
+		plug_paramsEngine(&u, 500);
+		ASSERT_TRUE(!u.p[I_VOL1].pending && u.p[I_VOL1].want == 40 && fw[I_VOL1] != 40);
+		ASSERT_EQ(plug_paramsReport(&u, fw, 500, 600, room ? CH : PLUG_VALUE_NONE, out, 0, room ? 0 : 16), 0);
+		ASSERT_TRUE(u.p[I_VOL1].pending && u.p[I_VOL1].sent == -1 && !u.p[I_DJ].pending);
+		ASSERT_EQ(plug_paramsPending(&u, CH, 700, out, 16), 1);
+		ASSERT_TRUE(out[0].b[1] == 89 && out[0].b[2] == 40 && u.p[I_VOL1].sent == 40 && !u.p[I_VOL1].pending);
+	}
 
 	/* a value the firmware changed by itself, or a restored state, ends what is pending */
 	plug_params_t o;
