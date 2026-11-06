@@ -54,14 +54,19 @@ void eng_fwValues(uint8_t values[PLUG_PARAM_COUNT], uint8_t *channel, uint8_t *r
 	*rxFilter = (uint8_t)(midiParser_txRxFilter & 0x0Fu);
 }
 
-int eng_fwCheck(char *err, size_t n)
+int eng_fwCheckTable(const plug_param_t *table, unsigned n, char *err, size_t errlen)
 {
-	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
-		if (plug_params[i].par != eng_pars[i].par)
+	for (unsigned i = 0; i < n && i < PLUG_PARAM_COUNT; i++)
+		if (table[i].par != eng_pars[i].par)
 		{
-			snprintf(err, n, "the parameter %s (id %u) is firmware parameter %u, %s is %u", plug_params[i].name,
-				(unsigned)plug_params[i].id, (unsigned)plug_params[i].par, eng_pars[i].name, (unsigned)eng_pars[i].par);
+			snprintf(err, errlen, "the parameter %s (id %u) is firmware parameter %u, %s is %u", table[i].name,
+				(unsigned)table[i].id, (unsigned)table[i].par, eng_pars[i].name, (unsigned)eng_pars[i].par);
 			return -1;
 		}
 	return 0;
+}
+
+int eng_fwCheck(char *err, size_t n)
+{
+	return eng_fwCheckTable(plug_params, PLUG_PARAM_COUNT, err, n);
 }

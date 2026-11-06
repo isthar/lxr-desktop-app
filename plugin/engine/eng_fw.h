@@ -31,4 +31,7 @@ void eng_fwValues(uint8_t values[PLUG_PARAM_COUNT], uint8_t *channel, uint8_t *r
  * else -1 with the first that is not in err */
 int eng_fwCheck(char *err, size_t n);
 
+/** the same check on a table of n rows (plug_params[]'s order; a test's copy with a row changed) */
+int eng_fwCheckTable(const plug_param_t *table, unsigned n, char *err, size_t errlen);
+
 #endif /* ENG_FW_H_ */

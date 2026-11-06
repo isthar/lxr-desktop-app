@@ -103,6 +103,14 @@ add_library(eng_fw OBJECT engine/eng_fw.c)
 target_link_libraries(eng_fw PRIVATE emu_fw_headers)
 target_include_directories(eng_fw PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/engine")
 target_compile_options(eng_fw PRIVATE -Wall -Wextra -Werror)
+# the check of plug_params[] against the firmware's parameters, on tables with a row changed: eng_fw.c with
+# stand-ins for the four globals it reads (P12_engine_table)
+add_executable(test_engfw tests/test_engfw.c $<TARGET_OBJECTS:eng_fw> $<TARGET_OBJECTS:plug_common_san>)
+target_include_directories(test_engfw PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/engine" "${LXR_ROOT}/tests")
+target_compile_options(test_engfw PRIVATE ${PLUGIN_FLAGS} ${PLUGIN_SAN_FLAGS})
+target_link_options(test_engfw PRIVATE ${PLUGIN_SAN_FLAGS})
+add_test(NAME P12_engine_table COMMAND test_engfw P12_engine_table)
+set_tests_properties(P12_engine_table PROPERTIES TIMEOUT 120 LABELS plugin)
 add_executable(lichomat-engine engine/eng_main.c engine/eng_run.c engine/eng_resample.c $<TARGET_OBJECTS:eng_fw>
     $<TARGET_OBJECTS:lichomat-render_fw> $<TARGET_OBJECTS:plug_common_san> ${PLUGIN_DEVICE_OBJECTS})
 target_include_directories(lichomat-engine PRIVATE "${PLUGIN_DIR}/common" "${PLUGIN_DIR}/engine"
