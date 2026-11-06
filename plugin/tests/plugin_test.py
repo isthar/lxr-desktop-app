@@ -694,6 +694,30 @@ def P6_engine_params(t):
     check(rows[0][2] == 0 and rows[0][3] == 15, 'channel and filter %r' % (rows[0][2:],))
 
 
+@case
+def P6_engine_late_epoch(t):
+    # The values' frames are the host's: with a pre-roll the epoch is above 0, the engine's first report is at the
+    # epoch, and each change of P6_engine_params' script shows within 512 frames of epoch + its frame
+    script = param_script(t, 'script.txt', PARAM_SCRIPT)
+    frames = blocks_frames(6)
+    s = t.drive(t.card('late'), RATE_TEXT, 128, script, frames, t.path('late.wav'), preroll=True,
+                values=t.path('values.txt'))
+    epoch = s.get('epoch', 0)
+    check(epoch > 0 and s.get('late') == 0, 'counters %r' % s)
+    rows = []
+    for line in open(t.path('values.txt')):
+        w = line.split()
+        rows.append((int(w[0][:-1]), [int(v) for v in w[1:-4]]))
+    print('the epoch %d; the first values at frame %d' % (epoch, rows[0][0]))
+    check(rows[0][0] == epoch, 'the first values at frame %d, not the epoch %d' % (rows[0][0], epoch))
+    seen = {'Drum 1 Volume': (1, 40, 30000), 'Drum 1 Filter': (13, 48, 52000), 'DJ Filter': (26, 20, 60000),
+            'Reverb Level': (27, 112, 90000), 'Pattern': (0, 1, 200000)}
+    for name, (i, v, at) in sorted(seen.items()):
+        f = next((f for f, vs in rows if f >= epoch + at and vs[i] == v), None)
+        print('%s = %d: from frame %s (sent at %d + epoch %d)' % (name, v, f, at, epoch))
+        check(f is not None and f - (epoch + at) <= 512, '%s: %r' % (name, f))
+
+
 # --- the bundle (Task 8) ----------------------------------------------------------------------
 
 @case

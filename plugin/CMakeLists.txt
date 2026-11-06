@@ -146,6 +146,7 @@ plugin_py_tests(P6_engine_version P6_engine_objects P6_engine_native P6_engine_b
     P6_engine_quit P6_engine_orphan P7_engine_resampled P7_engine_realtime P6_engine_split P7_engine_split P6_engine_params)
 set_tests_properties(P6_engine_paced P7_engine_realtime PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
 plugin_py_tests(P6_engine_refuses)
+plugin_py_tests(P6_engine_late_epoch)
 
 # --- the card archive (the plugin's state, Task 7) -------------------------------------------
 # with its own copy of the card's POSIX half, built without the emulator's sanitizers: the
