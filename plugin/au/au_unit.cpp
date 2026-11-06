@@ -546,7 +546,10 @@ private:
 			Output (1).SetName (CFSTR ("Out 2"));
 	}
 
-	/* the render guard from idle to setting up: waits while a render runs, at most kSetupWait */
+	/* The render guard from idle to setting up: waits while a render runs, at most kSetupWait. It waits inside
+	 * AUMethodSetProperty(), which holds the SDK's instance mutex (AUInstanceGuard, AUPlugInDispatch.cpp): the AU's
+	 * other locked calls on this instance (its properties, Initialize, Uninitialize, Reset) wait as long. In practice
+	 * the wait is one pull; kSetupWait's 11 s is only for an offline process() waiting on a hung engine */
 	bool holdRenders ()
 	{
 		const auto until = std::chrono::steady_clock::now () + kSetupWait;
