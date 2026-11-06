@@ -108,3 +108,22 @@ Każdy wiersz dostaje plan i przeglądy jak v0.6–v0.7. Prace nad wtyczką nie 
 | Okno | Prototyp bez okna, panel w E9.5 |
 | Nazwa i producent | „LICHOMAT”, producent do Twojego wyboru |
 | Udostępnianie innym | Po prototypie, Twoja decyzja o podpisie i notaryzacji |
+
+## 7. Dopisek z 2026-11-06: E9.4 bez AU (moje decyzje, do Twoich poprawek)
+
+AU wymaga AudioUnitSDK Apple'a, czyli kolejnego pobrania; zapytam Cię o nie osobno. Bez niego
+E9.4 robi teraz dwie rzeczy, na gałęzi `plugin-v07` (wtyczka z firmware v0.7):
+
+1. **Dwie szyny stereo: „Out 1” i „Out 2”**, jak dwa gniazda LXR.
+   - Głos trafia tam według `audio_out` swojego kitu (np. stopa na Out 2).
+   - Dopóki w Live nie włączysz drugiego wyjścia, „Out 1” niesie sumę obu, jak dziś.
+   - Po włączeniu „Out 1” to samo wyjście 1, a „Out 2” to wyjście 2: dwie ścieżki do osobnej obróbki.
+   - Silnik przelicza wtedy cztery kanały zamiast dwóch.
+2. **Parametry do automatyki** (ok. 30): na każdy z 6 głosów głośność, panorama, filtr i decay; do
+   tego filtr DJ, pogłos, delay, shuffle i **wybór wzorca** (0–63, wysyłany do firmware jak Program
+   Change).
+   - Zmiana z Live trafia do firmware co do próbki.
+   - Silnik odsyła wtyczce aktualne wartości z firmware, więc po wczytaniu kitu Live pokazuje to, co
+     gra.
+3. **Bez zmian:** jedna instancja to jeden silnik, stan w secie, opóźnienie, testy z prototypu.
+4. **Twoje sprawdzenie** dojdzie jako P9–P10 (dwa wyjścia, automatyka) w `plugin-checks.md`.
