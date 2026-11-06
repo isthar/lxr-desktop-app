@@ -177,14 +177,21 @@ public:
 	/* a host may take Out 1 alone (one output element: Out 1 is then always the sum) or both */
 	bool BusCountWritable (AudioUnitScope scope) override { return scope == kAudioUnitScope_Output; }
 
+	/* a new element takes Out 1's format (the SDK makes it at 44.1 kHz), so that a host that set the format first and
+	 * the count after gets one rate (Initialize() refuses two) */
 	OSStatus SetBusCount (AudioUnitScope scope, UInt32 count) override
 	{
 		if (scope != kAudioUnitScope_Output || count < 1 || count > 2)
 			return kAudioUnitErr_InvalidPropertyValue;
+		const UInt32 was = Outputs ().GetNumberOfElements ();
+		const AudioStreamBasicDescription f = Output (0).GetStreamFormat ();
 		const OSStatus r = MusicDeviceBase::SetBusCount (scope, count);
-		if (r == noErr)
-			nameOutputs ();
-		return r;
+		if (r != noErr)
+			return r;
+		for (UInt32 b = was; b < count; b++)
+			Output (b).SetStreamFormat (f);
+		nameOutputs ();
+		return noErr;
 	}
 
 	/* --- parameters --------------------------------------------------------------------------- */

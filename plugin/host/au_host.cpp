@@ -48,7 +48,9 @@
  *   info              print the AU's parameters (each value's string read back), outputs, latency and
  *                     tail before playing
  *   checks            before playing, what auval checks of an instrument and can be checked here:
- *                     initialized again at another rate (the latency follows), every writable
+ *                     initialized again at another rate (the latency follows), the formats while
+ *                     uninitialized (a second output element made after Out 1's format takes it, a
+ *                     format of Out 1 alone sets both), every writable
  *                     parameter's minimum, maximum and default set and scheduled and read back, the
  *                     Engine refusing a set, a value outside a parameter's range or between its steps
  *                     set and scheduled and read back as the device takes it (clamped, rounded), a
@@ -503,6 +505,36 @@ void runChecks (Instance& in, const Plan& p, const AuPlan& a)
 		AudioUnitGetProperty (in.au, kAudioUnitProperty_Latency, kAudioUnitScope_Global, 0, &lat, &size);
 		const uint32_t want = plug_latency (rate, (uint32_t)p.block, plug_marginFromEnv ());
 		expect (std::lround (lat * rate) == (long)want, "the latency at " + std::to_string (rate));
+	}
+	/* the formats while uninitialized (two output elements): a second element made after Out 1's format was set
+	 * takes that format, and initializes; a format set on Out 1 alone is both elements' */
+	if (a.outputs == 2)
+	{
+		auto format = [&in] (UInt32 b) {
+			AudioStreamBasicDescription f {};
+			UInt32 size = sizeof f;
+			AudioUnitGetProperty (in.au, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, b, &f, &size);
+			return f;
+		};
+		auto count = [&in] (UInt32 c) {
+			return AudioUnitSetProperty (in.au, kAudioUnitProperty_ElementCount, kAudioUnitScope_Output, 0, &c, sizeof c) == noErr;
+		};
+		const double other = p.rate == 48000.0 ? 96000.0 : 48000.0;
+		expect (AudioUnitUninitialize (in.au) == noErr, "AudioUnitUninitialize for the formats");
+		AudioStreamBasicDescription f = format (0);
+		f.mSampleRate = other;
+		expect (count (1), "one output element");
+		expect (AudioUnitSetProperty (in.au, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &f, sizeof f) == noErr,
+		        "Out 1's format at " + std::to_string (other));
+		expect (count (2), "two output elements");
+		expect (format (1).mSampleRate == other, "Out 2 made after Out 1's format: " + std::to_string (format (1).mSampleRate) + " Hz");
+		expect (AudioUnitInitialize (in.au) == noErr, "AudioUnitInitialize with Out 2 made after Out 1's format");
+		expect (AudioUnitUninitialize (in.au) == noErr, "AudioUnitUninitialize for Out 1's format alone");
+		f.mSampleRate = p.rate;
+		expect (AudioUnitSetProperty (in.au, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &f, sizeof f) == noErr
+		            && format (1).mSampleRate == p.rate,
+		        "Out 1's format alone: Out 2 at " + std::to_string (format (1).mSampleRate) + " Hz");
+		expect (AudioUnitInitialize (in.au) == noErr, "AudioUnitInitialize after the formats");
 	}
 	/* every writable parameter: its minimum, maximum and default, set and scheduled, read back */
 	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
