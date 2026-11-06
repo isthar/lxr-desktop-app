@@ -1649,6 +1649,39 @@ def P10_plugin_null_out2(t):
     check('engine running' in out, 'the engine did not run to the end')
 
 
+def lchv(path):
+    """the values block of a state file: {id: value}"""
+    data = open(path, 'rb').read()
+    at = data.rfind(b'LCHV')
+    check(at >= 0, 'no values block in %s' % path)
+    return dict(struct.unpack('<IB', data[k:k + 5]) for k in range(at + 12, len(data), 5))
+
+
+@case
+def P10_plugin_async_state(t):
+    # A state set from another thread while blocks run (a host loading a project): the new card's values, not the old
+    # card's. The init card runs (real time, paced, 48 kHz); at 48,000 a prototype state of the fx card (its card only,
+    # no values) is set from a thread of its own, and the final getState holds the fx card's FX Amount (id 53) and
+    # outputs (60-65), as a plugin that ran the fx card holds them. Before the fix the old engine's report, read after
+    # the state was taken, counted as the first report and gave the init card's values back: 0 and 0 0 0 0 0 0
+    cards = os.path.join(t.a.root, 'emu', 'tests', 'cards')
+    host(t, plan(t, 'make.txt', ['card ' + os.path.join(cards, 'fx'), 'out ' + t.path('make.wav'),
+                                 'state-out ' + t.path('fx.bin')], card=False, rate=48000, block=256, frames=12800))
+    data = open(t.path('fx.bin'), 'rb').read()
+    with open(t.path('fx-proto.bin'), 'wb') as f:
+        f.write(data[:data.rfind(b'LCHV')])
+    want = lchv(t.path('fx.bin'))
+    ids = [53] + list(range(60, 66))
+    host(t, plan(t, 'run.txt', ['card ' + os.path.join(cards, 'init'), 'mode realtime', 'paced',
+                                'setstate-async 48000 ' + t.path('fx-proto.bin'), 'out ' + t.path('run.wav'),
+                                'state-out ' + t.path('after.bin')], card=False, rate=48000, block=256, frames=48000 * 4))
+    got = lchv(t.path('after.bin'))
+    print('the fx card: FX Amount %d, outputs %r; the state after: FX Amount %d, outputs %r'
+          % (want[53], [want[i] for i in range(60, 66)], got[53], [got[i] for i in range(60, 66)]))
+    check(want[53] == 64 and [want[i] for i in range(60, 66)] == [6, 6, 6, 6, 0, 0], 'the fx card\'s values %r' % want)
+    check([got[i] for i in ids] == [want[i] for i in ids], 'the state after holds the old card\'s values')
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

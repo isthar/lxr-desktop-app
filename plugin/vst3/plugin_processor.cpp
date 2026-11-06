@@ -293,6 +293,9 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 	if (gen != restoreSeen.load (std::memory_order_relaxed))
 	{
 		restoreValues (stateValues);	/* a state set while active: its values */
+		/* the old engine still runs, and its report would count as the new card's first: none is taken until
+		 * the next engine's epoch is set (plug_paramsEngine; plug_paramsReport ignores frames before it) */
+		params.epoch = UINT64_MAX;
 		restoreSeen.store (gen, std::memory_order_relaxed);
 	}
 	const bool running = s && state == PLUG_ENGINE_RUNNING;

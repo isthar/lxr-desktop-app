@@ -119,7 +119,7 @@ struct Plan
 	std::vector<TransportCmd> transport;
 	std::vector<uint64_t> kills, hangs;
 	std::vector<std::pair<uint64_t, int>> renews;
-	std::vector<std::pair<uint64_t, std::string>> setstates;
+	std::vector<std::pair<uint64_t, std::string>> setstates, asyncSets;	/* asyncSets: setState from a thread of its own */
 	bool nullOut2 = false;		/* Out 2 (inactive) with null sample buffers, as the SDK allows */
 	std::vector<uint64_t> nullOut1;	/* the block from each frame with Out 1's left channel null */
 };
@@ -177,6 +177,7 @@ Plan readPlan (const char* path)
 		else if (cmd == "renew") { uint64_t k; int i; ok = !!(s >> k >> i); p.renews.push_back ({k, i}); }
 		else if (cmd == "null-out2") p.nullOut2 = true;
 		else if (cmd == "null-out1") { uint64_t k; ok = !!(s >> k); p.nullOut1.push_back (k); }
+		else if (cmd == "setstate-async") { uint64_t k; std::string fn; ok = !!(s >> k >> fn); p.asyncSets.push_back ({k, fn}); }
 		else if (cmd == "setstate") { uint64_t k; std::string fn; ok = !!(s >> k >> fn); p.setstates.push_back ({k, fn}); }
 		else ok = false;
 		if (!ok)
@@ -495,7 +496,8 @@ int main (int argc, char** argv)
 	plug_clock_t expect;
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
-	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextNull1 = 0;
+	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextNull1 = 0, nextAsync = 0;
+	std::vector<std::thread> asyncThreads;
 	unsigned long long processCalls = 0;
 	if (p.paced)
 		paceAsDevice (p);
@@ -531,6 +533,21 @@ int main (int argc, char** argv)
 			printf ("lichomat-plughost: setstate at %llu: %s in %.3f s\n", (unsigned long long)f, r == kResultOk ? "ok" : "refused",
 			        std::chrono::duration<double> (std::chrono::steady_clock::now () - w0).count ());
 			nextSet++;
+		}
+		while (nextAsync < p.asyncSets.size () && p.asyncSets[nextAsync].first <= f)
+		{
+			/* as a host's state loading thread does it, while blocks run */
+			auto st = std::make_shared<std::vector<uint8_t>> (readFile (p.asyncSets[nextAsync].second));
+			IComponent* comp = inst[0]->component.get ();
+			const uint64_t at = f;
+			asyncThreads.emplace_back ([st, comp, at] {
+				IPtr<MemoryStream> m = owned (new MemoryStream (st->data (), (TSize)st->size ()));
+				const auto w0 = std::chrono::steady_clock::now ();
+				const tresult r = comp->setState (m);
+				printf ("lichomat-plughost: setstate-async at %llu: %s in %.3f s\n", (unsigned long long)at,
+				        r == kResultOk ? "ok" : "refused", std::chrono::duration<double> (std::chrono::steady_clock::now () - w0).count ());
+			});
+			nextAsync++;
 		}
 		const plug_transport_t t = tl.block (f, n);
 		ctx.state = ProcessContext::kTempoValid | ProcessContext::kProjectTimeMusicValid;
@@ -664,6 +681,8 @@ int main (int argc, char** argv)
 		if (nextNull1 < p.nullOut1.size () && p.nullOut1[nextNull1] <= f)
 			nextNull1++;
 	}
+	for (auto& th : asyncThreads)
+		th.join ();
 	if (!p.stateOut.empty ())
 	{
 		IPtr<MemoryStream> m = owned (new MemoryStream);
