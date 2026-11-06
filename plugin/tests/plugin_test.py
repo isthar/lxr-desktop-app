@@ -1657,6 +1657,20 @@ def P10_plugin_restart_hold(t):
     check(after_restart_ok(after, back), 'after the restart: %r, beats %r' % (after, back))
     check(nearest == min(w for w in beats if w >= clock + lat[0]), 'the first beat after the restart %r' % nearest)
     restart_hold_midi(t, init, 96000, block)
+    # The first engine of an offline activation is not held (a bounce, an export, a freeze would lose its first 16th):
+    # the state's six volumes owed to it (the init card's are 127), the transport playing from frame 0 (48 kHz): its
+    # Start and first clock at frame 0, the volumes after them at that frame (the firmware settles them meanwhile: a
+    # known limit). Held, the Start would be a Continue at 16th 1, a block at least 1,024 frames after the volumes
+    first = t.path('events-first.txt')
+    host(t, plan(t, 'first.txt', ['state-in ' + t.path('quiet.bin'), 'play 0 120 0', 'events ' + first,
+                                  'out ' + t.path('first.wav')], card=False, rate=rate, block=block, frames=rate))
+    ev = midi_lines(first)
+    vols = sorted((f, m[1:]) for f, m in ev if m[0] & 0xF0 == 0xB0)
+    clock = next((f for f, m in ev if m[0] == 0xF8), -1)
+    print('the first engine, offline, owing six values: the first messages %r; the volumes %r; the first clock at %d'
+          % (ev[:4], vols, clock))
+    check(ev[:2] == [(0, [0xFA]), (0, [0xF8])] and clock == 0, 'the Start and the first clock %r' % ev[:3])
+    check(vols == [(0, [89 + k, 120]) for k in range(6)], 'the volumes %r' % vols)
 
 
 @case
