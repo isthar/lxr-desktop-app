@@ -1156,14 +1156,14 @@
     {
       "id": "E9.74",
       "epic": "E9",
-      "status": "gotowe",
+      "status": "zrobione",
       "title": "Wtyczka AU zad. 4: komponent LICHOMAT.component (własna cienka warstwa AU v2 na MusicDeviceBase wokół procesora VST3)",
       "updated": "2026-11-06"
     },
     {
       "id": "E9.75",
       "epic": "E9",
-      "status": "gotowe",
+      "status": "zrobione",
       "title": "Wtyczka AU zad. 5: host testowy AU (lichomat-auhost): 15 scenariuszy VST3 przez AU (bajt w bajt to samo) i 8 własnych, wątek audio 0 zakazanych wywołań",
       "updated": "2026-11-06"
     },
