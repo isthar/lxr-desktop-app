@@ -1117,6 +1117,22 @@ def beats_through(t, what, at, frames):
     return lat[0], before, want, after, back, log
 
 
+# The first two beats after a restart may come early, by up to 20 frames at 48 kHz and 120 BPM (measured 19 and 3, with
+# the test host offline and the restart set by a setState at each 8th frame of a clock, so deterministic), when the new
+# engine starts up to half a clock after a 16th: plug_clock then sends that 16th's Song Position and its clock at once
+# (ceil(4p - 1/12), plug_clock.c:58), that clock up to half a clock late, and the firmware's slave times its steps
+# from its clocks' fitted tempo (seq_core.c seqc_dueTime(): lastClockTime + (tick - lastClockPos) x cyclesPerTick), which
+# the short first interval makes fast until the fit settles. The device does the same with that clock stream; the host
+# mode of E9.3, which gives the sequencer the host's position instead of MIDI clock, has no such first interval.
+AFTER_RESTART = (-20, -20)
+
+
+def after_restart_ok(after, back):
+    """the onsets from the first one back against their beats: the first two within AFTER_RESTART..+2, then -2..+2"""
+    return len(after) == len(back) and all((AFTER_RESTART[i] if i < 2 else -2) <= o - w <= 2
+                                           for i, (o, w) in enumerate(zip(after, back)))
+
+
 @case
 def P10_plugin_beats(t):
     # real time, paced, 48 kHz, blocks of 256: the init card's four on the floor as the slave of a playing transport,
@@ -1124,14 +1140,13 @@ def P10_plugin_beats(t):
     # Continue where the transport is), so the beats come back within 1.5 s of the kill: every beat before the kill
     # sounds at its frame plus the latency, -1 to +1 (P10_plugin_onsets), and every one from the first back, -2 to
     # +2: the voices start on every second engine frame, 2.18 host frames at 48 kHz, and the new engine's epoch puts
-    # that grid anywhere among the host's frames (the first engine's is frame 0). The underruns in the instance's log
-    # tell a busy machine from a fault
+    # that grid anywhere among the host's frames (the first engine's is frame 0); the first two of them up to 20 frames
+    # early (AFTER_RESTART). The underruns in the instance's log tell a busy machine from a fault
     kill = 144000
     _, before, want, after, back, _ = beats_through(t, 'kill', kill, 48000 * 6)
     check(len(before) == len(want) and all(-1 <= o - w <= 1 for o, w in zip(before, want)), 'before the kill: %r' % before)
     check(after and after[0] < kill + 72000, 'no beat within 1.5 s of the kill: %r' % after[:3])
-    check(len(after) == len(back) and all(-2 <= o - w <= 2 for o, w in zip(after, back)), 'after the kill: %r, beats %r'
-          % (after, back))
+    check(after_restart_ok(after, back), 'after the kill: %r, beats %r' % (after, back))
 
 
 @case
@@ -1143,8 +1158,7 @@ def P10_plugin_hang(t):
     _, before, want, after, back, log = beats_through(t, 'hang', hang, 48000 * 8)
     check(len(before) == len(want) and all(-1 <= o - w <= 1 for o, w in zip(before, want)), 'before the hang: %r' % before)
     check(after and hang + 96000 < after[0] < hang + 192000, 'the first beat after the hang: %r' % after[:3])
-    check(len(after) == len(back) and all(-2 <= o - w <= 2 for o, w in zip(after, back)), 'after the hang: %r, beats %r'
-          % (after, back))
+    check(after_restart_ok(after, back), 'after the hang: %r, beats %r' % (after, back))
     check(re.search(r'ended \(signal 9\): it hung \(2 s without taking events\)', log), 'the log: %r' % log)
 
 
