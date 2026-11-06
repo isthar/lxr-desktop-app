@@ -1585,6 +1585,40 @@ def midi_lines(path):
     return out
 
 
+def restart_hold_midi(t, init, rate, block):
+    """P10_plugin_restart_hold's restart at rate, at 2 s of 5: the MIDI the plugin gave its engines checked; the
+    latency and the frame of the first clock after the restart. The output is run<rate>.wav"""
+    at, frames, hold = 2 * rate, 5 * rate, math.ceil(rate * 1024 / 48000.0)
+    sixteenth = rate // 8    # frames of a 16th at 120 BPM
+    events = t.path('events%d.txt' % rate)
+    lat, _ = host(t, plan(t, 'run%d.txt' % rate, ['card ' + init, 'play 0 120 0', 'setstate %d %s' % (at, t.path('quiet.bin')),
+                                                  'note %d 0 48 0' % (at + 100), 'note %d 0 48 0' % (at + 3000),
+                                                  'events ' + events, 'out ' + t.path('run%d.wav' % rate)],
+                          card=False, rate=rate, block=block, frames=frames))
+    ev = [(f, m) for f, m in midi_lines(events) if f >= at]
+    values = [(f, m) for f, m in ev if m[0] & 0xF0 == 0xB0]
+    first = values[0][0] if values else -1
+    transport = [(f, m) for f, m in ev if m[0] in (0xF2, 0xFA, 0xFB, 0xFC, 0xF8)]
+    resume = transport[0][0] if transport else -1
+    spp = [m for f, m in transport if m[0] == 0xF2]
+    six = spp[0][1] | spp[0][2] << 7 if spp else -1
+    clock = next((f for f, m in transport if m[0] == 0xF8), -1)
+    offs = [f for f, m in ev if m[0] & 0xF0 == 0x80]
+    print('%d Hz: after the restart at %d: the first report %r at %r; Song Position %d and Continue at %d (+%d), the first clock '
+          'at %d (16th %d at %d); Note Offs given at %r' % (rate, at, [m[1:] for f, m in values],
+                                                              sorted(set(f for f, m in values)), six, resume,
+                                                              resume - first, clock, six, six * sixteenth, offs))
+    check(sorted(m[1:] for f, m in values) == [[89 + k, 120] for k in range(6)] and all(f == first for f, m in values)
+          and first in (at, at + block), 'the first report %r' % values)
+    check([m[0] for f, m in transport[:2]] == [0xF2, 0xFB] and transport[1][0] == resume and resume % block == 0,
+          'the transport after the restart %r' % transport[:3])
+    check(first + hold <= resume < first + hold + block, 'the Continue %d frames after the values, not %d' % (resume - first, hold))
+    check(six == math.ceil(resume / float(sixteenth) - 1 / 12.0) and clock == six * sixteenth and clock >= first + hold,
+          'the first clock at %d, 16th %d' % (clock, six))
+    check(offs == [at + 3000], 'the Note Offs given %r' % offs)
+    return lat, clock
+
+
 @case
 def P10_plugin_restart_hold(t):
     # A new engine's slave starts once the host's values it lacked have settled. Offline, 48 kHz, blocks of 256: the
@@ -1598,37 +1632,16 @@ def P10_plugin_restart_hold(t):
     # P10_plugin_beats, the first on the first beat from that 16th on (values that silence voices would change which
     # voice's attack the onsets measure: Drum 1's alone comes 3-5 frames later, hold or not). Before the fix the Song
     # Position, the Continue and the 16th's clock came at the very frame of the volumes: the firmware played that beat
-    # while it settled them
+    # while it settled them. Then the same restart at 96 kHz (at 192,000), its MIDI alone: the hold is
+    # ceil(rate x 1,024 / 48,000) frames, the same 21.3 ms, 2,048 frames there
     init = os.path.join(t.a.root, 'emu', 'tests', 'cards', 'init')
-    rate, block, at, frames, hold = 48000, 256, 96000, 48000 * 5, 1024
+    block = 256
     host(t, plan(t, 'make.txt', ['card ' + init, 'out ' + t.path('make.wav'), 'state-out ' + t.path('quiet.bin')]
-                 + ['param 0 %d 120' % i for i in range(10, 16)], card=False, rate=rate, block=block, frames=12800))
+                 + ['param 0 %d 120' % i for i in range(10, 16)], card=False, rate=48000, block=block, frames=12800))
     check(all(lchv(t.path('quiet.bin')).get(i) == 120 for i in range(10, 16)), 'the state\'s volumes')
-    events = t.path('events.txt')
-    lat, _ = host(t, plan(t, 'run.txt', ['card ' + init, 'play 0 120 0', 'setstate %d %s' % (at, t.path('quiet.bin')),
-                                          'note %d 0 48 0' % (at + 100), 'note %d 0 48 0' % (at + 3000), 'events ' + events,
-                                          'out ' + t.path('run.wav')], card=False, rate=rate, block=block, frames=frames))
-    ev = [(f, m) for f, m in midi_lines(events) if f >= at]
-    values = [(f, m) for f, m in ev if m[0] & 0xF0 == 0xB0]
-    first = values[0][0] if values else -1
-    transport = [(f, m) for f, m in ev if m[0] in (0xF2, 0xFA, 0xFB, 0xFC, 0xF8)]
-    resume = transport[0][0] if transport else -1
-    spp = [m for f, m in transport if m[0] == 0xF2]
-    six = spp[0][1] | spp[0][2] << 7 if spp else -1
-    clock = next((f for f, m in transport if m[0] == 0xF8), -1)
-    offs = [f for f, m in ev if m[0] & 0xF0 == 0x80]
-    print('after the restart at %d: the first report %r at %r; Song Position %d and Continue at %d (+%d), the first clock '
-          'at %d (16th %d at %d); Note Offs given at %r' % (at, [m[1:] for f, m in values], sorted(set(f for f, m in values)),
-                                                              six, resume, resume - first, clock, six, six * 6000, offs))
-    check(sorted(m[1:] for f, m in values) == [[89 + k, 120] for k in range(6)] and all(f == first for f, m in values)
-          and first in (at, at + block), 'the first report %r' % values)
-    check([m[0] for f, m in transport[:2]] == [0xF2, 0xFB] and transport[1][0] == resume and resume % block == 0,
-          'the transport after the restart %r' % transport[:3])
-    check(first + hold <= resume < first + hold + block, 'the Continue %d frames after the values, not %d' % (resume - first, hold))
-    check(six == math.ceil(4 * resume / 24000.0 - 1 / 12.0) and clock == six * 6000 and clock >= first + hold,
-          'the first clock at %d, 16th %d' % (clock, six))
-    check(offs == [at + 3000], 'the Note Offs given %r' % offs)
-    _, _, x = wav(t.path('run.wav'))
+    rate, at, frames = 48000, 96000, 48000 * 5
+    lat, clock = restart_hold_midi(t, init, rate, block)
+    _, _, x = wav(t.path('run48000.wav'))
     on = attacks(x[0::2], ramp=8)
     beats = [b + lat[0] for b in beat_frames(float(rate), block, frames, 120.0, frames, 120.0, float('inf'))]
     before = [o for o in on if o < at + lat[0]]
@@ -1643,6 +1656,7 @@ def P10_plugin_restart_hold(t):
     check(len(before) == len(want) and all(-1 <= o - w <= 1 for o, w in zip(before, want)), 'before: %r' % before)
     check(after_restart_ok(after, back), 'after the restart: %r, beats %r' % (after, back))
     check(nearest == min(w for w in beats if w >= clock + lat[0]), 'the first beat after the restart %r' % nearest)
+    restart_hold_midi(t, init, 96000, block)
 
 
 @case
