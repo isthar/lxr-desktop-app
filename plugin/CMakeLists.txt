@@ -95,6 +95,11 @@ plugin_add_test(test_params IDS P12_params_table P12_params_midi P12_params_host
     P12_params_restore P12_params_state P12_params_new_engine P12_params_unknown
     P12_params_lchv P12_params_pending)
 
+# --- the AU's view of the parameters and of Out 2 (plan E9.7 Task 3) ---------------------------
+target_sources(plug_common PRIVATE common/plug_au.c)
+target_sources(plug_common_san PRIVATE common/plug_au.c)
+plugin_add_test(test_au IDS P13_unit_values P13_unit_out2)
+
 # --- lichomat-engine (Task 6) --------------------------------------------------------------
 target_sources(plug_common PRIVATE common/plug_spawn.c)
 # the renderer's direct calls: lichomat-render's own object of render_fw.c, with its flags (P-2,
