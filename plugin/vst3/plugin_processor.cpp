@@ -200,17 +200,21 @@ void Processor::restoreValues (const std::atomic<int>* from)
 }
 
 /* The host's parameter changes and the engine's values of a block as MIDI into paramMidi (plan E9.4,
- * plug_params.h): the host's to the engine when running (else kept for it), the engine's values
- * compared with the host's. Returns the MIDI count. */
+ * plug_params.h): first, at the block's first frame, those the host gave when there was no channel to send them on
+ * (no engine, or a flush), then the host's of the block, to the engine when it runs (else kept for it), then the
+ * engine's values compared with the host's. A flush or a block that is not played (n 0) only takes the host's
+ * changes: they are its values and wait for the next block. Returns the MIDI count. */
 unsigned Processor::paramsOf (ProcessData& data, plug_shm_t* s, bool running, uint32_t n)
 {
 	plug_values_t v;
-	const bool have = running && n > 0 && plug_valuesRead (s, &v);	/* a flush (n 0) only gives the host's */
+	const bool live = running && n > 0;
+	const bool have = live && plug_valuesRead (s, &v);
 	if (have)
 		channel = v.channel;
+	const uint8_t ch = live ? channel : (uint8_t)PLUG_VALUE_NONE;
+	unsigned nm = plug_paramsPending (&params, ch, frames, paramMidi, kMaxMidi);
 	const unsigned np = pointsOf (data.inputParameterChanges, (int32)n, points, kMaxMidi);
-	unsigned nm = plug_paramsHost (&params, points, np, frames, running ? channel : (uint8_t)PLUG_VALUE_NONE, paramMidi,
-	                               0, kMaxMidi);
+	nm = plug_paramsHost (&params, points, np, frames, ch, paramMidi, nm, kMaxMidi);
 	if (have)
 		nm = plug_paramsReport (&params, v.values, v.frame, frames, channel, paramMidi, nm, kMaxMidi);
 	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
@@ -311,19 +315,12 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 			runningPid = pid;
 		}
 	}
-	if (data.numSamples == 0)
+	if (data.numSamples <= 0 || data.numOutputs < 1 || data.outputs[0].numChannels < 2)
 	{
-		/* a flush: the host's parameter changes between blocks, at the next block's first frame */
-		const unsigned np = paramsOf (data, s, running, 0);
-		for (unsigned k = 0; running && k < np; k++)
-			(void)plug_evPush (s, frames, paramMidi[k].b, paramMidi[k].len);
-		return kResultOk;
-	}
-	if (data.numSamples < 0 || data.numOutputs < 1 || data.outputs[0].numChannels < 2)
-	{
-		/* a block that is not played: the host's changes are still its values (a getState holds them), and a
-		 * new engine gets them by its first report */
-		(void)paramsOf (data, s, false, 0);
+		/* a flush (the host's changes between blocks) or a block that is not played: the host's changes are its
+		 * values (a getState holds them), sent at the next block's first frame after its transport messages (a
+		 * new engine gets them by its first report) */
+		(void)paramsOf (data, s, running, 0);
 		return kResultOk;
 	}
 	const uint32_t n = (uint32_t)data.numSamples;

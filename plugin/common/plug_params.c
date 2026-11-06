@@ -132,6 +132,7 @@ void plug_paramsRestore(plug_params_t *ps, const int *values)
 		p->sent = -1;
 		p->sentFrame = 0;
 		p->first = 1;
+		p->pending = 0;	/* a new engine gets the restored values by its first report */
 	}
 	ps->synced = 0;
 }
@@ -163,6 +164,7 @@ static int send(plug_params_t *ps, unsigned i, uint8_t v, uint32_t offset, uint6
 		(void)insertMidi(out, n, max, &m[j]);
 	ps->p[i].sent = v;
 	ps->p[i].sentFrame = frame0 + offset;
+	ps->p[i].pending = 0;
 	return 1;
 }
 
@@ -178,7 +180,13 @@ unsigned plug_paramsHost(plug_params_t *ps, const plug_paramPoint_t *pts, unsign
 		const uint8_t v = pts[j].value > plug_params[i].max ? plug_params[i].max : pts[j].value;
 		p->want = v;
 		p->shown = 1;
-		if (v == p->sent || ch == PLUG_VALUE_NONE)
+		if (v == p->sent)
+		{
+			p->pending = 0;	/* the engine has it */
+			continue;
+		}
+		p->pending = 1;	/* until it is sent: no channel, or no room */
+		if (ch == PLUG_VALUE_NONE)
 			continue;
 		(void)send(ps, i, v, pts[j].offset, frame0, ch, out, &n, max);
 	}
@@ -205,13 +213,16 @@ unsigned plug_paramsReport(plug_params_t *ps, const uint8_t *values, uint64_t fr
 		{
 			if (first)
 				p->sent = fw;	/* the new engine has it */
+			p->pending = 0;
 			continue;
 		}
 		if (first && p->want >= 0)
 		{
 			/* a new engine: the host's value, unless it was given to this engine already */
-			if (!(p->sent == p->want && p->sentFrame >= ps->epoch) && ch != PLUG_VALUE_NONE)
-				(void)send(ps, i, (uint8_t)p->want, 0, frame0, ch, out, &n, max);
+			if (p->sent == p->want && p->sentFrame >= ps->epoch)
+				p->pending = 0;
+			else if (ch == PLUG_VALUE_NONE || !send(ps, i, (uint8_t)p->want, 0, frame0, ch, out, &n, max))
+				p->pending = 1;	/* no channel or no room: the next block's first frame */
 			continue;
 		}
 		if (!first && p->sent >= 0 && frame < p->sentFrame + ps->settle)
@@ -219,6 +230,27 @@ unsigned plug_paramsReport(plug_params_t *ps, const uint8_t *values, uint64_t fr
 		p->want = fw;	/* the firmware's own: the host is to get it */
 		p->sent = fw;
 		p->shown = 0;
+		p->pending = 0;
+	}
+	return n;
+}
+
+unsigned plug_paramsPending(plug_params_t *ps, uint8_t ch, uint64_t frame, plug_midi_t *out, unsigned max)
+{
+	unsigned n = 0;
+	if (ch == PLUG_VALUE_NONE)
+		return 0;
+	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+	{
+		plug_paramSync_t *p = &ps->p[i];
+		if (!p->pending)
+			continue;
+		if (p->want < 0 || p->want == p->sent)
+		{
+			p->pending = 0;
+			continue;
+		}
+		(void)send(ps, i, (uint8_t)p->want, 0, frame, ch, out, &n, max);
 	}
 	return n;
 }

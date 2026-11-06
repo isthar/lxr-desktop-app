@@ -1706,6 +1706,37 @@ def P10_plugin_early_state(t):
     check(got == {10: 40}, 'the block with no outputs lost the host\'s change: %r' % got)
 
 
+@case
+def P10_plugin_flush_order(t):
+    # The host's changes in a flush (process() with 0 frames) right before a block with Start are sent at that block's
+    # first frame after the Start, as the same change inside the block at frame 0 is (B-12: transport, parameters,
+    # notes): pattern 1 (a Program Change) in a flush before the Start block at 4,480 is what the renderer plays for the
+    # plughost's script, where the Program Change follows the Start at that frame, byte for byte, and the very output of
+    # the change given in the block. The firmware switches the pattern at once when the Program Change comes first and
+    # at the end of the playing pattern when it follows the Start: the two differ in 395,798 samples (init card)
+    init = os.path.join(t.a.root, 'emu', 'tests', 'cards', 'init')
+    runs = {}
+    for name, extra in (('flush', ['flush 4480 1 1']), ('inblock', ['param 4480 1 1']), ('none', [])):
+        script = t.path(name + '.txt')
+        lat, _ = host(t, plan(t, name + '.plan', ['card ' + init, 'play 4480 120 0', 'out ' + t.path(name + '.wav'),
+                                                    'script ' + script] + extra, card=False, frames=blocks_frames(10)))
+        runs[name] = wav(t.path(name + '.wav'))[2]
+    with open(t.path('flush.txt')) as f:
+        text = f.read()
+    check(' FA ' in text and 'C0 01' in text and text.index(' FA ') < text.index('C0 01') and text.splitlines()[0].startswith(
+        '4480f usb FA'), 'the script %r' % text.splitlines()[:2])
+    t.render(t.card('render', 'init'), t.path('flush.txt'), 10, t.path('render.wav'))
+    b = wav(t.path('render.wav'))[2]
+    n, diff, loud = shifted_equal(runs['flush'], b, lat[0] - 128)
+    same = same_files(t.path('flush.wav'), t.path('inblock.wav'))
+    other = sum(1 for x, y in zip(runs['flush'], runs['none']) if x != y)
+    print('flush vs the renderer: %d frames compared, %d differ; flush vs the change in the block: %s; flush vs no change: '
+          '%d samples differ' % (n, diff, 'the same' if same is None else same, other))
+    check(diff == 0 and loud > 10000, '%d samples differ from the renderer' % diff)
+    check(same is None, 'the flush plays another output than the change in the block: %s' % same)
+    check(other > 100000, 'the change does not matter (%d samples): the test shows nothing' % other)
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

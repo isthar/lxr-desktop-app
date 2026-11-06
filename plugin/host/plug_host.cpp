@@ -121,6 +121,7 @@ struct Plan
 	std::vector<std::pair<uint64_t, int>> renews;
 	std::vector<std::pair<uint64_t, std::string>> setstates, asyncSets;	/* asyncSets: setState from a thread of its own */
 	std::string stateEarly;		/* getState right after setState (FILE.set) and right after setActive (FILE), before any block */
+	std::vector<ParamCmd> flushes;	/* changes given in a flush (process() with 0 frames) right before the block from each frame */
 	std::vector<uint64_t> noOutputs;	/* the block from each frame with no output bus at all */
 	bool nullOut2 = false;		/* Out 2 (inactive) with null sample buffers, as the SDK allows */
 	std::vector<uint64_t> nullOut1;	/* the block from each frame with Out 1's left channel null */
@@ -177,6 +178,13 @@ Plan readPlan (const char* path)
 		else if (cmd == "kill") { uint64_t k; ok = !!(s >> k); p.kills.push_back (k); }
 		else if (cmd == "hang") { uint64_t k; ok = !!(s >> k); p.hangs.push_back (k); }
 		else if (cmd == "renew") { uint64_t k; int i; ok = !!(s >> k >> i); p.renews.push_back ({k, i}); }
+		else if (cmd == "flush")
+		{
+			ParamCmd c;
+			ok = !!(s >> c.frame >> c.id >> c.value) && plug_paramIndex (c.id) >= 0 && c.value >= 0
+			     && c.value <= plug_params[plug_paramIndex (c.id)].max;
+			p.flushes.push_back (c);
+		}
 		else if (cmd == "state-early") ok = !!(s >> p.stateEarly);
 		else if (cmd == "no-outputs") { uint64_t k; ok = !!(s >> k); p.noOutputs.push_back (k); }
 		else if (cmd == "null-out2") p.nullOut2 = true;
@@ -514,7 +522,7 @@ int main (int argc, char** argv)
 	plug_clock_t expect;
 	plug_clockInit (&expect, p.rate);
 	std::map<uint64_t, std::vector<std::string>> script;
-	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextNull1 = 0, nextAsync = 0, nextNoOut = 0;
+	size_t nextNote = 0, nextKill = 0, nextHang = 0, nextRenew = 0, nextSet = 0, nextParam = 0, nextNull1 = 0, nextAsync = 0, nextNoOut = 0, nextFlush = 0;
 	std::vector<std::thread> asyncThreads;
 	unsigned long long processCalls = 0;
 	if (p.paced)
@@ -567,6 +575,33 @@ int main (int argc, char** argv)
 			});
 			nextAsync++;
 		}
+		/* a flush right before the block: the host's changes between blocks, which the plugin sends at the block's
+		 * first frame, after its transport messages (plug_params.h, plug_paramsPending) */
+		plug_paramPoint_t flushPts[64];
+		unsigned nFlush = 0;
+		if (nextFlush < p.flushes.size () && p.flushes[nextFlush].frame <= f)
+		{
+			for (auto& in : inst)
+			{
+				in->inParams.clearQueue ();
+				for (size_t k = nextFlush; k < p.flushes.size () && p.flushes[k].frame <= f; k++)
+				{
+					const ParamCmd& c = p.flushes[k];
+					int32 index = 0, point = 0;
+					if (IParamValueQueue* q = in->inParams.addParameterData (c.id, index))
+						q->addPoint (0, (double)c.value / plug_params[plug_paramIndex (c.id)].max, point);
+				}
+				nFlush = lichomat::pointsOf (&in->inParams, 0, flushPts, 64);
+				in->outParams.clearQueue ();
+				in->events.clear ();
+				in->data.numSamples = 0;
+				in->data.processContext = &ctx;
+				in->processor->process (in->data);
+			}
+			while (nextFlush < p.flushes.size () && p.flushes[nextFlush].frame <= f)
+				nextFlush++;
+			printf ("lichomat-plughost: flush before %llu: %u changes\n", (unsigned long long)f, nFlush);
+		}
 		const plug_transport_t t = tl.block (f, n);
 		ctx.state = ProcessContext::kTempoValid | ProcessContext::kProjectTimeMusicValid;
 		if (t.playing)
@@ -615,6 +650,10 @@ int main (int argc, char** argv)
 		{
 			static plug_paramPoint_t pts[1024];
 			static plug_midi_t pm[1024];
+			/* the flush's, at offset 0 after the transport's messages, then the block's own */
+			const unsigned nf = plug_paramsHost (&inst[0]->mirror, flushPts, nFlush, f, (uint8_t)p.channel, pm, 0, 1024);
+			for (unsigned i = 0; i < nf; i++)
+				put (pm[i]);
 			const unsigned np = lichomat::pointsOf (&inst[0]->inParams, (int32)n, pts, 1024);
 			const unsigned nq = plug_paramsHost (&inst[0]->mirror, pts, np, f, (uint8_t)p.channel, pm, 0, 1024);
 			for (unsigned i = 0; i < nq; i++)

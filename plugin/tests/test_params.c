@@ -123,6 +123,89 @@ TEST(P12_params_host)
 	ASSERT_EQ(out[2].b[2], 100);
 }
 
+TEST(P12_params_pending)
+{
+	plug_midi_t out[16];
+	plug_params_t ps;
+	plug_paramsInit(&ps, SETTLE);
+	/* taken with no channel (no running engine, or a flush): the host's value, pending, nothing sent */
+	const plug_paramPoint_t a[] = { { I_PAN4, 3, 9 }, { I_VOL1, 7, 40 } };
+	ASSERT_EQ(plug_paramsHost(&ps, a, 2, 100, PLUG_VALUE_NONE, out, 0, 16), 0);
+	ASSERT_TRUE(ps.p[I_VOL1].pending && ps.p[I_PAN4].pending && !ps.p[I_DJ].pending);
+	ASSERT_TRUE(ps.p[I_VOL1].want == 40 && ps.p[I_VOL1].sent == -1);
+	/* still no channel: they wait */
+	ASSERT_EQ(plug_paramsPending(&ps, PLUG_VALUE_NONE, 1000, out, 16), 0);
+	ASSERT_TRUE(ps.p[I_VOL1].pending && ps.p[I_PAN4].pending);
+	/* a channel: both go out at offset 0, in the table's order, as plug_paramsHost() would give them */
+	ASSERT_EQ(plug_paramsPending(&ps, CH, 1000, out, 16), 2);
+	ASSERT_TRUE(out[0].offset == 0 && out[0].len == 3 && out[0].b[0] == 0xB3 && out[0].b[1] == 89 && out[0].b[2] == 40);
+	ASSERT_TRUE(out[1].offset == 0 && out[1].b[1] == 100 && out[1].b[2] == 9);
+	ASSERT_TRUE(!ps.p[I_VOL1].pending && ps.p[I_VOL1].sent == 40 && ps.p[I_VOL1].sentFrame == 1000);
+	ASSERT_TRUE(!ps.p[I_PAN4].pending && ps.p[I_PAN4].sent == 9 && ps.p[I_PAN4].sentFrame == 1000);
+	ASSERT_EQ(plug_paramsPending(&ps, CH, 1100, out, 16), 0);
+	/* a value taken back before it was sent is not pending (the engine has it), and a later one replaces it */
+	const plug_paramPoint_t b[] = { { I_VOL1, 0, 41 } };
+	ASSERT_EQ(plug_paramsHost(&ps, b, 1, 1200, PLUG_VALUE_NONE, out, 0, 16), 0);
+	ASSERT_TRUE(ps.p[I_VOL1].pending && ps.p[I_VOL1].want == 41);
+	const plug_paramPoint_t c[] = { { I_VOL1, 0, 40 } };
+	ASSERT_EQ(plug_paramsHost(&ps, c, 1, 1300, PLUG_VALUE_NONE, out, 0, 16), 0);
+	ASSERT_TRUE(!ps.p[I_VOL1].pending && ps.p[I_VOL1].want == 40);
+	ASSERT_EQ(plug_paramsPending(&ps, CH, 1400, out, 16), 0);
+	/* a full buffer: an NRPN's three messages all or none, it stays pending; a pattern is one Program Change */
+	const plug_paramPoint_t d[] = { { I_DJ, 0, 20 }, { I_PATTERN, 0, 1 } };
+	ASSERT_EQ(plug_paramsHost(&ps, d, 2, 1500, PLUG_VALUE_NONE, out, 0, 16), 0);
+	ASSERT_EQ(plug_paramsPending(&ps, CH, 1600, out, 2), 1);
+	ASSERT_TRUE(out[0].len == 2 && out[0].b[0] == 0xC3 && out[0].b[1] == 1 && !ps.p[I_PATTERN].pending);
+	ASSERT_TRUE(ps.p[I_DJ].pending && ps.p[I_DJ].sent == -1);
+	ASSERT_EQ(plug_paramsPending(&ps, CH, 1700, out, 16), 3);
+	ASSERT_TRUE(out[0].b[1] == 99 && out[2].b[1] == 6 && out[2].b[2] == 20 && !ps.p[I_DJ].pending);
+	/* with a channel plug_paramsHost() sends at once and leaves nothing pending */
+	const plug_paramPoint_t e[] = { { I_VOL1, 5, 50 } };
+	ASSERT_EQ(plug_paramsHost(&ps, e, 1, 1800, CH, out, 0, 16), 1);
+	ASSERT_TRUE(!ps.p[I_VOL1].pending && ps.p[I_VOL1].sent == 50);
+
+	/* with the first report: a pending value sent in the block before the report is not sent twice, and a new
+	 * engine's first report gives a value that was still pending (no channel at the report) when it can */
+	plug_params_t q;
+	plug_paramsInit(&q, SETTLE);
+	plug_paramsEngine(&q, 500);
+	uint8_t fw[PLUG_PARAM_COUNT];
+	fwValues(fw);
+	const plug_paramPoint_t f[] = { { I_VOL1, 0, 40 } };
+	ASSERT_EQ(plug_paramsHost(&q, f, 1, 550, PLUG_VALUE_NONE, out, 0, 16), 0);
+	ASSERT_EQ(plug_paramsPending(&q, CH, 600, out, 16), 1);
+	ASSERT_EQ(plug_paramsReport(&q, fw, 500, 600, CH, out, 0, 16), 0);
+	ASSERT_TRUE(q.p[I_VOL1].sent == 40 && q.p[I_VOL1].sentFrame == 600 && !q.p[I_VOL1].pending);
+	plug_params_t r;
+	plug_paramsInit(&r, SETTLE);
+	plug_paramsEngine(&r, 500);
+	ASSERT_EQ(plug_paramsHost(&r, f, 1, 550, PLUG_VALUE_NONE, out, 0, 16), 0);
+	ASSERT_EQ(plug_paramsReport(&r, fw, 500, 600, PLUG_VALUE_NONE, out, 0, 16), 0);	/* no channel at the report */
+	ASSERT_TRUE(r.p[I_VOL1].pending && r.p[I_VOL1].sent == -1);
+	ASSERT_EQ(plug_paramsPending(&r, CH, 700, out, 16), 1);
+	ASSERT_TRUE(out[0].b[1] == 89 && out[0].b[2] == 40 && r.p[I_VOL1].sent == 40);
+
+	/* a value the firmware changed by itself, or a restored state, ends what is pending */
+	plug_params_t o;
+	plug_paramsInit(&o, SETTLE);
+	plug_paramsEngine(&o, 0);
+	ASSERT_EQ(plug_paramsReport(&o, fw, 0, 0, CH, out, 0, 16), 0);
+	ASSERT_EQ(plug_paramsHost(&o, f, 1, 10, PLUG_VALUE_NONE, out, 0, 16), 0);
+	ASSERT_TRUE(o.p[I_VOL1].pending);
+	fw[I_VOL1] = 99;
+	ASSERT_EQ(plug_paramsReport(&o, fw, 5000, 5000, CH, out, 0, 16), 0);
+	ASSERT_TRUE(!o.p[I_VOL1].pending && o.p[I_VOL1].want == 99);
+	ASSERT_EQ(plug_paramsPending(&o, CH, 5100, out, 16), 0);
+	ASSERT_EQ(plug_paramsHost(&o, f, 1, 5200, PLUG_VALUE_NONE, out, 0, 16), 0);
+	ASSERT_TRUE(o.p[I_VOL1].pending);
+	int values[PLUG_PARAM_COUNT];
+	for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+		values[i] = -1;
+	plug_paramsRestore(&o, values);
+	ASSERT_TRUE(!o.p[I_VOL1].pending);
+	ASSERT_EQ(plug_paramsPending(&o, CH, 5300, out, 16), 0);
+}
+
 TEST(P12_params_first_report)
 {
 	plug_params_t ps;
