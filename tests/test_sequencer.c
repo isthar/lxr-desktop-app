@@ -162,7 +162,19 @@ void uart_processMidi(uint8_t maxBytes)
 }
 void uart_sendFrontpanelByte(uint8_t data) { (void)data; }
 void uart_sendFrontpanelSysExByte(uint8_t data) { (void)data; }
-void uart_sendMidi(MidiMsg msg) { (void)msg; }
+static int midiOns;			/* LICHOMAT v0.7 (plan v0.7 Task 4): the Note Ons given to uart_sendMidi() */
+static uint8_t midiOnStatus[64], midiOnVel[64];
+void uart_sendMidi(MidiMsg msg)
+{
+	if ((msg.status & 0xF0) != 0x90)
+		return;
+	if (midiOns < 64)
+	{
+		midiOnStatus[midiOns] = msg.status;
+		midiOnVel[midiOns] = msg.data2;
+	}
+	midiOns++;
+}
 uint8_t usb_getMidi(MidiMsg *msg) { (void)msg; return 0; }
 void usb_sendMidi(MidiMsg msg) { (void)msg; }
 static int slideCalls;			/* Drum_setSlide() (LICHOMAT v0.3, plan P4) */
@@ -948,7 +960,7 @@ TEST(sequencer_micro_step_page)
 	seq_loadGrooveParams(1, 2);
 	ASSERT_EQ(activeParameters[PAR_TRACK_TPL], 7);
 	ASSERT_EQ(activeParameters[PAR_TRACK_TPL_AMT], 200);
-	seq_setGrooveParam(1, 2, PAR_TRACK_TPL, 8);
+	seq_setGrooveParam(1, 2, PAR_TRACK_TPL, 12);	/* LICHOMAT v0.7: 8..11 are us1..us4 (plan v0.7 V7-1) */
 	seq_setGrooveParam(1, 2, PAR_TRACK_TPL_AMT, 201);
 	seq_loadGrooveParams(1, 2);
 	ASSERT_EQ(activeParameters[PAR_TRACK_TPL], 0);
@@ -1274,6 +1286,467 @@ TEST(record_micro_only_inside_seq_tick)
 	addNoteAtInTick(3, 100, 64, t);
 	ASSERT_TRUE(seq_isMainStepActive(3, 4, 0));
 	recordStop();
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT v0.7 (plan v0.7 Task 4): the velocity templates follow the pattern operations, the
+// host's vtmpl() and userTemplates reach the core, the own templates' capture, the clear of a
+// track's microtiming
+//------------------------------------------------------------------------------
+TEST(sequencer_dynamics_follow_copy_clear_and_backup)
+{
+	reset();
+	const TrackTemplate vt = { .id = 6, .amount = -25 };
+	static const TrackTemplate none[NUM_TRACKS];
+	seq_patternSet.vtpl[3][2] = vt;
+	seq_patternSet.vtpl[3][6] = (TrackTemplate){ .id = 8, .amount = 70 };	/* spec review of group B: the last track too */
+	seq_copyTrack(2, 5, 3);
+	ASSERT_EQ(memcmp(&seq_patternSet.vtpl[3][5], &vt, sizeof vt), 0);
+	seq_copyPattern(3, 7);
+	ASSERT_EQ(memcmp(seq_patternSet.vtpl[7], seq_patternSet.vtpl[3], sizeof seq_patternSet.vtpl[3]), 0);
+	seq_copyPatternToBackupBuffer(3);
+	TrackTemplate row[NUM_TRACKS];
+	memcpy(row, seq_patternSet.vtpl[3], sizeof row);
+	memset(seq_patternSet.vtpl[3], 0, sizeof seq_patternSet.vtpl[3]);
+	seq_copyBackupBufferToPattern(3);
+	ASSERT_EQ(memcmp(&seq_patternSet.vtpl[3][2], &vt, sizeof vt), 0);
+	ASSERT_EQ(memcmp(seq_patternSet.vtpl[3], row, sizeof row), 0);	/* the whole row, track 6 too */
+	seq_clearTrack(2, 3);
+	ASSERT_EQ(seq_patternSet.vtpl[3][2].id, 0);
+	ASSERT_EQ(seq_patternSet.vtpl[3][2].amount, 0);
+	ASSERT_EQ(memcmp(&seq_patternSet.vtpl[3][5], &vt, sizeof vt), 0);	/* the other track stays */
+	seq_clearPattern(7);
+	ASSERT_EQ(memcmp(seq_patternSet.vtpl[7], none, sizeof none), 0);
+	seq_patternSet.vtpl[4][2] = vt;						/* a rotation moves steps, not the track's settings */
+	seq_rotateTrack(2, 4, 1);
+	ASSERT_EQ(memcmp(&seq_patternSet.vtpl[4][2], &vt, sizeof vt), 0);
+	seq_clearPattern(3);
+	seq_clearPattern(4);
+}
+
+TEST(sequencer_dynamics_host_callbacks_reach_the_core)
+{
+	/* the glue's vtmpl() (seq_cbVtmpl()) and userTemplates (seq_userTemplates). Track 0, steps 0 and
+	 * 2 at volume 127 in smp, voice 1 on MIDI channel 6. k 0: vtp of8 at 100 %: the records and the
+	 * Note Ons carry 40 and 127 (q 0, 2); k 1: vtp us1 with -6 dB at position 0: 64 and 127; k 2: tpl
+	 * us1 with +12 ticks at position 2: the records 192 + 12 = 204 ticks apart (281,250 cycles) */
+	static const uint8_t vel[3][2] = { { 40, 127 }, { 64, 127 }, { 127, 127 } };
+	static const uint32_t apart[3] = { 192u * 281250u, 192u * 281250u, 204u * 281250u };
+	for (int k = 0; k < 3; k++)
+	{
+		reset();
+		activeParameters[PAR_TRIG_TIMING] = 0;
+		midiParser_txRxFilter = 0x10;		/* MIDI_FILTER_NOTES << 4: Note Ons out */
+		midi_MidiChannels[0] = 5;
+		Step *s0 = &seq_patternSet.seq_subStepPattern[0][0][0], *s2 = &seq_patternSet.seq_subStepPattern[0][0][2];
+		const Step old0 = *s0, old2 = *s2;
+		seq_setMainStep(0, 0, 0, 1);
+		seq_setMainStep(0, 0, 2, 1);
+		s0->volume = (uint8_t)(STEP_ACTIVE_MASK | 127);
+		s2->volume = (uint8_t)(STEP_ACTIVE_MASK | 127);
+		memset(seq_userTemplates, 0, sizeof seq_userTemplates);
+		seq_userTemplates[0].vel[0] = -6;
+		seq_userTemplates[0].timing[2] = 12;
+		seq_patternSet.vtpl[0][0] = (TrackTemplate){ .id = (uint8_t)(k == 0 ? 1 : (k == 1 ? 5 : 0)), .amount = 0 };
+		seq_patternSet.tmpl[0][0] = (TrackTemplate){ .id = (uint8_t)(k == 2 ? 8 : 0), .amount = 0 };
+		posts = 0;
+		midiOns = 0;
+		seq_setRunning(1);
+		run(400);
+		seq_setRunning(0);
+		run(1);
+		int on[2], n = 0;
+		for (int i = 0; i < posts && i < 64; i++)
+			if (posted[i].track == 0 && n < 2)
+				on[n++] = i;
+		ASSERT_EQ(n, 2);
+		ASSERT_EQ(posted[on[0]].vel, vel[k][0]);
+		ASSERT_EQ(posted[on[1]].vel, vel[k][1]);
+		const uint32_t d = posted[on[1]].time - posted[on[0]].time;
+		ASSERT_TRUE(d >= apart[k] - 1u && d <= apart[k] + 1u);
+		int m = 0;
+		for (int i = 0; i < midiOns && i < 64; i++)
+			if (midiOnStatus[i] == 0x95)
+			{
+				if (m < 2)
+					ASSERT_EQ(midiOnVel[i], vel[k][m]);
+				m++;
+			}
+		ASSERT_TRUE(m >= 2);
+		seq_setMainStep(0, 0, 0, 0);
+		seq_setMainStep(0, 0, 2, 0);
+		*s0 = old0;
+		*s2 = old2;
+		seq_patternSet.vtpl[0][0] = (TrackTemplate){ 0, 0 };
+		seq_patternSet.tmpl[0][0] = (TrackTemplate){ 0, 0 };
+		memset(seq_userTemplates, 0, sizeof seq_userTemplates);
+	}
+	midi_MidiChannels[0] = 0;
+	midiParser_txRxFilter = 0;
+	activeParameters[PAR_TRIG_TIMING] = 1;
+}
+
+/** step s of track t in pattern p on, at volume vel, with microtiming T */
+static void ownStep(uint8_t p, uint8_t t, uint8_t s, uint8_t vel, int micro)
+{
+	seq_setMainStep(p, t, s, 1);
+	Step *st = &seq_patternSet.seq_subStepPattern[p][t][s];
+	st->volume = (uint8_t)((st->volume & STEP_ACTIVE_MASK) | (vel & 0x7F));
+	stepFine_set(seq_patternSet.seq_stepFine[p][t], s, stepMicro_split(micro, &seq_patternSet.seq_stepTiming[p][t][s]));
+}
+
+TEST(own_capture_takes_steps_1_to_16)
+{
+	/* V7-6..V7-10: the timing part is each step's T, the velocity part its dB below the loudest
+	 * of steps 1-16 (127 here); steps that are off, step 21, and steps past the length give 0 and
+	 * 0 dB; the other slots stay; no step on empties the slot; the loudest at 0 gives 0 dB */
+	reset();
+	seq_clearPattern(40);
+	static const struct { uint8_t s, vel; int T; int8_t db; } on[8] = {
+		{ 0, 100, 12, -2 }, { 2, 127, -7, 0 }, { 3, 64, 84, -6 }, { 5, 40, -84, -10 },
+		{ 8, 20, 0, -16 }, { 11, 10, 5, -22 }, { 13, 1, 30, -42 }, { 15, 0, -1, -42 },
+	};
+	for (uint8_t s = 0; s < NUM_STEPS; s++)			/* stale values on every step, then off */
+	{
+		ownStep(40, 2, s, 5, 40);
+		seq_setMainStep(40, 2, s, 0);
+	}
+	for (int k = 0; k < 8; k++)
+		ownStep(40, 2, on[k].s, on[k].vel, on[k].T);
+	ownStep(40, 2, 20, 127, 50);				/* step 21: not a position */
+	memset(seq_userTemplates, 0x5A, sizeof seq_userTemplates);
+	ASSERT_EQ(seq_captureUserTemplate(2, 40, 1), 8);
+	int8_t wantT[16] = { 0 }, wantV[16] = { 0 };
+	for (int k = 0; k < 8; k++)
+	{
+		wantT[on[k].s] = (int8_t)on[k].T;
+		wantV[on[k].s] = on[k].db;
+	}
+	ASSERT_EQ(memcmp(seq_userTemplates[1].timing, wantT, 16), 0);
+	ASSERT_EQ(memcmp(seq_userTemplates[1].vel, wantV, 16), 0);
+	ASSERT_EQ(seq_userTemplates[0].timing[0], 0x5A);		/* the other slots stay */
+	ASSERT_EQ(seq_userTemplates[2].vel[15], 0x5A);
+	/* length 12: steps 13-16 give 0 */
+	seq_patternSet.length[40][2] = 12;
+	ASSERT_EQ(seq_captureUserTemplate(2, 40, 2), 6);
+	for (int s = 12; s < 16; s++)
+	{
+		ASSERT_EQ(seq_userTemplates[2].timing[s], 0);
+		ASSERT_EQ(seq_userTemplates[2].vel[s], 0);
+	}
+	ASSERT_EQ(seq_userTemplates[2].timing[3], 84);
+	ASSERT_EQ(seq_userTemplates[2].vel[5], -10);
+	/* the loudest at 0: every step on is 0 dB, the timing taken */
+	seq_patternSet.length[40][2] = 16;
+	for (int k = 0; k < 8; k++)
+		seq_patternSet.seq_subStepPattern[40][2][on[k].s].volume &= STEP_ACTIVE_MASK;
+	ASSERT_EQ(seq_captureUserTemplate(2, 40, 3), 8);
+	static const int8_t zero[16];
+	ASSERT_EQ(memcmp(seq_userTemplates[3].vel, zero, 16), 0);
+	ASSERT_EQ(memcmp(seq_userTemplates[3].timing, wantT, 16), 0);
+	/* no step on: the slot is empty (V7-9) */
+	for (uint8_t s = 0; s < NUM_STEPS; s++)
+		seq_setMainStep(40, 2, s, 0);
+	ASSERT_EQ(seq_captureUserTemplate(2, 40, 1), 0);
+	static const UserTemplate empty;
+	ASSERT_EQ(memcmp(&seq_userTemplates[1], &empty, sizeof empty), 0);
+	/* out of range: nothing changes */
+	const UserTemplate keep = seq_userTemplates[2];
+	ASSERT_EQ(seq_captureUserTemplate(2, 40, 4), 0);
+	ASSERT_EQ(seq_captureUserTemplate(7, 40, 2), 0);
+	ASSERT_EQ(seq_captureUserTemplate(2, 64, 2), 0);
+	ASSERT_EQ(memcmp(&seq_userTemplates[2], &keep, sizeof keep), 0);
+	seq_clearPattern(40);
+	seq_clearUserTemplates();
+	ASSERT_EQ(seq_userTemplates[0].timing[0], 0);
+}
+
+TEST(own_capture_clear_track_micro)
+{
+	/* V7-14: every step of the track in the pattern to T 0 (shift 7, fine 0), its flam kept; a
+	 * stored shift of 15 also becomes 7; the track's templates, the other tracks and the other
+	 * patterns stay */
+	reset();
+	for (uint8_t s = 0; s < NUM_STEPS; s++)
+	{
+		StepTiming *a = &seq_patternSet.seq_stepTiming[41][1][s];
+		a->flam = (uint8_t)(s % 6);
+		stepFine_set(seq_patternSet.seq_stepFine[41][1], s, stepMicro_split((s * 7) % 169 - 84, a));
+		stepFine_set(seq_patternSet.seq_stepFine[41][2], s, stepMicro_split(13, &seq_patternSet.seq_stepTiming[41][2][s]));
+		stepFine_set(seq_patternSet.seq_stepFine[42][1], s, stepMicro_split(-20, &seq_patternSet.seq_stepTiming[42][1][s]));
+	}
+	seq_patternSet.seq_stepTiming[41][1][63].shift = 15;
+	seq_patternSet.tmpl[41][1] = (TrackTemplate){ .id = 4, .amount = 20 };
+	seq_patternSet.vtpl[41][1] = (TrackTemplate){ .id = 2, .amount = -30 };
+	const uint32_t locks = host_irqDisables;
+	seq_clearTrackMicro(1, 41);
+	ASSERT_EQ(host_irqDisables - locks, 64u);			/* spec review of group B: each step masked */
+	ASSERT_EQ(host_primask, 0u);				/* quality review of group B: and unmasked again */
+	for (uint8_t s = 0; s < NUM_STEPS; s++)
+	{
+		ASSERT_EQ(seq_patternSet.seq_stepTiming[41][1][s].shift, 7);
+		ASSERT_EQ(seq_patternSet.seq_stepTiming[41][1][s].flam, s % 6);
+		ASSERT_EQ(stepFine_get(seq_patternSet.seq_stepFine[41][1], s), 0);
+		ASSERT_EQ(stepMicro(seq_patternSet.seq_stepTiming[41][2][s], stepFine_get(seq_patternSet.seq_stepFine[41][2], s)), 13);
+		ASSERT_EQ(stepMicro(seq_patternSet.seq_stepTiming[42][1][s], stepFine_get(seq_patternSet.seq_stepFine[42][1], s)), -20);
+	}
+	/* quality review of group B: the stored bytes are 0, not only the values (a nibble of -8 reads
+	 * 0, but block 2 would be written for it) */
+	static const uint8_t noFine[STEP_FINE_BYTES];
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[41][1], noFine, sizeof noFine), 0);
+	ASSERT_EQ(seq_patternSet.tmpl[41][1].id, 4);
+	ASSERT_EQ(seq_patternSet.vtpl[41][1].amount, -30);
+	seq_clearTrackMicro(7, 41);				/* out of range: nothing */
+	seq_clearTrackMicro(1, 64);
+	ASSERT_EQ(stepMicro(seq_patternSet.seq_stepTiming[42][1][0], stepFine_get(seq_patternSet.seq_stepFine[42][1], 0)), -20);
+	seq_clearPattern(41);
+	seq_clearPattern(42);
+}
+
+TEST(own_capture_takes_what_plays)
+{
+	/* V7-10 (Q36): the track's timing template is added to each step's T and the volume goes
+	 * through its velocity template: lay and of8 at 100 % on 16 steps of T 0 and volume 127 give
+	 * lay's ticks and of8's dB (of8's velocities 40, 23, 127 ... round back to its dB); lay at
+	 * 200 % with T 80 on step 2 clamps 80 + 36 to 84 */
+	reset();
+	seq_clearPattern(43);
+	for (uint8_t s = 0; s < 16; s++)
+		ownStep(43, 3, s, 127, 0);
+	seq_patternSet.tmpl[43][3] = (TrackTemplate){ .id = 2, .amount = 0 };	/* lay, 100 % */
+	seq_patternSet.vtpl[43][3] = (TrackTemplate){ .id = 1, .amount = 0 };	/* of8, 100 % */
+	ASSERT_EQ(seq_captureUserTemplate(3, 43, 0), 16);
+	static const int8_t lay[16] = { 0, 18, 0, 5, 0, 18, 0, 5, 0, 18, 0, 5, 0, 18, 0, 5 };
+	static const int8_t of8[16] = { -10, -15, 0, -14, -10, -14, 0, -13, -10, -16, 0, -14, -10, -15, 0, -13 };
+	ASSERT_EQ(memcmp(seq_userTemplates[0].timing, lay, 16), 0);
+	ASSERT_EQ(memcmp(seq_userTemplates[0].vel, of8, 16), 0);
+	seq_patternSet.tmpl[43][3].amount = 100;				/* lay, 200 % */
+	ownStep(43, 3, 1, 127, 80);
+	ASSERT_EQ(seq_captureUserTemplate(3, 43, 0), 16);
+	ASSERT_EQ(seq_userTemplates[0].timing[1], 84);
+	ASSERT_EQ(seq_userTemplates[0].timing[3], 10);
+	/* capturing into the slot the track plays: the old slot is read first */
+	seq_patternSet.tmpl[43][3] = (TrackTemplate){ .id = TEMPLATE_BUILTIN + 0, .amount = 0 };	/* us1 */
+	seq_patternSet.vtpl[43][3] = (TrackTemplate){ 0, 0 };
+	ownStep(43, 3, 1, 127, 0);
+	ASSERT_EQ(seq_captureUserTemplate(3, 43, 0), 16);
+	ASSERT_EQ(seq_userTemplates[0].timing[1], 84);			/* T 0 + us1's old 84 */
+	ASSERT_EQ(seq_userTemplates[0].timing[3], 10);
+	seq_clearPattern(43);
+	seq_clearUserTemplates();
+}
+
+TEST(sequencer_dynamics_vtmpl_reads_the_track_in_its_pattern)
+{
+	/* implementer of Task 4 (a mutant with vtpl[track][pattern] passed the plan's track 0 in
+	 * pattern 0): track 2 in pattern 0 with of8 at 100 % posts 40 and 127 (q 0, 2) while
+	 * vtpl[2][0] is off */
+	reset();
+	activeParameters[PAR_TRIG_TIMING] = 0;
+	Step *s0 = &seq_patternSet.seq_subStepPattern[0][2][0], *s2 = &seq_patternSet.seq_subStepPattern[0][2][2];
+	const Step old0 = *s0, old2 = *s2;
+	seq_setMainStep(0, 2, 0, 1);
+	seq_setMainStep(0, 2, 2, 1);
+	s0->volume = (uint8_t)(STEP_ACTIVE_MASK | 127);
+	s2->volume = (uint8_t)(STEP_ACTIVE_MASK | 127);
+	seq_patternSet.vtpl[0][2] = (TrackTemplate){ .id = 1, .amount = 0 };
+	seq_patternSet.vtpl[2][0] = (TrackTemplate){ 0, 0 };
+	posts = 0;
+	seq_setRunning(1);
+	run(400);
+	seq_setRunning(0);
+	run(1);
+	int on[2], n = 0;
+	for (int i = 0; i < posts && i < 64; i++)
+		if (posted[i].track == 2 && n < 2)
+			on[n++] = i;
+	ASSERT_EQ(n, 2);
+	ASSERT_EQ(posted[on[0]].vel, 40);
+	ASSERT_EQ(posted[on[1]].vel, 127);
+	const uint32_t d = posted[on[1]].time - posted[on[0]].time;
+	ASSERT_TRUE(d >= 192u * 281250u - 1u && d <= 192u * 281250u + 1u);
+	seq_setMainStep(0, 2, 0, 0);
+	seq_setMainStep(0, 2, 2, 0);
+	*s0 = old0;
+	*s2 = old2;
+	seq_patternSet.vtpl[0][2] = (TrackTemplate){ 0, 0 };
+	activeParameters[PAR_TRIG_TIMING] = 1;
+}
+
+TEST(own_capture_slots_set_and_clear)
+{
+	/* implementer of Task 4: seq_setUserTemplate() writes one slot and ignores slot 4 and NULL;
+	 * seq_setUserTemplates() writes all four and ignores NULL; seq_clearUserTemplates() empties
+	 * them */
+	static const UserTemplate none[USER_TEMPLATES];
+	static UserTemplate all[USER_TEMPLATES];
+	for (int u = 0; u < USER_TEMPLATES; u++)
+		for (int q = 0; q < TEMPLATE_STEPS; q++)
+		{
+			all[u].timing[q] = (int8_t)(u * 16 + q - 30);
+			all[u].vel[q] = (int8_t)-(u * 10 + q);
+		}
+	uint32_t locks = host_irqDisables;			/* spec review of group B: each masked */
+	seq_clearUserTemplates();
+	ASSERT_TRUE(host_irqDisables - locks >= 1u);
+	ASSERT_EQ(host_primask, 0u);				/* quality review of group B: unmasked again */
+	locks = host_irqDisables;
+	seq_setUserTemplate(2, &all[3]);
+	ASSERT_TRUE(host_irqDisables - locks >= 1u);
+	ASSERT_EQ(host_primask, 0u);				/* quality review of group B: unmasked again */
+	ASSERT_EQ(memcmp(&seq_userTemplates[2], &all[3], sizeof all[3]), 0);
+	ASSERT_EQ(memcmp(&seq_userTemplates[0], &none[0], sizeof none[0]), 0);
+	ASSERT_EQ(memcmp(&seq_userTemplates[3], &none[0], sizeof none[0]), 0);
+	seq_setUserTemplate(USER_TEMPLATES, &all[1]);		/* out of range: nothing */
+	seq_setUserTemplate(1, NULL);
+	ASSERT_EQ(memcmp(&seq_userTemplates[1], &none[0], sizeof none[0]), 0);
+	ASSERT_EQ(memcmp(&seq_userTemplates[2], &all[3], sizeof all[3]), 0);
+	locks = host_irqDisables;
+	seq_setUserTemplates(all);
+	ASSERT_TRUE(host_irqDisables - locks >= 1u);
+	ASSERT_EQ(host_primask, 0u);				/* quality review of group B: unmasked again */
+	ASSERT_EQ(memcmp(seq_userTemplates, all, sizeof all), 0);
+	seq_setUserTemplates(NULL);
+	ASSERT_EQ(memcmp(seq_userTemplates, all, sizeof all), 0);
+	seq_clearUserTemplates();
+	ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+}
+
+TEST(own_capture_edges_of_the_length_and_the_range)
+{
+	/* implementer of Task 4: the step at index len is past the length; a length of 0 plays as
+	 * 16 (the core's rule); T -84 with psh at 200 % (-8 at q 2) clamps to -84; out of range with
+	 * steps on returns 0 and writes nothing; seq_clearTrackMicro() of track 7 does not reach
+	 * pattern 42's track 0, which lies right after pattern 41's track 6 */
+	reset();
+	seq_clearPattern(44);
+	seq_clearUserTemplates();
+	ownStep(44, 4, 0, 127, 3);
+	ownStep(44, 4, 2, 64, -84);
+	ownStep(44, 4, 12, 100, 20);
+	ownStep(44, 4, 15, 90, -9);
+	seq_patternSet.length[44][4] = 12;
+	ASSERT_EQ(seq_captureUserTemplate(4, 44, 0), 2);
+	ASSERT_EQ(seq_userTemplates[0].timing[12], 0);
+	ASSERT_EQ(seq_userTemplates[0].vel[12], 0);
+	ASSERT_EQ(seq_userTemplates[0].timing[2], -84);
+	seq_patternSet.length[44][4] = 0;				/* as 16 */
+	ASSERT_EQ(seq_captureUserTemplate(4, 44, 1), 4);
+	ASSERT_EQ(seq_userTemplates[1].timing[12], 20);
+	ASSERT_EQ(seq_userTemplates[1].timing[15], -9);
+	ASSERT_EQ(seq_userTemplates[1].vel[15], -3);			/* 90 of 127: -2.99 dB */
+	seq_patternSet.length[44][4] = 16;
+	seq_patternSet.tmpl[44][4] = (TrackTemplate){ .id = 6, .amount = 100 };	/* psh, 200 % */
+	ASSERT_EQ(seq_captureUserTemplate(4, 44, 2), 4);
+	ASSERT_EQ(seq_userTemplates[2].timing[2], -84);		/* -84 - 8 */
+	ASSERT_EQ(seq_userTemplates[2].timing[0], 3);
+	const UserTemplate keep[USER_TEMPLATES] = { seq_userTemplates[0], seq_userTemplates[1],
+		seq_userTemplates[2], seq_userTemplates[3] };
+	ASSERT_EQ(seq_captureUserTemplate(4, 44, USER_TEMPLATES), 0);
+	ASSERT_EQ(seq_captureUserTemplate(NUM_TRACKS, 44, 2), 0);
+	ASSERT_EQ(seq_captureUserTemplate(4, NUM_PATTERN, 2), 0);
+	ASSERT_EQ(memcmp(seq_userTemplates, keep, sizeof keep), 0);
+	for (uint8_t s = 0; s < NUM_STEPS; s++)
+		stepFine_set(seq_patternSet.seq_stepFine[42][0], s, stepMicro_split(-20, &seq_patternSet.seq_stepTiming[42][0][s]));
+	seq_clearTrackMicro(NUM_TRACKS, 41);
+	for (uint8_t s = 0; s < NUM_STEPS; s++)
+		ASSERT_EQ(stepMicro(seq_patternSet.seq_stepTiming[42][0][s], stepFine_get(seq_patternSet.seq_stepFine[42][0], s)), -20);
+	seq_clearPattern(42);
+	seq_clearPattern(44);
+	seq_clearUserTemplates();
+}
+
+TEST(own_capture_db_below_the_loudest_heard)
+{
+	/* spec review of group B (V7-10): the dB is below the loudest of the volumes as they play, not
+	 * of the steps' own: of8 at 100 % on steps 1 and 5 alone (both -10 dB: 127 plays as 40) gives
+	 * 0 dB on both */
+	reset();
+	seq_clearPattern(45);
+	ownStep(45, 1, 0, 127, 0);
+	ownStep(45, 1, 4, 127, 0);
+	seq_patternSet.vtpl[45][1] = (TrackTemplate){ .id = 1, .amount = 0 };	/* of8, 100 % */
+	const uint32_t locks = host_irqDisables;
+	ASSERT_EQ(seq_captureUserTemplate(1, 45, 0), 2);
+	ASSERT_TRUE(host_irqDisables - locks >= 1u);		/* the slot written masked */
+	ASSERT_EQ(host_primask, 0u);				/* quality review of group B: and unmasked again */
+	ASSERT_EQ(seq_userTemplates[0].vel[0], 0);
+	ASSERT_EQ(seq_userTemplates[0].vel[4], 0);
+	seq_clearPattern(45);
+	seq_clearUserTemplates();
+}
+
+TEST(own_capture_takes_the_velocity_depth)
+{
+	/* spec review of group B (V7-10): of8 at 50 % (amount -50) on 16 steps at 127 plays half of
+	 * of8's dB (velocities 71, 54, 127, 57, ...), which round back to these */
+	reset();
+	seq_clearPattern(46);
+	for (uint8_t s = 0; s < 16; s++)
+		ownStep(46, 5, s, 127, 0);
+	seq_patternSet.vtpl[46][5] = (TrackTemplate){ .id = 1, .amount = -50 };	/* of8, 50 % */
+	ASSERT_EQ(seq_captureUserTemplate(5, 46, 3), 16);
+	static const int8_t half[16] = { -5, -7, 0, -7, -5, -7, 0, -7, -5, -8, 0, -7, -5, -7, 0, -7 };
+	ASSERT_EQ(memcmp(seq_userTemplates[3].vel, half, 16), 0);
+	seq_clearPattern(46);
+	seq_clearUserTemplates();
+}
+
+TEST(own_capture_loudest_within_the_length)
+{
+	/* quality review of group B (V7-8, V7-10): a step past the track's length is no position and
+	 * not the loudest either: length 12, step 1 at 100 and step 14 at 127 (T 30) give step 1 0 dB
+	 * and leave position 14 at 0 */
+	reset();
+	seq_clearPattern(47);
+	ownStep(47, 6, 0, 100, 0);
+	ownStep(47, 6, 13, 127, 30);
+	seq_patternSet.length[47][6] = 12;
+	ASSERT_EQ(seq_captureUserTemplate(6, 47, 1), 1);
+	ASSERT_EQ(seq_userTemplates[1].vel[0], 0);
+	ASSERT_EQ(seq_userTemplates[1].vel[13], 0);
+	ASSERT_EQ(seq_userTemplates[1].timing[13], 0);
+	seq_clearPattern(47);
+	seq_clearUserTemplates();
+}
+
+TEST(sequencer_dynamics_track_page)
+{
+	/* plan v0.7 Task 6: vtp, vdp and sav through the direct calls (V7-15); values past the lists
+	 * are the defaults; tpl takes us1..us4 (V7-1); sav reads --- on every load */
+	reset();
+	seq_setGrooveParam(1, 2, PAR_TRACK_VTP, 8);
+	seq_setGrooveParam(1, 2, PAR_TRACK_VDP, 200);
+	ASSERT_EQ(seq_patternSet.vtpl[2][1].id, 8);
+	ASSERT_EQ(seq_patternSet.vtpl[2][1].amount, 100);
+	activeParameters[PAR_TRACK_TPL_SAVE] = 3;
+	seq_loadGrooveParams(1, 2);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VTP], 8);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VDP], 200);
+	ASSERT_EQ(activeParameters[PAR_TRACK_TPL_SAVE], 0);
+	seq_setGrooveParam(1, 2, PAR_TRACK_VTP, 9);
+	seq_setGrooveParam(1, 2, PAR_TRACK_VDP, 201);
+	ASSERT_EQ(seq_patternSet.vtpl[2][1].id, 0);		/* the setter stores the defaults, off at 100 % */
+	ASSERT_EQ(seq_patternSet.vtpl[2][1].amount, 0);
+	seq_loadGrooveParams(1, 2);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VTP], 0);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VDP], 100);
+	/* Task 6's mutants: a velocity template from elsewhere (a file, a host) loads checked, as
+	 * velTemplate_checked(): id 9 is off, an amount of +101 or -101 is 100 % */
+	seq_patternSet.vtpl[2][1] = (TrackTemplate){ 9, 101 };
+	seq_loadGrooveParams(1, 2);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VTP], 0);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VDP], 100);
+	seq_patternSet.vtpl[2][1] = (TrackTemplate){ 5, -101 };
+	seq_loadGrooveParams(1, 2);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VTP], 5);
+	ASSERT_EQ(activeParameters[PAR_TRACK_VDP], 100);
+	seq_setGrooveParam(1, 2, PAR_TRACK_TPL, 11);
+	ASSERT_EQ(seq_patternSet.tmpl[2][1].id, 11);
+	seq_setGrooveParam(1, 2, PAR_TRACK_TPL, 12);
+	ASSERT_EQ(seq_patternSet.tmpl[2][1].id, 0);
+	seq_patternSet.vtpl[2][1] = (TrackTemplate){ 0, 0 };	/* the songs' pattern 2 as it was */
+	seq_patternSet.tmpl[2][1] = (TrackTemplate){ 0, 0 };
 }
 
 TEST_MAIN()

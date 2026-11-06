@@ -442,7 +442,12 @@ enum ParamEnums
 	// LICHOMAT v0.6: the track page's third screen, menu only, saved in the pattern's block 2 (plan v0.6, M18)
 	PAR_TRACK_TPL = END_OF_KIT_BLOCK,	/*309*/
 	PAR_TRACK_TPL_AMT,
-	NUM_PARAMS	/*311*/
+	// LICHOMAT v0.7: the track page's fourth screen, menu only: the velocity template and its
+	// depth (the pattern's block 3) and the own template's save slot (not saved) (plan v0.7 V7-15)
+	PAR_TRACK_VTP,		/*311*/
+	PAR_TRACK_VDP,
+	PAR_TRACK_TPL_SAVE,
+	NUM_PARAMS	/*314*/
 };
 
 extern uint8_t parameterOrder[END_OF_SOUND_PARAMETERS];

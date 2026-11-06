@@ -310,12 +310,21 @@ def E413_lfo_voice_0(t):
         check(r.returncode == 0, '%s: exit %d: %s' % (name, r.returncode, r.stderr[-600:]))
         check('runtime error' not in r.stdout + r.stderr, (r.stdout + r.stderr)[-600:])
         # whole snapshots of the page only: a snapshot can catch the LCD between its two rows' updates
-        lfo = [l for l in lcd_lines(r.stdout) if l[1].lower().startswith('rtg ofs voi dst')
+        lines = lcd_lines(r.stdout)
+        lfo = [l for l in lines if l[1].lower().startswith('rtg ofs voi dst')
                and re.match(r'^off +0 +[01] [a-z0-9 ]{3} $', l[2])]
         check(lfo, '%s: the LFO page did not show' % name)
-        check(lfo[0][2][8:11] == ('  0' if name == 'blank' else '  1'), '%s: voi reads %r' % (name, lfo[0][2]))
-        # where knob 4's turn ends (the last DST of 2.5-2.9 s of wall time)
-        seen = [l[2][12:15] for l in lfo if 2.5 <= l[0] < 2.9]
+        # a snapshot can also catch one row half rewritten in place: the new row's first 10 columns, the
+        # previous screen's from the voi digit on ('off   0   0 sin ' on the init card), until the next
+        # snapshot (at most 30 ms in 280 loaded runs; tracker E6.38). voi is read from a row that stood
+        # for 100 ms (the page's own rows stand for about 380 ms before knob 4 turns)
+        held = [l for l, nxt in zip(lines, lines[1:] + [None]) if nxt is None or nxt[0] - l[0] >= 0.1]
+        steady = [l for l in lfo if l in held]
+        check(steady, '%s: no LFO page stood for 100 ms' % name)
+        check(steady[0][2][8:11] == ('  0' if name == 'blank' else '  1'), '%s: voi reads %r' % (name, steady[0][2]))
+        # where knob 4's turn ends (the last DST of 2.5-2.9 s of wall time), from rows that stood for 100 ms
+        # too: a torn row could stand at the window's end (the turn's last row stands about 300 ms)
+        seen = [l[2][12:15] for l in steady if 2.5 <= l[0] < 2.9]
         check(seen, '%s: no LFO page in 2.5-2.9 s' % name)
         dst[name] = seen[-1]
     # without the sanitizer too: voi 0 reads voice 1's targets now; fw 1.7 toggled off and voice 2's rtg

@@ -198,7 +198,7 @@ def version_lines(root):
 @case
 def M17_cli_info(t):
     version, want = version_lines(t.root)
-    check(version == '0.6', 'the firmware version is %s, not 0.6 (spec 10.1)' % version)
+    check(version == '0.7', 'the firmware version is %s, not 0.7 (spec 10.1)' % version)
     out = t.run(['--version']).stdout
     m = re.search(r'Built from commit ([0-9a-f]{12}|unknown)\.', out)
     check(m, '--version names no commit of 12 hex digits: %r' % out)
@@ -1364,28 +1364,31 @@ def V06_ui(t):
     # voice's values and stops at amt; back left to dly; the recording page shows rqn. Review of
     # Task 6: the scroll signs >, * and <; edit mode on tpl shows the template's long name; the
     # voice mode button from the third screen opens the voice page's first sub-page; SHIFT + mode2
-    # steps through the three screens and back to the first
+    # steps through the three screens and back to the first. v0.7: the fourth screen follows the
+    # third (plan v0.7 V7-16)
     seed, log = t.seed(), t.path('panel.log')
     mode2 = '+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
     script = t.script('0ms press voice2\n+100ms param track_tpl=3\n+100ms param track_tpl_amt=150\n'
                       + mode2 + '+200ms mark euklid\n'
                       '+100ms encoder +4\n+200ms mark track\n+100ms encoder +4\n+200ms mark tpl\n'
-                      '+100ms push\n+200ms mark tpledit\n+100ms push\n+100ms encoder +3\n+200ms mark amt\n'
+                      '+100ms push\n+200ms mark tpledit\n+100ms push\n+100ms encoder +1\n+200ms mark amt\n'
                       '+100ms encoder -2\n+200ms mark back\n+100ms encoder +1\n+100ms press mode1\n+200ms mark voice\n'
                       + mode2 + '+200ms mark c1\n' + mode2 + '+200ms mark c2\n' + mode2 + '+200ms mark c3\n'
-                      + mode2 + '+200ms mark c4\n'
+                      + mode2 + '+200ms mark c4\n' + mode2 + '+200ms mark c5\n'
                       '+100ms down shift\n+20ms press rec\n+100ms up shift\n+200ms mark rec\n')
-    t.render(seed, ['--no-start', '--seconds', '5', '--param', 'rec_quant=1', '--panel-log', log,
+    t.render(seed, ['--no-start', '--seconds', '6', '--param', 'rec_quant=1', '--panel-log', log,
                     '--events', script])
     rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
     check(re.match(r'LEN.stp.rot.mrp>', rows['euklid'][0]), 'the first screen, sign >: %r' % rows['euklid'])
     check(re.match(r'TMP.hmt.hmv.dly\*', rows['track'][0]), 'the second screen, sign *: %r' % rows['track'])
-    check(re.match(r'TPL.amt.{8}<', rows['tpl'][0]) and re.match(r'lyb.150', rows['tpl'][1]), 'tpl: %r' % rows['tpl'])
+    check(re.match(r'TPL.amt.{8}\*', rows['tpl'][0]) and re.match(r'lyb.150', rows['tpl'][1]),
+          'tpl, sign * (a fourth screen follows, v0.7): %r' % rows['tpl'])
     check(rows['tpledit'][1].startswith('lay bar'), 'edit mode on tpl 3: %r' % rows['tpledit'])
-    check(re.match(r'tpl.AMT', rows['amt'][0]), 'amt, where the encoder stops: %r' % rows['amt'])
+    check(re.match(r'tpl.AMT', rows['amt'][0]), 'amt: %r' % rows['amt'])
     check(re.match(r'tmp.hmt.hmv.DLY', rows['back'][0]), 'back to dly: %r' % rows['back'])
     check(re.match(r'COA.fin.wav.pwm>', rows['voice'][0]), 'the voice page from tpl: %r' % rows['voice'])
-    for m, want in (('c1', r'LEN.stp'), ('c2', r'TMP.hmt'), ('c3', r'TPL.amt'), ('c4', r'LEN.stp')):
+    for m, want in (('c1', r'LEN.stp'), ('c2', r'TMP.hmt'), ('c3', r'TPL.amt'), ('c4', r'VTP.vdp.sav'),
+                    ('c5', r'LEN.stp')):
         check(re.match(want, rows[m][0]), 'SHIFT + mode2, %s: %r' % (m, rows[m]))
     check(re.search(r'rqn', rows['rec'][0], re.I) and re.search(r'on', rows['rec'][1]), 'rec: %r' % rows['rec'])
     # the step page's mic (review of Task 6): loaded on step select (seq_loadStepMicro() in
@@ -1405,6 +1408,152 @@ def V06_ui(t):
     check(re.match(r'Step +Micro', rows['micedit'][0]) and rows['micedit'][1].endswith('99.0ms +76'),
           'edit mode on mic: %r' % rows['micedit'])
     check(re.match(r'off \+7 +\+84 ', rows['shf'][1]), 'shf +1: %r' % rows['shf'])
+
+@case
+def V07_ui(t):
+    # the track page's fourth screen (plan v0.7 Task 6, V7-11, V7-14, V7-16): the encoder runs from
+    # amt over the skips to vtp and stops at sav (sign <); vtp and vdp show the voice's values, edit
+    # mode on vtp its long name, sav at 2 reads us2; back left to amt. SHIFT + COPY and the encoder
+    # show the clear page's micro, SHIFT up leaves it. A project save writes block 3 right after block
+    # 1 (3,697 + 20 bytes, LCHM 03 07, voice 2's of8 at 50 %, the others 0) and no USERTPL.LCH
+    seed, log, keep = t.seed(), t.path('panel.log'), t.path('K')
+    mode2 = '+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
+    script = t.script('0ms press voice2\n+100ms param track_vtp=1\n+100ms param track_vdp=50\n'
+                      + mode2 + '+200ms encoder +8\n+200ms mark tpl\n+100ms encoder +1\n+100ms encoder +1\n'
+                      '+200ms mark vtp\n+100ms push\n+200ms mark vtpedit\n+100ms push\n+150ms encoder +3\n'
+                      '+200ms mark sav\n+100ms push\n+150ms encoder +2\n+200ms mark savedit\n+100ms encoder -2\n'
+                      '+100ms push\n+200ms mark savoff\n+100ms param track_tpl_save=2\n+100ms encoder -1\n'
+                      '+100ms encoder +1\n+200ms mark sav2\n+100ms encoder -3\n'
+                      '+200ms mark back\n+100ms down shift\n+20ms press copy\n+150ms encoder +9\n+200ms mark clear\n'
+                      '+100ms up shift\n+200ms mark gone\n+300ms save-project 0\n')
+    t.render(seed, ['--no-start', '--seconds', '6', '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'TPL.amt.{8}\*', rows['tpl'][0]), 'the third screen, sign *: %r' % rows['tpl'])
+    check(re.match(r'VTP.vdp.sav.{4}<', rows['vtp'][0]) and re.match(r'of8. 50.---', rows['vtp'][1]),
+          'the fourth screen: %r' % rows['vtp'])
+    check(rows['vtpedit'][1].startswith('offbeat 8th'), 'edit mode on vtp 1: %r' % rows['vtpedit'])
+    check(re.match(r'vtp.vdp.SAV', rows['sav'][0]), 'sav, where the encoder stops: %r' % rows['sav'])
+    check(rows['savedit'][1] == 'push: save   us2', 'edit mode on sav 2: %r' % rows['savedit'])
+    check(re.match(r'vtp.vdp.SAV', rows['savoff'][0]) and re.match(r'of8. 50.---', rows['savoff'][1]),
+          'sav back at ---, edit mode left: %r' % rows['savoff'])
+    check(re.match(r'of8. 50.us2', rows['sav2'][1]), 'sav at 2 (shown after the cursor moves): %r' % rows['sav2'])
+    check(re.match(r'tpl.AMT', rows['back'][0]), 'back to amt: %r' % rows['back'])
+    check(rows['clear'][0].startswith('clear [micro]?'), 'the clear page: %r' % rows['clear'])
+    check(not rows['gone'][0].startswith('clear'), 'SHIFT up leaves the clear page: %r' % rows['gone'])
+    pat = one_file(keep, '00-*.PAT')
+    check(len(pat) == 3697 + 20 and pat[3697:3703] == b'LCHM\x03\x07', 'pattern 0: %d bytes, %r'
+          % (len(pat), pat[3697:3703]))
+    check(pat[3703:3717] == bytes([0, 0, 1, (50 - 100) & 0xFF] + [0] * 10), 'block 3: %r' % pat[3703:3717])
+    check(not glob.glob(os.path.join(keep, 'PROJ00', 'USERTPL.LCH')), 'no own template, no USERTPL.LCH')
+    # us1..us4 in tpl and vtp (V7-1, V7-2), their long names in edit mode. The capture (Task 6,
+    # group B's reviews), from edit mode as the manual says: sav's click writes /tmp's USERTPL.LCH
+    # and leaves edit mode, also when every template is empty: the project's USERTPL.LCH holds us1
+    # only, and Drum 1 has no step on in the seed's pattern 0 (us4 is empty too), so us1 is emptied;
+    # sav reads --- again. With TMP/USERTPL.LCH a directory (--as-booted copies TMP) the write is
+    # refused (FR_DENIED) and the LCD shows it (the mark comes at the end of menu_showSdError()'s
+    # HAL_Delay())
+    sav = ('0ms press voice1\n+100ms param track_tpl=11\n+100ms param track_vtp=8\n+100ms down shift\n'
+           '+20ms press mode2\n+100ms up shift\n+200ms encoder +8\n+200ms mark tplus\n+100ms push\n'
+           '+200ms mark tplusedit\n+100ms push\n+150ms encoder +2\n+200ms mark vtpus\n+100ms push\n'
+           '+200ms mark vtpusedit\n+100ms push\n+150ms encoder +13\n+200ms mark sav\n+100ms push\n'
+           '+150ms encoder +1\n+200ms mark savus1\n+100ms push\n+300ms mark saved\n')
+    own = card_copy(t, seed, 'own')
+    with open(os.path.join(own, 'PROJ00', 'USERTPL.LCH'), 'wb') as f:
+        f.write(b'LCHM\x01\x04' + bytes([5] * 16 + [256 - 10] * 16) + bytes(96))
+    keep, log = t.path('K2'), t.path('panel2.log')
+    t.render(own, ['--no-start', '--seconds', '5', '--panel-log', log, '--keep-card', keep, '--events', t.script(sav)])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'TPL.amt', rows['tplus'][0]) and re.match(r'us4.100', rows['tplus'][1]), 'tpl us4: %r' % rows['tplus'])
+    check(rows['tplusedit'][1].startswith('user 4'), 'edit mode on tpl 11: %r' % rows['tplusedit'])
+    check(re.match(r'VTP.vdp.sav', rows['vtpus'][0]) and re.match(r'us4.100.---', rows['vtpus'][1]),
+          'vtp us4: %r' % rows['vtpus'])
+    check(rows['vtpusedit'][1].startswith('user 4'), 'edit mode on vtp 8: %r' % rows['vtpusedit'])
+    check(re.match(r'vtp.vdp.SAV', rows['sav'][0]), 'the encoder on sav: %r' % rows['sav'])
+    check(rows['savus1'][1] == 'push: save   us1', 'edit mode on sav 1: %r' % rows['savus1'])
+    check(re.match(r'vtp.vdp.SAV', rows['saved'][0]) and re.match(r'us4.100.---', rows['saved'][1]),
+          'after the click: edit mode left, sav at ---: %r' % rows['saved'])
+    tpl = glob.glob(os.path.join(keep, 'TMP', 'USERTPL.LCH'))
+    tpl = open(tpl[0], 'rb').read() if tpl else None
+    check(tpl == b'LCHM\x01\x04' + bytes(128), "TMP's USERTPL.LCH after an empty capture: %r" % tpl)
+    card, log = card_copy(t, own, 'denied'), t.path('panel3.log')
+    os.mkdir(os.path.join(card, 'TMP', 'USERTPL.LCH'))
+    t.render(card, ['--no-start', '--seconds', '5', '--as-booted', '--panel-log', log, '--events', t.script(sav)])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(rows['saved'][0].startswith('SD Card error:') and rows['saved'][1].startswith('Card full!'),
+          'a refused write: %r' % rows['saved'])
+    # the clear page's micro on the track the step page shows (V7-14, group B's reviews): shf and mic
+    # read 0 at once, not only after the step is selected again
+    log = t.path('panel4.log')
+    script = t.script('0ms press voice1\n+300ms press mode1\n+200ms param active_step=2\n'
+                      '+100ms param step_micro=160\n+100ms param active_step=0\n+100ms param active_step=2\n'
+                      '+300ms mark step2\n+100ms down shift\n+20ms press copy\n+150ms encoder +9\n'
+                      '+200ms mark clear\n+100ms push\n+100ms up shift\n+300ms mark cleared\n')
+    t.render(seed, ['--no-start', '--seconds', '3', '--panel-log', log, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'FLM.shf.mic', rows['step2'][0]) and re.match(r'off \+6 +\+76 ', rows['step2'][1]),
+          'step 2 before the clear: %r' % rows['step2'])
+    check(rows['clear'][0].startswith('clear [micro]?'), 'the clear page on the step page: %r' % rows['clear'])
+    check(re.match(r'FLM.shf.mic', rows['cleared'][0]) and re.match(r'off 0 +0 ', rows['cleared'][1]),
+          'step 2 after the clear: %r' % rows['cleared'])
+    # the capture and the clear take the active voice in the shown pattern, sav's last slot us4 too
+    # (light review of group C): Drum 1's step 6 at T +24 in pattern 0 (kept by save-pattern 0
+    # before the pattern page, V6-14), then pattern 3, voice 3's steps 1 and 3 on at T +30 and -20;
+    # edit mode on sav reads no "push: save" at --- and "push: save   us4" at us4; the click on us4
+    # captures, the clear page's micro clears voice 3 in pattern 3, and the project save writes
+    # USERTPL.LCH (us1 the project's, us2 and us3 empty, us4 voice 3's T at 0 dB; TMP is emptied
+    # by the save, F9), voice 3's T all 0 in pattern 3 and Drum 1's +24 in pattern 0
+    keep, log = t.path('K3'), t.path('panel5.log')
+    script = t.script('0ms press voice1\n+100ms param active_step=5\n+100ms param step_micro=108\n'
+                      '+100ms save-pattern 0\n+100ms down shift\n+20ms press step16\n+80ms up shift\n'
+                      '+100ms press step4\n+200ms press mode1\n+100ms press voice3\n+100ms press step1\n'
+                      '+100ms press step3\n+100ms param active_step=0\n+100ms param step_micro=114\n'
+                      '+100ms param active_step=2\n+100ms param step_micro=64\n+100ms down shift\n'
+                      '+20ms press mode2\n+100ms up shift\n+200ms encoder +13\n+200ms mark sav\n+100ms push\n'
+                      '+150ms encoder +2\n+100ms encoder -2\n+200ms mark savdash\n+100ms encoder +13\n'
+                      '+200ms mark savus4\n+100ms push\n+300ms mark saved\n+100ms down shift\n+20ms press copy\n'
+                      '+150ms encoder +9\n+200ms mark clear\n+100ms push\n+100ms up shift\n+300ms save-project 0\n')
+    t.render(own, ['--no-start', '--seconds', '6', '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'vtp.vdp.SAV', rows['sav'][0]), 'voice 3, the encoder on sav: %r' % rows['sav'])
+    check(rows['savdash'][1].endswith('---') and not rows['savdash'][1].startswith('push: save'),
+          'edit mode on sav at ---: %r' % rows['savdash'])
+    check(rows['savus4'][1] == 'push: save   us4', 'edit mode on sav 4: %r' % rows['savus4'])
+    check(re.match(r'vtp.vdp.SAV', rows['saved'][0]) and re.match(r'off.100.---', rows['saved'][1]),
+          'after the click on us4: %r' % rows['saved'])
+    check(rows['clear'][0].startswith('clear [micro]?'), 'the clear page, voice 3: %r' % rows['clear'])
+    tpl = one_file(keep, 'USERTPL.LCH')
+    us4 = [30, 0, -20] + [0] * 13
+    want = b'LCHM\x01\x04' + bytes([5] * 16 + [256 - 10] * 16) + bytes(64) + bytes(x & 0xFF for x in us4) + bytes(16)
+    check(tpl == want, 'USERTPL.LCH after the capture of voice 3 into us4: %r, not %r' % (tpl, want))
+    v3 = pat_tracks(one_file(keep, '03-*.PAT'))[2]
+    check(v3['on'] == {0, 2} and all(T == 0 for T, _ in v3['steps']), 'voice 3 in pattern 3: on %r, T %r'
+          % (sorted(v3['on']), [T for T, _ in v3['steps'][:16]]))
+    d1 = pat_tracks(one_file(keep, '00-*.PAT'))[0]
+    check([T for T, _ in d1['steps'][:16]] == [0] * 5 + [24] + [0] * 10, "Drum 1's T in pattern 0 kept: %r"
+          % [T for T, _ in d1['steps'][:16]])
+    no_copies_left()
+
+@case
+def V07_screensaver(t):
+    # sav's click on a dark screen (Task 6, light review of group C): with the screensaver on and the
+    # cursor on sav at us1, two idle minutes start it (the LCD no longer shows the page); a click then
+    # only wakes the screen, as it leaves edit mode alone: the page reads sav us1 again, nothing is
+    # captured and /tmp gets no USERTPL.LCH. A 125 s render, its own case so that V07_ui stays fast
+    seed, log, keep = t.seed(), t.path('panel.log'), t.path('K')
+    script = t.script('0ms press voice1\n+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
+                      '+200ms encoder +13\n+200ms mark sav\n+100ms param track_tpl_save=1\n+100ms encoder -1\n'
+                      '+100ms encoder +1\n+200ms mark sav1\n+122s mark ss\n+100ms push\n+1000ms mark woke\n')
+    t.render(seed, ['--no-start', '--seconds', '125', '--param', 'screensaver_on_off=1', '--panel-log', log,
+                    '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'vtp.vdp.SAV', rows['sav1'][0]) and re.match(r'off.100.us1', rows['sav1'][1]),
+          'sav at us1: %r' % rows['sav1'])
+    check(not rows['ss'][0].startswith('vtp'), 'the screensaver after two idle minutes: %r' % rows['ss'])
+    check(re.match(r'vtp.vdp.SAV', rows['woke'][0]) and re.match(r'off.100.us1', rows['woke'][1]),
+          'after the click on the dark screen: %r' % rows['woke'])
+    check(not glob.glob(os.path.join(keep, 'TMP', 'USERTPL.LCH')), 'no capture on the dark screen: TMP holds %r'
+          % sorted(os.listdir(os.path.join(keep, 'TMP'))))
+    no_copies_left()
 
 def name_table(text, table):
     """the strings of a name table of MenuText.h, without its #if USE_CODEC_EQ entries (off in the build)"""
@@ -2034,6 +2183,117 @@ def V06_record(t):
             check(len(pat) == 3941 and [x - T[0] for x in T] == [d[k] - lay[k] for k in range(16)]
                   and pat[3703:3705] == bytes([2, 0]), '%s: %d bytes, T %r, template %r' % (gid, len(pat), T, pat[3703:3705]))
         print('%s: d %r, recorded T %r' % (gid, d, T))
+    no_copies_left()
+
+VEL_TEMPLATES = {   # the draft's table (2026-11-04-v0.7-draft.md 2.2): dB at 100 % on the 16ths of a bar
+    1: (-10, -15, 0, -14, -10, -14, 0, -13, -10, -16, 0, -14, -10, -15, 0, -13),   # of8
+    2: (-7, -15, 0, -5, -7, -9, -1, -10, -7, -14, 0, -7, -6, -10, -1, -10),         # ful
+    3: (-14, -12, 0, -19, -14, -11, 0, -19, -15, -12, 0, -16, -13, -12, 0, -21),    # dep
+    4: (-5, -15, 0, -20, -6, -17, 0, -16, -5, -17, 0, -15, -6, -17, -1, -16),        # qtr
+}
+
+def vel_template(vel, db, pct):
+    """plan v0.7 V7-4 in Python: vel x 10^(dB x pct / 2000), dB floored at -42, rounded half up,
+    1..127; a vel of 0, dB >= 0 or pct 0 leave vel"""
+    if vel == 0 or db >= 0 or pct == 0:
+        return vel
+    x = vel * 10 ** (max(db, -42) * pct / 2000.0)
+    return max(1, min(127, int(math.floor(x + 0.5))))
+
+def trig_frames(path, voice):
+    """the frame of each hit of voice in a --trig-log, as emu_onsets.py reads it: the last record of
+    each block serial, at its time + 128 frames; the one-shot records are left out"""
+    last, order = {}, []
+    with open(path) as f:
+        for line in f:
+            w = line.split()
+            if len(w) != 6 or int(w[1]) != voice or w[2] == 'oneshot':
+                continue
+            if w[3] not in last:
+                order.append(w[3])
+            last[w[3]] = int(w[0]) * 113 / 552960.0 + 128
+    return [last[s] for s in order]
+
+def hit_peaks(wav, channel, frames, before=8, after=220):
+    """the largest |sample| of channel from before frames ahead of each frame to after frames past
+    it; the hits whose window passes the end are left out"""
+    ch, a = samples(wav)
+    c = ('L1', 'R1', 'L2', 'R2').index(channel)
+    total = len(a) // ch
+    out = []
+    for f in frames:
+        lo, hi = int(f) - before, int(f) + after
+        if hi > total:
+            break
+        out.append(max(abs(a[i * ch + c]) for i in range(lo, hi)))
+    return out
+
+@case
+def V07_levels(t):
+    # G23 (plan v0.7 Task 7, V7-18): Drum 1's click on all 16 steps at 127 with vtp of8 at 100, 50
+    # and 200 %. Each hit's peak on L1, in dB against the median of the 0 dB steps' peaks, is within
+    # 0.5 dB of the formula's integer velocity computed here from the table (at 200 % step 10's -32
+    # dB is 3, -32.54 dB), and at 50 and 100 % within 0.5 dB of the table itself; no peak clips
+    for gid, pct in (('G23_velocity', 100), ('G23_velocity_50', 50), ('G23_velocity_200', 200)):
+        card, opts, script = golden(t, gid)
+        log = t.path(gid + '.log')
+        s, wav, _ = t.render(card, opts + ['--trig-log', log, '--events', script])
+        check(s['vsched']['late'] == 0, '%s: vsched %r' % (gid, s['vsched']))
+        peaks = hit_peaks(wav, 'L1', trig_frames(log, 0))
+        check(len(peaks) >= 32, '%s: %d hits of voice 1' % (gid, len(peaks)))
+        tab = VEL_TEMPLATES[1]
+        loud = sorted(p for k, p in enumerate(peaks) if tab[k % 16] == 0)
+        ref = loud[len(loud) // 2]
+        check(ref > 0 and max(peaks) < 30000, '%s: the 0 dB peaks %r' % (gid, loud))
+        worst = worst_table = 0.0
+        for k, p in enumerate(peaks):
+            db = tab[k % 16]
+            got = 20 * math.log10(p / ref) if p else -120.0
+            want = 20 * math.log10(vel_template(127, db, pct) / 127.0)
+            worst, worst_table = max(worst, abs(got - want)), max(worst_table, abs(got - db * pct / 100.0))
+            check(abs(got - want) <= 0.5, '%s: hit %d (step %d) at %.2f dB, the formula %.2f'
+                  % (gid, k, k % 16 + 1, got, want))
+            if pct <= 100:
+                check(abs(got - db * pct / 100.0) <= 0.5, '%s: hit %d at %.2f dB, the table %.2f'
+                      % (gid, k, got, db * pct / 100.0))
+        print('%s: %d hits, 0 dB peak %d, worst %.3f dB from the formula, %.3f from the table'
+              % (gid, len(peaks), ref, worst, worst_table))
+
+@case
+def V07_capture(t):
+    # the own template through the panel (plan v0.7 Task 7, V7-6, V7-9..V7-12, V7-14) on the groove
+    # card's pattern 0: sav us1 on Drum 1 takes its 16 steps' T (the model's, groove_card()), the
+    # clear page's micro sets them to 0 with the flam kept, and tpl us1 at 100 % plays them again:
+    # L1's onsets are G20_micro's ticks within 2 frames. The project save after the playback writes
+    # USERTPL.LCH (134 bytes: LCHM 1 4, us1's T and 0 dB, us2-us4 empty) and pattern 0 with Drum 1's T
+    # all 0, the flam of step 7 and tpl (8, 100)
+    card = groove_card(groove_script())
+    steps = card[(0, 0)]['steps']
+    groove_dir = os.path.join(t.root, 'emu', 'tests', 'cards', 'groove')
+    keep, log = t.path('K'), t.path('panel.log')
+    script = t.script('0ms press voice1\n+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
+                      '+200ms encoder +13\n+200ms mark sav\n+100ms param track_tpl_save=1\n+100ms push\n'
+                      '+300ms mark saved\n+100ms down shift\n+20ms press copy\n+150ms encoder +9\n'
+                      '+200ms mark clear\n+100ms push\n+100ms up shift\n+200ms mark cleared\n'
+                      '+100ms param track_tpl=8\n+100ms param track_tpl_amt=100\n+200ms press start\n'
+                      '+8050ms press start\n+300ms save-project 0\n')
+    start = 2.39     # the script's press start: the sum of its times before it, in seconds
+    _, wav, _ = t.render(groove_dir, ['--pattern', '0', '--bpm', '120', '--no-start', '--seconds', '11.6',
+                                      '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'vtp.vdp.SAV', rows['sav'][0]), 'the encoder on sav: %r' % rows['sav'])
+    check(re.match(r'off.100.---', rows['saved'][1]), 'sav after the click: %r' % rows['saved'])
+    check(rows['clear'][0].startswith('clear [micro]?'), 'the clear page: %r' % rows['clear'])
+    check(not rows['cleared'][0].startswith('clear'), 'after the clear: %r' % rows['cleared'])
+    ticks_check(t, wav, 'L1', groove_ticks(card, 0, 0, 64, 120), 120, '--from', start - 0.05, '--to', start + 8.04)
+    tpl = one_file(keep, 'USERTPL.LCH')
+    want = b'LCHM\x01\x04' + bytes(steps.get(s, (0, 0))[0] & 0xFF for s in range(16)) + bytes(16) + bytes(96)
+    check(tpl == want, 'USERTPL.LCH: %r, not %r' % (tpl, want))
+    pat = one_file(keep, '00-*.PAT')
+    check(len(pat) == 3941, 'pattern 0: %d bytes' % len(pat))
+    d1 = pat_tracks(pat)[0]
+    check(all(T == 0 for T, _ in d1['steps']), 'Drum 1 T after the clear: %r' % d1['steps'][:16])
+    check(d1['steps'][6][1] == 1 and d1['tpl'] == (8, 100), 'flam %r, tpl %r' % (d1['steps'][6], d1['tpl']))
     no_copies_left()
 
 def kept_report(t, p, head):

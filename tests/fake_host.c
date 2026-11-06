@@ -19,8 +19,15 @@
 #include <stdio.h>
 #include <string.h>
 
+/* LICHOMAT v0.7 (reviews of group B): the interrupt mask of tests/stubs/stm32f7xx_hal.h and its
+ * count of __disable_irq() calls, one object each for the whole test program */
+uint32_t host_primask, host_irqDisables;
+
 static fake_host_t fake_instance;
 static bool fake_micro;			/* v0.6: fake_useMicro() */
+static bool fake_dynamics;			/* v0.7: fake_useDynamics() */
+static TrackTemplate fake_vtplEvery;
+static UserTemplate fake_userEvery[USER_TEMPLATES];
 
 //------------------------------------------------------------------------------
 // Helpers
@@ -497,6 +504,15 @@ static TrackTemplate cb_tmpl(void *ctx, uint8_t pattern, uint8_t track)
 	return h->tmpl[pattern][track];
 }
 //------------------------------------------------------------------------------
+static TrackTemplate cb_vtmpl(void *ctx, uint8_t pattern, uint8_t track)
+{
+	fake_host_t *h = ctx;
+	h->reads[FAKE_READ_VTMPL]++;
+	if (!fake_validStep(h, "vtmpl", pattern, track, 0))
+		return (TrackTemplate){ 0, 0 };
+	return h->vtpl[pattern][track];
+}
+//------------------------------------------------------------------------------
 static void cb_trackStep(void *ctx, uint8_t track)
 {
 	fake_host_t *h = ctx;
@@ -528,7 +544,9 @@ void fake_reset(fake_host_t *h)
 						.param2Nr = FAKE_NO_AUTOMATION, .param2Val = 0 };
 				h->timing[p][t][s] = (StepTiming){ .flam = 0, .shift = SEQC_SHIFT_CENTER };
 			}
+			h->vtpl[p][t] = fake_vtplEvery;
 		}
+	memcpy(h->user, fake_userEvery, sizeof h->user);
 
 	/* seq_init(): every song entry SONG_END but the first */
 	memset(h->song, FAKE_SONG_END, sizeof h->song);
@@ -563,6 +581,8 @@ void fake_reset(fake_host_t *h)
 		.trackStep = cb_trackStep,
 		.fine = fake_micro ? cb_fine : NULL,
 		.tmpl = fake_micro ? cb_tmpl : NULL,
+		.vtmpl = fake_dynamics ? cb_vtmpl : NULL,
+		.userTemplates = fake_dynamics ? h->user : NULL,
 	};
 }
 //------------------------------------------------------------------------------
@@ -687,6 +707,28 @@ void fake_setTemplate(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t id
 		return;
 	}
 	h->tmpl[pattern][track] = (TrackTemplate){ .id = id, .amount = (int8_t)(percent - 100) };
+}
+//------------------------------------------------------------------------------
+void fake_useDynamics(bool on, TrackTemplate every, const UserTemplate *user)
+{
+	fake_dynamics = on;
+	fake_vtplEvery = every;
+	if (user)
+		memcpy(fake_userEvery, user, sizeof fake_userEvery);
+	else
+		memset(fake_userEvery, 0, sizeof fake_userEvery);
+}
+//------------------------------------------------------------------------------
+void fake_setVelTemplate(fake_host_t *h, uint8_t pattern, uint8_t track, uint8_t id, int percent)
+{
+	if (!fake_validStep(h, "fake_setVelTemplate", pattern, track, 0))
+		return;
+	if (id >= VEL_TEMPLATE_COUNT || percent < 0 || percent > 200)
+	{
+		fake_error(h, "fake_setVelTemplate(%u, %d %%): out of range", id, percent);
+		return;
+	}
+	h->vtpl[pattern][track] = (TrackTemplate){ .id = id, .amount = (int8_t)(percent - 100) };
 }
 
 //------------------------------------------------------------------------------

@@ -174,6 +174,19 @@ FRESULT loadTmpFolderFiles()
 			return res;
 		}
 	}
+	res = preset_loadUserTemplates(0);	//LICHOMAT v0.7: the captures since the project's save, if any
+	if ((res != FR_OK) && (res != FR_NO_FILE))
+	{	//LICHOMAT v0.7: as an error in the loop; the project's own templates stay
+		f_close((FIL*)&SDFile);
+		lcd_process_display_interrupt = 1;
+		preset_initTmpFolder();
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+		HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
+#else
+
+#endif
+		return res;
+	}
 
 	return FR_OK;
 }
@@ -370,21 +383,17 @@ static void preset_writePatternTiming(uint8_t patternNr)
 	f_write((FIL*)&SDFile, seq_patternSet.seq_stepFine[patternNr], sizeof seq_patternSet.seq_stepFine[patternNr], &bytesWritten);
 }
 
-static void preset_readPatternTiming(uint8_t patternNr)
+//LICHOMAT v0.7: block 2's data after its header (preset_readBlockHead()); 1 when it was complete
+static uint8_t preset_readPatternTiming(uint8_t patternNr)
 {
 	UINT bytesRead = 0;
-	uint8_t head[6];
 	TrackTemplate tp[NUM_TRACKS];
 	uint8_t fine[NUM_TRACKS][STEP_FINE_BYTES];
 
-	if((f_read((FIL*)&SDFile, head, sizeof head, &bytesRead) != FR_OK) || (bytesRead != sizeof head))
-		return;
-	if((memcmp(head, "LCHM", 4) != 0) || (head[4] != PATTERN_BLOCK2) || (head[5] != NUM_TRACKS))
-		return;
 	if((f_read((FIL*)&SDFile, tp, sizeof tp, &bytesRead) != FR_OK) || (bytesRead != sizeof tp))
-		return;
+		return 0;
 	if((f_read((FIL*)&SDFile, fine, sizeof fine, &bytesRead) != FR_OK) || (bytesRead != sizeof fine))
-		return;
+		return 0;
 	for(uint8_t t=0; t<NUM_TRACKS; t++)
 	{
 		seq_patternSet.tmpl[patternNr][t] = trackTemplate_checked(tp[t]);
@@ -397,6 +406,60 @@ static void preset_readPatternTiming(uint8_t patternNr)
 			stepFine_set(seq_patternSet.seq_stepFine[patternNr][t], s, f ? stepMicro_split(stepMicro(*st, f), st) : 0);
 		}
 	}
+	return 1;
+}
+
+//----------------------------------------------------
+// LICHOMAT v0.7: block 3 after block 2, or right after block 1 when there is no block 2 (plan
+// v0.7 V7-13), 20 bytes: "LCHM", the block number 3, the track count 7, then the 7 velocity
+// templates (TrackTemplate: id 0..8, depth - 100). It is written only when one of its 14 data
+// bytes is not 0, so a pattern without a velocity template is v0.6's file byte for byte. v0.6
+// reads one header after block 1 and takes only "LCHM" 2 7, so a block 3 there leaves its
+// defaults; v0.2-v0.5 stop after block 1, fw 1.7 after the kit number. Loading reads the
+// headers in order, block 2 then block 3; another header or a short block stops it, the
+// blocks not read keep their defaults, and a value out of range takes its default.
+//----------------------------------------------------
+#define PATTERN_BLOCK3 3
+
+static uint8_t preset_patternDynamicsUsed(uint8_t patternNr)
+{
+	const uint8_t *v = (const uint8_t *)seq_patternSet.vtpl[patternNr];
+	for(uint16_t i=0; i<sizeof seq_patternSet.vtpl[patternNr]; i++)
+		if(v[i]) return 1;
+	return 0;
+}
+
+static void preset_writePatternDynamics(uint8_t patternNr)
+{
+	UINT bytesWritten;
+	const uint8_t head[6] = { 'L', 'C', 'H', 'M', PATTERN_BLOCK3, NUM_TRACKS };
+	if(!preset_patternDynamicsUsed(patternNr))
+		return;
+	f_write((FIL*)&SDFile, head, sizeof head, &bytesWritten);
+	f_write((FIL*)&SDFile, seq_patternSet.vtpl[patternNr], sizeof seq_patternSet.vtpl[patternNr], &bytesWritten);
+}
+
+/** the next block's header: 1, and its number in *number, for "LCHM" with 7 tracks */
+static uint8_t preset_readBlockHead(uint8_t *number)
+{
+	UINT bytesRead = 0;
+	uint8_t head[6];
+	if((f_read((FIL*)&SDFile, head, sizeof head, &bytesRead) != FR_OK) || (bytesRead != sizeof head))
+		return 0;
+	if((memcmp(head, "LCHM", 4) != 0) || (head[5] != NUM_TRACKS))
+		return 0;
+	*number = head[4];
+	return 1;
+}
+
+static void preset_readPatternDynamics(uint8_t patternNr)
+{
+	UINT bytesRead = 0;
+	TrackTemplate vt[NUM_TRACKS];
+	if((f_read((FIL*)&SDFile, vt, sizeof vt, &bytesRead) != FR_OK) || (bytesRead != sizeof vt))
+		return;
+	for(uint8_t t=0; t<NUM_TRACKS; t++)
+		seq_patternSet.vtpl[patternNr][t] = velTemplate_checked(vt[t]);
 }
 
 static void preset_writePatternExt(uint8_t patternNr)
@@ -406,6 +469,7 @@ static void preset_writePatternExt(uint8_t patternNr)
 	f_write((FIL*)&SDFile, head, sizeof head, &bytesWritten);
 	f_write((FIL*)&SDFile, seq_patternSet.groove[patternNr], sizeof seq_patternSet.groove[patternNr], &bytesWritten);
 	preset_writePatternTiming(patternNr);	//LICHOMAT v0.6: block 2, if used
+	preset_writePatternDynamics(patternNr);	//LICHOMAT v0.7: block 3, if used
 }
 
 static void preset_readPatternExt(uint8_t patternNr)
@@ -417,6 +481,7 @@ static void preset_readPatternExt(uint8_t patternNr)
 	memset(seq_patternSet.groove[patternNr], 0, sizeof seq_patternSet.groove[patternNr]);
 	memset(seq_patternSet.seq_stepFine[patternNr], 0, sizeof seq_patternSet.seq_stepFine[patternNr]);	//LICHOMAT v0.6: block 2's defaults
 	memset(seq_patternSet.tmpl[patternNr], 0, sizeof seq_patternSet.tmpl[patternNr]);
+	memset(seq_patternSet.vtpl[patternNr], 0, sizeof seq_patternSet.vtpl[patternNr]);	//LICHOMAT v0.7: block 3's defaults
 	if((f_read((FIL*)&SDFile, head, sizeof head, &bytesRead) != FR_OK) || (bytesRead != sizeof head))
 		return;
 	if((memcmp(head, "LCHM", 4) != 0) || (head[4] != PATTERN_EXT_VERSION) || (head[5] != NUM_TRACKS))
@@ -425,7 +490,17 @@ static void preset_readPatternExt(uint8_t patternNr)
 		return;
 	for(uint8_t t=0; t<NUM_TRACKS; t++)
 		seq_patternSet.groove[patternNr][t] = trackGroove_checked(g[t]);
-	preset_readPatternTiming(patternNr);	//LICHOMAT v0.6: block 2, after a complete block 1
+	//LICHOMAT v0.6: block 2 after a complete block 1; v0.7: then block 3, or block 3 alone (V7-13)
+	uint8_t n = 0;
+	if(!preset_readBlockHead(&n))
+		return;
+	if(n == PATTERN_BLOCK2)
+	{
+		if(!preset_readPatternTiming(patternNr) || !preset_readBlockHead(&n))
+			return;
+	}
+	if(n == PATTERN_BLOCK3)
+		preset_readPatternDynamics(patternNr);
 }
 
 //----------------------------------------------------
@@ -2529,6 +2604,7 @@ FRESULT preset_createProject(uint8_t presetNr)
 
 	sprintf(savefileNames[presetNr][PROJECT_NAMES], "Init");
 
+	seq_clearUserTemplates();	//LICHOMAT v0.7: a new project has no own templates
 	preset_clearTmpFolder();
 
 	return FR_OK;
@@ -2556,6 +2632,90 @@ void preset_readSceneBlock(void)
 	if(memcmp(b, "LCHM", 4) || (b[4] != SCENE_BLOCK_VERSION) || (b[5] != MUTE_SCENES)) return;
 	for(uint8_t s = 0; s < MUTE_SCENES; s++)
 		seq_muteScenes[s] = (b[6 + s] & MUTE_SCENE_STORED) ? b[6 + s] : 0;
+}
+//----------------------------------------------------
+// LICHOMAT v0.7: the project's own templates us1..us4 (plan v0.7 V7-12), USERTPL.LCH, 134
+// bytes: "LCHM", the version 1, the count 4, then the 4 UserTemplates (16 timing offsets in
+// ticks, -84..+84; 16 velocity offsets in dB, -42..0). A project save writes it into the
+// project folder when a template is not empty, a project load reads it (no file: every
+// template empty); a capture writes it into /tmp, also when all are empty, and boot reads that
+// after the project (no file: the project's stay). fw 1.7 and v0.2-v0.6 open a project's files
+// by name and never this one; their project save empties the folder first, so it drops the
+// file. A value out of range reads 0; another version or count, or a short file, reads as no
+// file. A write that fails or comes up short (a full card) is an error: the project save returns
+// it before /tmp is cleared, so the captures there stay (quality review of group B).
+//----------------------------------------------------
+#define USER_TPL_FILE		"usertpl.lch"
+#define USER_TPL_VERSION	1
+
+FRESULT preset_saveUserTemplates(uint8_t always)
+{
+	uint8_t used = always;
+	const uint8_t *b = (const uint8_t *)seq_userTemplates;
+	for(uint16_t i=0; !used && (i < sizeof seq_userTemplates); i++)
+		if(b[i]) used = 1;
+	if(!used)
+		return FR_OK;
+	UINT bytesWritten = 0;
+	const uint8_t head[6] = { 'L', 'C', 'H', 'M', USER_TPL_VERSION, USER_TEMPLATES };
+	FRESULT res = f_open((FIL*)&SDFile, USER_TPL_FILE, FA_CREATE_ALWAYS | FA_WRITE);
+	if(res != FR_OK)
+		return res;
+	//on a full card f_write() returns FR_OK and writes fewer bytes (quality review of group B)
+	res = f_write((FIL*)&SDFile, head, sizeof head, &bytesWritten);
+	if((res == FR_OK) && (bytesWritten != sizeof head))
+		res = FR_DENIED;
+	if(res == FR_OK)
+	{
+		res = f_write((FIL*)&SDFile, seq_userTemplates, sizeof seq_userTemplates, &bytesWritten);
+		if((res == FR_OK) && (bytesWritten != sizeof seq_userTemplates))
+			res = FR_DENIED;
+	}
+	//with _FS_TINY 0 the bytes reach the card in f_close() (f_sync()), so its result counts too
+	const FRESULT closed = f_close((FIL*)&SDFile);
+	return (res != FR_OK) ? res : closed;
+}
+
+/** the own templates from USERTPL.LCH in the current folder: FR_OK; FR_NO_FILE when there is
+ * none or it is another version or count or short (all empty when clearIfAbsent); another error
+ * of the card is returned and the templates stay as they are (quality review of group B) */
+FRESULT preset_loadUserTemplates(uint8_t clearIfAbsent)
+{
+	UINT bytesRead = 0;
+	uint8_t head[6];
+	UserTemplate u[USER_TEMPLATES];
+	uint8_t ok = 0;
+	FRESULT res = f_open((FIL*)&SDFile, USER_TPL_FILE, FA_OPEN_EXISTING | FA_READ);
+	if(res == FR_OK)
+	{
+		res = f_read((FIL*)&SDFile, head, sizeof head, &bytesRead);
+		if((res == FR_OK) && (bytesRead == sizeof head) && (memcmp(head, "LCHM", 4) == 0)
+				&& (head[4] == USER_TPL_VERSION) && (head[5] == USER_TEMPLATES))
+		{
+			res = f_read((FIL*)&SDFile, u, sizeof u, &bytesRead);
+			if((res == FR_OK) && (bytesRead == sizeof u))
+				ok = 1;
+		}
+		f_close((FIL*)&SDFile);	//read only: nothing to flush
+	}
+	else if(res == FR_NO_FILE)
+		res = FR_OK;	//no file: as bad content, below
+	if(res != FR_OK)
+		return res;
+	if(!ok)
+	{
+		if(clearIfAbsent)
+			seq_clearUserTemplates();
+		return FR_NO_FILE;
+	}
+	for(uint8_t k=0; k<USER_TEMPLATES; k++)
+		for(uint8_t q=0; q<TEMPLATE_STEPS; q++)
+		{
+			u[k].timing[q] = userTemplate_timing(u[k].timing[q]);
+			u[k].vel[q] = userTemplate_vel(u[k].vel[q]);
+		}
+	seq_setUserTemplates(u);
+	return FR_OK;
 }
 //----------------------------------------------------
 // **SAVEALL
@@ -2740,6 +2900,17 @@ FRESULT preset_saveProject(uint8_t presetNr)
 #endif
 			return res;
 		}
+	}
+	res = preset_saveUserTemplates(0);	//LICHOMAT v0.7: the own templates, if any, into the project folder (V7-12)
+	if(res != FR_OK) {	//LICHOMAT v0.7: as an error in the loop; /tmp, with the captures since the last save, stays
+		lcd_process_display_interrupt = 1;
+		preset_initTmpFolder();
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+		HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
+#else
+
+#endif
+		return res;
 	}
 
 	lcd_process_display_interrupt = 1;
@@ -3134,6 +3305,19 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 #endif
 			return res;
 		}
+	}
+	res = preset_loadUserTemplates(1);	//LICHOMAT v0.7: the project's own templates, or none
+	if ((res != FR_OK) && (res != FR_NO_FILE))
+	{	//LICHOMAT v0.7: as an error in the loop, so the next save does not drop the project's file
+		f_close((FIL*)&SDFile);
+		lcd_process_display_interrupt = 1;
+		preset_initTmpFolder();
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+		HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
+#else
+
+#endif
+		return res;
 	}
 
 	res = FR_OK;

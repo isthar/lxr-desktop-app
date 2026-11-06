@@ -1101,7 +1101,7 @@ static void seqc_noTrig(seqc_draw_t *d)
 //------------------------------------------------------------------------------
 /** v0.6 (spec v0.6 4.2, M4): the groove templates 1..7 (swg lay lyb rlx 2bt psh drg), the
  * offset in ticks at 100 % of each 16th of the bar from the downbeat; id 0 is off */
-static const int8_t seqc_templates[TEMPLATE_COUNT - 1][TEMPLATE_STEPS] = {
+static const int8_t seqc_templates[TEMPLATE_BUILTIN - 1][TEMPLATE_STEPS] = {	//LICHOMAT v0.7: ids 8..11 are the host's (V7-1)
 	{ 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16 },	/* swg: even 16ths late */
 	{ 0, 18, 0,  5, 0, 18, 0,  5, 0, 18, 0,  5, 0, 18, 0,  5 },	/* lay: the reference's track 5, by beat */
 	{ 0, 15, 0, 11, 0, 24, 0,  5, 0, 17, 0,  1, 0, 16, 0,  3 },	/* lyb: track 5, the whole bar */
@@ -1110,6 +1110,38 @@ static const int8_t seqc_templates[TEMPLATE_COUNT - 1][TEMPLATE_STEPS] = {
 	{ 0,  0, -4, 0, 0,  0, -4, 0, 0,  0, -4, 0, 0,  0, -4, 0 },	/* psh: the offbeat 8ths early */
 	{ 0,  0, 6,  0, 0,  0, 6,  0, 0,  0, 6,  0, 0,  0, 6,  0 },	/* drg: the offbeat 8ths late */
 };
+//------------------------------------------------------------------------------
+/** v0.7 (plan v0.7 V7-2): the velocity templates 1..4 (of8 ful dep qtr), the offset in dB at
+ * 100 % of each 16th of the bar from the downbeat, measured on the reference album's hats; id 0
+ * is off */
+static const int8_t seqc_velTemplates[VEL_TEMPLATE_BUILTIN - 1][TEMPLATE_STEPS] = {
+	{ -10, -15, 0, -14, -10, -14,  0, -13, -10, -16, 0, -14, -10, -15,  0, -13 },	/* of8: the median of 8 tracks */
+	{  -7, -15, 0,  -5,  -7,  -9, -1, -10,  -7, -14, 0,  -7,  -6, -10, -1, -10 },	/* ful: dense 16ths */
+	{ -14, -12, 0, -19, -14, -11,  0, -19, -15, -12, 0, -16, -13, -12,  0, -21 },	/* dep: deep ghosts */
+	{  -5, -15, 0, -20,  -6, -17,  0, -16,  -5, -17, 0, -15,  -6, -17, -1, -16 },	/* qtr: quarters just after the offbeat */
+};
+/** v0.7 (V7-4): 10^(-k/20) in Q15 for k = 0..84 dB */
+static const uint16_t seqc_gainDb[85] = {
+	32768, 29205, 26029, 23198, 20675, 18427, 16423, 14637, 13045, 11627, 10362, 9235, 8231, 7336, 6538,
+	5827, 5193, 4629, 4125, 3677, 3277, 2920, 2603, 2320, 2068, 1843, 1642, 1464, 1305, 1163, 1036, 924,
+	823, 734, 654, 583, 519, 463, 413, 368, 328, 292, 260, 232, 207, 184, 164, 146, 130, 116, 104, 92,
+	82, 73, 65, 58, 52, 46, 41, 37, 33, 29, 26, 23, 21, 18, 16, 15, 13, 12, 10, 9, 8, 7, 7, 6, 5, 5, 4,
+	4, 3, 3, 3, 2, 2,
+};
+_Static_assert((int)(sizeof seqc_gainDb / sizeof seqc_gainDb[0]) == -VEL_TEMPLATE_DB_MIN * (100 + TEMPLATE_AMOUNT_MAX) / 100 + 1,
+		"seqc_gainDb reaches the deepest dB at the deepest depth (42 dB at 200 %: 84 dB)");	//LICHOMAT v0.7
+/** v0.7: 10^(-j/2000) in Q15 for j = 0..99 hundredths of a dB */
+static const uint16_t seqc_gainCentiDb[100] = {
+	32768, 32730, 32693, 32655, 32617, 32580, 32542, 32505, 32468, 32430, 32393, 32356, 32318, 32281,
+	32244, 32207, 32170, 32133, 32096, 32059, 32022, 31985, 31948, 31912, 31875, 31838, 31802, 31765,
+	31729, 31692, 31656, 31619, 31583, 31546, 31510, 31474, 31438, 31401, 31365, 31329, 31293, 31257,
+	31221, 31185, 31149, 31114, 31078, 31042, 31006, 30971, 30935, 30899, 30864, 30828, 30793, 30757,
+	30722, 30687, 30651, 30616, 30581, 30546, 30511, 30475, 30440, 30405, 30370, 30335, 30301, 30266,
+	30231, 30196, 30161, 30127, 30092, 30057, 30023, 29988, 29954, 29919, 29885, 29850, 29816, 29782,
+	29747, 29713, 29679, 29645, 29611, 29577, 29543, 29509, 29475, 29441, 29407, 29373, 29339, 29306,
+	29272, 29238,
+};
+_Static_assert(sizeof seqc_gainCentiDb / sizeof seqc_gainCentiDb[0] == 100u, "seqc_gainCentiDb holds the hundredths of a dB");	//LICHOMAT v0.7
 //------------------------------------------------------------------------------
 /** v0.6: a / b rounded half away from zero (b > 0), as seqc_msTicks() rounds */
 static int seqc_rhaDiv(int a, int b)
@@ -1128,18 +1160,48 @@ static int seqc_fineTicks(uint8_t pattern, uint8_t track, uint8_t step, uint16_t
 	return seqc_rhaDiv(f * (int)len, (int)SEQC_TICKS_PER_STEP);
 }
 //------------------------------------------------------------------------------
-/** v0.6 (spec v0.6 4.1, M5, M6): G, the track's template at the occurrence at pl of track
- * step s: position q = (loop * length + s) mod 16, scaled by the amount and the track step */
-static int seqc_templateTicks(uint8_t pattern, uint8_t track, uint8_t step, const seqc_place_t *pl)
+/** v0.6 (spec v0.6 M6): the template position q = (loop * length + s) mod 16 of the occurrence
+ * at pl of track step s; v0.7: the timing and the velocity template share it (plan v0.7 V7-5) */
+static uint32_t seqc_templatePos(uint8_t pattern, uint8_t track, uint8_t step, const seqc_place_t *pl)
+{
+	return (pl->loop * seqc_trackLength(pattern, track) + step) % TEMPLATE_STEPS;
+}
+//------------------------------------------------------------------------------
+/** the track's timing template through tmpl(), checked; off without the callback */
+static TrackTemplate seqc_tmplOf(uint8_t pattern, uint8_t track)
 {
 	if (seqc.host.tmpl == NULL)
+		return (TrackTemplate){ 0, 0 };
+	return trackTemplate_checked(seqc.host.tmpl(seqc.host.ctx, pattern, track));
+}
+//------------------------------------------------------------------------------
+/** v0.7 (V7-3, V7-6): timing template id 1..11 at position q in ticks at 100 %: the table, or
+ * the own template's timing part (0 without userTemplates or out of range) */
+static int seqc_templateValue(uint8_t id, uint32_t q)
+{
+	if (id < TEMPLATE_BUILTIN)
+		return seqc_templates[id - 1u][q];
+	if (seqc.host.userTemplates == NULL)
 		return 0;
-	const TrackTemplate tp = trackTemplate_checked(seqc.host.tmpl(seqc.host.ctx, pattern, track));
+	return userTemplate_timing(seqc.host.userTemplates[id - TEMPLATE_BUILTIN].timing[q]);
+}
+//------------------------------------------------------------------------------
+/** v0.6 (spec v0.6 4.1, M5): G, template tp at position q in a track step of len ticks, scaled
+ * by its amount; 0 for off. v0.7: the caller has checked tp (trackTemplate_checked(): id 0..11) */
+static int seqc_templateG(TrackTemplate tp, uint32_t q, uint16_t len)
+{
 	if (tp.id == 0)
 		return 0;
-	const uint32_t q = (pl->loop * seqc_trackLength(pattern, track) + step) % TEMPLATE_STEPS;
-	const int v = seqc_templates[tp.id - 1u][q];
-	return seqc_rhaDiv(v * ((int)tp.amount + 100) * (int)pl->len, 100 * (int)SEQC_TICKS_PER_STEP);
+	return seqc_rhaDiv(seqc_templateValue(tp.id, q) * ((int)tp.amount + 100) * (int)len, 100 * (int)SEQC_TICKS_PER_STEP);
+}
+//------------------------------------------------------------------------------
+/** v0.6: G at the occurrence at pl of track step s, for seqc_recordPlace() */
+static int seqc_templateTicks(uint8_t pattern, uint8_t track, uint8_t step, const seqc_place_t *pl)
+{
+	const TrackTemplate tp = seqc_tmplOf(pattern, track);
+	if (tp.id == 0)
+		return 0;
+	return seqc_templateG(tp, seqc_templatePos(pattern, track, step, pl), pl->len);
 }
 //------------------------------------------------------------------------------
 /** v0.6 (spec v0.6 4.1, M7): the step's own position P = clamp(C + F + G) to the shift's
@@ -1175,6 +1237,67 @@ static uint8_t seqc_humanVel(uint8_t vel, const seqc_draw_t *d)
 		return vel;
 	const int v = ((int)vel * (100 + d->velPct) + 50) / 100;
 	return (uint8_t)(v > 127 ? 127 : v);
+}
+//------------------------------------------------------------------------------
+_Static_assert(100 + TEMPLATE_AMOUNT_MAX == 200, "seqc_velScale() clamps the depth at 200 %, the amount's maximum + 100");	//LICHOMAT v0.7
+uint8_t seqc_velScale(uint8_t vel, int db, uint8_t pct)
+{
+	if (vel == 0 || db >= 0 || pct == 0)
+		return vel;
+	if (db < VEL_TEMPLATE_DB_MIN)
+		db = VEL_TEMPLATE_DB_MIN;
+	if (pct > 200u)
+		pct = 200u;
+	const uint32_t a = (uint32_t)(-db) * (uint32_t)pct;	/* hundredths of a dB, 0..8400 */
+	const uint32_t g = ((uint32_t)seqc_gainDb[a / 100u] * (uint32_t)seqc_gainCentiDb[a % 100u] + (1u << 14)) >> 15;
+	const uint32_t v = ((uint32_t)vel * g + (1u << 14)) >> 15;
+	return (uint8_t)(v < 1u ? 1u : (v > 127u ? 127u : v));
+}
+//------------------------------------------------------------------------------
+int8_t seqc_velDb(uint8_t vel, uint8_t loudest)
+{
+	if (loudest == 0 || vel >= loudest)
+		return 0;
+	if (vel == 0)
+		return VEL_TEMPLATE_DB_MIN;
+	/* k whole dB below: the count of k with vel / loudest <= 10^(-(k + 0.5) / 20) */
+	int k = 0;
+	while (k < -VEL_TEMPLATE_DB_MIN && ((uint64_t)vel << 30)
+			<= (uint64_t)loudest * (uint64_t)seqc_gainDb[k] * (uint64_t)seqc_gainCentiDb[50])
+		k++;
+	return (int8_t)-k;
+}
+//------------------------------------------------------------------------------
+/** v0.7 (V7-2): the track's velocity template through vtmpl(), checked; off without it */
+static TrackTemplate seqc_vtmplOf(uint8_t pattern, uint8_t track)
+{
+	if (seqc.host.vtmpl == NULL)
+		return (TrackTemplate){ 0, 0 };
+	return velTemplate_checked(seqc.host.vtmpl(seqc.host.ctx, pattern, track));
+}
+//------------------------------------------------------------------------------
+/** v0.7 (V7-4): vel through velocity template vt at position q; vel itself when vt is off or its
+ * depth is 0. The caller has checked vt (velTemplate_checked(): id 0..8, amount -100..+100) */
+static uint8_t seqc_templateVel(uint8_t vel, TrackTemplate vt, uint32_t q)
+{
+	if (vt.id == 0 || vt.amount == TEMPLATE_AMOUNT_MIN)
+		return vel;
+	int db = 0;
+	if (vt.id < VEL_TEMPLATE_BUILTIN)
+		db = seqc_velTemplates[vt.id - 1u][q];
+	else if (seqc.host.userTemplates != NULL)
+		db = userTemplate_vel(seqc.host.userTemplates[vt.id - VEL_TEMPLATE_BUILTIN].vel[q]);
+	return seqc_velScale(vel, db, (uint8_t)(vt.amount + 100));
+}
+//------------------------------------------------------------------------------
+int seqc_templateTicksAt(TrackTemplate tp, uint8_t q)
+{
+	return seqc_templateG(trackTemplate_checked(tp), (uint32_t)(q % TEMPLATE_STEPS), SEQC_TICKS_PER_STEP);
+}
+//------------------------------------------------------------------------------
+uint8_t seqc_templateVelAt(uint8_t vel, TrackTemplate vt, uint8_t q)
+{
+	return seqc_templateVel(vel, velTemplate_checked(vt), (uint32_t)(q % TEMPLATE_STEPS));
 }
 
 //------------------------------------------------------------------------------
@@ -1217,8 +1340,12 @@ static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint
 	const StepTiming timing = seqc.host.timing(seqc.host.ctx, pattern, track, step);
 	uint8_t hits = seqc_hitCount(timing.flam);
 	uint16_t len = pl->len;
+	//v0.7: the timing and the velocity template at one position q (plan v0.7 V7-5)
+	const TrackTemplate tp = seqc_tmplOf(pattern, track);
+	const TrackTemplate vt = seqc_vtmplOf(pattern, track);
+	const uint32_t q = (tp.id != 0 || vt.id != 0) ? seqc_templatePos(pattern, track, step, pl) : 0u;
 	const int pos = seqc_stepPos(seqc_shiftFor(timing.shift, len), seqc_fineTicks(pattern, track, step, len),
-			seqc_templateTicks(pattern, track, step, pl), len);
+			seqc_templateG(tp, q, len), len);
 	int offset = seqc_offset(d, &g, pos, absStep, pl);
 	if (early)
 	{
@@ -1227,7 +1354,7 @@ static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint
 		d->hits = hits;
 		d->offset = (int16_t)offset;
 		d->len = len;
-		if (!plays)
+		if (!plays || offset >= 0)	//LICHOMAT v0.7: no hit before the boundary, so none to queue here: skip the velocity and the hit loop (CPU)
 			return;
 	}
 	else if (d->timed && (d->offset < 0 || offset < 0))
@@ -1239,7 +1366,7 @@ static void seqc_generate(uint8_t track, uint32_t absStep, uint8_t pattern, uint
 	if (data == NULL)
 		data = seqc.host.step(seqc.host.ctx, pattern, track, step);
 	const seqc_tick_t first = pl->base + offset;
-	const uint8_t vel = seqc_humanVel((uint8_t)(data->volume & 0x7f), d);
+	const uint8_t vel = seqc_humanVel(seqc_templateVel((uint8_t)(data->volume & 0x7f), vt, q), d);	//v0.7: the velocity template, then v0.2's humanize volume (V7-4)
 
 	for (uint8_t j = 0; j < hits; j++)
 	{

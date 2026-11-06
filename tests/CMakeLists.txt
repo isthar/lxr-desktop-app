@@ -159,7 +159,7 @@ if(TARGET test_harness)
     # a "FAIL harness_..." line fails the test even if the exit status were broken
     set_tests_properties(harness PROPERTIES FAIL_REGULAR_EXPRESSION "FAIL harness_")
 endif()
-seqc_add_test(test_layout    IDS layout step_micro)  # E1.2  Step and StepTiming layout; v0.6 the microtiming split, TrackTemplate
+seqc_add_test(test_layout    IDS layout step_micro vel_types)  # E1.2  Step and StepTiming layout; v0.6 the microtiming split, TrackTemplate; v0.7 the velocity and own templates
 seqc_add_test(test_clock     IDS T1 STRICT_CORE seq_core_strict)                 # E1.3  master clock accuracy
 seqc_add_test(test_tracks    IDS T10 STRICT_CORE seq_core_strict)                # E1.4  track counters, master wrap, pattern end
 seqc_add_test(test_generate  IDS T2 T3 T4 T8 STRICT_CORE seq_core_strict)        # E1.5  grid, swing, shift, ratchet, probability
@@ -178,6 +178,7 @@ seqc_add_test(test_perform IDS RL1 RL2 SL1 STRICT_CORE seq_core_strict)    # v0.
 seqc_add_test(test_slide IDS GL1)    # v0.3 P3 glide
 seqc_add_test(test_itemtime  IDS seqc_itemtime STRICT_CORE seq_core_strict)    # v0.5 Task 2 seqc_itemTime()
 seqc_add_test(test_micro     IDS micro_offsets templates micro_choke record_place EXTRA queue_equiv.c STRICT_CORE seq_core_strict)    # v0.6 Task 3 microtiming, templates (Task 7: record_place)
+seqc_add_test(test_dynamics  IDS vel_scale vel_templates own_templates EXTRA queue_equiv.c STRICT_CORE seq_core_strict)    # v0.7 Task 3 velocity templates, own templates
 # LICHOMAT v0.5 (plan Task 3): the voice scheduler, plain C11 like the core, with its test
 # hooks (VSCHED_TEST); a second build with the fix-up's split cap 3 (S20) runs vsched_cap
 set(VSCHED_SOURCE ${LXR_ROOT}/Core/Src/Soundengine/vsched.c)
@@ -232,7 +233,7 @@ endif()
 # a buffer of the test with guard bytes after the 64 entries. stubs/seq_random_test.h
 # is forced into sequencer.c: its probability draw, SEQ_RANDOM(), becomes the
 # test's seqTest_random() (stage 1b F5).
-seqc_add_test(test_sequencer IDS sequencer record_micro EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c)  # E4.6  song page position, automation step; stage 1b F5 SEQ_RANDOM()
+seqc_add_test(test_sequencer IDS sequencer record_micro own_capture EXTRA ${LXR_ROOT}/Core/Src/Soundengine/Sequencer/sequencer.c)  # E4.6  song page position, automation step; stage 1b F5 SEQ_RANDOM()
 if(TARGET test_sequencer)
     target_include_directories(test_sequencer BEFORE PRIVATE stubs)
     target_include_directories(test_sequencer SYSTEM PRIVATE ${LXR_ROOT}/Core/Inc)
@@ -246,7 +247,7 @@ endif()
 # and configuration, and an in-memory card in the test. For this target
 # currentFolder, savefileNames and mainParameters are pointers to arrays of their
 # size, which the test points into buffers with guard bytes after the arrays.
-seqc_add_test(test_presets   IDS presets pattern_block2 EXTRA ${LXR_ROOT}/Core/Src/Preset/presetManager.c ${LXR_ROOT}/Core/Src/frontPanelParser.c)  # E4.7  project re-save, kit and project slot numbers; E4.8 NRPN 121
+seqc_add_test(test_presets   IDS presets pattern_block2 pattern_block3 user_templates EXTRA ${LXR_ROOT}/Core/Src/Preset/presetManager.c ${LXR_ROOT}/Core/Src/frontPanelParser.c)  # E4.7  project re-save, kit and project slot numbers; E4.8 NRPN 121
 if(TARGET test_presets)
     target_include_directories(test_presets BEFORE PRIVATE stubs/presets stubs)
     target_include_directories(test_presets SYSTEM PRIVATE

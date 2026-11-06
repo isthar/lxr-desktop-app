@@ -12,7 +12,8 @@ midi:  40-200 random DIN messages per render: CC, NRPN, notes, Program Change, p
        bend, aftertouch, SPP, song select and random bytes, mostly on channel 1.
 seq:   30-120 random edits per render: voices, steps, step parameters of steps 0-63
        (the step buttons' range), track settings, rolls, the performance mode, mute
-       scenes, rotation, start and stop; v0.6: mic, tpl and amt with values over 0-255.
+       scenes, rotation, start and stop; v0.6: mic, tpl and amt with values over 0-255;
+       v0.7: vtp, vdp and sav with values over 0-255, captures and clears.
 
 Each finding (a different source line, or a different exit message) is printed once
 with its seed; render N uses seed S + N, so `--count 1 --seed <seed>` repeats one.
@@ -64,16 +65,25 @@ def value(rnd):
     return rnd.choice([0, 1, 63, 64, 100, 101, 115, 116, 126, 127, rnd.randrange(128)])
 
 
-# LICHOMAT v0.6 (plan v0.6 V6-21): mic (0-168), tpl (0-7) and amt (0-200) pass 127; the edges of
+# LICHOMAT v0.6/v0.7: mic (0-168), tpl (0-11), amt and vdp (0-200), vtp (0-8) and sav (0-4): the edges of
 # their ranges and of the menu's clamp
-WIDE = ('step_micro', 'track_tpl', 'track_tpl_amt')
+WIDE = ('step_micro', 'track_tpl', 'track_tpl_amt', 'track_vtp', 'track_vdp', 'track_tpl_save')
 
 
 def wide(rnd):
     return rnd.choice([0, 83, 84, 85, 167, 168, 169, 200, 201, 255, rnd.randrange(256)])
 
 
+# LICHOMAT v0.7: tpl (0-11), vtp (0-8) and sav (0-4) are lists, and the menu's clamp puts each value
+# past a list on its last entry (us4), so wide() alone reaches of8-qtr and us1-us3 about once a sweep;
+# half of their draws pick from 0-12: tpl's list and the first value past it, vtp's and sav's lists and
+# values past them
+LISTS = ('track_tpl', 'track_vtp', 'track_tpl_save')
+
+
 def value_for(rnd, name):
+    if name in LISTS and rnd.random() < 0.5:
+        return rnd.randrange(13)
     return wide(rnd) if name in WIDE else value(rnd)
 
 
@@ -119,7 +129,8 @@ STEP_PARAMETERS = ['step_volume', 'step_prob', 'step_note', 'step_slide', 'step_
                    'step_micro']
 TRACK_PARAMETERS = ['track_tempo', 'human_time', 'human_vol', 'track_delay', 'track_length',
                     'track_rotation', 'shuffle', 'roll', 'scene_quant', 'euklid_length',
-                    'euklid_steps', 'euklid_rotation', 'bpm', 'track_tpl', 'track_tpl_amt']
+                    'euklid_steps', 'euklid_rotation', 'bpm', 'track_tpl', 'track_tpl_amt',
+                    'track_vtp', 'track_vdp', 'track_tpl_save']
 
 
 def seq_case(rnd, names):
@@ -160,6 +171,12 @@ def seq_case(rnd, names):
             at('down shift')
             at('press step%d' % rnd.randrange(1, 3))
             at('up shift')
+        elif r < 0.975:             # LICHOMAT v0.7: sav on the track page's fourth screen and the click
+            for c in ('down shift', 'press mode2', 'up shift', 'encoder +13', 'push'):
+                at(c)
+        elif r < 0.99:              # LICHOMAT v0.7: the clear page's micro
+            for c in ('down shift', 'press copy', 'encoder +9', 'push', 'up shift'):
+                at(c)
         else:
             at('press start')
     return ['--pattern', str(rnd.randrange(2)), '--no-start', '--seconds', '%.3f' % (t / 1000 + 1.0)], lines

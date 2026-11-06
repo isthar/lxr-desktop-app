@@ -98,6 +98,18 @@ typedef struct {
 static CardEntry card[CARD_ENTRIES];
 static char cardCwd[CARD_PATH] = "/";
 static int cardOpenFile = -1;
+/* LICHOMAT v0.7 (quality review of group B): failures on demand, each for the files whose
+ * absolute path holds the given name: f_open() of one returns cardFailOpenResult; f_write() to
+ * one writes nothing and returns FR_OK, as FatFs does on a full card; f_read() of one returns
+ * FR_DISK_ERR (cardFailRead); f_close() of one returns
+ * FR_DISK_ERR and leaves it open, as FatFs's f_close() does when its f_sync() fails. With
+ * cardFailWrite > 0 the cardFailWrite-th f_write() from now returns FR_DISK_ERR; with
+ * cardShortWrite > 0 the cardShortWrite-th one writes nothing and returns FR_OK; with
+ * cardFailReadNth > 0 the cardFailReadNth-th f_read() from now returns FR_DISK_ERR. cardReset()
+ * clears them. */
+static const char *cardFailOpen, *cardFull, *cardFailClose, *cardFailRead;
+static FRESULT cardFailOpenResult = FR_DISK_ERR;
+static int cardFailWrite, cardShortWrite, cardFailReadNth;
 
 static int lowerChar(int c) { return (c >= 'A' && c <= 'Z') ? c - 'A' + 'a' : c; }
 
@@ -191,6 +203,9 @@ static void cardReset(void)
 		removeEntry(i);
 	snprintf(cardCwd, sizeof cardCwd, "/");
 	cardOpenFile = -1;
+	cardFailOpen = cardFull = cardFailClose = cardFailRead = NULL;	/* LICHOMAT v0.7 */
+	cardFailOpenResult = FR_DISK_ERR;
+	cardFailWrite = cardShortWrite = cardFailReadNth = 0;
 }
 
 /** a file with the given bytes (path absolute) */
@@ -210,6 +225,12 @@ static int cardHas(const char *path) { return findAbsolute(path) >= 0; }
 
 FRESULT f_open(FIL *fp, const TCHAR *path, BYTE mode)
 {
+	if (cardFailOpen) {		/* LICHOMAT v0.7 */
+		char abs[CARD_PATH];
+		absolutePath(abs, path);
+		if (strstr(abs, cardFailOpen))
+			return cardFailOpenResult;
+	}
 	int i = find(path);
 	if (mode & (FA_CREATE_ALWAYS | FA_CREATE_NEW | FA_OPEN_ALWAYS)) {
 		if (i < 0)
@@ -230,6 +251,8 @@ FRESULT f_open(FIL *fp, const TCHAR *path, BYTE mode)
 FRESULT f_close(FIL *fp)
 {
 	(void)fp;
+	if (cardFailClose && cardOpenFile >= 0 && strstr(card[cardOpenFile].path, cardFailClose))
+		return FR_DISK_ERR;		/* LICHOMAT v0.7: still open */
 	cardOpenFile = -1;
 	return FR_OK;
 }
@@ -237,9 +260,13 @@ FRESULT f_close(FIL *fp)
 FRESULT f_read(FIL *fp, void *buff, UINT btr, UINT *br)
 {
 	*br = 0;
+	if (cardFailReadNth > 0 && --cardFailReadNth == 0)	/* LICHOMAT v0.7 */
+		return FR_DISK_ERR;
 	if (cardOpenFile < 0)
 		return FR_INVALID_OBJECT;
 	const CardEntry *e = &card[cardOpenFile];
+	if (cardFailRead && strstr(e->path, cardFailRead))
+		return FR_DISK_ERR;		/* LICHOMAT v0.7 */
 	UINT n = fp->fptr < e->len ? e->len - (UINT)fp->fptr : 0;
 	if (n > btr)
 		n = btr;
@@ -253,8 +280,14 @@ FRESULT f_read(FIL *fp, void *buff, UINT btr, UINT *br)
 FRESULT f_write(FIL *fp, const void *buff, UINT btw, UINT *bw)
 {
 	*bw = 0;
+	if (cardFailWrite > 0 && --cardFailWrite == 0)	/* LICHOMAT v0.7 */
+		return FR_DISK_ERR;
 	if (cardOpenFile < 0)
 		return FR_INVALID_OBJECT;
+	if (cardFull && strstr(card[cardOpenFile].path, cardFull))
+		return FR_OK;			/* LICHOMAT v0.7: a full card, nothing written */
+	if (cardShortWrite > 0 && --cardShortWrite == 0)
+		return FR_OK;
 	CardEntry *e = &card[cardOpenFile];
 	UINT end = (UINT)fp->fptr + btw;
 	if (end > e->len) {
@@ -399,6 +432,7 @@ static void resetMemory(void)
 	memset(menu_selectedPresetNr, 0, sizeof menu_selectedPresetNr);
 	memset(menu_loadedPresetNr, 0, sizeof menu_loadedPresetNr);
 	memset(&seq_patternSet, 0, sizeof seq_patternSet);
+	memset(seq_userTemplates, 0, sizeof seq_userTemplates);	/* LICHOMAT v0.7 */
 	seq_activePattern = seq_pendingPattern = 0;
 	menu_playedPattern = menu_shownPattern = 0;
 	lcd_process_display_interrupt = 1;
@@ -1621,7 +1655,7 @@ TEST(pattern_block2_values_out_of_range)
 	static uint8_t f[PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE];
 	memcpy(f, e->data, sizeof f);
 	uint8_t *b2 = f + PAT_V03_SIZE + PAT_EXT_SIZE;
-	b2[6 + 0] = 8;				/* track 0: template id 8 */
+	b2[6 + 0] = 12;				/* track 0: template id 12 (LICHOMAT v0.7: 8..11 are us1..us4, plan v0.7 V7-1) */
 	b2[6 + 3] = 101;			/* track 1: amount +101 */
 	b2[6 + 5] = (uint8_t)-101;		/* track 2: amount -101 */
 	b2[20 + 0] = 0x96;			/* track 0: step 0 nibble +6 (6), step 1 -7 (9) */
@@ -1676,6 +1710,620 @@ TEST(pattern_block2_fw17_reads_the_coarse_shift)
 			ASSERT_EQ((b >> 4) - 7, (int)floor((micro + 6) / 12.0));
 			ASSERT_EQ(b & 0x0F, (uint8_t)((t * NUM_STEPS + s) * 3 + 4) & 0x0F);
 		}
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT v0.7 (plan v0.7 Task 5): block 3, the velocity templates, after block 2 or right
+// after block 1 (V7-13); the own templates' USERTPL.LCH (V7-12)
+//------------------------------------------------------------------------------
+#define PAT_BLOCK3_SIZE 20	/* "LCHM", 3, 7, 7 x 2 */
+
+/** pattern p's velocity templates: ids 0..8, depths -75..+75 */
+static void fillDynamics(uint8_t p, uint8_t salt)
+{
+	for (uint8_t t = 0; t < NUM_TRACKS; t++)
+		seq_patternSet.vtpl[p][t] = (TrackTemplate){ .id = (uint8_t)((t + salt) % VEL_TEMPLATE_COUNT),
+			.amount = (int8_t)(25 * t - 75) };
+}
+
+/** a fresh card with /proj00 as the current folder; 1 if it worked */
+static int proj00(void)
+{
+	reset();
+	return f_mkdir("/proj00") == FR_OK && f_chdir("/proj00") == FR_OK;
+}
+
+TEST(pattern_block3_after_block_2)
+{
+	ASSERT_TRUE(proj00());
+	fillPattern(5, 2);
+	fillTiming(5, 2);
+	fillDynamics(5, 2);
+	ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+	CardEntry *e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE + PAT_BLOCK3_SIZE);
+	static const uint8_t head[6] = { 'L', 'C', 'H', 'M', 3, 7 };
+	const uint8_t *b3 = e->data + PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE;
+	ASSERT_EQ(memcmp(b3, head, 6), 0);
+	ASSERT_EQ(memcmp(b3 + 6, seq_patternSet.vtpl[5], 14), 0);
+	static TrackTemplate saved[NUM_TRACKS];
+	static TimingSlot savedT, loadedT;
+	memcpy(saved, seq_patternSet.vtpl[5], sizeof saved);
+	snapTiming(5, &savedT);
+	memset(&seq_patternSet, 0x5A, sizeof seq_patternSet);
+	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+	ASSERT_EQ(memcmp(seq_patternSet.vtpl[5], saved, sizeof saved), 0);
+	snapTiming(5, &loadedT);
+	ASSERT_EQ(memcmp(&loadedT, &savedT, sizeof savedT), 0);
+}
+
+TEST(pattern_block3_directly_after_block_1)
+{
+	/* no timing data and one velocity template: block 3 right after block 1, 3,717 bytes. v0.6
+	 * reads a header there that is not its "LCHM" 2 7 and keeps its defaults (F8); v0.7 reads
+	 * block 3 and leaves block 2's defaults */
+	ASSERT_TRUE(proj00());
+	fillPattern(5, 4);
+	seq_patternSet.vtpl[5][6] = (TrackTemplate){ .id = 1, .amount = -50 };
+	ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+	CardEntry *e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK3_SIZE);
+	static const uint8_t b3[PAT_BLOCK3_SIZE] = { 'L', 'C', 'H', 'M', 3, 7, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 1, (uint8_t)-50 };
+	ASSERT_EQ(memcmp(e->data + PAT_V03_SIZE + PAT_EXT_SIZE, b3, sizeof b3), 0);
+	memset(&seq_patternSet, 0x5A, sizeof seq_patternSet);
+	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+	ASSERT_EQ(seq_patternSet.vtpl[5][6].id, 1);
+	ASSERT_EQ(seq_patternSet.vtpl[5][6].amount, -50);
+	ASSERT_EQ(seq_patternSet.vtpl[5][0].id, 0);
+	static const uint8_t zero[NUM_TRACKS * STEP_FINE_BYTES];
+	ASSERT_EQ(memcmp(seq_patternSet.seq_stepFine[5], zero, sizeof zero), 0);
+	ASSERT_EQ(memcmp(seq_patternSet.tmpl[5], zero, sizeof seq_patternSet.tmpl[5]), 0);
+}
+
+TEST(pattern_block3_absent_without_data)
+{
+	/* no velocity template: v0.6's files byte for byte (3,697 B, or 3,941 with block 2); a depth
+	 * without a template is enough for block 3 (V7-13) */
+	CardEntry *e = savedPattern5(1);
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE);
+	e = savedTiming5(2);
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE);
+	seq_patternSet.vtpl[5][3] = (TrackTemplate){ .id = 0, .amount = 40 };
+	ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+	e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE + PAT_BLOCK3_SIZE);
+}
+
+TEST(pattern_block3_tmp_pat_round_trip)
+{
+	reset();
+	ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+	menu_playedPattern = 3;
+	fillPattern(3, 2);
+	fillDynamics(3, 2);
+	static TrackTemplate saved[NUM_TRACKS];
+	memcpy(saved, seq_patternSet.vtpl[3], sizeof saved);
+	ASSERT_EQ(preset_saveTmpPat(), FR_OK);
+	const int i = find("/tmp/tmp.pat");
+	ASSERT_TRUE(i >= 0);
+	ASSERT_EQ(card[i].len, 1 + PAT_V03_SIZE - 14 + PAT_EXT_SIZE + PAT_BLOCK3_SIZE);
+	memset(seq_patternSet.vtpl[3], 0x11, sizeof saved);
+	ASSERT_EQ(preset_LoadTmpPat(), FR_OK);
+	ASSERT_EQ(memcmp(seq_patternSet.vtpl[3], saved, sizeof saved), 0);
+}
+
+TEST(pattern_block3_left_out_keeps_the_defaults)
+{
+	/* a v0.6 file (blocks 1 and 2), a short block 3, block number 4, a track count of 6, 8 or 255
+	 * (8 and 255: spec review of group B), and a block 2 cut by 10 bytes before a valid block 3:
+	 * the velocity templates stay off */
+	ASSERT_TRUE(proj00());
+	fillPattern(5, 1);
+	fillTiming(5, 1);
+	fillDynamics(5, 1);
+	ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+	CardEntry *e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	enum { B3 = PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE, ALL = B3 + PAT_BLOCK3_SIZE };
+	static uint8_t file[ALL], f[ALL];
+	memcpy(file, e->data, sizeof file);
+	char path[CARD_PATH];
+	snprintf(path, sizeof path, "%s", e->path);
+	static const struct { int at; uint8_t value; UINT len; } cases[6] = {
+		{ -1, 0, B3 }, { -1, 0, ALL - 1 }, { B3 + 4, 4, ALL }, { B3 + 5, 6, ALL }, { B3 + 5, 8, ALL },
+		{ B3 + 5, 255, ALL },
+	};
+	static const TrackTemplate none[NUM_TRACKS];
+	for (unsigned k = 0; k < 7; k++)
+	{
+		UINT len;
+		memcpy(f, file, sizeof f);
+		if (k < 6)
+		{
+			if (cases[k].at >= 0)
+				f[cases[k].at] = cases[k].value;
+			len = cases[k].len;
+		}
+		else
+		{
+			memmove(f + B3 - 10, file + B3, PAT_BLOCK3_SIZE);	/* block 2 short by 10 bytes */
+			len = ALL - 10;
+		}
+		cardPut(path, f, len);
+		fillDynamics(5, 3);					/* stale values */
+		ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+		ASSERT_EQ(memcmp(seq_patternSet.vtpl[5], none, sizeof none), 0);
+	}
+}
+
+TEST(pattern_block3_values_out_of_range)
+{
+	ASSERT_TRUE(proj00());
+	fillPattern(5, 0);
+	fillDynamics(5, 0);
+	ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+	CardEntry *e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	static uint8_t f[PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK3_SIZE];
+	memcpy(f, e->data, sizeof f);
+	uint8_t *v = f + PAT_V03_SIZE + PAT_EXT_SIZE + 6;
+	v[0] = 9;				/* track 0: id 9 */
+	v[2] = 255;				/* track 1: id 255 */
+	v[5] = 101;				/* track 2: depth +101 */
+	v[7] = (uint8_t)-101;			/* track 3: depth -101 */
+	cardPut(e->path, f, sizeof f);
+	ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+	ASSERT_EQ(seq_patternSet.vtpl[5][0].id, 0);
+	ASSERT_EQ(seq_patternSet.vtpl[5][1].id, 0);
+	ASSERT_EQ(seq_patternSet.vtpl[5][2].amount, 0);
+	ASSERT_EQ(seq_patternSet.vtpl[5][3].amount, 0);
+	ASSERT_EQ(seq_patternSet.vtpl[5][4].id, 4);		/* the others stay */
+	ASSERT_EQ(seq_patternSet.vtpl[5][4].amount, 25);
+}
+
+/* spec review of group B (V7-3): the stand-ins of seq_setUserTemplates() and
+ * seq_clearUserTemplates() count their calls, so the load tests see that the loader writes the
+ * own templates through the setters, which mask interrupts, and not around them */
+static int userSetCalls, userClearCalls;
+
+/** the own templates with values over their ranges: timing -84..+84, velocity -42..0 */
+static void fillUser(uint8_t salt)
+{
+	for (int u = 0; u < USER_TEMPLATES; u++)
+		for (int q = 0; q < TEMPLATE_STEPS; q++)
+		{
+			seq_userTemplates[u].timing[q] = (int8_t)(((u * TEMPLATE_STEPS + q) * 11 + salt) % 169 - 84);
+			seq_userTemplates[u].vel[q] = (int8_t)-(((u * TEMPLATE_STEPS + q) * 5 + salt) % 43);
+		}
+}
+
+TEST(user_templates_project_round_trip)
+{
+	/* V7-12: a project save writes USERTPL.LCH (134 bytes: LCHM 1 4, the templates as in RAM)
+	 * into the project folder and clears /tmp; a project load reads it back */
+	reset();
+	fillUser(3);
+	static UserTemplate saved[USER_TEMPLATES];
+	memcpy(saved, seq_userTemplates, sizeof saved);
+	ASSERT_EQ(preset_saveProject(0), FR_OK);
+	const int i = find("/proj00/usertpl.lch");
+	ASSERT_TRUE(i >= 0);
+	ASSERT_EQ(card[i].len, 134);
+	static const uint8_t head[6] = { 'L', 'C', 'H', 'M', 1, 4 };
+	ASSERT_EQ(memcmp(card[i].data, head, 6), 0);
+	ASSERT_EQ(memcmp(card[i].data + 6, saved, sizeof saved), 0);
+	ASSERT_TRUE(find("/tmp/usertpl.lch") < 0);
+	memset(seq_userTemplates, 0x11, sizeof seq_userTemplates);
+	userSetCalls = userClearCalls = 0;
+	ASSERT_EQ(preset_loadProject(0, 1), FR_OK);
+	ASSERT_EQ(memcmp(seq_userTemplates, saved, sizeof saved), 0);
+	ASSERT_EQ(userSetCalls, 1);				/* through the setter */
+	ASSERT_EQ(userClearCalls, 0);
+}
+
+TEST(user_templates_absent_or_empty)
+{
+	/* empty templates write no file (the project is v0.6's); a project without the file loads
+	 * them empty over stale values; a new project has none */
+	reset();
+	ASSERT_EQ(preset_saveProject(0), FR_OK);
+	ASSERT_TRUE(find("/proj00/usertpl.lch") < 0);
+	static const UserTemplate none[USER_TEMPLATES];
+	fillUser(1);
+	userSetCalls = userClearCalls = 0;
+	ASSERT_EQ(preset_loadProject(0, 1), FR_OK);
+	ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+	ASSERT_EQ(userClearCalls, 1);				/* through the clear */
+	ASSERT_EQ(userSetCalls, 0);
+	fillUser(2);
+	userClearCalls = 0;
+	ASSERT_EQ(preset_createProject(0), FR_OK);
+	ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+	ASSERT_EQ(userClearCalls, 1);
+}
+
+TEST(user_templates_tmp_after_a_capture)
+{
+	/* /tmp: written after each capture, also when all are empty, read at boot after the project
+	 * (loadTmpFolderFiles()); no file there keeps the project's */
+	reset();
+	ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+	static UserTemplate saved[USER_TEMPLATES];
+	static const UserTemplate none[USER_TEMPLATES];
+	fillUser(5);
+	memcpy(saved, seq_userTemplates, sizeof saved);
+	ASSERT_EQ(preset_saveUserTemplates(1), FR_OK);
+	ASSERT_TRUE(find("/tmp/usertpl.lch") >= 0);
+	memset(seq_userTemplates, 0, sizeof seq_userTemplates);
+	userSetCalls = userClearCalls = 0;
+	ASSERT_EQ(loadTmpFolderFiles(), FR_OK);
+	ASSERT_EQ(memcmp(seq_userTemplates, saved, sizeof saved), 0);
+	ASSERT_EQ(userSetCalls, 1);				/* through the setter */
+	memset(seq_userTemplates, 0, sizeof seq_userTemplates);		/* emptied in this session */
+	ASSERT_EQ(preset_saveUserTemplates(1), FR_OK);
+	ASSERT_EQ(card[find("/tmp/usertpl.lch")].len, 134);
+	fillUser(6);
+	ASSERT_EQ(loadTmpFolderFiles(), FR_OK);
+	ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+	ASSERT_EQ(f_unlink("usertpl.lch"), FR_OK);
+	fillUser(7);
+	memcpy(saved, seq_userTemplates, sizeof saved);
+	userSetCalls = userClearCalls = 0;
+	ASSERT_EQ(loadTmpFolderFiles(), FR_OK);
+	ASSERT_EQ(memcmp(seq_userTemplates, saved, sizeof saved), 0);
+	ASSERT_EQ(userSetCalls + userClearCalls, 0);		/* no file: not touched */
+}
+
+TEST(user_templates_bad_files)
+{
+	/* values out of range read 0 (V7-6, V7-7); another version or count, or a short file, reads
+	 * as no file: empty from the project folder */
+	reset();
+	fillUser(0);
+	ASSERT_EQ(preset_saveProject(0), FR_OK);
+	const int i = find("/proj00/usertpl.lch");
+	ASSERT_TRUE(i >= 0);
+	static uint8_t f[134], g[134];
+	memcpy(f, card[i].data, sizeof f);
+	f[6 + 0] = 85;				/* us1 timing 0..3 */
+	f[6 + 1] = (uint8_t)-85;
+	f[6 + 2] = 127;
+	f[6 + 3] = (uint8_t)-128;
+	f[6 + 16] = 1;				/* us1 velocity 0..2 */
+	f[6 + 17] = (uint8_t)-43;
+	f[6 + 18] = 127;
+	cardPut("/proj00/usertpl.lch", f, sizeof f);
+	ASSERT_EQ(preset_loadProject(0, 1), FR_OK);
+	for (int q = 0; q < 4; q++)
+		ASSERT_EQ(seq_userTemplates[0].timing[q], 0);
+	for (int q = 0; q < 3; q++)
+		ASSERT_EQ(seq_userTemplates[0].vel[q], 0);
+	ASSERT_EQ(seq_userTemplates[0].timing[4], (int8_t)f[6 + 4]);		/* a valid value stays */
+	ASSERT_EQ(seq_userTemplates[3].vel[15], (int8_t)f[6 + 3 * 32 + 16 + 15]);
+	/* version 0 and count 5: spec review of group B */
+	static const struct { int at; uint8_t value; UINT len; } cases[5] = { { 4, 2, 134 }, { 5, 3, 134 }, { -1, 0, 133 },
+		{ 4, 0, 134 }, { 5, 5, 134 } };
+	static const UserTemplate none[USER_TEMPLATES];
+	for (int k = 0; k < 5; k++)
+	{
+		memcpy(g, f, sizeof g);
+		if (cases[k].at >= 0)
+			g[cases[k].at] = cases[k].value;
+		cardPut("/proj00/usertpl.lch", g, cases[k].len);
+		fillUser(9);
+		ASSERT_EQ(preset_loadProject(0, 1), FR_OK);
+		ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+		ASSERT_EQ(cardOpenFile, -1);				/* quality review of group B: closed */
+		ASSERT_EQ(f_chdir("/proj00"), FR_OK);			/* the loader alone, too */
+		preset_loadUserTemplates(1);
+		ASSERT_EQ(cardOpenFile, -1);
+	}
+}
+
+TEST(pattern_block3_written_for_each_of_its_bytes)
+{
+	/* implementer of Task 5 (mutants that left the first or the last data byte out of the test
+	 * passed the plan's cases): any one of the 14 bytes alone writes block 3, right after block 1,
+	 * and reads back */
+	for (unsigned i = 0; i < sizeof seq_patternSet.vtpl[5]; i++)
+	{
+		ASSERT_TRUE(proj00());
+		fillPattern(5, 4);
+		const uint8_t value = (uint8_t)((i % 2) ? -1 : 1);	/* id 1, or a depth of 99 % */
+		uint8_t *v = (uint8_t *)seq_patternSet.vtpl[5];
+		v[i] = value;
+		ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+		CardEntry *e = fileStarting("/proj00/05-");
+		ASSERT_TRUE(e != NULL);
+		ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK3_SIZE);
+		ASSERT_EQ(e->data[PAT_V03_SIZE + PAT_EXT_SIZE + 6 + i], value);
+		memset(seq_patternSet.vtpl[5], 0x5A, sizeof seq_patternSet.vtpl[5]);
+		ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+		for (unsigned j = 0; j < sizeof seq_patternSet.vtpl[5]; j++)
+			ASSERT_EQ(v[j], j == i ? value : 0);
+	}
+}
+
+TEST(pattern_block3_header_magic_checked)
+{
+	/* implementer of Task 5: a header with one letter of "LCHM" changed is not block 3, right
+	 * after block 1 and after block 2; one in block 2's header is not block 2, so the block 3
+	 * after it is not reached and block 2's defaults stay */
+	static const TrackTemplate none[NUM_TRACKS];
+	static uint8_t file[PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK2_SIZE + PAT_BLOCK3_SIZE], f[sizeof file];
+	for (int two = 0; two < 2; two++)
+	{
+		ASSERT_TRUE(proj00());
+		fillPattern(5, 1);
+		if (two)
+			fillTiming(5, 1);
+		fillDynamics(5, 1);
+		ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+		CardEntry *e = fileStarting("/proj00/05-");
+		ASSERT_TRUE(e != NULL);
+		const int b2 = PAT_V03_SIZE + PAT_EXT_SIZE;
+		const int b3 = b2 + (two ? PAT_BLOCK2_SIZE : 0);
+		const UINT len = (UINT)(b3 + PAT_BLOCK3_SIZE);
+		ASSERT_EQ(e->len, len);
+		memcpy(file, e->data, len);
+		char path[CARD_PATH];
+		snprintf(path, sizeof path, "%s", e->path);
+		for (int k = 0; k < 4 + 4 * two; k++)
+		{
+			memcpy(f, file, len);
+			const int at = (k < 4) ? b3 + k : b2 + (k - 4);
+			f[at] = (uint8_t)(f[at] ^ 0x20);		/* 'L' to 'l', and so on */
+			cardPut(path, f, len);
+			fillDynamics(5, 3);				/* stale values */
+			ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+			ASSERT_EQ(memcmp(seq_patternSet.vtpl[5], none, sizeof none), 0);
+			if (k >= 4)
+				ASSERT_EQ(memcmp(seq_patternSet.tmpl[5], none, sizeof none), 0);
+		}
+	}
+}
+
+TEST(user_templates_written_for_each_of_their_bytes)
+{
+	/* implementer of Task 5: any one of the 128 bytes alone is not empty and writes the file */
+	reset();
+	ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+	for (unsigned i = 0; i < sizeof seq_userTemplates; i++)
+	{
+		memset(seq_userTemplates, 0, sizeof seq_userTemplates);
+		((uint8_t *)seq_userTemplates)[i] = 0xFF;		/* -1: valid in both parts */
+		ASSERT_EQ(preset_saveUserTemplates(0), FR_OK);
+		const int k = find("/tmp/usertpl.lch");
+		ASSERT_TRUE(k >= 0);
+		ASSERT_EQ(card[k].len, 134);
+		ASSERT_EQ(card[k].data[6 + i], 0xFF);
+		ASSERT_EQ(f_unlink("usertpl.lch"), FR_OK);
+	}
+	memset(seq_userTemplates, 0, sizeof seq_userTemplates);
+	ASSERT_EQ(preset_saveUserTemplates(0), FR_OK);
+	ASSERT_TRUE(find("/tmp/usertpl.lch") < 0);
+}
+
+TEST(user_templates_magic_and_the_last_values_checked)
+{
+	/* implementer of Task 5: a changed letter of "LCHM" reads as no file; a value out of range at
+	 * the last position of us3 and us4 reads 0 too, in both parts */
+	reset();
+	fillUser(0);
+	ASSERT_EQ(preset_saveProject(0), FR_OK);
+	const int i = find("/proj00/usertpl.lch");
+	ASSERT_TRUE(i >= 0);
+	static uint8_t f[134], g[134];
+	memcpy(f, card[i].data, sizeof f);
+	static const UserTemplate none[USER_TEMPLATES];
+	for (int k = 0; k < 4; k++)
+	{
+		memcpy(g, f, sizeof g);
+		g[k] = (uint8_t)(g[k] ^ 0x20);
+		cardPut("/proj00/usertpl.lch", g, sizeof g);
+		fillUser(9);
+		ASSERT_EQ(preset_loadProject(0, 1), FR_OK);
+		ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+	}
+	memcpy(g, f, sizeof g);
+	g[6 + 3 * 32 + 15] = 85;			/* us4 timing 15 */
+	g[6 + 3 * 32 + 16 + 15] = 1;			/* us4 velocity 15 */
+	g[6 + 2 * 32 + 15] = (uint8_t)-85;		/* us3 timing 15 */
+	g[6 + 2 * 32 + 16 + 15] = (uint8_t)-43;		/* us3 velocity 15 */
+	cardPut("/proj00/usertpl.lch", g, sizeof g);
+	ASSERT_EQ(preset_loadProject(0, 1), FR_OK);
+	ASSERT_EQ(seq_userTemplates[3].timing[15], 0);
+	ASSERT_EQ(seq_userTemplates[3].vel[15], 0);
+	ASSERT_EQ(seq_userTemplates[2].timing[15], 0);
+	ASSERT_EQ(seq_userTemplates[2].vel[15], 0);
+	ASSERT_EQ(seq_userTemplates[3].timing[14], (int8_t)g[6 + 3 * 32 + 14]);	/* a valid value stays */
+	ASSERT_EQ(seq_userTemplates[3].vel[14], (int8_t)g[6 + 3 * 32 + 16 + 14]);
+}
+
+TEST(pattern_block3_gated_on_block_1)
+{
+	/* spec review of group B (V7-13): block 3's defaults hold without a complete block 1, so a
+	 * fw 1.7 or v0.3 file loaded after a v0.7 one drops the velocity templates: (a) the v0.3 part
+	 * alone, (b) block 1's head with version 9 (no body), then a valid block 3 right where a
+	 * reader past that head would look; both over stale values */
+	ASSERT_TRUE(proj00());
+	fillPattern(5, 4);
+	fillDynamics(5, 2);
+	ASSERT_EQ(preset_savePatternSD(5), FR_OK);
+	CardEntry *e = fileStarting("/proj00/05-");
+	ASSERT_TRUE(e != NULL);
+	ASSERT_EQ(e->len, PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK3_SIZE);
+	char path[CARD_PATH];
+	snprintf(path, sizeof path, "%s", e->path);
+	static uint8_t file[PAT_V03_SIZE + PAT_EXT_SIZE + PAT_BLOCK3_SIZE], f[PAT_V03_SIZE + 6 + PAT_BLOCK3_SIZE];
+	memcpy(file, e->data, sizeof file);
+	static const uint8_t head1[6] = { 'L', 'C', 'H', 'M', 9, 7 };
+	memcpy(f, file, PAT_V03_SIZE);
+	memcpy(f + PAT_V03_SIZE, head1, sizeof head1);
+	memcpy(f + PAT_V03_SIZE + 6, file + PAT_V03_SIZE + PAT_EXT_SIZE, PAT_BLOCK3_SIZE);
+	ASSERT_EQ(memcmp(f + PAT_V03_SIZE + 6, "LCHM\x03\x07", 6), 0);
+	static const TrackTemplate none[NUM_TRACKS];
+	const struct { const uint8_t *data; UINT len; } cases[2] = { { file, PAT_V03_SIZE }, { f, sizeof f } };
+	for (int k = 0; k < 2; k++)
+	{
+		cardPut(path, cases[k].data, cases[k].len);
+		fillDynamics(5, 3);				/* stale values */
+		ASSERT_EQ(preset_loadPatternSD(5), FR_OK);
+		ASSERT_EQ(memcmp(seq_patternSet.vtpl[5], none, sizeof none), 0);
+	}
+}
+
+TEST(user_templates_error_paths)
+{
+	/* quality review of group B: a failed open, header write or data write is reported and leaves
+	 * no file open (with _FS_LOCK 1 an open file would fail every later f_open() until a remount) */
+	reset();
+	ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+	fillUser(4);
+	cardFailOpen = "usertpl";
+	ASSERT_EQ(preset_saveUserTemplates(1), FR_DISK_ERR);
+	ASSERT_EQ(cardOpenFile, -1);
+	cardFailOpen = NULL;
+	for (int w = 1; w <= 2; w++)				/* the header, then the templates */
+	{
+		cardFailWrite = w;
+		ASSERT_EQ(preset_saveUserTemplates(1), FR_DISK_ERR);
+		ASSERT_EQ(cardOpenFile, -1);
+	}
+	ASSERT_EQ(preset_saveUserTemplates(1), FR_OK);
+	ASSERT_EQ(cardOpenFile, -1);
+	ASSERT_EQ(card[find("/tmp/usertpl.lch")].len, 134);
+}
+
+TEST(user_templates_full_card_keeps_the_captures)
+{
+	/* quality review of group B (item 1): on a full card f_write() returns FR_OK and writes fewer
+	 * bytes, and with _FS_TINY 0 the bytes reach the card in f_close(), so its result is the real
+	 * one. A project save that cannot write /proj00/usertpl.lch reports it and leaves /tmp's copy,
+	 * the captures since the last save: k 0 the writes short (FR_DENIED), k 1 f_close() failing */
+	static const FRESULT want[2] = { FR_DENIED, FR_DISK_ERR };
+	static UserTemplate saved[USER_TEMPLATES];
+	for (int k = 0; k < 2; k++)
+	{
+		reset();
+		fillUser(3);
+		memcpy(saved, seq_userTemplates, sizeof saved);
+		ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+		ASSERT_EQ(preset_saveUserTemplates(1), FR_OK);		/* a capture */
+		if (k == 0)
+			cardFull = "usertpl";
+		else
+			cardFailClose = "usertpl";
+		ASSERT_EQ(preset_saveProject(0), want[k]);
+		ASSERT_EQ(strcmp(cardCwd, "/tmp"), 0);			/* the loop's error path */
+		ASSERT_EQ(lcd_process_display_interrupt, 1);
+		const int i = find("/tmp/usertpl.lch");
+		ASSERT_TRUE(i >= 0);					/* the captures stay */
+		ASSERT_EQ(card[i].len, 134);
+		ASSERT_EQ(memcmp(card[i].data + 6, saved, sizeof saved), 0);
+		cardOpenFile = -1;					/* k 1: FatFs keeps a file whose f_close() failed */
+		ASSERT_EQ(f_chdir("/tmp"), FR_OK);			/* the function alone */
+		ASSERT_EQ(preset_saveUserTemplates(1), want[k]);
+		cardFull = cardFailClose = NULL;
+	}
+	cardOpenFile = -1;
+	for (int w = 1; w <= 2; w++)				/* the header short, then the templates */
+	{
+		cardShortWrite = w;
+		ASSERT_EQ(preset_saveUserTemplates(1), FR_DENIED);
+		ASSERT_EQ(cardOpenFile, -1);
+	}
+	cardShortWrite = 2;					/* a short write and a failing f_close(): the first error */
+	cardFailClose = "usertpl";
+	ASSERT_EQ(preset_saveUserTemplates(1), FR_DENIED);
+	cardFailClose = NULL;
+	cardOpenFile = -1;
+}
+
+TEST(user_templates_load_errors)
+{
+	/* quality review of group B (item 6): only FR_NO_FILE and bad content read as no file (V7-12;
+	 * the loader returns FR_NO_FILE, and clears when asked); another error of the card is returned
+	 * and leaves the templates as they are: a project load returns it through the loop's error
+	 * path, so its next save does not drop the project's file, and boot's /tmp overlay keeps the
+	 * project's templates. No file is left open */
+	reset();
+	fillUser(0);
+	ASSERT_EQ(preset_saveProject(0), FR_OK);
+	ASSERT_TRUE(find("/proj00/usertpl.lch") >= 0);
+	static UserTemplate stale[USER_TEMPLATES], project[USER_TEMPLATES];
+	memcpy(project, seq_userTemplates, sizeof project);
+	static const UserTemplate none[USER_TEMPLATES];
+	/* the loader alone, in the project folder */
+	ASSERT_EQ(f_chdir("/proj00"), FR_OK);
+	fillUser(9);
+	ASSERT_EQ(preset_loadUserTemplates(1), FR_OK);
+	ASSERT_EQ(memcmp(seq_userTemplates, project, sizeof project), 0);
+	static const FRESULT errors[2] = { FR_DISK_ERR, FR_TOO_MANY_OPEN_FILES };
+	for (int k = 0; k < 2; k++)
+	{
+		cardFailOpen = "usertpl";
+		cardFailOpenResult = errors[k];
+		fillUser(9);
+		memcpy(stale, seq_userTemplates, sizeof stale);
+		ASSERT_EQ(preset_loadUserTemplates(1), errors[k]);
+		ASSERT_EQ(memcmp(seq_userTemplates, stale, sizeof stale), 0);	/* not emptied */
+		ASSERT_EQ(cardOpenFile, -1);
+	}
+	cardFailOpenResult = FR_NO_FILE;				/* no file: emptied when asked */
+	ASSERT_EQ(preset_loadUserTemplates(0), FR_NO_FILE);
+	ASSERT_EQ(memcmp(seq_userTemplates, stale, sizeof stale), 0);
+	ASSERT_EQ(preset_loadUserTemplates(1), FR_NO_FILE);
+	ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+	cardFailOpen = NULL;
+	cardFailOpenResult = FR_DISK_ERR;
+	cardFailRead = "usertpl";					/* a read error: kept, closed */
+	fillUser(9);
+	ASSERT_EQ(preset_loadUserTemplates(1), FR_DISK_ERR);
+	ASSERT_EQ(memcmp(seq_userTemplates, stale, sizeof stale), 0);
+	ASSERT_EQ(cardOpenFile, -1);
+	cardFailRead = NULL;
+	cardFailReadNth = 2;					/* the templates' read alone, after the header's */
+	fillUser(9);
+	ASSERT_EQ(preset_loadUserTemplates(1), FR_DISK_ERR);
+	ASSERT_EQ(cardFailReadNth, 0);
+	ASSERT_EQ(memcmp(seq_userTemplates, stale, sizeof stale), 0);	/* not emptied */
+	ASSERT_EQ(cardOpenFile, -1);
+	const int i = find("/proj00/usertpl.lch");			/* bad content: as no file */
+	card[i].data[4] = 2;
+	ASSERT_EQ(preset_loadUserTemplates(1), FR_NO_FILE);
+	ASSERT_EQ(memcmp(seq_userTemplates, none, sizeof none), 0);
+	ASSERT_EQ(cardOpenFile, -1);
+	card[i].data[4] = 1;
+	/* a project load: the error is returned through the loop's error path, the templates kept */
+	cardFailOpen = "usertpl";
+	fillUser(9);
+	ASSERT_EQ(preset_loadProject(0, 1), FR_DISK_ERR);
+	ASSERT_EQ(memcmp(seq_userTemplates, stale, sizeof stale), 0);
+	ASSERT_EQ(strcmp(cardCwd, "/tmp"), 0);
+	ASSERT_EQ(lcd_process_display_interrupt, 1);
+	ASSERT_EQ(cardOpenFile, -1);
+	cardFailOpen = NULL;
+	ASSERT_EQ(preset_loadProject(0, 1), FR_OK);			/* without the error: the project's */
+	ASSERT_EQ(memcmp(seq_userTemplates, project, sizeof project), 0);
+	/* boot's /tmp overlay: an error keeps the project's templates and is returned */
+	ASSERT_EQ(f_chdir("/tmp"), FR_OK);
+	fillUser(5);
+	ASSERT_EQ(preset_saveUserTemplates(1), FR_OK);		/* a capture */
+	memcpy(seq_userTemplates, project, sizeof project);		/* the project, loaded at boot */
+	cardFailRead = "usertpl";
+	ASSERT_EQ(loadTmpFolderFiles(), FR_DISK_ERR);
+	ASSERT_EQ(memcmp(seq_userTemplates, project, sizeof project), 0);
+	ASSERT_EQ(cardOpenFile, -1);
+	cardFailRead = NULL;
+	ASSERT_EQ(loadTmpFolderFiles(), FR_OK);			/* without the error: the capture */
+	ASSERT_TRUE(memcmp(seq_userTemplates, project, sizeof project) != 0);
 }
 
 TEST_MAIN()
@@ -1737,6 +2385,9 @@ void seq_setNextPattern(const uint8_t patNr) { (void)patNr; }
 uint8_t seq_muteScenes[MUTE_SCENES];	/* LICHOMAT v0.3 (plan P7) */
 void seq_clearMuteScenes(void) { clearScenesCalls++; memset(seq_muteScenes, 0, MUTE_SCENES); }
 void seq_setMuteSceneQuant(uint8_t step) { sceneQuant = step; }
+UserTemplate seq_userTemplates[USER_TEMPLATES];	/* LICHOMAT v0.7 (plan v0.7 Task 5) */
+void seq_setUserTemplates(const UserTemplate *t) { userSetCalls++; memcpy(seq_userTemplates, t, sizeof seq_userTemplates); }
+void seq_clearUserTemplates(void) { userClearCalls++; memset(seq_userTemplates, 0, sizeof seq_userTemplates); }
 void soundengine_process(void) {}
 void uart_checkAndParse(void) {}
 uint8_t buttonHandler_getMode(void) { return 0; }

@@ -82,7 +82,47 @@ the first block and play each step at its coarse `shf`, the nearest 1/8 step; 1.
 `shf` only and loses the tempo, humanize, delay, fine parts and templates. Files from 1.7 and from
 0.2–0.5 load in 0.6 as they played there. Kits, projects, songs and `glo.cfg` keep their sizes.
 
-It keeps everything of 0.5 and 0.4, and of 0.3, which added tools for playing live and for acid
+Version 0.7 adds groove dynamics. Each voice of a pattern can follow a velocity template, on the
+fourth screen of the track page (the encoder past `amt`, or SHIFT + the second mode button once more
+from the third screen): `vtp` and `vdp`, 0–200 % of the template. A template lowers the sixteen 16ths
+of a bar by a number of dB below the step's own volume; at 0 % nothing changes, at 200 % the dB
+double. The four templates are measured on the hats of the reference album, and in each the offbeat
+8ths are the loudest (0 or −1 dB):
+
+- `of8` (offbeat 8th): the median of 8 tracks; the quarters 10 dB down, the 16ths between them
+  13–16 dB down;
+- `ful` (full 16th): two tracks of dense 16ths; the quarters 6–7 dB down, the 16ths 5–15 dB;
+- `dep` (deep ghost): one track with deep ghosts; the quarters 13–15 dB down, the 16ths 11–21 dB;
+- `qtr` (quarters): the quarters just below the offbeat 8ths, 5–6 dB down, the 16ths 15–20 dB.
+
+The template scales each step once, so a step's ratchets share it, before humanize's volume (`hmv`);
+it reaches the MIDI Note On velocity too, and a step of volume 0 stays silent. **A velocity changes a
+voice's loudness only with that voice's `vol` (velocity → volume) on**, on the voice page's velocity
+screen `dst amt vol`; the velocity modulation and MIDI out get it either way. Recording stores the
+velocity as played and the template plays on top of it, so record with `vtp off`. Rolls play at their
+fixed velocity, without the template.
+
+Four own templates per project, `us1`–`us4`, hold a timing and a velocity value for each of the sixteen
+positions. `sav`, on the same screen, captures the selected voice's track: in edit mode turn it to a
+slot (the LCD reads `push: save`) and press the encoder; `sav` reads `---` again. It takes what steps
+1–16 play: each step's `mic` and `shf` with the track's groove template at that position (up to ±84
+ticks), and its volume through the track's velocity template, in dB below the loudest of those steps. A
+step that is off, or past the track's length, leaves its position alone (0 ticks, 0 dB); a track with
+no step on empties the slot. `tpl` and `vtp` list `us1`–`us4` after the built-in templates, so a take
+recorded on one voice can play on any other. A capture is written to the card at once (`/tmp`) and so
+survives switching off; a project save stores the four in `USERTPL.LCH` in the project folder, a
+project load brings them back, and a new project starts with them empty. The clear page (SHIFT + COPY,
+then the encoder) gains `clear [micro]?` after `autom. 2`: it sets every step of the selected track in
+the shown pattern back to the grid (`shf` 0, `mic` 0), keeping its flams and templates.
+
+Patterns saved with 0.7 carry the velocity templates in a third block of 20 bytes after the blocks of
+0.2 and 0.6, only when a track's `vtp` or `vdp` is not at `off` and 100 %, so a pattern without them is
+the file of 0.6 byte for byte. 0.6 plays a 0.7 pattern without its velocity templates and with a `tpl`
+of `us1`–`us4` as `off`; 0.2–0.5 and 1.7 play it as they play a 0.6 pattern. The own templates live
+only in `USERTPL.LCH`, which 1.7 and 0.2–0.6 never open: a project saved by them loses its own
+templates. Kits, songs and `glo.cfg` keep their sizes.
+
+It keeps everything of 0.6, 0.5 and 0.4, and of 0.3, which added tools for playing live and for acid
 lines. In the performance mode (the second mode button) holding step 8 turns the fill mode on, steps
 9–16 recall eight mute scenes and COPY + a step stores one; the scenes are saved with the project.
 Rolls go from a whole bar to 1/32, triplets included, on each track's own tempo. Drum 1–3 can slide:
@@ -105,7 +145,7 @@ the step sequencer a new timing core and fixed the timing and MIDI problems of 1
   appears, right after the page with the clock in and clock out PPQ.
 
 Kits, patterns, projects, songs and global settings saved with 1.7 load unchanged. The start-up
-screen shows `LICHOMAT` and `v0.6 unofficial`. The main changes of 0.1 are listed in its
+screen shows `LICHOMAT` and `v0.7 unofficial`. The main changes of 0.1 are listed in its
 [release notes](docs/lichomat/release-notes-v0.1.md), and every change against 1.7 in section 2 of the
 [stage 1 report](docs/lichomat/reports/stage1-report.md). The release notes of 0.2, 0.3 and 0.4 are
 `docs/lichomat/release-notes-v0.2.md`, `docs/lichomat/release-notes-v0.3.md` and
@@ -116,7 +156,7 @@ screen shows `LICHOMAT` and `v0.6 unofficial`. The main changes of 0.1 are liste
 Install `LXR_V2_LICHOMAT_<version>.img` like any other update, see
 [Installing the update](#installing-the-update). First delete every other `LXR*.img` file from the SD
 card: the updater installs the first one it finds. After the update the start-up screen shows
-`LICHOMAT` and `v0.6 unofficial`.
+`LICHOMAT` and `v0.7 unofficial`.
 
 ### Going back to the official firmware
 
@@ -216,7 +256,7 @@ When the build has finished it shows where the update file is and how to install
 ```
 ======================================================================
   Firmware update file:
-    .../lxr-desktop-app/build/release/LXR_V2_LICHOMAT_0.6.img
+    .../lxr-desktop-app/build/release/LXR_V2_LICHOMAT_0.7.img
   ...
 ```
 

@@ -111,6 +111,10 @@ static uint16_t midi_notes_on=0;		    /**< which channels have a note currently 
 
 PatternBackupBuffer patternBackupBuffer;
 
+//LICHOMAT v0.7: the project's own templates (plan v0.7 V7-3, V7-6), read by the core in place
+//(seqc_host_t.userTemplates) from seq_tick(); written with interrupts masked
+UserTemplate seq_userTemplates[USER_TEMPLATES];
+
 //TempPattern seq_tmpPattern;
 
 //uint8_t seq_newPatternAvailable = 0; 	//indicate that a new pattern has loaded in the background and we should switch
@@ -317,6 +321,7 @@ void seq_copyPatternToBackupBuffer(uint8_t patternNr)
 	memcpy(patternBackupBuffer.groove, seq_patternSet.groove[patternNr], sizeof patternBackupBuffer.groove); //LICHOMAT v0.2: the per-track settings
 	memcpy(patternBackupBuffer.seq_stepFine, seq_patternSet.seq_stepFine[patternNr], sizeof patternBackupBuffer.seq_stepFine); //LICHOMAT v0.6: fine microtiming, templates (M13)
 	memcpy(patternBackupBuffer.tmpl, seq_patternSet.tmpl[patternNr], sizeof patternBackupBuffer.tmpl);
+	memcpy(patternBackupBuffer.vtpl, seq_patternSet.vtpl[patternNr], sizeof patternBackupBuffer.vtpl); //LICHOMAT v0.7: the velocity templates
 
 }
 //------------------------------------------------------------------------------
@@ -335,6 +340,7 @@ void seq_copyBackupBufferToPattern(uint8_t patternNr)
 	memcpy(seq_patternSet.groove[patternNr], patternBackupBuffer.groove, sizeof patternBackupBuffer.groove); //LICHOMAT v0.2: the per-track settings
 	memcpy(seq_patternSet.seq_stepFine[patternNr], patternBackupBuffer.seq_stepFine, sizeof patternBackupBuffer.seq_stepFine); //LICHOMAT v0.6: fine microtiming, templates (M13)
 	memcpy(seq_patternSet.tmpl[patternNr], patternBackupBuffer.tmpl, sizeof patternBackupBuffer.tmpl);
+	memcpy(seq_patternSet.vtpl[patternNr], patternBackupBuffer.vtpl, sizeof patternBackupBuffer.vtpl); //LICHOMAT v0.7
 }
 /*
 //------------------------------------------------------------------------------
@@ -1518,6 +1524,7 @@ void seq_clearTrack(uint8_t trackNr, uint8_t pattern)
 	memset(&seq_patternSet.groove[pattern][trackNr], 0, sizeof(TrackGroove)); //LICHOMAT v0.2: the defaults
 	memset(seq_patternSet.seq_stepFine[pattern][trackNr], 0, STEP_FINE_BYTES); //LICHOMAT v0.6: fine 0, template off (M13)
 	memset(&seq_patternSet.tmpl[pattern][trackNr], 0, sizeof(TrackTemplate));
+	memset(&seq_patternSet.vtpl[pattern][trackNr], 0, sizeof(TrackTemplate)); //LICHOMAT v0.7: velocity template off
 
 }
 //------------------------------------------------------------------------------
@@ -1578,6 +1585,7 @@ void seq_copyTrack(uint8_t srcNr, uint8_t dstNr, uint8_t pattern)
 	seq_patternSet.groove[pattern][dstNr] = seq_patternSet.groove[pattern][srcNr]; //LICHOMAT v0.2: the per-track settings
 	memmove(seq_patternSet.seq_stepFine[pattern][dstNr], seq_patternSet.seq_stepFine[pattern][srcNr], STEP_FINE_BYTES); //LICHOMAT v0.6 (M13)
 	seq_patternSet.tmpl[pattern][dstNr] = seq_patternSet.tmpl[pattern][srcNr];
+	seq_patternSet.vtpl[pattern][dstNr] = seq_patternSet.vtpl[pattern][srcNr]; //LICHOMAT v0.7
 
 
 }
@@ -1613,6 +1621,7 @@ void seq_copyPattern(uint8_t src, uint8_t dst)
 		seq_patternSet.groove[dst][j] = seq_patternSet.groove[src][j]; //LICHOMAT v0.2: the per-track settings
 		memmove(seq_patternSet.seq_stepFine[dst][j], seq_patternSet.seq_stepFine[src][j], STEP_FINE_BYTES); //LICHOMAT v0.6 (M13)
 		seq_patternSet.tmpl[dst][j] = seq_patternSet.tmpl[src][j];
+		seq_patternSet.vtpl[dst][j] = seq_patternSet.vtpl[src][j]; //LICHOMAT v0.7
 
 		seq_patternSet.shuffle[dst] = seq_patternSet.shuffle[src];
 		seq_patternSet.kitNr[dst] = seq_patternSet.kitNr[src];
@@ -2303,6 +2312,13 @@ static TrackTemplate seq_cbTmpl(void *ctx, uint8_t pattern, uint8_t track)
 	return seq_patternSet.tmpl[pattern][track];
 }
 //------------------------------------------------------------------------------
+/** LICHOMAT v0.7: the track's velocity template in the pattern (plan v0.7 V7-2, V7-3) */
+static TrackTemplate seq_cbVtmpl(void *ctx, uint8_t pattern, uint8_t track)
+{
+	(void)ctx;
+	return seq_patternSet.vtpl[pattern][track];
+}
+//------------------------------------------------------------------------------
 static const seqc_host_t seq_host =
 {
 	.ctx = NULL,
@@ -2329,6 +2345,8 @@ static const seqc_host_t seq_host =
 	.trackStep = seq_cbTrackStep,
 	.fine = seq_cbFine,
 	.tmpl = seq_cbTmpl,
+	.vtmpl = seq_cbVtmpl,	//LICHOMAT v0.7
+	.userTemplates = seq_userTemplates,
 };
 //------------------------------------------------------------------------------
 static void seq_initCore(void)
@@ -2549,6 +2567,11 @@ void seq_loadGrooveParams(uint8_t trackNr, uint8_t pattern)
 	const TrackTemplate tp = trackTemplate_checked(seq_patternSet.tmpl[pattern][trackNr]);
 	activeParameters[PAR_TRACK_TPL] = tp.id;
 	activeParameters[PAR_TRACK_TPL_AMT] = (uint8_t)(tp.amount + 100);
+	//LICHOMAT v0.7: the fourth screen: the velocity template and its depth, sav at --- (plan v0.7 V7-11)
+	const TrackTemplate vt = velTemplate_checked(seq_patternSet.vtpl[pattern][trackNr]);
+	activeParameters[PAR_TRACK_VTP] = vt.id;
+	activeParameters[PAR_TRACK_VDP] = (uint8_t)(vt.amount + 100);
+	activeParameters[PAR_TRACK_TPL_SAVE] = 0;
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.2: a track page parameter edited, as its menu value */
@@ -2565,6 +2588,9 @@ void seq_setGrooveParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 	//LICHOMAT v0.6: direct calls, the values pass 127 (M17)
 	case PAR_TRACK_TPL:	seq_patternSet.tmpl[pattern][trackNr].id = (value < TEMPLATE_COUNT) ? value : 0; break;
 	case PAR_TRACK_TPL_AMT:	seq_patternSet.tmpl[pattern][trackNr].amount = (int8_t)((value <= TEMPLATE_AMOUNT_MAX - TEMPLATE_AMOUNT_MIN) ? (int)value - 100 : 0); break;
+	//LICHOMAT v0.7: the fourth screen (V7-15)
+	case PAR_TRACK_VTP:	seq_patternSet.vtpl[pattern][trackNr].id = (value < VEL_TEMPLATE_COUNT) ? value : 0; break;
+	case PAR_TRACK_VDP:	seq_patternSet.vtpl[pattern][trackNr].amount = (int8_t)((value <= TEMPLATE_AMOUNT_MAX - TEMPLATE_AMOUNT_MIN) ? (int)value - 100 : 0); break;
 	default: break;
 	}
 }
@@ -2650,6 +2676,91 @@ int32_t seq_stepMicroTenthsMs(uint8_t track, uint8_t pattern, uint8_t value)
 	const int32_t num = ((int32_t)value - STEP_MICRO_MAX) * (int32_t)ticks[g.tempo + GROOVE_TEMPO_X1] * 15625;
 	const int32_t den = (int32_t)bpm * 960;
 	return num >= 0 ? (2 * num + den) / (2 * den) : -((-2 * num + den) / (2 * den));
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.7 (plan v0.7 V7-3): own template slot from t, with interrupts masked: the core
+ * reads seq_userTemplates in place from seq_tick() (TIM2) */
+void seq_setUserTemplate(uint8_t slot, const UserTemplate *t)
+{
+	if((slot >= USER_TEMPLATES) || (t == NULL)) return;
+	const uint32_t primask = seq_mailboxLock();
+	seq_userTemplates[slot] = *t;
+	seq_mailboxUnlock(primask);
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.7: all own templates from t (USER_TEMPLATES of them), as seq_setUserTemplate() */
+void seq_setUserTemplates(const UserTemplate *t)
+{
+	if(t == NULL) return;
+	const uint32_t primask = seq_mailboxLock();
+	memcpy(seq_userTemplates, t, sizeof seq_userTemplates);
+	seq_mailboxUnlock(primask);
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.7: every own template empty: a new project, a project without USERTPL.LCH */
+void seq_clearUserTemplates(void)
+{
+	const uint32_t primask = seq_mailboxLock();
+	memset(seq_userTemplates, 0, sizeof seq_userTemplates);
+	seq_mailboxUnlock(primask);
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.7 (V7-6..V7-10, Q36): own template slot from steps 1-16 of track in pattern, as
+ * they play: the timing part is each step's microtiming T plus the track's timing template at
+ * that position (x1), clamped to +-84; the velocity part its volume through the track's velocity
+ * template, in dB below the loudest of those steps (seqc_velDb()). A step that is off, or past
+ * the track's length, gives 0 and 0 dB. With no step on the slot is empty. Returns the number of
+ * steps taken */
+uint8_t seq_captureUserTemplate(uint8_t trackNr, uint8_t pattern, uint8_t slot)
+{
+	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN) || (slot >= USER_TEMPLATES)) return 0;
+	uint8_t len = seq_patternSet.length[pattern][trackNr];
+	if(len == 0) len = 16;
+	else if(len > NUM_STEPS) len = NUM_STEPS;
+	UserTemplate u;
+	memset(&u, 0, sizeof u);
+	const TrackTemplate tp = seq_patternSet.tmpl[pattern][trackNr];	//Q36: what plays
+	const TrackTemplate vt = seq_patternSet.vtpl[pattern][trackNr];
+	uint8_t on[TEMPLATE_STEPS], heard[TEMPLATE_STEPS];
+	uint8_t loudest = 0, n = 0;
+	for(uint8_t s = 0; s < TEMPLATE_STEPS; s++)
+	{
+		on[s] = (uint8_t)((s < len) && seq_intIsMainStepActive(trackNr, s, pattern));
+		if(!on[s]) continue;
+		n++;
+		//LICHOMAT v0.7: the shift and the fine part are read unmasked, as seq_loadStepMicro() reads
+		//them; recording writes them from seq_tick() (TIM2), so a capture while the same step is
+		//being recorded can mix its old and new parts (quality review of group B)
+		int micro = stepMicro(seq_patternSet.seq_stepTiming[pattern][trackNr][s],
+				stepFine_get(seq_patternSet.seq_stepFine[pattern][trackNr], s)) + seqc_templateTicksAt(tp, s);
+		if(micro > STEP_MICRO_MAX) micro = STEP_MICRO_MAX;
+		if(micro < -STEP_MICRO_MAX) micro = -STEP_MICRO_MAX;
+		u.timing[s] = (int8_t)micro;
+		heard[s] = seqc_templateVelAt(seq_patternSet.seq_subStepPattern[pattern][trackNr][s].volume & 0x7F, vt, s);
+		if(heard[s] > loudest) loudest = heard[s];
+	}
+	for(uint8_t s = 0; s < TEMPLATE_STEPS; s++)
+		if(on[s])
+			u.vel[s] = seqc_velDb(heard[s], loudest);
+	seq_setUserTemplate(slot, &u);
+	return n;
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.7 (V7-14): the clear page's micro: every step of track in pattern to T 0, shift
+ * 7 and fine 0, its flam kept; the track's templates stay. Each step with interrupts masked, as
+ * seq_setStepShift(): recording writes these bytes from seq_tick() */
+void seq_clearTrackMicro(uint8_t trackNr, uint8_t pattern)
+{
+	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return;
+	StepTiming *tm = seq_patternSet.seq_stepTiming[pattern][trackNr];
+	uint8_t *fine = seq_patternSet.seq_stepFine[pattern][trackNr];
+	for(uint8_t s = 0; s < NUM_STEPS; s++)
+	{
+		const uint32_t primask = seq_mailboxLock();
+		tm[s].shift = SEQC_SHIFT_CENTER;
+		stepFine_set(fine, s, 0);
+		seq_mailboxUnlock(primask);
+	}
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.2: move every step of the track in pattern one step later (dir +1) or
