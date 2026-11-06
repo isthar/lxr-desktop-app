@@ -1763,6 +1763,43 @@ def P10_plugin_silence(t):
     check(0 < f2 < b2, 'split: Out 2 flagged %d of %d blocks (a bus with sound is not silent)' % (f2, b2))
 
 
+@case
+def P10_plugin_frame_order(t):
+    # At one frame inside a block the transport's messages come first, then the parameters (B-12): the init card's
+    # Start (a count-in from position -0.05, so that the Start falls inside a block, at a frame that is no block's
+    # first) and a Program Change (pattern 1) at that very frame. The plugin's output is the renderer's for the
+    # plughost's script, where the Program Change follows the Start, byte for byte; the renderer playing it the other
+    # way round (the Program Change first) makes another output, so the case can tell the two orders apart
+    init = os.path.join(t.a.root, 'emu', 'tests', 'cards', 'init')
+    base = ['card ' + init, 'play 4000 120 -0.05']
+    host(t, plan(t, 'first.plan', base + ['out ' + t.path('first.wav'), 'script ' + t.path('first.txt')], card=False,
+                 frames=blocks_frames(10)))
+    with open(t.path('first.txt')) as f:
+        start = [l.split('f usb ')[0] for l in f if l.split('f usb ')[1].split(' ')[0] == 'FA']
+    check(len(start) == 1, 'Start lines %r' % start)
+    at = int(start[0])
+    check(at % 128 != 0, 'the Start at %d is a block\'s first frame' % at)
+    lat, _ = host(t, plan(t, 'order.plan', base + ['param %d 1 1' % at, 'out ' + t.path('order.wav'),
+                                                   'script ' + t.path('order.txt')], card=False, frames=blocks_frames(10)))
+    lines = open(t.path('order.txt')).read().splitlines()
+    mine = [l for l in lines if l.startswith('%df usb ' % at)]
+    check(len(mine) == 1 and mine[0].startswith('%df usb FA' % at) and mine[0].endswith(' C0 01'), 'the script at %d: %r' % (at, mine))
+    swapped = [('%df usb C0 01 %s' % (at, mine[0][len('%df usb ' % at):-len(' C0 01')])) if l == mine[0] else l for l in lines]
+    with open(t.path('swapped.txt'), 'w') as f:
+        f.write('\n'.join(swapped) + '\n')
+    t.render(t.card('order', 'init'), t.path('order.txt'), 10, t.path('order-render.wav'))
+    t.render(t.card('swapped', 'init'), t.path('swapped.txt'), 10, t.path('swapped-render.wav'))
+    a = wav(t.path('order.wav'))[2]
+    b = wav(t.path('order-render.wav'))[2]
+    c = wav(t.path('swapped-render.wav'))[2]
+    n, diff, loud = shifted_equal(a, b, lat[0] - 128)
+    _, other, _ = shifted_equal(a, c, lat[0] - 128)
+    print('Start and a Program Change at frame %d (block offset %d): %d frames compared, %d differ from the renderer; the '
+          'renderer with the Program Change first: %d differ' % (at, at % 128, n, diff, other))
+    check(diff == 0 and loud > 10000, '%d samples differ from the renderer' % diff)
+    check(other > 1000, 'the two orders sound alike (%d samples): the case shows nothing' % other)
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

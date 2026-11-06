@@ -219,7 +219,7 @@ foreach(id P10_plugin_native P10_plugin_onsets P10_plugin_latency P10_plugin_res
         P10_plugin_renew P10_plugin_kill P10_plugin_rt P10_plugin_logs P10_plugin_beats P10_plugin_setstate
         P10_plugin_hang P10_plugin_crashes P10_plugin_stale P10_plugin_policy P10_plugin_spawn_fail P10_plugin_nonblock
         P10_plugin_offline_hang P10_plugin_buses P10_plugin_buses48 P10_plugin_params P10_plugin_outputs
-        P10_plugin_params_restart P10_plugin_rtparams P10_plugin_params_state P10_plugin_null_out2 P10_plugin_async_state P10_plugin_early_state P10_plugin_flush_order P10_plugin_silence)
+        P10_plugin_params_restart P10_plugin_rtparams P10_plugin_params_state P10_plugin_null_out2 P10_plugin_async_state P10_plugin_early_state P10_plugin_flush_order P10_plugin_silence P10_plugin_frame_order)
     add_test(NAME ${id} COMMAND ${PLUGIN_HOST_TEST} ${id})
     set_tests_properties(${id} PROPERTIES TIMEOUT 600 LABELS plugin)
 endforeach()
