@@ -2449,6 +2449,26 @@ def P13_au_set(t):
     check(d is None, 'the sets %s' % d)
 
 
+@case
+def P13_au_set_order(t):
+    # A set and a scheduled event of one parameter in one render cycle reach the processor in the order of their frames,
+    # not of their calls: in the block from 99,968, Drum 1's volume scheduled to 20 at 99,990 and set to 100 at 100,080
+    # (the set comes first: the render takes the sets, then the scheduled events), a Note On before each and one after
+    # both. The AU's output is the VST3's with the points 20 at 99,990 and 100 at 100,080, byte for byte
+    notes = ['note %d 0 48 127' % f for f in (99980, 100000, 100090, 104000)]
+    _, vout = host(t, plan(t, 'v.plan', notes + ['param 99990 10 20', 'param 100080 10 100', 'out ' + t.path('v.wav'),
+                                                 'state-out ' + t.path('v.bin')], frames=blocks_frames(3)))
+    _, aout = au_host(t, au_plan(t, 'a.plan', notes + ['param 99990 10 20', 'set 100080 10 100', 'out ' + t.path('a.wav'),
+                                                       'state-out ' + t.path('a.bin')], frames=blocks_frames(3)))
+    d = same_files(t.path('v.wav'), t.path('a.wav'))
+    print('a set at 100,080 and a scheduled event at 99,990 in one cycle: %s the VST3\'s points; reports %r and %r; '
+          'Drum 1\'s volume in the states %r and %r' % ('==' if d is None else d, reports(vout)[1:], reports(aout)[1:],
+                                                          lchv(t.path('v.bin')).get(10), lchv(t.path('a.bin')).get(10)))
+    check(d is None, 'the order %s' % d)
+    check(reports(aout)[1:] == reports(vout)[1:] and lchv(t.path('a.bin')) == lchv(t.path('v.bin')),
+          'the AU reports %r, the VST3 %r' % (reports(aout)[1:], reports(vout)[1:]))
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

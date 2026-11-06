@@ -696,11 +696,13 @@ private:
 			const int32 at = (int32)((s >> 8) & 0xFFFFFFu);
 			point (plug_params[i].id, at > last ? last : at, (double)(s & 0xFFu) / plug_params[i].max);
 		}
+		bool fromSchedule[PLUG_PARAM_COUNT] {};
 		for (UInt32 k = 0; k < scheduled; k++)
 		{
 			const AudioUnitParameterEvent& e = schedule[k];
 			const unsigned i = (unsigned)plug_paramIndex (e.parameter);
 			const double max = plug_params[i].max;
+			fromSchedule[i] = true;
 			if (e.eventType == kParameterEvent_Immediate)
 			{
 				const int32 at = (int32)e.eventValues.immediate.bufferOffset;
@@ -729,6 +731,18 @@ private:
 				point (e.parameter, b, plug_auPlain (i, b == endAt ? r.endValue : at (b)) / max);
 		}
 		scheduled = 0;
+		/* A parameter with scheduled events ends the cycle on its last point (in the order of the frames), as the
+		 * processor does: ScheduleParameter() gave the AU the value of the host's last call, which a set at a later
+		 * frame, or a ramp's end beyond the cycle, is not */
+		for (int32 q = 0; q < inParams.getParameterCount (); q++)
+		{
+			IParamValueQueue* pq = inParams.getParameterData (q);
+			const int i = pq ? plug_paramIndex (pq->getParameterId ()) : -1;
+			int32 off = 0;
+			ParamValue v = 0.0;
+			if (i >= 0 && fromSchedule[i] && pq->getPoint (pq->getPointCount () - 1, off, v) == kResultOk)
+				Globals ()->SetParameterRT (pq->getParameterId (), plug_auValue ((unsigned)i, plug_paramValue ((unsigned)i, v)));
+		}
 	}
 
 	/* a point of the host's for the processor; one lost (more than a queue holds) is counted */

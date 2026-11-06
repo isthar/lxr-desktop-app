@@ -293,7 +293,7 @@ foreach(id P13_au_info P13_au_checks P13_au_native P13_au_latency P13_au_onsets 
         P13_au_out2_pull P13_au_one_output P13_au_params P13_au_outputs P13_au_state P13_au_params_state
         P13_au_vst3_state P13_au_setstate P13_au_renew P13_au_ramp P13_au_offline_switch P13_au_kill
         P13_au_params_restart P13_au_notify P13_au_rt P13_au_rtparams P13_au_noalloc P13_au_set_state P13_au_midi_async P13_au_offline_async
-        P13_au_stale_note P13_au_drops P13_au_set)
+        P13_au_stale_note P13_au_drops P13_au_set P13_au_set_order)
     add_test(NAME ${id} COMMAND ${PLUGIN_AU_TEST} ${id})
     set_tests_properties(${id} PROPERTIES TIMEOUT 600 LABELS plugin)
 endforeach()
