@@ -2258,18 +2258,18 @@ def P13_au_notify(t):
 def P13_au_ramp(t):
     # A scheduled ramp reaches the firmware as its two ends in the block it was given in, at their frames: Drum 1's
     # volume from 100 to 20 over 50 frames inside one block, and from 20 to 120 over 100 frames from 100 frames into a
-    # block of 128, of which the block holds 28 (its end there 20 + 100 x 27 / 100 = 47). The AU's output is the VST3's
-    # with those points, byte for byte
-    notes = ['note %d 0 48 127' % (100000 + 2000 * k) for k in range(16)]
-    points = ['param 100010 10 100', 'param 100059 10 20', 'param 120164 10 20', 'param 120191 10 47']
+    # block of 128, of which the block holds 28 (its end there 20 + 100 x 27 / 100 = 47); a ramp of 0 frames, from 100 to
+    # 30, is a step to its end value. The AU's output is the VST3's with those points, byte for byte
+    notes = ['note %d 0 48 127' % (100000 + 2000 * k) for k in range(24)]
+    points = ['param 100010 10 100', 'param 100059 10 20', 'param 120164 10 20', 'param 120191 10 47', 'param 140010 10 30']
     script = t.path('v.txt')
     host(t, plan(t, 'v.plan', notes + points + ['out ' + t.path('v.wav'), 'script ' + script], frames=blocks_frames(4)))
-    au_host(t, au_plan(t, 'a.plan', notes + ['ramp 100010 10 100 20 50', 'ramp 120164 10 20 120 100', 'out ' + t.path('a.wav')],
-                       frames=blocks_frames(4)))
+    au_host(t, au_plan(t, 'a.plan', notes + ['ramp 100010 10 100 20 50', 'ramp 120164 10 20 120 100', 'ramp 140010 10 100 30 0',
+                                             'out ' + t.path('a.wav')], frames=blocks_frames(4)))
     with open(script) as f:
         ccs = [l.split()[0] + ' ' + ' '.join(l.split()[2:]) for l in f if ' B0 59 ' in l]
     print('the VST3\'s points as MIDI: %r' % ccs)
-    check(ccs == ['100010f B0 59 64', '100059f B0 59 14', '120191f B0 59 2F'], 'the points %r' % ccs)
+    check(ccs == ['100010f B0 59 64', '100059f B0 59 14', '120191f B0 59 2F', '140010f B0 59 1E'], 'the points %r' % ccs)
     d = same_files(t.path('v.wav'), t.path('a.wav'))
     print('the AU\'s ramps == the VST3\'s points' if d is None else d)
     check(d is None, 'the ramps %s' % d)

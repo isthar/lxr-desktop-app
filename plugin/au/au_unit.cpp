@@ -196,6 +196,8 @@ public:
 		if (scope != kAudioUnitScope_Global)
 			return kAudioUnitErr_InvalidScope;
 		info = AudioUnitParameterInfo {};
+		/* not kAudioUnitParameterFlag_CanRamp: a host then automates with values, sets or immediate events, which is
+		 * what the VST3 gets (points); a ramp a host schedules anyway reaches the processor as its two ends */
 		info.flags = kAudioUnitParameterFlag_IsReadable | kAudioUnitParameterFlag_ValuesHaveStrings;
 		if (id == PLUG_AU_ENGINE)
 		{
@@ -685,8 +687,15 @@ private:
 				point (e.parameter, at > last ? last : at, plug_auPlain (i, e.eventValues.immediate.value) / max);
 				continue;
 			}
-			/* a ramp: its value at the cycle's first frame it covers and at its last */
+			/* a ramp: its value at the cycle's first frame it covers and at its last; one of 0 frames a step to
+			 * its end value */
 			const auto& r = e.eventValues.ramp;
+			if (r.durationInFrames == 0)
+			{
+				const int32 a = r.startBufferOffset < 0 ? 0 : r.startBufferOffset > last ? last : r.startBufferOffset;
+				point (e.parameter, a, plug_auPlain (i, r.endValue) / max);
+				continue;
+			}
 			const double d = r.durationInFrames > 0 ? (double)r.durationInFrames : 1.0;
 			const int32 a = r.startBufferOffset < 0 ? 0 : r.startBufferOffset > last ? last : r.startBufferOffset;
 			const int64_t endAt = (int64_t)r.startBufferOffset + (int64_t)r.durationInFrames - 1;

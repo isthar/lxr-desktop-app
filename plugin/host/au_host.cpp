@@ -42,8 +42,9 @@
  *                     renders of instance 0 that the AU flagged silent
  *                     (kAudioUnitRenderAction_OutputIsSilence) and those of them that were not
  *   ramp FRAME ID FROM TO FRAMES   a scheduled ramp of parameter ID from FROM to TO (its AU values,
- *                     the device's numbers) over FRAMES frames from FRAME, given in FRAME's block (the
- *                     script has no MIDI for it: a case compares the output with points of the VST3)
+ *                     the device's numbers) over FRAMES frames (0: a step to TO) from FRAME, given in
+ *                     FRAME's block (the script has no MIDI for it: a case compares the output with points
+ *                     of the VST3)
  *   info              print the AU's parameters (each value's string read back), outputs, latency and
  *                     tail before playing
  *   checks            before playing, what auval checks of an instrument and can be checked here:
@@ -681,7 +682,7 @@ int main (int argc, char** argv)
 		else if (cmd == "ramp")
 		{
 			RampCmd r {};
-			ok = !!(s >> r.frame >> r.id >> r.from >> r.to >> r.frames) && plug_paramIndex (r.id) >= 0 && r.frames > 0;
+			ok = !!(s >> r.frame >> r.id >> r.from >> r.to >> r.frames) && plug_paramIndex (r.id) >= 0;
 			a.ramps.push_back (r);
 		}
 		else if (cmd == "outputs")
