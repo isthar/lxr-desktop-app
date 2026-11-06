@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 08:19",
+    "updated": "2026-11-06 08:39",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (plan gotowy, wdrożenie)",
     "branch": "timing-core",
-    "head": "e37ab60",
+    "head": "763fe63",
     "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.4 grupy C–D, plan AU (E9.7), potem E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T08:19:00+01:00",
-    "now": "E9.4 grupa C (zad. 7–9: Out 1 i Out 2, parametry w Live, wartości w secie): implementacja (od 08:19); E9.7: plan AU na kopii roboczej (od 07:38)"
+    "updated_at": "2026-11-06T08:39:00+01:00",
+    "now": "E9.4: pełny przegląd zad. 7–9, najpierw zgodność z planem (od 08:39); E9.7: plan AU na kopii roboczej (od 07:38)"
   },
   "epics": [
     {
@@ -4806,6 +4806,11 @@
       "n": 653,
       "at": "2026-11-06 08:19",
       "text": "E9.35–E9.36 zrobione: poprawki i testy z przeglądu B na plugin-v07 (548cc21..2a80fa1), testy wtyczki 93/93, ostrzeżeń 0. Nowy test sprawdza kartę z innym globalnym kanałem MIDI (10) i innym filtrem odbioru: wtyczka czyta je z firmware i CC na kanale 10 dociera. Do obserwacji: P10_plugin_beats (test z prototypu, liczony według zegara) dwa razy nie przeszedł pod obciążeniem, sam przechodzi."
+    },
+    {
+      "n": 654,
+      "at": "2026-11-06 08:39",
+      "text": "E9.37–E9.39 (grupa C) zaimplementowane na plugin-v07 (f408870, 1c90668, 0fb6394); testy wtyczki 100/100 w Debug i Release, ostrzeżeń 0. Out 1 i Out 2 grają bit w bit jak wyjścia renderera. Automatyka parametrów przez wtyczkę gra bajt w bajt jak renderer z tym samym MIDI. Po wczytaniu kitu wtyczka odsyła do hosta tylko wartości kitu, każdą raz; host, który odsyła wartości z powrotem, niczego nie zmienia. Stan 4358 B, wartości wracają po otwarciu. Wątek audio z automatyką: 0 zakazanych wywołań. P10_plugin_beats trzeci raz zawiódł pod obciążeniem (sam przechodzi), sprawdzam to w przeglądzie."
     }
   ]
 }
