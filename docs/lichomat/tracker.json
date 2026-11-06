@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 10:30",
+    "updated": "2026-11-06 10:55",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (zad. 1–9 i poprawki gotowe; przegląd poprawek, potem zad. 10 i szkic wydania E9.8)",
     "branch": "timing-core",
-    "head": "26e9b58",
+    "head": "9387e77",
     "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: przegląd poprawek E9.4, zad. 10 (wersja 0.2.0), szkic wydania na GitHubie (E9.8), potem AU (E9.7) i E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T10:30:00+01:00",
-    "now": "E9.37–E9.39: niezależny przegląd poprawek z przeglądu C, z mutantami (od 10:33)"
+    "updated_at": "2026-11-06T10:55:00+01:00",
+    "now": "E9.37–E9.39: poprawki z przeglądu poprawek C (restart: zegar po wartościach; dwa setState pod rząd; luki w testach) (od 10:58)"
   },
   "epics": [
     {
@@ -4892,6 +4892,11 @@
       "n": 659,
       "at": "2026-11-06 10:30",
       "text": "E9.37–E9.39: poprawki i testy z przeglądu C w 9 commitach (0da2e5d..95252e7): pusty bufor Out 2 już nie wywraca hosta, stan ustawiony w trakcie grania daje nowej karcie jej własne wartości, getState przed pierwszym blokiem ma wartości, zmiany z flush idą po Start i zmianie wzorca, kanał zerowany dla nowego silnika; 9 nowych testów, 109/109 w Debug i Release. Do sprawdzenia: rzadki błąd testu P10_plugin_params_restart pod obciążeniem."
+    },
+    {
+      "n": 660,
+      "at": "2026-11-06 10:55",
+      "text": "E9.37–E9.39: przegląd poprawek z przeglądu C zatwierdzony z uwagami (27 mutantów). Rzadki błąd testu restartu był już wcześniej: po restarcie silnika wartości z Live dochodzą do firmware w tej samej chwili co wznowienie transportu, więc ściszony głos może kliknąć przez 2–3 ms (ok. 1 na 50–100 restartów). Poprawki: wznowienie zegara 1024 ramki po wartościach, dwa setState pod rząd, Out 2 z jednym pustym kanałem, 5 luk w testach."
     }
   ]
 }
