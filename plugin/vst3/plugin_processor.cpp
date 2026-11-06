@@ -312,6 +312,7 @@ tresult PLUGIN_API Processor::process (ProcessData& data)
 		{
 			plug_clockReset (&clock);	/* a new engine: the slave starts afresh */
 			plug_paramsEngine (&params, plug_load (&s->epoch));	/* and gets the host's values */
+			channel = PLUG_VALUE_NONE;	/* the new card's own global channel, from its first values: not the old one's */
 			runningPid = pid;
 		}
 	}
