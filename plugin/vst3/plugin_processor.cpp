@@ -142,6 +142,13 @@ tresult PLUGIN_API Processor::setActive (TBool state)
 		                    processSetup.processMode == kRealtime, folder.card (), logOf (folder), logOf (folder), gen, err))
 			fprintf (stderr, "LICHOMAT: the engine cannot start: %s\n", err.c_str ());
 		active = true;
+		/* A setState on another thread since gen was read (outside VST3's threading rules, which call both on the
+		 * main thread) moved restoreGen; one that found active still false asked for no engine of its gen, and
+		 * process() would take none for ever (EngineLink::engineGen() != restoreGen): ask for one. Read after
+		 * active is set, so that a setState after this read restarts the engine itself */
+		const uint64_t now = restoreGen.load (std::memory_order_acquire);
+		if (now != gen && folder.valid ())
+			link.restart (folder.card (), logOf (folder), logOf (folder), now);
 	}
 	else
 	{
