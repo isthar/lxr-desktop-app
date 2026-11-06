@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 09:14",
+    "updated": "2026-11-06 09:20",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E9.4: dwa wyjścia i 36 parametrów wtyczki (plan gotowy, wdrożenie)",
     "branch": "timing-core",
-    "head": "dc8965d",
+    "head": "5e9d378",
     "next": "Czeka na Ciebie: E8.12 wtyczka w Abletonie (P1–P8), odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: E9.4 grupy C–D, plan AU (E9.7), potem E9.3 po Twoim P4",
-    "updated_at": "2026-11-06T09:14:00+01:00",
-    "now": "E9.4: poprawki i testy z przeglądu C (od 09:14); E9.7: plan AU na kopii roboczej (od 07:38)"
+    "updated_at": "2026-11-06T09:20:00+01:00",
+    "now": "E9.4: poprawki i testy z przeglądu C (od 09:14)"
   },
   "epics": [
     {
@@ -1122,7 +1122,56 @@
       "id": "E9.7",
       "epic": "E9",
       "status": "w toku",
-      "title": "Wtyczka AU v2 (instrument aumu) dla Logic i innych hostów AU: ten sam silnik, dwa wyjścia, 36 parametrów i stan co VST3 0.2.0; AudioUnitSDK Apple'a 1.4.0 (Apache 2.0) pobrany za Twoją zgodą 06.11 i przypięty w repozytorium; bez instalacji u mnie (testy ładują komponent w procesie), auval w skrypcie instalacyjnym u Ciebie. Szkic §8; plan teraz, wdrożenie po E9.4 (zad. N = E9.(70+N))",
+      "title": "Wtyczka AU v2 (instrument aumu, kody Lcht/Lchm) dla Logic i innych hostów AU: ten sam silnik, dwa wyjścia, 36 parametrów i stan co VST3 0.2.0 (stany przechodzą między formatami). Własna cienka warstwa na AudioUnitSDK (MusicDeviceBase) wokół procesora VST3. Wrapper AU z SDK VST3 da się zbudować, ale sprawdzony zawodzi: od razu włącza oba wyjścia, wartości dochodzą tylko przez timer, renderowanie offline milczy, 82 zakazane wywołania w wątku audio. Plan: docs/superpowers/plans/2026-11-06-plugin-au.md (zad. 1–7 = E9.71–E9.77), sprawdzony na kopii roboczej (119/119); przed wdrożeniem odświeżę go o poprawki z przeglądów E9.4. AudioUnitSDK Apple'a 1.4.0 (Apache 2.0) pobrany za Twoją zgodą 06.11; bez instalacji u mnie, auval w skrypcie instalacyjnym u Ciebie",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.71",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka AU zad. 1: stan wyjściowy na plugin-v07 po E9.4",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.72",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka AU zad. 2: AudioUnitSDK w repozytorium (przypięty: 30 plików, 348 KB, sumy kontrolne), biblioteka ausdk, licencja Apache 2.0 w bramce licencji",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.73",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka AU zad. 3: widok parametrów w AU (wartości jak na wyświetlaczu) i reguła Out 2",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.74",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka AU zad. 4: komponent LICHOMAT.component (własna cienka warstwa AU v2 na MusicDeviceBase wokół procesora VST3)",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.75",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka AU zad. 5: host testowy AU (lichomat-auhost): 15 scenariuszy VST3 przez AU (bajt w bajt to samo) i 8 własnych, wątek audio 0 zakazanych wywołań",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.76",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka AU zad. 6: README, instalacja z auval (przy błędzie wraca poprzedni komponent), odinstalowanie, końcowe bramki",
+      "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.77",
+      "epic": "E9",
+      "status": "do zrobienia",
+      "title": "Wtyczka AU zad. 7: Twoje sprawdzenie P11 (instalacja z auval, Logic albo inny host AU), HANDOFF, tracker",
       "updated": "2026-11-06"
     },
     {
@@ -4833,6 +4882,11 @@
       "n": 657,
       "at": "2026-11-06 09:14",
       "text": "E9.37–E9.39: przegląd jakości (17 mutantów) znalazł kilka błędów, wszystkie zmierzone na kopii roboczej. Krytyczny: host, który poda puste bufory nieaktywnego Out 2, wywróciłby się. Dwa ważne: stan ustawiony w trakcie grania z innego wątku dawał nowej karcie wartości starej; zapis setu przed pierwszym blokiem gubił wartości parametrów. Mniejszy, ale słyszalny: zmiana wzorca dostarczona między blokami przed startem przełączała od razu zamiast na końcu wzorca. Poprawki i 8 testów idą teraz osobnymi commitami. P10_plugin_beats: bez błędu w kodzie (10 z 10 osobno, w logach 0 niedoborów); zawodził, gdy obok szły testy liczone według zegara z innego przebiegu."
+    },
+    {
+      "n": 658,
+      "at": "2026-11-06 09:20",
+      "text": "E9.7: plan AU gotowy (docs/superpowers/plans/2026-11-06-plugin-au.md, 7 zadań = E9.71–E9.77), sprawdzony na kopii roboczej: 119/119 testów w Debug i Release. Wybór: własna cienka warstwa AU v2 (ok. 900 linii) wokół procesora VST3; gra bajt w bajt to samo co VST3 i ma 0 zakazanych wywołań w wątku audio. Wrapper AU z SDK VST3 też się buduje, ale zmierzony zawodzi: Out 1 od razu bez sumy, wartości tylko przez timer, offline cisza, 82 zakazane wywołania. Wdrożenie po E9.4; przedtem odświeżę plan o poprawki z przeglądów."
     }
   ]
 }
