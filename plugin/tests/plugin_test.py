@@ -2581,6 +2581,31 @@ def P13_au_sched_reset(t):
     check(d is None, 'the output %s' % d)
 
 
+@case
+def P13_au_set_taken(t):
+    # A set the processor took is in its state as the processor holds it, not put over it again: Drum 1's volume set to
+    # 40 at 30,100 (AudioUnitSetParameter at an offset), then pattern 1 at 100,003, a Program Change (the firmware loads
+    # its kit, and the engine reports Drum 1's volume 127 after it). The state's values are the VST3's for the same
+    # changes as points, Drum 1's volume 127, not the set's 40; the output too, byte for byte
+    changes = [(30100, 10, 40), (100003, 1, 1)]
+    notes = ['note %d 0 48 127' % f for f in sorted([20000 * k + 5000 for k in range(6)] + [c[0] - 10 for c in changes])]
+    _, vout = host(t, plan(t, 'v.plan', notes + ['param %d %d %d' % c for c in changes] + ['out ' + t.path('v.wav'),
+                                                                                       'state-out ' + t.path('v.bin')],
+                           frames=blocks_frames(3)))
+    _, aout = au_host(t, au_plan(t, 'a.plan', notes + ['set %d %d %d' % c for c in changes] + ['out ' + t.path('a.wav'),
+                                                                                            'state-out ' + t.path('a.bin')],
+                                 frames=blocks_frames(3)))
+    d = same_files(t.path('v.wav'), t.path('a.wav'))
+    later = [(f, r[10]) for f, r in reports(aout)[1:] if f > 100003 and 10 in r]
+    va, vv = lchv(t.path('a.bin')), lchv(t.path('v.bin'))
+    print('the sets %s the VST3\'s points; the AU\'s reports of Drum 1\'s volume after the Program Change %r; Drum 1\'s '
+          'volume in the states %r and %r' % ('==' if d is None else d, later, va.get(10), vv.get(10)))
+    check(later and later[-1][1] == 127, 'no report of Drum 1\'s volume 127 after the Program Change: the case shows nothing')
+    check(d is None, 'the sets %s' % d)
+    check(va.get(10) == 127 and va == vv, 'the AU\'s state holds %r for Drum 1\'s volume (the VST3\'s %r), its values %s'
+          % (va.get(10), vv.get(10), 'the VST3\'s' if va == vv else 'not the VST3\'s'))
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
