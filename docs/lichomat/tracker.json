@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 01:01",
+    "updated": "2026-11-06 01:49",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "Wtyczka: wykonanie planu prototypu (E9.11–E9.21)",
     "branch": "timing-core",
-    "head": "d357470",
+    "head": "29af272",
     "next": "E9.2 plan i prototyp wtyczki; czeka na Ciebie: odsłuch utworu 3, kitów i akcentów v0.7, B13 (A czy B), poprawki szkiców v0.7 i wtyczki, CI; sprzęt (H12, E8.1, U38–U41)",
-    "updated_at": "2026-11-06T01:01:00+01:00",
-    "now": "E9.19: naprawa dwóch niestabilnych testów wtyczki (od 01:01)"
+    "updated_at": "2026-11-06T01:49:00+01:00",
+    "now": "E9.20: implementer zad. 10 wtyczki (od 01:49)"
   },
   "epics": [
     {
@@ -988,23 +988,23 @@
     {
       "id": "E9.18",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Wtyczka zad. 8: LICHOMAT.vst3: procesor, kontroler, połączenie z silnikiem, foldery instancji; walidator SDK",
-      "updated": "2026-11-05"
+      "updated": "2026-11-06"
     },
     {
       "id": "E9.19",
       "epic": "E9",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Wtyczka zad. 9: host testowy na klasach SDK, sprawdzenie czasu rzeczywistego, scenariusze; testy P10; pełny przegląd",
-      "updated": "2026-11-05"
+      "updated": "2026-11-06"
     },
     {
       "id": "E9.20",
       "epic": "E9",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Wtyczka zad. 10: bramka licencji, README, instalacja z podpisem ad hoc, końcowe bramki; testy P11",
-      "updated": "2026-11-05"
+      "updated": "2026-11-06"
     },
     {
       "id": "E9.21",
@@ -4582,6 +4582,11 @@
       "n": 635,
       "at": "2026-11-06 01:01",
       "text": "E9.18–E9.19: recenzent sprawdził poprawki. Kod wtyczki w porządku, wszystkie mutanty z przeglądu padają. Dwa nowe testy są jednak niestabilne: P10_plugin_hang (błąd w dopasowaniu rytmu po restarcie, 2 na 9 przebiegów) i P10_plugin_offline_hang (wyścig ze startem silnika, 3 na 5). Wtyczka sama zachowała się poprawnie we wszystkich przebiegach. Implementer robi testy deterministycznymi, bez poszerzania tolerancji, i domyka dwa drobne mutanty."
+    },
+    {
+      "n": 636,
+      "at": "2026-11-06 01:49",
+      "text": "E9.18 i E9.19 zrobione (wtyczka zad. 8–9, 91536df..07fb5b1): LICHOMAT.vst3 i host testowy po pełnym przeglądzie i jego sprawdzeniu. Niestabilne testy naprawione (20 na 20 przebiegów każdy), dwie pełne bramki z rzędu 71/71, walidator 47/0. E9.20 start: bramka licencji, README, skrypt instalacji sprawdzony w folderze tymczasowym (Twojego ~/Library nie ruszam), końcowe bramki."
     }
   ]
 }

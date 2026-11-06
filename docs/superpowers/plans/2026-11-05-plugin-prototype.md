@@ -4442,7 +4442,7 @@ int plug_archiveRead(const char *dir, plug_get_t get, void *ctx, char *err, size
 
 **Files:** Create `plugin/vst3/plugin_ids.h`, `plugin/vst3/plugin_card.h`, `plugin/vst3/plugin_card.cpp`, `plugin/vst3/plugin_link.h`, `plugin/vst3/plugin_link.cpp`, `plugin/vst3/plugin_processor.h`, `plugin/vst3/plugin_processor.cpp`, `plugin/vst3/plugin_controller.h`, `plugin/vst3/plugin_controller.cpp`, `plugin/vst3/plugin_factory.cpp`, `plugin/vst3/Info.plist.in`; modify `plugin/tests/plugin_test.py`, `plugin/CMakeLists.txt` (append).
 
-- [ ] **Step 1: the failing test.** In `plugin/tests/plugin_test.py`, before `def main():`:
+- [x] **Step 1: the failing test.** In `plugin/tests/plugin_test.py`, before `def main():`:
 
 ```python
 # --- the bundle (Task 8) ----------------------------------------------------------------------
@@ -4493,8 +4493,8 @@ add_test(NAME P10_plugin_validator COMMAND ${PLUGIN_BUNDLE_TEST} P10_plugin_vali
 set_tests_properties(P10_plugin_validator PROPERTIES TIMEOUT 600 LABELS plugin)
 ```
 
-- [ ] **Step 2: run it.** PLUGIN with `-R P10_plugin_validator`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: vst3/plugin_factory.cpp`.
-- [ ] **Step 3: ids, folders, the link** (P-6, P-16, P-18, P-19). `plugin/vst3/plugin_ids.h`:
+- [x] **Step 2: run it.** PLUGIN with `-R P10_plugin_validator`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: vst3/plugin_factory.cpp`.
+- [x] **Step 3: ids, folders, the link** (P-6, P-16, P-18, P-19). `plugin/vst3/plugin_ids.h`:
 
 ```cpp
 /*
@@ -5138,7 +5138,7 @@ void EngineLink::monitor ()
 } // namespace lichomat
 ```
 
-- [ ] **Step 4: the processor, the controller, the factory** (P-10, P-12, P-13, P-14, P-20, P-21). `plugin/vst3/plugin_processor.h`:
+- [x] **Step 4: the processor, the controller, the factory** (P-10, P-12, P-13, P-14, P-20, P-21). `plugin/vst3/plugin_processor.h`:
 
 ```cpp
 /*
@@ -5675,14 +5675,14 @@ END_FACTORY
 </plist>
 ```
 
-- [ ] **Step 5: pass.** PLUGIN with `-R P10_plugin_validator`, then:
+- [x] **Step 5: pass.** PLUGIN with `-R P10_plugin_validator`, then:
 
 ```bash
 cd /Users/tk/Code/lxr/build/wt-plugin && find build/plugin/VST3/Debug/LICHOMAT.vst3 -type f | sed 's|.*LICHOMAT.vst3/||' | sort && codesign --verify --deep --strict build/plugin/VST3/Debug/LICHOMAT.vst3 && plutil -extract CFBundleIdentifier raw build/plugin/VST3/Debug/LICHOMAT.vst3/Contents/Info.plist && ls ~/Library/Audio/Plug-Ins
 ```
 
   Expected: `100% tests passed, 0 tests failed out of 1` (`Result: 47 tests passed, 0 tests failed` in `-V`); the files `Contents/Helpers/lichomat-engine`, `Contents/Info.plist`, `Contents/MacOS/LICHOMAT`, `Contents/Resources/LICENSE`, `Contents/Resources/NOTICE.md`, `Contents/Resources/VST3-SDK-LICENSE.txt`, `Contents/Resources/moduleinfo.json`, `Contents/_CodeSignature/CodeResources`; codesign silent (valid); `org.lichomat.plugin`; the `ls` line of Task 1.
-- [ ] **Step 6: the gate.** PLUGIN-CHECK (T 39). **Step 7: commit** `plugin Task 8 (E9.18): LICHOMAT.vst3, the processor, the controller, the engine link and the instance folders; the validator` with the eleven files, `plugin/tests/plugin_test.py` and `plugin/CMakeLists.txt`; push.
+- [x] **Step 6: the gate.** PLUGIN-CHECK (T 39). **Step 7: commit** `plugin Task 8 (E9.18): LICHOMAT.vst3, the processor, the controller, the engine link and the instance folders; the validator` with the eleven files, `plugin/tests/plugin_test.py` and `plugin/CMakeLists.txt`; push.
 
 ---
 
@@ -5690,7 +5690,7 @@ cd /Users/tk/Code/lxr/build/wt-plugin && find build/plugin/VST3/Debug/LICHOMAT.v
 
 **Files:** Create `plugin/host/plug_host.cpp`, `plugin/tests/plug_rtcheck.c`; modify `plugin/tests/plugin_test.py`, `plugin/CMakeLists.txt` (append).
 
-- [ ] **Step 1: the failing tests.** In `plugin/tests/plugin_test.py`, after Task 8's section and before `def main():`:
+- [x] **Step 1: the failing tests.** In `plugin/tests/plugin_test.py`, after Task 8's section and before `def main():`:
 
 ```python
 # --- the VST3 bundle through lichomat-plughost (Task 9) -----------------------------------
@@ -5939,8 +5939,8 @@ endforeach()
 set_tests_properties(P10_plugin_kill P10_plugin_rt PROPERTIES RUN_SERIAL TRUE)	# paced by the wall clock
 ```
 
-- [ ] **Step 2: run it.** PLUGIN with `-R P10`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: host/plug_host.cpp`.
-- [ ] **Step 3: the test host** (P-22). `plugin/host/plug_host.cpp`:
+- [x] **Step 2: run it.** PLUGIN with `-R P10`. Expected: `== plugin build: 1`; the configure stops at `Cannot find source file: host/plug_host.cpp`.
+- [x] **Step 3: the test host** (P-22). `plugin/host/plug_host.cpp`:
 
 ```cpp
 /*
@@ -6453,7 +6453,7 @@ int main (int argc, char** argv)
 }
 ```
 
-- [ ] **Step 4: the real-time check** (P-23). `plugin/tests/plug_rtcheck.c`:
+- [x] **Step 4: the real-time check** (P-23). `plugin/tests/plug_rtcheck.c`:
 
 ```c
 /*
@@ -6576,9 +6576,9 @@ INTERPOSE(r_rdlock, pthread_rwlock_rdlock);
 INTERPOSE(r_write, write);
 ```
 
-- [ ] **Step 5: pass.** PLUGIN with `-R P10`, then `ctest --test-dir build/plugin -R P10 -V | grep -E 'blocks of|onsets,|onset - note|48 kHz|two instances|LICHOMAT Emu|new instance|silent|rtcheck:'`.
+- [x] **Step 5: pass.** PLUGIN with `-R P10`, then `ctest --test-dir build/plugin -R P10 -V | grep -E 'blocks of|onsets,|onset - note|48 kHz|two instances|LICHOMAT Emu|new instance|silent|rtcheck:'`.
   Expected: `100% tests passed, 0 tests failed out of 10` (with Task 8's validator); `blocks of 128: latency 385, 529471 frames compared, 0 differ, 5 loop jumps` and `blocks of 100: latency 357, 529499 frames compared, 0 differ, 5 loop jumps`; `22 onsets, 22 beats; onset - (beat + latency 385): [-1, 0, 1]`; `onset - note [385, 384, …]` and `[590, 589, …]`; `48 kHz: latency 834 (191 + 643), 478000 frames compared, 0 differ`; `two instances == one; the state, 4166 bytes …`; the start-card line; `the new instance (latency 385) sounds 4713 frames after its start`; `silent N frames after the kill, sound again at T s` (N ≥ 4,800, T < 4.5); `rtcheck: 3750 process calls, 0 forbidden calls, 3750 writes`.
-- [ ] **Step 6: the gate.** PLUGIN-CHECK (T 48). **Step 7: commit** `plugin Task 9 (E9.19): the test host on the SDK's hosting classes, the real-time interposer, the bundle's scenarios` with `plugin/host/plug_host.cpp plugin/tests/plug_rtcheck.c plugin/tests/plugin_test.py plugin/CMakeLists.txt`; record the measured lines; push. **Review: full** (spec, then quality), mutants among them: `notesOf()`'s Note On of velocity 0 as a Note On, the clock reset on a new pid removed, the read offset's lag at 0, the offline wait removed, a `usleep(1)` or a `std::vector` in `process()` (`P10_plugin_rt` must fail). The wake pipe's `O_NONBLOCK` has no test (a full pipe would make the write block; the engine drains it at every wait): the reviewer reads it.
+- [x] **Step 6: the gate.** PLUGIN-CHECK (T 48). **Step 7: commit** `plugin Task 9 (E9.19): the test host on the SDK's hosting classes, the real-time interposer, the bundle's scenarios` with `plugin/host/plug_host.cpp plugin/tests/plug_rtcheck.c plugin/tests/plugin_test.py plugin/CMakeLists.txt`; record the measured lines; push. **Review: full** (spec, then quality), mutants among them: `notesOf()`'s Note On of velocity 0 as a Note On, the clock reset on a new pid removed, the read offset's lag at 0, the offline wait removed, a `usleep(1)` or a `std::vector` in `process()` (`P10_plugin_rt` must fail). The wake pipe's `O_NONBLOCK` has no test (a full pipe would make the write block; the engine drains it at every wait): the reviewer reads it.
 
 ---
 
@@ -6888,3 +6888,4 @@ Jeśli w P3–P4 nic nie słychać: plik `engine.log` z tego samego folderu. Wł
 **Tasks 8–9 (E9.18–E9.19), `91536df`, `5936055`.** The plan's code byte for byte; no interface moved in the reviews of groups B and C. T 51 / 60. Validator 47 passed, 0 failed (Debug 6.7 s, Release 2.7 s); `codesign --verify --deep --strict` valid; `org.lichomat.plugin`, vendor LICHOMAT, category Instrument|Drum. Measured as planned: native 0 differ over 529,471 / 529,499 frames (blocks of 128 / 100) with 5 loop jumps, latency 385 / 357; onsets 22 = beats, offsets [−1, 0, 1]; resampled at 48 kHz 0 differ over 478,000 frames, latency 834; state 4,166 B; renew 4,713 frames (at p = 5.385 quarters both rules give 16th 22); rt 3,750 calls, 0 forbidden. `P10_plugin_kill`: first sound after the restart at 3.78 s (plan 3.6–3.75 s): it is the Note On at 181,000 plus the latency, the pattern's step at 3.60 s comes before the engine is back; the engine returns ≈ 0.69 s after the kill. Step 2 of Task 8 stopped at `configure_file` (missing `Info.plist.in`) rather than at the missing source, harmless. Full review of Tasks 8–9 follows.
 - **Tasks 8–9 full review: changes requested.** The code matches the plan and behaves correctly on every path run. One build bug: the engine was copied into `Contents/Helpers` in a PRE_LINK step, so an engine-only change left the old engine in the bundle (and every P10 test and the validator tested it). Robustness: the offline wait had no total bound when the engine hangs (an export or freeze would never end; a hang at boot never tripped the give-up limit); the logs were deleted at terminate (no `plugin.log` for P8); `restart()` could block the main thread 3 s; a card folder without its lock was never cleaned; `stop()` closed the wake pipe's read end first. Test gaps: the clock reset on a new engine (the plan's named mutant survived: after a restart while playing the drums would stay silent until a wrap), the first offline wait (the plan's named mutant survived: a note in the first block of a freeze lost), setState while active, output zeroing, `O_NONBLOCK`, P-15/P-16/P-18's rules, `plug_rtcheck`'s list of calls. All fixed in review commits.
 - Review fixes `1635ba7`..`40395fe` (14 commits, each test first): the bundle depends on the built engine (`P10_plugin_helper`); the test host fills its outputs with 0.5 before each `process()`; each instance's log is kept as `BASE/logs/<id>.log`, the newest 32 (the README and P8 point there); the paced test host runs as an audio device, on a time-constraint thread woken by `mach_wait_until()` (it caused underruns itself before); `P10_plugin_beats` (beats back 4.012 s after a kill at 3 s; ±2 frames after a restart, ±1 before); a first-block Note On in `P10_plugin_renew` (+385, the slave's first step still at +4,713); `setstate`/`hang` in the test host and `P10_plugin_setstate`, `_hang`, `_crashes`, `_stale`, `_policy`, `_spawn_fail`, `_nonblock`, `_offline_hang`; `plug_rtcheck` counts 45 calls; a lockless stale folder is removed, the lock last; `restart()` is a counted request the monitor answers at once, and after a failed start the monitor waits for a new card; the offline wait is bounded at 10 s by the clock, one wait per engine, the hang rule also fires while the processor waits offline, and 3 stalls in 10 minutes give up (P-16 extended); `stop()` closes the wake pipe's write end first. T 71. P-16, P-23 and the test host's commands now differ from the plan's text as described here.
+- Re-check fixes `be149d0`..`07fb5b1`: the beats after a restart are paired from the nearest one, and the 48 kHz converter's ringing before an attack (up to 6 frames ≥ 500 before the first ≥ 1,000) is no missed onset; `P10_plugin_offline_hang` hangs its engines deterministically (a wrapper helper `kill -STOP`s every engine from its second start) and checks the wait the processor logs as it measured it ("the plugin waited 10.000 s"); `P10_plugin_spawn_fail` gives a state while the engine still cannot start (0.049 s); `P10_plugin_stale`'s unremovable entry is a top-level `zz` listed after `lock`. 20 of 20 reruns of each flaky case; PLUGIN-CHECK twice in a row 71 of 71. Equivalent survivors kept: `merge_notes_first`, `note_order_reversed`, `vel0_noteon`, the second-wait skip. **Tasks 8–9 done.**
