@@ -875,23 +875,27 @@ def P10_plugin_stale(t):
     check(left == sorted([names['held'], names['young']]), 'left %r' % left)
     for k in ('held', 'young'):
         check(os.path.isfile(os.path.join(home, names[k], 'card', 'TMP', 'X.BIN')), 'the %s folder\'s card' % k)
-    # a stale folder that cannot be removed whole (a folder in it without write permission) keeps its lock, which
-    # is removed last, and goes with the next instance once it can
+    # a stale folder that cannot be removed whole keeps its lock, which is removed last, and goes with the next
+    # instance once it can. Its only entry that cannot be removed is a folder without write permission listed after
+    # the lock (the folder's own order, which the removal follows), so that the lock would go first in that order
     part = os.path.join(home, 'e' * 16)
-    os.makedirs(os.path.join(part, 'card', 'RO'))
-    for f in (os.path.join(part, 'card', 'RO', 'X.BIN'), os.path.join(part, 'card', 'Y.BIN'), os.path.join(part, 'lock')):
+    os.makedirs(os.path.join(part, 'card'))
+    os.makedirs(os.path.join(part, 'zz'))
+    for f in (os.path.join(part, 'card', 'Y.BIN'), os.path.join(part, 'zz', 'X.BIN'), os.path.join(part, 'lock')):
         open(f, 'w').close()
-    os.chmod(os.path.join(part, 'card', 'RO'), 0o555)
+    order = os.listdir(part)
+    check(order.index('lock') < order.index('zz'), 'the folder lists %r: zz before the lock' % order)
+    os.chmod(os.path.join(part, 'zz'), 0o555)
     os.utime(part, (old, old))
     try:
         host(t, plan(t, 's2.txt', ['out ' + t.path('s2.wav')], frames=12800))
         kept = sorted(os.listdir(part)) if os.path.isdir(part) else None
     finally:
-        os.chmod(os.path.join(part, 'card', 'RO'), 0o755)
+        os.chmod(os.path.join(part, 'zz'), 0o755)
     os.utime(part, (old, old))
     host(t, plan(t, 's3.txt', ['out ' + t.path('s3.wav')], frames=12800))
     print('a stale folder removed partway keeps %r; the next instance removes it: %s' % (kept, not os.path.exists(part)))
-    check(kept is not None and 'lock' in kept, 'the folder removed partway kept %r' % kept)
+    check(kept is not None and 'lock' in kept and 'zz' in kept, 'the folder removed partway kept %r' % kept)
     check(not os.path.exists(part), 'the folder removed partway is still there')
 
 
