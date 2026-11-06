@@ -14,6 +14,7 @@
 
 #include <cerrno>
 #include <chrono>
+#include <climits>
 #include <csignal>
 #include <cstdarg>
 #include <cstdio>
@@ -194,7 +195,7 @@ void EngineLink::monitor ()
 		/* the engine before is gone and the state none: the gen of this one's card, before it can run (engineGen()) */
 		spawnedGen.store (gen, std::memory_order_release);
 		std::atomic_thread_fence (std::memory_order_seq_cst);	/* and before the spawn's own stores */
-		char err[256];
+		char err[PATH_MAX + 256];	/* "posix_spawn <the engine's path>: <why>" in full, so the log has the why */
 		/* no log (BASE/logs could not be made): the engine's output goes nowhere rather than stop it */
 		const pid_t pid = plug_spawnEngine (exe.c_str (), c.c_str (), wakeFd[0], life[1], memFd,
 		                                    log.empty () ? "/dev/null" : log.c_str (), err, sizeof err);
