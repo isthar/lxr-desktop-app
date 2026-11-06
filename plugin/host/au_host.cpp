@@ -56,6 +56,10 @@
  *                     1 and 0 in turn, one every 50 ms, while the blocks run; the summary counts the
  *                     renders of instance 0 that the AU flagged silent
  *                     (kAudioUnitRenderAction_OutputIsSilence) and those of them that were not
+ *   offline-between FRAME   in FRAME's block of instance 0, between the pulls of its time stamp: a thread of its
+ *                     own sets OfflineRender to 1; 300 us after it starts the set (the setup, real time to offline,
+ *                     takes 2-4 ms) Out 1 is pulled, the thread joined, then Out 2 of the same time stamp; each pull's
+ *                     kAudioUnitRenderAction_OutputIsSilence and whether its frames are silent are printed
  *   ramp FRAME ID FROM TO FRAMES   a scheduled ramp of parameter ID from FROM to TO (its AU values,
  *                     the device's numbers) over FRAMES frames (0: a step to TO) from FRAME, given in
  *                     FRAME's block (the script has no MIDI for it: a case compares the output with points
@@ -85,6 +89,7 @@
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <dispatch/dispatch.h>
 #include <dlfcn.h>
@@ -129,6 +134,7 @@ struct AuPlan
 	std::vector<ParamCmd> sets;
 	uint64_t snap = UINT64_MAX;
 	uint64_t schedReset = UINT64_MAX;
+	uint64_t offlineBetween = UINT64_MAX;
 	std::vector<std::pair<ParamCmd, bool>> setRestores;	/* set-restore, and set-refused (true) */
 	UInt32 outputs = 2;
 	bool info = false, checks = false, noalloc = false;
@@ -854,6 +860,8 @@ int main (int argc, char** argv)
 			ok = !!(s >> a.snap);
 		else if (cmd == "sched-reset")
 			ok = !!(s >> a.schedReset);
+		else if (cmd == "offline-between")
+			ok = !!(s >> a.offlineBetween);
 		else if (cmd == "set-restore" || cmd == "set-refused")
 		{
 			ParamCmd c {};
@@ -1224,9 +1232,40 @@ int main (int argc, char** argv)
 				AudioUnitScheduleParameters (in.au, floodEvents, 300);
 			}
 			AudioUnitRenderActionFlags flags1 = 0, flags2 = 0;
-			OSStatus r = renderBus (in, 0, n, (Float64)f, &flags1);
-			if (r == noErr && pull2)
-				r = renderBus (in, 1, n, (Float64)f, &flags2);
+			OSStatus r = noErr;
+			if (idx == 0 && a.offlineBetween >= f && a.offlineBetween < f + n)
+			{
+				/* a host's other thread sets up a bounce while this one pulls the time stamp's two elements */
+				AudioUnit u = in.au;
+				OSStatus set = noErr;
+				std::atomic<bool> started {false};
+				std::thread th ([u, &set, &started] {
+					const UInt32 on = 1;
+					started.store (true);
+					set = AudioUnitSetProperty (u, kAudioUnitProperty_OfflineRender, kAudioUnitScope_Global, 0, &on, sizeof on);
+				});
+				while (!started.load ())
+					std::this_thread::yield ();
+				std::this_thread::sleep_for (std::chrono::microseconds (300));
+				r = renderBus (in, 0, n, (Float64)f, &flags1);
+				auto loud = [&in, n] (int b) {
+					return std::any_of (in.out[b].begin (), in.out[b].begin () + n, [] (float x) { return x != 0.0f; });
+				};
+				const bool loud1 = loud (0) || loud (1);
+				th.join ();
+				if (r == noErr)
+					r = renderBus (in, 1, n, (Float64)f, &flags2);
+				const bool loud2 = loud (2) || loud (3);
+				printf ("%s: offline-between at %llu: the set %s; Out 1 flagged %d loud %d, Out 2 flagged %d loud %d\n", gName,
+				        (unsigned long long)f, set == noErr ? "taken" : "refused", (flags1 & kAudioUnitRenderAction_OutputIsSilence) ? 1 : 0,
+				        (int)loud1, (flags2 & kAudioUnitRenderAction_OutputIsSilence) ? 1 : 0, (int)loud2);
+			}
+			else
+			{
+				r = renderBus (in, 0, n, (Float64)f, &flags1);
+				if (r == noErr && pull2)
+					r = renderBus (in, 1, n, (Float64)f, &flags2);
+			}
 			if (rtInside)
 				rtInside (0);
 			if (r != noErr)

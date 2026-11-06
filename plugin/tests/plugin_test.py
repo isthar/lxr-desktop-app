@@ -2606,6 +2606,23 @@ def P13_au_set_taken(t):
           % (va.get(10), vv.get(10), 'the VST3\'s' if va == vv else 'not the VST3\'s'))
 
 
+@case
+def P13_au_offline_between(t):
+    # A bounce set up between the two pulls of one time stamp: real time, paced, 48 kHz in blocks of 128, both outputs,
+    # a Note On every 2,000 frames; in the block of 100,032 a thread of the host's sets OfflineRender to 1, and 300 us
+    # later (the setup, real time to offline, takes 2-4 ms) the host pulls Out 1, which finds the setup in progress,
+    # joins the thread, then pulls Out 2 of the same time stamp. The time stamp is silent: Out 2 too is flagged
+    # (kAudioUnitRenderAction_OutputIsSilence) and silent, not the frames the AU kept from the time stamp before. Out 1
+    # must have found the setup (flagged), or the case shows nothing
+    lines = ['mode realtime', 'paced', 'bus2', 'offline-between 100032', 'out ' + t.path('o.wav')]
+    lines += ['note %d 0 48 127' % (2000 * k + 100) for k in range(72)]
+    _, out = au_host(t, au_plan(t, 'o.txt', lines, rate=48000, block=128, frames=48000 * 3))
+    line = [l for l in out.splitlines() if 'offline-between at' in l]
+    print(line[0] if line else out[-400:])
+    check(line and 'the set taken; Out 1 flagged 1 loud 0' in line[0], 'Out 1 did not find the setup: %r' % line)
+    check('Out 2 flagged 1 loud 0' in line[0], 'Out 2 of that time stamp: %r' % line[0])
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
