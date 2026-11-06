@@ -1088,12 +1088,16 @@ def beats_through(t, what, at, frames):
     lines = ['card ' + init, 'mode realtime', 'paced', 'play 0 120 0', '%s %d' % (what, at), 'out ' + t.path('beats.wav')]
     lat, _ = host(t, plan(t, 'beats.txt', lines, rate=48000, block=256, frames=frames, card=False))
     _, _, x = wav(t.path('beats.wav'))
-    on = attacks(x[0::2])
+    # resampled, the converter rings before an attack: up to 6 frames at 500 or more before the first one at 1,000
+    # (measured at 48 kHz), so the quiet run may end up to 8 frames before the onset, not 4
+    on = attacks(x[0::2], ramp=8)
     beats = [b + lat[0] for b in beat_frames(48000.0, 256, frames, 120.0, frames, 120.0, float('inf'))]
     before = [o for o in on if o < at + lat[0]]
     after = [o for o in on if o >= at + lat[0]]
     want = [w for w in beats if w < at + lat[0]]
-    back = [w for w in beats if after and w >= after[0] - 1 and w < frames - 64]
+    # the beats from the one nearest the first onset back on (that onset may lie up to 2 frames either side of it)
+    first = min(beats, key=lambda w: abs(w - after[0])) if after else None
+    back = [w for w in beats if after and w >= first and w < frames - 64]
     print('latency %d; %d onsets before the %s (%d beats), the first after it at %.3f s, %d after (%d beats)'
           % (lat[0], len(before), what, len(want), (after[0] if after else 0) / 48000, len(after), len(back)))
     print('onset - (beat + latency): before %r, after %r' % (sorted(set(o - w for o, w in zip(before, want))),
