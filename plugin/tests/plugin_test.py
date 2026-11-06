@@ -2393,6 +2393,22 @@ def P13_au_offline_async(t):
     check(late > 1000 and 'engine running' in out, 'no sound after the switches: %d' % late)
 
 
+@case
+def P13_au_stale_note(t):
+    # A Note On the host sent before it uninitialized the AU (AudioUnitUninitialize, AudioUnitInitialize) or reset it
+    # (AudioUnitReset) does not play after: offline, the onset card stopped, no 0-frame renders before the first block
+    # (which waits for the engine), 1 s: silent. The same Note On sent after the Initialize plays at frame 0 (so the case
+    # can tell)
+    loud = {}
+    for name in ('init', 'reset', 'after'):
+        au_host(t, au_plan(t, name + '.txt', ['stale-note ' + name, 'out ' + t.path(name + '.wav')], frames=blocks_frames(1)))
+        loud[name] = sum(1 for v in wav(t.path(name + '.wav'))[2] if abs(v) >= 4000)
+    print('loud samples: a Note On before Uninitialize and Initialize %d, before Reset %d, after them %d'
+          % (loud['init'], loud['reset'], loud['after']))
+    check(loud['after'] > 100, 'the Note On after Initialize did not play: the case shows nothing')
+    check(loud['init'] == 0 and loud['reset'] == 0, 'a stale Note On played: %r' % loud)
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case

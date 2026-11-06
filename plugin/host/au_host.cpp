@@ -26,6 +26,10 @@
  *                     Note Off, one every 2 ms, at offset 0 (MusicDevice.h: a thread that is not the
  *                     render thread), while the blocks run: Note On k of pitch 36 + k / 100 and velocity
  *                     1 + k % 100, channel 1
+ *   stale-note init|reset|after   a Note On of Drum 1 (note 48, velocity 127) to instance 0 at offset 0
+ *                     before AudioUnitUninitialize and AudioUnitInitialize (init), before AudioUnitReset
+ *                     (reset), or after them (after), before playing; no 0-frame renders before the first
+ *                     block (offline, the first block waits for the engine)
  *   set-end ID VALUE  AudioUnitSetParameter of ID to VALUE (0..its max) after the last block, with no
  *                     render after it, before the state-out
  *   offline FRAME 0|1 set kAudioUnitProperty_OfflineRender of every instance at FRAME, while it plays
@@ -94,6 +98,7 @@ struct AuPlan
 	std::vector<std::pair<uint32_t, int>> setsAtEnd;
 	std::vector<std::pair<uint64_t, int>> notesAsync;
 	std::vector<std::pair<uint64_t, int>> offlineAsync;
+	std::string staleNote;
 	UInt32 outputs = 2;
 	bool info = false, checks = false, noalloc = false;
 };
@@ -664,6 +669,8 @@ int main (int argc, char** argv)
 			ok = !!(s >> at >> count) && count > 0 && count <= 1000;
 			a.offlineAsync.push_back ({at, count});
 		}
+		else if (cmd == "stale-note")
+			ok = !!(s >> a.staleNote) && (a.staleNote == "init" || a.staleNote == "reset" || a.staleNote == "after");
 		else if (cmd == "notes-async")
 		{
 			uint64_t at = 0;
@@ -727,8 +734,25 @@ int main (int argc, char** argv)
 		printInfo (*inst[0], p.rate);
 	if (a.checks)
 		runChecks (*inst[0], p, a);
-	for (auto& in : inst)
-		waitRunning (*in);
+	if (!a.staleNote.empty ())
+	{
+		/* a note the host sent before it uninitialized or reset the AU must not play after */
+		Instance& in = *inst[0];
+		if (a.staleNote != "after")
+			MusicDeviceMIDIEvent (in.au, 0x90, 48, 127, 0);
+		if (a.staleNote == "reset")
+		{
+			if (AudioUnitReset (in.au, kAudioUnitScope_Global, 0) != noErr)
+				die ("AudioUnitReset failed");
+		}
+		else if (AudioUnitUninitialize (in.au) != noErr || AudioUnitInitialize (in.au) != noErr)
+			die ("AudioUnitUninitialize, AudioUnitInitialize failed");
+		if (a.staleNote == "after")
+			MusicDeviceMIDIEvent (in.au, 0x90, 48, 127, 0);
+	}
+	else
+		for (auto& in : inst)
+			waitRunning (*in);
 	/* the timeline */
 	Timeline tl (p);
 	plug_clock_t expect;

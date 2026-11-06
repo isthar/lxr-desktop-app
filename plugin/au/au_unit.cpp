@@ -99,6 +99,7 @@ public:
 
 	OSStatus Initialize () override
 	{
+		forget ();
 		const UInt32 outs = Outputs ().GetNumberOfElements ();
 		rate = Output (0).GetStreamFormat ().mSampleRate;
 		for (UInt32 b = 1; b < outs; b++)
@@ -117,11 +118,20 @@ public:
 
 	void Cleanup () override
 	{
+		forget ();
 		proc->setProcessing (false);
 		proc->setActive (false);
 		stopNotify.store (true);
 		if (notifier.joinable ())
 			notifier.join ();
+	}
+
+	/* AudioUnitReset (any thread; a host resets an instrument when it stops or jumps): the notes and scheduled
+	 * parameter events given before it are dropped, by the render thread at its next render (forget()) */
+	OSStatus Reset (AudioUnitScope scope, AudioUnitElement element) override
+	{
+		forget ();
+		return MusicDeviceBase::Reset (scope, element);
 	}
 
 	/* --- formats and outputs ------------------------------------------------------------------ */
@@ -251,6 +261,7 @@ public:
 	 * its two ends), all of them in the cycle's order */
 	OSStatus ScheduleParameter (const AudioUnitParameterEvent* events, UInt32 n) noexcept override
 	{
+		forgotten ();
 		for (UInt32 k = 0; k < n; k++)
 		{
 			const AudioUnitParameterEvent& e = events[k];
@@ -715,6 +726,7 @@ private:
 		float* ch[2][2];
 		for (UInt32 b = 0; b < 2; b++)
 			channelsOf (b, bus, n, outs, ch[b]);
+		forgotten ();
 		takeNotes ();
 		heldFrames = n;
 		hostPoints (n);
@@ -753,8 +765,11 @@ private:
 	{
 		lichomat::AuNoteQueue::Note m {};
 		uint64_t at = 0;
+		const uint64_t from = notesFrom.load (std::memory_order_acquire);
 		while (events.getEventCount () < lichomat::AuEvents::kMax && notes.pop (m, at))
 		{
+			if (at < from)
+				continue;	/* given before a reset (forget()) */
 			Event e {};
 			e.sampleOffset = (int32)(m.frame > 0x7FFFFFFFu ? 0x7FFFFFFFu : m.frame);
 			if (m.on)
@@ -784,6 +799,30 @@ private:
 		for (UInt32 c = 0; c < l->mNumberBuffers; c++)
 			if (void* to = l->mBuffers[c].mData)
 				memset (to, 0, n * sizeof (float) < l->mBuffers[c].mDataByteSize ? n * sizeof (float) : l->mBuffers[c].mDataByteSize);
+	}
+
+	/* A reset, an Initialize or a Cleanup, on the caller's thread: the notes queued so far and the scheduled events
+	 * so far are to be dropped. Only atomics: the render thread, the queue's one consumer and the schedule's owner,
+	 * drops them (takeNotes(), forgotten()), so a reset beside a render (any thread may call it) is safe */
+	void forget () noexcept
+	{
+		const uint64_t end = notes.end ();
+		uint64_t from = notesFrom.load (std::memory_order_relaxed);
+		while (from < end && !notesFrom.compare_exchange_weak (from, end, std::memory_order_release, std::memory_order_relaxed))
+		{
+		}
+		resets.fetch_add (1, std::memory_order_release);
+	}
+
+	/* the render thread's: the scheduled events given before the last reset dropped */
+	void forgotten () noexcept
+	{
+		const uint32_t r = resets.load (std::memory_order_acquire);
+		if (r != resetsSeen)
+		{
+			scheduled = 0;
+			resetsSeen = r;
+		}
 	}
 
 	float* ownChannel (UInt32 b, UInt32 c) noexcept { return own.data () + (2 * b + c) * (size_t)maxFrames; }
@@ -876,6 +915,9 @@ private:
 	std::atomic<uint32_t> taken[PLUG_PARAM_COUNT];	/**< seen, published after the process() that took it */
 	AudioUnitParameterEvent schedule[kMaxScheduled];
 	UInt32 scheduled = 0;
+	std::atomic<uint64_t> notesFrom {0};	/**< the queue's notes before this position came before a reset */
+	std::atomic<uint32_t> resets {0};		/**< resets so far (forget()) */
+	uint32_t resetsSeen = 0;				/**< those the schedule has seen (the render thread's) */
 	std::atomic<bool> pending[kSlots];	/**< reported values the listeners are to hear of */
 	std::atomic<bool> stopNotify {true};
 	std::thread notifier;
