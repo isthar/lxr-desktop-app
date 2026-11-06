@@ -127,3 +127,28 @@ E9.4 robi teraz dwie rzeczy, na gałęzi `plugin-v07` (wtyczka z firmware v0.7):
      gra.
 3. **Bez zmian:** jedna instancja to jeden silnik, stan w secie, opóźnienie, testy z prototypu.
 4. **Twoje sprawdzenie** dojdzie jako P9–P10 (dwa wyjścia, automatyka) w `plugin-checks.md`.
+
+## 8. Dopisek z 2026-11-06: AU (E9.7), po Twojej zgodzie na pobranie (moje decyzje, do Twoich poprawek)
+
+Zgoda na pobranie: 2026-11-06, 07:35. Pobrałem AudioUnitSDK Apple'a w wersji 1.4.0 (commit
+`bd98b31`, 2025-12-05) do `build/AudioUnitSDK`:
+- 50 plików, 668 KB;
+- licencja Apache 2.0, zgodna z GPL-3.0.
+
+Do repozytorium trafi przypięta kopia z sumami kontrolnymi, tak jak SDK VST3. Nic więcej nie pobieram.
+
+1. **Co:** instrument AU v2 (typ `aumu`) „LICHOMAT”, dla Logic i innych hostów AU.
+   - Live dalej gra VST3.
+   - Ten sam silnik w osobnym procesie, te same dwa wyjścia, 36 parametrów i stan w secie co VST3 0.2.0 (E9.4).
+2. **Jak:** najpierw sprawdzam, czy da się zbudować bez Xcode wrapper AU z SDK VST3 (`auwrapper`, ta sama wtyczka VST3 w środku komponentu AU).
+   - Jego CMake wymaga Xcode, więc budowałbym go z własnym plikiem CMake, jak SDK VST3 w prototypie.
+   - Jeśli to się nie uda, napiszę własną cienką warstwę AU na AudioUnitSDK (`MusicDeviceBase`) nad tym samym procesorem.
+   - Wybór i powód będą w planie.
+3. **Bez instalacji u mnie:**
+   - testy ładują komponent w procesie hosta testowego (`AudioComponentRegister`), bez rejestracji w systemie;
+   - walidator Apple'a (`auval`) uruchomi skrypt instalacyjny u Ciebie, tak jak walidator Steinberga dla VST3.
+4. **Nazwy:** „LICHOMAT” od „LICHOMAT”, bez nazw producenta urządzenia; kody AU (producent, podtyp) własne.
+5. **Twoje sprawdzenie:** P11 w `plugin-checks.md`, w Logic albo innym hoście AU. Jeśli nie masz takiego hosta, wystarczy wynik `auval` ze skryptu instalacyjnego.
+6. **Kolejność:**
+   - plan teraz, sprawdzany na kopii roboczej z gotowym E9.4;
+   - wdrożenie po E9.4, na `plugin-v07`.
