@@ -21,6 +21,8 @@
  *   outputs 1         take one output element: Out 1 alone
  *   noalloc           kAudioUnitProperty_ShouldAllocateBuffer 0 on every output element before
  *                     AudioUnitInitialize: the AU renders into the host's buffers only
+ *   set-end ID VALUE  AudioUnitSetParameter of ID to VALUE (0..its max) after the last block, with no
+ *                     render after it, before the state-out
  *   offline FRAME 0|1 set kAudioUnitProperty_OfflineRender of every instance at FRAME, while it plays
  *   ramp FRAME ID FROM TO FRAMES   a scheduled ramp of parameter ID from FROM to TO (its AU values,
  *                     the device's numbers) over FRAMES frames from FRAME, given in FRAME's block (the
@@ -79,6 +81,7 @@ struct AuPlan
 	std::vector<std::pair<uint64_t, uint64_t>> pull2;
 	std::vector<RampCmd> ramps;
 	std::vector<std::pair<uint64_t, UInt32>> offline;
+	std::vector<std::pair<uint32_t, int>> setsAtEnd;
 	UInt32 outputs = 2;
 	bool info = false, checks = false, noalloc = false;
 };
@@ -602,6 +605,13 @@ int main (int argc, char** argv)
 			a.info = true;
 		else if (cmd == "noalloc")
 			a.noalloc = true;
+		else if (cmd == "set-end")
+		{
+			uint32_t id = 0;
+			int v = -1;
+			ok = !!(s >> id >> v) && plug_paramIndex (id) >= 0 && v >= 0 && v <= plug_params[plug_paramIndex (id)].max;
+			a.setsAtEnd.push_back ({id, v});
+		}
 		else if (cmd == "checks")
 			a.checks = true;
 		else
@@ -826,6 +836,11 @@ int main (int argc, char** argv)
 			}
 		}
 	}
+	for (auto& [id, v] : a.setsAtEnd)
+		for (auto& in : inst)
+			if (AudioUnitSetParameter (in->au, id, kAudioUnitScope_Global, 0, plug_auValue ((unsigned)plug_paramIndex (id), (uint8_t)v), 0)
+			    != noErr)
+				die ("set-end " + std::to_string (id) + " refused");
 	if (!p.stateOut.empty ())
 	{
 		const std::vector<uint8_t> st = stateOf (*inst[0]);

@@ -72,6 +72,8 @@ public:
 			Globals ()->SetParameter (plug_params[i].id, plug_auValue (i, plug_params[i].def));
 		for (auto& s : slots)
 			s.store (0);
+		for (auto& g : taken)
+			g.store (0);
 		for (auto& p : pending)
 			p.store (false);
 	}
@@ -346,21 +348,39 @@ public:
 
 	/* --- the state: the AU's ClassInfo with the processor's bytes ------------------------------ */
 
+	/* The processor's state holds the values a render gave it (getState() reads them), so the host's sets that no
+	 * render has taken yet (a knob turned, then the project saved) go into its values block here. A slot counts as
+	 * taken when the render thread published its generation (after the process() that took it) before getState():
+	 * taken[] is read first, then the slot, so a slot taken while the state is read is put in as well, with the same
+	 * value; a set after the slot's read is not in this state */
 	OSStatus SaveState (CFPropertyListRef* out) override
 	{
 		CFPropertyListRef base = nullptr;
 		const OSStatus r = MusicDeviceBase::SaveState (&base);
 		if (r != noErr)
 			return r;
+		int set[PLUG_PARAM_COUNT];
+		bool any = false;
+		for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+		{
+			const uint32_t t = taken[i].load (std::memory_order_acquire);
+			const uint64_t s = slots[i].load (std::memory_order_acquire);
+			set[i] = (uint32_t)(s >> 40) != t ? (int)(s & 0xFFu) : -1;
+			any = any || set[i] >= 0;
+		}
 		IPtr<MemoryStream> m = owned (new MemoryStream);
 		if (proc->getState (m) != kResultOk)
 		{
 			CFRelease (base);
 			return kAudioUnitErr_CannotDoInCurrentContext;
 		}
+		const UInt8* bytes = reinterpret_cast<const UInt8*> (m->getData ());
+		std::vector<uint8_t> state (bytes, bytes + m->getSize ());
+		if (any)
+			withValues (state, set);
 		CFMutableDictionaryRef d = CFDictionaryCreateMutableCopy (nullptr, 0, static_cast<CFDictionaryRef> (base));
 		CFRelease (base);
-		CFDataRef data = CFDataCreate (nullptr, reinterpret_cast<const UInt8*> (m->getData ()), (CFIndex)m->getSize ());
+		CFDataRef data = CFDataCreate (nullptr, state.data (), (CFIndex)state.size ());
 		CFDictionarySetValue (d, kStateKey, data);
 		CFRelease (data);
 		*out = d;
@@ -437,6 +457,47 @@ private:
 			return kAudioUnitErr_FailedInitialization;
 		proc->setProcessing (true);
 		return noErr;
+	}
+
+	/* the values set[] (-1: none) into a state's values block, which the processor's getState() writes last (LCHV,
+	 * plug_params.h: 12 bytes and 5 a value) */
+	static void withValues (std::vector<uint8_t>& state, const int* set)
+	{
+		for (size_t count = 0; count <= PLUG_PARAM_COUNT; count++)
+		{
+			if (state.size () < 12 + 5 * count)
+				return;
+			const size_t at = state.size () - 12 - 5 * count;
+			const uint8_t* h = state.data () + at;
+			if (memcmp (h, PLUG_STATE_VALUES_MAGIC, 4) != 0 || h[8] != count || h[9] || h[10] || h[11])
+				continue;
+			struct Reader
+			{
+				const uint8_t* p;
+				size_t left;
+			} rd {h, 12 + 5 * count};
+			int v[PLUG_PARAM_COUNT];
+			if (plug_paramsRead ([] (void* ctx, void* to, size_t n) {
+				    auto* x = static_cast<Reader*> (ctx);
+				    if (n > x->left)
+					    return -1;
+				    memcpy (to, x->p, n);
+				    x->p += n;
+				    x->left -= n;
+				    return 0;
+			    }, &rd, v) != 0)
+				return;
+			for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+				if (set[i] >= 0)
+					v[i] = set[i];
+			state.resize (at);
+			plug_paramsWrite ([] (void* ctx, const void* p, size_t n) {
+				auto* s = static_cast<std::vector<uint8_t>*> (ctx);
+				s->insert (s->end (), static_cast<const uint8_t*> (p), static_cast<const uint8_t*> (p) + n);
+				return 0;
+			}, &state, v);
+			return;
+		}
 	}
 
 	/* a value as the device shows it: its name, or the number */
@@ -611,6 +672,9 @@ private:
 		d.inputEvents = &events;
 		d.processContext = &ctx;
 		proc->process (d);
+		for (unsigned i = 0; i < PLUG_PARAM_COUNT; i++)
+			if (taken[i].load (std::memory_order_relaxed) != seen[i])
+				taken[i].store (seen[i], std::memory_order_release);	/* in the processor's values now (SaveState) */
 		takeReports ();
 		events.clear ();
 		inParams.clear ();
@@ -699,6 +763,7 @@ private:
 	std::atomic<uint64_t> slots[PLUG_PARAM_COUNT];
 	std::atomic<uint32_t> setGen {0};
 	uint32_t seen[PLUG_PARAM_COUNT] {};	/**< the generation of each slot that the render thread took */
+	std::atomic<uint32_t> taken[PLUG_PARAM_COUNT];	/**< seen, published after the process() that took it */
 	AudioUnitParameterEvent schedule[kMaxScheduled];
 	UInt32 scheduled = 0;
 	std::atomic<bool> pending[kSlots];	/**< reported values the listeners are to hear of */

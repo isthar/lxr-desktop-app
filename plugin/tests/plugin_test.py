@@ -2309,6 +2309,27 @@ def P13_au_noalloc(t):
             check(d is None, '%s%s without the AU\'s buffers %s' % (name, f, d))
 
 
+@case
+def P13_au_set_state(t):
+    # A host's set with no render after it (a knob turned, then the project saved): the state holds the set value,
+    # which no render has taken to the processor yet; a new instance restoring that state reports it at its first block
+    # and plays as one that the host gives it at frame 0, byte for byte
+    lines = ['note %d 0 48 127' % (20000 * k + 5000) for k in range(12)]
+    au_host(t, au_plan(t, 'make.txt', lines + ['set-end 10 40', 'out ' + t.path('make.wav'), 'state-out ' + t.path('s.bin')],
+                       frames=blocks_frames(1)))
+    v = lchv(t.path('s.bin'))
+    print('the state after a set of id 10 to 40 with no render after it: %d values, id 10 %r' % (len(v), v.get(10)))
+    check(len(v) == 36 and v.get(10) == 40, 'the state holds %r for id 10' % v.get(10))
+    au_host(t, au_plan(t, 'ref.txt', lines + ['param 0 10 40', 'out ' + t.path('ref.wav')]))
+    _, got = au_host(t, au_plan(t, 'got.txt', lines + ['state-in ' + t.path('s.bin'), 'out ' + t.path('got.wav')], card=False))
+    d = same_files(t.path('ref.wav'), t.path('got.wav'))
+    first = reports(got)[0]
+    print('restored: the first report at frame %d, id 10 %r; the output %s' % (first[0], first[1].get(10),
+                                                                              'the same' if d is None else d))
+    check(first[0] == 0 and first[1].get(10) == 40, 'the restored instance reports %r' % (first,))
+    check(d is None, 'the restored instance plays otherwise: %s' % d)
+
+
 # --- the licence gate and the name scan (Task 10) ----------------------------------------------
 
 @case
