@@ -1617,6 +1617,20 @@ def V08_ui(t):
           and a[3655 + 5] == b[3655 + 5], "voice 6 after und is the seed's: length %d, not %d" % (a[3660], b[3660]))
     k2 = one_file(keep, '00-*.SND')
     check(k2[8 + n] == 1, "the hats' vol after und: %d, the generator's 1 stays" % k2[8 + n])
+    # the encoder past the end of typ's list (review of group C): prp with den 7, typ +1 stays prp and
+    # keeps den 7 (the same typ loads nothing)
+    log = t.path('panel3.log')
+    script = t.script('0ms press voice6\n' + mode2 + '+200ms encoder +13\n+100ms push\n+150ms encoder +5\n'
+                      '+100ms push\n+200ms mark prp\n+150ms encoder +2\n+100ms push\n+150ms encoder +3\n'
+                      '+100ms push\n+200ms mark den7\n+150ms encoder -2\n+100ms push\n+150ms encoder +1\n'
+                      '+100ms push\n+200ms mark again\n')
+    t.render(seed, ['--no-start', '--seconds', '4', '--panel-log', log, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'prp.  1.  4.-15', rows['prp'][1]), "prp's values: %r" % rows['prp'])
+    check(re.match(r'typ.sty.DEN.lev', rows['den7'][0]) and re.match(r'prp.  1.  7.-15', rows['den7'][1]),
+          'den 7: %r' % rows['den7'])
+    check(re.match(r'TYP.sty.den.lev', rows['again'][0]) and re.match(r'prp.  1.  7.-15', rows['again'][1]),
+          'typ +1 at prp: %r' % rows['again'])
     no_copies_left()
 
 @case

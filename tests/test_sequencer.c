@@ -1929,4 +1929,27 @@ TEST(gen_glue_armed_values_survive_a_reload)
 	ASSERT_EQ(activeParameters[PAR_GEN_UND], 0);
 }
 
+TEST(gen_glue_the_same_typ_is_no_change)
+{
+	/* review of group C: the encoder at the end of typ's list (or a value past it) sends the stored
+	 * typ again; it neither loads the type's values nor regenerates */
+	reset();
+	ASSERT_EQ(seq_setGenParam(1, 0, PAR_GEN_TYP, PG_TYPE_PRP), PG_WROTE);	/* prp from track 1, empty */
+	ASSERT_EQ(seq_setGenParam(1, 0, PAR_GEN_DEN, 7), PG_WROTE);
+	seq_patternSet.seq_subStepPattern[0][1][9].volume = 33;	/* an edit by hand */
+	PatternGenTrack before, after;
+	genRead(0, 1, &before);
+	patTouches = 0;
+	ASSERT_EQ(seq_setGenParam(1, 0, PAR_GEN_TYP, PG_TYPE_PRP), 0);
+	seq_loadGrooveParams(1, 0);
+	ASSERT_EQ(activeParameters[PAR_GEN_DEN], 7);
+	genRead(0, 1, &after);
+	ASSERT_TRUE(genSame(&before, &after)); ASSERT_EQ(patTouches, 0);
+	ASSERT_EQ(seq_setGenParam(1, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);	/* another typ: its values */
+	seq_loadGrooveParams(1, 0);
+	ASSERT_EQ(activeParameters[PAR_GEN_DEN], 7);	/* hat's den is 7 too */
+	ASSERT_EQ(activeParameters[PAR_GEN_LEV], 15);
+	ASSERT_EQ(patTouches, 1);
+}
+
 TEST_MAIN()
