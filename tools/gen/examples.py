@@ -57,6 +57,11 @@ KICK = 'X...X...X...X...'
 HAT_PLAIN = '..X...X...X...X.'           # the closed hat on the offbeats, all 127
 HAT_HAND = '..X...X..o.X..X.|..X...X..x.X.oX.'   # sty 0's hand-made hats: 2 bars, accents and a ghost
 
+# Drum 2 re-voiced as a ghost kick (spec 10): a kick-like voice, shorter and darker than the kick
+GHOST = [('osc_wave_drum2', 0), ('coarse2', 31), ('fine2', 64), ('modamnt2', 34), ('mod_eg2', 44),
+         ('pitch_slope2', 20), ('fmamnt2', 0), ('veloa2', 0), ('velod2', 10), ('vol_slope2', 90),
+         ('trans2_vol', 0), ('filter_type_2', 0), ('filter_freq_2', 36), ('reso_2', 0), ('drive2', 18),
+         ('volume_mod_on_off2', 1), ('vol2', 113)]
 # The cymbal re-voiced as a noise roar for rar (no kit has one): noise through a resonant
 # band-pass, driven, a short attack (so rar's stutter is heard) and a long decay
 ROAR = [('wave1_cym', 4), ('wave2_cym', 4), ('wave3_cym', 4), ('mod_osc_gain1_cym', 0),
@@ -81,9 +86,9 @@ def H(pattern):
 # Faders from single hits of each voice of PROSTO alone (peak, fader 1): kick -5.1 dBFS, bass
 # (Drum 2) -8.8, figure (Drum 3) -14.4, Snare -14.9, the roar (Cymbal, ROAR) -9.0, hihat -18.1
 F_HAT = (0.35, 1, 1, 1, 1, 1)
-F_SUB = (0.6, 0.8, 1, 1, 1, 1)
+F_GHOST = (0.35, 0.4, 1, 1, 1, 1)
 F_MIX = (0.45, 1, 1, 1, 0.6, 1)
-F_GROOVE = (0.5, 0.7, 1, 1, 0.5, 1)
+F_GROOVE = (0.5, 0.4, 1, 1, 0.5, 1)
 
 
 def examples():
@@ -95,18 +100,19 @@ def examples():
             tr[6] = ('gen-on', G('hat', sty=0)[1], HAT_HAND)
         ex.append(dict(name='hat-sty%d' % sty, title='hat, styl %d (%s): ghosty hihatu ze stopą, 8 taktów'
                        % (sty, hat_titles[sty]), kit='58-PROST.SND', bars=8, tracks=tr, faders=F_HAT))
-    sub_titles = {1: 'krok przed stopą', 2: 'rolling', 3: 'galop', 4: 'offbeat', 5: 'synkopa', 6: 'rzadki',
-                  7: 'figura 2-taktowa', 8: 'z ziarna'}
+    sub_titles = {1: 'klasyczny: 4, 7, 12, 15', 2: '12, 15', 3: '7, 15', 4: '4, 12', 5: '8, 16',
+                  6: 'gęsty: 4, 7, 8, 12, 15, 16', 7: 'figura 2-taktowa: w takcie B dochodzą 10 i 16',
+                  8: 'z ziarna: 3 z miejsc 4, 7, 12, 15, 8, 16, 10, 14'}
     for sty in range(1, 9):
-        ex.append(dict(name='sub-sty%d' % sty, title='sub, styl %d (%s): bas ze stopą i hihatem, 4 takty'
-                       % (sty, sub_titles[sty]), kit='58-PROST.SND', bars=4,
-                       tracks={1: H(KICK), 2: G('sub', sty=sty), 6: H(HAT_PLAIN)}, faders=F_SUB))
-    ex.append(dict(name='sub-sty2-var+2', title='sub, styl 2 (rolling), var +2: druga nuta o cały ton wyżej '
-                   'na ćwierćnutach 2 i 4, 4 takty', kit='58-PROST.SND', bars=4,
-                   tracks={1: H(KICK), 2: G('sub', sty=2, var=2), 6: H(HAT_PLAIN)}, faders=F_SUB))
-    ex.append(dict(name='sub-sty6-var-1', title='sub, styl 6 (rzadki), var −1: druga nuta pół tonu niżej '
-                   'na ćwierćnutach 2 i 4, 4 takty', kit='58-PROST.SND', bars=4,
-                   tracks={1: H(KICK), 2: G('sub', sty=6, var=-1), 6: H(HAT_PLAIN)}, faders=F_SUB))
+        ex.append(dict(name='sub-sty%d' % sty, title='sub, styl %d (%s): ghost kicki ze stopą i hihatem, 8 taktów'
+                       % (sty, sub_titles[sty]), kit='58-PROST.SND', bars=8, kit_params=GHOST,
+                       tracks={1: H(KICK), 2: G('sub', sty=sty), 6: G('hat')}, faders=F_GHOST))
+    for var, what in ((1, 'w takcie 8 dochodzi ghost na 16. kroku'),
+                      (-1, 'w takcie 8 znika jeden ghost')):
+        ex.append(dict(name='sub-sty1-var%+d' % var,
+                       title='sub, styl 1 (klasyczny: 4, 7, 12, 15), var %+d: %s (zmiana gra tylko w takcie 8), '
+                       '8 taktów' % (var, what), kit='58-PROST.SND', bars=8, kit_params=GHOST,
+                       tracks={1: H(KICK), 2: G('sub', sty=1, var=var), 6: G('hat')}, faders=F_GHOST))
     prc_titles = {1: 'synkopy', 2: 'offbeat', 3: '3+3+2', 4: 'losowy'}
     for sty in range(1, 5):
         for var in (1, -1):
@@ -132,11 +138,11 @@ def examples():
                        'cel to Snare, 8 taktów' % (sty, prp_titles[sty]), kit='58-PROST.SND', bars=8,
                        tracks={1: H(KICK), 3: G('prc'), 4: G('prp', sty=sty, src=3, shf=prp_shf[sty]),
                                6: H(HAT_PLAIN)}, faders=F_MIX))
-    ex.append(dict(name='groove', title='cały groove, 32 takty: stopa 4/4, sub (styl 2), ghosty hihatu (styl 1), '
+    ex.append(dict(name='groove', title='cały groove, 32 takty: stopa 4/4, ghost kicki sub (styl 1), ghosty hihatu (styl 1), '
                    'prc (styl 1), rar (styl 4) na talerzu; wszystko poza stopą z generatora',
                    kit='58-PROST.SND', bars=32,
-                   tracks={1: H(KICK), 2: G('sub', sty=2, sed=4), 3: G('prc', sed=4), 5: G('rar', sty=4, den=4, sed=4),
-                           6: G('hat', sed=4)}, kit_params=ROAR, faders=F_GROOVE))
+                   tracks={1: H(KICK), 2: G('sub', sty=1, sed=4), 3: G('prc', sed=4), 5: G('rar', sty=4, den=4, sed=4),
+                           6: G('hat', sed=4)}, kit_params=GHOST + ROAR, faders=F_GROOVE))
     return ex
 
 
