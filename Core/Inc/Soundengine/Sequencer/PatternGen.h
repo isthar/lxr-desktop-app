@@ -25,10 +25,12 @@ enum { PG_TYPE_OFF, PG_TYPE_HAT, PG_TYPE_SUB, PG_TYPE_PRC, PG_TYPE_RAR, PG_TYPE_
 /* the settings' ranges (spec §3): lev in dB, not in semitones, shf in steps */
 enum { PG_STY_MAX = 8, PG_DEN_MAX = 16, PG_LEV_MIN = -30, PG_VAR_MAX = 4, PG_NOTE_MAX = 24, PG_SED_MAX = 99, PG_SHF_MAX = 8 };
 /* an accent is a step at 64 or above (spec §3); 60 the voice's own pitch (SEQ_DEFAULT_NOTE); 0xFF no
- * p-lock (NO_AUTOMATION); prob 100 or a trig condition of SeqStepTypes.h; rar's scatter at 25 %;
- * StepTiming.flam x4 (off x2 x3 x4 x6 x8) and shift 7, none */
-enum { PG_ACCENT_MIN = 64, PG_NOTE_BASE = 60, PG_NO_PLOCK = 0xFF, PG_PROB_ALWAYS = 100, PG_COND_1_2 = 101,
-	PG_COND_2_2 = 102, PG_COND_1_4 = 106, PG_COND_4_4 = 109, PG_PROB_RARE = 25, PG_FLAM_X4 = 3, PG_SHIFT_NONE = 7 };
+ * p-lock (NO_AUTOMATION); prob 100 or a trig condition of SeqStepTypes.h, in its order from
+ * STEP_COND_1_2 (1:2 2:2 1:3 2:3 3:3 1:4 2:4 3:4 4:4); rar's scatter at 25 %; StepTiming.flam x4 (off
+ * x2 x3 x4 x6 x8) and shift 7, none */
+enum { PG_ACCENT_MIN = 64, PG_NOTE_BASE = 60, PG_NO_PLOCK = 0xFF, PG_PROB_ALWAYS = 100, PG_COND_1_2 = STEP_COND_1_2,
+	PG_COND_2_2 = STEP_COND_1_2 + 1, PG_COND_1_4 = STEP_COND_1_2 + 5, PG_COND_4_4 = STEP_COND_1_2 + 8, PG_PROB_RARE = 25,
+	PG_FLAM_X4 = 3, PG_SHIFT_NONE = 7 };
 
 /** one track's generator settings (RAM only, spec §2); zero bytes are the defaults */
 typedef struct PatternGenSettings

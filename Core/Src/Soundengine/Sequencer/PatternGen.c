@@ -247,6 +247,7 @@ static uint16_t pg_kick(const PatternGenSettings *s, uint8_t track, const Patter
 static const uint16_t pg_subBar[8] = { 0, 0x8888u, 0xCCCCu, 0xEEEEu, 0x4444u, 0x4C4Cu, 0x40C0u, 0x0CCCu };
 #define PG_SUB_BAR_B	0xECCCu
 static const uint8_t pg_subFig[5] = { 0x8, 0xC, 0xE, 0x4, 0x0 }, pg_subFigW[5] = { 3, 4, 1, 2, 1 };
+#define PG_SUB_FIG_TOTAL	(3u + 4u + 1u + 2u + 1u)	/* the sum of pg_subFigW (gen.py SUB_FIGURE_TOTAL) */
 
 /* spec §4.2, §8 (gen.py _sub()): the style's bars off the kick (style 8: one bar of figures, draw 3,
  * den keeps its best ranked hits); the last hit after each kick before the next at 127, the others
@@ -259,7 +260,7 @@ static void pg_sub(pg_ctx_t *c, const PatternGenSettings *s, uint16_t kick, Patt
 		uint16_t h = 0;
 		for (unsigned q = 0; q < 4u; q++)
 		{
-			unsigned r = pg_rand(c, 11u), f = 0;
+			unsigned r = pg_rand(c, PG_SUB_FIG_TOTAL), f = 0;
 			while (r >= pg_subFigW[f])
 				r -= pg_subFigW[f++];
 			h |= (uint16_t)(pg_subFig[f] << (4u * q));
