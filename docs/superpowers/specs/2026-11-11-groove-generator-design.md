@@ -225,3 +225,14 @@ Prototyp (`tools/gen/gen.py` na v0.8) wymusił kilka rozstrzygnięć. Wiążą o
   - styl 1 nie kopiuje flagi slide;
   - style 3 i 4 **przejmują warunek kroku źródła**, więc echo akcentu 2:2 też gra tylko w taktach 5–8, a velocity biorą z `lev`;
   - nuta to 60 + `not`.
+
+## 9. Poprawki po przeglądzie rdzenia (11.11)
+
+Przegląd porównał rdzeń w C z prototypem (53 000 losowych przypadków, zero różnic) i wskazał miejsca, gdzie prototyp rozjeżdża się z punktami 3–5. Rozstrzygnięcia (zmieniają prototyp, wektory i rdzeń):
+
+- **`prc`, takt 2:** przenoszę zawsze akcent taktu 1 z najwyższym kluczem rankingu, a nie `sorted(takt1)[los % den]`. Cel to najlepsze w rankingu kluczy 16–31 wolne miejsce poza krokami stopy. Losowanie „przeniesienia” znika z fazy 3. Dzięki temu zmiana `den` nie przetasowuje taktu 2, jak obiecują punkty 3 i 5.
+- **Styl 0 bez akcentów** (`hat` i `prc`): gdy na ścieżce nie ma żadnego kroku z vel ≥ 64, styl 0 działa jak styl 1: akcenty i wagi stylu 1, ziarno dalej z `sty` = 0.
+- **`prc`, styl 0:** akcenty każdego taktu biorę tak, jak grają, we wszystkich 4 taktach. Takty 3–4 zachowują swoje akcenty i dostają ghosty od nich. To zastępuje zdanie „takty 3–4 = takty 1–2” z punktu 4.3 dla stylu 0.
+- **`prc`, ghost przed akcentem na 1. kroku taktu:** nie powstaje. Wcześniej trafiał na 16. krok tego samego taktu.
+- **`rar`, styl 4:** posyp ma najwyżej 8 kroków, jak w stylu 3, więc `den` 10–16 daje ten sam wzorzec.
+- **Ograniczenie:** stopę czytam z pierwszego taktu ścieżki `src`, tak jak gra (krótsza ścieżka się powtarza), i ten układ obowiązuje we wszystkich 4 taktach. Przy stopie o długości, która nie dzieli 16 (np. 12 kroków), sub i perkusja mogą w taktach 2–4 trafić na stopę. W tym stylu stopa gra 4/4, więc zostawiam to opisane, nie poprawione.
