@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 23:30",
+    "updated": "2026-11-12 00:16",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "E10: groovebox do minimal groove techno; generator v0.8 gotowy w kodzie, teraz testy w emulatorze i kity z laboratorium brzmień",
+    "focus": "E10: groovebox do minimal groove techno; v0.8 (generator wzorców) gotowe w kodzie, kity 52–55 do odsłuchu",
     "branch": "timing-core",
-    "head": "2004e2e",
-    "next": "Twój odsłuch kitów 52–55 (v18) i wybór z zestawu C; po E10.17 dokumenty v0.8 z nowymi liczbami i raport M22",
-    "updated_at": "2026-11-11T23:30:00+01:00",
-    "now": "W tle: poprawki po przeglądzie (E10.17)"
+    "head": "bb0404c",
+    "next": "Twój odsłuch kitów 52–55 (strona v18) i wybór perkusji z zestawu C (Q43); potem U42–U45 na LXR po sprawdzeniach 0.7",
+    "updated_at": "2026-11-12T00:16:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -1226,9 +1226,9 @@
     {
       "id": "E10.3",
       "epic": "E10",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Generator wzorców w firmware (plan, testy, przeglądy)",
-      "updated": "2026-11-11"
+      "updated": "2026-11-12"
     },
     {
       "id": "E10.4",
@@ -1310,9 +1310,9 @@
     {
       "id": "E10.15",
       "epic": "E10",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Plan v0.8, zadanie 8: dokumenty dla Ciebie: U42–U45, rozdział instrukcji o generatorze, szkic notatek 0.8, raport M22",
-      "updated": "2026-11-11"
+      "updated": "2026-11-12"
     },
     {
       "id": "E10.16",
@@ -1324,9 +1324,9 @@
     {
       "id": "E10.17",
       "epic": "E10",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Poprawki po przeglądzie całej gałęzi v0.8 (projekt §11): styl 0 nie czyta własnych kroków jako akcentów, przeładowanie patternu przerywa zapis, brakujące wektory, fuzz w repo",
-      "updated": "2026-11-11"
+      "updated": "2026-11-12"
     }
   ],
   "milestones": [
@@ -1455,6 +1455,12 @@
       "date": "2026-11-06",
       "title": "Prototyp wtyczki do Abletona (VST3) gotowy (E9.1, E9.2, E9.11–E9.21)",
       "summary": "LICHOMAT.vst3: ten sam kod firmware co na LXR, w osobnym procesie lichomat-engine dla każdej instancji (błąd silnika nie zamknie Live'a; wtyczka milknie i wraca po ok. 0,7 s). Stereo, nuty MIDI co do próbki, sekwencer idzie za transportem Live'a przez MIDI clock (pętla, tempo, start od taktu). Stan w secie, bounce i freeze czekają na silnik. Przez host testowy gra bit w bit jak renderer emulatora; 72 testy, walidator Steinberga 47/0, sprawdzanie czasu rzeczywistego wątku audio. Przeglądy znalazły i naprawiły m.in. gubiony downbeat po zawinięciu pętli, lawinę zegara za taktem 1024, nieaktualny silnik w paczce i brak limitu czekania przy zawieszonym silniku. Instalacja jednym poleceniem; Twoje sprawdzenia P1–P8: docs/lichomat/plugin-checks.md (E8.12). Następne: tryb host (E9.3, szkic), AU i osobne wyjścia (E9.4), panel (E9.5)."
+    },
+    {
+      "id": "M22",
+      "date": "2026-11-12",
+      "title": "v0.8: generator wzorców gotowy w kodzie (E10.2, E10.3, E10.8–E10.17)",
+      "summary": "Generator wzorców na stronie ścieżki (ekrany 5–7: typ sty den lev, var not sed und, src shf) pisze zwykłe kroki: ghosty hihatu, ghost kicki (po Twoim odsłuchu), figury perkusji, rzadkie uderzenia na granicach fraz i przeniesienie rytmu. Prototyp w Pythonie jest wzorcem: 284 wektory bajt w bajt, 112 000 losowych porównań bez różnic. Bez generatora v0.8 gra bit w bit jak v0.7 (41 złotych renderów bez zmian). 139 testów na hoście, 360 w emulatorze, RAM 470 332 z 471 032 B. Przegląd całej gałęzi znalazł i poprawiono: styl 0 brał własne kroki za Twoje akcenty, przeładowanie wzorca w trakcie zapisu. Do tego kity 52–55 z laboratorium brzmień. Raport: docs/lichomat/reports/M22-v0.8-groove-generator.md. Czeka: Twój odsłuch kitów, Q43, U42–U45 na LXR."
     }
   ],
   "questions": [
@@ -5233,6 +5239,11 @@
       "n": 693,
       "at": "2026-11-11 23:30",
       "text": "E10.4: kity 52 ECHO, 53 FALA, 54 RYK, 55 TLO zbudowane przez firmware z zestawów A i B (gałąź kits, 69bed86..e8f0f30): stopa i hihat w balansie PROSTO, akcent ghost kicka 4,9 dB pod stopą, zdarzenia tła 17 dB pod groovem, werbel C2 do Q43. Dema A (przepis z kitu, zgodność z laboratorium do 0,2 dB) i B (16 taktów z generatora) na stronie do odsłuchu v18. E10.4 zostaje w toku do Twojego odsłuchu i wyboru perkusji (Q43)."
+    },
+    {
+      "n": 694,
+      "at": "2026-11-12 00:16",
+      "text": "E10.17 zrobione (v0.8 6799020..05b98aa): styl 0 pomija kroki, które generator sam zapisał (maska 64 bitów na ścieżkę), wybór hat albo prc na ścieżce z Twoimi akcentami zaczyna od stylu 0, przeładowanie grającego patternu przerywa zapis i und, wektory ghost kicków przy stopie, porównanie prototypu z C w repo (ctest pgen_fuzz). Host 139/139, emulator 360/360, pod ASan 331/331, RAM 470 332 / 471 032 B, stos 736 B (limit 768). E10.15 zrobione: U42 krok 5 (styl 0), notatki do wydania z ostatecznymi liczbami, raport M22 (bb0404c), wiersz w HANDOFF. Kamień M22: v0.8 gotowe w kodzie."
     }
   ]
 }
