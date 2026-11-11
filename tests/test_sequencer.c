@@ -1990,4 +1990,30 @@ TEST(gen_glue_write_stops_when_its_pattern_stops_playing)
 	ASSERT_EQ(got.length, 64); ASSERT_EQ(patTouches, 1);
 }
 
+TEST(gen_glue_the_same_value_is_no_change)
+{
+	/* review of group C: a knob or the encoder at the end of a range writes the stored value again;
+	 * for every generator parameter that is no change: no regeneration, no timer, the hand edits stay.
+	 * A value past a range that maps to the stored default is the same value too */
+	reset();
+	ASSERT_EQ(seq_setGenParam(4, 3, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seq_setGenParam(4, 3, PAR_GEN_DEN, PG_DEN_MAX), PG_WROTE | PG_SOFT);
+	seq_patternSet.seq_subStepPattern[3][4][1].volume = 50;	/* hand edits on generated steps */
+	seq_setMainStep(3, 4, 5, 0);
+	PatternGenTrack before, after;
+	genRead(3, 4, &before);
+	seq_loadGrooveParams(4, 3);
+	patTouches = 0;
+	static const uint16_t par[9] = { PAR_GEN_TYP, PAR_GEN_STY, PAR_GEN_DEN, PAR_GEN_LEV, PAR_GEN_VAR, PAR_GEN_NOT,
+		PAR_GEN_SED, PAR_GEN_SRC, PAR_GEN_SHF };
+	for (unsigned i = 0; i < 9; i++)
+		ASSERT_EQ(seq_setGenParam(4, 3, par[i], activeParameters[par[i]]), 0);
+	ASSERT_EQ(seq_setGenParam(4, 3, PAR_GEN_SED, 100), 0);	/* past 99: the default 0, as stored */
+	genRead(3, 4, &after);
+	ASSERT_TRUE(genSame(&before, &after)); ASSERT_EQ(patTouches, 0);
+	ASSERT_EQ(seq_setGenParam(4, 3, PAR_GEN_DEN, PG_DEN_MAX - 1), PG_WROTE | PG_SOFT);	/* a change regenerates */
+	genRead(3, 4, &after);
+	ASSERT_FALSE(genSame(&before, &after)); ASSERT_EQ(patTouches, 1);
+}
+
 TEST_MAIN()

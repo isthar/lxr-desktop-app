@@ -2865,20 +2865,21 @@ uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.8 (G2, G4): a generator parameter of the track page as its menu value, a value
- * past its range the default; another typ loads its type's values (spec §3), the same typ changes
- * nothing, a typ past prp is --- (spec §9). With typ set the track in pattern is regenerated (und
- * is the click's: menu.c) */
+ * past its range the default; another typ loads its type's values (spec §3), a typ past prp is ---
+ * (spec §9). With typ set a changed value regenerates the track in pattern; the stored value again
+ * changes nothing (und is the click's: menu.c) */
 uint8_t seq_setGenParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint8_t value)
 {
 	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return 0;
 	PatternGenSettings *g = &seq_gen[trackNr];
+	const PatternGenSettings was = *g;
 	switch(paramNr)
 	{
 	case PAR_GEN_TYP:
 	{
 		const uint8_t typ = (value < PG_TYPES) ? value : PG_TYPE_OFF;
-		if(typ == g->typ)	// the encoder at the end of the list sends the same typ: no change (review of group C)
-			return 0;
+		if(typ == g->typ)	// the same typ: no type values loaded (below: no change)
+			break;
 		patternGen_typeDefaults(typ, g);
 		seq_loadGenParams(trackNr);	// the screens show the type's values
 		break;
@@ -2893,6 +2894,10 @@ uint8_t seq_setGenParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 	case PAR_GEN_SHF: g->shf = (int8_t)((value <= 2 * PG_SHF_MAX) ? (int)value - PG_SHF_MAX : 0); break;
 	default: return 0;
 	}
+	//review of group C: a knob or the encoder at the end of a range writes the stored value again:
+	//no change, so no regeneration and no autosave, and the hand edits stay
+	if(!memcmp(&was, g, sizeof was))
+		return 0;
 	return (g->typ != PG_TYPE_OFF) ? seq_generateTrack(trackNr, pattern) : 0;
 }
 //------------------------------------------------------------------------------

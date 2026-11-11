@@ -1640,6 +1640,22 @@ def V08_ui(t):
           "sub's not: %r" % rows['subnot'])
     check(re.match(r'src.SHF', rows['shfneg'][0]) and re.match(r'  1. -3', rows['shfneg'][1]), 'shf -3: %r' % rows['shfneg'])
     check(re.match(r'  1. \+8', rows['shfpos'][1]), 'shf +8: %r' % rows['shfpos'])
+    # the same value again is no change (review of group C): hat at den 16 fills bar 1; step 2 off by hand
+    # on the step page; back on the track page (at len) the encoder +1 on den at its end leaves it off
+    log, keep = t.path('panel4.log'), t.path('K4')
+    script = t.script('0ms press voice6\n' + mode2 + '+200ms encoder +13\n+100ms push\n+150ms encoder +1\n'
+                      '+100ms push\n+150ms encoder +2\n+100ms push\n+150ms encoder +9\n+100ms push\n'
+                      '+100ms press mode1\n+200ms press step2\n' + mode2 + '+200ms encoder +15\n+100ms push\n'
+                      '+150ms encoder +1\n+100ms push\n+200ms mark again\n+300ms save-project 0\n')
+    t.render(seed, ['--no-start', '--seconds', '5', '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'typ.sty.DEN.lev', rows['again'][0]) and re.match(r'hat.  1. 16.-15', rows['again'][1]),
+          'den at 16 after +1: %r' % rows['again'])
+    pat = one_file(keep, '00-*.PAT')
+    main = int.from_bytes(pat[3598 + 8 * 5:3606 + 8 * 5], 'little')
+    bars = [(main >> (16 * b)) & 0xFFFF for b in range(4)]
+    check(bars == [0xFFFD, 0xFFFF, 0xFFFF, 0xFFFF], 'voice 6 with step 2 off by hand, after den +1 at 16: %r'
+          % [hex(b) for b in bars])
     no_copies_left()
 
 @case
