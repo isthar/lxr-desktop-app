@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-11 16:03",
+    "updated": "2026-11-11 16:27",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; teraz E10.3, generator w firmware (gałąź v0.8)",
     "branch": "timing-core",
-    "head": "258070c",
-    "next": "U mnie: plan E10.3, potem wdrożenie z testami bajt w bajt z prototypem. Czeka na Ciebie: Q41 odsłuch przykładów generatora, H12 na LXR (30 min, odblokowuje v0.4–v0.7 i wyznacza CPU dla atmo i riserów), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
-    "updated_at": "2026-11-11T16:03:00+01:00",
+    "head": "0bf8342",
+    "next": "U mnie: grupa C v0.8 (menu i spięcie generatora), laboratorium brzmień (sub, tło, perkusja), potem nowe style suba i poziom rzadkich uderzeń w generatorze. Czeka na Ciebie: wybór brzmień z laboratorium (gdy będą), H12 na LXR (30 min), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
+    "updated_at": "2026-11-11T16:27:00+01:00",
     "now": "E10.11–E10.12: spięcie generatora z sekwencerem i menu (grupa C planu v0.8)"
   },
   "epics": [
@@ -1233,7 +1233,7 @@
     {
       "id": "E10.4",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Kity w stylu z pomiarów: stopa z rumble, sub, metalowa perkusja, hihaty",
       "updated": "2026-11-11"
     },
@@ -1731,10 +1731,10 @@
     },
     {
       "id": "Q41",
-      "status": "otwarte",
+      "status": "zamknięte",
       "question": "Generator wzorców (E10.2): na stronie odsłuchu, w sekcji „Generator: pierwsze przykłady”, jest 32 przykładów, każdy z siatką kroków. Które style zostają, które wyrzucić albo zmienić? Czy ghosty hihatu (−15 dB) i suby (2 półtony pod stopą) brzmią w stylu? Czy zmiany na końcu frazy (var) są za słabe, czy za mocne?",
       "assumption": "Zostają wszystkie style z liczbami z pomiarów. Firmware (E10.3) robię dalej, a Twoje uwagi zmienią tylko tabele stylów.",
-      "answer": "",
+      "answer": "Twoja odpowiedź (11.11): stopy z HH wychodzą świetnie; suby naiwne i mało berlińskie, rolling jak z naiwnego psytrance'u; rzadkie uderzenia za głośne (mają być uderzeniem tła) i zbyt prymitywny szum bez pogłosu i ambientu; przeniesienie rytmu super, ale ten rimshot naiwny. Co z tym robię: ghosty hihatu i przeniesienie rytmu zostają bez zmian. Suby: nowy głos (głęboki, długi, z wolnym atakiem, pod stopą, tłumiony stopą) i style z jednym uderzeniem na ćwierćnutę lub rzadziej zamiast szesnastkowego rollingu. Rzadkie uderzenia: dużo ciszej, zawsze w pogłosie (predelay, długi ogon, freeze, ducking od stopy), zaprojektowane ryki i risery zamiast surowego szumu. Rim i perkusja: nowe barwy w kitach (E10.4). Najpierw próbki brzmień do Twojego wyboru na stronie odsłuchu, potem zmiana tabel stylów w generatorze.",
       "updated": "2026-11-11"
     }
   ],
@@ -5158,6 +5158,11 @@
       "n": 684,
       "at": "2026-11-11 16:03",
       "text": "E10.10 zrobione (v0.8 c757bf0..bdaf4aa): sub, prc, rar i prp w rdzeniu C. 233 wektory i 22 000 losowych przypadków zgadzają się z prototypem bajt w bajt. Przegląd zgodności nie znalazł błędu w kodzie, ale wskazał rozjazdy prototypu z projektem; rozstrzygnąłem je w §9 (36e19e0): takt 2 figury prc przenosi zawsze najwyżej oceniony akcent, więc den nie przetasowuje figury; styl 0 bez akcentów działa jak styl 1; brak ghosta przed akcentem na 1. kroku taktu; typ spoza zakresu nic nie robi. Przegląd jakości: stos 464 B, bez floatów i stanu globalnego, 40 mutantów; 3 luki w testach domknięte. Strona odsłuchu: wersja 15 (przerenderowane perkusja, przeniesienie rytmu i groove). E10.11 w toku (grupa C: spięcie z sekwencerem i menu)"
+    },
+    {
+      "n": 685,
+      "at": "2026-11-11 16:27",
+      "text": "Q41 zamknięte, Twój odsłuch: stopy z hihatami świetne; suby naiwne, mało berlińskie, rolling jak z psytrance'u; rzadkie uderzenia za głośne i za suche (mają być tłem w pogłosie); przeniesienie rytmu super, rimshot naiwny. Ghosty hihatu i przeniesienie zostają bez zmian. E10.4 w toku: laboratorium brzmień na istniejących głosach i pogłosie (głęboki sub tłumiony stopą, rzadkie uderzenia jako tło w pogłosie, nowe barwy perkusji), próbki do Twojego wyboru na stronie odsłuchu; potem nowe style suba w generatorze (jedno uderzenie na ćwierćnutę lub rzadziej) i cichsze rzadkie uderzenia"
     }
   ]
 }
