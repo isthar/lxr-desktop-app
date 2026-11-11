@@ -122,7 +122,47 @@ of `us1`–`us4` as `off`; 0.2–0.5 and 1.7 play it as they play a 0.6 pattern.
 only in `USERTPL.LCH`, which 1.7 and 0.2–0.6 never open: a project saved by them loses its own
 templates. Kits, songs and `glo.cfg` keep their sizes.
 
-It keeps everything of 0.6, 0.5 and 0.4, and of 0.3, which added tools for playing live and for acid
+Version 0.8 adds a pattern generator, for groove techno. It writes ordinary steps, so what it makes
+you edit, save and play like any other pattern. It has ten parameters on two new screens of the track
+page, after `vtp vdp sav`: turn the encoder on from `sav` (or SHIFT + the second mode button once more
+from the fourth screen) to `typ sty den lev | var not sed und`, and on to `src shf`. `typ` picks what
+the selected voice's track gets, `---` leaves the generator off:
+
+- `hat` (hat ghosts): accents on the offbeats and quiet ghosts between them, the same in all four
+  bars; styles 0–4 (0 keeps your own accents, the steps at velocity 64 or more);
+- `sub` (`ghost kick` on the LCD): quiet kick-like hits on the syncopated 16ths between the kicks,
+  four a bar at style 1 (`...g..G....g..G.`), the last of them an accent; styles 1–8. Give it a
+  track with a short kick-like voice; the kick itself stays on its own track (`src`, voice 1 by
+  default; hits never land on its steps);
+- `prc` (percussion): a two-bar figure with ghosts before the accents, repeated in bars 3 and 4;
+  styles 0–4;
+- `rar` (rare hits): risers, booms and noise stutters on the phrase lines, mostly bars 8 and 16;
+  styles 1–4;
+- `prp` (propagate): carries the rhythm of the track `src` over to this one, shifted by `shf` steps;
+  styles 1–4.
+
+`sty` is the style of the type, `den` the density (ghosts or accents a bar, events in 16 bars; at
+`sub` only style 8 uses it), `lev` the level of the ghosts below the accent (-30 … 0 dB), `var` the
+change at the end of the phrase (extra hits only in bars 5–8, or hits that play only in bars 1–4),
+`not` shifts the note, `src` is the source track and `shf` the shift of the copy. `sed` (0–99) is
+the seed: the same seed gives the same pattern, in the emulator and on the device, and turning it
+browses variants; changing `den` adds or removes hits without reshuffling the others. Choosing a
+`typ` loads that type's defaults into `sty den lev var not`.
+
+While `typ` is not `---`, a change of any generator parameter of the track generates it again at
+once, always 64 steps (four bars). Your edits to that track are replaced at the next change, so set
+`typ` back to `---` when you want to keep them. Setting a parameter to the value it already has does
+nothing, so a turn against the end of its range does not discard hand edits. The generator clears
+the p-locks, flam, shift and fine timing of the steps it writes. When it writes a step below full
+velocity it switches the voice's `vol` on (otherwise the ghosts would play at full volume). `und`
+(push, turn to `und`, push) brings the track back from the pattern's last save; it works on the
+pattern that is playing. The generator cannot be controlled over MIDI or NRPN. The settings belong to
+the track, live in RAM and are not saved; the steps are.
+
+A pattern made this way is a normal 0.7 pattern: 0.2–0.7 play it as 0.8 does. Firmware 1.7 plays the
+trig conditions 1:2, 2:2, 4:4 and 1:4 that `var` and `rar` use on every pass.
+
+It keeps everything of 0.7, 0.6, 0.5 and 0.4, and of 0.3, which added tools for playing live and for acid
 lines. In the performance mode (the second mode button) holding step 8 turns the fill mode on, steps
 9–16 recall eight mute scenes and COPY + a step stores one; the scenes are saved with the project.
 Rolls go from a whole bar to 1/32, triplets included, on each track's own tempo. Drum 1–3 can slide:
