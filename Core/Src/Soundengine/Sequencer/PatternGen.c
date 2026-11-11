@@ -151,7 +151,8 @@ static void pg_frame(pg_ctx_t *c, PatternGenTrack *io, int keep)
 		if (pg_isOn(io->on, j) && ((io->step[j].volume & 0x7Fu) >= PG_ACCENT_MIN))
 			c->acc[i >> 4] |= (uint16_t)(1u << (i & 15u));
 	}
-	for (unsigned i = PG_STEPS; i-- > 0u;)	/* downwards: step i % len <= i is still the current one */
+	/* the order does not matter: a kept step copies step i % len, an accent, which stays in place */
+	for (unsigned i = PG_STEPS; i-- > 0u;)
 	{
 		const unsigned j = i % len;
 		if (keep && ((c->acc[i >> 4] >> (i & 15u)) & 1u))
