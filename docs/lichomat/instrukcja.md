@@ -8,7 +8,7 @@ wystarczy jedna instalacja. Części oznaczone (0.8) są tylko w 0.8; reszta dzi
 1.7: usuń z karty `LXR_V2_LICHOMAT_0.8.img` i zainstaluj `LXR_V2_V1.7.img` tak samo (updater się nie zmienia);
 szczegóły w [notatkach 0.7](release-notes-v0.7.md), „Powrót do v0.6 … albo do oficjalnego firmware”. Opis
 pochodzi z notatek do wydania i z emulatora; na LXR sprawdza go [sesja testowa](test-session-v0.6.md), a
-części 0.7 i 0.8 sprawdzenia U38–U45 z [listy](hardware-checklist.md).
+części 0.7 i 0.8 sprawdzenia U38–U45 z [listy](hardware-checklist.md). Krótki przewodnik na start (groove w 5 minut, co inaczej niż w 1.7): [praca z LICHOMAT](praca-z-lichomat.md).
 
 ## Gdzie co jest
 
