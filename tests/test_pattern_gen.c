@@ -353,6 +353,29 @@ TEST(pgen_core_hat_style0_reads_as_played)
 	}
 }
 
+TEST(pgen_core_style0_keeps_raw_fine)
+{
+	/* §3: style 0 keeps the user's accents byte for byte, the fine nibble as stored too, where
+	 * stepFine_get() would read something else: the raw 0x9 (-7, out of -6..+5, read as 0) on step 3,
+	 * a low nibble, and 0xE (-2) on step 8, a high one, of a 16-step track, in all 4 bars; hat and prc */
+	static const uint8_t typ[2] = { PG_TYPE_HAT, PG_TYPE_PRC };
+	for (unsigned i = 0; i < 2u; i++)
+	{
+		PatternGenTrack t;
+		cleared(&t);
+		t.on[0] = (1u << 2) | (1u << 7);
+		t.fine[1] = 0x09u;
+		t.fine[3] = 0xE0u;
+		const PatternGenSettings s = { typ[i], 0, 4, -15, 0, 0, 0, 0, 0 };
+		ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t) & PG_WROTE, PG_WROTE);
+		for (unsigned b = 0; b < PG_BARS; b++)
+		{
+			ASSERT_TRUE(isOn(&t, 16u * b + 2u)); ASSERT_TRUE(isOn(&t, 16u * b + 7u));
+			ASSERT_EQ(t.fine[8u * b + 1u], 0x09u); ASSERT_EQ(t.fine[8u * b + 3u], 0xE0u);
+		}
+	}
+}
+
 TEST(pgen_core_types)
 {
 	/* the spec's own words, one rule a type; the vectors check the rest */
