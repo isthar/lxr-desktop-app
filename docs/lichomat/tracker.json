@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 09:22",
+    "updated": "2026-11-11 11:12",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "E9.5: panel w oknie wtyczki (0.3.0), szkic gotowy, piszę plan; w tle czekają Twoje P11 (a) i odpowiedzi znajomego na P1–P10",
+    "focus": "E10: groovebox do minimal groove techno; teraz E10.1, pomiary referencji pod generator wzorców",
     "branch": "timing-core",
-    "head": "d5a4869",
-    "next": "Czeka na Ciebie: E8.14 P11 (a): instalacja z auval w Terminalu (bez DAW); E8.12–E8.13 wtyczka w Live przez znajomego (karta testu); odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: po Twoim (a) szkic wydania z zipem AU; E9.3 po P4",
-    "updated_at": "2026-11-11T09:22:00+01:00",
-    "now": "E9.5: plan panelu we wtyczce"
+    "head": "e8a5ac7",
+    "next": "U mnie: E10.1 pomiary, potem E10.2 szkic generatora z przykładami do odsłuchu. Czeka na Ciebie: H12 na LXR (30 min, odblokowuje v0.4–v0.7 i wyznacza CPU dla atmo i riserów), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
+    "updated_at": "2026-11-11T11:12:00+01:00",
+    "now": "E10.1: pomiary referencji (suby, ghosty, rzadkie zdarzenia)"
   },
   "epics": [
     {
@@ -79,6 +79,13 @@
       "stage": "Etap 4",
       "title": "Wtyczka do Abletona (VST3, AU)",
       "goal": "Emulator jako wtyczka instrumentu na Maca: ten sam kod firmware, dźwięk i MIDI z hosta, sekwencer zsynchronizowany z tempem i pozycją Abletona, stan w secie. Najpierw szkic i prototyp jednej instancji, potem osobne wyjścia, panel, kilka instancji."
+    },
+    {
+      "id": "E10",
+      "order": 10,
+      "stage": "Etap 5",
+      "title": "Groovebox do minimal groove techno",
+      "goal": "To, co Ty uważasz za sedno (11.11): generator i rozchodzenie się wzorców (ghosty, klasyczne i nieklasyczne patterny subów, rzadkie uderzenia), kity w stylu, rzadkie zdarzenia (risery, nieokreślone ryki, metalowa perkusja), głos atmo i tła. Wszystko z pomiarów referencji i do oceny uchem na stronie odsłuchu. Potem instrukcja pod sposób pracy."
     }
   ],
   "tasks": [
@@ -1051,8 +1058,8 @@
     {
       "id": "E9.5",
       "epic": "E9",
-      "status": "w toku",
-      "title": "Panel w oknie wtyczki (VST3 i AU 0.3.0): urządzenie z aplikacji LICHOMAT Emu (wyświetlacz, enkoder, gałki, suwaki, 41 przycisków z diodami) w oknie Live'a i Logic, obsługa myszą; twarz wydzielona z panel.cpp (aplikacja bez zmian), wyświetlacz i zdarzenia panelu przez pamięć wspólną v3, suwaki w stanie setu. Szkic: docs/superpowers/specs/2026-11-11-plugin-panel-design.md (moje decyzje do Twojej poprawki); gałąź plugin-panel od plugin-v07 420d4a9",
+      "status": "do zrobienia",
+      "title": "Panel w oknie wtyczki (VST3 i AU 0.3.0): urządzenie z aplikacji LICHOMAT Emu (wyświetlacz, enkoder, gałki, suwaki, 41 przycisków z diodami) w oknie Live'a i Logic, obsługa myszą; twarz wydzielona z panel.cpp (aplikacja bez zmian), wyświetlacz i zdarzenia panelu przez pamięć wspólną v3, suwaki w stanie setu. Szkic: docs/superpowers/specs/2026-11-11-plugin-panel-design.md (moje decyzje do Twojej poprawki); gałąź plugin-panel od plugin-v07 420d4a9. Wstrzymane 11.11 na rzecz E10 (groovebox); szkic i prototyp zostają",
       "updated": "2026-11-11"
     },
     {
@@ -1201,6 +1208,55 @@
       "status": "zrobione",
       "title": "Szkic wydania na GitHubie (Twoja decyzja 06.11): w forku isthar/lxr-desktop-app, tag na gałęzi plugin-v07, emulator LICHOMAT Emu 0.7 i wtyczka VST3 0.2.0 jako zipy na Maca z Apple Silicon (podpis ad hoc, bez notaryzacji), sumy SHA-256, opis: nieoficjalne, bez związku z Erica Synths, GPL-3.0, źródło pod tym tagiem. Po E9.4 (wszystkie testy). Szkic widzisz tylko Ty; „Publish” klikasz sam. AU (E9.7) dojdzie później. Szkic gotowy (06.11): tag emu-0.7-vst3-0.2.0 na d0534b1, pliki LICHOMAT-Emu-0.7-macOS-arm64.zip, LICHOMAT-VST3-0.2.0-macOS-arm64.zip i SHA256SUMS, sprawdzone po pobraniu; https://github.com/isthar/lxr-desktop-app/releases (szkic widzisz po zalogowaniu). Opublikowane przez Ciebie 06.11 o 17:37 jako pre-release: https://github.com/isthar/lxr-desktop-app/releases/tag/emu-0.7-vst3-0.2.0",
       "updated": "2026-11-06"
+    },
+    {
+      "id": "E10.1",
+      "epic": "E10",
+      "status": "w toku",
+      "title": "Pomiary referencji do generatora: patterny subów krok po kroku (pasmo 30–150 Hz bez stopy, wysokość), warstwy ghostów w hihatach i perkusji według sekcji (gęstość, zmiany co 1–4 takty), słownik figur perkusji, katalog rzadkich zdarzeń (risery, ryki, uderzenia: miejsce w frazie, długość, pasmo, ruch widma), tło w breakdownach i grooveie, budowa aranżacji w blokach 4/8/16",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.2",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Szkic generatora wzorców na stronie ścieżki: ghost, sub, perc, propagacja rytmu i akcentów na inne ścieżki; pisze zwykłe kroki do edycji i zapisu; przykłady z emulatora na stronie odsłuchu",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.3",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Generator wzorców w firmware (plan, testy, przeglądy)",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.4",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Kity w stylu z pomiarów: stopa z rumble, sub, metalowa perkusja, hihaty",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.5",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Rzadkie zdarzenia: riser (szum i filtr przez 1–8 taktów), nieokreślone ryki (szum i FM, warczenie), metalowa perkusja; zależne od H12",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.6",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Głos atmo i tła: szumy, drony i plamy przez filtry z wolną modulacją, do pogłosu i freeze; zależny od H12",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.7",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Instrukcja pod sposób pracy: co inaczej niż w fw 1.7, groove w 5 minut",
+      "updated": "2026-11-11"
     }
   ],
   "milestones": [
@@ -5003,6 +5059,11 @@
       "n": 677,
       "at": "2026-11-11 09:22",
       "text": "E9.5: szkic projektu panelu w oknie wtyczki (docs/superpowers/specs/2026-11-11-plugin-panel-design.md): twarz urządzenia wydzielona z panel.cpp, wyświetlacz i zdarzenia przez pamięć wspólną v3, okno Metal z własnym wejściem myszy, IMessage w VST3, właściwość w AU, suwaki w secie; decyzje moje, do Twojej poprawki. Dalej: plan"
+    },
+    {
+      "n": 678,
+      "at": "2026-11-11 11:12",
+      "text": "E10 (nowy epik): groovebox do minimal groove techno, Twoja korekta kierunku z 11.11: generator wzorców (ghosty, suby, rzadkie uderzenia, propagacja), kity w stylu, rzadkie zdarzenia (risery, nieokreślone ryki, metalowa perkusja), głos atmo; E9.5 (panel we wtyczce) wstrzymany. Start: E10.1, pomiary referencji pod generator"
     }
   ]
 }
