@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-12 00:16",
+    "updated": "2026-11-12 00:17",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; v0.8 (generator wzorców) gotowe w kodzie, kity 52–55 do odsłuchu",
     "branch": "timing-core",
-    "head": "bb0404c",
+    "head": "bc8f0ba",
     "next": "Twój odsłuch kitów 52–55 (strona v18) i wybór perkusji z zestawu C (Q43); potem U42–U45 na LXR po sprawdzeniach 0.7",
-    "updated_at": "2026-11-12T00:16:00+01:00",
-    "now": ""
+    "updated_at": "2026-11-12T00:17:00+01:00",
+    "now": "W tle: przewodnik pracy z LICHOMAT 0.8 (E10.7)"
   },
   "epics": [
     {
@@ -1254,9 +1254,9 @@
     {
       "id": "E10.7",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Instrukcja pod sposób pracy: co inaczej niż w fw 1.7, groove w 5 minut",
-      "updated": "2026-11-11"
+      "updated": "2026-11-12"
     },
     {
       "id": "E10.8",
@@ -5244,6 +5244,11 @@
       "n": 694,
       "at": "2026-11-12 00:16",
       "text": "E10.17 zrobione (v0.8 6799020..05b98aa): styl 0 pomija kroki, które generator sam zapisał (maska 64 bitów na ścieżkę), wybór hat albo prc na ścieżce z Twoimi akcentami zaczyna od stylu 0, przeładowanie grającego patternu przerywa zapis i und, wektory ghost kicków przy stopie, porównanie prototypu z C w repo (ctest pgen_fuzz). Host 139/139, emulator 360/360, pod ASan 331/331, RAM 470 332 / 471 032 B, stos 736 B (limit 768). E10.15 zrobione: U42 krok 5 (styl 0), notatki do wydania z ostatecznymi liczbami, raport M22 (bb0404c), wiersz w HANDOFF. Kamień M22: v0.8 gotowe w kodzie."
+    },
+    {
+      "n": 695,
+      "at": "2026-11-12 00:17",
+      "text": "E10.7 rusza: krótki przewodnik po polsku (groove w 5 minut na LXR z generatorem i kitem ECHO, tabela: co inaczej niż w fw 1.7, czego unikać)."
     }
   ]
 }
