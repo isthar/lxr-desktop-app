@@ -12,6 +12,10 @@ the spec leaves open are marked "CHOICE" where they are decided:
 - the steps the generator does not hit are written clean and inactive, note 60 + not;
 - hat and prc sty 0 on a track with no accent as it plays (no step at vel >= 64) is sty 1:
   its accents and weights, while the seed keeps sty 0 (spec 9);
+- the steps the last run wrote (generate()'s `own`, bit i step i as stored, so on a shorter
+  track it masks step i wherever it plays) are no accents of sty 0, nor for the check above,
+  whatever their velocity now; the track generate() returns carries the steps it wrote as
+  Track.written, the next run's `own` (spec 11);
 - hat sty 0: the free places are found bar by bar, around that bar's accents;
 - prc sty 0: each bar keeps its own accents as they play, in all 4 bars (bars 3-4 are not
   copies of bars 1-2), and gets its ghosts from them (spec 9);
@@ -191,8 +195,9 @@ class Step:
 
 class Track:
     """a track as the sequencer holds it: 64 steps, the 64 active bits (seq_mainSteps) and
-    the length 1-64. `needs_vol` is set by generate(): the generator wrote a velocity
-    below 127, so the voice's vol (velocity -> volume) must be on (spec 3)"""
+    the length 1-64. generate() sets `needs_vol`, the generator wrote a velocity below 127,
+    so the voice's vol (velocity -> volume) must be on (spec 3), and `written`, the steps it
+    wrote as a mask (bit i step i), which the next run takes as its `own` (spec 11)"""
 
     def __init__(self, steps: Optional[Sequence[Step]] = None,
                  active: Optional[Sequence[bool]] = None, length: int = 16):
@@ -200,11 +205,12 @@ class Track:
         self.active: List[bool] = list(active) if active else [False] * NUM_STEPS
         self.length = length
         self.needs_vol = False
+        self.written = 0
         assert len(self.steps) == NUM_STEPS and len(self.active) == NUM_STEPS and 1 <= length <= NUM_STEPS
 
     def copy(self) -> 'Track':
         t = Track(self.steps, self.active, self.length)
-        t.needs_vol = self.needs_vol
+        t.needs_vol, t.written = self.needs_vol, self.written
         return t
 
     @classmethod
@@ -257,6 +263,16 @@ class Track:
 
     def __eq__(self, other) -> bool:
         return isinstance(other, Track) and self.to_json() == other.to_json()
+
+
+def mask_bars(mask: int) -> List[int]:
+    """a mask of steps (bit i step i) as the vectors hold it, like Track.bars(): 4 words, bar 1-4"""
+    return [(mask >> (b * BAR)) & 0xFFFF for b in range(NUM_BARS)]
+
+
+def bars_mask(words: Sequence[int]) -> int:
+    """mask_bars() back to a mask"""
+    return sum((w & 0xFFFF) << (b * BAR) for b, w in enumerate(words))
 
 
 # --- spec 5: the PRNG, the ranking, dB -> velocity ------------------------------------------
@@ -385,20 +401,20 @@ OFFSET_DEFAULT = (-3, 2)
 
 class _Out:
     """the track being written: all 64 steps clean (spec 3: no p-locks, flam, shift or
-    fine; note 60 + not; prob 100; inactive), length 64"""
+    fine; note 60 + not; prob 100; inactive), length 64; `written` the steps hit, bit i step i"""
 
     def __init__(self, note: int):
         self.note = note
         self.t = Track(length=NUM_STEPS)
         for s in self.t.steps:
             s.note = note
-        self.written = [False] * NUM_STEPS
+        self.written = 0
 
     def hit(self, i: int, vel: int, prob: int = 100, note: Optional[int] = None, flam: int = 0):
         s = self.t.steps[i]
         s.vol, s.prob, s.note, s.flam = vel, prob, self.note if note is None else note, flam
         self.t.active[i] = True
-        self.written[i] = True
+        self.written |= 1 << i
 
     def keep(self, i: int, src: Track):
         """step i as it is in src (the user's accent, spec 3: untouched)"""
@@ -406,8 +422,9 @@ class _Out:
         self.t.active[i] = True
 
     def done(self) -> Track:
-        self.t.needs_vol = any(self.written[i] and self.t.active[i] and (self.t.steps[i].vol & VOLUME_MASK) < 127
+        self.t.needs_vol = any((self.written >> i) & 1 and self.t.active[i] and (self.t.steps[i].vol & VOLUME_MASK) < 127
                                for i in range(NUM_STEPS))
+        self.t.written = self.written
         return self.t
 
 
@@ -415,9 +432,10 @@ def _clamp_note(n: int) -> int:
     return min(max(n, 0), 127)
 
 
-def _accents(view: Track, bar: int) -> set:
-    """the places of a bar's accents: active steps with vel >= 64"""
-    return {p for p in range(BAR) if view.active[bar * BAR + p]
+def _accents(view: Track, bar: int, mine: int = 0) -> set:
+    """the places of a bar's accents: active steps with vel >= 64, not in `mine` (bit i step i
+    of the view: the generator's own, spec 11)"""
+    return {p for p in range(BAR) if view.active[bar * BAR + p] and not (mine >> (bar * BAR + p)) & 1
             and (view.steps[bar * BAR + p].vol & VOLUME_MASK) >= ACCENT_VEL}
 
 
@@ -432,16 +450,18 @@ def kick_places(s: Settings, track_index: int, src_track: Optional[Track]) -> fr
 
 
 def generate(settings: Settings, track_index: int, src_track: Optional[Track] = None,
-             cur_track: Optional[Track] = None) -> Track:
+             cur_track: Optional[Track] = None, own: int = 0) -> Track:
     """the track the generator writes on track `track_index` (0-6) with these settings.
     src_track is track settings.src (the kick for sub, prc and rar; the source for prp),
-    cur_track the track's current content (read by hat and prc sty 0). Returns a new
-    Track; typ '---' and prp with src on itself return cur_track unchanged"""
+    cur_track the track's current content (read by hat and prc sty 0), own the steps of
+    cur_track the last run wrote (bit i step i; spec 11: none of them is an accent of sty
+    0). Returns a new Track with the steps it wrote in `written`; typ '---' and prp with
+    src on itself return cur_track unchanged, written 0"""
     s = settings.clamped()
     cur = cur_track if cur_track is not None else Track()
     if s.typ == TYP_OFF or (s.typ == TYP_PRP and s.src - 1 == track_index):
         out = cur.copy()
-        out.needs_vol = False
+        out.needs_vol, out.written = False, 0
         return out
 
     # spec 5: the state, then the draws in their fixed order; nothing below depends on
@@ -453,17 +473,18 @@ def generate(settings: Settings, track_index: int, src_track: Optional[Track] = 
     offsets = [lo + rng.rand(hi - lo + 1) for _ in range(grid)]          # 2. the level offsets
     out = _Out(_clamp_note(DEFAULT_NOTE + s.not_))                       # 3. per kind, below
     view = cur.played()
-    if s.typ in (TYP_HAT, TYP_PRC) and s.sty == 0 and not any(_accents(view, b) for b in range(NUM_BARS)):
+    mine = sum(1 << i for i in range(NUM_STEPS) if (own >> (i % cur.length)) & 1)  # spec 11: own as it plays
+    if s.typ in (TYP_HAT, TYP_PRC) and s.sty == 0 and not any(_accents(view, b, mine) for b in range(NUM_BARS)):
         s = dataclasses.replace(s, sty=1)       # spec 9: sty 0 without accents is sty 1, seeded with 0
     if s.typ == TYP_HAT:
-        _hat(s, out, draws, offsets, view)
+        _hat(s, out, draws, offsets, view, mine)
     elif s.typ == TYP_SUB:
         keys8 = [rng.rand(65536) for _ in range(BAR)] if s.sty == 8 else []     # spec 10: sty 8's keys,
         var_draws = [rng.rand(65536) for _ in range(BAR)]                       # then var's, always
         _sub(s, out, keys8, var_draws, kick_places(s, track_index, src_track))
     elif s.typ == TYP_PRC:
         var_draws = [rng.rand(65536) for _ in range(BAR)]               # spec 9: no draw for the move
-        _prc(s, out, draws, offsets, var_draws, kick_places(s, track_index, src_track), view)
+        _prc(s, out, draws, offsets, var_draws, kick_places(s, track_index, src_track), view, mine)
     elif s.typ == TYP_RAR:
         steps = [rng.rand(65536) for _ in range(NUM_STEPS)] if s.sty in (3, 4) else []
         _rar(s, out, steps, kick_places(s, track_index, src_track))
@@ -474,10 +495,10 @@ def generate(settings: Settings, track_index: int, src_track: Optional[Track] = 
 
 # 4.1 ----------------------------------------------------------------------------------------
 
-def _hat(s: Settings, out: _Out, draws, offsets, view: Track):
+def _hat(s: Settings, out: _Out, draws, offsets, view: Track, mine: int):
     weights = HAT_WEIGHTS[s.sty]
     for b in range(NUM_BARS):
-        acc = _accents(view, b) if s.sty == 0 else HAT_ACCENTS[s.sty]
+        acc = _accents(view, b, mine) if s.sty == 0 else HAT_ACCENTS[s.sty]
         for p in acc:
             if s.sty == 0:
                 out.keep(b * BAR + p, view)
@@ -513,7 +534,7 @@ def _sub(s: Settings, out: _Out, keys8, var_draws, kick: frozenset):
                 if b == 3 and c == 'g':
                     ghosts.append(p)
     if s.var > 0:
-        free = lambda p: SUB_WEIGHTS[p] > 0 and p not in kick and not out.written[last + p]
+        free = lambda p: SUB_WEIGHTS[p] > 0 and p not in kick and not (out.written >> (last + p)) & 1
         first = [p for p in SUB_FIRST if free(p)]
         order = first + rank(var_draws, SUB_WEIGHTS, lambda p: free(p) and p not in first)
         for p in order[:s.var]:
@@ -525,10 +546,10 @@ def _sub(s: Settings, out: _Out, keys8, var_draws, kick: frozenset):
 
 # 4.3 ----------------------------------------------------------------------------------------
 
-def _prc(s: Settings, out: _Out, draws, offsets, var_draws, kick: frozenset, view: Track):
+def _prc(s: Settings, out: _Out, draws, offsets, var_draws, kick: frozenset, view: Track, mine: int):
     weights = PRC_WEIGHTS[s.sty]
     if s.sty == 0:                               # spec 9: each bar's own accents as they play, all 4 bars
-        bar_acc = [_accents(view, b) for b in range(NUM_BARS)]
+        bar_acc = [_accents(view, b, mine) for b in range(NUM_BARS)]
         for b in range(NUM_BARS):
             for p in bar_acc[b]:
                 out.keep(b * BAR + p, view)

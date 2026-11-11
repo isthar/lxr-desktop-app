@@ -938,6 +938,114 @@ class Prp(unittest.TestCase):
         self.assertFalse(out.needs_vol)
 
 
+def mask_of(steps):
+    """a mask of steps 0-63 as generate() takes and gives it: bit i is step i"""
+    return sum(1 << i for i in set(steps))
+
+
+def kept(t):
+    """the steps of t that its run did not write: the user's accents it kept"""
+    return {i for i in range(NUM_STEPS) if t.active[i] and not (t.written >> i) & 1}
+
+
+def chain(s, track, src, cur, seds, masked=True):
+    """the tracks of turning sed through `seds`, each run on the last one's track and, when masked,
+    its mask (spec 11), as the firmware does it"""
+    outs, own = [], 0
+    for sed in seds:
+        cur = generate(dataclasses.replace(s, sed=sed), track, src, cur, own if masked else 0)
+        own = cur.written
+        outs.append(cur)
+    return outs
+
+
+class Own(unittest.TestCase):
+    """spec 11: style 0 does not read the generator's own steps as the user's accents. generate()
+    takes the steps the last run wrote (own, bit i is step i) and gives back those it wrote
+    (Track.written); the accents of hat and prc style 0 and the "style 0 without accents is
+    style 1" check (spec 9) leave the masked steps out"""
+
+    USER = '......X.......X.'       # the review's track: the user's accents on steps 7 and 15
+
+    def test_written_is_every_step_hit(self):
+        cur = user_track()
+        src = generate(S('prc', sed=3), 3, KICK)
+        mine = {i for i in range(NUM_STEPS) if cur.active[i] and cur.steps[i].vol >= 64}
+        for s in Always().all_settings():
+            out = generate(s, 2, src if s.typ == gen.TYP_PRP else KICK, cur)
+            on = {i for i in range(NUM_STEPS) if out.active[i]}
+            self.assertEqual(out.written, mask_of(on - (mine if s.sty == 0 else set())), s)
+        self.assertEqual(generate(Settings(), 2, KICK, cur, mask_of(range(64))).written, 0)
+        self.assertEqual(generate(S('prp', sty=1, src=4), 3, cur, cur).written, 0)
+        self.assertEqual(generate(S('hat'), 5).copy().written, generate(S('hat'), 5).written)
+
+    def test_prc_sty0_sed_there_and_back(self):
+        # the review's finding 1: prc sty 0 var +1 (den 3 lev -13) on the user's 7 and 15, sed 0 -> 5 -> 0
+        # gives the first track again; without the mask var's hit at 127 became an accent
+        s = S('prc', sty=0)
+        cur = Track.from_pattern(self.USER)
+        first, _, again = chain(s, 2, KICK, cur, (0, 5, 0))
+        self.assertEqual(again, first)
+        self.assertEqual(again.written, first.written)
+        self.assertEqual(kept(again), {b * BAR + p for b in range(4) for p in (6, 14)})
+        self.assertNotEqual(chain(s, 2, KICK, cur, (0, 5, 0), masked=False)[2], first)
+
+    def test_hat_sty0_loud_ghosts_keep_the_count(self):
+        # finding 1: hat sty 0 at lev -6 writes ghosts at 64 and above; over sed turns the number of
+        # hits stays, only the user's 8 accents are kept, and sed 0 again is the first track
+        s = S('hat', sty=0, lev=-6)
+        cur = Track.from_pattern(self.USER)
+        outs = chain(s, 5, None, cur, (0, 1, 2, 3, 4, 5, 0))
+        self.assertTrue(any(o.steps[i].vol >= 64 for o in outs for i in range(NUM_STEPS) if (o.written >> i) & 1))
+        self.assertEqual([sum(o.active) for o in outs], [40] * 7)
+        self.assertEqual([len(kept(o)) for o in outs], [8] * 7)
+        self.assertEqual(outs[-1], outs[0])
+        self.assertGreater(sum(chain(s, 5, None, cur, (0, 1, 2, 3, 4, 5, 0), masked=False)[-1].active), 40)
+
+    def test_a_masked_step_edited_is_no_accent_an_added_one_is(self):
+        # spec 11: a masked step edited by hand up to 127 is no accent (the next change writes it
+        # over, spec 3); an accent added on an empty step is the user's
+        out = generate(S('hat', sty=0, den=4, var=0), 5, None, Track.from_pattern('..X...X...X...X.'))
+        ed = out.copy()
+        ghost = min(i for i in range(BAR) if (out.written >> i) & 1)
+        empty = min(i for i in range(BAR) if not out.active[i])
+        ed.steps[ghost].vol = 127
+        ed.active[empty] = True
+        ed.steps[empty] = Step(vol=127, p1nr=9, p1val=4)
+        nxt = generate(S('hat', sty=0, den=4, var=0, sed=1), 5, None, ed, out.written)
+        self.assertEqual(kept(nxt), kept(out) | {empty})
+        self.assertEqual(nxt.steps[empty], ed.steps[empty])
+        self.assertFalse(nxt.active[ghost] and nxt.steps[ghost].vol == 127)
+
+    def test_every_accent_masked_is_sty1(self):
+        # spec 11 with 9: when every step at 64 or above is the generator's, style 0 works as style 1
+        # (seeded with 0), so a run on its own track writes that track again; without the mask hat's
+        # ghosts at lev -4 (64 and above) and prc's var hit at 127 were accents
+        for typ, track, lev in (('hat', 5, -4), ('prc', 2, -13)):
+            s = S(typ, sty=0, sed=4, lev=lev)
+            first = generate(s, track, KICK)
+            self.assertEqual(kept(first), set())
+            self.assertEqual(generate(s, track, KICK, first, first.written), first)
+            self.assertNotEqual(generate(s, track, KICK, first), first)
+
+    def test_a_short_track_masks_as_it_plays(self):
+        # the mask is of the steps as stored: on a 16-step track bit 6 masks step 7 wherever it plays
+        # (7, 23, 39, 55); bits past the length mask nothing
+        cur = Track.from_pattern('..X...X...X...X.')
+        s = S('hat', sty=0, den=3, var=0)
+        out = generate(s, 5, None, cur, mask_of([6]))
+        self.assertEqual(kept(out), {b * BAR + p for b in range(4) for p in (2, 10, 14)})
+        self.assertEqual(generate(s, 5, None, cur, mask_of([22, 38, 54, 63])), generate(s, 5, None, cur))
+
+    def test_other_kinds_and_styles_ignore_the_mask(self):
+        cur = user_track()
+        src = generate(S('prc', sed=3), 3, KICK)
+        for s in Always().all_settings():
+            if s.sty != 0:
+                k = src if s.typ == gen.TYP_PRP else KICK
+                self.assertEqual(generate(s, 2, k, cur, mask_of(range(64))), generate(s, 2, k, cur), s)
+
+
 class Vectors(unittest.TestCase):
     def test_golden_vectors(self):
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vectors.json')
@@ -955,9 +1063,15 @@ class Vectors(unittest.TestCase):
             st = c['settings']
             s = Settings(typ=gen.typ_code(st['typ']), sty=st['sty'], den=st['den'], lev=st['lev'],
                          var=st['var'], not_=st['not'], sed=st['sed'], src=st['src'], shf=st['shf'])
-            out = generate(s, c['track'], Track.from_json(c['src']), Track.from_json(c['cur']))
+            own = gen.bars_mask(c['own']) if 'own' in c else 0
+            out = generate(s, c['track'], Track.from_json(c['src']), Track.from_json(c['cur']), own)
             self.assertEqual(out.to_json(), c['out'], c['name'])
             self.assertEqual(out.needs_vol, c['vol'], c['name'])
+            self.assertEqual(gen.mask_bars(out.written), c['own_out'], c['name'])
+        masked = {c['settings']['typ'] for c in v['cases'] if any(c.get('own', ()))}
+        self.assertTrue({'hat', 'prc'} <= masked, masked)       # spec 11: cases with a mask
+        self.assertIn('own', v['format'])
+        self.assertIn('own_out', v['format'])
 
 
 if __name__ == '__main__':

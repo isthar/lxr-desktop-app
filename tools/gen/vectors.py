@@ -15,8 +15,10 @@ draws for a few seeds, and the cases. A track is
 A case: settings (typ by name, or as a number past prp, which is '---'; `not` as in the
 menu), track (the destination, 0-6),
 src (the content of track settings.src, or null: a cleared track), cur (the
-destination's content now, or null), out (what the generator writes), vol (whether it
-wrote a velocity under 127, so the voice's vol must be on).
+destination's content now, or null), own (optional: the steps of cur that the last run
+wrote, spec 11, as 4 words like active; absent is none), out (what the generator writes),
+vol (whether it wrote a velocity under 127, so the voice's vol must be on), own_out (the
+steps it wrote, 4 words: the next run's own).
 
 Copyright (C) 2026 Tomasz Krzywicki
 SPDX-License-Identifier: GPL-3.0-only
@@ -38,7 +40,9 @@ FORMAT = ('track: length 1-64; active: 4 words, bar 1-4, bit n = step n of the b
           'hex (volume prob note param1Nr param1Val param2Nr param2Val); timing: 64 bytes hex, flam bits '
           '0-3, shift bits 4-7 (7 = none); fine: 32 bytes hex, step 2i bits 0-3, 2i+1 bits 4-7, signed. '
           'case: settings (typ by name, or a number past prp, which is ---), track 0-6, src = content of track settings.src (null: cleared, '
-          'length 16), cur = the destination now (null: cleared), out, vol = the voice needs vol on. '
+          'length 16), cur = the destination now (null: cleared), own (optional, absent = none) = the steps of cur '
+          'the last run wrote, as 4 words like active (spec 11: no accents of sty 0), out, vol = the voice needs vol '
+          'on, own_out = the steps out wrote, 4 words (the next run\'s own). '
           'prng: Rng(sed, typ, sty, track) state and its next draws (xorshift32). vel_table[d] = vel at -d dB.')
 
 
@@ -164,15 +168,28 @@ def short_source():
     return t
 
 
+MASK_ALL = (1 << 64) - 1
+
+
+def mask(*steps):
+    """a mask of steps 0-63 (bit i is step i)"""
+    return sum(1 << i for i in steps)
+
+
 def cases():
     out = []
 
-    def add(name, typ, track, inp=None, cur=None, **kw):
+    def add(name, typ, track, inp=None, cur=None, own=0, **kw):
         s = apply_type_defaults(Settings(), typ)
         if 'not' in kw:
             kw['not_'] = kw.pop('not')
         s = dataclasses.replace(s, **kw)
-        out.append((name, s, track, inp, cur))
+        out.append((name, s, track, inp, cur, own))
+
+    def last():
+        """the track the last case writes (a run on it next takes its written steps as own)"""
+        name, s, track, inp, cur, own = out[-1]
+        return generate(s, track, inp, cur, own)
 
     # --- hat (track 6, index 5; some on 7) ---
     for sty in range(5):
@@ -219,6 +236,7 @@ def cases():
     add('sub sty0 (clamped to 1)', 'sub', 1, inp=kick44(), sty=0)
     add('sub sty8 track 6', 'sub', 5, inp=kick44(), sty=8, sed=21)
     add('sub sty2 track 3', 'sub', 2, inp=kick44(), sty=2, var=-1)
+    add('sub sty8 own ignored', 'sub', 1, inp=kick44(), cur=user_hats64(), own=MASK_ALL, sty=8, var=2)
 
     # --- prc (track 3, index 2) ---
     for sty in range(1, 5):
@@ -261,6 +279,25 @@ def cases():
     add('hat sty0 raw fine 64 var-1', 'hat', 5, cur=raw_fine(64), sty=0, den=9, var=-1)
     add('prc sty0 raw fine 16', 'prc', 2, inp=kick44(), cur=raw_fine(16), sty=0, den=4, var=0)
     add('prc sty0 raw fine 64 var+2', 'prc', 2, inp=kick44(), cur=raw_fine(64), sty=0, den=5, var=2)
+    # spec 11: the steps the last run wrote (own) are no accents of style 0, nor for spec 9's check
+    add('hat sty0 lev-6 user16 sed0', 'hat', 5, cur=user_hats16(), sty=0, lev=-6)
+    add('hat sty0 lev-6 own sed1', 'hat', 5, cur=last(), own=last().written, sty=0, lev=-6, sed=1)
+    add('hat sty0 lev-4 cleared sed4', 'hat', 5, sty=0, lev=-4, sed=4)
+    add('hat sty0 own every accent (as sty1)', 'hat', 5, cur=last(), own=last().written, sty=0, lev=-4, sed=4)
+    add('hat sty0 user16 own step 7 and past the length', 'hat', 6, cur=user_hats16(), own=mask(6, 22, 40, 63),
+        sty=0, den=9, var=2)
+    add('hat sty0 user64 own some accents', 'hat', 5, cur=user_hats64(), own=mask(1, 2, 18, 34, 42, 61),
+        sty=0, den=5, var=-2)
+    add('hat sty1 own ignored', 'hat', 5, cur=user_hats64(), own=MASK_ALL, var=-1)
+    add('prc sty0 var+1 user16 sed0', 'prc', 2, inp=kick44(), cur=Track.from_pattern('......X.......X.'), sty=0)
+    add('prc sty0 var+1 own sed5', 'prc', 2, inp=kick44(), cur=last(), own=last().written, sty=0, sed=5)
+    add('prc sty0 var+1 own sed0 again', 'prc', 2, inp=kick44(), cur=last(), own=last().written, sty=0)
+    add('prc sty0 cleared sed4', 'prc', 2, inp=kick44(), sty=0, sed=4, var=-1)
+    add('prc sty0 own every accent (as sty1)', 'prc', 2, inp=kick44(), cur=last(), own=last().written,
+        sty=0, sed=4, var=-1)
+    add('prc sty0 user64 own bar 3', 'prc', 3, inp=kick44(), cur=user_hats64(), own=0xFFFF << 32, sty=0, den=6, var=1)
+    add('prc sty0 user32 own short', 'prc', 2, inp=kick_odd(), cur=user_prc32(), own=mask(3, 11, 35), sty=0, den=4, var=2)
+    add('prc sty3 own ignored', 'prc', 2, inp=kick44(), cur=user_prc32(), own=MASK_ALL, sty=3, den=4, var=-2)
 
     # --- rar (track 5, index 4) ---
     for sty in range(1, 5):
@@ -276,6 +313,7 @@ def cases():
     add('rar sty8 (clamped to 4)', 'rar', 4, inp=kick44(), sty=8, den=5)
     add('rar sty3 step 49 weighs 2', 'rar', 4, inp=kick_even(), sty=3, den=4, sed=1)
     add('rar sty3 step 48 weighs 1', 'rar', 4, inp=kick_even(), sty=3, den=2, sed=4)
+    add('rar sty4 own ignored', 'rar', 4, inp=kick44(), cur=user_hats64(), own=MASK_ALL, sty=4, den=7)
 
     # --- prp (track 4, index 3; src track 3) ---
     for sty in range(1, 5):
@@ -294,9 +332,12 @@ def cases():
         add('prp sty1 not%+d' % n, 'prp', 3, inp=short_source(), sty=1, src=3, **{'not': n})
     add('prp sty1 src on itself', 'prp', 3, inp=user_hats64(), cur=user_hats64(), sty=1, src=4, shf=2)
     add('prp sty2 sed9 track 7', 'prp', 6, inp=prc_source(), sty=2, src=3, sed=9)
+    add('prp sty1 own ignored', 'prp', 3, inp=prc_source(), cur=user_hats64(), own=MASK_ALL, sty=1, src=3, shf=-3)
 
     # --- off ---
     add('off', 'hat', 5, cur=user_hats64())
+    out[-1] = (out[-1][0], dataclasses.replace(out[-1][1], typ=gen.TYP_OFF), *out[-1][2:])
+    add('off own', 'hat', 5, cur=user_hats64(), own=MASK_ALL)
     out[-1] = (out[-1][0], dataclasses.replace(out[-1][1], typ=gen.TYP_OFF), *out[-1][2:])
     add('off empty', 'sub', 1, inp=kick44(), den=0, lev=-3, **{'not': -2})   # the old sub defaults, kept
     out[-1] = (out[-1][0], dataclasses.replace(out[-1][1], typ=gen.TYP_OFF), *out[-1][2:])
@@ -312,12 +353,15 @@ def build():
         r = gen.Rng(*b)
         prng.append(dict(bytes=list(b), state=r.x, next=[r.next() for _ in range(8)]))
     rows = []
-    for name, s, track, src, cur in cases():
-        res = generate(s, track, src, cur)
-        rows.append(dict(name=name, settings=s.as_dict(), track=track,
-                         src=src.to_json() if src is not None else None,
-                         cur=cur.to_json() if cur is not None else None,
-                         out=res.to_json(), vol=res.needs_vol))
+    for name, s, track, src, cur, own in cases():
+        res = generate(s, track, src, cur, own)
+        row = dict(name=name, settings=s.as_dict(), track=track,
+                   src=src.to_json() if src is not None else None,
+                   cur=cur.to_json() if cur is not None else None)
+        if own:
+            row['own'] = gen.mask_bars(own)
+        row.update(out=res.to_json(), vol=res.needs_vol, own_out=gen.mask_bars(res.written))
+        rows.append(row)
     names = [r['name'] for r in rows]
     assert len(names) == len(set(names)), 'duplicate case names'
     return dict(format=FORMAT, vel_table=list(gen.VEL_TABLE), prng=prng, cases=rows)
