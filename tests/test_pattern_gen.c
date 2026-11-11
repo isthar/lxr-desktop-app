@@ -640,8 +640,8 @@ TEST(pgen_core_rar_mixed_keeps_its_two_steps)
 {
 	/* §4.4 style 4 with the kick on 2 6 10 14: steps 1 (1:2) and 49 (4:4) stay whatever the scatter's
 	 * keys (in gen.py 54 of the 100 seeds rank one of them among the 8 best); den 10 - 2 = 8 at 25 %,
-	 * off the kick */
-	PatternGenTrack t, k;
+	 * off the kick; §9: at most 8, so den 11-16 write den 10's track */
+	PatternGenTrack t, u, k;
 	const PatternGenSource kick = source(&k, 0x2222u);
 	for (uint8_t sed = 0; sed <= PG_SED_MAX; sed++)
 	{
@@ -659,6 +659,13 @@ TEST(pgen_core_rar_mixed_keeps_its_two_steps)
 			rare += t.step[st].prob == 25;
 		}
 		ASSERT_EQ(on, 10u); ASSERT_EQ(rare, 8u);
+		for (uint8_t den = 11; den <= PG_DEN_MAX; den++)
+		{
+			const PatternGenSettings more = { PG_TYPE_RAR, 4, den, 0, 0, 0, sed, 0, 0 };
+			cleared(&u);
+			ASSERT_EQ(patternGen_generate(&more, 4, &kick, &u), PG_WROTE);
+			ASSERT_EQ(memcmp(&u, &t, sizeof u), 0);
+		}
 	}
 }
 

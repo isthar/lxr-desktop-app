@@ -27,7 +27,11 @@ the spec leaves open are marked "CHOICE" where they are decided:
   var -n does nothing on sty 0 (its accents are the user's, which the generator never
   touches);
 - rar: den 0 writes nothing; sty 3 and 4 rank all 64 steps with 64 keys drawn third,
-  away from the kick of track src; den >= 4 on sty 1 is den 4;
+  away from the kick of track src; den >= 4 on sty 1 is den 4; sty 4's scatter has at
+  most 8 steps, as sty 3's, so den 10-16 is one pattern (spec 9);
+- the kick is bar 1 of track src as it plays, the same in all 4 bars: a kick track whose
+  length does not divide 16 may have kicks in bars 2-4 that sub and prc do not avoid
+  (spec 9 leaves it so: the kick of this style is 4/4);
 - prp: an accent of the source is an active step with vel >= 64; sty 1 copies vel and
   prob without the slide flag; sty 3 and 4 take the source accent's prob without the
   slide flag (spec 8), the velocity from lev and note 60 + not;

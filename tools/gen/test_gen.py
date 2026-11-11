@@ -660,7 +660,7 @@ class Rar(unittest.TestCase):
         self.assertGreater(bars[0] + bars[3], bars[1] + bars[2])
 
     def test_sty4_mixed(self):
-        for den in (1, 2, 3, 5, 10):
+        for den in (1, 2, 3, 5, 10, 11, 16):
             out = generate(S('rar', sty=4, den=den, sed=4), 4, KICK)
             e = self.events(out)
             self.assertEqual(e[0], [1, 9])
@@ -668,6 +668,15 @@ class Rar(unittest.TestCase):
             scatter = [i for i in e if i not in (0, 48)]
             self.assertEqual(len(scatter), min(max(den - 2, 0), 8))
             self.assertTrue(all(out.steps[i].prob == 25 for i in scatter))
+
+    def test_sty4_scatter_at_most_8(self):
+        # spec 9: sty 4's scatter has at most 8 steps, as sty 3's, so den 10-16 is one pattern
+        for sed in SEEDS:
+            for src in (KICK, KICK_ODD, None):
+                ten = generate(S('rar', sty=4, den=10, sed=sed), 4, src)
+                self.assertEqual(sum(ten.active), 10)
+                for den in range(11, 17):
+                    self.assertEqual(generate(S('rar', sty=4, den=den, sed=sed), 4, src), ten, (sed, den))
 
 
 class Prp(unittest.TestCase):
