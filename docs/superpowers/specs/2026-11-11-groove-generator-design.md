@@ -236,3 +236,4 @@ Przegląd porównał rdzeń w C z prototypem (53 000 losowych przypadków, zero 
 - **`prc`, ghost przed akcentem na 1. kroku taktu:** nie powstaje. Wcześniej trafiał na 16. krok tego samego taktu.
 - **`rar`, styl 4:** posyp ma najwyżej 8 kroków, jak w stylu 3, więc `den` 10–16 daje ten sam wzorzec.
 - **Ograniczenie:** stopę czytam z pierwszego taktu ścieżki `src`, tak jak gra (krótsza ścieżka się powtarza), i ten układ obowiązuje we wszystkich 4 taktach. Przy stopie o długości, która nie dzieli 16 (np. 12 kroków), sub i perkusja mogą w taktach 2–4 trafić na stopę. W tym stylu stopa gra 4/4, więc zostawiam to opisane, nie poprawione.
+- **`typ` poza zakresem** (bajt 6–255, np. z NRPN): działa jak `---`, czyli nie rusza ścieżki. Wcześniej był przycinany do `prp`, który nadpisuje ścieżkę. (Przegląd jakości, 11.11.)
