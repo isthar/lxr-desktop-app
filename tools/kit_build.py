@@ -9,9 +9,14 @@ NAME = VALUE, a '#' starts a comment:
 - 'slot' is the kit slot 0-63 the file is for;
 - 'bpm', 'shuffle' and 'pattern' set the demo, not the kit: its tempo (default 128),
   the sequencer's shuffle 0-127 (PAR_SHUFFLE, a pattern setting; default: not set),
-  and its pattern, 'classic' (PATTERN, the default) or 'album' (ALBUM_PATTERN);
+  and its pattern, 'classic' (PATTERN, the default), 'album' (ALBUM_PATTERN), 'ghost'
+  (GHOST_PATTERN) or 'bed' (BED_PATTERN);
 - every other NAME is a parameter of lichomat-render --param (emu/render/
-  render_params.h), VALUE 0-255 as the menu stores it (the menu clamps it).
+  render_params.h), VALUE 0-255 as the menu stores it (the menu clamps it). A renderer
+  older than the kits branch's (v0.7's among them) refuses the LFO page's voi and dst
+  (voice_lfoN, target_lfoN: menu_encoderChangeParameter() has a special case for them);
+  with such a renderer they go into the bytes of the kit the firmware loads at boot,
+  byte 8 + the parameter number, as a kit load sets them, unclamped (BYTE_PARAMS).
 
 For each kit:
 1. the firmware writes the kit. A card from lichomat-render --seed-card; the
@@ -32,7 +37,7 @@ For each kit:
    at 0), in plain Python: peak, RMS, the kick's fundamental, each voice's decay.
 
 A pattern card is made once per run and pattern: an init card with the demo
-pattern (PATTERN or ALBUM_PATTERN below) put in by the step buttons and saved as
+pattern (PATTERNS below) put in by the step buttons and saved as
 pattern 0.
 
 Copyright (C) 2026 Tomasz Krzywicki
@@ -91,7 +96,22 @@ ALBUM_PATTERN = {
     6: [(1, 40, None), (5, 40, None), (9, 40, None), (13, 40, None)],				# closed hat
     7: [(3, 127, None), (7, 127, None), (11, 127, None), (15, 127, None)],			# open hat
 }
-PATTERNS = {'classic': PATTERN, 'album': ALBUM_PATTERN}
+# The sound lab's groove ('pattern = ghost', kits 52-54): the kick 4/4; ghost kicks on Drum 2 on 4, 7, 12,
+# 15, the accents (G) on 7 and 15 at 127, the others (g) at 52 (-7.8 dB); the noise tick on 2 and 4
+# (Snare); the hat layer of the generator's hat sty 1 den 7 lev -15 (bar 1; step 8 at 2:2) on track 6.
+# 'pattern = bed' (kit 55): the same with a short low note on Drum 2 on 4, 8, 12, 16, just before each
+# kick. No Drum 3 and no Cymbal: in kits 52-55 they hold rare events, which a one-bar loop cannot play.
+_LAB_HAT = [(2, 23, None), (3, 127, None), (4, 25, None), (5, 20, None), (6, 20, None), (7, 127, None),
+            (8, 20, 102), (10, 16, None), (11, 127, None), (12, 25, None), (14, 20, None), (15, 127, None)]
+GHOST_PATTERN = {
+    1: [(1, None, None), (5, None, None), (9, None, None), (13, None, None)],			# kick 4/4
+    2: [(4, 52, None), (7, 127, None), (12, 52, None), (15, 127, None)],				# ghost kicks
+    4: [(5, None, None), (13, None, None)],											# tick on 2 and 4
+    6: _LAB_HAT,
+}
+BED_PATTERN = {1: GHOST_PATTERN[1], 2: [(4, 127, None), (8, 127, None), (12, 127, None), (16, 127, None)],
+               4: GHOST_PATTERN[4], 6: _LAB_HAT}
+PATTERNS = {'classic': PATTERN, 'album': ALBUM_PATTERN, 'ghost': GHOST_PATTERN, 'bed': BED_PATTERN}
 DEMO_KEYS = {'bpm': (40, 255), 'shuffle': (0, 127)}
 VOICE_NAMES = {1: 'Drum 1', 2: 'Drum 2', 3: 'Drum 3', 4: 'Snare', 5: 'Cymbal', 6: 'Hihat'}
 
@@ -99,6 +119,10 @@ NAME = re.compile(r'^[A-Z0-9_]{1,8}$')
 KIT_BYTES = 268			# 8 name + 247 parameters + the 13-byte kit block of v0.4
 END_OF_SOUND = 247
 KIT_BLOCK_FIRST = 302	# PAR_REV_SIZE: the block's 7 settings follow its 6-byte header
+# PAR_VOICE_LFO1-6 and PAR_TARGET_LFO1-6 (Core/Inc/Parameters.h): with a renderer that refuses them as
+# --param, their byte in the boot kit's file (8 + the number)
+BYTE_PARAMS = dict([('voice_lfo%d' % n, 160 + n) for n in range(1, 7)] +
+                   [('target_lfo%d' % n, 166 + n) for n in range(1, 7)])
 
 
 def fail(what):
@@ -145,6 +169,20 @@ def read_spec(path):
 class Renderer:
     def __init__(self, path, work):
         self.path, self.work = path, work
+        self._lfo = None
+
+    def takes_lfo_params(self):
+        """whether this renderer sets voice_lfoN and target_lfoN by --param (the kits branch's does)"""
+        if self._lfo is None:
+            p = subprocess.run([self.path, '--card', self.seed('lfo-probe-seed'), '--out',
+                                os.path.join(self.work, 'lfo-probe.wav'), '--no-start', '--seconds', '0.1',
+                                '--param', 'voice_lfo1=1'], capture_output=True, text=True)
+            self._lfo = p.returncode == 0
+        return self._lfo
+
+    def byte_params(self, params):
+        """the parameters that go into the boot kit's bytes: none if the renderer takes them"""
+        return set() if self.takes_lfo_params() else {p for p, _ in params if p in BYTE_PARAMS}
 
     def run(self, args):
         p = subprocess.run([self.path] + args, capture_output=True, text=True)
@@ -208,7 +246,14 @@ def build_kit(r, kit, name, slot, params, out_dir):
     slot_file = one(os.path.join(seed, 'PROJ00', '%02d-*.SND' % slot))
     with open(slot_file, 'r+b') as f:
         f.write(name.encode().ljust(8, b'\0'))
-    lines = ['0ms mark begin'] + ['+20ms param %s=%d' % pv for pv in params]
+    byte = r.byte_params(params)
+    if byte:
+        with open(one(os.path.join(seed, 'PROJ00', '00-*.SND')), 'r+b') as f:		# kit 0, loaded at boot
+            for p, v in params:
+                if p in byte:
+                    f.seek(8 + BYTE_PARAMS[p])
+                    f.write(bytes([v]))
+    lines = ['0ms mark begin'] + ['+20ms param %s=%d' % pv for pv in params if pv[0] not in byte]
     lines += ['+100ms save-kit %d' % slot, '+200ms save-project 0', '+100ms mark saved']
     kept = r.keep(seed, kit + '-build', lines, 0.02 * len(params) + 1.5)
     made = one(os.path.join(kept, 'PROJ00', '%02d-*.SND' % slot))
@@ -223,6 +268,11 @@ def param_numbers(r, kit, params):
     """each parameter's number and its value after the menu's clamp, from the summaries of short
     renders with --param (at most 64 a render)"""
     numbers, values = {}, {}
+    byte = r.byte_params(params)
+    for p, v in params:
+        if p in byte:
+            numbers[p], values[p] = BYTE_PARAMS[p], v
+    params = [pv for pv in params if pv[0] not in byte]
     seed = r.seed(kit + '-lookup-seed')
     for k in range(0, len(params), 60):
         summary = os.path.join(r.work, '%s-lookup%d.json' % (kit, k))
