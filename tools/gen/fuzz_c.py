@@ -11,7 +11,8 @@ a destination track, a source (none, random, or the destination itself) and a cu
 with random lengths, velocities, conditions, p-locks, timing and fine nibbles, and a mask of
 the steps the last run wrote: none, random bits, some of the current track's steps, all, or a
 chain (the current track and its mask are what the prototype wrote in a run just before, with
-other settings). --masks gives every case a mask (but a chain whose first run wrote nothing)
+other settings). The driver also answers the settings that choosing the case's typ loads on that
+track and mask (patternGen_typeDefaults(), gen.py apply_type_defaults(), spec 11). --masks gives every case a mask (but a chain whose first run wrote nothing)
 and style 0 more often. The summary counts the cases with a mask and those where it applies (hat
 or prc style 0). The ctest id pgen_fuzz runs 3000 cases from seed 1. Exit status 1 on a
 difference; the first 5 are printed.
@@ -35,7 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gen  # noqa: E402
 
 STEP_BYTES = gen.NUM_STEPS * 7
-OUT = 1 + 1 + 8 + STEP_BYTES + 64 + 32 + 8
+OUT = 1 + 1 + 8 + STEP_BYTES + 64 + 32 + 8 + 9
 ALL = (1 << 64) - 1
 
 
@@ -137,21 +138,25 @@ def main(argv=None):
         c = dict(length=o[1], active=list(struct.unpack('<4H', o[2:10])), steps=o[10:458].hex(),
                  timing=o[458:522].hex(), fine=o[522:554].hex())
         c_own = struct.unpack('<Q', o[554:562])[0]
+        c_set = o[562:571]
         # the settings as the core sees its bytes: typ sty den sed unsigned, lev var not shf signed
         g_s = gen.Settings(typ=s.typ & 0xFF, sty=s.sty & 0xFF, den=s.den & 0xFF, lev=sv(s.lev & 0xFF),
                            var=sv(s.var & 0xFF), not_=sv(s.not_ & 0xFF), sed=s.sed & 0xFF, src=s.src,
                            shf=sv(s.shf & 0xFF))
+        g_set = settings_bytes(gen.apply_type_defaults(g_s, g_s.typ, cur, own))
         g = gen.generate(g_s, track, cur if has == 2 else src, cur, own)
         k = g_s.clamped()
         wrote = not (k.typ == gen.TYP_OFF or (k.typ == gen.TYP_PRP and k.src - 1 == track))
         masked += own != 0
         applies += own != 0 and k.typ in (gen.TYP_HAT, gen.TYP_PRC) and k.sty == 0
-        if g.to_json() == c and bool(o[0] & 2) == g.needs_vol and bool(o[0] & 1) == wrote and c_own == g.written:
+        if (g.to_json() == c and bool(o[0] & 2) == g.needs_vol and bool(o[0] & 1) == wrote and c_own == g.written
+                and c_set == g_set):
             continue
         bad += 1
         if bad <= 5:
-            print('DIFFERENT case %d: %s track %d has %d own %016x: return %d, C own %016x, gen.py own %016x'
-                  % (n, g_s, track, has, own, o[0], c_own, g.written))
+            print('DIFFERENT case %d: %s track %d has %d own %016x: return %d, C own %016x, gen.py own %016x,'
+                  ' type defaults C %s gen.py %s' % (n, g_s, track, has, own, o[0], c_own, g.written, list(c_set),
+                                                     list(g_set)))
             for key, v in g.to_json().items():
                 if v != c[key]:
                     print('   %s: gen.py %s, C %s' % (key, v, c[key]))

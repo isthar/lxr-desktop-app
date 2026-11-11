@@ -2921,7 +2921,7 @@ uint8_t seq_setGenParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 		const uint8_t typ = (value < PG_TYPES) ? value : PG_TYPE_OFF;
 		if(typ == g->typ)	// the same typ: no type values loaded (below: no change)
 			break;
-		patternGen_typeDefaults(typ, g);
+		patternGen_typeDefaults(typ, g, NULL, 0);
 		seq_loadGenParams(trackNr);	// the screens show the type's values
 		if(typ == PG_TYPE_OFF)
 			seq_genOwn[trackNr] = 0;	//LICHOMAT v0.8 (spec §11): accents edited at --- are the user's

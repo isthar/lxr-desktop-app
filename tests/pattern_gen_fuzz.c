@@ -8,7 +8,9 @@
  *   in   settings 9 (typ sty den lev var not sed src shf, src 0-6), track 1, has 1 (0 no source,
  *        1 the source below, 2 the destination itself as the source), source: length 1, on 8,
  *        steps 448; current track: length 1, on 8, steps 448, timing 64, fine 32; own 8 (spec §11)
- *   out  return 1, then the track: length 1, on 8, steps 448, timing 64, fine 32; own 8
+ *   out  return 1, then the track: length 1, on 8, steps 448, timing 64, fine 32; own 8; and the
+ *        settings 9 that patternGen_typeDefaults() loads for the case's typ on the current track and
+ *        own as they came in (spec §11: hat or prc on the user's accents starts at style 0)
  *
  * Copyright (C) 2026 Tomasz Krzywicki
  * SPDX-License-Identifier: GPL-3.0-only
@@ -23,7 +25,7 @@
 #include "Soundengine/Sequencer/PatternGen.h"
 
 enum { STEP_BYTES = PG_STEPS * 7, SRC = 1 + 8 + STEP_BYTES, TRACK = SRC + PG_STEPS + 32, IN = 9 + 2 + SRC + TRACK + 8,
-	OUT = 1 + TRACK + 8 };
+	OUT = 1 + TRACK + 8 + 9 };
 
 static const unsigned char *getOn(const unsigned char *p, uint16_t on[PG_BARS])
 {
@@ -62,6 +64,9 @@ int main(void)
 		uint64_t own = 0;
 		for (unsigned i = 0; i < 8u; i++)
 			own |= (uint64_t)p[i] << (8u * i);
+		PatternGenSettings d = s;	/* before the generator writes t */
+		const PatternGenSource cur = { t.step, { t.on[0], t.on[1], t.on[2], t.on[3] }, t.length };
+		patternGen_typeDefaults(s.typ, &d, &cur, own);
 		/* has 2: the source is the destination's own steps, in place */
 		const PatternGenSource self = { t.step, { t.on[0], t.on[1], t.on[2], t.on[3] }, t.length };
 		const uint8_t r = patternGen_generate(&s, track, (has == 0u) ? NULL : (has == 2u) ? &self : &src, &t, &own);
@@ -81,6 +86,9 @@ int main(void)
 		q += sizeof t.fine;
 		for (unsigned i = 0; i < 8u; i++)
 			*q++ = (unsigned char)(own >> (8u * i));
+		const uint8_t set[9] = { d.typ, d.sty, d.den, (uint8_t)d.lev, (uint8_t)d.var, (uint8_t)d.note, d.sed, d.src,
+			(uint8_t)d.shf };
+		memcpy(q, set, sizeof set);
 		if (fwrite(out, 1, OUT, stdout) != OUT)
 			return 1;
 	}

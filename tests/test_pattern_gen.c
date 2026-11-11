@@ -112,18 +112,18 @@ TEST(pgen_core_settings)
 	for (uint8_t typ = PG_TYPE_HAT; typ < PG_TYPES; typ++)
 	{
 		PatternGenSettings s = { PG_TYPE_OFF, 8, 16, -30, -4, 24, 42, 3, -5 };
-		patternGen_typeDefaults(typ, &s);
+		patternGen_typeDefaults(typ, &s, NULL, 0);
 		const int8_t *d = want[typ - 1];
 		const PatternGenSettings w = { typ, (uint8_t)d[0], (uint8_t)d[1], d[2], d[3], d[4], 42, 3, -5 };
 		ASSERT_EQ(memcmp(&s, &w, sizeof s), 0);
 	}
 	PatternGenSettings o = { PG_TYPE_SUB, 3, 9, -7, 2, 5, 42, 3, -5 }, o2 = o;	/* --- switches it off only */
-	patternGen_typeDefaults(PG_TYPE_OFF, &o);
+	patternGen_typeDefaults(PG_TYPE_OFF, &o, NULL, 0);
 	o2.typ = PG_TYPE_OFF;
 	ASSERT_EQ(memcmp(&o, &o2, sizeof o), 0);
-	patternGen_typeDefaults(PG_TYPES, &o);	/* no such type: nothing */
+	patternGen_typeDefaults(PG_TYPES, &o, NULL, 0);	/* no such type: nothing */
 	ASSERT_EQ(memcmp(&o, &o2, sizeof o), 0);
-	patternGen_typeDefaults(PG_TYPE_HAT, NULL);
+	patternGen_typeDefaults(PG_TYPE_HAT, NULL, NULL, 0);
 
 	/* gen.py Settings.clamped(): each field clamped into its range, sty into the type's styles (spec §8);
 	 * a typ past prp is --- (a stray byte must not wipe a track), its sty 0..8 */
@@ -174,6 +174,63 @@ TEST(pgen_core_settings)
 		ASSERT_EQ(patternGen_generate(&stray, 5, &src, &t, NULL), 0);
 	}
 	ASSERT_EQ(memcmp(&t, &u, sizeof t), 0);
+}
+
+/** patternGen_typeDefaults(typ) with the track (steps of t, on, length) and own loads style want, and
+ * everything else as the table */
+static void styOn(uint8_t typ, const PatternGenTrack *t, uint8_t length, uint64_t own, uint8_t want)
+{
+	PatternGenSettings s = { PG_TYPE_OFF, 8, 16, -30, -4, 24, 42, 3, -5 }, w = s;
+	const PatternGenSource cur = { t->step, { t->on[0], t->on[1], t->on[2], t->on[3] }, length };
+	patternGen_typeDefaults(typ, &s, &cur, own);
+	patternGen_typeDefaults(typ, &w, NULL, 0);
+	if (s.sty != want)
+		printf("typ %d length %d own %016llx vol %d: sty %d, not %d\n", typ, length, (unsigned long long)own,
+			t->step[6].volume, s.sty, want);
+	ASSERT_EQ(s.sty, want);
+	w.sty = want;
+	ASSERT_EQ(memcmp(&s, &w, sizeof s), 0);
+}
+
+TEST(pgen_core_type_defaults_on_a_track)
+{
+	/* §11 (gen.py apply_type_defaults() with a track): hat or prc on a track with an accent of the
+	 * user's, a step on at 64 or above as it plays outside own, load style 0 instead of 1, the rest the
+	 * table's; none, a ghost at 63, bit 7 alone, an accent past the length, the generator's own steps
+	 * keep style 1; sub, rar, prp, --- and a typ past prp do not change */
+	PatternGenTrack t;
+	cleared(&t);
+	static const uint8_t typs[2] = { PG_TYPE_HAT, PG_TYPE_PRC };
+	for (unsigned i = 0; i < 2u; i++)
+	{
+		const uint8_t typ = typs[i];
+		t.on[0] = 0;
+		styOn(typ, &t, 16, 0, 1);
+		t.on[0] = 1u << 6;	/* step 7 at 127 */
+		styOn(typ, &t, 16, 0, 0);
+		styOn(typ, &t, 0, 0, 0);	/* length 0 plays as 16 */
+		styOn(typ, &t, 16, 1u << 6, 1);	/* the generator's own */
+		styOn(typ, &t, 16, ((uint64_t)1 << 22) | ((uint64_t)1 << 38), 0);	/* bits past the length */
+		styOn(typ, &t, 6, 0, 1);	/* past the length: does not play */
+		t.step[6].volume = 63;
+		styOn(typ, &t, 16, 0, 1);
+		t.step[6].volume = 0x80u | 40u;	/* the legacy active flag: 40 */
+		styOn(typ, &t, 16, 0, 1);
+		t.step[6].volume = 64;
+		styOn(typ, &t, 16, 0, 0);
+		t.step[6].volume = 127;
+	}
+	PatternGenSettings s = { PG_TYPE_OFF, 4, 9, -1, 2, 3, 7, 1, 2 };
+	const PatternGenSource cur = { t.step, { t.on[0], 0, 0, 0 }, 16 };
+	for (unsigned typ = 0; typ <= 255u; typ++)
+	{
+		if ((typ == PG_TYPE_HAT) || (typ == PG_TYPE_PRC))
+			continue;
+		PatternGenSettings a = s, b = s;
+		patternGen_typeDefaults((uint8_t)typ, &a, &cur, 0);
+		patternGen_typeDefaults((uint8_t)typ, &b, NULL, 0);
+		ASSERT_EQ(memcmp(&a, &b, sizeof a), 0);
+	}
 }
 
 TEST(pgen_core_hat_layout)

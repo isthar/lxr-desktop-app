@@ -90,7 +90,21 @@ PatternGenSettings patternGen_checked(PatternGenSettings s)
 	return s;
 }
 
-void patternGen_typeDefaults(uint8_t typ, PatternGenSettings *s)
+/** a raw length as it plays: 0 as 16, above 64 as 64 */
+static unsigned pg_len(uint8_t length) { return (length == 0u) ? 16u : (length > PG_STEPS) ? (unsigned)PG_STEPS : length; }
+
+/* LICHOMAT v0.8 §11 (gen.py user_accents()): cur, as it plays, has a step on at 64 or above that own
+ * (bit j step j as stored) leaves out: the steps that play are 0 .. length - 1, repeated */
+static int pg_userAccents(const PatternGenSource *cur, uint64_t own)
+{
+	const unsigned len = pg_len(cur->length);
+	for (unsigned j = 0; j < len; j++)
+		if (((cur->on[j >> 4] >> (j & 15u)) & 1u) && !((own >> j) & 1u) && ((cur->step[j].volume & 0x7Fu) >= PG_ACCENT_MIN))
+			return 1;
+	return 0;
+}
+
+void patternGen_typeDefaults(uint8_t typ, PatternGenSettings *s, const PatternGenSource *cur, uint64_t own)
 {
 	if (!s || (typ >= PG_TYPES))
 		return;
@@ -99,6 +113,8 @@ void patternGen_typeDefaults(uint8_t typ, PatternGenSettings *s)
 		return;
 	const int8_t *d = pg_defaults[typ - 1u];
 	s->sty = (uint8_t)d[0]; s->den = (uint8_t)d[1]; s->lev = d[2]; s->var = d[3]; s->note = d[4];
+	if (((typ == PG_TYPE_HAT) || (typ == PG_TYPE_PRC)) && cur && pg_userAccents(cur, own))
+		s->sty = 0;	/* LICHOMAT v0.8 §11: the user's accents: style 0 keeps them */
 }
 
 /* spec §5 (gen.py rank()): the places p < n with w[p] > 0 and bit p of allowed into c->order, the
@@ -132,15 +148,14 @@ static unsigned pg_rank(pg_ctx_t *c, const uint16_t *key, const uint8_t *w, uint
 }
 
 static int pg_isOn(const uint16_t *on, unsigned s) { return (on[s >> 4] >> (s & 15u)) & 1u; }
-/** a raw length as it plays: 0 as 16, above 64 as 64 */
-static unsigned pg_len(uint8_t length) { return (length == 0u) ? 16u : (length > PG_STEPS) ? (unsigned)PG_STEPS : length; }
 static uint8_t pg_noteOf(int n) { return (uint8_t)pg_clamp(n, 0, 127); }
 /** step s's fine nibble as stored (a raw copy keeps a value stepFine_get() reads as 0) */
 static uint8_t pg_fine(const uint8_t *fine, unsigned s) { return (uint8_t)((fine[s >> 1] >> ((s & 1u) * 4u)) & 0x0Fu); }
 
 /* gen.py's _Out and cur.played(): the accents (on, vel >= 64, not of mine: LICHOMAT v0.8 §11, the steps
  * the last run wrote, bit j step j as stored) of the current track as it plays (a track shorter than 64
- * steps repeated to 64, spec §8) bar by bar into c->acc; then every step clean and off (spec §3, §8:
+ * steps repeated to 64, spec §8) bar by bar into c->acc (E10.17: on a track shortened after the run, bit
+ * j still masks step j wherever it plays); then every step clean and off (spec §3, §8:
  * vel 127, prob 100, note 60 + not, no p-lock, flam 0, shift 7, fine 0) and the length 64; with keep
  * the accents stay as they play (gen.py _Out.keep: the step, its timing and fine) */
 static void pg_frame(pg_ctx_t *c, PatternGenTrack *io, int keep, uint64_t mine)

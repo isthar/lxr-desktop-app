@@ -85,8 +85,10 @@ uint8_t patternGen_generate(const PatternGenSettings *s, uint8_t track, const Pa
  * stray byte never wipes a track; patternGen_generate() applies it itself */
 PatternGenSettings patternGen_checked(PatternGenSettings s);
 /** gen.py's apply_type_defaults(): typ into s and the type's sty den lev var not (spec §3); typ ---
- * sets typ only, a typ past prp changes nothing */
-void patternGen_typeDefaults(uint8_t typ, PatternGenSettings *s);
+ * sets typ only, a typ past prp changes nothing. LICHOMAT v0.8 spec §11: hat or prc on cur (the track
+ * now; NULL none) with an accent of the user's, a step on at 64 or above as it plays that own (as in
+ * patternGen_generate()) leaves out, load style 0 instead of 1 */
+void patternGen_typeDefaults(uint8_t typ, PatternGenSettings *s, const PatternGenSource *cur, uint64_t own);
 /** round(127 x 10^(dB/20)), at least 1; dB clamped to -30..0 (spec §5, §8) */
 uint8_t patternGen_dbVel(int db);
 /** the random generator of spec §5, for the host tests: the start state from the bytes sed typ sty
