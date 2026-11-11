@@ -519,6 +519,39 @@ TEST(pgen_core_prc_bar2_moves_the_top_accent)
 	}
 }
 
+TEST(pgen_core_prc_style0_bar_by_bar)
+{
+	/* §9: style 0 keeps each bar's own accents as the track plays, in all 4 bars (bars 3-4 are no
+	 * copies of bars 1-2), and puts den 6's 3 ghosts before them, off the kick 1 5 9 13: accents on
+	 * 3 11 | 7 | 15 | 3 10, ghosts on 2 10 | 6 | 14 | 2 (10's pickup 9 is a kick step) */
+	static const uint16_t acc[PG_BARS] = { (1u << 2) | (1u << 10), 1u << 6, 1u << 14, (1u << 2) | (1u << 9) };
+	static const uint16_t ghost[PG_BARS] = { (1u << 1) | (1u << 9), 1u << 5, 1u << 13, 1u << 1 };
+	PatternGenTrack t;
+	cleared(&t);
+	t.length = 64;
+	for (unsigned b = 0; b < PG_BARS; b++)
+	{
+		t.on[b] = acc[b];
+		for (unsigned p = 0; p < 16u; p++)
+			t.step[16u * b + p] = (Step){ (uint8_t)(100u + b), 100, 60, 30, (uint8_t)(16u * b + p), 0xFF, 0 };
+	}
+	const PatternGenSettings s = { PG_TYPE_PRC, 0, 6, -13, 0, 0, 4, 0, 0 };
+	ASSERT_EQ(patternGen_generate(&s, 2, NULL, &t), PG_WROTE | PG_SOFT);
+	for (unsigned b = 0; b < PG_BARS; b++)
+	{
+		ASSERT_EQ(t.on[b], acc[b] | ghost[b]);
+		for (unsigned p = 0; p < 16u; p++)
+			if ((acc[b] >> p) & 1u)
+			{
+				ASSERT_EQ(t.step[16u * b + p].volume, 100u + b); ASSERT_EQ(t.step[16u * b + p].param1Val, 16u * b + p);
+			}
+			else if ((ghost[b] >> p) & 1u)
+			{
+				ASSERT_TRUE(t.step[16u * b + p].volume < 64); ASSERT_EQ(t.step[16u * b + p].param1Nr, 0xFF);
+			}
+	}
+}
+
 TEST(pgen_core_prc_no_pickup_before_step_1)
 {
 	/* §9: an accent on step 1 of a bar gets no ghost (before, step 16 of the same bar got it). With the

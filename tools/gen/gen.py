@@ -13,6 +13,8 @@ the spec leaves open are marked "CHOICE" where they are decided:
 - hat and prc sty 0 on a track with no accent as it plays (no step at vel >= 64) is sty 1:
   its accents and weights, while the seed keeps sty 0 (spec 9);
 - hat sty 0: the free places are found bar by bar, around that bar's accents;
+- prc sty 0: each bar keeps its own accents as they play, in all 4 bars (bars 3-4 are not
+  copies of bars 1-2), and gets its ghosts from them (spec 9);
 - hat var +n: the next n places of the ranking (2:2); var -n: the last n of the den (1:2);
 - sub: "the last hit before a kick" is the last hit after the kick before it; sty 8 is
   one bar from the seed, repeated, and den keeps the best ranked hits (weights 1);
@@ -511,7 +513,7 @@ def _sub(s: Settings, out: _Out, draws, figures, kick: frozenset):
 
 def _prc(s: Settings, out: _Out, draws, offsets, var_draws, kick: frozenset, view: Track):
     weights = PRC_WEIGHTS[s.sty]
-    if s.sty == 0:
+    if s.sty == 0:                               # spec 9: each bar's own accents as they play, all 4 bars
         bar_acc = [_accents(view, b) for b in range(NUM_BARS)]
         for b in range(NUM_BARS):
             for p in bar_acc[b]:

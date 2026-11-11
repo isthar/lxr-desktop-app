@@ -583,6 +583,25 @@ class Prc(unittest.TestCase):
         self.assertFalse(all(generate(S('prc', sty=0, sed=sed), 2, KICK) == generate(S('prc', sty=1, sed=sed), 2, KICK)
                              for sed in range(10)))
 
+    def test_sty0_each_bar_its_own_accents(self):
+        # spec 9: sty 0 takes each bar's accents as they play, in all 4 bars: bars 3-4 keep their
+        # own (not copies of bars 1-2) and their ghosts stand before them
+        cur = user_track()
+        acc = [{p for p in range(BAR) if cur.active[b * BAR + p] and cur.steps[b * BAR + p].vol >= 64}
+               for b in range(4)]
+        self.assertNotEqual(acc[2], acc[0])
+        self.assertNotEqual(acc[3], acc[1])
+        for den in (1, 3, 5, 8):
+            for sed in SEEDS:
+                out = generate(S('prc', sty=0, den=den, var=0, sed=sed), 2, KICK, cur)
+                for b in range(4):
+                    for p in acc[b]:
+                        self.assertEqual(out.steps[b * BAR + p], cur.steps[b * BAR + p])
+                    ghosts = bar_hits(out, b) - acc[b]
+                    places = {p - 1 for p in acc[b] if p > 0} - acc[b] - gen.QUARTERS
+                    self.assertTrue(ghosts <= places, (den, sed, b))
+                    self.assertEqual(len(ghosts), min(3, (den + 1) // 2, len(places)))
+
     def test_sty0_keeps_the_accents(self):
         cur = user_track()
         for var in (-2, 0, 3):

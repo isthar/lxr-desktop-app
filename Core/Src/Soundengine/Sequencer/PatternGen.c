@@ -304,10 +304,11 @@ static void pg_sub(pg_ctx_t *c, const PatternGenSettings *s, uint16_t kick, Patt
 
 /* spec §4.3, §8, §9 (gen.py _prc()): bar 1's den accents by rank off the kick, bar 2 with bar 1's
  * top-ranked accent moved to the best ranked free place of keys 16-31 off the kick (§9: no draw for
- * it, so den never changes which accent moves), bars 3-4 as 1-2 (style 0: the current track's,
- * which pg_frame() kept); ghosts on the step before an accent in its bar (none before step 1, §9),
- * off accents and kick, ranked by keys 0-15, at lev + the offset of the place in bar 1 or 2; var +n: n at 2:2 in bar 4, its own
- * keys (draw 3) and steps 13-16 x4; var -n: n of bar 4's accents at 1:2, not on style 0 */
+ * it, so den never changes which accent moves), bars 3-4 as 1-2 (style 0: each bar's own accents as
+ * the current track plays, in all 4 bars, which pg_frame() kept, §9); ghosts on the step before an
+ * accent in its bar (none before step 1, §9), off accents and kick, ranked by keys 0-15, at lev + the
+ * offset of the place in bar 1 or 2; var +n: n at 2:2 in bar 4, its own keys (draw 3) and steps 13-16
+ * x4; var -n: n of bar 4's accents at 1:2, not on style 0 */
 static void pg_prc(pg_ctx_t *c, const PatternGenSettings *s, uint16_t kick, PatternGenTrack *io)
 {
 	/* gen.py PRC_WEIGHTS by the 16th of the quarter; style 3: 8 on steps 4 7 12 15, else 1 */
