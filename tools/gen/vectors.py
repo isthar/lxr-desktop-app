@@ -54,6 +54,11 @@ def kick_odd():
     return Track.from_pattern('X..X..X...X.X...')
 
 
+def kick16():
+    """a 4/4 kick with one more on step 16, the first place var +n takes on sub"""
+    return Track.from_pattern('X...X...X...X..X')
+
+
 def kick64():
     """a 64-step kick: 4/4 with an extra kick on step 15 of bar 4 (only bar 1 counts)"""
     t = Track.from_pattern('X...X...X...X...' * 3 + 'X...X...X...X.X.')
@@ -225,6 +230,11 @@ def cases():
             add('sub sty%d var%+d' % (sty, var), 'sub', 1, inp=kick44(), sty=sty, var=var, sed=5)
     add('sub sty1 lev0 var-2', 'sub', 1, inp=kick44(), sty=1, lev=0, var=-2)
     add('sub sty1 var+3 kick odd', 'sub', 1, inp=kick_odd(), sty=1, var=3)
+    # the whole-branch review: var -n leaves out the ghosts the kick dropped (kick odd drops 4), var +n
+    # never puts a ghost on the kick, also not on the steps it takes first (16 here)
+    add('sub sty1 var-2 kick odd', 'sub', 1, inp=kick_odd(), sty=1, var=-2)
+    for var in range(1, 5):
+        add('sub sty1 var+%d kick16' % var, 'sub', 1, inp=kick16(), sty=1, var=var)
     add('sub sty5 src on itself', 'sub', 1, inp=kick_odd(), cur=kick_odd(), sty=5, src=2)
     add('sub sty3 src empty', 'sub', 1, inp=None, sty=3)
     add('sub sty1 kick64', 'sub', 1, inp=kick64(), sty=1)
