@@ -27,11 +27,13 @@
 # 0.6) is set against that kick. A fader and vol are the same gain (after the drums' drive,
 # before the Cymbal's distortion), so vol1 and vol2 are A9's vol x its fader^2 / 0.1225 x
 # 0.35. A9's bed note needs 3.6 times the kick's vol (123 at 0.6 against 100 at 0.35), so
-# with vol2 127 the kick is vol1 35: 9 dB under PROSTO's 100 against the hat (vol6 127, as
-# in PROSTO). Measured with all six faders at 1: A9's voices within 0.1 dB of the recipe
-# relative to the kick, the bed 8.2 dB under the kick as in A9, the hat 8.9 dB further under
-# it than in A9, the peak on out 1 -6.6 dBFS (-5.5 with the events, -4.8 in the demo below,
-# with the tick).
+# with vol2 127 the kick is vol1 35 (PROSTO's 100). The hat and the snare, which PROSTO
+# balances against the kick, come down with it: vol6 52 (127 x 35 / 86), so the hat sits as
+# far under the kick as in ECHO (42.1 dB in RMS against ECHO's 42.0, both dry, measured),
+# and vol4 51 (C2's 124 x 52 / 127). Measured with all six faders at 1: A9's voices within
+# 0.1 dB of the recipe relative to the kick, the bed 8.2 dB under the kick as in A9, the hat
+# 16.7 dB further under it than in A9, the peak on out 1 -6.6 dBFS (-5.5 with the events,
+# -6.2 in the demo below).
 # The reverb's duck follows the kick's peak (the depth x twice the peak, at most all), so
 # the louder kick would duck the reverb about 3 times deeper than in A9: rev_duck_depth 44
 # (127 x 12.25 / 35) keeps A9's duck and with it the rumble's shape. The downlifter and the
@@ -129,8 +131,8 @@ mod_wave_drum3 = 0
 
 # Snare: a placeholder, C2 of the sound lab's set C (a noise tick like a shaker: noise only
 # through a band at about 5 kHz, a soft 16 ms attack, 70 ms), until the owner picks from set
-# C, which is not judged yet. Dry: it needs no FX slot. vol4 124: C2's level to the hat
-# (both at the fader 1 in C2)
+# C, which is not judged yet. Dry: it needs no FX slot. vol4 51: C2's level to the hat
+# (both at the fader 1 in C2), with the hat at 52 (124 x 52 / 127)
 osc_wave_snare = 0
 mix1 = 127            # noise only
 noise_freq1 = 127
@@ -146,7 +148,7 @@ trans4_vol = 0
 snare_distortion = 0
 volume_mod_on_off4 = 1
 pan4 = 56
-vol4 = 124
+vol4 = 51
 
 # Cymbal: the stutter (B5): a very short noise burst through a band at the top, a little
 # distortion; the generator's rar sty 1 den 4 plays it as a hit on 1 and four flams of 4 on
@@ -178,7 +180,8 @@ audio_out5 = 6        # FX
 amount_lfo5 = 0       # no LFO on the stutter
 
 # Hihat: PROSTO's. Noise through HP 99 (a centroid of about 8.3 kHz), short; with the
-# generator's hat (sty 1 den 7 lev -15) the ghosts and the accents of the sound lab
+# generator's hat (sty 1 den 7 lev -15) the ghosts and the accents of the sound lab.
+# vol6 52: PROSTO's 127 at this kit's kick (127 x 35 / 86, as against ECHO's vol1 86)
 wave1_hh = 4          # Noi
 mod_osc_gain1 = 0
 mod_osc_gain2 = 0
@@ -192,7 +195,7 @@ velod6_open = 12
 vol_slope6 = 12
 hat_distortion = 0
 volume_mod_on_off6 = 1
-vol6 = 127
+vol6 = 52
 pan6 = 64
 
 # FX: A9's reverb, the rumble. The slot off; a dark reverb (size 110, decay 76, tone 0)

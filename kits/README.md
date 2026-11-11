@@ -450,16 +450,18 @@ zrobiony sposobem laboratorium: PROSTO jako kit 0, edycje przepisu z poziomami o
   W `TLO` downlifter i jąkanie grają w pogłosie A9, nie w swoim: predelay, wybrzmienie i barwa B3
   i B5 przesunęłyby bed, więc ich `vol` jest zmierzony od nowa, ok. 17 dB pod groove `TLO`.
 
-**Poziomy.** Kity trzymają proporcję stopy do hihatu z PROSTO (hihat `vol6` 127 jak w PROSTO), a resztę
+**Poziomy.** Kity trzymają proporcję stopy do hihatu z PROSTO (hihat `vol6` 127 jak w PROSTO, w `TLO` 52), a resztę
 głosów względem stopy tak jak przepisy. Laboratorium ściszyło swoją stopę (suwak 0,35, wzmocnienie =
 suwak²) tylko po to, żeby było słychać resztę; ghost kick (suwak 0,4), bed A9 (0,6) i zdarzenia
 (0,09–0,24) są ustawione względem tej cichej stopy. Kit suwaków nie zapisuje. Suwak i `vol` to to
 samo wzmocnienie (za przesterem bębnów, przed przesterem talerza), więc `vol` kitu to `vol` przepisu
 × suwak² / 0,35² × (`vol1` / 100), sprawdzony pomiarem. Stopa jest tak wysoko, jak pozwala Drum 2 przy
 `vol2` 127: w `ECHO`, `FALA` i `RYK` ghost kick potrzebuje ok. 1,5 raza `vol` stopy, więc `vol1` 86
-(PROSTO 100, 1,3 dB głośniej); w `TLO` nuta bedu A9 potrzebuje 3,6 raza, więc `vol1` 35, 9 dB ciszej
-niż w PROSTO względem hihatu. Szczyt na wyjściu 1: od −3,6 do −6,6 dBFS (PROSTO −2,7); −3,6 i −4,8
-to dema `demo/*.wav` z tykiem werbla na 2 i 4.
+(PROSTO 100, 1,3 dB głośniej); w `TLO` nuta bedu A9 potrzebuje 3,6 raza, więc `vol1` 35, a hihat
+i werbel, które PROSTO ustawia względem stopy, schodzą razem z nią: `vol6` 52 (127 × 35 / 86) i `vol4`
+51. Hihat jest wtedy pod stopą tak samo jak w `ECHO`: 42,1 dB RMS wobec 42,0 dB (oba na
+sucho, zmierzone). Szczyt na wyjściu 1: od −3,6 do −6,6 dBFS (PROSTO −2,7); −3,6 to dema
+`demo/echo.wav`, `fala.wav` i `ryk.wav` z tykiem werbla na 2 i 4.
 
 Dwa ustawienia idą za poziomem, a nie za `vol`. **Przyciszanie pogłosu** zależy od szczytu stopy
 (głębokość × dwa razy szczyt, najwyżej całość): głośniejsza stopa przyciszałaby pogłos 7 razy
@@ -479,9 +481,10 @@ sam `vol5` zmienia też proporcję drżenia (LFO dodaje do `vol` stałą głębo
 | `ECHO` | 86 | 127 | 29 | 124 | 31 | 127 | `amount_lfo5` 21 (44), `cymbal_distortion` 9 (100), `ddp` 18 (127) |
 | `FALA` | 86 | 127 | 12 | 124 | 42 | 127 | `cymbal_distortion` 5 (40), `ddp` 18 (127) |
 | `RYK` | 86 | 127 | 29 | 124 | 26 | 127 | `amount_lfo5` 18 (44), `cymbal_distortion` 9 (100), `ddp` 18 (127) |
-| `TLO` | 35 | 127 | 14 | 124 | 38 | 127 | `cymbal_distortion` 11 (60), `ddp` 44 (127) |
+| `TLO` | 35 | 127 | 14 | 51 | 38 | 52 | `cymbal_distortion` 11 (60), `ddp` 44 (127) |
 
-Werbel (C2) zostaje przy `vol4` 124: tyle miał w C2 względem hihatu, obaj na suwaku 1.
+Werbel (C2) zostaje przy `vol4` 124: tyle miał w C2 względem hihatu, obaj na suwaku 1; w `TLO`, gdzie
+hihat ma 52, werbel ma 51 (124 × 52 / 127).
 
 **Wynik** (emulator v0.7, 143 BPM, wyjście 1, wszystkie suwaki na 1). Demo A: przepis, z którego kit
 powstał, z jego ścieżkami, zdarzeniami i długością, zagrany z pliku kitu, obok ten sam przepis
@@ -499,7 +502,7 @@ Wyzwolenia zgadzają się z zapisanymi krokami we wszystkich demach.
 | `ECHO` | ryk −0,09 dB | −16,8 dB | 4,9 / 4,9 dB (5,0) | 17,4, 17,1 dB (17,0, 17,1) | 17,5, 17,2 dB | −5,0 / −4,8 dBFS |
 | `FALA` | riser +0,19 dB | −17,0 dB | 4,9 / 4,9 dB (5,0) | 17,0, 17,2, 16,7, 16,8 dB (17,1, 17,3, 16,9, 17,0) | te same | −5,0 / −5,0 dBFS |
 | `RYK` | ryk +0,09 dB | −16,8 dB | 4,9 / 4,9 dB (5,0) | 17,3, 17,0 dB (17,4, 17,0) | 17,3, 17,1 dB | −5,1 / −4,8 dBFS |
-| `TLO` | bed +0,02 dB | −8,9 dB | bez ghost kicka; bed 8,2 dB pod stopą (8,2) | A9 nie ma zdarzeń | 16,9, 17,1, 18,0, 17,1 dB | −6,6 / −5,5 dBFS |
+| `TLO` | bed +0,02 dB | −16,7 dB | bez ghost kicka; bed 8,2 dB pod stopą (8,2) | A9 nie ma zdarzeń | 16,9, 17,1, 18,0, 17,1 dB | −6,6 / −5,5 dBFS |
 
 W `TLO` downlifter taktu 9 wchodzi w pogłos zamrożony przez jąkanie (B5) i dlatego jest 18,0 dB pod
 groove.
