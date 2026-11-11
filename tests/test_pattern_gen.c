@@ -800,7 +800,6 @@ typedef struct { uint8_t length; uint16_t on[PG_BARS]; uint8_t step[PG_STEPS * s
 	uint8_t fine[STEP_FINE_BYTES]; } pgv_track_t;
 typedef struct { const char *name; PatternGenSettings set; uint8_t track, vol; int16_t src, cur, out; } pgv_t;
 #include "pattern_gen_vectors.h"
-#define PGV_TYPES_DONE	PG_TYPES	/* every type (Task 3) */
 
 TEST(pgen_vectors_vel_table)
 {
@@ -882,8 +881,6 @@ TEST(pgen_vectors_byte_for_byte)
 	{
 		const pgv_t *x = &PGV[v];
 		PatternGenTrack src, io, want;
-		if (x->set.typ >= PGV_TYPES_DONE)
-			continue;
 		pgvLoad(x->src, &src); pgvLoad(x->cur, &io); pgvLoad(x->out, &want);
 		const PatternGenSource s = { src.step, { src.on[0], src.on[1], src.on[2], src.on[3] }, src.length };
 		const uint8_t got = patternGen_generate(&x->set, x->track, &s, &io);
