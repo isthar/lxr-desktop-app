@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 17:25",
+    "updated": "2026-11-11 20:38",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; teraz E10.3, generator w firmware (gałąź v0.8)",
     "branch": "timing-core",
-    "head": "b4cad5e",
-    "next": "U mnie: grupa C v0.8 (menu i spięcie generatora), laboratorium brzmień (sub, tło, perkusja), potem nowe style suba i poziom rzadkich uderzeń w generatorze. Czeka na Ciebie: wybór brzmień z laboratorium (gdy będą), H12 na LXR (30 min), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
-    "updated_at": "2026-11-11T17:25:00+01:00",
-    "now": "Czekam na Twój wybór z laboratorium brzmień; w tle poprawki menu v0.8 (E10.12)"
+    "head": "c272126",
+    "next": "Po E10.16: przykłady ghost kicków do odsłuchu, potem testy w emulatorze (E10.13–E10.14)",
+    "updated_at": "2026-11-11T20:38:00+01:00",
+    "now": "Ghost kicki w generatorze (E10.16) w tle; czekam też na Twój wybór z laboratorium brzmień"
   },
   "epics": [
     {
@@ -1282,14 +1282,14 @@
     {
       "id": "E10.11",
       "epic": "E10",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Plan v0.8, zadanie 4: spięcie z sekwencerem: ustawienia na ścieżkę, przeliczanie, zapis kroków przy zablokowanych przerwaniach, autozapis, und",
       "updated": "2026-11-11"
     },
     {
       "id": "E10.12",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Plan v0.8, zadanie 5: menu (podstrony generatora, enkoder dalej za sav), włączanie vol, renderer i test V08_ui; drugi przegląd",
       "updated": "2026-11-11"
     },
@@ -1317,7 +1317,7 @@
     {
       "id": "E10.16",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Sub jako ghost kicki (projekt §10): nowe style w prototypie, wektorach i rdzeniu C, var jak w prc, przykłady do odsłuchu",
       "updated": "2026-11-11"
     }
@@ -5180,6 +5180,11 @@
       "n": 687,
       "at": "2026-11-11 17:25",
       "text": "E10.4: laboratorium brzmień na stronie odsłuchu (wersja 16, sekcja „Ghost kicki, tło, perkusja”, 20 próbek, przepisy w scratchpadzie soundlab/index.json). A1–A7 to ghost kicki na Drum 2 w Twoich figurach, A8–A9 bed dla porównania. B1–B7 to rzadkie uderzenia ok. 17 dB pod groovem w pogłosie: ryk z zamrożonym ogonem, riser, downlifter, boom, jąkanie, mieszany, ryk tylko w pogłosie. C1–C4 to perkusja zamiast rimshota: drewno FM, szum, metal, dubowy rim. Braki obecnych głosów (ważne dla E10.5–E10.6 po H12): ducking pogłosu zależy od poziomu stopy (przy cichej stopie tylko ok. 2 dB zamiast zmierzonych 4–9); jeden wspólny pogłos bez wysyłek per głos; predelay najwyżej 92 ms; obwiednia Drum ma jeden kształt na atak i wybrzmienie, bez hold i sustain; brak obwiedni filtra (riser przez LFO, nie zsynchronizowany z taktem); LFO co 64 próbki (ryk 40 Hz schodkowy); freeze bez p-locka"
+    },
+    {
+      "n": 688,
+      "at": "2026-11-11 20:38",
+      "text": "E10.11, E10.12: spięcie z sekwencerem i menu generatora zrobione, z poprawkami po przeglądzie jakości (sav/und tylko w trybie edycji, vol bez zapisu jako automatyka, lev ze znakiem, wyścig przy zmianie patternu w obu połówkach, ta sama wartość na nowym patternie generuje). Bramki: host 138/138 (też ASan), emulator 358/358, pod ASan 329/329, RAM 470 268 / 471 032 B. E10.16: szczegóły ghost kicków domknięte w projekcie §10 (c272126); realizacja ruszyła na v0.8. Przy okazji dokumenty zwracają się do Ciebie bez form rodzajowych."
     }
   ]
 }
