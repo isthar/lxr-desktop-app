@@ -25,7 +25,7 @@ static const uint8_t pg_velOfDb[1 - PG_LEV_MIN] = {
 
 /* spec §3: sty den lev var not of hat, sub, prc, rar, prp (gen.py TYPE_DEFAULTS) */
 static const int8_t pg_defaults[PG_TYPES - 1][5] = {
-	{ 1, 7, -15, 1, 0 }, { 1, 0, -3, 0, -2 }, { 1, 3, -13, 1, 0 }, { 1, 2, 0, 0, 0 }, { 1, 4, -15, 0, 0 } };
+	{ 1, 7, -15, 1, 0 }, { 1, 3, -8, 0, 0 }, { 1, 3, -13, 1, 0 }, { 1, 2, 0, 0, 0 }, { 1, 4, -15, 0, 0 } };
 
 /* the styles of each type (spec §4); patternGen_checked() clamps sty into them (spec §8, gen.py STY_RANGE) */
 static const uint8_t pg_styMin[PG_TYPES] = { 0, 0, 1, 0, 1, 1 };
@@ -244,65 +244,86 @@ static uint16_t pg_kick(const PatternGenSettings *s, uint8_t track, const Patter
 	return k ? k : 0x1111u;
 }
 
-/* spec §4.2: the bar of styles 1-7 (bit p is step p + 1) and style 7's second bar (gen.py SUB_BARS);
- * style 8's quarter figures ...x ..xx .xxx ..x. .... and their weights (gen.py SUB_FIGURES) */
-static const uint16_t pg_subBar[8] = { 0, 0x8888u, 0xCCCCu, 0xEEEEu, 0x4444u, 0x4C4Cu, 0x40C0u, 0x0CCCu };
-#define PG_SUB_BAR_B	0xECCCu
-static const uint8_t pg_subFig[5] = { 0x8, 0xC, 0xE, 0x4, 0x0 }, pg_subFigW[5] = { 3, 4, 1, 2, 1 };
-#define PG_SUB_FIG_TOTAL	(3u + 4u + 1u + 2u + 1u)	/* the sum of pg_subFigW (gen.py SUB_FIGURE_TOTAL) */
+/* spec §10 (gen.py SUB_BARS): the ghosts and the accents of styles 1-7 (bit p is step p + 1), style 7's
+ * second bar B last; an accent is a hit too, so pg_subAcc is a subset of pg_subAll */
+static const uint16_t pg_subAll[9] = { 0, 0x4848u, 0x4800u, 0x4040u, 0x0808u, 0x8080u, 0xC8C8u, 0x4848u, 0xCA48u };
+static const uint16_t pg_subAcc[9] = { 0, 0x4040u, 0x4000u, 0x4000u, 0x0800u, 0x8000u, 0xC000u, 0x4040u, 0xC040u };
+#define PG_SUB_B	8u	/* the index of style 7's bar B */
+/* gen.py SUB_WEIGHTS: steps 4 7 12 15 x4, 8 16 x2, 10 14 x1, the dictionary of sty 8 and of var +n */
+static const uint8_t pg_subW[16] = { 0, 0, 0, 4, 0, 0, 4, 2, 0, 1, 0, 4, 0, 1, 4, 2 };
+#define PG_SUB_DICT	0xEAC8u	/* the places of pg_subW > 0 */
+#define PG_SUB_MAX_DEN	8u	/* sty 8: den 0 and 9-16 are all 8 places */
 
-/* spec §4.2, §8 (gen.py _sub()): the style's bars off the kick (style 8: one bar of figures, draw 3,
- * den keeps its best ranked hits); the last hit after each kick before the next at 127, the others
- * at lev; var's second note on quarters 2 and 4 */
+/* spec §10 (gen.py _sub()): ghost kicks. Draw 3: sty 8's 16 keys (key[16..31]), then always var's 16
+ * (key[32..47]), so var never moves sty 8. Styles 1-7 are a bar (7: A B A B); style 8 is the den best
+ * ranked places off the kick, the last of them the accent; a hit on a kick step is dropped, an
+ * accent does not move. var +n in bar 4: steps 16, 14, 10 first, then the free places of the
+ * dictionary by var's keys x pg_subW, off the kick, n of them at 2:2; var -n: n ghosts of bar 4
+ * (never an accent), by var's keys, at 1:2 */
 static void pg_sub(pg_ctx_t *c, const PatternGenSettings *s, uint16_t kick, PatternGenTrack *io)
 {
-	uint16_t bar[2];
+	uint16_t all[2], acc[2];
 	if (s->sty == 8u)
 	{
+		for (unsigned p = 0; p < 16u; p++)
+			c->key[16u + p] = (uint16_t)pg_rand(c, 65536u);
+		const unsigned n = ((s->den == 0u) || (s->den > PG_SUB_MAX_DEN)) ? PG_SUB_MAX_DEN : s->den;
+		const unsigned m = pg_rank(c, c->key + 16, pg_subW, (uint16_t)~kick, 16);
 		uint16_t h = 0;
-		for (unsigned q = 0; q < 4u; q++)
-		{
-			unsigned r = pg_rand(c, PG_SUB_FIG_TOTAL), f = 0;
-			while (r >= pg_subFigW[f])
-				r -= pg_subFigW[f++];
-			h |= (uint16_t)(pg_subFig[f] << (4u * q));
-		}
-		h &= (uint16_t)~kick;
-		if (s->den)
-		{
-			const unsigned m = pg_rank(c, c->key, pg_one, h, 16);
-			h = 0;
-			for (unsigned i = 0; (i < s->den) && (i < m); i++)
-				h |= (uint16_t)(1u << c->order[i]);
-		}
-		bar[0] = bar[1] = h;
+		for (unsigned i = 0; (i < n) && (i < m); i++)
+			h |= (uint16_t)(1u << c->order[i]);
+		all[0] = all[1] = h;
+		acc[0] = acc[1] = h ? (uint16_t)(1u << (31u - (unsigned)__builtin_clz((unsigned)h))) : 0u;
 	}
 	else
 	{
-		bar[0] = (uint16_t)(pg_subBar[s->sty] & ~kick);
-		bar[1] = (uint16_t)(((s->sty == 7u) ? PG_SUB_BAR_B : pg_subBar[s->sty]) & ~kick);
+		all[0] = pg_subAll[s->sty];
+		acc[0] = pg_subAcc[s->sty];
+		all[1] = (s->sty == 7u) ? pg_subAll[PG_SUB_B] : all[0];
+		acc[1] = (s->sty == 7u) ? pg_subAcc[PG_SUB_B] : acc[0];
 	}
-	uint64_t hits = 0, kicks = 0, loud = 0;
+	for (unsigned p = 0; p < 16u; p++)
+		c->key[32u + p] = (uint16_t)pg_rand(c, 65536u);
+	const uint8_t ghost = patternGen_dbVel(s->lev);
+	uint16_t bar4 = 0, g4 = 0;
 	for (unsigned b = 0; b < PG_BARS; b++)
 	{
-		hits |= (uint64_t)bar[b & 1u] << (16u * b);
-		kicks |= (uint64_t)kick << (16u * b);
+		const uint16_t h = (uint16_t)(all[b & 1u] & ~kick), a = acc[b & 1u];
+		for (unsigned p = 0; p < 16u; p++)
+			if ((h >> p) & 1u)
+				pg_hit(c, io, 16u * b + p, ((a >> p) & 1u) ? 127 : ghost, PG_PROB_ALWAYS, c->note, 0);
+		if (b == 3u)
+		{
+			bar4 = h;
+			g4 = (uint16_t)(h & ~a);
+		}
 	}
-	for (unsigned k = 0; k < PG_STEPS; k++)	/* back from each kick to the one before it */
+	if (s->var > 0)
 	{
-		if (!((kicks >> k) & 1u))
-			continue;
-		for (unsigned i = (k + PG_STEPS - 1u) % PG_STEPS; !((kicks >> i) & 1u); i = (i + PG_STEPS - 1u) % PG_STEPS)
-			if ((hits >> i) & 1u)
+		const uint16_t free = (uint16_t)(PG_SUB_DICT & ~kick & ~bar4);
+		unsigned order[16], m = 0;
+		uint16_t taken = 0;
+		for (unsigned i = 0; i < 3u; i++)	/* steps 16, 14, 10 */
+		{
+			static const uint8_t first[3] = { 15, 13, 9 };
+			if ((free >> first[i]) & 1u)
 			{
-				loud |= (uint64_t)1 << i;
-				break;
+				order[m++] = first[i];
+				taken |= (uint16_t)(1u << first[i]);
 			}
+		}
+		const unsigned r = pg_rank(c, c->key + 32, pg_subW, (uint16_t)(free & ~taken), 16);
+		for (unsigned i = 0; i < r; i++)
+			order[m++] = c->order[i];
+		for (unsigned i = 0; (i < (unsigned)s->var) && (i < m); i++)
+			pg_hit(c, io, 48u + order[i], ghost, PG_COND_2_2, c->note, 0);
 	}
-	for (unsigned i = 0; i < PG_STEPS; i++)
-		if ((hits >> i) & 1u)
-			pg_hit(c, io, i, ((loud >> i) & 1u) ? 127 : patternGen_dbVel(s->lev), PG_PROB_ALWAYS,
-				((s->var != 0) && (i & 4u)) ? pg_noteOf(c->note + s->var) : c->note, 0);
+	else if (s->var < 0)
+	{
+		const unsigned m = pg_rank(c, c->key + 32, pg_one, g4, 16);
+		for (unsigned i = 0; (i < (unsigned)-s->var) && (i < m); i++)
+			io->step[48u + c->order[i]].prob = PG_COND_1_2;
+	}
 }
 
 /* spec §4.3, §8, §9 (gen.py _prc()): bar 1's den accents by rank off the kick, bar 2 with bar 1's

@@ -504,12 +504,14 @@ def _sub(s: Settings, out: _Out, keys8, var_draws, kick: frozenset):
     else:
         bars = SUB_BARS[s.sty]
     ghost = vel_db(s.lev)
+    last = 3 * BAR                               # var: bar 4, so bar 8 of each phrase
+    ghosts = []                                  # by the figure, not by velocity: lev 0 makes a ghost 127
     for b in range(NUM_BARS):                    # a hit on a kick step is dropped, G stays where it is
         for p, c in enumerate(bars[b % len(bars)]):
             if c != '.' and p not in kick:
                 out.hit(b * BAR + p, 127 if c == 'G' else ghost)
-    last = 3 * BAR                               # var: bar 4, so bar 8 of each phrase
-    ghosts = [p for p in range(BAR) if out.written[last + p] and out.t.steps[last + p].vol != 127]
+                if b == 3 and c == 'g':
+                    ghosts.append(p)
     if s.var > 0:
         free = lambda p: SUB_WEIGHTS[p] > 0 and p not in kick and not out.written[last + p]
         first = [p for p in SUB_FIRST if free(p)]

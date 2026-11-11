@@ -189,7 +189,7 @@ const char genTypeNames[][4] =
 };
 const char genTypeLongNames[][12] =
 {
-	{"off"}, {"hat ghosts"}, {"sub bass"}, {"percussion"}, {"rare hits"}, {"propagate"},
+	{"off"}, {"hat ghosts"}, {"ghost kick"}, {"percussion"}, {"rare hits"}, {"propagate"},
 };
 const char genUndoNames[][4] =
 {

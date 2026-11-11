@@ -1831,7 +1831,7 @@ TEST(gen_glue_writes_what_the_core_makes_masked)
 	seq_patternSet.seq_subStepPattern[2][4][3].param1Nr = 5;
 	PatternGenTrack want, got;
 	genRead(2, 4, &want);
-	const PatternGenSettings s = { PG_TYPE_SUB, 1, 0, -3, 0, -2, 0, 0, 0 };
+	const PatternGenSettings s = { PG_TYPE_SUB, 1, 3, -8, 0, 0, 0, 0, 0 };
 	const PatternGenSource src = { seq_patternSet.seq_subStepPattern[2][0], { 0x0101u, 0, 0, 0 }, seq_patternSet.length[2][0] };
 	ASSERT_EQ(patternGen_generate(&s, 4, &src, &want), PG_WROTE | PG_SOFT);
 	const uint32_t irq = host_irqDisables;

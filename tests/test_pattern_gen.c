@@ -107,7 +107,7 @@ TEST(pgen_core_random)
 TEST(pgen_core_settings)
 {
 	/* spec §3's table (gen.py apply_type_defaults()): typ set, sty den lev var not loaded, sed src shf kept */
-	static const int8_t want[5][5] = { { 1, 7, -15, 1, 0 }, { 1, 0, -3, 0, -2 }, { 1, 3, -13, 1, 0 },
+	static const int8_t want[5][5] = { { 1, 7, -15, 1, 0 }, { 1, 3, -8, 0, 0 }, { 1, 3, -13, 1, 0 },
 		{ 1, 2, 0, 0, 0 }, { 1, 4, -15, 0, 0 } };
 	for (uint8_t typ = PG_TYPE_HAT; typ < PG_TYPES; typ++)
 	{
@@ -388,11 +388,18 @@ TEST(pgen_core_types)
 {
 	/* the spec's own words, one rule a type; the vectors check the rest */
 	PatternGenTrack t, k, u;
-	static const uint16_t bar[8] = { 0, 0x8888u, 0xCCCCu, 0xEEEEu, 0x4444u, 0x4C4Cu, 0x40C0u, 0x0CCCu };
-	for (uint8_t sty = 1; sty <= 7; sty++)	/* sub §4.2 with the default kick; style 7's second bar */
+	static const uint16_t bar[8] = { 0, 0x4848u, 0x4800u, 0x4040u, 0x0808u, 0x8080u, 0xC8C8u, 0x4848u };
+	static const uint16_t acc[8] = { 0, 0x4040u, 0x4000u, 0x4000u, 0x0800u, 0x8000u, 0xC000u, 0x4040u };
+	for (uint8_t sty = 1; sty <= 7; sty++)	/* sub §10 with the default kick; style 7's second bar */
 	{
-		gen((PatternGenSettings){ PG_TYPE_SUB, sty, 0, -3, 0, -2, 0, 5, 0 }, &t, NULL);
-		ASSERT_EQ(t.on[0], bar[sty]); ASSERT_EQ(t.on[1], sty == 7 ? 0xECCCu : bar[sty]); ASSERT_EQ(t.on[3], t.on[1]);
+		gen((PatternGenSettings){ PG_TYPE_SUB, sty, 3, -8, 0, 0, 0, 5, 0 }, &t, NULL);
+		ASSERT_EQ(t.on[0], bar[sty]); ASSERT_EQ(t.on[1], sty == 7 ? 0xCA48u : bar[sty]); ASSERT_EQ(t.on[3], t.on[1]);
+		for (unsigned p = 0; p < 16u; p++)	/* an accent at 127, a ghost at -8 dB (51), note 60, always */
+			if ((bar[sty] >> p) & 1u)
+			{
+				ASSERT_EQ(t.step[p].volume, ((acc[sty] >> p) & 1u) ? 127 : 51);
+				ASSERT_EQ(t.step[p].note, 60); ASSERT_EQ(t.step[p].prob, PG_PROB_ALWAYS);
+			}
 	}
 	static const struct { uint8_t sty, den, st, prob; } one[] = {	/* rar §4.4: 4:4 109, 2:2 102, 1:4 106, 1:2 101 */
 		{ 1, 1, 48, 109 }, { 1, 2, 48, 102 }, { 2, 1, 0, 106 }, { 2, 3, 0, 101 }, { 2, 4, 0, 100 } };
@@ -448,28 +455,29 @@ static PatternGenSource source(PatternGenTrack *k, uint16_t bar1)
 
 TEST(pgen_core_kick_as_played)
 {
-	/* §4.2, §8: the kick is bar 1 of track src as it plays, read through sub style 2 (..xx a quarter,
-	 * never on a kick). 6 steps with step 1 on (and step 10, past the length) play on 1 7 13; a kick on
-	 * 3 (track 1, generating track 2); src on the track itself, an empty track or none: 1 5 9 13 */
+	/* §10, §8: the kick is bar 1 of track src as it plays, read through sub style 6 (steps 4 7 8 12 15 16
+	 * 15 and 16 accents; a hit on a kick step is dropped). 6 steps with step 1 on (and step 10, past the
+	 * length) play on 1 7 13: step 7 goes; a kick on 4 (track 1, generating track 2) drops step 4;
+	 * src on the track itself, an empty track or none: 1 5 9 13, which no style hits */
 	PatternGenTrack t, k;
 	PatternGenSource src = source(&k, (1u << 0) | (1u << 9));
 	src.length = 6;
-	PatternGenSettings s = { PG_TYPE_SUB, 2, 0, -3, 0, -2, 0, 0, 0 };
+	PatternGenSettings s = { PG_TYPE_SUB, 6, 3, -8, 0, 0, 0, 0, 0 };
 	cleared(&t);
 	ASSERT_EQ(patternGen_generate(&s, 1, &src, &t), PG_WROTE | PG_SOFT);
 	for (unsigned b = 0; b < PG_BARS; b++)
-		ASSERT_EQ(t.on[b], 0xCC8Cu);
-	src = source(&k, 1u << 2);
+		ASSERT_EQ(t.on[b], 0xC888u);
+	src = source(&k, 1u << 3);
 	cleared(&t);
 	(void)patternGen_generate(&s, 1, &src, &t);
-	ASSERT_EQ(t.on[0], 0xCCC8u); ASSERT_EQ(t.on[3], 0xCCC8u);
-	for (unsigned i = 0; i < 3u; i++)	/* step 4 before the kick on 5 at 127, step 3 at lev */
+	ASSERT_EQ(t.on[0], 0xC8C0u); ASSERT_EQ(t.on[3], 0xC8C0u);
+	for (unsigned i = 0; i < 3u; i++)
 	{
 		s.src = (i == 0u) ? 1 : 0;
-		src = source(&k, (i == 0u) ? (1u << 2) : 0u);
+		src = source(&k, (i == 0u) ? (1u << 3) : 0u);
 		cleared(&t);
 		(void)patternGen_generate(&s, 1, (i == 2u) ? NULL : &src, &t);
-		ASSERT_EQ(t.on[0], 0xCCCCu); ASSERT_EQ(t.step[3].volume, 127); ASSERT_EQ(t.step[2].volume, 90);
+		ASSERT_EQ(t.on[0], 0xC8C8u); ASSERT_EQ(t.step[14].volume, 127); ASSERT_EQ(t.step[11].volume, 51);
 	}
 }
 

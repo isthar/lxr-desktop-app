@@ -510,6 +510,17 @@ class Sub(unittest.TestCase):
                     half = {p for p in range(BAR) if out.steps[3 * BAR + p].prob == gen.COND_1_2}
                     self.assertEqual(half, set(order[:n]), (sty, sed, n))
 
+    def test_var_minus_at_lev_0_still_halves_ghosts(self):
+        # a ghost at lev 0 has velocity 127 like G, but it is a ghost: var -n takes it
+        for sty in range(1, 9):
+            base = generate(S('sub', sty=sty, lev=0, sed=4), 1, KICK)
+            out = generate(S('sub', sty=sty, lev=0, sed=4, var=-4), 1, KICK)
+            n_hits = len(bar_hits(base, 3))
+            ref = generate(S('sub', sty=sty, lev=-8, sed=4, var=-4), 1, KICK)
+            half = lambda t: {p for p in range(BAR) if t.steps[3 * BAR + p].prob == gen.COND_1_2}
+            self.assertEqual(half(out), half(ref), sty)
+            self.assertTrue(half(out) or n_hits == 1)
+
     def test_var_minus_is_heard_in_bar_8(self):
         out = generate(S('sub', sty=1, var=-2), 1, KICK)
         h = heard(out)

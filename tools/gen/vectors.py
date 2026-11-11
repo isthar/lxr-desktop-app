@@ -206,6 +206,7 @@ def cases():
     for sty in (1, 4, 6, 7, 8):
         for var in (-4, -2, -1, 1, 2, 4):
             add('sub sty%d var%+d' % (sty, var), 'sub', 1, inp=kick44(), sty=sty, var=var, sed=5)
+    add('sub sty1 lev0 var-2', 'sub', 1, inp=kick44(), sty=1, lev=0, var=-2)
     add('sub sty1 var+3 kick odd', 'sub', 1, inp=kick_odd(), sty=1, var=3)
     add('sub sty5 src on itself', 'sub', 1, inp=kick_odd(), cur=kick_odd(), sty=5, src=2)
     add('sub sty3 src empty', 'sub', 1, inp=None, sty=3)
