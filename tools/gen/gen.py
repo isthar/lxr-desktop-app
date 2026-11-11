@@ -16,8 +16,14 @@ the spec leaves open are marked "CHOICE" where they are decided:
 - prc sty 0: each bar keeps its own accents as they play, in all 4 bars (bars 3-4 are not
   copies of bars 1-2), and gets its ghosts from them (spec 9);
 - hat var +n: the next n places of the ranking (2:2); var -n: the last n of the den (1:2);
-- sub: "the last hit before a kick" is the last hit after the kick before it; sty 8 is
-  one bar from the seed, repeated, and den keeps the best ranked hits (weights 1);
+- sub (spec 10, ghost kicks): g is a ghost at lev, G the accent at 127, note 60 + not on
+  every hit; a hit on a kick step is dropped and G does not move; sty 8 is one bar from the
+  seed, repeated: den hits (0 and 9-16 are 8) ranked by 16 keys drawn first in phase 3 x the
+  weights 4 (steps 4 7 12 15) 2 (8 16) 1 (10 14), the last one of them G; 16 more keys, drawn
+  always, serve var, so var never moves sty 8; var +n in bar 4: steps 16, 14, 10 first, then
+  the rest of the dictionary (steps 4 7 8 10 12 14 15 16) by var keys x those weights, free
+  of hits and the kick, ghosts at 2:2; var -n: the n ghosts of bar 4 (never G) first by var
+  keys (weight 1) get 1:2;
 - prc: bar 2 moves bar 1's accent with the highest ranking key (the first of its ranking)
   to the best ranked free place of bar 2's own keys (places 16-31): not an accent of bar 1,
   not a kick step, the style's weights (spec 9; no draw for it, so den k -> k+1 never
@@ -101,7 +107,7 @@ STY_RANGE = {TYP_HAT: (0, 4), TYP_SUB: (1, 8), TYP_PRC: (0, 4), TYP_RAR: (1, 4),
 # selecting typ loads sty den lev var not (spec 3); sed, src and shf stay
 TYPE_DEFAULTS = {
     TYP_HAT: dict(sty=1, den=7, lev=-15, var=1, not_=0),
-    TYP_SUB: dict(sty=1, den=0, lev=-3, var=0, not_=-2),
+    TYP_SUB: dict(sty=1, den=3, lev=-8, var=0, not_=0),
     TYP_PRC: dict(sty=1, den=3, lev=-13, var=1, not_=0),
     TYP_RAR: dict(sty=1, den=2, lev=0, var=0, not_=0),
     TYP_PRP: dict(sty=1, den=4, lev=-15, var=0, not_=0),
@@ -340,18 +346,21 @@ HAT_WEIGHTS = {
     4: _w(lambda p: 1),
 }
 
-# 4.2 sub: one bar per style (7: bars A B A B); 8 from the seed, a figure a quarter
+# 10 sub: ghost kicks. One bar per style (7: bars A B A B); g a ghost (lev), G the accent (127);
+# 8 from the seed. SUB_WEIGHTS are sty 8's places (steps 4 7 12 15 x4, 8 16 x2, 10 14 x1), which
+# are also the dictionary var +n draws on
 SUB_BARS = {
-    1: ('...x...x...x...x',),
-    2: ('..xx..xx..xx..xx',),
-    3: ('.xxx.xxx.xxx.xxx',),
-    4: ('..x...x...x...x.',),
-    5: ('..xx..x...xx..x.',),
-    6: ('......xx......x.',),
-    7: ('..xx..xx..xx....', '..xx..xx..xx.xxx'),
+    1: ('...g..G....g..G.',),
+    2: ('...........g..G.',),
+    3: ('......g.......G.',),
+    4: ('...g.......G....',),
+    5: ('.......g.......G',),
+    6: ('...g..gg...g..GG',),
+    7: ('...g..G....g..G.', '...g..G..g.g..GG'),
 }
-SUB_FIGURES = (('...x', 3), ('..xx', 4), ('.xxx', 1), ('..x.', 2), ('....', 1))
-SUB_FIGURE_TOTAL = sum(w for _, w in SUB_FIGURES)   # 11
+SUB_WEIGHTS = _w(lambda p: 4 if p in (3, 6, 11, 14) else 2 if p in (7, 15) else 1 if p in (9, 13) else 0)
+SUB_FIRST = (15, 13, 9)     # var +n takes steps 16, 14, 10 first, in this order
+SUB_MAX_DEN = 8             # sty 8's places: den 0 and 9-16 mean all of them
 
 # 4.3 prc: the accents' weights per sty (0: the user's accents; its weights are for var +n)
 PRC_WEIGHTS = {
@@ -449,8 +458,9 @@ def generate(settings: Settings, track_index: int, src_track: Optional[Track] = 
     if s.typ == TYP_HAT:
         _hat(s, out, draws, offsets, view)
     elif s.typ == TYP_SUB:
-        figures = [rng.rand(SUB_FIGURE_TOTAL) for _ in range(4)] if s.sty == 8 else []
-        _sub(s, out, draws, figures, kick_places(s, track_index, src_track))
+        keys8 = [rng.rand(65536) for _ in range(BAR)] if s.sty == 8 else []     # spec 10: sty 8's keys,
+        var_draws = [rng.rand(65536) for _ in range(BAR)]                       # then var's, always
+        _sub(s, out, keys8, var_draws, kick_places(s, track_index, src_track))
     elif s.typ == TYP_PRC:
         var_draws = [rng.rand(65536) for _ in range(BAR)]               # spec 9: no draw for the move
         _prc(s, out, draws, offsets, var_draws, kick_places(s, track_index, src_track), view)
@@ -484,41 +494,31 @@ def _hat(s: Settings, out: _Out, draws, offsets, view: Track):
             out.hit(b * BAR + p, vel_db(s.lev + offsets[p]), prob)
 
 
-# 4.2 ----------------------------------------------------------------------------------------
+# 10 -----------------------------------------------------------------------------------------
 
-def _sub(s: Settings, out: _Out, draws, figures, kick: frozenset):
-    if s.sty == 8:
-        bar = ''
-        for r in figures:
-            for fig, w in SUB_FIGURES:
-                if r < w:
-                    bar += fig
-                    break
-                r -= w
-        bars = (bar,)
+def _sub(s: Settings, out: _Out, keys8, var_draws, kick: frozenset):
+    if s.sty == 8:                               # one bar from the seed, repeated: den best, the last G
+        n = SUB_MAX_DEN if s.den == 0 or s.den > SUB_MAX_DEN else s.den
+        places = sorted(rank(keys8, SUB_WEIGHTS, lambda p: p not in kick)[:n])
+        bars = (''.join('.' if p not in places else 'G' if p == places[-1] else 'g' for p in range(BAR)),)
     else:
         bars = SUB_BARS[s.sty]
-    pats = []
-    for b in range(NUM_BARS):
-        pat = {p for p, c in enumerate(bars[b % len(bars)]) if c == 'x' and p not in kick}
-        if s.sty == 8 and s.den > 0:            # den: at most den hits a bar, the best ranked
-            pat = set(rank(draws, [1] * BAR, lambda p: p in pat)[:s.den])
-        pats.append(pat)
-    hits = [b * BAR + p for b in range(NUM_BARS) for p in sorted(pats[b])]
-    hitset = set(hits)
-    kicks = [b * BAR + k for b in range(NUM_BARS) for k in sorted(kick)]
-    loud = set()
-    for k in kicks:                              # the last hit before each kick, after the one before
-        i = (k - 1) % NUM_STEPS
-        while i not in kicks:
-            if i in hitset:
-                loud.add(i)
-                break
-            i = (i - 1) % NUM_STEPS
-    for i in hits:
-        second = s.var != 0 and (i % BAR) // 4 in (1, 3)   # quarters 2 and 4
-        out.hit(i, 127 if i in loud else vel_db(s.lev),
-                note=_clamp_note(out.note + s.var) if second else None)
+    ghost = vel_db(s.lev)
+    for b in range(NUM_BARS):                    # a hit on a kick step is dropped, G stays where it is
+        for p, c in enumerate(bars[b % len(bars)]):
+            if c != '.' and p not in kick:
+                out.hit(b * BAR + p, 127 if c == 'G' else ghost)
+    last = 3 * BAR                               # var: bar 4, so bar 8 of each phrase
+    ghosts = [p for p in range(BAR) if out.written[last + p] and out.t.steps[last + p].vol != 127]
+    if s.var > 0:
+        free = lambda p: SUB_WEIGHTS[p] > 0 and p not in kick and not out.written[last + p]
+        first = [p for p in SUB_FIRST if free(p)]
+        order = first + rank(var_draws, SUB_WEIGHTS, lambda p: free(p) and p not in first)
+        for p in order[:s.var]:
+            out.hit(last + p, ghost, COND_2_2)
+    elif s.var < 0:
+        for p in rank(var_draws, [1] * BAR, lambda p: p in ghosts)[:-s.var]:
+            out.t.steps[last + p].prob = COND_1_2
 
 
 # 4.3 ----------------------------------------------------------------------------------------

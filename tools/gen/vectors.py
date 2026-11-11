@@ -195,25 +195,29 @@ def cases():
     add('hat sty2 den5 var-4', 'hat', 5, sty=2, den=5, var=-4)
     add('hat sty7 (clamped to 4)', 'hat', 5, sty=7)
 
-    # --- sub (track 2, index 1; src track 1) ---
+    # --- sub: ghost kicks (track 2, index 1; src track 1) ---
     for sty in range(1, 9):
         add('sub sty%d' % sty, 'sub', 1, inp=kick44(), sty=sty)
         add('sub sty%d kick odd' % sty, 'sub', 1, inp=kick_odd(), sty=sty, sed=3)
-    for den in (0, 1, 2, 3, 5, 16):
-        for sed in (0, 7):
+    for den in (0, 1, 3, 8, 12):
+        for sed in (0, 7, 31):
             add('sub sty8 den%d sed%d' % (den, sed), 'sub', 1, inp=kick44(), sty=8, den=den, sed=sed)
-    for sty in (2, 6, 7):
-        for var in (-4, -1, 2, 4):
-            add('sub sty%d var%+d' % (sty, var), 'sub', 1, inp=kick44(), sty=sty, var=var)
+    add('sub sty8 den3 kick odd', 'sub', 1, inp=kick_odd(), sty=8, den=3, sed=11)
+    for sty in (1, 4, 6, 7, 8):
+        for var in (-4, -2, -1, 1, 2, 4):
+            add('sub sty%d var%+d' % (sty, var), 'sub', 1, inp=kick44(), sty=sty, var=var, sed=5)
+    add('sub sty1 var+3 kick odd', 'sub', 1, inp=kick_odd(), sty=1, var=3)
     add('sub sty5 src on itself', 'sub', 1, inp=kick_odd(), cur=kick_odd(), sty=5, src=2)
     add('sub sty3 src empty', 'sub', 1, inp=None, sty=3)
-    add('sub sty2 kick64', 'sub', 1, inp=kick64(), sty=2)
-    for lev in (-30, 0):
-        add('sub sty2 lev%d' % lev, 'sub', 1, inp=kick44(), sty=2, lev=lev)
+    add('sub sty1 kick64', 'sub', 1, inp=kick64(), sty=1)
+    add('sub sty5 kick64', 'sub', 1, inp=kick64(), sty=5)
+    for lev in (-30, -8, 0):
+        add('sub sty6 lev%d' % lev, 'sub', 1, inp=kick44(), sty=6, lev=lev)
     for n in (-24, 24):
         add('sub sty3 not%+d var+4' % n, 'sub', 1, inp=kick44(), sty=3, var=4, **{'not': n})
     add('sub sty0 (clamped to 1)', 'sub', 1, inp=kick44(), sty=0)
     add('sub sty8 track 6', 'sub', 5, inp=kick44(), sty=8, sed=21)
+    add('sub sty2 track 3', 'sub', 2, inp=kick44(), sty=2, var=-1)
 
     # --- prc (track 3, index 2) ---
     for sty in range(1, 5):
@@ -293,7 +297,7 @@ def cases():
     # --- off ---
     add('off', 'hat', 5, cur=user_hats64())
     out[-1] = (out[-1][0], dataclasses.replace(out[-1][1], typ=gen.TYP_OFF), *out[-1][2:])
-    add('off empty', 'sub', 1, inp=kick44())
+    add('off empty', 'sub', 1, inp=kick44(), den=0, lev=-3, **{'not': -2})   # the old sub defaults, kept
     out[-1] = (out[-1][0], dataclasses.replace(out[-1][1], typ=gen.TYP_OFF), *out[-1][2:])
     for typ in (6, 255):                         # a typ past prp is '---': the track stays
         add('typ %d is off' % typ, 'prp', 3, inp=prc_source(), cur=user_hats64(), sty=1, src=3, shf=2)

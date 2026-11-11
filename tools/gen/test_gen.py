@@ -117,7 +117,7 @@ class Prng(unittest.TestCase):
 class Defaults(unittest.TestCase):
     def test_type_defaults_table(self):
         base = Settings(sed=33, src=4, shf=-3, sty=7, den=9, lev=-1, var=-4, not_=5)
-        want = {'hat': (1, 7, -15, 1, 0), 'sub': (1, 0, -3, 0, -2), 'prc': (1, 3, -13, 1, 0),
+        want = {'hat': (1, 7, -15, 1, 0), 'sub': (1, 3, -8, 0, 0), 'prc': (1, 3, -13, 1, 0),
                 'rar': (1, 2, 0, 0, 0), 'prp': (1, 4, -15, 0, 0)}
         for typ, row in want.items():
             s = apply_type_defaults(base, typ)
@@ -348,79 +348,184 @@ class Hat(unittest.TestCase):
             self.assertEqual(len(bar_hits(out, b)), 8)
 
 
+SUB_STYLES = {
+    1: ('...g..G....g..G.',),
+    2: ('...........g..G.',),
+    3: ('......g.......G.',),
+    4: ('...g.......G....',),
+    5: ('.......g.......G',),
+    6: ('...g..gg...g..GG',),
+    7: ('...g..G....g..G.', '...g..G..g.g..GG'),
+}
+SUB_W8 = [0, 0, 0, 4, 0, 0, 4, 2, 0, 1, 0, 4, 0, 1, 4, 2]     # steps 4 7 12 15: 4; 8 16: 2; 10 14: 1
+KICK_1_8 = Track.from_pattern('X......X........')
+
+
+def sub_draws(sty, sed, track=1):
+    """sub's draws in their order (spec 5, 10): 16 keys, 16 level offsets (unused), then
+    phase 3: sty 8's 16 keys (only there), then the 16 keys of var (always)"""
+    r = gen.Rng(sed, gen.TYP_SUB, sty, track)
+    for _ in range(2 * BAR):
+        r.rand(65536)
+    k8 = [r.rand(65536) for _ in range(BAR)] if sty == 8 else None
+    return k8, [r.rand(65536) for _ in range(BAR)]
+
+
+def sub_bar(t, b):
+    """a bar as text: g a hit under 127, G a hit at 127, . no hit"""
+    return ''.join('.' if not t.active[b * BAR + p] else 'G' if t.steps[b * BAR + p].vol == 127 else 'g'
+                   for p in range(BAR))
+
+
 class Sub(unittest.TestCase):
-    def check(self, out, kick, lev):
-        kicks = [b * BAR + k for b in range(4) for k in sorted(kick)]
-        for i in range(NUM_STEPS):
-            if out.active[i]:
-                self.assertNotIn(i % BAR, kick)
-        for k in kicks:                          # the last hit after the kick before: 127
-            i, last = (k - 1) % NUM_STEPS, None
-            while i not in kicks:
-                if out.active[i]:
-                    last = i
-                    break
-                i = (i - 1) % NUM_STEPS
-            if last is not None:
-                self.assertEqual(out.steps[last].vol, 127, (k, last))
-        loud = sum(1 for i in range(NUM_STEPS) if out.active[i] and out.steps[i].vol == 127)
-        self.assertTrue(all(out.steps[i].vol in (127, vel_db(lev)) for i in range(NUM_STEPS) if out.active[i]))
-        return loud
-
-    def test_never_on_the_kick_and_loud_before_it(self):
-        for sty in range(1, 9):
-            for src, kick in ((KICK, gen.QUARTERS), (KICK_ODD, {0, 3, 6, 10, 12}), (None, gen.QUARTERS)):
-                for sed in SEEDS:
-                    out = generate(S('sub', sty=sty, sed=sed, lev=-9), 1, src)
-                    self.check(out, kick, -9)
-
-    def test_styles(self):
-        want = {1: '...x...x...x...x', 2: '..xx..xx..xx..xx', 3: '.xxx.xxx.xxx.xxx', 4: '..x...x...x...x.',
-                5: '..xx..x...xx..x.', 6: '......xx......x.'}
-        for sty, pat in want.items():
+    def test_styles_on_a_44_kick(self):
+        for sty, bars in SUB_STYLES.items():
             out = generate(S('sub', sty=sty), 1, KICK)
             for b in range(4):
-                self.assertEqual(bar_hits(out, b), {p for p, c in enumerate(pat) if c == 'x'})
-        out = generate(S('sub', sty=7), 1, KICK)
-        self.assertEqual(bar_hits(out, 0), {2, 3, 6, 7, 10, 11})
-        self.assertEqual(bar_hits(out, 1), {2, 3, 6, 7, 10, 11, 13, 14, 15})
-        self.assertEqual(bar_hits(out, 2), bar_hits(out, 0))
-        self.assertEqual(bar_hits(out, 3), bar_hits(out, 1))
-        out = generate(S('sub', sty=2), 1, KICK)    # rolling: the 3rd 16th quiet, the 4th loud
-        self.assertEqual([out.steps[i].vol for i in (2, 3, 6, 7)], [90, 127, 90, 127])
+                self.assertEqual(sub_bar(out, b), bars[b % len(bars)], (sty, b))
 
-    def test_sty8_den_limit(self):
-        for sed in range(30):
-            free = generate(S('sub', sty=8, sed=sed, den=0), 1, KICK)
-            n = len(bar_hits(free, 0))
-            for b in range(4):
-                self.assertEqual(bar_hits(free, b), bar_hits(free, 0))
-            for den in range(1, 17):
-                out = generate(S('sub', sty=8, sed=sed, den=den), 1, KICK)
-                self.assertEqual(len(bar_hits(out, 0)), min(den, n))
-                self.assertTrue(bar_hits(out, 0) <= bar_hits(free, 0))
+    def test_kick_steps_drop_their_hits(self):
+        # a hit on a kick step is dropped; G does not move to another step
+        out = generate(S('sub', sty=1), 1, KICK_ODD)        # kick 1 4 7 11 13: 4 and 7 go
+        for b in range(4):
+            self.assertEqual(sub_bar(out, b), '...........g..G.')
+        out = generate(S('sub', sty=5), 1, KICK_1_8)        # kick 1 8: the g on 8 goes
+        self.assertEqual(sub_bar(out, 0), '...............G')
+        out = generate(S('sub', sty=7), 1, Track.from_pattern('.X.X..X.........'))   # kick 2 4 7
+        self.assertEqual(sub_bar(out, 0), '...........g..G.')
+        self.assertEqual(sub_bar(out, 1), '.........g.g..GG')
+        out = generate(S('sub', sty=5), 1, Track.from_pattern('...............X'))   # kick 16
+        self.assertEqual(sub_bar(out, 0), '.......g........')
 
-    def test_sty8_figures(self):
+    def test_a_64_step_kick_is_read_as_bar_1_plays(self):
+        k = Track(length=64)
+        for i in (0, 7, 18, 40):
+            k.active[i] = True
+        out = generate(S('sub', sty=5), 1, k)           # kick places 0 7: the g on 8 goes
+        for b in range(4):
+            self.assertEqual(sub_bar(out, b), '...............G')
+
+    def test_nothing_hits_the_kick(self):
+        for sty in range(1, 9):
+            for src, kick in ((KICK, gen.QUARTERS), (KICK_ODD, {0, 3, 6, 10, 12}), (KICK_1_8, {0, 7}),
+                              (None, gen.QUARTERS)):
+                for sed in SEEDS:
+                    out = generate(S('sub', sty=sty, sed=sed, var=2), 1, src)
+                    for i in range(NUM_STEPS):
+                        if out.active[i]:
+                            self.assertNotIn(i % BAR, kick, (sty, sed, i))
+
+    def test_velocity_note_and_prob(self):
+        self.assertEqual(vel_db(-8), 51)
+        for lev in (0, -8, -30):
+            for n in (-24, 0, 24):
+                out = generate(S('sub', sty=6, lev=lev, **{'not': n}), 1, KICK)
+                for i in range(NUM_STEPS):
+                    st = out.steps[i]
+                    self.assertEqual(st.note, 60 + n)
+                    if out.active[i]:
+                        self.assertEqual(st.vol, 127 if i % BAR >= 14 else vel_db(lev))
+                        self.assertEqual(st.prob, 100)
+
+    def test_sty8_is_den_hits_of_the_dictionary_the_last_one_loud(self):
         for sed in range(40):
-            out = generate(S('sub', sty=8, sed=sed), 1, KICK)
-            for q in range(4):
-                fig = ''.join('x' if out.active[4 * q + j] else '.' for j in range(4))
-                self.assertIn(fig, [f for f, _ in gen.SUB_FIGURES])
+            k8, _ = sub_draws(8, sed)
+            for src, kick in ((KICK, gen.QUARTERS), (KICK_ODD, {0, 3, 6, 10, 12}), (KICK_1_8, {0, 7})):
+                order = gen.rank(k8, SUB_W8, lambda p: p not in kick)
+                for den in (0, 1, 2, 3, 5, 8, 9, 12, 16):
+                    out = generate(S('sub', sty=8, sed=sed, den=den), 1, src)
+                    want = sorted(order[:8 if den == 0 or den > 8 else den])
+                    for b in range(4):
+                        hits = [p for p in range(BAR) if out.active[b * BAR + p]]
+                        self.assertEqual(hits, want, (sed, den, b))
+                        self.assertEqual([out.steps[b * BAR + p].vol for p in want],
+                                         [51] * (len(want) - 1) + [127][:len(want)])
 
-    def test_second_note(self):
-        for var in (-4, -1, 2, 4):
-            out = generate(S('sub', sty=3, var=var), 1, KICK)
-            for i in range(NUM_STEPS):
-                if out.active[i]:
-                    second = (i % BAR) // 4 in (1, 3)
-                    self.assertEqual(out.steps[i].note, 58 + (var if second else 0))
-        out = generate(S('sub', sty=3, var=0), 1, KICK)
-        self.assertTrue(all(st.note == 58 for st in out.steps))
+    def test_sty8_den_default_and_den_k_is_a_prefix_of_k_plus_1(self):
+        for sed in range(30):
+            prev = set()
+            for den in range(1, 9):
+                cur = bar_hits(generate(S('sub', sty=8, sed=sed, den=den), 1, KICK), 0)
+                self.assertTrue(prev < cur, (sed, den))
+                prev = cur
+            self.assertEqual(len(bar_hits(generate(S('sub', sty=8, sed=sed), 1, KICK), 0)), 3)
 
-    def test_src_is_this_track(self):
+    def test_den_does_nothing_outside_sty8(self):
+        for sty in range(1, 8):
+            a = generate(S('sub', sty=sty, den=1), 1, KICK)
+            for den in (0, 3, 8, 16):
+                self.assertEqual(a, generate(S('sub', sty=sty, den=den), 1, KICK))
+
+    def test_var_changes_only_bar_4(self):
+        for sty in range(1, 9):
+            for sed in SEEDS:
+                base = generate(S('sub', sty=sty, sed=sed), 1, KICK)
+                for var in (-4, -3, -2, -1, 1, 2, 3, 4):
+                    out = generate(S('sub', sty=sty, sed=sed, var=var), 1, KICK)
+                    for i in range(3 * BAR):
+                        self.assertEqual(out.steps[i], base.steps[i], (sty, sed, var, i))
+                        self.assertEqual(out.active[i], base.active[i])
+
+    def test_var_plus_adds_ghosts_in_bar_4_at_2_2(self):
+        # first steps 16, 14, 10 in that order (places 15 13 9), then by var keys x weights
+        for sty, want in ((1, [15, 13, 9, 7]), (6, [13, 9])):
+            base = generate(S('sub', sty=sty), 1, KICK)
+            for n in range(1, 5):
+                out = generate(S('sub', sty=sty, var=n), 1, KICK)
+                got = [p for p in range(BAR) if out.active[3 * BAR + p] and not base.active[3 * BAR + p]]
+                self.assertEqual(got, sorted(want[:n]), (sty, n))
+                for p in got:
+                    st = out.steps[3 * BAR + p]
+                    self.assertEqual((st.vol, st.prob, st.note), (51, gen.COND_2_2, 60))
+                for p in range(BAR):
+                    if base.active[3 * BAR + p]:
+                        self.assertEqual(out.steps[3 * BAR + p], base.steps[3 * BAR + p])
+
+    def test_var_plus_rest_by_keys_and_weights(self):
+        # sty 4's bar 4 holds places 3 and 11; free: 6 7 9 13 14 15, of which 15 13 9 come
+        # first and 6 7 14 follow by the var keys x the weights of sty 8
+        for sed in range(20):
+            _, vk = sub_draws(4, sed)
+            want = [15, 13, 9] + gen.rank(vk, SUB_W8, lambda p: p in (6, 7, 14))
+            for n in range(1, 5):
+                out = generate(S('sub', sty=4, sed=sed, var=n), 1, KICK)
+                got = {p for p in range(BAR) if out.active[3 * BAR + p]} - {3, 11}
+                self.assertEqual(got, set(want[:n]), (sed, n))
+
+    def test_var_plus_skips_the_kick(self):
+        out = generate(S('sub', sty=1, var=1), 1, Track.from_pattern('...............X'))
+        self.assertFalse(out.active[3 * BAR + 15])
+        self.assertTrue(out.active[3 * BAR + 13])
+
+    def test_var_minus_halves_ghosts_of_bar_4_never_the_accent(self):
+        for sty in range(1, 9):
+            for sed in SEEDS:
+                base = generate(S('sub', sty=sty, sed=sed), 1, KICK)
+                _, vk = sub_draws(sty, sed)
+                ghosts = [p for p in range(BAR) if base.active[3 * BAR + p] and base.steps[3 * BAR + p].vol != 127]
+                order = gen.rank(vk, [1] * BAR, lambda p: p in ghosts)
+                for n in range(1, 5):
+                    out = generate(S('sub', sty=sty, sed=sed, var=-n), 1, KICK)
+                    self.assertEqual(sub_bar(out, 3), sub_bar(base, 3))
+                    half = {p for p in range(BAR) if out.steps[3 * BAR + p].prob == gen.COND_1_2}
+                    self.assertEqual(half, set(order[:n]), (sty, sed, n))
+
+    def test_var_minus_is_heard_in_bar_8(self):
+        out = generate(S('sub', sty=1, var=-2), 1, KICK)
+        h = heard(out)
+        self.assertEqual((len(h[4]), len(h[8])), (4, 2))
+
+    def test_defaults_clamp_and_sources(self):
+        s = apply_type_defaults(Settings(), 'sub')
+        self.assertEqual((s.sty, s.den, s.lev, s.var, s.not_), (1, 3, -8, 0, 0))
+        self.assertEqual(generate(S('sub', sty=0), 1, KICK), generate(S('sub', sty=1), 1, KICK))
         a = generate(dataclasses.replace(S('sub', sty=5), src=2), 1, KICK_ODD)
-        b = generate(S('sub', sty=5), 1, KICK)
-        self.assertEqual(a, b)
+        self.assertEqual(a, generate(S('sub', sty=5), 1, None))
+        self.assertEqual(generate(S('sub', sty=3), 1, Track()), generate(S('sub', sty=3), 1, KICK))
+
+    def test_the_track_index_is_in_the_seed(self):
+        bars = {sub_bar(generate(S('sub', sty=8, sed=5), t, KICK), 0) for t in range(7)}
+        self.assertGreater(len(bars), 1)
 
 
 KICK_EVEN = Track.from_pattern('.X...X...X...X..')      # kick places 1 5 9 13: step 1 is free
