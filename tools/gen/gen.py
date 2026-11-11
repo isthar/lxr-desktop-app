@@ -23,7 +23,8 @@ the spec leaves open are marked "CHOICE" where they are decided:
 - rar: den 0 writes nothing; sty 3 and 4 rank all 64 steps with 64 keys drawn third,
   away from the kick of track src; den >= 4 on sty 1 is den 4;
 - prp: an accent of the source is an active step with vel >= 64; sty 1 copies vel and
-  prob without the slide flag, sty 3 and 4 write prob 100 and note 60 + not;
+  prob without the slide flag; sty 3 and 4 take the source accent's prob without the
+  slide flag (spec 8), the velocity from lev and note 60 + not;
 - the level offset of every kind is drawn (hat's range for sub, rar, prp); a level is
   clamped to 0...-30 dB; a sty outside the kind's styles is clamped into them.
 
@@ -585,12 +586,12 @@ def _prp(s: Settings, out: _Out, draws, src: Track):
     elif s.sty == 3:                             # a ghost before each accent, where it is empty
         for i in range(NUM_STEPS):
             j = (i - 1) % NUM_STEPS
-            if accent(i) and not src.active[j]:
-                out.hit(j, vel_db(s.lev))
+            if accent(i) and not src.active[j]:  # spec 8: with the accent's condition
+                out.hit(j, vel_db(s.lev), src.steps[i].prob & PROB_MASK)
     else:                                        # the accents shifted by shf, as ghosts
         for i in range(NUM_STEPS):
-            if accent(i):
-                out.hit((i + s.shf) % NUM_STEPS, vel_db(s.lev))
+            if accent(i):                        # spec 8: with the accent's condition
+                out.hit((i + s.shf) % NUM_STEPS, vel_db(s.lev), src.steps[i].prob & PROB_MASK)
 
 
 # --- the CLI --------------------------------------------------------------------------------

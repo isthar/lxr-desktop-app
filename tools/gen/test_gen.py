@@ -562,7 +562,27 @@ class Prp(unittest.TestCase):
         out = generate(S('prp', sty=4, src=3, shf=3, lev=-9), 3, src)
         want = {(i + 3) % 64 for i in range(NUM_STEPS) if src.active[i] and src.steps[i].vol >= 64}
         self.assertEqual({i for i in range(NUM_STEPS) if out.active[i]}, want)
-        self.assertTrue(all(out.steps[i].vol == vel_db(-9) and out.steps[i].prob == 100 for i in want))
+        self.assertTrue(all(out.steps[i].vol == vel_db(-9) for i in want))
+
+    def test_pre_beats_and_echo_keep_the_condition(self):
+        # spec 8: prp sty 3 and 4 take the source step's prob (condition) byte, without the
+        # slide flag; the velocity from lev, the note 60 + not
+        src = Track.from_pattern('...X...X...X...X' * 4)
+        for i, prob in ((3, 102), (7, 109), (11, 0x80 | 101), (19, 50), (63, 106)):
+            src.steps[i].prob = prob
+            src.steps[i].note = 70
+        for sty, shf in ((3, 0), (4, 3), (4, -5)):
+            out = generate(S('prp', sty=sty, src=3, shf=shf, lev=-12, **{'not': 1}), 3, src)
+            for i in range(NUM_STEPS):
+                if not src.active[i]:
+                    continue
+                j = (i - 1) % NUM_STEPS if sty == 3 else (i + shf) % NUM_STEPS
+                self.assertTrue(out.active[j])
+                self.assertEqual((out.steps[j].prob, out.steps[j].vol, out.steps[j].note),
+                                 (src.steps[i].prob & 0x7F, vel_db(-12), 61), (sty, shf, i))
+        echo = generate(S('prp', sty=4, src=3, shf=3), 3, src)
+        self.assertEqual(bars_of(echo, 6), [5, 13])       # the echo of a 2:2 accent: bars 5-8 only
+        self.assertEqual(bars_of(echo, 10), [13])         # of a 4:4 accent: the last 4 of 16
 
     def test_src_on_itself_does_nothing(self):
         cur = user_track()
