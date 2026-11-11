@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-12 00:17",
+    "updated": "2026-11-12 00:19",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; v0.8 (generator wzorców) gotowe w kodzie, kity 52–55 do odsłuchu",
     "branch": "timing-core",
-    "head": "bc8f0ba",
+    "head": "c1c8060",
     "next": "Twój odsłuch kitów 52–55 (strona v18) i wybór perkusji z zestawu C (Q43); potem U42–U45 na LXR po sprawdzeniach 0.7",
-    "updated_at": "2026-11-12T00:17:00+01:00",
-    "now": "W tle: przewodnik pracy z LICHOMAT 0.8 (E10.7)"
+    "updated_at": "2026-11-12T00:19:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -1254,7 +1254,7 @@
     {
       "id": "E10.7",
       "epic": "E10",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Instrukcja pod sposób pracy: co inaczej niż w fw 1.7, groove w 5 minut",
       "updated": "2026-11-12"
     },
@@ -5249,6 +5249,11 @@
       "n": 695,
       "at": "2026-11-12 00:17",
       "text": "E10.7 rusza: krótki przewodnik po polsku (groove w 5 minut na LXR z generatorem i kitem ECHO, tabela: co inaczej niż w fw 1.7, czego unikać)."
+    },
+    {
+      "n": 696,
+      "at": "2026-11-12 00:19",
+      "text": "E10.7 zrobione (c1c8060): docs/lichomat/praca-z-lichomat.md, krótki przewodnik po polsku: groove w 5 minut na LXR (kit ECHO, stopa ręcznie, generator na głosach 6, 2, 3, 5, opcjonalnie prp, przeglądanie sed/den/lev/var, styl 0 na Twoich akcentach, und, pogłos z freeze i duckingiem, szablony na hihatach, zapis), tabela 26 obszarów: co inaczej niż w fw 1.7 i od której wersji, oraz czego unikać. Link z instrukcji."
     }
   ]
 }
