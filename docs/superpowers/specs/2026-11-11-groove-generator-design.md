@@ -274,3 +274,21 @@ Style (g = ghost, vel z `lev`; G = akcent, 127):
 - **Velocity:** g = `lev` bez przesunięcia, G = 127. Domyślne −8 dB to z tablicy vel 51.
 - **Nuta:** 60 + `not` na każdym uderzeniu. Druga nuta i reguła „ostatnie uderzenie przed stopą na 127” z §4.2 odpadają; §4.2 opisuje już tylko stary sub, zastąpiony tą sekcją.
 - **`sty` 0:** jak dotąd, przycinany do 1.
+
+## 11. Po przeglądzie całości (11.11, moje decyzje)
+
+- **Styl 0 nie czyta własnych kroków jako Twoich akcentów.** Dotąd styl 0 (`hat` i `prc`) brał za akcent każdy krok z velocity ≥ 64. Po pierwszym przeliczeniu były wśród nich także kroki generatora: uderzenia `var` +n na 127 i ghosty przy `lev` ≥ −8 dB. Akcentów przybywało z każdą zmianą, a `sed` 0 nie wracał do pierwszego wzorca.
+  - Teraz firmware pamięta dla każdej ścieżki, które kroki sam zapisał przy ostatnim przeliczeniu: maska 64 bitów, tylko w pamięci, ważna dla patternu, na którym ścieżka była ostatnio generowana.
+  - Przy kolejnym przeliczeniu kroki z maski nie są akcentami, nawet z velocity ≥ 64. To samo dotyczy reguły „styl 0 bez akcentów gra jak styl 1” (§9).
+  - Krok poprawiony ręcznie, który był w masce, nie liczy się jako akcent: następna zmiana i tak go zastępuje (§3). Akcent dopisany na pustym kroku się liczy.
+- **Maska jest pusta:**
+  - po ustawieniu `typ` na `---`, więc ręczne poprawki akcentów robi się przy `---`, a po powrocie do `hat` albo `prc` każdy krok z velocity ≥ 64 jest Twoim akcentem;
+  - po `und`;
+  - na patternie innym niż ten, na którym ścieżka była ostatnio generowana;
+  - po włączeniu LXR.
+- **Prototyp:** `generate()` dostaje maskę kroków poprzedniego przeliczenia (domyślnie pusta) i oddaje maskę kroków, które zapisał (`_Out.written`). Wektory dostają przypadki z maską. Bez maski wynik jest bajt w bajt taki jak dotąd.
+- **Przeładowanie grającego patternu w trakcie zapisu** (przycisk patternu albo Program Change na ten sam pattern) przerywa zapis tak jak zmiana patternu: licznik zmian patternu zamiast samego numeru. Tak samo `und`.
+- **„Ta sama wartość nic nie robi”** (§10, uzupełnienie do §3) dotyczy patternu, na którym ścieżka była ostatnio generowana. Na innym patternie pierwsze dotknięcie parametru, także tą samą wartością, pisze tam ścieżkę. Ustawienia należą do ścieżki, nie do patternu, a tylko tak `typ` ustawiony wcześniej zadziała na nowym patternie. Instrukcja to opisuje.
+- **Bez zmian:**
+  - menu odświeża wartości z przerwania przy zmianie taktu, jak dla `PAR_TRACK_*`; w najgorszym razie ekran na chwilę pokazuje starą wartość;
+  - `vol` włącza się w kicie, który jest wczytany teraz. Przy autoload kitu inny pattern może wczytać kit z `vol` wyłączonym; notatki do wydania to opisują.
