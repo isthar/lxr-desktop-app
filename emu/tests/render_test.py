@@ -1646,9 +1646,9 @@ def V08_ui(t):
           'den 7: %r' % rows['den7'])
     check(re.match(r'TYP.sty.den.lev', rows['again'][0]) and re.match(r'prp.  1.  7.-15', rows['again'][1]),
           'typ +1 at prp: %r' % rows['again'])
-    # var, not and shf with their signs, as mic: sub's not -2, shf -3 and +8; lev too: sub's -3
-    check(re.match(r'sub.  1.  0. -3', rows['sub'][1]), "sub's lev: %r" % rows['sub'])
-    check(re.match(r'var.NOT.sed.und', rows['subnot'][0]) and re.match(r'  0. -2.  0.---', rows['subnot'][1]),
+    # var, not and shf with their signs, as mic: sub's lev -8, shf -3 and +8; not 0 shows as '  0'
+    check(re.match(r'sub.  1.  3. -8', rows['sub'][1]), "sub's lev: %r" % rows['sub'])
+    check(re.match(r'var.NOT.sed.und', rows['subnot'][0]) and re.match(r'  0.  0.  0.---', rows['subnot'][1]),
           "sub's not: %r" % rows['subnot'])
     check(re.match(r'src.SHF', rows['shfneg'][0]) and re.match(r'  1. -3', rows['shfneg'][1]), 'shf -3: %r' % rows['shfneg'])
     check(re.match(r'  1. \+8', rows['shfpos'][1]), 'shf +8: %r' % rows['shfpos'])
