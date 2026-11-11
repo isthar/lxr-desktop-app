@@ -352,6 +352,168 @@ TEST(pgen_core_hat_style0_reads_as_played)
 	}
 }
 
+TEST(pgen_core_types)
+{
+	/* the spec's own words, one rule a type; the vectors check the rest */
+	PatternGenTrack t, k, u;
+	static const uint16_t bar[8] = { 0, 0x8888u, 0xCCCCu, 0xEEEEu, 0x4444u, 0x4C4Cu, 0x40C0u, 0x0CCCu };
+	for (uint8_t sty = 1; sty <= 7; sty++)	/* sub §4.2 with the default kick; style 7's second bar */
+	{
+		gen((PatternGenSettings){ PG_TYPE_SUB, sty, 0, -3, 0, -2, 0, 5, 0 }, &t, NULL);
+		ASSERT_EQ(t.on[0], bar[sty]); ASSERT_EQ(t.on[1], sty == 7 ? 0xECCCu : bar[sty]); ASSERT_EQ(t.on[3], t.on[1]);
+	}
+	static const struct { uint8_t sty, den, st, prob; } one[] = {	/* rar §4.4: 4:4 109, 2:2 102, 1:4 106, 1:2 101 */
+		{ 1, 1, 48, 109 }, { 1, 2, 48, 102 }, { 2, 1, 0, 106 }, { 2, 3, 0, 101 }, { 2, 4, 0, 100 } };
+	for (unsigned i = 0; i < sizeof one / sizeof one[0]; i++)
+	{
+		ASSERT_EQ(gen((PatternGenSettings){ PG_TYPE_RAR, one[i].sty, one[i].den, 0, 0, 0, 0, 5, 0 }, &t, NULL), PG_WROTE);
+		ASSERT_EQ(bits(t.on[0]) + bits(t.on[1]) + bits(t.on[2]) + bits(t.on[3]), 1u);
+		ASSERT_TRUE(isOn(&t, one[i].st)); ASSERT_EQ(t.step[one[i].st].prob, one[i].prob);
+	}
+	gen((PatternGenSettings){ PG_TYPE_RAR, 1, 4, 0, 0, 0, 0, 5, 0 }, &t, NULL);	/* G19: the stutter, x4 */
+	ASSERT_EQ(t.on[3], 0x0F01u); ASSERT_EQ(t.timing[57].flam, 3); ASSERT_EQ(t.step[57].prob, 102);
+	/* prp §4.5: from its own track nothing; style 1: the source (1 at 2:2, 6 at 40) 5 later, note + 3 */
+	cleared(&k);
+	k.on[0] = (1u << 0) | (1u << 5);
+	k.step[0].prob = 102;
+	k.step[5].volume = 40;
+	const PatternGenSource src = { k.step, { k.on[0], 0, 0, 0 }, 0 };
+	const PatternGenSettings own = { PG_TYPE_PRP, 1, 3, -15, 0, 3, 0, 5, 5 };
+	cleared(&t);
+	memcpy(&u, &t, sizeof t);
+	ASSERT_EQ(patternGen_generate(&own, 5, &src, &t), 0); ASSERT_EQ(memcmp(&t, &u, sizeof t), 0);
+	ASSERT_EQ(gen((PatternGenSettings){ PG_TYPE_PRP, 1, 3, -15, 0, 3, 0, 0, 5 }, &t, &src), PG_WROTE | PG_SOFT);
+	for (unsigned b = 0; b < PG_BARS; b++)
+		ASSERT_EQ(t.on[b], (1u << 5) | (1u << 10));
+	ASSERT_EQ(t.step[5].prob, 102); ASSERT_EQ(t.step[10].volume, 40); ASSERT_EQ(t.step[10].note, 63);
+}
+
+TEST(pgen_core_soft_below_127)
+{
+	/* §3: vol goes on for a written step below 127. prp style 1 copies the source's velocity (bits
+	 * 0-6): 126 is soft; 127 and 255 (the legacy bit 7, played as 127) are not */
+	static const struct { uint8_t vel, copied, ret; } c[] = {
+		{ 126, 126, PG_WROTE | PG_SOFT }, { 127, 127, PG_WROTE }, { 255, 127, PG_WROTE } };
+	for (unsigned i = 0; i < sizeof c / sizeof c[0]; i++)
+	{
+		PatternGenTrack k, t;
+		cleared(&k);
+		k.on[0] = 1u << 2;
+		k.step[2].volume = c[i].vel;
+		const PatternGenSource src = { k.step, { k.on[0], 0, 0, 0 }, 16 };
+		ASSERT_EQ(gen((PatternGenSettings){ PG_TYPE_PRP, 1, 3, -15, 0, 0, 0, 0, 0 }, &t, &src), c[i].ret);
+		ASSERT_EQ(t.on[0], 1u << 2); ASSERT_EQ(t.step[2].volume, c[i].copied);
+	}
+}
+
+/** k cleared with steps on at the bits of bar 1, as a 16-step source */
+static PatternGenSource source(PatternGenTrack *k, uint16_t bar1)
+{
+	cleared(k);
+	k->on[0] = bar1;
+	return (PatternGenSource){ k->step, { bar1, 0, 0, 0 }, 16 };
+}
+
+TEST(pgen_core_kick_as_played)
+{
+	/* §4.2, §8: the kick is bar 1 of track src as it plays, read through sub style 2 (..xx a quarter,
+	 * never on a kick). 6 steps with step 1 on (and step 10, past the length) play on 1 7 13; a kick on
+	 * 3 (track 1, generating track 2); src on the track itself, an empty track or none: 1 5 9 13 */
+	PatternGenTrack t, k;
+	PatternGenSource src = source(&k, (1u << 0) | (1u << 9));
+	src.length = 6;
+	PatternGenSettings s = { PG_TYPE_SUB, 2, 0, -3, 0, -2, 0, 0, 0 };
+	cleared(&t);
+	ASSERT_EQ(patternGen_generate(&s, 1, &src, &t), PG_WROTE | PG_SOFT);
+	for (unsigned b = 0; b < PG_BARS; b++)
+		ASSERT_EQ(t.on[b], 0xCC8Cu);
+	src = source(&k, 1u << 2);
+	cleared(&t);
+	(void)patternGen_generate(&s, 1, &src, &t);
+	ASSERT_EQ(t.on[0], 0xCCC8u); ASSERT_EQ(t.on[3], 0xCCC8u);
+	for (unsigned i = 0; i < 3u; i++)	/* step 4 before the kick on 5 at 127, step 3 at lev */
+	{
+		s.src = (i == 0u) ? 1 : 0;
+		src = source(&k, (i == 0u) ? (1u << 2) : 0u);
+		cleared(&t);
+		(void)patternGen_generate(&s, 1, (i == 2u) ? NULL : &src, &t);
+		ASSERT_EQ(t.on[0], 0xCCCCu); ASSERT_EQ(t.step[3].volume, 127); ASSERT_EQ(t.step[2].volume, 90);
+	}
+}
+
+TEST(pgen_core_prc_weights)
+{
+	/* §4.3's weights decide, found with gen.py on track 3, den 1: style 2 sed 5 takes the offbeat 3
+	 * (6) and its ghost on 2; style 3 sed 0 with the kick on 2 6 10 14 takes step 4 (8), not step 1
+	 * (1), and its ghost on 3; var +1 puts its 2:2 in bar 4 where steps 13-16 weigh x4 */
+	PatternGenTrack t, k;
+	const PatternGenSource kick = source(&k, 0x2222u);
+	PatternGenSettings s = { PG_TYPE_PRC, 2, 1, -13, 0, 0, 5, 0, 0 };
+	cleared(&t);
+	ASSERT_EQ(patternGen_generate(&s, 2, NULL, &t), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(t.on[0], 0x0006u); ASSERT_EQ(t.step[2].volume, 127);
+	s = (PatternGenSettings){ PG_TYPE_PRC, 3, 1, -13, 0, 0, 0, 0, 0 };
+	cleared(&t);
+	ASSERT_EQ(patternGen_generate(&s, 2, &kick, &t), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(t.on[0], 0x000Cu); ASSERT_EQ(t.step[3].volume, 127);
+	static const struct { uint8_t sty, sed; uint16_t late; } v[] = {
+		{ 1, 10, 1u << 14 }, { 2, 4, 1u << 15 }, { 3, 1, 1u << 14 }, { 4, 51, 1u << 13 } };
+	for (unsigned i = 0; i < sizeof v / sizeof v[0]; i++)
+	{
+		s = (PatternGenSettings){ PG_TYPE_PRC, v[i].sty, 1, -13, 1, 0, v[i].sed, 0, 0 };
+		cleared(&t);
+		(void)patternGen_generate(&s, 2, NULL, &t);
+		uint16_t late = 0;
+		for (unsigned p = 0; p < 16u; p++)
+			late |= (uint16_t)((isOn(&t, 48u + p) && (t.step[48u + p].prob == 102)) ? 1u << p : 0u);
+		ASSERT_EQ(late, v[i].late);
+	}
+}
+
+TEST(pgen_core_rar_mixed_keeps_its_two_steps)
+{
+	/* §4.4 style 4 with the kick on 2 6 10 14: steps 1 (1:2) and 49 (4:4) stay whatever the scatter's
+	 * keys (in gen.py 54 of the 100 seeds rank one of them among the 8 best); den 10 - 2 = 8 at 25 %,
+	 * off the kick */
+	PatternGenTrack t, k;
+	const PatternGenSource kick = source(&k, 0x2222u);
+	for (uint8_t sed = 0; sed <= PG_SED_MAX; sed++)
+	{
+		const PatternGenSettings s = { PG_TYPE_RAR, 4, 10, 0, 0, 0, sed, 0, 0 };
+		cleared(&t);
+		ASSERT_EQ(patternGen_generate(&s, 4, &kick, &t), PG_WROTE);
+		ASSERT_TRUE(isOn(&t, 0)); ASSERT_EQ(t.step[0].prob, 101); ASSERT_TRUE(isOn(&t, 48)); ASSERT_EQ(t.step[48].prob, 109);
+		unsigned on = 0, rare = 0;
+		for (unsigned st = 0; st < PG_STEPS; st++)
+		{
+			if (!isOn(&t, st))
+				continue;
+			ASSERT_TRUE((st & 3u) != 1u);
+			on++;
+			rare += t.step[st].prob == 25;
+		}
+		ASSERT_EQ(on, 10u); ASSERT_EQ(rare, 8u);
+	}
+}
+
+TEST(pgen_core_prp_accent_at_64)
+{
+	/* G21: an accent is a source step at 64 or above. 64 on step 5, 63 on step 9: style 3's pickup on
+	 * step 4 and style 4's echo (shf +2) on step 7, at lev; the 63 gets neither */
+	PatternGenTrack t, k;
+	const PatternGenSource src = source(&k, (1u << 4) | (1u << 8));
+	k.step[4].volume = 64;
+	k.step[8].volume = 63;
+	static const struct { uint8_t sty; uint16_t bar; } c[] = { { 3, 1u << 3 }, { 4, 1u << 6 } };
+	for (unsigned i = 0; i < sizeof c / sizeof c[0]; i++)
+	{
+		ASSERT_EQ(gen((PatternGenSettings){ PG_TYPE_PRP, c[i].sty, 4, -15, 0, 0, 0, 0, 2 }, &t, &src), PG_WROTE | PG_SOFT);
+		for (unsigned b = 0; b < PG_BARS; b++)
+			ASSERT_EQ(t.on[b], c[i].bar);
+		ASSERT_EQ(t.step[(c[i].sty == 3u) ? 3 : 6].volume, 23);
+	}
+}
+
 /* tools/gen/vectors.json (tests/pattern_gen_vectors.py): the dB table, the random generator's start
  * states (bytes sed typ sty track) and first draws, the distinct tracks in the firmware's bytes, the
  * cases (src, cur, out: an index into PGV_TRACK, -1 a cleared track) */
@@ -360,7 +522,7 @@ typedef struct { uint8_t length; uint16_t on[PG_BARS]; uint8_t step[PG_STEPS * s
 	uint8_t fine[STEP_FINE_BYTES]; } pgv_track_t;
 typedef struct { const char *name; PatternGenSettings set; uint8_t track, vol; int16_t src, cur, out; } pgv_t;
 #include "pattern_gen_vectors.h"
-#define PGV_TYPES_DONE	(PG_TYPE_HAT + 1)	/* Task 2: --- and hat; Task 3 sets PG_TYPES */
+#define PGV_TYPES_DONE	PG_TYPES	/* every type (Task 3) */
 
 TEST(pgen_vectors_vel_table)
 {
@@ -453,6 +615,25 @@ TEST(pgen_vectors_byte_for_byte)
 	printf("%u vectors, %u differ\n", run, bad);
 	ASSERT_TRUE(run > 0u);
 	ASSERT_EQ(bad, 0u);
+}
+
+TEST(pgen_vectors_cover_the_settings)
+{
+	/* the vectors reach every style row of each type and the ends of the ranges */
+	unsigned sty[PG_TYPES] = { 0 }, ends = 0;
+	for (unsigned v = 0; v < PGV_COUNT; v++)
+	{
+		const PatternGenSettings *s = &PGV[v].set;
+		ASSERT_TRUE((s->typ < PG_TYPES) && (s->sty <= PG_STY_MAX));
+		sty[s->typ] |= 1u << s->sty;
+		ends |= (unsigned)(s->den == 0) | (unsigned)(s->den == 16) << 1 | (unsigned)(s->lev == -30) << 2
+			| (unsigned)(s->lev == 0) << 3 | (unsigned)(s->var == -4) << 4 | (unsigned)(s->var == 4) << 5
+			| (unsigned)(s->shf == -8) << 6 | (unsigned)(s->shf == 8) << 7 | (unsigned)(s->src == PGV[v].track) << 8
+			| (unsigned)(s->note != 0) << 9;
+	}
+	ASSERT_EQ(sty[PG_TYPE_HAT] & 0x1Fu, 0x1Fu); ASSERT_EQ(sty[PG_TYPE_SUB] & 0x1FEu, 0x1FEu);
+	ASSERT_EQ(sty[PG_TYPE_PRC] & 0x1Fu, 0x1Fu); ASSERT_EQ(sty[PG_TYPE_RAR] & 0x1Eu, 0x1Eu);
+	ASSERT_EQ(sty[PG_TYPE_PRP] & 0x1Eu, 0x1Eu); ASSERT_EQ(ends, 0x3FFu);
 }
 
 TEST_MAIN()
