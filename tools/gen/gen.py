@@ -36,7 +36,8 @@ the spec leaves open are marked "CHOICE" where they are decided:
   prob without the slide flag; sty 3 and 4 take the source accent's prob without the
   slide flag (spec 8), the velocity from lev and note 60 + not;
 - the level offset of every kind is drawn (hat's range for sub, rar, prp); a level is
-  clamped to 0...-30 dB; a sty outside the kind's styles is clamped into them.
+  clamped to 0...-30 dB; a sty outside the kind's styles is clamped into them; a typ
+  outside 0-5 is '---': the track stays as it is.
 
     from gen import Settings, generate, apply_type_defaults
     s = apply_type_defaults(Settings(), 'hat')
@@ -130,22 +131,29 @@ class Settings:
     shf: int = 0
 
     def clamped(self) -> 'Settings':
-        """every parameter clamped into its menu range (spec 3), sty into the kind's styles"""
+        """every parameter clamped into its menu range (spec 3), sty into the kind's styles;
+        CHOICE: a typ outside 0-5 (a stray byte) is '---', so it never wipes a track"""
         v = {k: min(max(int(getattr(self, k)), lo), hi) for k, (lo, hi) in RANGES.items()}
+        if not RANGES['typ'][0] <= int(self.typ) <= RANGES['typ'][1]:
+            v['typ'] = TYP_OFF
         if v['typ'] in STY_RANGE:
             lo, hi = STY_RANGE[v['typ']]
             v['sty'] = min(max(v['sty'], lo), hi)
         return Settings(**v)
 
     def as_dict(self) -> dict:
-        return dict(typ=TYP_NAMES[self.typ], sty=self.sty, den=self.den, lev=self.lev,
+        """the settings as the vectors hold them: typ by name, a typ outside 0-5 as its number"""
+        typ = TYP_NAMES[self.typ] if 0 <= self.typ < len(TYP_NAMES) else self.typ
+        return dict(typ=typ, sty=self.sty, den=self.den, lev=self.lev,
                     var=self.var, **{'not': self.not_}, sed=self.sed, src=self.src, shf=self.shf)
 
 
 def apply_type_defaults(settings: Settings, typ) -> Settings:
     """settings with typ chosen: sty den lev var not from the kind's table (spec 3), the
-    rest kept; '---' only switches the generator off"""
+    rest kept; '---' only switches the generator off; a typ outside 0-5 changes nothing"""
     t = typ_code(typ)
+    if not 0 <= t < len(TYP_NAMES):
+        return settings
     return dataclasses.replace(settings, typ=t, **TYPE_DEFAULTS.get(t, {}))
 
 

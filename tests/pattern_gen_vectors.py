@@ -46,9 +46,10 @@ def c_string(s):
 
 def settings(s, name):
     v = dict(s)
-    if v.get('typ') not in TYPES:
-        fail('%s: typ %r is not one of %s' % (name, v.get('typ'), ' '.join(TYPES)))
-    v['typ'] = TYPES.index(v['typ'])
+    if v.get('typ') in TYPES:
+        v['typ'] = TYPES.index(v['typ'])
+    elif not isinstance(v.get('typ'), int) or v['typ'] < len(TYPES):   # a number only past prp
+        fail('%s: typ %r is not one of %s or a number past them' % (name, v.get('typ'), ' '.join(TYPES)))
     v['src'] = integer(v.get('src'), 1, 7, "%s: src (the menu's 1-7)" % name) - 1
     if set(v) != {k for k, _, _ in FIELDS}:
         fail('%s: the settings are %s' % (name, sorted(v)))

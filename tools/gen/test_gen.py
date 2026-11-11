@@ -130,6 +130,19 @@ class Defaults(unittest.TestCase):
         cur = user_track()
         self.assertEqual(generate(Settings(), 2, KICK, cur), cur)
 
+    def test_typ_out_of_range_is_off(self):
+        # a typ outside 0-5 (a stray byte) is '---': the track stays as it is, and choosing it
+        # loads no defaults, so it must not wipe a track
+        cur = user_track()
+        base = Settings(sed=33, src=4, shf=-3, sty=2, den=9, lev=-1, var=-4, not_=5)
+        for typ in (6, 7, 100, 255, -1):
+            s = dataclasses.replace(S('hat'), typ=typ)
+            self.assertEqual(s.clamped().typ, gen.TYP_OFF)
+            out = generate(s, 2, KICK, cur)
+            self.assertEqual(out, cur)
+            self.assertFalse(out.needs_vol)
+            self.assertEqual(apply_type_defaults(base, typ), base)
+
 
 class Always(unittest.TestCase):
     """spec 3: length 64, written steps clean, vol on when a velocity under 127 is written"""
@@ -824,7 +837,7 @@ class Vectors(unittest.TestCase):
         self.assertGreaterEqual(len(v['cases']), 150)
         for c in v['cases']:
             st = c['settings']
-            s = Settings(typ=gen.TYP_NAMES.index(st['typ']), sty=st['sty'], den=st['den'], lev=st['lev'],
+            s = Settings(typ=gen.typ_code(st['typ']), sty=st['sty'], den=st['den'], lev=st['lev'],
                          var=st['var'], not_=st['not'], sed=st['sed'], src=st['src'], shf=st['shf'])
             out = generate(s, c['track'], Track.from_json(c['src']), Track.from_json(c['cur']))
             self.assertEqual(out.to_json(), c['out'], c['name'])

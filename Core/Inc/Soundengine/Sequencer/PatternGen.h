@@ -73,11 +73,11 @@ typedef struct PatternGenSource
  * read (the kick is then 1 5 9 13, and prp writes nothing). Every track is read as it plays: shorter
  * than 64 steps, it repeats to 64 (spec §8). Style 0 of hat and prc on a track without an accent as
  * it plays is style 1, seeded with style 0 (spec §9). Returns PG_WROTE | PG_SOFT, or 0 when io is
- * left as it was: typ ---, prp from its own track, no track 0..6 */
+ * left as it was: typ --- or past prp, prp from its own track, no track 0..6 */
 uint8_t patternGen_generate(const PatternGenSettings *s, uint8_t track, const PatternGenSource *src, PatternGenTrack *io);
 /** s as gen.py's Settings.clamped(): every field clamped into its range (spec §3), sty into the
- * styles of typ (spec §8: hat and prc 0..4, sub 1..8, rar and prp 1..4); patternGen_generate()
- * applies it itself */
+ * styles of typ (spec §8: hat and prc 0..4, sub 1..8, rar and prp 1..4); a typ past prp is ---, so a
+ * stray byte never wipes a track; patternGen_generate() applies it itself */
 PatternGenSettings patternGen_checked(PatternGenSettings s);
 /** gen.py's apply_type_defaults(): typ into s and the type's sty den lev var not (spec §3); typ ---
  * sets typ only, a typ past prp changes nothing */

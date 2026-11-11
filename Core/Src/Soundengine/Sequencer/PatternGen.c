@@ -77,7 +77,8 @@ static int pg_clamp(int v, int lo, int hi) { return (v < lo) ? lo : (v > hi) ? h
 
 PatternGenSettings patternGen_checked(PatternGenSettings s)
 {
-	s.typ = (uint8_t)pg_clamp(s.typ, PG_TYPE_OFF, PG_TYPES - 1);
+	if (s.typ >= PG_TYPES)	/* LICHOMAT v0.8: a typ past prp is ---, a stray byte must not wipe a track */
+		s.typ = PG_TYPE_OFF;
 	s.sty = (uint8_t)pg_clamp(s.sty, pg_styMin[s.typ], pg_styMax[s.typ]);	/* within 0..8 */
 	s.den = (uint8_t)pg_clamp(s.den, 0, PG_DEN_MAX);
 	s.lev = (int8_t)pg_clamp(s.lev, PG_LEV_MIN, 0);

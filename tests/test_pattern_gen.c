@@ -125,10 +125,12 @@ TEST(pgen_core_settings)
 	ASSERT_EQ(memcmp(&o, &o2, sizeof o), 0);
 	patternGen_typeDefaults(PG_TYPE_HAT, NULL);
 
-	/* gen.py Settings.clamped(): each field clamped into its range, sty into the type's styles (spec §8) */
+	/* gen.py Settings.clamped(): each field clamped into its range, sty into the type's styles (spec §8);
+	 * a typ past prp is --- (a stray byte must not wipe a track), its sty 0..8 */
 	static const struct { PatternGenSettings in, out; } clamp[] = {
-		{ { 6, 9, 17, -31, 5, 25, 100, 7, 9 }, { 5, 4, 16, -30, 4, 24, 99, 6, 8 } },
-		{ { 255, 255, 255, -128, -128, -128, 255, 255, -128 }, { 5, 4, 16, -30, -4, -24, 99, 6, -8 } },
+		{ { 6, 9, 17, -31, 5, 25, 100, 7, 9 }, { 0, 8, 16, -30, 4, 24, 99, 6, 8 } },
+		{ { 255, 255, 255, -128, -128, -128, 255, 255, -128 }, { 0, 8, 16, -30, -4, -24, 99, 6, -8 } },
+		{ { 6, 1, 7, -15, 1, 0, 0, 0, 0 }, { 0, 1, 7, -15, 1, 0, 0, 0, 0 } },
 		{ { 0, 9, 0, 1, -5, -25, 0, 0, -9 }, { 0, 8, 0, 0, -4, -24, 0, 0, -8 } },
 		{ { 0, 0, 0, 127, 127, 127, 0, 0, 127 }, { 0, 0, 0, 0, 4, 24, 0, 0, 8 } },
 		{ { 1, 5, 7, -15, 1, 0, 0, 0, 0 }, { 1, 4, 7, -15, 1, 0, 0, 0, 0 } },	/* hat 0..4 */
@@ -153,7 +155,8 @@ TEST(pgen_core_settings)
 		ASSERT_EQ(memcmp(&c, &clamp[i].out, sizeof c), 0);
 	}
 
-	/* typ ---, prp from its own track, no track 7, no settings or track: 0 and nothing written */
+	/* typ --- or past prp (6, 255), prp from its own track, no track 7, no settings or track: 0 and
+	 * nothing written */
 	PatternGenTrack t, u;
 	cleared(&t);
 	t.on[1] = 0x00F0u;
@@ -165,6 +168,11 @@ TEST(pgen_core_settings)
 	ASSERT_EQ(patternGen_generate(&none, 5, &src, &t), 0); ASSERT_EQ(patternGen_generate(&own, 5, &src, &t), 0);
 	ASSERT_EQ(patternGen_generate(&h, 7, NULL, &t), 0); ASSERT_EQ(patternGen_generate(NULL, 5, NULL, &t), 0);
 	ASSERT_EQ(patternGen_generate(&h, 5, NULL, NULL), 0);
+	for (unsigned typ = PG_TYPES; typ <= 255u; typ++)
+	{
+		const PatternGenSettings stray = { (uint8_t)typ, 1, 7, -15, 1, 0, 0, 0, 0 };
+		ASSERT_EQ(patternGen_generate(&stray, 5, &src, &t), 0);
+	}
 	ASSERT_EQ(memcmp(&t, &u, sizeof t), 0);
 }
 
@@ -845,7 +853,8 @@ static void pgvLoad(int16_t i, PatternGenTrack *t)
 static int pgvDiffers(unsigned v, uint8_t got, const PatternGenTrack *g, const PatternGenTrack *w)
 {
 	const pgv_t *x = &PGV[v];
-	const uint8_t want = ((x->set.typ == PG_TYPE_OFF) || ((x->set.typ == PG_TYPE_PRP) && (x->set.src == x->track)))
+	const PatternGenSettings c = patternGen_checked(x->set);	/* a typ past prp is --- */
+	const uint8_t want = ((c.typ == PG_TYPE_OFF) || ((c.typ == PG_TYPE_PRP) && (c.src == x->track)))
 		? 0u : (uint8_t)(PG_WROTE | (x->vol ? PG_SOFT : 0u));
 	if (got != want)
 	{
@@ -894,12 +903,17 @@ TEST(pgen_vectors_byte_for_byte)
 
 TEST(pgen_vectors_cover_the_settings)
 {
-	/* the vectors reach every style row of each type and the ends of the ranges */
+	/* the vectors reach every style row of each type, a typ past prp and the ends of the ranges */
 	unsigned sty[PG_TYPES] = { 0 }, ends = 0;
 	for (unsigned v = 0; v < PGV_COUNT; v++)
 	{
 		const PatternGenSettings *s = &PGV[v].set;
-		ASSERT_TRUE((s->typ < PG_TYPES) && (s->sty <= PG_STY_MAX));
+		ASSERT_TRUE(s->sty <= PG_STY_MAX);
+		if (s->typ >= PG_TYPES)
+		{
+			ends |= 1u << 10;
+			continue;
+		}
 		sty[s->typ] |= 1u << s->sty;
 		ends |= (unsigned)(s->den == 0) | (unsigned)(s->den == 16) << 1 | (unsigned)(s->lev == -30) << 2
 			| (unsigned)(s->lev == 0) << 3 | (unsigned)(s->var == -4) << 4 | (unsigned)(s->var == 4) << 5
@@ -908,7 +922,7 @@ TEST(pgen_vectors_cover_the_settings)
 	}
 	ASSERT_EQ(sty[PG_TYPE_HAT] & 0x1Fu, 0x1Fu); ASSERT_EQ(sty[PG_TYPE_SUB] & 0x1FEu, 0x1FEu);
 	ASSERT_EQ(sty[PG_TYPE_PRC] & 0x1Fu, 0x1Fu); ASSERT_EQ(sty[PG_TYPE_RAR] & 0x1Eu, 0x1Eu);
-	ASSERT_EQ(sty[PG_TYPE_PRP] & 0x1Eu, 0x1Eu); ASSERT_EQ(ends, 0x3FFu);
+	ASSERT_EQ(sty[PG_TYPE_PRP] & 0x1Eu, 0x1Eu); ASSERT_EQ(ends & 0x3FFu, 0x3FFu);
 }
 
 TEST_MAIN()

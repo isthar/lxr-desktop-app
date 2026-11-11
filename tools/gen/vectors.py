@@ -12,7 +12,8 @@ draws for a few seeds, and the cases. A track is
   steps    64 x 7 bytes in hex: volume, prob, note, param1Nr, param1Val, param2Nr, param2Val
   timing   64 bytes in hex: StepTiming, flam in bits 0-3, shift in bits 4-7 (7 = no shift)
   fine     32 bytes in hex: step 2i in bits 0-3, step 2i+1 in bits 4-7, signed -6..+5
-A case: settings (typ by name, `not` as in the menu), track (the destination, 0-6),
+A case: settings (typ by name, or as a number past prp, which is '---'; `not` as in the
+menu), track (the destination, 0-6),
 src (the content of track settings.src, or null: a cleared track), cur (the
 destination's content now, or null), out (what the generator writes), vol (whether it
 wrote a velocity under 127, so the voice's vol must be on).
@@ -36,7 +37,7 @@ from gen import Settings, Step, Track, apply_type_defaults, generate  # noqa: E4
 FORMAT = ('track: length 1-64; active: 4 words, bar 1-4, bit n = step n of the bar; steps: 64 x 7 bytes '
           'hex (volume prob note param1Nr param1Val param2Nr param2Val); timing: 64 bytes hex, flam bits '
           '0-3, shift bits 4-7 (7 = none); fine: 32 bytes hex, step 2i bits 0-3, 2i+1 bits 4-7, signed. '
-          'case: settings (typ by name), track 0-6, src = content of track settings.src (null: cleared, '
+          'case: settings (typ by name, or a number past prp, which is ---), track 0-6, src = content of track settings.src (null: cleared, '
           'length 16), cur = the destination now (null: cleared), out, vol = the voice needs vol on. '
           'prng: Rng(sed, typ, sty, track) state and its next draws (xorshift32). vel_table[d] = vel at -d dB.')
 
@@ -294,6 +295,9 @@ def cases():
     out[-1] = (out[-1][0], dataclasses.replace(out[-1][1], typ=gen.TYP_OFF), *out[-1][2:])
     add('off empty', 'sub', 1, inp=kick44())
     out[-1] = (out[-1][0], dataclasses.replace(out[-1][1], typ=gen.TYP_OFF), *out[-1][2:])
+    for typ in (6, 255):                         # a typ past prp is '---': the track stays
+        add('typ %d is off' % typ, 'prp', 3, inp=prc_source(), cur=user_hats64(), sty=1, src=3, shf=2)
+        out[-1] = (out[-1][0], dataclasses.replace(out[-1][1], typ=typ), *out[-1][2:])
     return out
 
 
