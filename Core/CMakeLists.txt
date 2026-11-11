@@ -36,9 +36,10 @@ add_library(lxr_engine OBJECT ${LXR_SOURCES_ENGINE})
 add_library(lxr_midi OBJECT ${LXR_SOURCES_MIDI})
 
 add_library(lxr_sequencer OBJECT ${LXR_SOURCES_SEQUENCER})
-# The host tests build seq_core.c and seq_syncq.c with -Wall -Wextra -Werror; the
-# firmware warns about the same for them and for seq_platform.c.
+# The host tests build seq_core.c, seq_syncq.c and, LICHOMAT v0.8, PatternGen.c with
+# -Wall -Wextra -Werror; the firmware warns about the same for them and for seq_platform.c.
 set_property(SOURCE
+    Src/Soundengine/Sequencer/PatternGen.c
     Src/Soundengine/Sequencer/seq_core.c
     Src/Soundengine/Sequencer/seq_platform.c
     Src/Soundengine/Sequencer/seq_syncq.c

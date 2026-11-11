@@ -114,9 +114,11 @@ set(LXR_SOURCES_MIDI
 
 # Step sequencer: the timing core (seq_core) and the sync input queues (seq_syncq),
 # which the host tests in tests/ build as well, the platform layer (seq_platform:
-# DWT time base, queue instances), the glue (sequencer) and the Euclidean generator.
+# DWT time base, queue instances), the glue (sequencer), the Euclidean generator and,
+# LICHOMAT v0.8, the pattern generator (PatternGen, which the host tests build as well).
 set(LXR_SOURCES_SEQUENCER
     Src/Soundengine/Sequencer/EuklidGenerator.c
+    Src/Soundengine/Sequencer/PatternGen.c
     Src/Soundengine/Sequencer/seq_core.c
     Src/Soundengine/Sequencer/seq_platform.c
     Src/Soundengine/Sequencer/seq_syncq.c
