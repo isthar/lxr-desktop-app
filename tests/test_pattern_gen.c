@@ -50,7 +50,7 @@ static PatternGenSettings hat(uint8_t sty, uint8_t den, int8_t lev, int8_t var, 
 static uint8_t gen(PatternGenSettings s, PatternGenTrack *t, const PatternGenSource *src)
 {
 	cleared(t);
-	return patternGen_generate(&s, 5, src, t);
+	return patternGen_generate(&s, 5, src, t, NULL);
 }
 
 TEST(pgen_core_db_table)
@@ -165,13 +165,13 @@ TEST(pgen_core_settings)
 	const PatternGenSettings none = { 0, 1, 7, -15, 1, 0, 0, 0, 0 }, h = hat(1, 7, -15, 0, 0);
 	const PatternGenSettings own = { PG_TYPE_PRP, 1, 4, -15, 0, 0, 0, 5, 0 };
 	const PatternGenSource src = { t.step, { 0x1111u, 0, 0, 0 }, 16 };
-	ASSERT_EQ(patternGen_generate(&none, 5, &src, &t), 0); ASSERT_EQ(patternGen_generate(&own, 5, &src, &t), 0);
-	ASSERT_EQ(patternGen_generate(&h, 7, NULL, &t), 0); ASSERT_EQ(patternGen_generate(NULL, 5, NULL, &t), 0);
-	ASSERT_EQ(patternGen_generate(&h, 5, NULL, NULL), 0);
+	ASSERT_EQ(patternGen_generate(&none, 5, &src, &t, NULL), 0); ASSERT_EQ(patternGen_generate(&own, 5, &src, &t, NULL), 0);
+	ASSERT_EQ(patternGen_generate(&h, 7, NULL, &t, NULL), 0); ASSERT_EQ(patternGen_generate(NULL, 5, NULL, &t, NULL), 0);
+	ASSERT_EQ(patternGen_generate(&h, 5, NULL, NULL, NULL), 0);
 	for (unsigned typ = PG_TYPES; typ <= 255u; typ++)
 	{
 		const PatternGenSettings stray = { (uint8_t)typ, 1, 7, -15, 1, 0, 0, 0, 0 };
-		ASSERT_EQ(patternGen_generate(&stray, 5, &src, &t), 0);
+		ASSERT_EQ(patternGen_generate(&stray, 5, &src, &t, NULL), 0);
 	}
 	ASSERT_EQ(memcmp(&t, &u, sizeof t), 0);
 }
@@ -196,7 +196,7 @@ TEST(pgen_core_hat_layout)
 		t.length = 40;
 		PatternGenSettings s = hat(1, 7, -15, 0, sed);
 		s.note = 3;
-		ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t), PG_WROTE | PG_SOFT);
+		ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t, NULL), PG_WROTE | PG_SOFT);
 		ASSERT_EQ(t.length, 64); ASSERT_EQ(t.on[0] & 0x4444u, 0x4444u); ASSERT_EQ(bits(t.on[0]), 11u);
 		for (unsigned b = 1; b < PG_BARS; b++)
 			ASSERT_EQ(t.on[b], t.on[0]);
@@ -270,7 +270,7 @@ TEST(pgen_core_hat_rank_ties)
 			cleared(&t);
 			t.on[0] = (tie[i].sty == 0u) ? 1u << 2 : 0u;
 			const PatternGenSettings s = hat(tie[i].sty, den, -15, 0, tie[i].sed);
-			ASSERT_EQ(patternGen_generate(&s, 1, NULL, &t), PG_WROTE | PG_SOFT);
+			ASSERT_EQ(patternGen_generate(&s, 1, NULL, &t, NULL), PG_WROTE | PG_SOFT);
 			for (unsigned o = 0; o < PG_STEPS; o += 16)
 			{
 				ASSERT_TRUE(isOn(&t, o + tie[i].lower)); ASSERT_EQ(isOn(&t, o + tie[i].higher), den > tie[i].den);
@@ -289,7 +289,7 @@ TEST(pgen_core_hat_style0_keeps_own_accents)
 	t.step[1].volume = 64; t.step[1].param1Nr = 9; t.step[12].volume = 63;
 	stepFine_set(t.fine, 1, -4);
 	const PatternGenSettings s = hat(0, 16, -15, 0, 5);
-	ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t, NULL), PG_WROTE | PG_SOFT);
 	for (unsigned o = 0; o < PG_STEPS; o += 16)
 	{
 		ASSERT_EQ(t.step[o + 1].volume, 64); ASSERT_EQ(t.step[o + 1].param1Nr, 9); ASSERT_EQ(stepFine_get(t.fine, (uint8_t)(o + 1)), -4);
@@ -315,7 +315,7 @@ TEST(pgen_core_hat_style0_reads_as_played)
 	t.step[5].volume = 30;
 	const Step acc = t.step[0];
 	const PatternGenSettings s = hat(0, 0, -15, 0, 0);
-	ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t), PG_WROTE);
+	ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t, NULL), PG_WROTE);
 	ASSERT_EQ(t.length, 64);
 	ASSERT_EQ(t.on[0], (1u << 0) | (1u << 12)); ASSERT_EQ(t.on[1], 1u << 8); ASSERT_EQ(t.on[2], 1u << 4);
 	ASSERT_EQ(t.on[3], (1u << 0) | (1u << 12));
@@ -342,7 +342,7 @@ TEST(pgen_core_hat_style0_reads_as_played)
 		stepFine_set(t.fine, (uint8_t)(16u * b + b), -5);
 	}
 	const PatternGenSettings f = hat(0, 15, -15, 0, 3);
-	ASSERT_EQ(patternGen_generate(&f, 5, NULL, &t), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(patternGen_generate(&f, 5, NULL, &t, NULL), PG_WROTE | PG_SOFT);
 	for (unsigned b = 0; b < PG_BARS; b++)
 	{
 		ASSERT_EQ(t.on[b], 0xFFFFu);
@@ -375,7 +375,7 @@ TEST(pgen_core_style0_keeps_raw_fine)
 		t.fine[1] = 0x09u;
 		t.fine[3] = 0xE0u;
 		const PatternGenSettings s = { typ[i], 0, 4, -15, 0, 0, 0, 0, 0 };
-		ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t) & PG_WROTE, PG_WROTE);
+		ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t, NULL) & PG_WROTE, PG_WROTE);
 		for (unsigned b = 0; b < PG_BARS; b++)
 		{
 			ASSERT_TRUE(isOn(&t, 16u * b + 2u)); ASSERT_TRUE(isOn(&t, 16u * b + 7u));
@@ -420,7 +420,7 @@ TEST(pgen_core_types)
 	const PatternGenSettings own = { PG_TYPE_PRP, 1, 3, -15, 0, 3, 0, 5, 5 };
 	cleared(&t);
 	memcpy(&u, &t, sizeof t);
-	ASSERT_EQ(patternGen_generate(&own, 5, &src, &t), 0); ASSERT_EQ(memcmp(&t, &u, sizeof t), 0);
+	ASSERT_EQ(patternGen_generate(&own, 5, &src, &t, NULL), 0); ASSERT_EQ(memcmp(&t, &u, sizeof t), 0);
 	ASSERT_EQ(gen((PatternGenSettings){ PG_TYPE_PRP, 1, 3, -15, 0, 3, 0, 0, 5 }, &t, &src), PG_WROTE | PG_SOFT);
 	for (unsigned b = 0; b < PG_BARS; b++)
 		ASSERT_EQ(t.on[b], (1u << 5) | (1u << 10));
@@ -464,19 +464,19 @@ TEST(pgen_core_kick_as_played)
 	src.length = 6;
 	PatternGenSettings s = { PG_TYPE_SUB, 6, 3, -8, 0, 0, 0, 0, 0 };
 	cleared(&t);
-	ASSERT_EQ(patternGen_generate(&s, 1, &src, &t), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(patternGen_generate(&s, 1, &src, &t, NULL), PG_WROTE | PG_SOFT);
 	for (unsigned b = 0; b < PG_BARS; b++)
 		ASSERT_EQ(t.on[b], 0xC888u);
 	src = source(&k, 1u << 3);
 	cleared(&t);
-	(void)patternGen_generate(&s, 1, &src, &t);
+	(void)patternGen_generate(&s, 1, &src, &t, NULL);
 	ASSERT_EQ(t.on[0], 0xC8C0u); ASSERT_EQ(t.on[3], 0xC8C0u);
 	for (unsigned i = 0; i < 3u; i++)
 	{
 		s.src = (i == 0u) ? 1 : 0;
 		src = source(&k, (i == 0u) ? (1u << 3) : 0u);
 		cleared(&t);
-		(void)patternGen_generate(&s, 1, (i == 2u) ? NULL : &src, &t);
+		(void)patternGen_generate(&s, 1, (i == 2u) ? NULL : &src, &t, NULL);
 		ASSERT_EQ(t.on[0], 0xC8C8u); ASSERT_EQ(t.step[14].volume, 127); ASSERT_EQ(t.step[11].volume, 51);
 	}
 }
@@ -491,11 +491,11 @@ TEST(pgen_core_prc_weights)
 	const PatternGenSource kick = source(&k, 0x2222u);
 	PatternGenSettings s = { PG_TYPE_PRC, 2, 1, -13, 0, 0, 5, 0, 0 };
 	cleared(&t);
-	ASSERT_EQ(patternGen_generate(&s, 2, NULL, &t), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(patternGen_generate(&s, 2, NULL, &t, NULL), PG_WROTE | PG_SOFT);
 	ASSERT_EQ(t.on[0], 0x0006u); ASSERT_EQ(t.step[2].volume, 127);
 	s = (PatternGenSettings){ PG_TYPE_PRC, 3, 1, -13, 0, 0, 0, 0, 0 };
 	cleared(&t);
-	ASSERT_EQ(patternGen_generate(&s, 2, &kick, &t), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(patternGen_generate(&s, 2, &kick, &t, NULL), PG_WROTE | PG_SOFT);
 	ASSERT_EQ(t.on[0], 0x000Cu); ASSERT_EQ(t.step[3].volume, 127);
 	static const struct { uint8_t sty, sed; uint16_t late; } v[] = {
 		{ 1, 2, 1u << 15 }, { 2, 1, 1u << 14 }, { 3, 0, 1u << 14 }, { 4, 0, 1u << 15 } };
@@ -503,7 +503,7 @@ TEST(pgen_core_prc_weights)
 	{
 		s = (PatternGenSettings){ PG_TYPE_PRC, v[i].sty, 1, -13, 1, 0, v[i].sed, 0, 0 };
 		cleared(&t);
-		(void)patternGen_generate(&s, 2, NULL, &t);
+		(void)patternGen_generate(&s, 2, NULL, &t, NULL);
 		uint16_t late = 0;
 		for (unsigned p = 0; p < 16u; p++)
 			late |= (uint16_t)((isOn(&t, 48u + p) && (t.step[48u + p].prob == 102)) ? 1u << p : 0u);
@@ -539,7 +539,7 @@ TEST(pgen_core_prc_bar2_moves_the_top_accent)
 				{
 					const PatternGenSettings s = { PG_TYPE_PRC, sty, den, -13, 0, 0, sed, 0, 0 };
 					cleared(&t);
-					(void)patternGen_generate(&s, 2, &kick, &t);
+					(void)patternGen_generate(&s, 2, &kick, &t, NULL);
 					const uint16_t a1 = accents(&t, 0), a2 = accents(&t, 1);
 					ASSERT_EQ(a1 & kicks[ki], 0u); ASSERT_EQ(a2 & kicks[ki], 0u);
 					ASSERT_EQ(accents(&t, 2), a1); ASSERT_EQ(accents(&t, 3), a2);
@@ -575,7 +575,7 @@ TEST(pgen_core_prc_style0_bar_by_bar)
 			t.step[16u * b + p] = (Step){ (uint8_t)(100u + b), 100, 60, 30, (uint8_t)(16u * b + p), 0xFF, 0 };
 	}
 	const PatternGenSettings s = { PG_TYPE_PRC, 0, 6, -13, 0, 0, 4, 0, 0 };
-	ASSERT_EQ(patternGen_generate(&s, 2, NULL, &t), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(patternGen_generate(&s, 2, NULL, &t, NULL), PG_WROTE | PG_SOFT);
 	for (unsigned b = 0; b < PG_BARS; b++)
 	{
 		ASSERT_EQ(t.on[b], acc[b] | ghost[b]);
@@ -605,7 +605,7 @@ TEST(pgen_core_prc_no_pickup_before_step_1)
 			{
 				const PatternGenSettings s = { PG_TYPE_PRC, sty, den, -13, 0, 0, sed, 0, 0 };
 				cleared(&t);
-				(void)patternGen_generate(&s, 2, &kick, &t);
+				(void)patternGen_generate(&s, 2, &kick, &t, NULL);
 				for (unsigned b = 0; b < PG_BARS; b++)
 				{
 					bites += (accents(&t, b) & 0x8001u) == 1u;
@@ -618,7 +618,7 @@ TEST(pgen_core_prc_no_pickup_before_step_1)
 		const PatternGenSettings s = { PG_TYPE_PRC, 0, den, -13, 0, 0, 0, 0, 0 };
 		cleared(&t);
 		t.on[0] = (1u << 0) | (1u << 6);
-		ASSERT_EQ(patternGen_generate(&s, 2, NULL, &t), PG_WROTE | PG_SOFT);
+		ASSERT_EQ(patternGen_generate(&s, 2, NULL, &t, NULL), PG_WROTE | PG_SOFT);
 		for (unsigned b = 0; b < PG_BARS; b++)
 			ASSERT_EQ(t.on[b], (1u << 0) | (1u << 5) | (1u << 6));
 	}
@@ -651,7 +651,7 @@ TEST(pgen_core_style0_without_accents)
 		{
 			const PatternGenSettings h = hat(0, 7, -15, 0, sed);
 			noAccents(&t, v);
-			ASSERT_EQ(patternGen_generate(&h, 5, NULL, &t), PG_WROTE | PG_SOFT);
+			ASSERT_EQ(patternGen_generate(&h, 5, NULL, &t, NULL), PG_WROTE | PG_SOFT);
 			for (unsigned b = 0; b < PG_BARS; b++)
 			{
 				ASSERT_EQ(t.on[b], t.on[0]); ASSERT_EQ(t.on[b] & 0x4444u, 0x4444u); ASSERT_EQ(bits(t.on[b]), 11u);
@@ -663,7 +663,7 @@ TEST(pgen_core_style0_without_accents)
 
 			const PatternGenSettings p = { PG_TYPE_PRC, 0, 3, -13, -1, 0, sed, 0, 0 };
 			noAccents(&t, v);
-			ASSERT_EQ(patternGen_generate(&p, 2, NULL, &t) & PG_WROTE, PG_WROTE);
+			ASSERT_EQ(patternGen_generate(&p, 2, NULL, &t, NULL) & PG_WROTE, PG_WROTE);
 			const uint16_t a1 = accents(&t, 0);
 			ASSERT_EQ(bits(a1), 3u); ASSERT_EQ(a1 & 0x1111u, 0u);
 			ASSERT_EQ(bits(a1 ^ accents(&t, 1)), 2u); ASSERT_EQ(accents(&t, 2), a1);
@@ -696,7 +696,7 @@ TEST(pgen_core_style0_accent_in_bar3_only)
 		{
 			memcpy(&t, &u, sizeof t);
 			const PatternGenSettings s = { typ[i], 0, (i == 0u) ? 7 : 3, -15, 0, 0, sed, 0, 0 };
-			ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t), PG_WROTE | PG_SOFT);
+			ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t, NULL), PG_WROTE | PG_SOFT);
 			ASSERT_EQ(memcmp(&t.step[36], &u.step[36], sizeof(Step)), 0);
 			ASSERT_EQ(t.timing[36].shift, 9); ASSERT_EQ(nibble(&t, 36), -3);
 			for (unsigned st = 0; st < PG_STEPS; st++)
@@ -717,7 +717,7 @@ TEST(pgen_core_style0_legacy_bit7_is_no_accent)
 	t.on[0] = 1u << 5;
 	t.step[5].volume = 0x80u | 40u;
 	const PatternGenSettings h = hat(0, 7, -15, 0, 2);
-	ASSERT_EQ(patternGen_generate(&h, 5, NULL, &t), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(patternGen_generate(&h, 5, NULL, &t, NULL), PG_WROTE | PG_SOFT);
 	for (unsigned b = 0; b < PG_BARS; b++)
 	{
 		ASSERT_EQ(t.on[b] & 0x4444u, 0x4444u); ASSERT_EQ(bits(t.on[b]), 11u);
@@ -732,7 +732,7 @@ TEST(pgen_core_style0_legacy_bit7_is_no_accent)
 		t.step[1].volume = 64;
 		t.step[5].volume = 0x80u | 40u;
 		const PatternGenSettings s = { typ[i], 0, 0, -15, 0, 0, 2, 0, 0 };
-		ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t), PG_WROTE);
+		ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t, NULL), PG_WROTE);
 		for (unsigned b = 0; b < PG_BARS; b++)
 			ASSERT_EQ(t.on[b], 1u << 1);
 		ASSERT_EQ(t.step[5].volume, 127);
@@ -751,7 +751,7 @@ TEST(pgen_core_rar_bars_1_and_4_weigh_2)
 	{
 		const PatternGenSettings s = { PG_TYPE_RAR, 3, c[i].den, 0, 0, 0, c[i].sed, 0, 0 };
 		cleared(&t);
-		ASSERT_EQ(patternGen_generate(&s, 4, &kick, &t), PG_WROTE);
+		ASSERT_EQ(patternGen_generate(&s, 4, &kick, &t, NULL), PG_WROTE);
 		ASSERT_EQ(isOn(&t, c[i].step - 1u), c[i].on);
 		ASSERT_EQ(bits(t.on[0]) + bits(t.on[1]) + bits(t.on[2]) + bits(t.on[3]), c[i].den);
 	}
@@ -768,7 +768,7 @@ TEST(pgen_core_rar_mixed_keeps_its_two_steps)
 	{
 		const PatternGenSettings s = { PG_TYPE_RAR, 4, 10, 0, 0, 0, sed, 0, 0 };
 		cleared(&t);
-		ASSERT_EQ(patternGen_generate(&s, 4, &kick, &t), PG_WROTE);
+		ASSERT_EQ(patternGen_generate(&s, 4, &kick, &t, NULL), PG_WROTE);
 		ASSERT_TRUE(isOn(&t, 0)); ASSERT_EQ(t.step[0].prob, 101); ASSERT_TRUE(isOn(&t, 48)); ASSERT_EQ(t.step[48].prob, 109);
 		unsigned on = 0, rare = 0;
 		for (unsigned st = 0; st < PG_STEPS; st++)
@@ -784,7 +784,7 @@ TEST(pgen_core_rar_mixed_keeps_its_two_steps)
 		{
 			const PatternGenSettings more = { PG_TYPE_RAR, 4, den, 0, 0, 0, sed, 0, 0 };
 			cleared(&u);
-			ASSERT_EQ(patternGen_generate(&more, 4, &kick, &u), PG_WROTE);
+			ASSERT_EQ(patternGen_generate(&more, 4, &kick, &u, NULL), PG_WROTE);
 			ASSERT_EQ(memcmp(&u, &t, sizeof u), 0);
 		}
 	}
@@ -808,13 +808,90 @@ TEST(pgen_core_prp_accent_at_64)
 	}
 }
 
+/** the steps of t on at velocity minVel or above */
+static unsigned hits(const PatternGenTrack *t, unsigned minVel)
+{
+	unsigned n = 0;
+	for (unsigned s = 0; s < PG_STEPS; s++)
+		n += isOn(t, s) && ((t->step[s].volume & 0x7Fu) >= minVel);
+	return n;
+}
+/** the steps of t that are on: the bits of on[] as one mask, bit i step i */
+static uint64_t onMask(const PatternGenTrack *t)
+{
+	return (uint64_t)t->on[0] | (uint64_t)t->on[1] << 16 | (uint64_t)t->on[2] << 32 | (uint64_t)t->on[3] << 48;
+}
+
+TEST(pgen_core_own_steps_are_no_accents)
+{
+	/* §11, finding 1 of the whole-branch review: style 0 took the generator's own steps at 64 and
+	 * above as the user's accents (var's hit at 127, ghosts at lev -6), so they grew with each change.
+	 * With the steps the last run wrote passed back in, prc style 0 var +1 on the user's 7 and 15 at
+	 * sed 0 -> 5 -> 0 writes the first track again, and hat style 0 at lev -6 keeps its 40 hits */
+	PatternGenTrack k, t, first;
+	const PatternGenSource kick = source(&k, 0x1111u);
+	static const PatternGenSettings set[2] = { { PG_TYPE_PRC, 0, 3, -13, 1, 0, 0, 0, 0 }, { PG_TYPE_HAT, 0, 7, -6, 1, 0, 0, 0, 0 } };
+	static const uint8_t seds[7] = { 0, 5, 1, 2, 3, 4, 0 };
+	for (unsigned c = 0; c < 2u; c++)
+	{
+		cleared(&t);
+		t.on[0] = (1u << 6) | (1u << 14);
+		uint64_t own = 0, firstOwn = 0;
+		for (unsigned i = 0; i < 7u; i++)
+		{
+			PatternGenSettings s = set[c];
+			s.sed = seds[i];
+			ASSERT_EQ(patternGen_generate(&s, 2, &kick, &t, &own), PG_WROTE | PG_SOFT);
+			ASSERT_EQ(own & ~onMask(&t), 0u);	/* written: on, ... */
+			ASSERT_EQ(onMask(&t) & ~own, 0x4040404040404040ull);	/* ... all but the user's 8 accents */
+			if (c == 1u)
+				ASSERT_EQ(hits(&t, 1), 40u);
+			if (i == 0u)
+			{
+				first = t;
+				firstOwn = own;
+			}
+		}
+		ASSERT_EQ(memcmp(&t, &first, sizeof t), 0); ASSERT_EQ(own, firstOwn);
+	}
+}
+
+TEST(pgen_core_own_null_out_and_as_played)
+{
+	/* §11: NULL is no mask; the steps written come back also when no step is kept (style 1: every
+	 * step on), and 0 with a return of 0; on a track shorter than 64 steps bit j masks step j where
+	 * it plays (j, j + 16, ...), and a bit past the length masks nothing */
+	PatternGenTrack t, u;
+	uint64_t own = 0x5u;
+	cleared(&t);
+	ASSERT_EQ(patternGen_generate(&(PatternGenSettings){ PG_TYPE_HAT, 1, 7, -15, 1, 0, 0, 0, 0 }, 5, NULL, &t, &own), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(own, onMask(&t));
+	const PatternGenSettings off = { PG_TYPE_OFF, 1, 7, -15, 1, 0, 0, 0, 0 }, h = hat(0, 3, -15, 0, 0);
+	ASSERT_EQ(patternGen_generate(&off, 5, NULL, &t, &own), 0); ASSERT_EQ(own, 0u);
+	own = 1u;
+	ASSERT_EQ(patternGen_generate(&h, 7, NULL, &t, &own), 0); ASSERT_EQ(own, 0u);
+	own = 1u;
+	ASSERT_EQ(patternGen_generate(&h, 5, NULL, NULL, &own), 0); ASSERT_EQ(own, 0u);
+	cleared(&t);
+	t.on[0] = 0x4444u;	/* the user's 3 7 11 15, 16 steps */
+	u = t;
+	own = 1u << 6;
+	ASSERT_EQ(patternGen_generate(&h, 5, NULL, &t, &own), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(onMask(&t) & ~own, 0x4404440444044404ull);	/* 7 goes in every bar */
+	uint64_t past = ((uint64_t)1 << 22) | ((uint64_t)1 << 38) | ((uint64_t)1 << 63);
+	PatternGenTrack v = u;
+	ASSERT_EQ(patternGen_generate(&h, 5, NULL, &u, &past), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(patternGen_generate(&h, 5, NULL, &v, NULL), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(memcmp(&u, &v, sizeof u), 0);
+}
+
 /* tools/gen/vectors.json (tests/pattern_gen_vectors.py): the dB table, the random generator's start
  * states (bytes sed typ sty track) and first draws, the distinct tracks in the firmware's bytes, the
  * cases (src, cur, out: an index into PGV_TRACK, -1 a cleared track) */
 typedef struct { uint8_t bytes[4]; uint32_t state; uint32_t next[8]; } pgv_prng_t;
 typedef struct { uint8_t length; uint16_t on[PG_BARS]; uint8_t step[PG_STEPS * sizeof(Step)]; uint8_t timing[PG_STEPS];
 	uint8_t fine[STEP_FINE_BYTES]; } pgv_track_t;
-typedef struct { const char *name; PatternGenSettings set; uint8_t track, vol; int16_t src, cur, out; } pgv_t;
+typedef struct { const char *name; PatternGenSettings set; uint8_t track, vol; int16_t src, cur, out; uint64_t own, ownOut; } pgv_t;
 #include "pattern_gen_vectors.h"
 
 TEST(pgen_vectors_vel_table)
@@ -857,8 +934,8 @@ static void pgvLoad(int16_t i, PatternGenTrack *t)
 	t->length = v->length;
 }
 
-/** 1 and the first difference printed, or 0 */
-static int pgvDiffers(unsigned v, uint8_t got, const PatternGenTrack *g, const PatternGenTrack *w)
+/** 1 and the first difference printed, or 0; own the steps written as the generator returns them (spec §11) */
+static int pgvDiffers(unsigned v, uint8_t got, const PatternGenTrack *g, const PatternGenTrack *w, uint64_t own)
 {
 	const pgv_t *x = &PGV[v];
 	const PatternGenSettings c = patternGen_checked(x->set);	/* a typ past prp is --- */
@@ -867,6 +944,12 @@ static int pgvDiffers(unsigned v, uint8_t got, const PatternGenTrack *g, const P
 	if (got != want)
 	{
 		printf("vector %u (%s): returns %d, not %d\n", v, x->name, got, want);
+		return 1;
+	}
+	if (own != x->ownOut)
+	{
+		printf("vector %u (%s): writes the steps %016llx, not %016llx\n", v, x->name, (unsigned long long)own,
+			(unsigned long long)x->ownOut);
 		return 1;
 	}
 	for (unsigned s = 0; s < PG_STEPS; s++)
@@ -892,7 +975,7 @@ static int pgvDiffers(unsigned v, uint8_t got, const PatternGenTrack *g, const P
 
 TEST(pgen_vectors_byte_for_byte)
 {
-	unsigned bad = 0, run = 0;
+	unsigned bad = 0, run = 0, masked = 0;
 	ASSERT_TRUE(PGV_COUNT >= 150u);
 	for (unsigned v = 0; v < PGV_COUNT; v++)
 	{
@@ -900,12 +983,19 @@ TEST(pgen_vectors_byte_for_byte)
 		PatternGenTrack src, io, want;
 		pgvLoad(x->src, &src); pgvLoad(x->cur, &io); pgvLoad(x->out, &want);
 		const PatternGenSource s = { src.step, { src.on[0], src.on[1], src.on[2], src.on[3] }, src.length };
-		const uint8_t got = patternGen_generate(&x->set, x->track, &s, &io);
-		bad += (unsigned)pgvDiffers(v, got, &io, &want);
+		uint64_t own = x->own;	/* spec §11: in the steps the last run wrote, out those of this run */
+		const uint8_t got = patternGen_generate(&x->set, x->track, &s, &io, &own);
+		bad += (unsigned)pgvDiffers(v, got, &io, &want, own);
 		run++;
+		masked += x->own != 0u;
+		if (x->own == 0u)	/* no mask: NULL is the same */
+		{
+			pgvLoad(x->cur, &io);
+			bad += (unsigned)pgvDiffers(v, patternGen_generate(&x->set, x->track, &s, &io, NULL), &io, &want, x->ownOut);
+		}
 	}
-	printf("%u vectors, %u differ\n", run, bad);
-	ASSERT_TRUE(run > 0u);
+	printf("%u vectors (%u with a mask), %u differ\n", run, masked, bad);
+	ASSERT_TRUE(run > 0u); ASSERT_TRUE(masked >= 10u);
 	ASSERT_EQ(bad, 0u);
 }
 

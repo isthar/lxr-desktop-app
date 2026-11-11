@@ -2882,7 +2882,7 @@ uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
 		t.on[b] = seq_patternSet.seq_mainSteps[b][pattern][trackNr];
 		src.on[b] = seq_patternSet.seq_mainSteps[b][pattern][srcNr];
 	}
-	const uint8_t f = patternGen_generate(&seq_gen[trackNr], trackNr, &src, &t);
+	const uint8_t f = patternGen_generate(&seq_gen[trackNr], trackNr, &src, &t, NULL);
 	if(f & PG_WROTE)
 	{
 		if(!seq_putTrack(trackNr, pattern, &t, played))

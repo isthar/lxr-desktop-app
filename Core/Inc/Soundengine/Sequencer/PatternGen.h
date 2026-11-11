@@ -2,7 +2,7 @@
  * PatternGen.h
  *
  * LICHOMAT v0.8 (plan v0.8 G2-G21; spec docs/superpowers/specs/2026-11-11-groove-generator-design.md
- * §3-§5, §8, §9): the pattern generator of the track page. It writes plain steps into one 64-step track:
+ * §3-§5, §8-§11): the pattern generator of the track page. It writes plain steps into one 64-step track:
  * the settings, the source track and the current track in, the new track out. Pure C on the
  * types of SeqStepTypes.h; tests/test_pattern_gen.c builds it as it is and compares it byte for
  * byte with the prototype tools/gen/gen.py (tools/gen/vectors.json), which is the reference (G14).
@@ -72,9 +72,14 @@ typedef struct PatternGenSource
  * with io->step only when that track is the destination itself: the one case where src is never
  * read (the kick is then 1 5 9 13, and prp writes nothing). Every track is read as it plays: shorter
  * than 64 steps, it repeats to 64 (spec §8). Style 0 of hat and prc on a track without an accent as
- * it plays is style 1, seeded with style 0 (spec §9). Returns PG_WROTE | PG_SOFT, or 0 when io is
- * left as it was: typ --- or past prp, prp from its own track, no track 0..6 */
-uint8_t patternGen_generate(const PatternGenSettings *s, uint8_t track, const PatternGenSource *src, PatternGenTrack *io);
+ * it plays is style 1, seeded with style 0 (spec §9). LICHOMAT v0.8 spec §11: own (bit i step i, as
+ * stored), in the steps of io the last run wrote, none of which is an accent of style 0 or counts
+ * for §9's check, so on a shorter track bit j masks step j wherever it plays; out the steps this run
+ * wrote (gen.py Track.written), 0 when it returns 0; NULL is no mask and no answer. Returns PG_WROTE
+ * | PG_SOFT, or 0 when io is left as it was: typ --- or past prp, prp from its own track, no track
+ * 0..6 */
+uint8_t patternGen_generate(const PatternGenSettings *s, uint8_t track, const PatternGenSource *src, PatternGenTrack *io,
+	uint64_t *own);
 /** s as gen.py's Settings.clamped(): every field clamped into its range (spec §3), sty into the
  * styles of typ (spec §8: hat and prc 0..4, sub 1..8, rar and prp 1..4); a typ past prp is ---, so a
  * stray byte never wipes a track; patternGen_generate() applies it itself */

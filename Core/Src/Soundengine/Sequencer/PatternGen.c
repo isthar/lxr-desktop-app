@@ -2,7 +2,7 @@
  * PatternGen.c
  *
  * LICHOMAT v0.8 (plan v0.8 Tasks 2-3, G5-G10, G14, G19-G21; spec
- * docs/superpowers/specs/2026-11-11-groove-generator-design.md §3-§5, §8, §9): the pattern generator,
+ * docs/superpowers/specs/2026-11-11-groove-generator-design.md §3-§5, §8-§11): the pattern generator,
  * a port of the prototype tools/gen/gen.py, the reference: the same random draws in the same
  * order, the same ranking and the same steps. tests/test_pattern_gen.c checks it byte for byte
  * against gen.py's vectors.
@@ -138,18 +138,19 @@ static uint8_t pg_noteOf(int n) { return (uint8_t)pg_clamp(n, 0, 127); }
 /** step s's fine nibble as stored (a raw copy keeps a value stepFine_get() reads as 0) */
 static uint8_t pg_fine(const uint8_t *fine, unsigned s) { return (uint8_t)((fine[s >> 1] >> ((s & 1u) * 4u)) & 0x0Fu); }
 
-/* gen.py's _Out and cur.played(): the accents (on, vel >= 64) of the current track as it plays (a track
- * shorter than 64 steps repeated to 64, spec §8) bar by bar into c->acc; then every step clean and off
- * (spec §3, §8: vel 127, prob 100, note 60 + not, no p-lock, flam 0, shift 7, fine 0) and the length
- * 64; with keep the accents stay as they play (gen.py _Out.keep: the step, its timing and fine) */
-static void pg_frame(pg_ctx_t *c, PatternGenTrack *io, int keep)
+/* gen.py's _Out and cur.played(): the accents (on, vel >= 64, not of mine: LICHOMAT v0.8 §11, the steps
+ * the last run wrote, bit j step j as stored) of the current track as it plays (a track shorter than 64
+ * steps repeated to 64, spec §8) bar by bar into c->acc; then every step clean and off (spec §3, §8:
+ * vel 127, prob 100, note 60 + not, no p-lock, flam 0, shift 7, fine 0) and the length 64; with keep
+ * the accents stay as they play (gen.py _Out.keep: the step, its timing and fine) */
+static void pg_frame(pg_ctx_t *c, PatternGenTrack *io, int keep, uint64_t mine)
 {
 	const unsigned len = pg_len(io->length);
 	memset(c->acc, 0, sizeof c->acc);
 	for (unsigned i = 0; i < PG_STEPS; i++)
 	{
 		const unsigned j = i % len;
-		if (pg_isOn(io->on, j) && ((io->step[j].volume & 0x7Fu) >= PG_ACCENT_MIN))
+		if (pg_isOn(io->on, j) && !((mine >> j) & 1u) && ((io->step[j].volume & 0x7Fu) >= PG_ACCENT_MIN))
 			c->acc[i >> 4] |= (uint16_t)(1u << (i & 15u));
 	}
 	/* the order does not matter: a kept step copies step i % len, an accent, which stays in place */
@@ -487,8 +488,12 @@ static void pg_prp(pg_ctx_t *c, const PatternGenSettings *s, const PatternGenSou
 	}
 }
 
-uint8_t patternGen_generate(const PatternGenSettings *in, uint8_t track, const PatternGenSource *src, PatternGenTrack *io)
+uint8_t patternGen_generate(const PatternGenSettings *in, uint8_t track, const PatternGenSource *src, PatternGenTrack *io,
+	uint64_t *own)
 {
+	const uint64_t mine = own ? *own : 0u;	/* LICHOMAT v0.8 §11: the steps the last run wrote */
+	if (own)
+		*own = 0;	/* and the steps this one writes, none until it writes */
 	if (!in || !io || (track >= PG_TRACKS))
 		return 0;
 	PatternGenSettings s = patternGen_checked(*in);
@@ -505,10 +510,10 @@ uint8_t patternGen_generate(const PatternGenSettings *in, uint8_t track, const P
 		c.off[p] = (int8_t)((s.typ == PG_TYPE_PRC) ? (int)pg_rand(&c, 5u) - 2 : (int)pg_rand(&c, 6u) - 3);
 	c.note = pg_noteOf(PG_NOTE_BASE + s.note);
 	const uint16_t kick = pg_kick(&s, track, src);
-	const int own = ((s.typ == PG_TYPE_HAT) || (s.typ == PG_TYPE_PRC)) && (s.sty == 0u);
-	pg_frame(&c, io, own);
-	if (own && !(c.acc[0] | c.acc[1] | c.acc[2] | c.acc[3]))
-		s.sty = 1;	/* LICHOMAT v0.8 §9: style 0 without an accent is style 1, seeded with style 0 */
+	const int keep = ((s.typ == PG_TYPE_HAT) || (s.typ == PG_TYPE_PRC)) && (s.sty == 0u);
+	pg_frame(&c, io, keep, mine);
+	if (keep && !(c.acc[0] | c.acc[1] | c.acc[2] | c.acc[3]))
+		s.sty = 1;	/* LICHOMAT v0.8 §9: style 0 without an accent is style 1, seeded with style 0 (§11: mine left out) */
 	switch (s.typ)	/* each draws its draw 3 first */
 	{
 	case PG_TYPE_HAT:	pg_hat(&c, &s, io); break;
@@ -517,5 +522,7 @@ uint8_t patternGen_generate(const PatternGenSettings *in, uint8_t track, const P
 	case PG_TYPE_RAR:	pg_rar(&c, &s, kick, io); break;
 	default:		pg_prp(&c, &s, src, io); break;
 	}
+	if (own)
+		*own = c.hit;	/* LICHOMAT v0.8 §11 */
 	return (uint8_t)(PG_WROTE | pg_soft(&c, io));
 }

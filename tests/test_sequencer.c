@@ -1833,7 +1833,7 @@ TEST(gen_glue_writes_what_the_core_makes_masked)
 	genRead(2, 4, &want);
 	const PatternGenSettings s = { PG_TYPE_SUB, 1, 3, -8, 0, 0, 0, 0, 0 };
 	const PatternGenSource src = { seq_patternSet.seq_subStepPattern[2][0], { 0x0101u, 0, 0, 0 }, seq_patternSet.length[2][0] };
-	ASSERT_EQ(patternGen_generate(&s, 4, &src, &want), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(patternGen_generate(&s, 4, &src, &want, NULL), PG_WROTE | PG_SOFT);
 	const uint32_t irq = host_irqDisables;
 	patTouches = 0;
 	ASSERT_EQ(seq_setGenParam(4, 2, PAR_GEN_TYP, PG_TYPE_SUB), PG_WROTE | PG_SOFT);
@@ -1861,7 +1861,7 @@ TEST(gen_glue_keeps_the_raw_fine_nibbles)
 	genRead(3, 2, &want);
 	const PatternGenSettings s = { PG_TYPE_HAT, 0, 7, -15, 1, 0, 0, 0, 0 };
 	const PatternGenSource src = { seq_patternSet.seq_subStepPattern[3][0], { 0, 0, 0, 0 }, seq_patternSet.length[3][0] };
-	ASSERT_EQ(patternGen_generate(&s, 2, &src, &want), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(patternGen_generate(&s, 2, &src, &want, NULL), PG_WROTE | PG_SOFT);
 	ASSERT_EQ(want.fine[1] & 0x0F, 0x09);
 	ASSERT_EQ(seq_setGenParam(2, 3, PAR_GEN_STY, 0), PG_WROTE | PG_SOFT);
 	genRead(3, 2, &got);
@@ -2050,14 +2050,14 @@ static void patternChangeToAtUnmask(void)
 
 static void (*duringGenerate)(void);	/* an "interrupt" while the generator runs */
 uint8_t seqTest_patternGenGenerate(const PatternGenSettings *s, uint8_t track, const PatternGenSource *src,
-	PatternGenTrack *io);
+	PatternGenTrack *io, uint64_t *own);
 /** sequencer.c's patternGen_generate() (stubs/seq_random_test.h): duringGenerate, then the generator */
 uint8_t seqTest_patternGenGenerate(const PatternGenSettings *s, uint8_t track, const PatternGenSource *src,
-	PatternGenTrack *io)
+	PatternGenTrack *io, uint64_t *own)
 {
 	if (duringGenerate)
 		duringGenerate();
-	return patternGen_generate(s, track, src, io);
+	return patternGen_generate(s, track, src, io, own);
 }
 static void patternChangeTo1(void)
 {
@@ -2122,7 +2122,7 @@ TEST(gen_glue_the_same_value_on_another_pattern_generates)
 	genRead(1, 2, &want);
 	const PatternGenSettings s = { PG_TYPE_HAT, 1, 7, -15, 1, 0, 0, 0, 0 };
 	const PatternGenSource src = { seq_patternSet.seq_subStepPattern[1][0], { 0, 0, 0, 0 }, seq_patternSet.length[1][0] };
-	ASSERT_EQ(patternGen_generate(&s, 2, &src, &want), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(patternGen_generate(&s, 2, &src, &want, NULL), PG_WROTE | PG_SOFT);
 	patTouches = 0;
 	ASSERT_EQ(seq_setGenParam(2, 1, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);	/* pattern 1 shown */
 	genRead(1, 2, &got);
