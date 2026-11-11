@@ -72,7 +72,7 @@ sam co na końcu gałęzi `v0.3`).
 Pełnej częstotliwości nie ma w tabeli: przy niej ogon basu w pogłosie przechyla się w lewo (decyzja
 Q34, porównanie na stronie odsłuchu).
 
-Więcej na 0.3 nie rób: wszystko inne z 0.1–0.3 jest w 0.6, więc na 0.3 robiłbyś to dwa razy.
+Więcej na 0.3 nie rób: wszystko inne z 0.1–0.3 jest w 0.6, więc na 0.3 byłaby to podwójna robota.
 
 ## Część 2: v0.6
 
@@ -155,7 +155,7 @@ zapisać na wycieczkę do 1.7 (2.9).
 
 - [ ] **U2**: własne nowe projekty w pustym slocie; karta trzy razy do komputera.
 - [ ] **U3**: nowy projekt. W kroku 6 ścisz.
-- [ ] **U4**, **U6**. „As in v0.1”: nie słyszałeś v0.1 na LXR, więc porównaj z 1.7 i zapisz każdą
+- [ ] **U4**, **U6**. „As in v0.1”: v0.1 nie grało u Ciebie na LXR, więc porównaj z 1.7 i zapisz każdą
       różnicę.
 
 ### 2.9 Jedna wycieczka do 1.7 (45 min)

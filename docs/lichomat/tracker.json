@@ -1637,7 +1637,7 @@
       "status": "zamknięte",
       "question": "Etap 2 stoi: v0.4 (atmosfera) czeka na odczyt CPU (H12). R3 emulatora (nagrania wzorcowe, CI z ASan) było odłożone na koniec etapu 2. Robić R3 teraz?",
       "assumption": "Tak: R3 nie zależy od sprzętu, a chroni każdą kolejną wersję.",
-      "answer": "Moja rekomendacja, zapowiedziana 30.10 o 20:37 bez sprzeciwu, zapisana 23:07: R3 zrobione teraz i scalone do v0.3. Aplikacja emulatora (E5.5, R4–R5) zostaje odłożona na koniec etapu 2, jak zdecydowałeś 29.10."
+      "answer": "Moja rekomendacja, zapowiedziana 30.10 o 20:37 bez sprzeciwu, zapisana 23:07: R3 zrobione teraz i scalone do v0.3. Aplikacja emulatora (E5.5, R4–R5) zostaje odłożona na koniec etapu 2, zgodnie z Twoją decyzją z 29.10."
     },
     {
       "id": "Q28",
@@ -1686,7 +1686,7 @@
       "status": "zamknięte",
       "question": "Pogłos 0.4 przy pełnej częstotliwości (plan D41: jeśli H12 da pk ≤ 46,24) brzmi inaczej niż przy połowie, na której strojone są kity, przepisy i utwory: te same bufory to mniejszy pokój, a ogon basu przechyla się w lewo (na samej stopie mokry L o 6–7 dB głośniejszy niż R i o 8–9 dB głośniejszy niż przy połowie; przy połowie L i R w granicach 1,5 dB). Brać pełną, gdy CPU pozwala?",
       "assumption": "Nie: połowa także przy niskim pk.",
-      "answer": "Moja decyzja według Twojej reguły z 29.10: pogłos 0.4 zostaje w połowie częstotliwości także wtedy, gdy H12 pozwoli na pełną. H12 rozstrzyga już tylko między połową (P ≤ 63,28) a lean (P > 63,28), a U20 jak dotąd może zejść stopień niżej. Powody: rumble to podstawa stylu, a na pełnej przechyla się w lewo; wszystko, co słyszałeś, jest strojone na połowie; przepisy tną górę tonem i tak poniżej 11 kHz; zostaje ok. 17 % CPU zapasu. Pełna jest gotowa na gałęzi v0.4-full (z E7.7), pary A/B są na stronie odsłuchu. Jeśli wolisz pełną, napisz: wtedy najpierw osobne zadanie na nierówny bas w odczepach L i R. Zmienia D41 i Q30."
+      "answer": "Moja decyzja według Twojej reguły z 29.10: pogłos 0.4 zostaje w połowie częstotliwości także wtedy, gdy H12 pozwoli na pełną. H12 rozstrzyga już tylko między połową (P ≤ 63,28) a lean (P > 63,28), a U20 jak dotąd może zejść stopień niżej. Powody: rumble to podstawa stylu, a na pełnej przechyla się w lewo; wszystko, co było do odsłuchu, jest strojone na połowie; przepisy tną górę tonem i tak poniżej 11 kHz; zostaje ok. 17 % CPU zapasu. Pełna jest gotowa na gałęzi v0.4-full (z E7.7), pary A/B są na stronie odsłuchu. Jeśli wolisz pełną, napisz: wtedy najpierw osobne zadanie na nierówny bas w odczepach L i R. Zmienia D41 i Q30."
     },
     {
       "id": "Q35",

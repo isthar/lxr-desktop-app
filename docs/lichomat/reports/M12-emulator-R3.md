@@ -108,5 +108,5 @@ demo) i `/Users/tk/Code/lxr/build/dlc/demo/` (funkcje LICHOMAT na tych kitach), 
   (Release), budżet pamięci bez zmian.
 - **Kolejność (Q27):** R3 było odłożone na koniec etapu 2 (Twoja decyzja z 29.10). Zrobiłem je teraz,
   bo reszta etapu 2 (v0.4, atmosfera) czeka na odczyt CPU (H12); zapowiedziałem to o 20:37. Aplikacja
-  emulatora (E5.5, R4–R5) zostaje odłożona, jak zdecydowałeś.
+  emulatora (E5.5, R4–R5) zostaje odłożona, zgodnie z Twoją decyzją.
 - **Ty:** jak dotąd – testy na LXR-02 (Q6 z odczytem CPU, H12; potem U4–U19); odsłuch renderów.

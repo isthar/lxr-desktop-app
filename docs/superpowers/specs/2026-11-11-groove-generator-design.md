@@ -240,7 +240,7 @@ Przegląd porównał rdzeń w C z prototypem (53 000 losowych przypadków, zero 
 
 ## 10. `sub` to ghost kicki (11.11, Twoje doprecyzowanie)
 
-Napisałeś: „chodziło mi z tym subem o coś takiego jak groove z ghost kickiem”, z przykładami `***g**g****g**g*` i `***********g**G*` pod stopą 4/4. Rodzaj `sub` (na LCD zostaje `sub`) zamiast szesnastkowego basiku pisze więc **figury ghost kicków**: ciche uderzenia stopopodobnego głosu na synkopowanych szesnastkach między stopami. Pomiar się z tym zgadza: dół wraca na krokach 4, 7, 12 i 15 w kilku utworach referencji. Brzmienie ghost kicka (głos podobny do stopy, krótszy, ciemniejszy) daje kit (E10.4).
+Twoje słowa: „chodziło mi z tym subem o coś takiego jak groove z ghost kickiem”, z przykładami `***g**g****g**g*` i `***********g**G*` pod stopą 4/4. Rodzaj `sub` (na LCD zostaje `sub`) zamiast szesnastkowego basiku pisze więc **figury ghost kicków**: ciche uderzenia stopopodobnego głosu na synkopowanych szesnastkach między stopami. Pomiar się z tym zgadza: dół wraca na krokach 4, 7, 12 i 15 w kilku utworach referencji. Brzmienie ghost kicka (głos podobny do stopy, krótszy, ciemniejszy) daje kit (E10.4).
 
 Style (g = ghost, vel z `lev`; G = akcent, 127):
 
@@ -257,8 +257,20 @@ Style (g = ghost, vel z `lev`; G = akcent, 127):
 
 - **Kroki stopy:** uderzenia nigdy na nie nie trafiają, jak dotąd (stopa ze ścieżki `src`).
 - **`var`** zmienia znaczenie i działa teraz jak w `prc`: +n to n ghostów dochodzących w 8. takcie frazy (2:2), z pierwszeństwem dla kroków 16, 14 i 10; −n to n ghostów z taktu 4 ścieżki, które dostają 1:2, czyli znikają w takcie 8. Druga nuta odpada.
-- **Domyślnie:** `sty` 1, `lev` −8 dB (vel 50), `var` 0, `not` 0 (głos stroi kit).
+- **Domyślnie:** `sty` 1, `den` 3, `lev` −8 dB (vel 51), `var` 0, `not` 0 (głos stroi kit).
 - **Losowanie:** losowania dla stylu 8 i dla `var` idą w fazie 3, w tej kolejności.
 - **Ścieżka:** ghost kicki gra osobna ścieżka (Drum 2 albo Drum 3) z głosem podobnym do stopy. Stopa zostaje na swojej ścieżce.
 
 **Uzupełnienie do §3 (11.11, po przeglądzie menu):** ustawienie parametrowi generatora tej samej wartości (np. pokrętło lub enkoder dociśnięty do końca zakresu) nic nie robi: nie przelicza ścieżki, więc nie kasuje ręcznych poprawek. Generatora nie da się sterować przez MIDI ani NRPN.
+
+**Szczegóły do implementacji (11.11, E10.16, moje decyzje):**
+
+- **Stopa:** uderzenie (g albo G) na kroku stopy odpada; G nie przechodzi na inny krok. W stylu 8 G dostaje ostatnie uderzenie taktu, które zostało.
+- **`den`** działa tylko w stylu 8: tyle uderzeń na takt, 1–8; 0 = wszystkie 8 miejsc; 9–16 = 8. Domyślnie 3 (dotąd 0). W stylach 1–7 `den` nic nie zmienia.
+- **Losowanie, faza 3:** najpierw, tylko w stylu 8, 16 kluczy `rand(65536)` (klucz miejsca p to p-ta szesnastka taktu); potem, w każdym stylu, 16 kluczy `var`. Klucze `var` są losowane zawsze, więc zmiana `var` nie przestawia stylu 8. Losowania 1 i 2 idą jak dla każdego rodzaju, ale `sub` z nich nie korzysta (jak `rar`).
+- **Styl 8:** ranking klucz × waga (4, 2, 1 jak w tabeli, inne miejsca 0), bez kroków stopy; `den` najlepszych; ten sam takt we wszystkich 4 taktach.
+- **`var` +n:** kandydaci to wolne miejsca słownika ghost kicków (kroki 4, 7, 8, 10, 12, 14, 15, 16) w takcie 4, poza stopą. Najpierw 16, 14 i 10 w tej kolejności, potem reszta według kluczy `var` × wagi stylu 8. n pierwszych dostaje ghosta (`lev`) z warunkiem 2:2; gdy kandydatów jest mniej, dochodzi mniej.
+- **`var` −n:** ghosty taktu 4 (bez G) według kluczy `var`; n pierwszych dostaje 1:2. G zostaje.
+- **Velocity:** g = `lev` bez przesunięcia, G = 127. Domyślne −8 dB to z tablicy vel 51.
+- **Nuta:** 60 + `not` na każdym uderzeniu. Druga nuta i reguła „ostatnie uderzenie przed stopą na 127” z §4.2 odpadają; §4.2 opisuje już tylko stary sub, zastąpiony tą sekcją.
+- **`sty` 0:** jak dotąd, przycinany do 1.

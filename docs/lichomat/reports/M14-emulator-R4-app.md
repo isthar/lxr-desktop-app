@@ -55,7 +55,7 @@ dźwiękiem przez CoreAudio i wirtualnymi portami MIDI „LICHOMAT Emu”. Zosta
 
 ## Jak uruchomić
 
-Kopia z Twoją kartą DLC, którą oglądałeś, teraz w wersji Release ze wszystkimi poprawkami (bez wpływu na oryginał):
+Kopia z Twoją kartą DLC (tą samą co ostatnio), teraz w wersji Release ze wszystkimi poprawkami (bez wpływu na oryginał):
 
 ```sh
 S=/private/tmp/claude-501/-Users-tk-Code-lxr/96b76bdc-1e78-46dc-a0e8-44d89ec424a5/scratchpad/emu-show
