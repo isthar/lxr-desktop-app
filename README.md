@@ -131,7 +131,7 @@ the selected voice's track gets, `---` leaves the generator off:
 - `hat` (hat ghosts): accents on the offbeats and quiet ghosts between them, the same in all four
   bars; styles 0–4 (0 keeps your own accents, the steps at velocity 64 or more);
 - `sub` (`ghost kick` on the LCD): quiet kick-like hits on the syncopated 16ths between the kicks,
-  four a bar at style 1 (`...g..G....g..G.`), the last of them an accent; styles 1–8. Give it a
+  four a bar at style 1 (`...g..G....g..G.`: soft on steps 4 and 12, accents on 7 and 15); styles 1–8. Give it a
   track with a short kick-like voice; the kick itself stays on its own track (`src`, voice 1 by
   default; hits never land on its steps);
 - `prc` (percussion): a two-bar figure with ghosts before the accents, repeated in bars 3 and 4;
@@ -143,7 +143,8 @@ the selected voice's track gets, `---` leaves the generator off:
 
 `sty` is the style of the type, `den` the density (ghosts or accents a bar, events in 16 bars; at
 `sub` only style 8 uses it), `lev` the level of the ghosts below the accent (-30 … 0 dB), `var` the
-change at the end of the phrase (extra hits only in bars 5–8, or hits that play only in bars 1–4),
+change at the end of the phrase (`hat`: extra hits only in bars 5–8, or hits that play only in
+bars 1–4; `sub` and `prc`: the same in bar 8 alone),
 `not` shifts the note, `src` is the source track and `shf` the shift of the copy. `sed` (0–99) is
 the seed: the same seed gives the same pattern, in the emulator and on the device, and turning it
 browses variants; changing `den` adds or removes hits without reshuffling the others. Choosing a
