@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 23:14",
+    "updated": "2026-11-11 23:30",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; generator v0.8 gotowy w kodzie, teraz testy w emulatorze i kity z laboratorium brzmień",
     "branch": "timing-core",
-    "head": "64c764e",
-    "next": "Po E10.17: dokumenty v0.8 z nowymi liczbami, raport M22; dema kitów do odsłuchu",
-    "updated_at": "2026-11-11T23:14:00+01:00",
-    "now": "W tle: poprawki po przeglądzie (E10.17) i nowy balans kitów 52–55 (E10.4)"
+    "head": "2004e2e",
+    "next": "Twój odsłuch kitów 52–55 (v18) i wybór z zestawu C; po E10.17 dokumenty v0.8 z nowymi liczbami i raport M22",
+    "updated_at": "2026-11-11T23:30:00+01:00",
+    "now": "W tle: poprawki po przeglądzie (E10.17)"
   },
   "epics": [
     {
@@ -5228,6 +5228,11 @@
       "n": 692,
       "at": "2026-11-11 23:14",
       "text": "Końcowy przegląd całej gałęzi v0.8: gotowa do testów na LXR, bez usterek, które mogłyby zawiesić urządzenie albo uszkodzić pamięć. Dwie prawdziwe usterki: styl 0 brał własne kroki generatora za Twoje akcenty (sed nie wracał do pierwszego wzorca) i przeładowanie grającego patternu w trakcie zapisu zostawiało pół ścieżki. Decyzje w projekcie §11 (64c764e); poprawki E10.17 w toku. Kity 52–55 zbudowane, ale za ciche (stopa ściszona jak na stronie laboratorium): przerabiam na balans PROSTO."
+    },
+    {
+      "n": 693,
+      "at": "2026-11-11 23:30",
+      "text": "E10.4: kity 52 ECHO, 53 FALA, 54 RYK, 55 TLO zbudowane przez firmware z zestawów A i B (gałąź kits, 69bed86..e8f0f30): stopa i hihat w balansie PROSTO, akcent ghost kicka 4,9 dB pod stopą, zdarzenia tła 17 dB pod groovem, werbel C2 do Q43. Dema A (przepis z kitu, zgodność z laboratorium do 0,2 dB) i B (16 taktów z generatora) na stronie do odsłuchu v18. E10.4 zostaje w toku do Twojego odsłuchu i wyboru perkusji (Q43)."
     }
   ]
 }
