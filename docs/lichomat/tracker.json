@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 22:25",
+    "updated": "2026-11-11 22:54",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; generator v0.8 gotowy w kodzie, teraz testy w emulatorze i kity z laboratorium brzmień",
     "branch": "timing-core",
-    "head": "dfbe7aa",
-    "next": "Kity 52–55 do odsłuchu; potem dokumentacja v0.8 (E10.15)",
-    "updated_at": "2026-11-11T22:25:00+01:00",
-    "now": "W tle: kity 52–55 z zestawów A i B (E10.4) oraz testy generatora w emulatorze (E10.13–E10.14)"
+    "head": "148e91d",
+    "next": "Raport M22 i szkic wydania v0.8 po przeglądzie; dema kitów 52–55 do odsłuchu",
+    "updated_at": "2026-11-11T22:54:00+01:00",
+    "now": "W tle: końcowy przegląd v0.8 i kity 52–55 (E10.4)"
   },
   "epics": [
     {
@@ -1296,21 +1296,21 @@
     {
       "id": "E10.13",
       "epic": "E10",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Plan v0.8, zadanie 6: testy w emulatorze: V08_generator (log uderzeń: rzadkie w taktach 8 i 16), V08_persist (zapis i odczyt), fuzz",
       "updated": "2026-11-11"
     },
     {
       "id": "E10.14",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Plan v0.8, zadanie 7: RAM i stos (ramka ≤ 768 B), README, odbiór",
       "updated": "2026-11-11"
     },
     {
       "id": "E10.15",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Plan v0.8, zadanie 8: dokumenty dla Ciebie: U42–U45, rozdział instrukcji o generatorze, szkic notatek 0.8, raport M22",
       "updated": "2026-11-11"
     },
@@ -5211,6 +5211,11 @@
       "n": 690,
       "at": "2026-11-11 22:25",
       "text": "Q42: zestawy A i B z laboratorium brzmień w porządku, wszystkie przykłady. E10.4: z nich robię kity 52–55 (ECHO, FALA, RYK, TLO) na głosach PROSTO. Q43 otwarte: perkusja z zestawu C. Równolegle zaczynają się testy generatora w emulatorze (E10.13–E10.14)."
+    },
+    {
+      "n": 691,
+      "at": "2026-11-11 22:54",
+      "text": "E10.13, E10.14: testy generatora w emulatorze (V08_generator: rzadkie uderzenia tylko w taktach 8 i 16; V08_persist: zapis i odczyt grają te same nuty), fuzz z dziesięcioma parametrami generatora (1 500 renderów, 0 znalezisk), README v0.8 (v0.8 97fc0fc, 1619ee2, 85cd7f0). Host 138/138, emulator 360/360, pod ASan 331/331, 41 złotych renderów bez zmian, RAM 470 268 / 471 032 B, stos najwyżej 696 B (limit 768). E10.15: punkty U42–U45 i rozdział instrukcji (727efc8), szkic notatek do wydania (148e91d); trwa końcowy przegląd całej gałęzi."
     }
   ]
 }
