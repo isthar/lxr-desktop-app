@@ -1901,4 +1901,32 @@ TEST(gen_glue_undo_takes_the_backup_of_the_playing_pattern)
 	ASSERT_EQ(patTouches, 1);
 }
 
+TEST(gen_glue_armed_values_survive_a_reload)
+{
+	/* review of group C: led_updateSeqLeds() reloads the track page at every bar change when the
+	 * steps follow the play position; a reload of the same track and pattern keeps an armed und and
+	 * sav, a reload of another track or pattern, and the first after seq_init(), clears them */
+	reset();
+	activeParameters[PAR_GEN_UND] = 1;
+	activeParameters[PAR_TRACK_TPL_SAVE] = 2;
+	seq_loadGrooveParams(2, 0);
+	ASSERT_EQ(activeParameters[PAR_GEN_UND], 0); ASSERT_EQ(activeParameters[PAR_TRACK_TPL_SAVE], 0);
+	activeParameters[PAR_GEN_UND] = 1;
+	activeParameters[PAR_TRACK_TPL_SAVE] = 2;
+	seq_loadGrooveParams(2, 0);	/* a bar change */
+	ASSERT_EQ(activeParameters[PAR_GEN_UND], 1); ASSERT_EQ(activeParameters[PAR_TRACK_TPL_SAVE], 2);
+	seq_loadGrooveParams(3, 0);	/* another track */
+	ASSERT_EQ(activeParameters[PAR_GEN_UND], 0); ASSERT_EQ(activeParameters[PAR_TRACK_TPL_SAVE], 0);
+	activeParameters[PAR_GEN_UND] = 1;
+	activeParameters[PAR_TRACK_TPL_SAVE] = 4;
+	seq_loadGrooveParams(3, 1);	/* another pattern */
+	ASSERT_EQ(activeParameters[PAR_GEN_UND], 0); ASSERT_EQ(activeParameters[PAR_TRACK_TPL_SAVE], 0);
+	activeParameters[PAR_GEN_UND] = 1;
+	seq_loadGrooveParams(7, 1);	/* no track 8: nothing */
+	ASSERT_EQ(activeParameters[PAR_GEN_UND], 1);
+	reset();
+	seq_loadGrooveParams(3, 1);	/* the first load after seq_init() */
+	ASSERT_EQ(activeParameters[PAR_GEN_UND], 0);
+}
+
 TEST_MAIN()

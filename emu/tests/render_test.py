@@ -1619,6 +1619,37 @@ def V08_ui(t):
     check(k2[8 + n] == 1, "the hats' vol after und: %d, the generator's 1 stays" % k2[8 + n])
     no_copies_left()
 
+@case
+def V08_armed(t):
+    # und and sav armed while the sequencer plays and the steps follow the play position (review of
+    # group C): each bar change reloads the track page (led_updateSeqLeds()); an armed und or sav
+    # stays armed over more than a bar, so the click puts back voice 6 as loaded, or captures it
+    seed, log, keep = t.seed(), t.path('panel.log'), t.path('K')
+    head = '0ms press voice6\n+100ms param follow=1\n+100ms down shift\n+20ms press mode2\n+100ms up shift\n' \
+           '+200ms encoder +13\n+100ms push\n+150ms encoder +1\n+100ms push\n'
+    script = t.script(head + '+150ms encoder +7\n+100ms push\n+150ms encoder +1\n+200ms mark undedit\n'
+                      '+2500ms mark wait\n+100ms push\n+300ms mark undone\n+300ms save-project 0\n')
+    t.render(seed, ['--seconds', '7', '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(rows['undedit'][1] == 'push: undo   und', 'edit mode on und: %r' % rows['undedit'])
+    check(re.match(r'var.not.sed.UND', rows['undone'][0]) and rows['undone'][1].rstrip().endswith('---'),
+          'after the click: %r' % rows['undone'])
+    a, b = one_file(keep, '00-*.PAT'), one_file(seed, '00-*.PAT')
+    check(a[14 + 512 * 5:14 + 512 * 6] == b[14 + 512 * 5:14 + 512 * 6] and a[3638:3646] == b[3638:3646]
+          and a[3655 + 5] == b[3655 + 5], "voice 6 after und while playing is the seed's: length %d, not %d"
+          % (a[3660], b[3660]))
+    log, keep = t.path('panel2.log'), t.path('K2')
+    script = t.script(head + '+150ms encoder -1\n+100ms push\n+150ms encoder +1\n+200ms mark savedit\n'
+                      '+2500ms mark wait\n+100ms push\n+300ms mark saved\n')
+    t.render(seed, ['--seconds', '6', '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(rows['savedit'][1] == 'push: save   us1', 'edit mode on sav 1: %r' % rows['savedit'])
+    check(re.match(r'vtp.vdp.SAV', rows['saved'][0]) and rows['saved'][1].rstrip().endswith('---'),
+          'after the click on sav: %r' % rows['saved'])
+    check(glob.glob(os.path.join(keep, 'TMP', 'USERTPL.LCH')), 'sav captured while playing: TMP holds %r'
+          % sorted(os.listdir(os.path.join(keep, 'TMP'))))
+    no_copies_left()
+
 def name_table(text, table):
     """the strings of a name table of MenuText.h, without its #if USE_CODEC_EQ entries (off in the build)"""
     body = text.split('const char %s[][16] =' % table, 1)[1].split('};', 1)[0]

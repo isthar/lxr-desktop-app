@@ -112,6 +112,7 @@ static uint16_t midi_notes_on=0;		    /**< which channels have a note currently 
 
 PatternBackupBuffer patternBackupBuffer;
 static PatternGenSettings seq_gen[NUM_TRACKS];	//LICHOMAT v0.8: the generator's settings per track, RAM only (plan v0.8 G4)
+static uint8_t seq_grooveTrack, seq_groovePattern;	//LICHOMAT v0.8: the track page's last load (seq_loadGrooveParams())
 _Static_assert((NUM_STEPS == PG_STEPS) && (NUM_BARS == PG_BARS) && (NUM_TRACKS == PG_TRACKS),
 	"LICHOMAT v0.8: a PatternGenTrack is one track of a pattern");
 
@@ -291,6 +292,7 @@ void seq_init()
 	}
 
 	memset(seq_gen, 0, sizeof seq_gen);	//LICHOMAT v0.8: the generator off on every track
+	seq_grooveTrack = seq_groovePattern = 0xFF;	//LICHOMAT v0.8: no track page loaded yet
 
 	//the timing core, its time base and the sync input queues
 	seq_initCore();
@@ -2559,7 +2561,7 @@ void seq_tick()
 	seq_inTick = 0;
 }
 //------------------------------------------------------------------------------
-/** LICHOMAT v0.8 (G2): the generator's ten parameters of track as menu values; und reads --- */
+/** LICHOMAT v0.8 (G2): the generator's parameters of track as menu values (und: seq_loadGrooveParams()) */
 static void seq_loadGenParams(uint8_t trackNr)
 {
 	const PatternGenSettings s = patternGen_checked(seq_gen[trackNr]);
@@ -2570,7 +2572,6 @@ static void seq_loadGenParams(uint8_t trackNr)
 	activeParameters[PAR_GEN_VAR] = (uint8_t)(s.var + PG_VAR_MAX);
 	activeParameters[PAR_GEN_NOT] = (uint8_t)(s.note + PG_NOTE_MAX);
 	activeParameters[PAR_GEN_SED] = s.sed;
-	activeParameters[PAR_GEN_UND] = 0;
 	activeParameters[PAR_GEN_SRC] = s.src;
 	activeParameters[PAR_GEN_SHF] = (uint8_t)(s.shf + PG_SHF_MAX);
 }
@@ -2593,7 +2594,16 @@ void seq_loadGrooveParams(uint8_t trackNr, uint8_t pattern)
 	const TrackTemplate vt = velTemplate_checked(seq_patternSet.vtpl[pattern][trackNr]);
 	activeParameters[PAR_TRACK_VTP] = vt.id;
 	activeParameters[PAR_TRACK_VDP] = (uint8_t)(vt.amount + 100);
-	activeParameters[PAR_TRACK_TPL_SAVE] = 0;
+	//LICHOMAT v0.8 (review of group C): sav and und at --- for another track or pattern only; a
+	//reload of the same (led_updateSeqLeds() at each bar change while the steps follow the play
+	//position) keeps them armed, so their click still acts
+	if((trackNr != seq_grooveTrack) || (pattern != seq_groovePattern))
+	{
+		seq_grooveTrack = trackNr;
+		seq_groovePattern = pattern;
+		activeParameters[PAR_TRACK_TPL_SAVE] = 0;
+		activeParameters[PAR_GEN_UND] = 0;
+	}
 	seq_loadGenParams(trackNr);	//LICHOMAT v0.8: the generator's sub-pages
 }
 //------------------------------------------------------------------------------
