@@ -195,3 +195,33 @@ Musi dawać identyczny wynik w Pythonie i w C, więc opisuję je dokładnie.
 - Swingu i mikrotimingu (masz `tpl`, `hmt` i v0.7).
 - Zapisywania ustawień generatora w patternie: brak RAM-u (jeden bajt na ścieżkę i pattern to 448 B), a wynik i tak jest w krokach.
 - Generowania dźwięków. Kity i głosy to E10.4–E10.6.
+
+## 8. Doprecyzowania po prototypie (11.11)
+
+Prototyp (`tools/gen/gen.py` na v0.8) wymusił kilka rozstrzygnięć. Wiążą one także firmware.
+
+- **Wejście:** każdą ścieżkę (źródło i bieżącą) czytam tak, jak gra. Ścieżkę krótszą niż 64 kroki powtarzam do 64. Bez tego styl 0 na ścieżce 16-krokowej zgubiłby akcenty w taktach 2–4.
+- **Kroki bez uderzenia:** zapisuję je czyste i nieaktywne, z nutą 60 + `not`.
+- **Zakresy:** `sty` spoza stylów danego rodzaju przycinam do najbliższego. Poziom (`lev` plus przesunięcie miejsca) przycinam do 0…−30 dB.
+- **Losowanie:** przesunięcia poziomu losuję dla każdego rodzaju, także tam, gdzie nie są używane. Losowania zależne od rodzaju zależą tylko od `typ` i `sty`, nigdy od `den`, `lev` ani `var`.
+- **`hat`:**
+  - styl 0 szuka wolnych miejsc takt po takcie;
+  - `var` +n bierze n kolejnych miejsc z rankingu z warunkiem 2:2;
+  - `var` −n daje 1:2 ostatnim n z `den` ghostów.
+- **`sub`:**
+  - „ostatnie uderzenie przed stopą” to ostatnie uderzenie od poprzedniej stopy;
+  - styl 8 to jeden takt z ziarna, powtórzony; `den` zostawia najlepsze w rankingu.
+- **`prc`:**
+  - w takcie 2 przenoszę akcent `sorted(takt1)[los % den]` na najlepsze miejsce rankingu kluczy 16–31;
+  - ghosty stoją na kroku przed akcentem w tym samym takcie, **nigdy na kroku stopy**;
+  - `var` + daje krokom 13–16 wagę ×4;
+  - `var` − na stylu 0 nic nie robi (Twoich akcentów nie ruszam).
+- **`rar`:**
+  - `den` 0 nie pisze nic;
+  - style 3–4 rankingują wszystkie 64 kroki kluczami z fazy 3;
+  - styl 1 traktuje `den` ≥ 4 jak 4;
+  - stopa dla posypu pochodzi z `src`.
+- **`prp`:**
+  - styl 1 nie kopiuje flagi slide;
+  - style 3 i 4 **przejmują warunek kroku źródła**, więc echo akcentu 2:2 też gra tylko w taktach 5–8, a velocity biorą z `lev`;
+  - nuta to 60 + `not`.
