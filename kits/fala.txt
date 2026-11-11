@@ -20,15 +20,20 @@
 #
 # Each voice is PROSTO's (kits/prosto.txt) or a recipe's edits in the recipe's order.
 #
-# Levels. The sound lab set the balance partly with the faders (gain = fader^2), which a
-# kit does not keep: the kick at 0.35, the ghost kick at 0.4, the boom at 0.146, the riser
-# at 0.229 (B6). A fader and vol are the same gain (after the drums' drive, before the
-# Cymbal's distortion), so each vol here is the recipe's vol x its fader^2, measured: with
-# all six faders at 1 the kit plays B6's balance, and the kick still ducks the reverb as in
-# the recipe (the duck follows the kick's level). The hat is already at its maximum (vol6
-# 127, fader 1), so the kick comes down to it (vol1 12) instead of the rest going up: the
-# kit plays at the recipes' level, a peak of -10 to -13 dBFS in the demos. Turn the output
-# up.
+# Levels. The kit keeps PROSTO's kick-to-hat balance (the kick at vol1 86 against PROSTO's
+# 100, the hat at vol6 127 as in PROSTO) and B6's balance of everything else to the kick.
+# The sound lab had turned its kick down (the fader 0.35, gain = fader^2) only so that the
+# rest could be heard; the ghost kick (the fader 0.4), the boom and the riser (the faders
+# 0.146 and 0.229) are set against that kick. A fader and vol are the same gain (after the
+# drums' drive, before the Cymbal's distortion), so each vol is the recipe's vol x its
+# fader^2 / 0.1225 x 0.86: the kick's step from the fader 0.35 to vol1 86, the highest kick
+# at which the ghost kick keeps its balance with vol2 127. Measured with all six faders at
+# 1: B6's voices within 0.2 dB of the recipe relative to the kick, the hat 17 dB further
+# under it than in B6, the peak on out 1 -5 dBFS (-3.6 in the demo below, with the tick).
+# The reverb's duck follows the kick's peak (the depth x twice the peak, at most all), so
+# the louder kick would duck the reverb 7 times deeper than in B6: rev_duck_depth 18
+# (127 x 12.25 / 86) keeps B6's duck; with 127 the reverb would duck all the way under
+# each kick.
 #
 # No freeze: B2, B4 and B6 have none.
 #
@@ -45,7 +50,8 @@ pattern = ghost
 
 # Drum 1: the kick, PROSTO's. A sine on G#1 a little sharp (about 52.7 Hz), a pitch drop
 # from about 5.2x (a time constant of about 32 ms), no transient, no filter, a little drive.
-# vol1 12: PROSTO's 100 at the sound lab's fader 0.35 (100 x 0.1225 = 12.25)
+# vol1 86 (PROSTO's 100): the highest kick at which the ghost kick still sits 5 dB under
+# it with vol2 127; at 100 it would need vol2 148
 osc_wave_drum1 = 0
 coarse1 = 32
 fine1 = 98            # about 0.3 semitone up: 52.7 Hz
@@ -59,14 +65,14 @@ vol_slope1 = 108      # held, then a quick fall
 trans1_vol = 0
 filter_type_1 = 7     # off
 drive1 = 32           # about 5 % THD
-vol1 = 12
+vol1 = 86
 
 # Drum 2: the ghost kick (A2): a softer echo of the kick, 1.3 semitones lower (G1), a
 # smaller and shorter pitch drop, a shorter body, low-passed (no click), a little drive.
 # The steps' volumes set the accents (G 127, the ghosts g about -8 dB): volume_mod_on_off2.
 # Played on 4, 7, 12, 15 with G on 7 and 15 (A2; the generator's sub sty 1 places the
-# same), G sits 5 dB under the kick in the 30-150 Hz band. vol2 18: A2's 113 at the
-# fader 0.4 (113 x 0.16 = 18.1)
+# same), G sits 5 dB under the kick in the 30-150 Hz band. vol2 127: A2's 113 at the
+# fader 0.4 against the kick's 0.35, at vol1 86 (113 x 0.16 / 0.1225 x 0.86 = 126.9)
 osc_wave_drum2 = 0    # Sin
 coarse2 = 31          # G1
 fine2 = 64
@@ -83,16 +89,14 @@ filter_freq_2 = 36
 reso_2 = 0
 drive2 = 18
 volume_mod_on_off2 = 1
-vol2 = 18
+vol2 = 127
 
 # Drum 3: the sub boom (B4): a sine falling from about 245 Hz to E1 (coarse3 28) over a
 # long pitch envelope, low-passed, some drive, a long decay; into the FX bus (the slot is
 # off: dry and into the reverb). In B6 it sits 17 dB under the groove on the first kick of
-# bars 1 and 9. Levels: B4's vol3 80 at the fader 0.146 is 1.7, which vol cannot hold (2 is
-# 1.4 dB louder). The drive comes before vol and at the boom's level it is close to a plain
-# gain: drive3 26 instead of B4's 40 takes the 1.4 dB, and the boom's low (30-150 Hz) and
-# high bands stay in B6's balance within 0.1 dB, measured. fm_freq3 and mod_wave_drum3 stay
-# PROSTO's (no effect with fmamnt3 0), as in B4
+# bars 1 and 9. Levels: B4's vol3 80 at the fader 0.146 against the kick's 0.35 is 12.0 at
+# vol1 86; the drive comes before vol, so B4's drive3 40 stays. fm_freq3 and mod_wave_drum3
+# stay PROSTO's (no effect with fmamnt3 0), as in B4
 osc_wave_drum3 = 0    # Sin
 coarse3 = 28          # E1
 fine3 = 64
@@ -105,20 +109,21 @@ trans3_vol = 0
 filter_type_3 = 0     # LP
 filter_freq_3 = 40
 reso_3 = 10
-drive3 = 26
+drive3 = 40
 veloa3 = 3
 velod3 = 60
 vol_slope3 = 80
 volume_mod_on_off3 = 1
 pan3 = 64
-vol3 = 2
+vol3 = 12
 audio_out3 = 6        # FX
 fm_freq3 = 76
 mod_wave_drum3 = 0
 
 # Snare: a placeholder, C2 of the sound lab's set C (a noise tick like a shaker: noise only
 # through a band at about 5 kHz, a soft 16 ms attack, 70 ms), until the owner picks from set
-# C, which is not judged yet. Dry: it needs no FX slot. vol4 124 at the fader 1, as in C2
+# C, which is not judged yet. Dry: it needs no FX slot. vol4 124: C2's level to the hat
+# (both at the fader 1 in C2)
 osc_wave_snare = 0
 mix1 = 127            # noise only
 noise_freq1 = 127
@@ -140,9 +145,12 @@ vol4 = 124
 # bar (LFO 5, a saw up on filter_freq_5, restarted by the hit, one rise in 1.53 s), a slow
 # rise in level (veloa5 112), a little distortion; into the FX bus, with the longest
 # predelay. In B6 it sits 17 dB under the groove in bars 8 and 16, into the boom of bars 9
-# and 1. Levels: B2's vol5 64 at the fader 0.229 is 3.36 (3 is -1 dB). The distortion
-# after vol is, at the riser's level, a plain gain of 1 + k (k = 2s / (1 - s), s =
-# cymbal_distortion / 127): B2's 40 was 1.89x, 46 is 2.10x, so vol5 3 with 46 is B2's level
+# and 1. Levels: B2's vol5 64 at the fader 0.229 against the kick's 0.35 is 23.6 at vol1
+# 86. The distortion after vol depends on the level it gets: B2 fed it so softly (the fader
+# comes before it) that its 40 was a plain gain of 1.89x (1 + k at a low level, k =
+# 2s / (1 - s), s = cymbal_distortion / 127) with about 2 % of squash. Here vol5 42 with
+# cymbal_distortion 5 (1.07x) gives B2's level and the same small squash, measured; 40
+# with vol5 24 would squash the riser about 7 times as hard
 wave1_cym = 4         # Noi
 wave2_cym = 4
 wave3_cym = 4
@@ -153,7 +161,7 @@ fine5 = 64
 filter_type_5 = 0     # LP
 filter_freq_5 = 50
 reso_5 = 50
-cymbal_distortion = 46
+cymbal_distortion = 5
 veloa5 = 112
 velod5 = 19
 vol_slope5 = 90
@@ -161,7 +169,7 @@ repeat5 = 0
 trans5_vol = 0
 volume_mod_on_off5 = 1
 pan5 = 64
-vol5 = 3
+vol5 = 42
 audio_out5 = 6        # FX
 voice_lfo5 = 5        # LFO 5: a saw up on the riser's low-pass (target 173, filter_freq_5)
 target_lfo5 = 173
@@ -192,7 +200,7 @@ pan6 = 64
 
 # FX: B2's reverb, which B6 uses for both. The slot off; a long, dark reverb (size 120,
 # decay 96, tone 24) with the longest predelay, about 92 ms (127; the reverb runs at half
-# rate, 2-92 ms), ducked by the kick (dck dr1, ddp 127)
+# rate, 2-92 ms), ducked by the kick (dck dr1; ddp 18, B6's duck at this kick: see Levels)
 fx_type = 0
 rev_level = 110
 rev_size = 120
@@ -201,7 +209,7 @@ rev_tone = 24
 rev_predelay = 127
 rev_mod = 50
 rev_duck_src = 1
-rev_duck_depth = 127
+rev_duck_depth = 18
 
 # Modulation, PROSTO's (target numbers: modTargets in Core/Src/menu/Cc2Text.c, 0 off;
 # sync 1 is 4/1, 10 a 16th; wave 1 tri, 5 random). LFO 6: a random pan for each 16th of

@@ -21,16 +21,23 @@
 #
 # Each voice is PROSTO's (kits/prosto.txt) or a recipe's edits in the recipe's order.
 #
-# Levels. The sound lab set the balance partly with the faders (gain = fader^2), which a
-# kit does not keep: in A9 the kick at 0.35 and the bed at 0.6. A fader and vol are the
-# same gain (after the drums' drive, before the Cymbal's distortion), so vol1 and vol2 here
-# are A9's vol x its fader^2, measured: with all six faders at 1 the kit plays A9's bed, and
-# the kick feeds and ducks the reverb as in A9 (the duck follows the kick's level). The hat
-# is already at its maximum (vol6 127, fader 1), so the kick comes down to it (vol1 12)
-# instead of the rest going up: the kit plays at the recipes' level, a peak of -10 to -13
-# dBFS in the demos. Turn the output up. The downlifter and the stutter play in A9's
-# reverb, not in their own (B3's and B5's predelay, decay and tone would move the bed), so
-# their vol is measured here again: each about 17 dB under this kit's groove, as in set B.
+# Levels. The kit keeps A9's balance of the bed to the kick and brings the kick as close to
+# PROSTO's kick-to-hat balance as the bed allows. The sound lab had turned its kick down
+# (the fader 0.35, gain = fader^2) only so that the rest could be heard; the bed (the fader
+# 0.6) is set against that kick. A fader and vol are the same gain (after the drums' drive,
+# before the Cymbal's distortion), so vol1 and vol2 are A9's vol x its fader^2 / 0.1225 x
+# 0.35. A9's bed note needs 3.6 times the kick's vol (123 at 0.6 against 100 at 0.35), so
+# with vol2 127 the kick is vol1 35: 9 dB under PROSTO's 100 against the hat (vol6 127, as
+# in PROSTO). Measured with all six faders at 1: A9's voices within 0.1 dB of the recipe
+# relative to the kick, the bed 8.2 dB under the kick as in A9, the hat 8.9 dB further under
+# it than in A9, the peak on out 1 -6.6 dBFS (-5.5 with the events, -4.8 in the demo below,
+# with the tick).
+# The reverb's duck follows the kick's peak (the depth x twice the peak, at most all), so
+# the louder kick would duck the reverb about 3 times deeper than in A9: rev_duck_depth 44
+# (127 x 12.25 / 35) keeps A9's duck and with it the rumble's shape. The downlifter and the
+# stutter play in A9's reverb, not in their own (B3's and B5's predelay, decay and tone
+# would move the bed), so their vol is measured here again: each about 17 dB under this
+# kit's groove, as in set B.
 #
 # Freeze. B5 freezes the reverb from step 13 of bar 8 to the middle of bar 9 (and of 16 to
 # 1), an event of the render: a kit always saves freeze off and a step cannot p-lock it. On
@@ -52,9 +59,9 @@ pattern = bed
 
 # Drum 1: the kick, PROSTO's. A sine on G#1 a little sharp (about 52.7 Hz), a pitch drop
 # from about 5.2x (a time constant of about 32 ms), no transient, no filter, a little drive.
-# vol1 12: PROSTO's 100 at the sound lab's fader 0.35 (100 x 0.1225 = 12.25). Into the FX
-# bus (A9): it plays dry through the slot (off) and feeds the reverb, which it ducks: the
-# rumble
+# vol1 35 (PROSTO's 100): the highest kick at which the bed note keeps A9's balance, 8 dB
+# under the kick, with vol2 127. Into the FX bus (A9): it plays dry through the slot (off)
+# and feeds the reverb, which it ducks: the rumble
 osc_wave_drum1 = 0
 coarse1 = 32
 fine1 = 98            # about 0.3 semitone up: 52.7 Hz
@@ -68,13 +75,13 @@ vol_slope1 = 108      # held, then a quick fall
 trans1_vol = 0
 filter_type_1 = 7     # off
 drive1 = 32           # about 5 % THD
-vol1 = 12
+vol1 = 35
 audio_out1 = 6        # FX (A9)
 
 # Drum 2: the bed's low note (A9): a sine on F#1 (46 Hz), low-passed, a little drive, a short
 # attack (veloa2 8) and decay (velod2 12), on the 4th 16th of each beat (4, 8, 12, 16), just
-# before the kick; with the rumble the low end never stops. vol2 44: A9's 123 at the fader
-# 0.6 (123 x 0.36 = 44.3)
+# before the kick; with the rumble the low end never stops. vol2 127: A9's 123 at the
+# fader 0.6 against the kick's 0.35, at vol1 35 (123 x 0.36 / 0.1225 x 0.35 = 126.5)
 osc_wave_drum2 = 0    # Sin
 coarse2 = 30          # F#1
 fine2 = 64
@@ -89,14 +96,14 @@ veloa2 = 8
 velod2 = 12
 vol_slope2 = 100
 pan2 = 64
-vol2 = 44
+vol2 = 127
 
 # Drum 3: the downlifter (B3): noise whose colour falls from bright to dark over about a bar
 # (a long pitch envelope on the noise, modamnt3 90, mod_eg3 112), low-passed, some drive;
-# into the FX bus (dry through the slot and into the reverb). vol3 5: 16.6 dB under this
-# kit's groove, measured (4 is 18.5 dB under); B3's 80 at its fader 0.195 was 3.0, over A2's
-# quieter groove and in B3's brighter reverb. fm_freq3 and mod_wave_drum3 stay PROSTO's (no
-# effect with fmamnt3 0)
+# into the FX bus (dry through the slot and into the reverb). vol3 14: 16.9 dB under this
+# kit's groove, measured; B3's 80 at its fader 0.195 against the kick's 0.35 would be 8.7 at
+# vol1 35, over A2's quieter groove and in B3's brighter reverb. fm_freq3 and mod_wave_drum3
+# stay PROSTO's (no effect with fmamnt3 0)
 osc_wave_drum3 = 4    # Noi
 coarse3 = 79
 fine3 = 64
@@ -115,14 +122,15 @@ velod3 = 50
 vol_slope3 = 70
 volume_mod_on_off3 = 1
 pan3 = 64
-vol3 = 5
+vol3 = 14
 audio_out3 = 6        # FX
 fm_freq3 = 76
 mod_wave_drum3 = 0
 
 # Snare: a placeholder, C2 of the sound lab's set C (a noise tick like a shaker: noise only
 # through a band at about 5 kHz, a soft 16 ms attack, 70 ms), until the owner picks from set
-# C, which is not judged yet. Dry: it needs no FX slot. vol4 124 at the fader 1, as in C2
+# C, which is not judged yet. Dry: it needs no FX slot. vol4 124: C2's level to the hat
+# (both at the fader 1 in C2)
 osc_wave_snare = 0
 mix1 = 127            # noise only
 noise_freq1 = 127
@@ -142,10 +150,11 @@ vol4 = 124
 
 # Cymbal: the stutter (B5): a very short noise burst through a band at the top, a little
 # distortion; the generator's rar sty 1 den 4 plays it as a hit on 1 and four flams of 4 on
-# steps 9-12 of bar 8 (and 16); into the FX bus. Levels: 17 dB under this kit's groove,
-# measured. The distortion after vol is, at the stutter's level, a plain gain of 1 + k (k =
-# 2s / (1 - s), s = cymbal_distortion / 127): B5 had 60 (2.74x); here vol5 6 with 57 (2.60x),
-# 17.1 dB under, measured
+# steps 9-12 of bar 8 (and 16); into the FX bus. Levels: 17.1 dB under this kit's groove,
+# measured. The distortion after vol depends on the level it gets: B5 fed it so softly (the
+# fader comes before it) that its 60 was a plain gain of 2.74x (1 + k at a low level, k =
+# 2s / (1 - s), s = cymbal_distortion / 127) with about 5 % of squash. Here vol5 38 with
+# cymbal_distortion 11 (1.17x) keeps B5's small squash (k x the level into it as in B5)
 wave1_cym = 4         # Noi
 wave2_cym = 4
 wave3_cym = 4
@@ -156,7 +165,7 @@ fine5 = 64
 filter_type_5 = 2     # BP
 filter_freq_5 = 70
 reso_5 = 40
-cymbal_distortion = 57
+cymbal_distortion = 11
 veloa5 = 0
 velod5 = 3
 vol_slope5 = 64
@@ -164,7 +173,7 @@ repeat5 = 0
 trans5_vol = 0
 volume_mod_on_off5 = 1
 pan5 = 64
-vol5 = 6
+vol5 = 38
 audio_out5 = 6        # FX
 amount_lfo5 = 0       # no LFO on the stutter
 
@@ -187,7 +196,8 @@ vol6 = 127
 pan6 = 64
 
 # FX: A9's reverb, the rumble. The slot off; a dark reverb (size 110, decay 76, tone 0)
-# without predelay at its full level, ducked by the kick (dck dr1, ddp 127): the kick's
+# without predelay at its full level, ducked by the kick (dck dr1; ddp 44, A9's duck at
+# this kick: see Levels): the kick's
 # tail swells between the kicks and hides under each. B5 needs nothing more from it
 fx_type = 0
 rev_level = 127
@@ -197,7 +207,7 @@ rev_tone = 0
 rev_predelay = 0
 rev_mod = 20
 rev_duck_src = 1
-rev_duck_depth = 127
+rev_duck_depth = 44
 
 # Modulation, PROSTO's (target numbers: modTargets in Core/Src/menu/Cc2Text.c, 0 off;
 # sync 1 is 4/1, 10 a 16th; wave 1 tri, 5 random). LFO 6: a random pan for each 16th of
