@@ -114,6 +114,7 @@ PatternBackupBuffer patternBackupBuffer;
 static PatternGenSettings seq_gen[NUM_TRACKS];	//LICHOMAT v0.8: the generator's settings per track, RAM only (plan v0.8 G4)
 static uint8_t seq_grooveTrack, seq_groovePattern;	//LICHOMAT v0.8: the track page's last load (seq_loadGrooveParams())
 static uint8_t seq_genPattern[NUM_TRACKS];	//LICHOMAT v0.8: the pattern each track was last generated into (quality review of group C)
+static uint64_t seq_genOwn[NUM_TRACKS];	//LICHOMAT v0.8 (spec §11): the steps each track's last completed write wrote, in seq_genPattern[track]
 _Static_assert((NUM_STEPS == PG_STEPS) && (NUM_BARS == PG_BARS) && (NUM_TRACKS == PG_TRACKS),
 	"LICHOMAT v0.8: a PatternGenTrack is one track of a pattern");
 
@@ -295,6 +296,7 @@ void seq_init()
 	memset(seq_gen, 0, sizeof seq_gen);	//LICHOMAT v0.8: the generator off on every track
 	seq_grooveTrack = seq_groovePattern = 0xFF;	//LICHOMAT v0.8: no track page loaded yet
 	memset(seq_genPattern, 0xFF, sizeof seq_genPattern);	//LICHOMAT v0.8: and nothing generated
+	memset(seq_genOwn, 0, sizeof seq_genOwn);	//LICHOMAT v0.8 (spec §11): no step the generator's
 
 	//the timing core, its time base and the sync input queues
 	seq_initCore();
@@ -2861,7 +2863,9 @@ static uint8_t seq_putTrack(uint8_t trackNr, uint8_t pattern, const PatternGenTr
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.8 (G4, G12): track in pattern regenerated from its settings; the source is the
  * same pattern's track src (as patternGen_checked() reads it), read in place (the core reads none
- * when src is the track); the current track a copy on the stack */
+ * when src is the track); the current track a copy on the stack. Spec §11: the core gets the steps
+ * the track's last completed write wrote when that was into pattern (else none), and a completed
+ * write keeps the steps it wrote */
 uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
 {
 	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return 0;
@@ -2882,13 +2886,15 @@ uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
 		t.on[b] = seq_patternSet.seq_mainSteps[b][pattern][trackNr];
 		src.on[b] = seq_patternSet.seq_mainSteps[b][pattern][srcNr];
 	}
-	const uint8_t f = patternGen_generate(&seq_gen[trackNr], trackNr, &src, &t, NULL);
+	uint64_t own = (pattern == seq_genPattern[trackNr]) ? seq_genOwn[trackNr] : 0u;	//LICHOMAT v0.8 (spec §11)
+	const uint8_t f = patternGen_generate(&seq_gen[trackNr], trackNr, &src, &t, &own);
 	if(f & PG_WROTE)
 	{
 		if(!seq_putTrack(trackNr, pattern, &t, played))
 			return 0;	// the pattern stopped playing: it is its backup again
 		preset_touchTimer(PRESET_PAT_TIMER);	// autosave, as a step toggled on the panel
 		seq_genPattern[trackNr] = pattern;
+		seq_genOwn[trackNr] = own;	//LICHOMAT v0.8 (spec §11): the steps this write wrote
 	}
 	return f;
 }
@@ -2911,6 +2917,8 @@ uint8_t seq_setGenParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 			break;
 		patternGen_typeDefaults(typ, g);
 		seq_loadGenParams(trackNr);	// the screens show the type's values
+		if(typ == PG_TYPE_OFF)
+			seq_genOwn[trackNr] = 0;	//LICHOMAT v0.8 (spec §11): accents edited at --- are the user's
 		break;
 	}
 	case PAR_GEN_STY: g->sty = (value <= PG_STY_MAX) ? value : 0; break;
@@ -2939,7 +2947,8 @@ uint8_t seq_setGenParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.8 (G13): und: track in pattern back to the backup, the last saved or loaded state,
  * only while pattern plays: each step checks it with interrupts masked, since a pattern change in
- * seq_tick() swaps the backup. The fine nibbles as stored; the settings (typ) stay. 1 when done */
+ * seq_tick() swaps the backup. The fine nibbles as stored; the settings (typ) stay; spec §11: no
+ * step is the generator's any more. 1 when done */
 uint8_t seq_genUndo(uint8_t trackNr, uint8_t pattern)
 {
 	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return 0;
@@ -2953,6 +2962,7 @@ uint8_t seq_genUndo(uint8_t trackNr, uint8_t pattern)
 	if(!seq_putTrack(trackNr, pattern, &t, 1))	// only while pattern plays
 		return 0;
 	preset_touchTimer(PRESET_PAT_TIMER);
+	seq_genOwn[trackNr] = 0;	//LICHOMAT v0.8 (spec §11)
 	return 1;
 }
 //------------------------------------------------------------------------------

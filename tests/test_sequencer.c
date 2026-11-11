@@ -1852,19 +1852,24 @@ TEST(gen_glue_writes_what_the_core_makes_masked)
 TEST(gen_glue_keeps_the_raw_fine_nibbles)
 {
 	/* G6: hat style 0 keeps the accents byte for byte, fine nibbles included as stored: -7 (0x9)
-	 * and +7 (0x7), which stepFine_get() reads as 0, stay as the core leaves them */
+	 * and +7 (0x7), which stepFine_get() reads as 0, stay as the core leaves them. Spec §11: the
+	 * accents are the user's (saved, generated over, back with und), not the generator's own */
 	reset();
-	ASSERT_EQ(seq_setGenParam(2, 3, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);	/* offbeats at 127 */
-	seq_patternSet.seq_stepFine[3][2][1] = 0x09;	/* step 3's nibble */
-	seq_patternSet.seq_stepFine[3][2][3] = 0x07;	/* step 7's */
+	seq_setMainStep(0, 2, 2, 1);	/* steps 3 and 7 at 127 */
+	seq_setMainStep(0, 2, 6, 1);
+	seq_patternSet.seq_stepFine[0][2][1] = 0x09;	/* step 3's nibble */
+	seq_patternSet.seq_stepFine[0][2][3] = 0x07;	/* step 7's */
+	seq_copyPatternToBackupBuffer(0);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);	/* offbeats at 127 */
+	ASSERT_EQ(seq_genUndo(2, 0), 1);
 	PatternGenTrack want, got;
-	genRead(3, 2, &want);
+	genRead(0, 2, &want);
 	const PatternGenSettings s = { PG_TYPE_HAT, 0, 7, -15, 1, 0, 0, 0, 0 };
-	const PatternGenSource src = { seq_patternSet.seq_subStepPattern[3][0], { 0, 0, 0, 0 }, seq_patternSet.length[3][0] };
+	const PatternGenSource src = { seq_patternSet.seq_subStepPattern[0][0], { 0, 0, 0, 0 }, seq_patternSet.length[0][0] };
 	ASSERT_EQ(patternGen_generate(&s, 2, &src, &want, NULL), PG_WROTE | PG_SOFT);
-	ASSERT_EQ(want.fine[1] & 0x0F, 0x09);
-	ASSERT_EQ(seq_setGenParam(2, 3, PAR_GEN_STY, 0), PG_WROTE | PG_SOFT);
-	genRead(3, 2, &got);
+	ASSERT_EQ(want.fine[1] & 0x0F, 0x09); ASSERT_EQ(want.fine[9] & 0x0F, 0x09);	/* steps 3 and 19 */
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_STY, 0), PG_WROTE | PG_SOFT);
+	genRead(0, 2, &got);
 	ASSERT_TRUE(genSame(&got, &want));
 }
 
@@ -2049,15 +2054,21 @@ static void patternChangeToAtUnmask(void)
 }
 
 static void (*duringGenerate)(void);	/* an "interrupt" while the generator runs */
+#define NO_MASK UINT64_MAX	/* seamOwnIn when sequencer.c passes none (NULL) */
+static uint64_t seamOwnIn, seamOwnOut;	/* spec §11: the mask the glue passed the core last, and got back */
 uint8_t seqTest_patternGenGenerate(const PatternGenSettings *s, uint8_t track, const PatternGenSource *src,
 	PatternGenTrack *io, uint64_t *own);
-/** sequencer.c's patternGen_generate() (stubs/seq_random_test.h): duringGenerate, then the generator */
+/** sequencer.c's patternGen_generate() (stubs/seq_random_test.h): duringGenerate, then the generator;
+ * the mask passed in and out in seamOwnIn and seamOwnOut */
 uint8_t seqTest_patternGenGenerate(const PatternGenSettings *s, uint8_t track, const PatternGenSource *src,
 	PatternGenTrack *io, uint64_t *own)
 {
 	if (duringGenerate)
 		duringGenerate();
-	return patternGen_generate(s, track, src, io, own);
+	seamOwnIn = own ? *own : NO_MASK;
+	const uint8_t f = patternGen_generate(s, track, src, io, own);
+	seamOwnOut = own ? *own : NO_MASK;
+	return f;
 }
 static void patternChangeTo1(void)
 {
@@ -2173,6 +2184,105 @@ TEST(gen_glue_keeps_an_outer_mask)
 	host_primask = 0;
 	ASSERT_EQ(f, PG_WROTE | PG_SOFT); ASSERT_EQ(u, 1);
 	ASSERT_EQ(afterWrite, 1); ASSERT_EQ(afterUndo, 1);
+}
+
+/** the steps of track in pattern that are on, bit i step i */
+static uint64_t genOn(uint8_t pattern, uint8_t track)
+{
+	uint64_t m = 0;
+	for (unsigned b = 0; b < NUM_BARS; b++)
+		m |= (uint64_t)seq_patternSet.seq_mainSteps[b][pattern][track] << (16u * b);
+	return m;
+}
+
+TEST(gen_glue_mask_of_the_last_write)
+{
+	/* spec §11: the glue passes the core the steps the track's last completed write wrote, in the
+	 * pattern it wrote them in, and keeps the steps it gets back; another pattern gets none, and the
+	 * mask is the last pattern's only (one a track); none after seq_init() (boot) */
+	reset();
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seamOwnIn, 0u);
+	const uint64_t m0 = genOn(0, 2);	/* hat style 1 writes every step that is on */
+	ASSERT_EQ(seamOwnOut, m0);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_DEN, 3), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seamOwnIn, m0);
+	const uint64_t m1 = genOn(0, 2);
+	ASSERT_TRUE(m1 != m0);
+	ASSERT_EQ(seq_setGenParam(2, 1, PAR_GEN_DEN, 3), PG_WROTE | PG_SOFT);	/* pattern 1 shown: none */
+	ASSERT_EQ(seamOwnIn, 0u);
+	ASSERT_EQ(seq_setGenParam(2, 1, PAR_GEN_DEN, 5), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seamOwnIn, m1);	/* pattern 1 has pattern 0's track at den 3 */
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_DEN, 6), PG_WROTE | PG_SOFT);	/* back on pattern 0 */
+	ASSERT_EQ(seamOwnIn, 0u);
+	const uint64_t m2 = genOn(0, 2);
+	ASSERT_EQ(seq_setGenParam(3, 0, PAR_GEN_TYP, PG_TYPE_PRC), PG_WROTE | PG_SOFT);	/* each track its own */
+	ASSERT_EQ(seamOwnIn, 0u);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_DEN, 7), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seamOwnIn, m2);
+	reset();
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seamOwnIn, 0u);
+}
+
+TEST(gen_glue_style0_sed_there_and_back)
+{
+	/* spec §11, finding 1 through the glue: prc style 0 var +1 on the user's accents 7 and 15 (saved,
+	 * generated over, back with und), sed 0 -> 5 -> 0: var's hit at 127 is the generator's, no accent,
+	 * so sed 0 writes the first track again */
+	reset();
+	seq_setMainStep(0, 2, 6, 1);
+	seq_setMainStep(0, 2, 14, 1);
+	seq_copyPatternToBackupBuffer(0);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_PRC), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seq_genUndo(2, 0), 1);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_STY, 0), PG_WROTE | PG_SOFT);
+	PatternGenTrack first, got;
+	genRead(0, 2, &first);
+	ASSERT_EQ(first.on[0] & 0x4040u, 0x4040u); ASSERT_EQ(first.on[3] & 0x4040u, 0x4040u);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_SED, 5), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_SED, 0), PG_WROTE | PG_SOFT);
+	genRead(0, 2, &got);
+	ASSERT_TRUE(genSame(&got, &first));
+}
+
+TEST(gen_glue_mask_emptied_by_off_and_undo)
+{
+	/* spec §11: typ --- empties the mask (the hand edits of accents are made at ---) and so does und */
+	reset();
+	seq_copyPatternToBackupBuffer(0);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_OFF), 0);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seamOwnIn, 0u);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, 200), 0);	/* past prp: --- too */
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seamOwnIn, 0u);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_DEN, 3), PG_WROTE | PG_SOFT);
+	ASSERT_TRUE(seamOwnIn != 0u);
+	ASSERT_EQ(seq_genUndo(2, 0), 1);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_DEN, 5), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seamOwnIn, 0u);
+}
+
+TEST(gen_glue_mask_of_a_stopped_write_is_not_kept)
+{
+	/* spec §11: only a completed write keeps its mask; a write that a pattern change stopped leaves the
+	 * last completed one's */
+	reset();
+	seq_setMainStep(0, 2, 5, 1);
+	seq_copyPatternToBackupBuffer(0);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	const uint64_t m0 = genOn(0, 2);
+	unmasks = 0;
+	switchAtUnmask = 10;
+	host_irqAtUnmask = patternChangeAtUnmask;
+	const uint8_t f = seq_setGenParam(2, 0, PAR_GEN_DEN, 3);
+	host_irqAtUnmask = NULL;
+	ASSERT_EQ(f, 0); ASSERT_EQ(seamOwnIn, m0);
+	ASSERT_TRUE(seamOwnOut != m0);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_DEN, 5), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seamOwnIn, m0);
 }
 
 TEST_MAIN()
