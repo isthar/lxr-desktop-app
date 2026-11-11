@@ -371,10 +371,10 @@ static void pg_prc(pg_ctx_t *c, const PatternGenSettings *s, uint16_t kick, Patt
 	}
 }
 
-/* spec §4.4, §8, G19 (gen.py _rar()): everything at 127, den 0 nothing; style 1 bar 4's step 1 and
- * den 3+ the stutter on its steps 9-12 (flam x4); style 2 step 1; style 3 min(den, 8) of the 64 steps
- * off the kick by their keys (draw 3), bars 1 and 4 weigh 2, at 25 %; style 4 steps 1 (1:2) and 49
- * (4:4) and den - 2 of the scatter */
+/* spec §4.4, §8, §9, G19 (gen.py _rar()): everything at 127, den 0 nothing; style 1 bar 4's step 1
+ * and den 3+ the stutter on its steps 9-12 (flam x4); style 2 step 1; style 3 min(den, 8) of the 64
+ * steps off the kick by their keys (draw 3), bars 1 and 4 weigh 2, at 25 %; style 4 steps 1 (1:2) and
+ * 49 (4:4) and min(den - 2, 8) of the scatter (§9) */
 static void pg_rar(pg_ctx_t *c, const PatternGenSettings *s, uint16_t kick, PatternGenTrack *io)
 {
 	const unsigned den = s->den;
