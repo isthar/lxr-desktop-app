@@ -204,6 +204,11 @@ void seq_setUserTemplates(const UserTemplate *t);
 void seq_clearUserTemplates(void);
 uint8_t seq_captureUserTemplate(uint8_t trackNr, uint8_t pattern, uint8_t slot);
 void seq_clearTrackMicro(uint8_t trackNr, uint8_t pattern);	//LICHOMAT v0.7: the clear page's micro (V7-14)
+//LICHOMAT v0.8: the pattern generator (plan v0.8 Task 4, G4, G12, G13): a track page parameter of the
+//generator, with typ set the track regenerated (PG_WROTE | PG_SOFT, PatternGen.h); und from the backup
+uint8_t seq_setGenParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint8_t value);
+uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern);
+uint8_t seq_genUndo(uint8_t trackNr, uint8_t pattern);
 //LICHOMAT v0.3: the step page's slide flag and probability, each keeping the other (plan D23, D26)
 void seq_setStepSlide(uint8_t pattern, uint8_t track, uint8_t step, uint8_t on);
 void seq_setStepProbKeepSlide(uint8_t pattern, uint8_t track, uint8_t step, uint8_t prob);

@@ -447,7 +447,19 @@ enum ParamEnums
 	PAR_TRACK_VTP,		/*311*/
 	PAR_TRACK_VDP,
 	PAR_TRACK_TPL_SAVE,
-	NUM_PARAMS	/*314*/
+	// LICHOMAT v0.8: the pattern generator on the track page's sub-pages 2 and 3, menu only, not
+	// saved: the settings live in seq_gen (plan v0.8 G2, G4). PAR_GEN_TYP..PAR_GEN_SHF in this order
+	PAR_GEN_TYP,		/*314*/
+	PAR_GEN_STY,
+	PAR_GEN_DEN,
+	PAR_GEN_LEV,
+	PAR_GEN_VAR,
+	PAR_GEN_NOT,
+	PAR_GEN_SED,
+	PAR_GEN_UND,
+	PAR_GEN_SRC,
+	PAR_GEN_SHF,
+	NUM_PARAMS	/*324*/
 };
 
 extern uint8_t parameterOrder[END_OF_SOUND_PARAMETERS];

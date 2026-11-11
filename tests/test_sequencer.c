@@ -53,6 +53,7 @@
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/vsched.h"
 #include "seq_random_test.h"
+#include "Soundengine/Sequencer/PatternGen.h"
 
 #define GUARD_AFTER 256		/* past index 255, where fw 1.7 put the pattern */
 #define GUARD_BYTE 0xA5
@@ -142,7 +143,8 @@ void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmedi
 {
 	(void)presetNr; (void)isMorph; (void)sendImmediate;
 }
-void preset_touchTimer(PresetTimer type) { (void)type; }
+static int patTouches;			/* preset_touchTimer(PRESET_PAT_TIMER), LICHOMAT v0.8 */
+void preset_touchTimer(PresetTimer type) { if (type == PRESET_PAT_TIMER) patTouches++; }
 void trigger_clockTick(uint8_t onOff, uint8_t cnt) { (void)onOff; (void)cnt; }
 void trigger_reset(uint8_t value) { (void)value; }
 void trigger_setClockPhase(uint8_t pulse) { (void)pulse; }
@@ -1747,6 +1749,156 @@ TEST(sequencer_dynamics_track_page)
 	ASSERT_EQ(seq_patternSet.tmpl[2][1].id, 0);
 	seq_patternSet.vtpl[2][1] = (TrackTemplate){ 0, 0 };	/* the songs' pattern 2 as it was */
 	seq_patternSet.tmpl[2][1] = (TrackTemplate){ 0, 0 };
+}
+
+//------------------------------------------------------------------------------
+// LICHOMAT v0.8 (plan v0.8 Task 4): the pattern generator's glue
+//------------------------------------------------------------------------------
+/** track of pattern as the generator reads it */
+static void genRead(uint8_t pattern, uint8_t track, PatternGenTrack *t)
+{
+	memset(t, 0, sizeof *t);
+	memcpy(t->step, seq_patternSet.seq_subStepPattern[pattern][track], sizeof t->step);
+	memcpy(t->timing, seq_patternSet.seq_stepTiming[pattern][track], sizeof t->timing);
+	memcpy(t->fine, seq_patternSet.seq_stepFine[pattern][track], sizeof t->fine);
+	for (unsigned b = 0; b < NUM_BARS; b++)
+		t->on[b] = seq_patternSet.seq_mainSteps[b][pattern][track];
+	t->length = seq_patternSet.length[pattern][track];
+}
+static int genSame(const PatternGenTrack *a, const PatternGenTrack *b)
+{
+	return !memcmp(a->step, b->step, sizeof a->step) && !memcmp(a->timing, b->timing, sizeof a->timing)
+		&& !memcmp(a->fine, b->fine, sizeof a->fine) && !memcmp(a->on, b->on, sizeof a->on) && a->length == b->length;
+}
+/** the ten generator values of activeParameters, typ first */
+static void genShows(const uint8_t want[10])
+{
+	for (unsigned i = 0; i < 10; i++)
+		ASSERT_EQ(activeParameters[PAR_GEN_TYP + i], want[i]);
+}
+
+TEST(gen_glue_parameters)
+{
+	/* G2, G4: the settings per track as menu values; typ loads its defaults and keeps sed src shf;
+	 * values past the ranges read the defaults; und reads --- on every load */
+	reset();
+	ASSERT_EQ(seq_setGenParam(3, 2, PAR_GEN_DEN, 9), 0);	/* typ ---: stored only */
+	ASSERT_EQ(seq_patternSet.length[2][3], 16);
+	seq_setGenParam(3, 2, PAR_GEN_SED, 42);
+	seq_setGenParam(3, 2, PAR_GEN_SRC, 4);
+	seq_setGenParam(3, 2, PAR_GEN_SHF, 13);
+	activeParameters[PAR_GEN_UND] = 1;
+	seq_loadGrooveParams(3, 2);
+	genShows((const uint8_t[10]){ 0, 0, 9, 30, 4, 24, 42, 0, 4, 13 });
+	ASSERT_EQ(seq_setGenParam(3, 2, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	genShows((const uint8_t[10]){ 1, 1, 7, 15, 5, 24, 42, 0, 4, 13 });
+	ASSERT_EQ(seq_patternSet.length[2][3], 64);
+	static const uint16_t par[8] = { PAR_GEN_LEV, PAR_GEN_VAR, PAR_GEN_NOT, PAR_GEN_SHF, PAR_GEN_SRC, PAR_GEN_SED,
+		PAR_GEN_STY, PAR_GEN_DEN };
+	static const uint8_t past[8] = { 31, 9, 49, 17, 7, 100, 9, 17 };
+	for (unsigned i = 0; i < 8; i++)
+		seq_setGenParam(3, 2, par[i], past[i]);
+	seq_loadGrooveParams(3, 2);
+	genShows((const uint8_t[10]){ 1, 0, 0, 30, 4, 24, 0, 0, 0, 8 });
+	/* spec §9: a typ past prp (6..255, e.g. from NRPN) is ---: stored as ---, the track stays */
+	PatternGenTrack before, after;
+	genRead(2, 3, &before);
+	patTouches = 0;
+	ASSERT_EQ(seq_setGenParam(3, 2, PAR_GEN_TYP, PG_TYPES), 0);
+	seq_loadGrooveParams(3, 2);
+	ASSERT_EQ(activeParameters[PAR_GEN_TYP], PG_TYPE_OFF);
+	ASSERT_EQ(seq_setGenParam(3, 2, PAR_GEN_TYP, 255), 0);
+	ASSERT_EQ(seq_setGenParam(3, 2, PAR_GEN_DEN, 5), 0);	/* and the generator is off */
+	genRead(2, 3, &after);
+	ASSERT_TRUE(genSame(&before, &after)); ASSERT_EQ(patTouches, 0);
+	seq_loadGrooveParams(4, 2);	/* another track, its own settings */
+	genShows((const uint8_t[10]){ 0, 0, 0, 30, 4, 24, 0, 0, 0, 8 });
+	ASSERT_EQ(seq_setGenParam(7, 2, PAR_GEN_TYP, 1) | seq_setGenParam(3, NUM_PATTERN, PAR_GEN_TYP, 1)
+		| seq_setGenParam(3, 2, PAR_TRACK_VTP, 1), 0);	/* no track 8, no pattern 64, not a generator parameter */
+	seq_loadGrooveParams(3, 2);
+	ASSERT_EQ(activeParameters[PAR_GEN_TYP], PG_TYPE_OFF);
+}
+
+TEST(gen_glue_writes_what_the_core_makes_masked)
+{
+	/* G12: with typ set each change rewrites the track as patternGen_generate() makes it from the
+	 * pattern (sub from track 1's kick on 1 and 9), each step and the length with interrupts masked,
+	 * and touches the pattern's autosave timer once */
+	reset();
+	seq_setMainStep(2, 0, 0, 1);
+	seq_setMainStep(2, 0, 8, 1);
+	seq_patternSet.seq_subStepPattern[2][4][3].param1Nr = 5;
+	PatternGenTrack want, got;
+	genRead(2, 4, &want);
+	const PatternGenSettings s = { PG_TYPE_SUB, 1, 0, -3, 0, -2, 0, 0, 0 };
+	const PatternGenSource src = { seq_patternSet.seq_subStepPattern[2][0], { 0x0101u, 0, 0, 0 }, seq_patternSet.length[2][0] };
+	ASSERT_EQ(patternGen_generate(&s, 4, &src, &want), PG_WROTE | PG_SOFT);
+	const uint32_t irq = host_irqDisables;
+	patTouches = 0;
+	ASSERT_EQ(seq_setGenParam(4, 2, PAR_GEN_TYP, PG_TYPE_SUB), PG_WROTE | PG_SOFT);
+	ASSERT_TRUE(host_irqDisables - irq >= NUM_STEPS + 1u);
+	ASSERT_EQ(host_primask, 0); ASSERT_EQ(patTouches, 1);
+	genRead(2, 4, &got);
+	ASSERT_TRUE(genSame(&got, &want));
+	seq_setGenParam(4, 2, PAR_GEN_TYP, PG_TYPE_OFF);	/* typ ---: a change stores, the track stays */
+	seq_setGenParam(4, 2, PAR_GEN_SED, 9);
+	genRead(2, 4, &got);
+	ASSERT_TRUE(genSame(&got, &want)); ASSERT_EQ(patTouches, 1);
+	seq_setGenParam(4, 2, PAR_GEN_SRC, 4);	/* prp from its own track: nothing */
+	ASSERT_EQ(seq_setGenParam(4, 2, PAR_GEN_TYP, PG_TYPE_PRP), 0); ASSERT_EQ(patTouches, 1);
+}
+
+TEST(gen_glue_keeps_the_raw_fine_nibbles)
+{
+	/* G6: hat style 0 keeps the accents byte for byte, fine nibbles included as stored: -7 (0x9)
+	 * and +7 (0x7), which stepFine_get() reads as 0, stay as the core leaves them */
+	reset();
+	ASSERT_EQ(seq_setGenParam(2, 3, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);	/* offbeats at 127 */
+	seq_patternSet.seq_stepFine[3][2][1] = 0x09;	/* step 3's nibble */
+	seq_patternSet.seq_stepFine[3][2][3] = 0x07;	/* step 7's */
+	PatternGenTrack want, got;
+	genRead(3, 2, &want);
+	const PatternGenSettings s = { PG_TYPE_HAT, 0, 7, -15, 1, 0, 0, 0, 0 };
+	const PatternGenSource src = { seq_patternSet.seq_subStepPattern[3][0], { 0, 0, 0, 0 }, seq_patternSet.length[3][0] };
+	ASSERT_EQ(patternGen_generate(&s, 2, &src, &want), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(want.fine[1] & 0x0F, 0x09);
+	ASSERT_EQ(seq_setGenParam(2, 3, PAR_GEN_STY, 0), PG_WROTE | PG_SOFT);
+	genRead(3, 2, &got);
+	ASSERT_TRUE(genSame(&got, &want));
+}
+
+TEST(gen_glue_undo_takes_the_backup_of_the_playing_pattern)
+{
+	/* G13: und puts back the track's steps, timing, fine (as stored), main steps and length from
+	 * the backup, only in the pattern that plays, masked, and touches the timer; typ stays */
+	reset();
+	seq_setMainStep(0, 5, 3, 1);
+	seq_patternSet.seq_subStepPattern[0][5][3].volume = 77;
+	seq_patternSet.seq_stepTiming[0][5][3].flam = 2;
+	stepFine_set(seq_patternSet.seq_stepFine[0][5], 3, -5);
+	seq_patternSet.seq_stepFine[0][5][2] = 0x09;	/* step 4's nibble: -7, read as 0 */
+	seq_patternSet.length[0][5] = 12;
+	seq_copyPatternToBackupBuffer(0);	/* the "last save" */
+	PatternGenTrack saved, got;
+	genRead(0, 5, &saved);
+	ASSERT_EQ(seq_setGenParam(5, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	genRead(0, 5, &got);
+	ASSERT_FALSE(genSame(&got, &saved));
+	ASSERT_EQ(seq_genUndo(5, 2), 0);	/* pattern 2 does not play */
+	genRead(0, 5, &got);
+	ASSERT_FALSE(genSame(&got, &saved));
+	patTouches = 0;
+	const uint32_t irq = host_irqDisables;
+	ASSERT_EQ(seq_genUndo(5, 0), 1);
+	ASSERT_TRUE(host_irqDisables - irq >= NUM_STEPS + 1u);
+	ASSERT_EQ(host_primask, 0); ASSERT_EQ(patTouches, 1);
+	genRead(0, 5, &got);
+	ASSERT_TRUE(genSame(&got, &saved));
+	seq_loadGrooveParams(5, 0);
+	ASSERT_EQ(activeParameters[PAR_GEN_TYP], PG_TYPE_HAT);
+	ASSERT_EQ(seq_genUndo(7, 0), 0);
+	ASSERT_EQ(seq_genUndo(5, NUM_PATTERN), 0);
+	ASSERT_EQ(patTouches, 1);
 }
 
 TEST_MAIN()

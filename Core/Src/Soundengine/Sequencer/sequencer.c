@@ -39,6 +39,7 @@
 #include "buttonHandler.h"
 #include "Preset/PresetManager.h"
 #include "Soundengine/vsched.h"	//LICHOMAT v0.5: sample-accurate triggering (plan v0.5)
+#include "Soundengine/Sequencer/PatternGen.h"	//LICHOMAT v0.8: the pattern generator
 
 void seq_setPendingPatternActive();
 
@@ -110,6 +111,9 @@ static uint16_t midi_notes_on=0;		    /**< which channels have a note currently 
 #endif
 
 PatternBackupBuffer patternBackupBuffer;
+static PatternGenSettings seq_gen[NUM_TRACKS];	//LICHOMAT v0.8: the generator's settings per track, RAM only (plan v0.8 G4)
+_Static_assert((NUM_STEPS == PG_STEPS) && (NUM_BARS == PG_BARS) && (NUM_TRACKS == PG_TRACKS),
+	"LICHOMAT v0.8: a PatternGenTrack is one track of a pattern");
 
 //LICHOMAT v0.7: the project's own templates (plan v0.7 V7-3, V7-6), read by the core in place
 //(seqc_host_t.userTemplates) from seq_tick(); written with interrupts masked
@@ -285,6 +289,8 @@ void seq_init()
 		//seq_patternSet.seq_patternSettings[i].nextPattern 	= i;	//default setting: repeat same pattern
 		seq_clearPattern(i); // will clear all tracks in the pattern
 	}
+
+	memset(seq_gen, 0, sizeof seq_gen);	//LICHOMAT v0.8: the generator off on every track
 
 	//the timing core, its time base and the sync input queues
 	seq_initCore();
@@ -2553,6 +2559,22 @@ void seq_tick()
 	seq_inTick = 0;
 }
 //------------------------------------------------------------------------------
+/** LICHOMAT v0.8 (G2): the generator's ten parameters of track as menu values; und reads --- */
+static void seq_loadGenParams(uint8_t trackNr)
+{
+	const PatternGenSettings s = patternGen_checked(seq_gen[trackNr]);
+	activeParameters[PAR_GEN_TYP] = s.typ;
+	activeParameters[PAR_GEN_STY] = s.sty;
+	activeParameters[PAR_GEN_DEN] = s.den;
+	activeParameters[PAR_GEN_LEV] = (uint8_t)(s.lev - PG_LEV_MIN);
+	activeParameters[PAR_GEN_VAR] = (uint8_t)(s.var + PG_VAR_MAX);
+	activeParameters[PAR_GEN_NOT] = (uint8_t)(s.note + PG_NOTE_MAX);
+	activeParameters[PAR_GEN_SED] = s.sed;
+	activeParameters[PAR_GEN_UND] = 0;
+	activeParameters[PAR_GEN_SRC] = s.src;
+	activeParameters[PAR_GEN_SHF] = (uint8_t)(s.shf + PG_SHF_MAX);
+}
+//------------------------------------------------------------------------------
 /** LICHOMAT v0.2: the track page's four parameters (Euklid page, second screen) from the
  * track's settings in pattern */
 void seq_loadGrooveParams(uint8_t trackNr, uint8_t pattern)
@@ -2572,6 +2594,7 @@ void seq_loadGrooveParams(uint8_t trackNr, uint8_t pattern)
 	activeParameters[PAR_TRACK_VTP] = vt.id;
 	activeParameters[PAR_TRACK_VDP] = (uint8_t)(vt.amount + 100);
 	activeParameters[PAR_TRACK_TPL_SAVE] = 0;
+	seq_loadGenParams(trackNr);	//LICHOMAT v0.8: the generator's sub-pages
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.2: a track page parameter edited, as its menu value */
@@ -2761,6 +2784,119 @@ void seq_clearTrackMicro(uint8_t trackNr, uint8_t pattern)
 		stepFine_set(fine, s, 0);
 		seq_mailboxUnlock(primask);
 	}
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.8: step s's fine nibble as stored, for a copy byte for byte: stepFine_get() reads
+ * -8, -7, +6 and +7 as 0, and the generator's style 0 keeps them (PatternGen.c pg_fine()) */
+static int8_t seq_rawFine(const uint8_t *fine, uint8_t s)
+{
+	return (int8_t)((fine[(s >> 1) & 31u] >> ((s & 1u) * 4u)) & 0x0Fu);
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.8 (G12): a generated track into pattern, each step with interrupts masked as
+ * seq_clearTrackMicro(): seq_tick() reads the steps, and recording writes them */
+static void seq_writeGenTrack(uint8_t trackNr, uint8_t pattern, const PatternGenTrack *t)
+{
+	Step *st = seq_patternSet.seq_subStepPattern[pattern][trackNr];
+	StepTiming *tm = seq_patternSet.seq_stepTiming[pattern][trackNr];
+	uint8_t *fine = seq_patternSet.seq_stepFine[pattern][trackNr];
+	for(uint8_t s = 0; s < NUM_STEPS; s++)
+	{
+		const uint32_t primask = seq_mailboxLock();
+		st[s] = t->step[s];
+		tm[s] = t->timing[s];
+		stepFine_set(fine, s, seq_rawFine(t->fine, s));
+		seq_setMainStep(pattern, trackNr, s, (uint8_t)((t->on[s >> 4] >> (s & 15u)) & 1u));
+		seq_mailboxUnlock(primask);
+	}
+	const uint32_t primask = seq_mailboxLock();
+	seq_patternSet.length[pattern][trackNr] = t->length;
+	seq_mailboxUnlock(primask);
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.8 (G4, G12): track in pattern regenerated from its settings; the source is the
+ * same pattern's track src (as patternGen_checked() reads it), read in place (the core reads none
+ * when src is the track); the current track a copy on the stack */
+uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
+{
+	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return 0;
+	const uint8_t srcNr = patternGen_checked(seq_gen[trackNr]).src;
+	PatternGenTrack t;
+	PatternGenSource src;
+	memcpy(t.step, seq_patternSet.seq_subStepPattern[pattern][trackNr], sizeof t.step);
+	memcpy(t.timing, seq_patternSet.seq_stepTiming[pattern][trackNr], sizeof t.timing);
+	memcpy(t.fine, seq_patternSet.seq_stepFine[pattern][trackNr], sizeof t.fine);
+	t.length = seq_patternSet.length[pattern][trackNr];
+	src.step = seq_patternSet.seq_subStepPattern[pattern][srcNr];
+	src.length = seq_patternSet.length[pattern][srcNr];
+	for(uint8_t b = 0; b < NUM_BARS; b++)
+	{
+		t.on[b] = seq_patternSet.seq_mainSteps[b][pattern][trackNr];
+		src.on[b] = seq_patternSet.seq_mainSteps[b][pattern][srcNr];
+	}
+	const uint8_t f = patternGen_generate(&seq_gen[trackNr], trackNr, &src, &t);
+	if(f & PG_WROTE)
+	{
+		seq_writeGenTrack(trackNr, pattern, &t);
+		preset_touchTimer(PRESET_PAT_TIMER);	// autosave, as a step toggled on the panel
+	}
+	return f;
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.8 (G2, G4): a generator parameter of the track page as its menu value, a value
+ * past its range the default; typ loads its type's values (spec §3), a typ past prp is --- (spec
+ * §9). With typ set the track in pattern is regenerated (und is the click's: menu.c) */
+uint8_t seq_setGenParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint8_t value)
+{
+	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return 0;
+	PatternGenSettings *g = &seq_gen[trackNr];
+	switch(paramNr)
+	{
+	case PAR_GEN_TYP:
+		patternGen_typeDefaults((value < PG_TYPES) ? value : PG_TYPE_OFF, g);
+		seq_loadGenParams(trackNr);	// the screens show the type's values
+		break;
+	case PAR_GEN_STY: g->sty = (value <= PG_STY_MAX) ? value : 0; break;
+	case PAR_GEN_DEN: g->den = (value <= PG_DEN_MAX) ? value : 0; break;
+	case PAR_GEN_LEV: g->lev = (int8_t)((value <= -PG_LEV_MIN) ? (int)value + PG_LEV_MIN : 0); break;
+	case PAR_GEN_VAR: g->var = (int8_t)((value <= 2 * PG_VAR_MAX) ? (int)value - PG_VAR_MAX : 0); break;
+	case PAR_GEN_NOT: g->note = (int8_t)((value <= 2 * PG_NOTE_MAX) ? (int)value - PG_NOTE_MAX : 0); break;
+	case PAR_GEN_SED: g->sed = (value <= PG_SED_MAX) ? value : 0; break;
+	case PAR_GEN_SRC: g->src = (value < NUM_TRACKS) ? value : 0; break;
+	case PAR_GEN_SHF: g->shf = (int8_t)((value <= 2 * PG_SHF_MAX) ? (int)value - PG_SHF_MAX : 0); break;
+	default: return 0;
+	}
+	return (g->typ != PG_TYPE_OFF) ? seq_generateTrack(trackNr, pattern) : 0;
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.8 (G13): und: track in pattern back to the backup, the last saved or loaded state,
+ * only while pattern plays: each step checks it with interrupts masked, since a pattern change in
+ * seq_tick() swaps the backup. The fine nibbles as stored; the settings (typ) stay. 1 when done */
+uint8_t seq_genUndo(uint8_t trackNr, uint8_t pattern)
+{
+	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return 0;
+	Step *st = seq_patternSet.seq_subStepPattern[pattern][trackNr];
+	StepTiming *tm = seq_patternSet.seq_stepTiming[pattern][trackNr];
+	uint8_t *fine = seq_patternSet.seq_stepFine[pattern][trackNr];
+	for(uint8_t s = 0; s <= NUM_STEPS; s++)
+	{
+		const uint32_t primask = seq_mailboxLock();
+		const uint8_t plays = (pattern == seq_activePattern);
+		if(plays && (s == NUM_STEPS))	// the length last
+			seq_patternSet.length[pattern][trackNr] = patternBackupBuffer.length[trackNr];
+		else if(plays)
+		{
+			st[s] = patternBackupBuffer.seq_subStepPattern[trackNr][s];
+			memcpy(&tm[s], &patternBackupBuffer.seq_stepTiming[trackNr][s], sizeof tm[s]);
+			stepFine_set(fine, s, seq_rawFine(patternBackupBuffer.seq_stepFine[trackNr], s));
+			seq_setMainStep(pattern, trackNr, s, (uint8_t)((patternBackupBuffer.seq_mainSteps[s >> 4][trackNr] >> (s & 15u)) & 1u));
+		}
+		seq_mailboxUnlock(primask);
+		if(!plays)
+			return 0;
+	}
+	preset_touchTimer(PRESET_PAT_TIMER);
+	return 1;
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.2: move every step of the track in pattern one step later (dir +1) or
