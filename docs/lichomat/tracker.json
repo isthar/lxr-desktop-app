@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 22:03",
+    "updated": "2026-11-11 22:25",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "E10: groovebox do minimal groove techno; teraz E10.3, generator w firmware (gałąź v0.8)",
+    "focus": "E10: groovebox do minimal groove techno; generator v0.8 gotowy w kodzie, teraz testy w emulatorze i kity z laboratorium brzmień",
     "branch": "timing-core",
-    "head": "eb345f4",
-    "next": "Czekam na Twój odsłuch ghost kicków (v17) i wybór z laboratorium brzmień; w tym czasie testy w emulatorze (E10.13–E10.14)",
-    "updated_at": "2026-11-11T22:03:00+01:00",
-    "now": ""
+    "head": "dfbe7aa",
+    "next": "Kity 52–55 do odsłuchu; potem dokumentacja v0.8 (E10.15)",
+    "updated_at": "2026-11-11T22:25:00+01:00",
+    "now": "W tle: kity 52–55 z zestawów A i B (E10.4) oraz testy generatora w emulatorze (E10.13–E10.14)"
   },
   "epics": [
     {
@@ -1742,6 +1742,22 @@
       "question": "Generator wzorców (E10.2): na stronie odsłuchu, w sekcji „Generator: pierwsze przykłady”, jest 32 przykładów, każdy z siatką kroków. Które style zostają, które wyrzucić albo zmienić? Czy ghosty hihatu (−15 dB) i suby (2 półtony pod stopą) brzmią w stylu? Czy zmiany na końcu frazy (var) są za słabe, czy za mocne?",
       "assumption": "Zostają wszystkie style z liczbami z pomiarów. Firmware (E10.3) robię dalej, a Twoje uwagi zmienią tylko tabele stylów.",
       "answer": "Twoja odpowiedź (11.11): stopy z HH wychodzą świetnie; suby naiwne i mało berlińskie, rolling jak z naiwnego psytrance'u; rzadkie uderzenia za głośne (mają być uderzeniem tła) i zbyt prymitywny szum bez pogłosu i ambientu; przeniesienie rytmu super, ale ten rimshot naiwny. Co z tym robię: ghosty hihatu i przeniesienie rytmu zostają bez zmian. Suby: nowy głos (głęboki, długi, z wolnym atakiem, pod stopą, tłumiony stopą) i style z jednym uderzeniem na ćwierćnutę lub rzadziej zamiast szesnastkowego rollingu. Rzadkie uderzenia: dużo ciszej, zawsze w pogłosie (predelay, długi ogon, freeze, ducking od stopy), zaprojektowane ryki i risery zamiast surowego szumu. Rim i perkusja: nowe barwy w kitach (E10.4). Najpierw próbki brzmień do Twojego wyboru na stronie odsłuchu, potem zmiana tabel stylów w generatorze.",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "Q42",
+      "status": "zamknięte",
+      "question": "Laboratorium brzmień (strona do odsłuchu v16): które ghost kicki (zestaw A), które uderzenia tła (zestaw B) i która perkusja (zestaw C) zostają?",
+      "assumption": "Ghost kick A2 do generatora i kitów; reszta według Twojego odsłuchu.",
+      "answer": "Twoja odpowiedź (11.11): zestawy A i B, wszystkie przykłady w porządku. Ghost kick A2 zostaje głosem przykładów generatora; kity 52–55 (E10.4) biorą głosy z A i B (A2, bed A9, ryki B1 i B7, riser B2, boom B4, jąkanie B5, downlifter B3) i ich pogłos. Zestaw C nie ma jeszcze oceny: patrz Q43.",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "Q43",
+      "status": "otwarte",
+      "question": "Laboratorium brzmień, zestaw C: która perkusja zamiast rimshota (C1 ciemne drewno FM, C2 tyk szumu jak shaker, C3 krótki metaliczny tyk, C4 dubowy rim w delayu)?",
+      "assumption": "Do Twojego wyboru nowe kity 52–55 mają na werblu C2 (bez slotu FX, więc nie gryzie się z pogłosem tła); po wyborze podmieniam.",
+      "answer": "",
       "updated": "2026-11-11"
     }
   ],
@@ -5190,6 +5206,11 @@
       "n": 689,
       "at": "2026-11-11 22:03",
       "text": "E10.16: sub pisze ghost kicki (projekt §10) w prototypie, wektorach (260, w tym 76 sub; reszta bajt w bajt bez zmian) i rdzeniu C (v0.8 45d938e..3cebde7); fuzz prototyp kontra C: 50 000 przypadków, 0 różnic. Host 138/138, RAM bez zmian. Testy emulatora 355/358: trzy testy aplikacji z dźwiękiem Maca (R4_dev_coreaudio, stopwait, import) padają, bo CoreAudio daje teraz 0 wywołań; build v0.7 pada tak samo, więc to sprzęt, nie kod. Strona do odsłuchu v17: 10 przykładów ghost kicków (głos A2) i nowy cały groove."
+    },
+    {
+      "n": 690,
+      "at": "2026-11-11 22:25",
+      "text": "Q42: zestawy A i B z laboratorium brzmień w porządku, wszystkie przykłady. E10.4: z nich robię kity 52–55 (ECHO, FALA, RYK, TLO) na głosach PROSTO. Q43 otwarte: perkusja z zestawu C. Równolegle zaczynają się testy generatora w emulatorze (E10.13–E10.14)."
     }
   ]
 }
