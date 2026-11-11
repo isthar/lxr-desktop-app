@@ -922,7 +922,7 @@ TEST(pgen_vectors_cover_the_settings)
 	}
 	ASSERT_EQ(sty[PG_TYPE_HAT] & 0x1Fu, 0x1Fu); ASSERT_EQ(sty[PG_TYPE_SUB] & 0x1FEu, 0x1FEu);
 	ASSERT_EQ(sty[PG_TYPE_PRC] & 0x1Fu, 0x1Fu); ASSERT_EQ(sty[PG_TYPE_RAR] & 0x1Eu, 0x1Eu);
-	ASSERT_EQ(sty[PG_TYPE_PRP] & 0x1Eu, 0x1Eu); ASSERT_EQ(ends & 0x3FFu, 0x3FFu);
+	ASSERT_EQ(sty[PG_TYPE_PRP] & 0x1Eu, 0x1Eu); ASSERT_EQ(ends, 0x7FFu);
 }
 
 TEST_MAIN()
