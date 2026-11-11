@@ -1046,6 +1046,54 @@ class Own(unittest.TestCase):
                 self.assertEqual(generate(s, 2, k, cur, mask_of(range(64))), generate(s, 2, k, cur), s)
 
 
+class TypeDefaultsOnATrack(unittest.TestCase):
+    """spec 11: choosing hat or prc on a track with the user's accents (a step at vel >= 64 as it
+    plays, outside the mask) loads sty 0 instead of 1; the other defaults stay the table's"""
+
+    DRAWN = '..X...X...X...X.'      # accents drawn at ---
+
+    def test_hat_and_prc_on_drawn_accents_start_at_sty0(self):
+        cur = Track.from_pattern(self.DRAWN)
+        cur.steps[6].p1nr, cur.steps[6].p1val = 20, 7
+        base = Settings(sed=3, src=2, shf=-1)
+        for typ, track in (('hat', 5), ('prc', 2)):
+            s = apply_type_defaults(base, typ, cur)
+            self.assertEqual(s, dataclasses.replace(apply_type_defaults(base, typ), sty=0))
+            out = generate(s, track, KICK, cur)
+            for b in range(4):                    # the accents kept as they are, ghosts added
+                for p in (2, 6, 10, 14):
+                    self.assertEqual(out.steps[b * BAR + p], cur.steps[p])
+                self.assertGreater(len(bar_hits(out, b)), 4)
+            self.assertEqual(kept(out), {b * BAR + p for b in range(4) for p in (2, 6, 10, 14)})
+
+    def test_empty_or_the_generators_own_steps_stay_sty1(self):
+        ghosts, past = no_accents()
+        for typ, track in (('hat', 5), ('prc', 2)):
+            for cur in (None, Track(), ghosts, past):
+                self.assertEqual(apply_type_defaults(Settings(), typ, cur).sty, 1)
+            own = generate(S('hat'), track, KICK)
+            self.assertEqual(apply_type_defaults(Settings(), typ, own, own.written).sty, 1)
+            self.assertEqual(apply_type_defaults(Settings(), typ, own).sty, 0)        # without its mask
+            mixed = own.copy()                    # one accent drawn on an empty step: the user's
+            empty = min(i for i in range(NUM_STEPS) if not own.active[i])
+            mixed.active[empty] = True
+            self.assertEqual(apply_type_defaults(Settings(), typ, mixed, own.written).sty, 0)
+
+    def test_as_it_plays_and_the_mask_on_a_short_track(self):
+        cur = Track.from_pattern('......X.........')
+        self.assertEqual(apply_type_defaults(Settings(), 'hat', cur, mask_of([6])).sty, 1)
+        self.assertEqual(apply_type_defaults(Settings(), 'hat', cur, mask_of([22, 38])).sty, 0)
+        legacy = Track.from_pattern('.....x..........')
+        legacy.steps[5].vol = 0x80 | 40           # the legacy active flag: 40, no accent
+        self.assertEqual(apply_type_defaults(Settings(), 'prc', legacy).sty, 1)
+
+    def test_sub_rar_prp_and_off_do_not_change(self):
+        cur = Track.from_pattern(self.DRAWN)
+        base = Settings(sty=4, den=9, sed=7)
+        for typ in ('sub', 'rar', 'prp', '---', 6, 255):
+            self.assertEqual(apply_type_defaults(base, typ, cur), apply_type_defaults(base, typ))
+
+
 class Vectors(unittest.TestCase):
     def test_golden_vectors(self):
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vectors.json')

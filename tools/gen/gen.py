@@ -16,6 +16,8 @@ the spec leaves open are marked "CHOICE" where they are decided:
   track it masks step i wherever it plays) are no accents of sty 0, nor for the check above,
   whatever their velocity now; the track generate() returns carries the steps it wrote as
   Track.written, the next run's `own` (spec 11);
+- choosing hat or prc on a track with the user's accents (as it plays, outside the mask) loads
+  sty 0 instead of 1 (apply_type_defaults() with the current track and mask, spec 11);
 - hat sty 0: the free places are found bar by bar, around that bar's accents;
 - prc sty 0: each bar keeps its own accents as they play, in all 4 bars (bars 3-4 are not
   copies of bars 1-2), and gets its ghosts from them (spec 9);
@@ -158,13 +160,18 @@ class Settings:
                     var=self.var, **{'not': self.not_}, sed=self.sed, src=self.src, shf=self.shf)
 
 
-def apply_type_defaults(settings: Settings, typ) -> Settings:
+def apply_type_defaults(settings: Settings, typ, cur_track: Optional['Track'] = None, own: int = 0) -> Settings:
     """settings with typ chosen: sty den lev var not from the kind's table (spec 3), the
-    rest kept; '---' only switches the generator off; a typ outside 0-5 changes nothing"""
+    rest kept; '---' only switches the generator off; a typ outside 0-5 changes nothing.
+    Spec 11: hat or prc on cur_track (the track now) with the user's accents, outside own
+    (the steps the last run wrote), starts at sty 0"""
     t = typ_code(typ)
     if not 0 <= t < len(TYP_NAMES):
         return settings
-    return dataclasses.replace(settings, typ=t, **TYPE_DEFAULTS.get(t, {}))
+    s = dataclasses.replace(settings, typ=t, **TYPE_DEFAULTS.get(t, {}))
+    if t in (TYP_HAT, TYP_PRC) and cur_track is not None and user_accents(cur_track, own):
+        s = dataclasses.replace(s, sty=0)
+    return s
 
 
 # --- tracks ---------------------------------------------------------------------------------
@@ -439,6 +446,14 @@ def _accents(view: Track, bar: int, mine: int = 0) -> set:
             and (view.steps[bar * BAR + p].vol & VOLUME_MASK) >= ACCENT_VEL}
 
 
+def user_accents(cur: Track, own: int = 0) -> bool:
+    """whether cur, as it plays, has an accent of the user's: a step at vel >= 64 that is not one
+    the last run wrote (own, bit i step i as stored, so on a shorter track wherever it plays;
+    spec 11); without one, hat and prc sty 0 is sty 1 (spec 9) and choosing them loads sty 1"""
+    return any(cur.active[j] and not (own >> j) & 1 and (cur.steps[j].vol & VOLUME_MASK) >= ACCENT_VEL
+               for j in range(cur.length))           # the steps that play: 0 .. length - 1, repeated
+
+
 def kick_places(s: Settings, track_index: int, src_track: Optional[Track]) -> frozenset:
     """spec 4.2: the kick is the first bar of track src; when that is empty or src is this
     track, steps 1 5 9 13. Places 0-15, the same in every bar"""
@@ -474,7 +489,7 @@ def generate(settings: Settings, track_index: int, src_track: Optional[Track] = 
     out = _Out(_clamp_note(DEFAULT_NOTE + s.not_))                       # 3. per kind, below
     view = cur.played()
     mine = sum(1 << i for i in range(NUM_STEPS) if (own >> (i % cur.length)) & 1)  # spec 11: own as it plays
-    if s.typ in (TYP_HAT, TYP_PRC) and s.sty == 0 and not any(_accents(view, b, mine) for b in range(NUM_BARS)):
+    if s.typ in (TYP_HAT, TYP_PRC) and s.sty == 0 and not user_accents(cur, own):
         s = dataclasses.replace(s, sty=1)       # spec 9: sty 0 without accents is sty 1, seeded with 0
     if s.typ == TYP_HAT:
         _hat(s, out, draws, offsets, view, mine)
@@ -675,13 +690,13 @@ def main(argv=None) -> int:
                     help="track src's steps (default a 4/4 kick)")
     ap.add_argument('--cur-pattern', help="the destination track's steps now (hat, prc sty 0)")
     a = ap.parse_args(argv)
-    s = apply_type_defaults(Settings(), a.typ)
+    cur = Track.from_pattern(a.cur_pattern) if a.cur_pattern else None
+    s = apply_type_defaults(Settings(), a.typ, cur)       # spec 11: sty 0 on the user's accents
     over = {('not_' if k == 'not' else k): getattr(a, k) for k in
             ('sty', 'den', 'lev', 'var', 'not', 'sed', 'src', 'shf') if getattr(a, k) is not None}
     s = dataclasses.replace(s, **over).clamped()
     track = (a.track or {TYP_HAT: 6, TYP_SUB: 2, TYP_PRC: 3, TYP_RAR: 5, TYP_PRP: 4}[s.typ]) - 1
     src = Track.from_pattern(a.src_pattern)
-    cur = Track.from_pattern(a.cur_pattern) if a.cur_pattern else None
     out = generate(s, track, src, cur)
     d = s.as_dict()
     print(' '.join('%s %s' % (k, v) for k, v in d.items()) + ', track %d' % (track + 1)
