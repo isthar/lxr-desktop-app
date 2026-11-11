@@ -32,6 +32,7 @@
 
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Sequencer/PatternGen.h"	// LICHOMAT v0.8: PG_ ranges and flags
+#include "Soundengine/MIDI/MidiParser.h"	// LICHOMAT v0.8: midiParser_ccHandler(), the generator's vol
 #include "Soundengine/MIDI/CortexParser.h"	// LICHOMAT v0.6: frontParser_activeStep
 #include "Soundengine/Soundengine.h"
 #include "Soundengine/cpuMeter.h"
@@ -3076,14 +3077,16 @@ static void menu_genUndo(void)
 }
 //-----------------------------------------------------------------
 /** LICHOMAT v0.8 (G11): a generated step below 127 on a voice with vol (velocity -> volume) off:
- * vol on, as its edit on the voice page; both hats share PAR_VOLUME_MOD_ON_OFF6 */
+ * vol on in the kit, as its edit on the voice page; both hats share PAR_VOLUME_MOD_ON_OFF6. The
+ * engine gets it as a kit load sends it (quality review of group C): the front panel's CC2 path would
+ * also record it as automation into the step that plays while recording is on */
 static void menu_genVolumeOn(uint8_t voice)
 {
 	const uint16_t p = (uint16_t)(PAR_VOLUME_MOD_ON_OFF1 + ((voice < 5) ? voice : 5));
 	if(activeParameters[p])
 		return;
 	activeParameters[p] = 1;
-	frontPanel_sendData(CC_2, (uint8_t)(p - 128), 1);
+	midiParser_ccHandler((MidiMsg){ .status = CC_2, .data1 = (uint8_t)(p - 128), .data2 = 1 }, 1, 0, 0.f);
 	preset_touchTimer(PRESET_KIT_TIMER);
 }
 //-----------------------------------------------------------------

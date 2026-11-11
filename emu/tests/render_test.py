@@ -1709,6 +1709,22 @@ def V08_armed(t):
               % (name, sorted(os.listdir(os.path.join(keep, 'TMP')))))
     no_copies_left()
 
+@case
+def V08_vol(t):
+    # the generator's vol switch (plan v0.8 G11, quality review of group C). A: recording on and the
+    # sequencer playing: the switch goes to the engine directly, so it records no automation into the
+    # step that plays: voice 6's steps keep the generator's empty p-locks
+    seed, keep = t.seed(), t.path('K')
+    mode2 = '+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
+    script = t.script('0ms press voice6\n+100ms press rec\n' + mode2 + '+200ms encoder +13\n+100ms push\n'
+                      '+150ms encoder +1\n+100ms push\n+300ms press start\n+200ms press rec\n+300ms save-project 0\n')
+    t.render(seed, ['--seconds', '3', '--param', 'volume_mod_on_off6=0', '--keep-card', keep, '--events', script])
+    pat = one_file(keep, '00-*.PAT')
+    locks = [(k, pat[14 + 512 * 5 + 7 * k + 3], pat[14 + 512 * 5 + 7 * k + 5]) for k in range(64)]
+    check(pat[3655 + 5] == 64 and all(a == 0xFF and b == 0xFF for _, a, b in locks),
+          'voice 6 recorded while the generator switched vol: %r' % [x for x in locks if x[1:] != (0xFF, 0xFF)])
+    no_copies_left()
+
 def name_table(text, table):
     """the strings of a name table of MenuText.h, without its #if USE_CODEC_EQ entries (off in the build)"""
     body = text.split('const char %s[][16] =' % table, 1)[1].split('};', 1)[0]
