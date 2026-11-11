@@ -1620,7 +1620,7 @@ def V08_ui(t):
     # keeps den 7 (the same typ loads nothing)
     log = t.path('panel3.log')
     script = t.script('0ms press voice6\n' + mode2 + '+200ms encoder +13\n+100ms push\n+150ms encoder +2\n'
-                      '+100ms push\n+150ms encoder +5\n+200ms mark subnot\n+100ms encoder -5\n+100ms push\n'
+                      '+100ms push\n+200ms mark sub\n+150ms encoder +5\n+200ms mark subnot\n+100ms encoder -5\n+100ms push\n'
                       '+150ms encoder +3\n'
                       '+100ms push\n+200ms mark prp\n+150ms encoder +2\n+100ms push\n+150ms encoder +3\n'
                       '+100ms push\n+200ms mark den7\n+150ms encoder -2\n+100ms push\n+150ms encoder +1\n'
@@ -1634,7 +1634,8 @@ def V08_ui(t):
           'den 7: %r' % rows['den7'])
     check(re.match(r'TYP.sty.den.lev', rows['again'][0]) and re.match(r'prp.  1.  7.-15', rows['again'][1]),
           'typ +1 at prp: %r' % rows['again'])
-    # var, not and shf with their signs, as mic: sub's not -2, shf -3 and +8
+    # var, not and shf with their signs, as mic: sub's not -2, shf -3 and +8; lev too: sub's -3
+    check(re.match(r'sub.  1.  0. -3', rows['sub'][1]), "sub's lev: %r" % rows['sub'])
     check(re.match(r'var.NOT.sed.und', rows['subnot'][0]) and re.match(r'  0. -2.  0.---', rows['subnot'][1]),
           "sub's not: %r" % rows['subnot'])
     check(re.match(r'src.SHF', rows['shfneg'][0]) and re.match(r'  1. -3', rows['shfneg'][1]), 'shf -3: %r' % rows['shfneg'])

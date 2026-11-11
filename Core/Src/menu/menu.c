@@ -2837,7 +2837,7 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 //so the bound cannot drift from the rows (each [0][0] counts them today)
 #define MENU_NAME(t)	((t)[(((size_t)curParmVal + 1) < (sizeof(t) / sizeof((t)[0]))) ? (curParmVal + 1) : 1])
 /** LICHOMAT v0.6: a signed value in 3 characters with its sign, as mic shows T: " +5", "+19", "-84",
- * "  0"; v0.8: the generator's var, not and shf the same (review of group C) */
+ * "  0"; v0.8: the generator's lev, var, not and shf the same (reviews of group C) */
 static void menu_signedValue(char *buf, int t)
 {
 	const int a = (t < -99) ? 99 : (t > 99) ? 99 : (t < 0) ? -t : t;	// two digits at most
@@ -3004,7 +3004,7 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 	case MENU_GEN_DEN:
 	case MENU_GEN_SED: numtostrpu(buf, curParmVal, ' '); return;
 	case MENU_GEN_SRC: numtostrpu(buf, (uint8_t)(curParmVal + 1), ' '); return;	// tracks 1..7
-	case MENU_GEN_LEV: numtostrps(buf, (int8_t)(curParmVal + PG_LEV_MIN)); return;
+	case MENU_GEN_LEV: menu_signedValue(buf, (int)curParmVal + PG_LEV_MIN); return;	// " -3", "-15", "  0"
 	case MENU_GEN_VAR: menu_signedValue(buf, (int)curParmVal - PG_VAR_MAX); return;	// with the sign, as mic
 	case MENU_GEN_NOT: menu_signedValue(buf, (int)curParmVal - PG_NOTE_MAX); return;
 	case MENU_GEN_SHF: menu_signedValue(buf, (int)curParmVal - PG_SHF_MAX); return;
