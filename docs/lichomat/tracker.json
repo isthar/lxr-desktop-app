@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 20:38",
+    "updated": "2026-11-11 22:03",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; teraz E10.3, generator w firmware (gałąź v0.8)",
     "branch": "timing-core",
-    "head": "c272126",
-    "next": "Po E10.16: przykłady ghost kicków do odsłuchu, potem testy w emulatorze (E10.13–E10.14)",
-    "updated_at": "2026-11-11T20:38:00+01:00",
-    "now": "Ghost kicki w generatorze (E10.16) w tle; czekam też na Twój wybór z laboratorium brzmień"
+    "head": "eb345f4",
+    "next": "Czekam na Twój odsłuch ghost kicków (v17) i wybór z laboratorium brzmień; w tym czasie testy w emulatorze (E10.13–E10.14)",
+    "updated_at": "2026-11-11T22:03:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -1317,7 +1317,7 @@
     {
       "id": "E10.16",
       "epic": "E10",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Sub jako ghost kicki (projekt §10): nowe style w prototypie, wektorach i rdzeniu C, var jak w prc, przykłady do odsłuchu",
       "updated": "2026-11-11"
     }
@@ -5185,6 +5185,11 @@
       "n": 688,
       "at": "2026-11-11 20:38",
       "text": "E10.11, E10.12: spięcie z sekwencerem i menu generatora zrobione, z poprawkami po przeglądzie jakości (sav/und tylko w trybie edycji, vol bez zapisu jako automatyka, lev ze znakiem, wyścig przy zmianie patternu w obu połówkach, ta sama wartość na nowym patternie generuje). Bramki: host 138/138 (też ASan), emulator 358/358, pod ASan 329/329, RAM 470 268 / 471 032 B. E10.16: szczegóły ghost kicków domknięte w projekcie §10 (c272126); realizacja ruszyła na v0.8. Przy okazji dokumenty zwracają się do Ciebie bez form rodzajowych."
+    },
+    {
+      "n": 689,
+      "at": "2026-11-11 22:03",
+      "text": "E10.16: sub pisze ghost kicki (projekt §10) w prototypie, wektorach (260, w tym 76 sub; reszta bajt w bajt bez zmian) i rdzeniu C (v0.8 45d938e..3cebde7); fuzz prototyp kontra C: 50 000 przypadków, 0 różnic. Host 138/138, RAM bez zmian. Testy emulatora 355/358: trzy testy aplikacji z dźwiękiem Maca (R4_dev_coreaudio, stopwait, import) padają, bo CoreAudio daje teraz 0 wywołań; build v0.7 pada tak samo, więc to sprzęt, nie kod. Strona do odsłuchu v17: 10 przykładów ghost kicków (głos A2) i nowy cały groove."
     }
   ]
 }
