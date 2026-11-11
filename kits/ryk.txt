@@ -1,0 +1,219 @@
+# RYK: PROSTO's straight groove with a ghost kick and a rare roar heard only as its echoes
+# and their reverb, from the sound lab's recipes A2 and B7 (2026-11-11, both accepted by ear).
+# Drum 2 is a soft echo of the kick on 4, 7, 12 and 15 (A2); the Cymbal is B1's roar with no
+# direct sound: the slot is a dark delay at 100 % wet, so the roar comes back as 1/16 echoes,
+# and the long reverb takes them (B7); the Snare is a placeholder (C2).
+#
+# Copyright (C) 2026 Tomasz Krzywicki
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Licensed under the GNU General Public License version 3, with the additional
+# permission and terms in NOTICE.md. See LICENSE and NOTICE.md in the root of
+# the repository.
+#
+# Built by tools/kit_build.py: NAME = VALUE, the values as the menu stores them
+# (emu/render/render_params.h names them). Menus count from 0: osc wave 0 Sin 1 Tri
+# 2 Saw 3 Rec 4 Noi 5 PWM; filter 0 LP 1 HP 2 BP 3 UBP 4 Nch 5 Pek 6 LP2 7 off;
+# out 0 St1 ... 6 FX. Notes: coarse 31 is G1 (49 Hz), +12 an octave; fine 64 is in
+# tune, 0 and 127 about half a semitone down and up. Built with the v0.7 renderer
+# (build/wt-v07), the one the sound lab used.
+#
+# Each voice is PROSTO's (kits/prosto.txt) or a recipe's edits in the recipe's order.
+#
+# Levels. The sound lab set the balance partly with the faders (gain = fader^2), which a
+# kit does not keep: the kick at 0.35, the ghost kick at 0.4, the roar at 0.09. A fader
+# and vol are the same gain (after the drums' drive, before the Cymbal's distortion), so
+# each vol here is the recipe's vol x its fader^2, measured: with all six faders at 1 the
+# kit plays the recipe's balance, and the kick still ducks the reverb as in the recipe
+# (the duck follows the kick's level). The hat is already at its maximum (vol6 127, fader
+# 1), so the kick comes down to it (vol1 12) instead of the rest going up: the kit plays
+# at the recipes' level, a peak of -10 to -13 dBFS in the demos. Turn the output up.
+#
+# Freeze. B7 freezes the reverb's tail for bars 2-3 and 10-11 of its 16, an event of the
+# render: a kit always saves freeze off and a step cannot p-lock it. On the LXR freeze is
+# turned by hand: SHIFT + step 3 in the performance mode (or frz on the reverb's
+# sub-page) on the bar after the roar, and off again two bars later.
+#
+# The demo plays the 'ghost' pattern (tools/kit_build.py GHOST_PATTERN) at 143 BPM,
+# straight: the kick, the ghost kicks, the tick on 2 and 4 and the hat layer, without the
+# figure and the roar. The roar is rare: the generator's rar places it (sty 2: bars 1 and 9).
+
+name = RYK
+slot = 54
+bpm = 143
+shuffle = 0
+pattern = ghost
+
+# Drum 1: the kick, PROSTO's. A sine on G#1 a little sharp (about 52.7 Hz), a pitch drop
+# from about 5.2x (a time constant of about 32 ms), no transient, no filter, a little drive.
+# vol1 12: PROSTO's 100 at the sound lab's fader 0.35 (100 x 0.1225 = 12.25)
+osc_wave_drum1 = 0
+coarse1 = 32
+fine1 = 98            # about 0.3 semitone up: 52.7 Hz
+modamnt1 = 50         # the pitch drop
+mod_eg1 = 58          # its length
+pitch_slope1 = 17     # its curve: fast at first, then a long glide down
+fmamnt1 = 0
+veloa1 = 0
+velod1 = 14           # -3 dB at about 140 ms, -6 dB at about 165 ms
+vol_slope1 = 108      # held, then a quick fall
+trans1_vol = 0
+filter_type_1 = 7     # off
+drive1 = 32           # about 5 % THD
+vol1 = 12
+
+# Drum 2: the ghost kick (A2): a softer echo of the kick, 1.3 semitones lower (G1), a
+# smaller and shorter pitch drop, a shorter body, low-passed (no click), a little drive.
+# The steps' volumes set the accents (G 127, the ghosts g about -8 dB): volume_mod_on_off2.
+# Played on 4, 7, 12, 15 with G on 7 and 15 (A2; the generator's sub sty 1 places the
+# same), G sits 5 dB under the kick in the 30-150 Hz band. vol2 18: A2's 113 at the
+# fader 0.4 (113 x 0.16 = 18.1)
+osc_wave_drum2 = 0    # Sin
+coarse2 = 31          # G1
+fine2 = 64
+modamnt2 = 34
+mod_eg2 = 44
+pitch_slope2 = 20
+fmamnt2 = 0
+veloa2 = 0
+velod2 = 10
+vol_slope2 = 90
+trans2_vol = 0
+filter_type_2 = 0     # LP
+filter_freq_2 = 36
+reso_2 = 0
+drive2 = 18
+volume_mod_on_off2 = 1
+vol2 = 18
+
+# Drum 3: the figure, PROSTO's. A sine on B3 with a little FM and a short blip of pitch, an
+# exponential decay; the step volumes give the accents (the generator's prc). vol3 17: the
+# level of the sound lab's set C, which played prc on this figure at the fader 0.7
+# (34 x 0.49 = 16.7); set C is not judged yet
+osc_wave_drum3 = 0
+coarse3 = 59          # B3
+modamnt3 = 6
+mod_eg3 = 12
+fmamnt3 = 20
+fm_freq3 = 76         # the modulator an octave up: hollow, still one pitch
+mod_wave_drum3 = 0
+veloa3 = 0
+velod3 = 7
+vol_slope3 = 30
+trans3_vol = 0
+filter_type_3 = 7
+volume_mod_on_off3 = 1
+vol3 = 17
+pan3 = 64
+
+# Snare: a placeholder, C2 of the sound lab's set C (a noise tick like a shaker: noise only
+# through a band at about 5 kHz, a soft 16 ms attack, 70 ms), until the owner picks from set
+# C, which is not judged yet. Dry: it needs no FX slot. vol4 124 at the fader 1, as in C2
+osc_wave_snare = 0
+mix1 = 127            # noise only
+noise_freq1 = 127
+filter_type_4 = 2     # BP
+filter_freq_4 = 112
+reso_4 = 20
+modamnt4 = 0
+veloa4 = 12
+velod4 = 6
+vol_slope4 = 40
+repeat4 = 0
+trans4_vol = 0
+snare_distortion = 0
+volume_mod_on_off4 = 1
+pan4 = 56
+vol4 = 124
+
+# Cymbal: the roar (B7, B1's roar). Noise through a narrow band at about 500 Hz with a
+# strong resonance, a slow rise (veloa5 55) and a long fall, a 40 Hz tremble (LFO 5 on vol5,
+# restarted by the hit), into the FX bus only: the slot's delay at 100 % wet takes all of
+# it, so there is no direct sound. In B7 it sits 17 dB under the groove.
+# Levels: B7 had vol5 64 and the LFO's depth 44 at the fader 0.09 (-42 dB), which vol cannot
+# hold (0.52; and the LFO adds its depth to vol, so both scale together). The distortion
+# after vol is, at the roar's level, a plain gain of 1 + k (k = 2s / (1 - s), s =
+# cymbal_distortion / 127): B7's 100 was 8.07x. Here vol5 3 and the depth 2 (2/3, B7's
+# 44/64 = 0.69) with cymbal_distortion 22 (1.40x): the same level and tremble, measured
+wave1_cym = 4         # Noi
+wave2_cym = 4
+wave3_cym = 4
+mod_osc_gain1_cym = 0
+mod_osc_gain2_cym = 0
+coarse5 = 110
+fine5 = 64
+filter_type_5 = 2     # BP
+filter_freq_5 = 42    # about 500 Hz
+reso_5 = 80
+cymbal_distortion = 22
+veloa5 = 55
+velod5 = 45
+vol_slope5 = 70
+repeat5 = 0
+trans5_vol = 0
+volume_mod_on_off5 = 1
+pan5 = 64
+vol5 = 3
+audio_out5 = 6        # FX
+voice_lfo5 = 5        # LFO 5: a 40 Hz sine on the roar's vol (target 183, vol5)
+target_lfo5 = 183
+wave_lfo5 = 0         # sin
+sync_lfo5 = 0         # free
+freq_lfo5 = 74        # about 40 Hz
+retrigger_lfo5 = 5    # restarted by the Cymbal's hit
+offset_lfo5 = 0
+amount_lfo5 = 2       # vol5 1-5
+
+# Hihat: PROSTO's. Noise through HP 99 (a centroid of about 8.3 kHz), short; with the
+# generator's hat (sty 1 den 7 lev -15) the ghosts and the accents of the sound lab
+wave1_hh = 4          # Noi
+mod_osc_gain1 = 0
+mod_osc_gain2 = 0
+coarse6 = 90
+filter_type_6 = 1     # HP
+filter_freq_6 = 99
+reso_6 = 0
+veloa6 = 0
+velod6_closed = 4
+velod6_open = 12
+vol_slope6 = 12
+hat_distortion = 0
+volume_mod_on_off6 = 1
+vol6 = 127
+pan6 = 64
+
+# FX: B7's. The reverb: long and dark (size 120, decay 100, tone 16), no predelay (the
+# echoes before it are the distance), ducked by the kick (dck dr1, ddp 127). Then the slot: a
+# delay, normal (not ping-pong), synced to a 16th (105 ms at 143 BPM), dark (fx_p3 30), some
+# feedback (fx_p4 60), 100 % wet
+fx_type = 4           # Del
+rev_level = 110
+rev_size = 120
+rev_decay = 100
+rev_tone = 16
+rev_predelay = 0
+rev_mod = 50
+rev_duck_src = 1
+rev_duck_depth = 127
+fx_delay_type = 0     # normal
+fx_delay_sync = 2     # 1/16
+fx_p3 = 30            # the echoes' filter: dark
+fx_p4 = 60            # feedback
+fx_dry_wet = 100
+
+# Modulation, PROSTO's (target numbers: modTargets in Core/Src/menu/Cc2Text.c, 0 off;
+# sync 1 is 4/1, 10 a 16th; wave 1 tri, 5 random). LFO 6: a random pan for each 16th of
+# the hat
+voice_lfo6 = 6
+target_lfo6 = 222     # pan6
+wave_lfo6 = 5         # random
+sync_lfo6 = 10        # a 16th
+retrigger_lfo6 = 0
+amount_lfo6 = 127
+# LFO 3: the figure's FM index moves over 4 bars: brighter, then rounder
+voice_lfo3 = 3
+target_lfo3 = 91      # fmamnt3
+wave_lfo3 = 1         # tri
+sync_lfo3 = 1         # 4/1
+retrigger_lfo3 = 0
+amount_lfo3 = 16      # fmamnt3 4-36
