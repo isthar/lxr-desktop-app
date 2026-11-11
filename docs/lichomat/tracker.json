@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-11 12:10",
+    "updated": "2026-11-11 12:39",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; teraz E10.1, pomiary referencji pod generator wzorców",
     "branch": "timing-core",
-    "head": "29cedcc",
+    "head": "b744de8",
     "next": "U mnie: E10.1 pomiary, potem E10.2 szkic generatora z przykładami do odsłuchu. Czeka na Ciebie: H12 na LXR (30 min, odblokowuje v0.4–v0.7 i wyznacza CPU dla atmo i riserów), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
-    "updated_at": "2026-11-11T12:10:00+01:00",
+    "updated_at": "2026-11-11T12:39:00+01:00",
     "now": "E10.2: szkic generatora wzorców (ghost, sub, perc, rzadkie, propagacja) z liczb E10.1"
   },
   "epics": [
@@ -5069,6 +5069,11 @@
       "n": 679,
       "at": "2026-11-11 12:10",
       "text": "E10.1 zrobione: pomiary 8 utworów referencji pod generator (tylko liczby, poza repo). Sub: ciągła warstwa 4–8 dB pod stopą, tłumiona każdą stopą, ponowne wejście na 4. szesnastce każdej ćwierćnuty (w każdym utworze), często też na 3.; nuta 0–3 półtony pod stopą, w połowie utworów dwie nuty o pół tonu lub ton. Ghosty hihatów: 4–10 na takt, około −15 dB pod akcentem (vel 73–84), miejsca prawie stałe, zmienia się tylko głośność; gęstość skacze na liniach 8 taktów. Ghosty perkusji: w 7 z 8 utworów krok przed akcentem. Figury perkusji 2-taktowe, +-1–2 uderzenia na 8 taktów, przesunięcia o +5 i −4 kroki. Rzadkie zdarzenia około 6 na 32 takty: risery i jąkanie szumu w 8. takcie frazy, sub-boomy, downliftery i ryki na 1. takcie. Tło 21–26 dB pod groovem, szerokie, tłumione stopą. Detektory sprawdzone na sztucznym utworze (ghosty 96 % trafień)"
+    },
+    {
+      "n": 680,
+      "at": "2026-11-11 12:39",
+      "text": "E10.2: projekt generatora w docs/superpowers/specs/2026-11-11-groove-generator-design.md. Strona ścieżki, podstrony 3–4: typ (hat, sub, prc, rar, prp), sty, den, lev, var, not, sed, und, src, shf. Przelicza na żywo jak Euklid i pisze zwykłe kroki 64-krokowej ścieżki. Pozycje we frazie dają istniejące warunki 1:2/2:2 i x:4, bez zmian silnika i formatu plików. Losowanie opisane dokładnie, żeby prototyp w Pythonie i firmware dawały to samo. Następny krok: prototyp tools/gen/gen.py na gałęzi v0.8 i przykłady z emulatora do odsłuchu"
     }
   ]
 }
