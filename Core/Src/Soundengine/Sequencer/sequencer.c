@@ -630,6 +630,10 @@ void seq_setPendingPatternActive()
 		*/
 		//copy current backup to current slot (discarding unsaved changes)
 		seq_copyBackupBufferToPattern(seq_activePattern);
+		//LICHOMAT v0.8 (spec §11): the tracks last generated into it are its saved state again: no mask
+		for(uint8_t t = 0; t < NUM_TRACKS; t++)
+			if(seq_genPattern[t] == seq_activePattern)
+				seq_genOwn[t] = 0;
 		//copy pending pattern to backup buffer
 		seq_copyPatternToBackupBuffer(seq_pendingPattern);
 
@@ -2837,8 +2841,11 @@ static void seq_putBackupStep(uint8_t trackNr, const PatternGenTrack *t, uint8_t
  * played and the next pattern into the backup: when pattern played and no longer does, or (spec
  * §11) it was reloaded, the same number, the write stops (0), so no half written track stays in it;
  * when it did not play and now does, the backup takes the rest too, so it holds the whole track. 1
- * when written. The generator's write-back and und */
-static uint8_t seq_putTrack(uint8_t trackNr, uint8_t pattern, const PatternGenTrack *t, uint8_t played, uint8_t changes)
+ * when written. The generator's write-back (own: the steps it wrote, kept with pattern as the track's
+ * mask) and und (own NULL: the mask emptied); spec §11: in the length's masked section, so a pattern
+ * change after it empties the mask in seq_setPendingPatternActive() */
+static uint8_t seq_putTrack(uint8_t trackNr, uint8_t pattern, const PatternGenTrack *t, uint8_t played, uint8_t changes,
+	const uint64_t *own)
 {
 	for(uint8_t s = 0; s <= NUM_STEPS; s++)
 	{
@@ -2852,7 +2859,16 @@ static uint8_t seq_putTrack(uint8_t trackNr, uint8_t pattern, const PatternGenTr
 		if(s < NUM_STEPS)
 			seq_putStep(trackNr, pattern, t, s);
 		else
+		{
 			seq_patternSet.length[pattern][trackNr] = t->length;	// the length last
+			if(own)	//LICHOMAT v0.8 (spec §11): with it, the steps the generator wrote, in this pattern
+			{
+				seq_genPattern[trackNr] = pattern;
+				seq_genOwn[trackNr] = *own;
+			}
+			else	// und, also when the mask is another pattern's (spec §11 as written)
+				seq_genOwn[trackNr] = 0;
+		}
 		if(!played && plays)	// it started to play during the write
 		{
 			if(s < NUM_STEPS)
@@ -2896,13 +2912,23 @@ uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
 	const uint8_t f = patternGen_generate(&seq_gen[trackNr], trackNr, &src, &t, &own);
 	if(f & PG_WROTE)
 	{
-		if(!seq_putTrack(trackNr, pattern, &t, played, changes))
+		if(!seq_putTrack(trackNr, pattern, &t, played, changes, &own))	// keeps the pattern and the mask
 			return 0;	// the pattern stopped playing or was reloaded: it is its backup again
 		preset_touchTimer(PRESET_PAT_TIMER);	// autosave, as a step toggled on the panel
-		seq_genPattern[trackNr] = pattern;
-		seq_genOwn[trackNr] = own;	//LICHOMAT v0.8 (spec §11): the steps this write wrote
 	}
 	return f;
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.8 (spec §11): typ's defaults into track trackNr's settings, read on its track in pattern as
+ * it is: hat or prc on the user's accents (as it plays, outside the track's mask) start at style 0. A
+ * frame of its own, gone before seq_generateTrack() runs */
+__attribute__((noinline)) static void seq_genTypeDefaults(uint8_t trackNr, uint8_t pattern, uint8_t typ)
+{
+	PatternGenSource cur = { seq_patternSet.seq_subStepPattern[pattern][trackNr], { 0, 0, 0, 0 },
+		seq_patternSet.length[pattern][trackNr] };
+	for(uint8_t b = 0; b < NUM_BARS; b++)
+		cur.on[b] = seq_patternSet.seq_mainSteps[b][pattern][trackNr];
+	patternGen_typeDefaults(typ, &seq_gen[trackNr], &cur, (pattern == seq_genPattern[trackNr]) ? seq_genOwn[trackNr] : 0u);
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.8 (G2, G4): a generator parameter of the track page as its menu value, a value
@@ -2921,8 +2947,8 @@ uint8_t seq_setGenParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 		const uint8_t typ = (value < PG_TYPES) ? value : PG_TYPE_OFF;
 		if(typ == g->typ)	// the same typ: no type values loaded (below: no change)
 			break;
-		patternGen_typeDefaults(typ, g, NULL, 0);
-		seq_loadGenParams(trackNr);	// the screens show the type's values
+		seq_genTypeDefaults(trackNr, pattern, typ);	//LICHOMAT v0.8 (spec §11): style 0 on the user's accents
+		seq_loadGenParams(trackNr);	// the screens show the type's values, the style loaded too
 		if(typ == PG_TYPE_OFF)
 			seq_genOwn[trackNr] = 0;	//LICHOMAT v0.8 (spec §11): accents edited at --- are the user's
 		break;
@@ -2966,10 +2992,9 @@ uint8_t seq_genUndo(uint8_t trackNr, uint8_t pattern)
 	for(uint8_t b = 0; b < NUM_BARS; b++)
 		t.on[b] = patternBackupBuffer.seq_mainSteps[b][trackNr];
 	t.length = patternBackupBuffer.length[trackNr];
-	if(!seq_putTrack(trackNr, pattern, &t, 1, changes))	// only while pattern plays, not reloaded
+	if(!seq_putTrack(trackNr, pattern, &t, 1, changes, NULL))	// only while pattern plays, not reloaded; no mask
 		return 0;
 	preset_touchTimer(PRESET_PAT_TIMER);
-	seq_genOwn[trackNr] = 0;	//LICHOMAT v0.8 (spec §11)
 	return 1;
 }
 //------------------------------------------------------------------------------
