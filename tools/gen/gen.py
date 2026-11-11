@@ -16,9 +16,10 @@ the spec leaves open are marked "CHOICE" where they are decided:
   one bar from the seed, repeated, and den keeps the best ranked hits (weights 1);
 - prc: bar 2 moves the accent sorted(bar 1)[draw % den] to the best place of bar 2's
   own keys (places 16-31); ghosts are ranked by bar 1's keys in every bar, on the step
-  before the accent within the bar (step 1's is step 16 of the same bar), offsets of
-  bar 2 from places 16-31; var +n weights steps 13-16 x4; var -n does nothing on sty 0
-  (its accents are the user's, which the generator never touches);
+  before the accent within the bar (step 1's is step 16 of the same bar) and never on a
+  kick step (spec 8), offsets of bar 2 from places 16-31; var +n weights steps 13-16 x4;
+  var -n does nothing on sty 0 (its accents are the user's, which the generator never
+  touches);
 - rar: den 0 writes nothing; sty 3 and 4 rank all 64 steps with 64 keys drawn third,
   away from the kick of track src; den >= 4 on sty 1 is den 4;
 - prp: an accent of the source is an active step with vel >= 64; sty 1 copies vel and
@@ -525,7 +526,7 @@ def _prc(s: Settings, out: _Out, draws, offsets, move, var_draws, kick: frozense
     bar_ghosts = []
     for b in range(NUM_BARS):                    # ghosts on the step before an accent
         acc = bar_acc[b]
-        places = {(p - 1) % BAR for p in acc} - acc
+        places = {(p - 1) % BAR for p in acc} - acc - kick    # spec 8: never on a kick step
         g = rank(draws[:BAR], [1] * BAR, lambda p: p in places)[:ghosts]
         for q in g:
             out.hit(b * BAR + q, vel_db(s.lev + offsets[(b % 2) * BAR + q]))

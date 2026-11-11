@@ -389,10 +389,22 @@ class Prc(unittest.TestCase):
                 for b in range(4):
                     acc = self.accents(out, b)
                     ghosts = bar_hits(out, b, lambda st: st.vol < 127)
-                    self.assertEqual(len(ghosts), min(3, (den + 1) // 2, len({(p - 1) % 16 for p in acc} - acc)))
+                    places = {(p - 1) % 16 for p in acc} - acc - gen.QUARTERS
+                    self.assertEqual(len(ghosts), min(3, (den + 1) // 2, len(places)))
                     for q in ghosts:
                         self.assertIn((q + 1) % BAR, acc)
                         self.assertIn(out.steps[b * BAR + q].vol, {vel_db(-13 + d) for d in range(-2, 3)})
+
+    def test_ghosts_never_on_the_kick(self):
+        # spec 8: a pickup whose pre-step is a kick step is skipped (the kick from src)
+        for sty in range(0, 5):
+            for den in range(1, 9):
+                for sed in range(12):
+                    for src, kick in ((KICK, gen.QUARTERS), (KICK_ODD, {0, 3, 6, 10, 12})):
+                        out = generate(S('prc', sty=sty, den=den, var=0, sed=sed), 2, src, user_track())
+                        for i in range(NUM_STEPS):
+                            if out.active[i] and out.steps[i].vol < 64 and out.steps[i].p1nr == 0xFF:
+                                self.assertNotIn(i % BAR, kick, (sty, den, sed, i))
 
     def test_den_nested(self):
         for sty in range(1, 5):
