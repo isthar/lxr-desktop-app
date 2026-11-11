@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 14:33",
+    "updated": "2026-11-11 16:03",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; teraz E10.3, generator w firmware (gałąź v0.8)",
     "branch": "timing-core",
-    "head": "1201272",
+    "head": "258070c",
     "next": "U mnie: plan E10.3, potem wdrożenie z testami bajt w bajt z prototypem. Czeka na Ciebie: Q41 odsłuch przykładów generatora, H12 na LXR (30 min, odblokowuje v0.4–v0.7 i wyznacza CPU dla atmo i riserów), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
-    "updated_at": "2026-11-11T14:33:00+01:00",
-    "now": "E10.10: sub, prc, rar, prp w rdzeniu C (grupa B planu v0.8)"
+    "updated_at": "2026-11-11T16:03:00+01:00",
+    "now": "E10.11–E10.12: spięcie generatora z sekwencerem i menu (grupa C planu v0.8)"
   },
   "epics": [
     {
@@ -1275,14 +1275,14 @@
     {
       "id": "E10.10",
       "epic": "E10",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Plan v0.8, zadanie 3: sub, prc, rar, prp; wszystkie 211 wektorów bajt w bajt; przegląd zgodności i jakości z mutantami",
       "updated": "2026-11-11"
     },
     {
       "id": "E10.11",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Plan v0.8, zadanie 4: spięcie z sekwencerem: ustawienia na ścieżkę, przeliczanie, zapis kroków przy zablokowanych przerwaniach, autozapis, und",
       "updated": "2026-11-11"
     },
@@ -5153,6 +5153,11 @@
       "n": 683,
       "at": "2026-11-11 14:33",
       "text": "E10.8 i E10.9 zrobione (v0.8 f0bdb73..b548cbc): wersja 0.8 i rdzeń generatora PatternGen.c z ghostami hihatu. Wszystkie 40 wektorów hat zgadza się z prototypem bajt w bajt; testy: host 137/137, emulator 353/353, ASan 324/324, złote pliki bez zmian; RAM bez zmian (470188/471032 B), stos generatora 440 B (limit 768). Rdzeń idzie za prototypem tam, gdzie plan zgadywał (13 odstępstw opisanych w raporcie grupy A). E10.10 w toku: sub, prc, rar, prp i wszystkie 211 wektorów"
+    },
+    {
+      "n": 684,
+      "at": "2026-11-11 16:03",
+      "text": "E10.10 zrobione (v0.8 c757bf0..bdaf4aa): sub, prc, rar i prp w rdzeniu C. 233 wektory i 22 000 losowych przypadków zgadzają się z prototypem bajt w bajt. Przegląd zgodności nie znalazł błędu w kodzie, ale wskazał rozjazdy prototypu z projektem; rozstrzygnąłem je w §9 (36e19e0): takt 2 figury prc przenosi zawsze najwyżej oceniony akcent, więc den nie przetasowuje figury; styl 0 bez akcentów działa jak styl 1; brak ghosta przed akcentem na 1. kroku taktu; typ spoza zakresu nic nie robi. Przegląd jakości: stos 464 B, bez floatów i stanu globalnego, 40 mutantów; 3 luki w testach domknięte. Strona odsłuchu: wersja 15 (przerenderowane perkusja, przeniesienie rytmu i groove). E10.11 w toku (grupa C: spięcie z sekwencerem i menu)"
     }
   ]
 }
