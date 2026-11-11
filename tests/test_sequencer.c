@@ -53,6 +53,7 @@
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/vsched.h"
 #include "seq_random_test.h"
+#undef patternGen_generate	/* the seam is sequencer.c's; here the generator itself (LICHOMAT v0.8) */
 #include "Soundengine/Sequencer/PatternGen.h"
 
 #define GUARD_AFTER 256		/* past index 255, where fw 1.7 put the pattern */
@@ -2034,6 +2035,81 @@ TEST(gen_glue_a_style_past_the_types_is_its_last)
 	ASSERT_TRUE(genSame(&before, &after)); ASSERT_EQ(patTouches, 0);
 	ASSERT_EQ(seq_setGenParam(4, 3, PAR_GEN_STY, 3), PG_WROTE | PG_SOFT);	/* a style of hat's: a change */
 	ASSERT_EQ(patTouches, 1);
+}
+
+static uint8_t switchToPattern;
+/** seq_tick()'s pattern change to switchToPattern as the interrupt at the switchAtUnmask-th unmask */
+static void patternChangeToAtUnmask(void)
+{
+	if (++unmasks != switchAtUnmask)
+		return;
+	seq_copyBackupBufferToPattern(seq_activePattern);
+	seq_copyPatternToBackupBuffer(switchToPattern);
+	seq_activePattern = switchToPattern;
+}
+
+static void (*duringGenerate)(void);	/* an "interrupt" while the generator runs */
+uint8_t seqTest_patternGenGenerate(const PatternGenSettings *s, uint8_t track, const PatternGenSource *src,
+	PatternGenTrack *io);
+/** sequencer.c's patternGen_generate() (stubs/seq_random_test.h): duringGenerate, then the generator */
+uint8_t seqTest_patternGenGenerate(const PatternGenSettings *s, uint8_t track, const PatternGenSource *src,
+	PatternGenTrack *io)
+{
+	if (duringGenerate)
+		duringGenerate();
+	return patternGen_generate(s, track, src, io);
+}
+static void patternChangeTo1(void)
+{
+	seq_copyBackupBufferToPattern(seq_activePattern);
+	seq_copyPatternToBackupBuffer(1);
+	seq_activePattern = 1;
+}
+
+TEST(gen_glue_write_stops_after_a_change_while_generating)
+{
+	/* quality review of group C: whether the pattern plays is taken before its track is read, so a
+	 * pattern change while the generator runs stops the write too: nothing generated from a stale
+	 * read lands in the pattern that played */
+	reset();
+	seq_setMainStep(0, 2, 5, 1);
+	seq_patternSet.length[0][2] = 12;
+	seq_copyPatternToBackupBuffer(0);
+	PatternGenTrack saved, got;
+	genRead(0, 2, &saved);
+	duringGenerate = patternChangeTo1;
+	patTouches = 0;
+	const uint8_t f = seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT);
+	duringGenerate = NULL;
+	ASSERT_EQ(f, 0); ASSERT_EQ(seq_activePattern, 1); ASSERT_EQ(patTouches, 0);
+	genRead(0, 2, &got);
+	ASSERT_TRUE(genSame(&got, &saved));
+}
+
+TEST(gen_glue_write_into_a_pattern_that_starts_to_play_reaches_its_backup)
+{
+	/* quality review of group C: the shown pattern 2 does not play; a pattern change to it in the middle
+	 * of the write-back takes its half written track into the backup; the rest of the write goes into
+	 * the backup too, so the backup holds the whole generated track (und, or an unsaved change away) */
+	reset();
+	unmasks = 0;
+	switchAtUnmask = 10;
+	switchToPattern = 2;
+	host_irqAtUnmask = patternChangeToAtUnmask;
+	const uint8_t f = seq_setGenParam(3, 2, PAR_GEN_TYP, PG_TYPE_HAT);
+	host_irqAtUnmask = NULL;
+	ASSERT_EQ(f, PG_WROTE | PG_SOFT); ASSERT_EQ(seq_activePattern, 2); ASSERT_EQ(host_primask, 0);
+	PatternGenTrack got, backup;
+	genRead(2, 3, &got);
+	ASSERT_EQ(got.length, 64);
+	memset(&backup, 0, sizeof backup);
+	memcpy(backup.step, patternBackupBuffer.seq_subStepPattern[3], sizeof backup.step);
+	memcpy(backup.timing, patternBackupBuffer.seq_stepTiming[3], sizeof backup.timing);
+	memcpy(backup.fine, patternBackupBuffer.seq_stepFine[3], sizeof backup.fine);
+	for (unsigned b = 0; b < NUM_BARS; b++)
+		backup.on[b] = patternBackupBuffer.seq_mainSteps[b][3];
+	backup.length = patternBackupBuffer.length[3];
+	ASSERT_TRUE(genSame(&got, &backup));
 }
 
 TEST_MAIN()

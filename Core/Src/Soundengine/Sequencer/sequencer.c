@@ -2803,33 +2803,56 @@ static int8_t seq_rawFine(const uint8_t *fine, uint8_t s)
 	return (int8_t)((fine[(s >> 1) & 31u] >> ((s & 1u) * 4u)) & 0x0Fu);
 }
 //------------------------------------------------------------------------------
-/** LICHOMAT v0.8 (G12): a generated track into pattern, each step and then the length with
- * interrupts masked as seq_clearTrackMicro(): seq_tick() reads the steps, and recording writes them.
- * A pattern change in seq_tick() puts the backup over the pattern that played (review of group C):
- * when pattern played at the start and no longer does, the write stops there, as seq_genUndo(), so no
- * half generated track stays in it; a pattern that starts to play takes the rest. 1 when written */
-static uint8_t seq_writeGenTrack(uint8_t trackNr, uint8_t pattern, const PatternGenTrack *t)
+/** LICHOMAT v0.8: step s of t into track trackNr of pattern: its step, timing, fine nibble as stored
+ * and main-step bit; the caller masks interrupts */
+static void seq_putStep(uint8_t trackNr, uint8_t pattern, const PatternGenTrack *t, uint8_t s)
 {
-	Step *st = seq_patternSet.seq_subStepPattern[pattern][trackNr];
-	StepTiming *tm = seq_patternSet.seq_stepTiming[pattern][trackNr];
-	uint8_t *fine = seq_patternSet.seq_stepFine[pattern][trackNr];
-	const uint8_t played = (pattern == seq_activePattern);
+	seq_patternSet.seq_subStepPattern[pattern][trackNr][s] = t->step[s];
+	seq_patternSet.seq_stepTiming[pattern][trackNr][s] = t->timing[s];
+	stepFine_set(seq_patternSet.seq_stepFine[pattern][trackNr], s, seq_rawFine(t->fine, s));
+	seq_setMainStep(pattern, trackNr, s, (uint8_t)((t->on[s >> 4] >> (s & 15u)) & 1u));
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.8 (quality review of group C): the same into patternBackupBuffer's track trackNr */
+static void seq_putBackupStep(uint8_t trackNr, const PatternGenTrack *t, uint8_t s)
+{
+	patternBackupBuffer.seq_subStepPattern[trackNr][s] = t->step[s];
+	memcpy(&patternBackupBuffer.seq_stepTiming[trackNr][s], &t->timing[s], sizeof t->timing[s]);
+	stepFine_set(patternBackupBuffer.seq_stepFine[trackNr], s, seq_rawFine(t->fine, s));
+	uint16_t *bar = &patternBackupBuffer.seq_mainSteps[s >> 4][trackNr];
+	*bar = (uint16_t)((*bar & ~(1u << (s & 15u))) | (((t->on[s >> 4] >> (s & 15u)) & 1u) << (s & 15u)));
+}
+//------------------------------------------------------------------------------
+/** LICHOMAT v0.8 (G12, G13, review and quality review of group C): track t into pattern, step by
+ * step and then its length, each with interrupts masked as seq_clearTrackMicro(): seq_tick() reads
+ * the steps, and recording writes them. played: pattern played when t was read. A pattern change in
+ * seq_tick() puts the backup over the pattern that played and the next pattern into the backup: when
+ * pattern played and no longer does, the write stops (0), so no half written track stays in it; when
+ * it did not play and now does, the backup takes the rest too, so it holds the whole track. 1 when
+ * written. The generator's write-back and und */
+static uint8_t seq_putTrack(uint8_t trackNr, uint8_t pattern, const PatternGenTrack *t, uint8_t played)
+{
 	for(uint8_t s = 0; s <= NUM_STEPS; s++)
 	{
 		const uint32_t primask = seq_mailboxLock();
-		const uint8_t stopped = played && (pattern != seq_activePattern);
-		if(!stopped && (s == NUM_STEPS))	// the length last
-			seq_patternSet.length[pattern][trackNr] = t->length;
-		else if(!stopped)
+		const uint8_t plays = (pattern == seq_activePattern);
+		if(played && !plays)
 		{
-			st[s] = t->step[s];
-			tm[s] = t->timing[s];
-			stepFine_set(fine, s, seq_rawFine(t->fine, s));
-			seq_setMainStep(pattern, trackNr, s, (uint8_t)((t->on[s >> 4] >> (s & 15u)) & 1u));
+			seq_mailboxUnlock(primask);
+			return 0;
+		}
+		if(s < NUM_STEPS)
+			seq_putStep(trackNr, pattern, t, s);
+		else
+			seq_patternSet.length[pattern][trackNr] = t->length;	// the length last
+		if(!played && plays)	// it started to play during the write
+		{
+			if(s < NUM_STEPS)
+				seq_putBackupStep(trackNr, t, s);
+			else
+				patternBackupBuffer.length[trackNr] = t->length;
 		}
 		seq_mailboxUnlock(primask);
-		if(stopped)
-			return 0;
 	}
 	return 1;
 }
@@ -2840,6 +2863,9 @@ static uint8_t seq_writeGenTrack(uint8_t trackNr, uint8_t pattern, const Pattern
 uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
 {
 	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return 0;
+	//quality review of group C: whether pattern plays, before the track is read: a pattern change
+	//from here on, also while the generator runs, makes the write stop (seq_putTrack())
+	const uint8_t played = (pattern == seq_activePattern);
 	const uint8_t srcNr = patternGen_checked(seq_gen[trackNr]).src;
 	PatternGenTrack t;
 	PatternGenSource src;
@@ -2857,8 +2883,8 @@ uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
 	const uint8_t f = patternGen_generate(&seq_gen[trackNr], trackNr, &src, &t);
 	if(f & PG_WROTE)
 	{
-		if(!seq_writeGenTrack(trackNr, pattern, &t))
-			return 0;	// the pattern stopped playing during the write: it is its backup again
+		if(!seq_putTrack(trackNr, pattern, &t, played))
+			return 0;	// the pattern stopped playing: it is its backup again
 		preset_touchTimer(PRESET_PAT_TIMER);	// autosave, as a step toggled on the panel
 	}
 	return f;
@@ -2913,26 +2939,15 @@ uint8_t seq_setGenParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 uint8_t seq_genUndo(uint8_t trackNr, uint8_t pattern)
 {
 	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return 0;
-	Step *st = seq_patternSet.seq_subStepPattern[pattern][trackNr];
-	StepTiming *tm = seq_patternSet.seq_stepTiming[pattern][trackNr];
-	uint8_t *fine = seq_patternSet.seq_stepFine[pattern][trackNr];
-	for(uint8_t s = 0; s <= NUM_STEPS; s++)
-	{
-		const uint32_t primask = seq_mailboxLock();
-		const uint8_t plays = (pattern == seq_activePattern);
-		if(plays && (s == NUM_STEPS))	// the length last
-			seq_patternSet.length[pattern][trackNr] = patternBackupBuffer.length[trackNr];
-		else if(plays)
-		{
-			st[s] = patternBackupBuffer.seq_subStepPattern[trackNr][s];
-			memcpy(&tm[s], &patternBackupBuffer.seq_stepTiming[trackNr][s], sizeof tm[s]);
-			stepFine_set(fine, s, seq_rawFine(patternBackupBuffer.seq_stepFine[trackNr], s));
-			seq_setMainStep(pattern, trackNr, s, (uint8_t)((patternBackupBuffer.seq_mainSteps[s >> 4][trackNr] >> (s & 15u)) & 1u));
-		}
-		seq_mailboxUnlock(primask);
-		if(!plays)
-			return 0;
-	}
+	PatternGenTrack t;	// the backup's track; a pattern change meanwhile stops the write below
+	memcpy(t.step, patternBackupBuffer.seq_subStepPattern[trackNr], sizeof t.step);
+	memcpy(t.timing, patternBackupBuffer.seq_stepTiming[trackNr], sizeof t.timing);
+	memcpy(t.fine, patternBackupBuffer.seq_stepFine[trackNr], sizeof t.fine);
+	for(uint8_t b = 0; b < NUM_BARS; b++)
+		t.on[b] = patternBackupBuffer.seq_mainSteps[b][trackNr];
+	t.length = patternBackupBuffer.length[trackNr];
+	if(!seq_putTrack(trackNr, pattern, &t, 1))	// only while pattern plays
+		return 0;
 	preset_touchTimer(PRESET_PAT_TIMER);
 	return 1;
 }
