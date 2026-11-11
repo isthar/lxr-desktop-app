@@ -1554,6 +1554,14 @@ def V07_screensaver(t):
           % sorted(os.listdir(os.path.join(keep, 'TMP'))))
     no_copies_left()
 
+# LICHOMAT v0.8: the step LEDs, LED_STEP1..LED_STEP16 of ledHandler.h, and the bar LEDs (page down, up)
+STEP_LEDS = (39, 38, 37, 36, 31, 30, 29, 28, 23, 22, 21, 20, 15, 14, 13, 12)
+BAR_LEDS = (40, 0)
+
+def panel_leds(line):
+    """the LED word of a panel-log line"""
+    return int(line.split()[-1], 16)
+
 @case
 def V08_ui(t):
     # the generator's screens (plan v0.8 Task 5, G2, G3, G11, G13). A: from sav the encoder goes on to
@@ -1572,6 +1580,7 @@ def V08_ui(t):
     s, _, _ = t.render(seed, ['--no-start', '--seconds', '5', '--param', 'volume_mod_on_off6=0', '--panel-log', log,
                               '--keep-card', keep, '--events', script])
     rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    leds = {x.split()[2]: panel_leds(x) for x in log_lines(log, PANEL_LINE)}
     check(re.match(r'vtp.vdp.SAV.{4}\*', rows['sav'][0]), 'sav, sign * (the generator follows): %r' % rows['sav'])
     check(re.match(r'TYP.sty.den.lev\*', rows['typ'][0]) and re.match(r'---.  0.  0.  0', rows['typ'][1]),
           'typ: %r' % rows['typ'])
@@ -1586,6 +1595,9 @@ def V08_ui(t):
     bars = [(main >> (16 * b)) & 0xFFFF for b in range(4)]
     check(pat[3655 + 6] == 64 and len(set(bars)) == 1 and bars[0] & 0x4444 == 0x4444 and bin(bars[0]).count('1') == 12,
           'voice 7: length %d, bars %r' % (pat[3655 + 6], [hex(b) for b in bars]))
+    shown = sum(((leds['hat'] >> led) & 1) << k for k, led in enumerate(STEP_LEDS))
+    check(shown == bars[0], 'the step LEDs after the generation: %s, bar 1 %s (quality review of group C)'
+          % (hex(shown), hex(bars[0])))
     # bar 1: the offbeats at 127, eight soft hits (den 7 at 100 %, var +1 at 2:2) at -18..-13 dB
     steps = {p: tuple(pat[14 + 512 * 6 + 7 * p:14 + 512 * 6 + 7 * p + 2]) for p in range(16) if bars[0] >> p & 1}
     soft = [steps[p] for p in steps if p % 4 != 2]
@@ -1670,6 +1682,9 @@ def V08_armed(t):
                       '+2500ms mark wait\n+100ms push\n+300ms mark undone\n+300ms save-project 0\n')
     t.render(seed, ['--seconds', '7', '--panel-log', log, '--keep-card', keep, '--events', script])
     rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    leds = {x.split()[2]: panel_leds(x) for x in log_lines(log, PANEL_LINE)}
+    bar = lambda m: tuple((leds[m] >> led) & 1 for led in BAR_LEDS)
+    check(bar('undedit') != bar('wait'), 'und: no bar change between arming and the push: %r' % (bar('wait'),))
     check(rows['undedit'][1] == 'push: undo   und', 'edit mode on und: %r' % rows['undedit'])
     check(re.match(r'var.not.sed.UND', rows['undone'][0]) and rows['undone'][1].rstrip().endswith('---'),
           'after the click: %r' % rows['undone'])
@@ -1682,6 +1697,8 @@ def V08_armed(t):
                       '+2500ms mark wait\n+100ms push\n+300ms mark saved\n')
     t.render(seed, ['--seconds', '6', '--panel-log', log, '--keep-card', keep, '--events', script])
     rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    leds = {x.split()[2]: panel_leds(x) for x in log_lines(log, PANEL_LINE)}
+    check(bar('savedit') != bar('wait'), 'sav: no bar change between arming and the push: %r' % (bar('wait'),))
     check(rows['savedit'][1] == 'push: save   us1', 'edit mode on sav 1: %r' % rows['savedit'])
     check(re.match(r'vtp.vdp.SAV', rows['saved'][0]) and rows['saved'][1].rstrip().endswith('---'),
           'after the click on sav: %r' % rows['saved'])
@@ -1724,6 +1741,78 @@ def V08_vol(t):
     locks = [(k, pat[14 + 512 * 5 + 7 * k + 3], pat[14 + 512 * 5 + 7 * k + 5]) for k in range(64)]
     check(pat[3655 + 5] == 64 and all(a == 0xFF and b == 0xFF for _, a, b in locks),
           'voice 6 recorded while the generator switched vol: %r' % [x for x in locks if x[1:] != (0xFF, 0xFF)])
+    # B: the switch reaches the engine: hat (gen_typ=1 by the edit path) plays its ghosts quiet; the
+    # accents at the top, the ghosts (-18..-13 dB) below 40 % of it, as with vol on
+    log = t.path('trig.log')
+    script = t.script('0ms press voice6\n+100ms param gen_typ=1\n+300ms press start\n')
+    _, wav, _ = t.render(seed, ['--no-start', '--seconds', '3', '--param', 'volume_mod_on_off6=0', '--trig-log', log,
+                                '--events', script])
+    peaks = hit_peaks(wav, 'L1', trig_frames(log, 5))
+    top = max(peaks or [0])
+    check(len(peaks) >= 12 and top > 1000 and sum(p >= 0.9 * top for p in peaks) >= 3
+          and sum(p < 0.4 * top for p in peaks) >= 6, "voice 6's hits on L1 with the generator's vol: %r" % peaks)
+    # C: rar (all at 127) leaves vol off: the kit of the project save after it; then hat switches it on
+    # and touches the kit's autosave timer: /tmp's TMP.SND (preset byte, then the parameters) has it
+    keep = t.path('K3')
+    script = t.script('0ms press voice6\n+100ms param gen_typ=4\n+300ms save-project 0\n+500ms param gen_typ=1\n'
+                      '+2600ms mark end\n')
+    s, _, _ = t.render(seed, ['--no-start', '--seconds', '4', '--param', 'volume_mod_on_off6=0', '--keep-card', keep,
+                              '--events', script])
+    n = s['paramNumbers']['volume_mod_on_off6']
+    kit = one_file(keep, '00-*.SND')
+    check(kit[8 + n] == 0, 'vol after rar, all at 127: %d' % kit[8 + n])
+    tmp = glob.glob(os.path.join(keep, 'TMP', 'TMP.SND'))
+    tmp = open(tmp[0], 'rb').read() if tmp else b''
+    check(len(tmp) > 1 + n and tmp[1 + n] == 1, 'the autosaved kit after hat: %r' % (tmp[1 + n] if len(tmp) > 1 + n else None))
+    no_copies_left()
+
+@case
+def V08_menu(t):
+    # the generator's menu paths (quality review of group C). A: und set while the cursor is on den
+    # in edit mode: the push only leaves edit mode, voice 6 stays generated. B: src from the encoder
+    # reaches the generator: prp copies voice 1 (steps 1 5 9 13), then src 2 copies voice 2 instead
+    seed, log, keep = t.seed(), t.path('panel.log'), t.path('K')
+    mode2 = '+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
+    script = t.script('0ms press voice6\n' + mode2 + '+200ms encoder +13\n+100ms push\n+150ms encoder +1\n'
+                      '+100ms push\n+150ms encoder +2\n+100ms push\n+100ms param gen_und=1\n+100ms push\n'
+                      '+200ms mark left\n+300ms save-project 0\n')
+    t.render(seed, ['--no-start', '--seconds', '3', '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'typ.sty.DEN.lev', rows['left'][0]), 'the push on den: %r' % rows['left'])
+    pat = one_file(keep, '00-*.PAT')
+    check(pat[3655 + 5] == 64, 'voice 6 after a push off und: length %d, still generated' % pat[3655 + 5])
+    log, keep = t.path('panel2.log'), t.path('K2')
+    script = t.script('0ms press voice1\n+100ms press step1\n+100ms press step5\n+100ms press step9\n'
+                      '+100ms press step13\n+100ms press voice6\n' + mode2 + '+200ms encoder +13\n+100ms push\n'
+                      '+150ms encoder +5\n+100ms push\n+150ms encoder +8\n+100ms push\n+150ms encoder +1\n'
+                      '+100ms push\n+200ms mark src\n+300ms save-project 0\n')
+    t.render(seed, ['--no-start', '--seconds', '4', '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'SRC.shf', rows['src'][0]) and re.match(r'  2', rows['src'][1]), 'src 2: %r' % rows['src'])
+    pat = one_file(keep, '00-*.PAT')
+    bars = lambda tr: [(int.from_bytes(pat[3598 + 8 * tr:3606 + 8 * tr], 'little') >> (16 * b)) & 0xFFFF for b in range(4)]
+    check(bars(0)[0] == 0x1111 and bars(5) == [bars(1)[0]] * 4 and bars(5) != [0x1111] * 4,
+          'voice 6 with src 2: %r (voice 1 %r, voice 2 %r)' % (bars(5), bars(0), bars(1)))
+    no_copies_left()
+
+@case
+def V08_screensaver(t):
+    # und's click on a dark screen (quality review of group C): und armed in edit mode, two idle
+    # minutes start the screensaver; a push then only wakes the screen (edit mode stays, und still
+    # armed), and voice 6 is still the generated track. A 125 s render, as V07_screensaver
+    seed, log, keep = t.seed(), t.path('panel.log'), t.path('K')
+    script = t.script('0ms press voice6\n+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
+                      '+200ms encoder +13\n+100ms push\n+150ms encoder +1\n+100ms push\n+150ms encoder +7\n'
+                      '+100ms push\n+150ms encoder +1\n+200ms mark armed\n+122s mark ss\n+100ms push\n'
+                      '+1000ms mark woke\n+300ms save-project 0\n')
+    t.render(seed, ['--no-start', '--seconds', '126', '--param', 'screensaver_on_off=1', '--panel-log', log,
+                    '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(rows['armed'][1] == 'push: undo   und', 'und armed: %r' % rows['armed'])
+    check(rows['ss'] != rows['armed'], 'the screensaver after two idle minutes: %r' % rows['ss'])
+    check(rows['woke'] == rows['armed'], 'after the push on the dark screen: %r' % rows['woke'])
+    pat = one_file(keep, '00-*.PAT')
+    check(pat[3655 + 5] == 64, 'voice 6 after the push on the dark screen: length %d' % pat[3655 + 5])
     no_copies_left()
 
 def name_table(text, table):

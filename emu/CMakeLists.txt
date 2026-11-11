@@ -331,7 +331,8 @@ emu_render_tests(V04_kit_file V04_kit_fw17)
 emu_render_tests(V05_trig_setting V05_onsets_tool V05_onsets V05_midi_in V05_slave_onsets V05_save_onsets
     V05_plocks)
 emu_render_tests(V06_rec_setting V06_ui V06_onsets_ticks V06_card V06_micro V06_template V06_record)
-emu_render_tests(V07_ui V07_screensaver V07_levels V07_capture V08_ui V08_armed V08_vol)
+emu_render_tests(V07_ui V07_screensaver V07_levels V07_capture V08_ui V08_armed V08_vol V08_menu
+    V08_screensaver)
 # fw 1.7 fixes: the long names in edit mode (tracker E4.10)
 emu_render_tests(E410_long_names)
 # fw 1.7 fixes: the ping-pong delay of a centred send (tracker E7.8)

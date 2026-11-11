@@ -2135,4 +2135,44 @@ TEST(gen_glue_the_same_value_on_another_pattern_generates)
 	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_DEN, 7), 0);
 }
 
+static int lengthSeen[NUM_STEPS + 4];	/* the length of pattern 0's track 2 at each unmask */
+static void recordLengthAtUnmask(void)
+{
+	if (unmasks < (int)(sizeof lengthSeen / sizeof lengthSeen[0]))
+		lengthSeen[unmasks] = seq_patternSet.length[0][2];
+	unmasks++;
+}
+
+TEST(gen_glue_the_length_is_written_last)
+{
+	/* quality review of group C: the write-back puts the length after every step, so seq_tick() never
+	 * plays the 64 steps of a half written track: until the last unmask the old length (12) stays */
+	reset();
+	seq_patternSet.length[0][2] = 12;
+	unmasks = 0;
+	host_irqAtUnmask = recordLengthAtUnmask;
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	host_irqAtUnmask = NULL;
+	ASSERT_EQ(unmasks, NUM_STEPS + 1);	/* 64 steps, then the length */
+	for (int i = 0; i < unmasks - 1; i++)
+		ASSERT_EQ(lengthSeen[i], 12);
+	ASSERT_EQ(lengthSeen[unmasks - 1], 64);
+}
+
+TEST(gen_glue_keeps_an_outer_mask)
+{
+	/* quality review of group C: the masked sections give back the mask they found: called with
+	 * interrupts masked, the write-back and und leave them masked */
+	reset();
+	seq_copyPatternToBackupBuffer(0);
+	host_primask = 1;
+	const uint8_t f = seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT);
+	const uint32_t afterWrite = host_primask;
+	const uint8_t u = seq_genUndo(2, 0);
+	const uint32_t afterUndo = host_primask;
+	host_primask = 0;
+	ASSERT_EQ(f, PG_WROTE | PG_SOFT); ASSERT_EQ(u, 1);
+	ASSERT_EQ(afterWrite, 1); ASSERT_EQ(afterUndo, 1);
+}
+
 TEST_MAIN()
