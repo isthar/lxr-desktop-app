@@ -1296,7 +1296,7 @@
     {
       "id": "E10.13",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Plan v0.8, zadanie 6: testy w emulatorze: V08_generator (log uderzeń: rzadkie w taktach 8 i 16), V08_persist (zapis i odczyt), fuzz",
       "updated": "2026-11-11"
     },
