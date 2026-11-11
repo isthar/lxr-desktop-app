@@ -250,23 +250,24 @@ TEST(pgen_core_hat_density_level_and_var)
 TEST(pgen_core_hat_rank_ties)
 {
 	/* §5: a tie of keys goes to the lower place. Track 2 (index 1), found with gen.py: style 3 sed 13
-	 * ties places 1 and 13 (weight 3) at ranks 7 and 8; style 0 sed 56 on a track without accents
-	 * ties 6 (weight 1) and 13 (weight 4) at ranks 14 and 15 */
+	 * ties places 1 and 13 (weight 3) at ranks 7 and 8; style 0 sed 56 on a track with one accent, on
+	 * step 3 (§9: without one it would be style 1), ties 6 (weight 1) and 13 (weight 4) at ranks 14
+	 * and 15 */
 	static const struct { uint8_t sty, den, sed, lower, higher; } tie[] = { { 3, 7, 13, 1, 13 }, { 0, 14, 56, 6, 13 } };
 	for (unsigned i = 0; i < sizeof tie / sizeof tie[0]; i++)
 	{
 		PatternGenTrack t;
-		cleared(&t);
-		const PatternGenSettings s = hat(tie[i].sty, tie[i].den, -15, 0, tie[i].sed);
-		ASSERT_EQ(patternGen_generate(&s, 1, NULL, &t), PG_WROTE | PG_SOFT);
-		for (unsigned o = 0; o < PG_STEPS; o += 16)
+		for (uint8_t den = tie[i].den; den <= tie[i].den + 1u; den++)
 		{
-			ASSERT_TRUE(isOn(&t, o + tie[i].lower)); ASSERT_FALSE(isOn(&t, o + tie[i].higher));
+			cleared(&t);
+			t.on[0] = (tie[i].sty == 0u) ? 1u << 2 : 0u;
+			const PatternGenSettings s = hat(tie[i].sty, den, -15, 0, tie[i].sed);
+			ASSERT_EQ(patternGen_generate(&s, 1, NULL, &t), PG_WROTE | PG_SOFT);
+			for (unsigned o = 0; o < PG_STEPS; o += 16)
+			{
+				ASSERT_TRUE(isOn(&t, o + tie[i].lower)); ASSERT_EQ(isOn(&t, o + tie[i].higher), den > tie[i].den);
+			}
 		}
-		const PatternGenSettings more = hat(tie[i].sty, (uint8_t)(tie[i].den + 1u), -15, 0, tie[i].sed);
-		cleared(&t);
-		(void)patternGen_generate(&more, 1, NULL, &t);
-		ASSERT_TRUE(isOn(&t, tie[i].lower)); ASSERT_TRUE(isOn(&t, tie[i].higher));
 	}
 }
 
@@ -516,6 +517,57 @@ TEST(pgen_core_prc_bar2_moves_the_top_accent)
 				}
 			}
 	}
+}
+
+/** v 0: a cleared track; 1: ghosts at 63 on steps 1-16; 2: a 16-step track whose accent on step
+ * 21 does not play. None has an accent as it plays */
+static void noAccents(PatternGenTrack *t, unsigned v)
+{
+	cleared(t);
+	if (v == 1u)
+	{
+		t->on[0] = 0xFFFFu;
+		for (unsigned st = 0; st < 16u; st++)
+			t->step[st].volume = 63;
+	}
+	else if (v == 2u)
+		t->on[1] = 1u << 4;
+}
+
+TEST(pgen_core_style0_without_accents)
+{
+	/* §9: style 0 on a track without an accent as it plays is style 1: hat's offbeats at 127 and den
+	 * ghosts; prc's den accents off the kick, bar 2 with one moved, var -1's 1:2 on one of bar 4's.
+	 * The seed keeps style 0, so style 1's own tracks differ for some seed */
+	PatternGenTrack t, one;
+	unsigned differ = 0;
+	for (unsigned v = 0; v < 3u; v++)
+		for (uint8_t sed = 0; sed < 10; sed++)
+		{
+			const PatternGenSettings h = hat(0, 7, -15, 0, sed);
+			noAccents(&t, v);
+			ASSERT_EQ(patternGen_generate(&h, 5, NULL, &t), PG_WROTE | PG_SOFT);
+			for (unsigned b = 0; b < PG_BARS; b++)
+			{
+				ASSERT_EQ(t.on[b], t.on[0]); ASSERT_EQ(t.on[b] & 0x4444u, 0x4444u); ASSERT_EQ(bits(t.on[b]), 11u);
+				for (unsigned p = 2; p < 16u; p += 4)
+					ASSERT_EQ(t.step[16u * b + p].volume, 127);
+			}
+			gen(hat(1, 7, -15, 0, sed), &one, NULL);
+			differ += memcmp(&t, &one, sizeof t) != 0;
+
+			const PatternGenSettings p = { PG_TYPE_PRC, 0, 3, -13, -1, 0, sed, 0, 0 };
+			noAccents(&t, v);
+			ASSERT_EQ(patternGen_generate(&p, 2, NULL, &t) & PG_WROTE, PG_WROTE);
+			const uint16_t a1 = accents(&t, 0);
+			ASSERT_EQ(bits(a1), 3u); ASSERT_EQ(a1 & 0x1111u, 0u);
+			ASSERT_EQ(bits(a1 ^ accents(&t, 1)), 2u); ASSERT_EQ(accents(&t, 2), a1);
+			unsigned c12 = 0;
+			for (unsigned st = 0; st < PG_STEPS; st++)
+				c12 += isOn(&t, st) && (t.step[st].prob == 101) && (t.step[st].volume == 127) && (st >= 48u);
+			ASSERT_EQ(c12, 1u);
+		}
+	ASSERT_TRUE(differ > 0u);
 }
 
 TEST(pgen_core_rar_mixed_keeps_its_two_steps)

@@ -54,6 +54,15 @@ def bars_of(t, i, bars=16):
     return [n for n, steps in heard(t, bars).items() if i in steps]
 
 
+def no_accents():
+    """tracks with no step at vel >= 64 as they play: ghosts only, and an accent past the
+    length (step 21 of a 16-step track does not play)"""
+    ghosts = Track.from_pattern('.x.x....x..x...x')
+    past = Track.from_pattern('.x..............')
+    past.active[20] = True
+    return ghosts, past
+
+
 def user_track():
     """a 64-step track of the user's: accents (some under 127), ghosts, p-locks, flam,
     shift, fine and conditions, different in each bar"""
@@ -258,6 +267,27 @@ class Hat(unittest.TestCase):
                 acc = {p for p in range(BAR) if cur.active[b * BAR + p] and cur.steps[b * BAR + p].vol >= 64}
                 ghosts = bar_hits(out, b) - acc
                 self.assertEqual(ghosts, set(range(BAR)) - acc)
+
+    def test_sty0_without_accents_is_sty1(self):
+        # spec 9: no step at vel >= 64 on the track as it plays: sty 0 takes sty 1's accents
+        # (the offbeats at 127) and its weights; the seed keeps sty 0
+        for cur in (None,) + no_accents():
+            for den in (0, 5, 12, 16):
+                for var in (-2, 0, 3):
+                    for sed in SEEDS:
+                        out = generate(S('hat', sty=0, den=den, var=var, sed=sed), 5, None, cur)
+                        r = gen.Rng(sed, gen.TYP_HAT, 0, 5)
+                        keys = [r.rand(65536) for _ in range(BAR)]
+                        offsets = [r.rand(6) - 3 for _ in range(BAR)]
+                        order = gen.rank(keys, gen.HAT_WEIGHTS[1], lambda p: p not in gen.OFFBEATS)
+                        ghosts = order[:min(den, len(order)) + max(var, 0)]
+                        for b in range(4):
+                            self.assertEqual(bar_hits(out, b, lambda st: st.vol == 127), set(gen.OFFBEATS))
+                            self.assertEqual(bar_hits(out, b, lambda st: st.vol < 127), set(ghosts), (den, var, sed))
+                            for p in ghosts:
+                                self.assertEqual(out.steps[b * BAR + p].vol, vel_db(-15 + offsets[p]))
+        self.assertFalse(all(generate(S('hat', sty=0, sed=sed), 5) == generate(S('hat', sty=1, sed=sed), 5)
+                             for sed in range(10)))
 
     def test_sty0_short_track_repeats(self):
         cur = Track.from_pattern('..X...X..o.x..X.')
@@ -512,6 +542,27 @@ class Prc(unittest.TestCase):
                 self.assertEqual(i // BAR, 3)
                 self.assertEqual(out.steps[i].vol, 127)
                 self.assertEqual(bars_of(out, i), [4, 12])
+
+    def test_sty0_without_accents_is_sty1(self):
+        # spec 9: no step at vel >= 64 on the track as it plays: sty 0 is sty 1 (its weights,
+        # bar 2's move, var -n's 1:2 in bar 4); the seed keeps sty 0
+        w = gen.PRC_WEIGHTS[1]
+        for cur in (None,) + no_accents():
+            for den in (1, 3, 6):
+                for var in (-2, 0, 2):
+                    for sed in SEEDS:
+                        out = generate(S('prc', sty=0, den=den, var=var, sed=sed), 2, KICK, cur)
+                        keys = prc_draws(0, sed)[0]
+                        order = gen.rank(keys[:BAR], w, lambda p: p not in gen.QUARTERS)
+                        a1 = set(order[:den])
+                        dest = gen.rank(keys[BAR:], w, lambda p: p not in a1 and p not in gen.QUARTERS)
+                        a2 = (a1 - {order[0]}) | {dest[0]}
+                        self.assertEqual([self.accents(out, b) for b in range(3)], [a1, a2, a1], (den, var, sed))
+                        gone = [i for i in range(NUM_STEPS) if out.active[i] and out.steps[i].prob == gen.COND_1_2]
+                        self.assertEqual(len(gone), min(-var, den) if var < 0 else 0)
+                        self.assertTrue(all(i // BAR == 3 for i in gone))
+        self.assertFalse(all(generate(S('prc', sty=0, sed=sed), 2, KICK) == generate(S('prc', sty=1, sed=sed), 2, KICK)
+                             for sed in range(10)))
 
     def test_sty0_keeps_the_accents(self):
         cur = user_track()

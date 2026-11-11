@@ -2,7 +2,7 @@
  * PatternGen.c
  *
  * LICHOMAT v0.8 (plan v0.8 Tasks 2-3, G5-G10, G14, G19-G21; spec
- * docs/superpowers/specs/2026-11-11-groove-generator-design.md §3-§5, §8): the pattern generator,
+ * docs/superpowers/specs/2026-11-11-groove-generator-design.md §3-§5, §8, §9): the pattern generator,
  * a port of the prototype tools/gen/gen.py, the reference: the same random draws in the same
  * order, the same ranking and the same steps. tests/test_pattern_gen.c checks it byte for byte
  * against gen.py's vectors.
@@ -469,7 +469,7 @@ uint8_t patternGen_generate(const PatternGenSettings *in, uint8_t track, const P
 {
 	if (!in || !io || (track >= PG_TRACKS))
 		return 0;
-	const PatternGenSettings s = patternGen_checked(*in);
+	PatternGenSettings s = patternGen_checked(*in);
 	if ((s.typ == PG_TYPE_OFF) || ((s.typ == PG_TYPE_PRP) && (s.src == track)))
 		return 0;	/* gen.py: the current track as it is */
 	pg_ctx_t c;
@@ -483,7 +483,10 @@ uint8_t patternGen_generate(const PatternGenSettings *in, uint8_t track, const P
 		c.off[p] = (int8_t)((s.typ == PG_TYPE_PRC) ? (int)pg_rand(&c, 5u) - 2 : (int)pg_rand(&c, 6u) - 3);
 	c.note = pg_noteOf(PG_NOTE_BASE + s.note);
 	const uint16_t kick = pg_kick(&s, track, src);
-	pg_frame(&c, io, ((s.typ == PG_TYPE_HAT) || (s.typ == PG_TYPE_PRC)) && (s.sty == 0u));
+	const int own = ((s.typ == PG_TYPE_HAT) || (s.typ == PG_TYPE_PRC)) && (s.sty == 0u);
+	pg_frame(&c, io, own);
+	if (own && !(c.acc[0] | c.acc[1] | c.acc[2] | c.acc[3]))
+		s.sty = 1;	/* LICHOMAT v0.8 §9: style 0 without an accent is style 1, seeded with style 0 */
 	switch (s.typ)	/* each draws its draw 3 first */
 	{
 	case PG_TYPE_HAT:	pg_hat(&c, &s, io); break;

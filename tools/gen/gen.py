@@ -10,6 +10,8 @@ the spec leaves open are marked "CHOICE" where they are decided:
 - a step is read as it plays: a track shorter than 64 steps is repeated to 64 (the
   spec says so for the prp source; here also for the kick and for sty 0's accents);
 - the steps the generator does not hit are written clean and inactive, note 60 + not;
+- hat and prc sty 0 on a track with no accent as it plays (no step at vel >= 64) is sty 1:
+  its accents and weights, while the seed keeps sty 0 (spec 9);
 - hat sty 0: the free places are found bar by bar, around that bar's accents;
 - hat var +n: the next n places of the ranking (2:2); var -n: the last n of the den (1:2);
 - sub: "the last hit before a kick" is the last hit after the kick before it; sty 8 is
@@ -427,14 +429,17 @@ def generate(settings: Settings, track_index: int, src_track: Optional[Track] = 
     lo, hi = OFFSET_RANGE.get(s.typ, OFFSET_DEFAULT)
     offsets = [lo + rng.rand(hi - lo + 1) for _ in range(grid)]          # 2. the level offsets
     out = _Out(_clamp_note(DEFAULT_NOTE + s.not_))                       # 3. per kind, below
+    view = cur.played()
+    if s.typ in (TYP_HAT, TYP_PRC) and s.sty == 0 and not any(_accents(view, b) for b in range(NUM_BARS)):
+        s = dataclasses.replace(s, sty=1)       # spec 9: sty 0 without accents is sty 1, seeded with 0
     if s.typ == TYP_HAT:
-        _hat(s, out, draws, offsets, cur.played())
+        _hat(s, out, draws, offsets, view)
     elif s.typ == TYP_SUB:
         figures = [rng.rand(SUB_FIGURE_TOTAL) for _ in range(4)] if s.sty == 8 else []
         _sub(s, out, draws, figures, kick_places(s, track_index, src_track))
     elif s.typ == TYP_PRC:
         var_draws = [rng.rand(65536) for _ in range(BAR)]               # spec 9: no draw for the move
-        _prc(s, out, draws, offsets, var_draws, kick_places(s, track_index, src_track), cur.played())
+        _prc(s, out, draws, offsets, var_draws, kick_places(s, track_index, src_track), view)
     elif s.typ == TYP_RAR:
         steps = [rng.rand(65536) for _ in range(NUM_STEPS)] if s.sty in (3, 4) else []
         _rar(s, out, steps, kick_places(s, track_index, src_track))

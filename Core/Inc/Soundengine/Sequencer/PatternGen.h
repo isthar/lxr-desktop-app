@@ -2,7 +2,7 @@
  * PatternGen.h
  *
  * LICHOMAT v0.8 (plan v0.8 G2-G21; spec docs/superpowers/specs/2026-11-11-groove-generator-design.md
- * §3-§5, §8): the pattern generator of the track page. It writes plain steps into one 64-step track:
+ * §3-§5, §8, §9): the pattern generator of the track page. It writes plain steps into one 64-step track:
  * the settings, the source track and the current track in, the new track out. Pure C on the
  * types of SeqStepTypes.h; tests/test_pattern_gen.c builds it as it is and compares it byte for
  * byte with the prototype tools/gen/gen.py (tools/gen/vectors.json), which is the reference (G14).
@@ -67,7 +67,8 @@ typedef struct PatternGenSource
 
 /** track (0..6) from s into io (the current track in, the new one out); src is track s->src, or
  * NULL for an empty track (gen.py's None). Every track is read as it plays: shorter than 64 steps,
- * it repeats to 64 (spec §8). Returns PG_WROTE | PG_SOFT, or 0 when io is left as it was: typ ---,
+ * it repeats to 64 (spec §8). Style 0 of hat and prc on a track without an accent as it plays is
+ * style 1, seeded with style 0 (spec §9). Returns PG_WROTE | PG_SOFT, or 0 when io is left as it was: typ ---,
  * prp from its own track, no track 0..6 */
 uint8_t patternGen_generate(const PatternGenSettings *s, uint8_t track, const PatternGenSource *src, PatternGenTrack *io);
 /** s as gen.py's Settings.clamped(): every field clamped into its range (spec §3), sty into the
