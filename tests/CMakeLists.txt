@@ -196,6 +196,15 @@ seqc_add_test(test_pattern_gen IDS pgen_core pgen_vectors EXTRA ${PGEN_SOURCE}
 if(TARGET test_pattern_gen)
     target_include_directories(test_pattern_gen PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 endif()
+# LICHOMAT v0.8 (E10.17): the differential fuzz of the generator. tools/gen/fuzz_c.py sends random
+# cases (masks of spec 11 included) through pattern_gen_fuzz, PatternGen.c as it is, and through the
+# prototype tools/gen/gen.py, which must agree byte for byte; pgen_fuzz runs a fixed seed and count
+add_executable(pattern_gen_fuzz pattern_gen_fuzz.c ${PGEN_SOURCE})
+target_include_directories(pattern_gen_fuzz PRIVATE ${LXR_ROOT}/Core/Inc)
+target_link_libraries(pattern_gen_fuzz PRIVATE seqc_options)
+add_test(NAME pgen_fuzz COMMAND ${Python3_EXECUTABLE} ${LXR_ROOT}/tools/gen/fuzz_c.py
+    $<TARGET_FILE:pattern_gen_fuzz> 3000 1)
+set_tests_properties(pgen_fuzz PROPERTIES TIMEOUT ${SEQC_TEST_TIMEOUT})
 # LICHOMAT v0.5 (plan Task 3): the voice scheduler, plain C11 like the core, with its test
 # hooks (VSCHED_TEST); a second build with the fix-up's split cap 3 (S20) runs vsched_cap
 set(VSCHED_SOURCE ${LXR_ROOT}/Core/Src/Soundengine/vsched.c)
