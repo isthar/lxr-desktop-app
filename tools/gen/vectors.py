@@ -81,6 +81,49 @@ def user_prc32():
     return t
 
 
+def kick_even():
+    """a kick off step 1: steps 2 6 10 14, so prc's styles 3-4 can put an accent on step 1"""
+    return Track.from_pattern('.X...X...X...X..')
+
+
+def no_accents():
+    """ghosts only (vel 40 and 63), no step at vel >= 64"""
+    t = Track.from_pattern('.x.x....x..x.x.x')
+    t.steps[8].vol = 63
+    return t
+
+
+def accent_past_length():
+    """16 steps; the accent on step 21 (a p-lock on it) does not play"""
+    t = Track.from_pattern('...x...........x')
+    t.active[20] = True
+    t.steps[20].p1nr, t.steps[20].p1val = 33, 3
+    return t
+
+
+def step1_accents16():
+    """the user's accents on steps 1 and 7"""
+    return Track.from_pattern('X.....X.........')
+
+
+def step1_accents64():
+    """64 steps: accents on step 1 of bars 2 and 4 (one 90, one 2:2), others elsewhere"""
+    t = Track.from_pattern('..X...X.....X...|X.....X...X.....|...X.......X..X.|X..o....X.....X.')
+    t.steps[48].prob = 102
+    return t
+
+
+def raw_fine(length):
+    """accents with the raw fine nibbles 0x9 (-7, which the firmware's stepFine_get() reads as
+    0) on step 3 and 0xE (-2) on step 8, a p-lock and a shift; a ghost with 0x9 on step 12"""
+    t = Track.from_pattern(('..X....X...x....' * 4)[:length])
+    for b in range(length // 16):
+        t.steps[16 * b + 2] = Step(vol=127, prob=100, note=62, p1nr=12, p1val=b, shift=9, fine=-7)
+        t.steps[16 * b + 7] = Step(vol=100, prob=104 if b == 1 else 100, note=60, fine=-2)
+        t.steps[16 * b + 11].fine = -7
+    return t
+
+
 def prc_source():
     return generate(apply_type_defaults(Settings(sed=5), 'prc'), 2, kick44())
 
@@ -166,6 +209,23 @@ def cases():
     add('prc sty3 src on itself', 'prc', 2, inp=kick_odd(), cur=kick_odd(), sty=3, src=3)
     add('prc sty1 den12 var+4 (no room)', 'prc', 2, inp=kick44(), den=12, var=4)
     add('prc sty4 den16 var-4', 'prc', 2, inp=kick44(), sty=4, den=16, var=-4)
+    # spec 9: style 0 without accents is style 1, seeded with sty 0
+    add('hat sty0 cleared (as sty1)', 'hat', 5, sty=0)
+    add('hat sty0 ghosts only var-2', 'hat', 5, cur=no_accents(), sty=0, den=5, var=-2)
+    add('hat sty0 accent past length den16 var+3', 'hat', 6, cur=accent_past_length(), sty=0, den=16, var=3)
+    add('prc sty0 cleared (as sty1) var-2', 'prc', 2, inp=kick44(), sty=0, den=4, var=-2)
+    add('prc sty0 ghosts only var+2', 'prc', 2, inp=kick_odd(), cur=no_accents(), sty=0, den=3, var=2)
+    add('prc sty0 accent past length var-1', 'prc', 3, inp=kick44(), cur=accent_past_length(), sty=0, den=6, var=-1)
+    # spec 9: no pickup ghost before an accent on step 1 of a bar
+    add('prc sty3 kick even den4', 'prc', 2, inp=kick_even(), sty=3, den=4, var=0)
+    add('prc sty4 kick even den4 sed1', 'prc', 2, inp=kick_even(), sty=4, den=4, sed=1, var=0)
+    add('prc sty0 step1 user16 den3', 'prc', 2, inp=kick44(), cur=step1_accents16(), sty=0, den=3, var=0)
+    add('prc sty0 step1 user64 den6 var+1', 'prc', 2, inp=kick_even(), cur=step1_accents64(), sty=0, den=6, var=1)
+    # spec 9 (the core review): style 0 keeps an accent's raw fine nibble 0x9 and 0xE
+    add('hat sty0 raw fine 16', 'hat', 5, cur=raw_fine(16), sty=0, den=6, var=0)
+    add('hat sty0 raw fine 64 var-1', 'hat', 5, cur=raw_fine(64), sty=0, den=9, var=-1)
+    add('prc sty0 raw fine 16', 'prc', 2, inp=kick44(), cur=raw_fine(16), sty=0, den=4, var=0)
+    add('prc sty0 raw fine 64 var+2', 'prc', 2, inp=kick44(), cur=raw_fine(64), sty=0, den=5, var=2)
 
     # --- rar (track 5, index 4) ---
     for sty in range(1, 5):
