@@ -20,7 +20,7 @@ the spec leaves open are marked "CHOICE" where they are decided:
   to the best ranked free place of bar 2's own keys (places 16-31): not an accent of bar 1,
   not a kick step, the style's weights (spec 9; no draw for it, so den k -> k+1 never
   changes which accent moves); ghosts are ranked by bar 1's keys in every bar, on the step
-  before the accent within the bar (step 1's is step 16 of the same bar) and never on a
+  before the accent within the bar (an accent on step 1 gets none, spec 9) and never on a
   kick step (spec 8), offsets of bar 2 from places 16-31; var +n weights steps 13-16 x4;
   var -n does nothing on sty 0 (its accents are the user's, which the generator never
   touches);
@@ -532,7 +532,7 @@ def _prc(s: Settings, out: _Out, draws, offsets, var_draws, kick: frozenset, vie
     bar_ghosts = []
     for b in range(NUM_BARS):                    # ghosts on the step before an accent
         acc = bar_acc[b]
-        places = {(p - 1) % BAR for p in acc} - acc - kick    # spec 8: never on a kick step
+        places = {p - 1 for p in acc if p > 0} - acc - kick   # spec 9: none before step 1; 8: off the kick
         g = rank(draws[:BAR], [1] * BAR, lambda p: p in places)[:ghosts]
         for q in g:
             out.hit(b * BAR + q, vel_db(s.lev + offsets[(b % 2) * BAR + q]))

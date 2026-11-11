@@ -519,6 +519,39 @@ TEST(pgen_core_prc_bar2_moves_the_top_accent)
 	}
 }
 
+TEST(pgen_core_prc_no_pickup_before_step_1)
+{
+	/* §9: an accent on step 1 of a bar gets no ghost (before, step 16 of the same bar got it). With the
+	 * kick on 2 6 10 14, styles 3-4 put accents on step 1, and no ghost lands on a step 16; style 0
+	 * with the user's accents on 1 and 7 (kick 1 5 9 13): the only ghost is on 6 */
+	PatternGenTrack t, k;
+	const PatternGenSource kick = source(&k, 0x2222u);
+	unsigned bites = 0;
+	for (uint8_t sty = 3; sty <= 4; sty++)
+		for (uint8_t den = 1; den <= 8; den++)
+			for (uint8_t sed = 0; sed < 30; sed++)
+			{
+				const PatternGenSettings s = { PG_TYPE_PRC, sty, den, -13, 0, 0, sed, 0, 0 };
+				cleared(&t);
+				(void)patternGen_generate(&s, 2, &kick, &t);
+				for (unsigned b = 0; b < PG_BARS; b++)
+				{
+					bites += (accents(&t, b) & 0x8001u) == 1u;
+					ASSERT_FALSE(isOn(&t, 16u * b + 15u) && (t.step[16u * b + 15u].volume < 127));
+				}
+			}
+	ASSERT_TRUE(bites > 0u);
+	for (uint8_t den = 1; den <= 6; den++)
+	{
+		const PatternGenSettings s = { PG_TYPE_PRC, 0, den, -13, 0, 0, 0, 0, 0 };
+		cleared(&t);
+		t.on[0] = (1u << 0) | (1u << 6);
+		ASSERT_EQ(patternGen_generate(&s, 2, NULL, &t), PG_WROTE | PG_SOFT);
+		for (unsigned b = 0; b < PG_BARS; b++)
+			ASSERT_EQ(t.on[b], (1u << 0) | (1u << 5) | (1u << 6));
+	}
+}
+
 /** v 0: a cleared track; 1: ghosts at 63 on steps 1-16; 2: a 16-step track whose accent on step
  * 21 does not play. None has an accent as it plays */
 static void noAccents(PatternGenTrack *t, unsigned v)

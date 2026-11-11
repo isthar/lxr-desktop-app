@@ -485,11 +485,30 @@ class Prc(unittest.TestCase):
                 for b in range(4):
                     acc = self.accents(out, b)
                     ghosts = bar_hits(out, b, lambda st: st.vol < 127)
-                    places = {(p - 1) % 16 for p in acc} - acc - gen.QUARTERS
+                    places = {p - 1 for p in acc if p > 0} - acc - gen.QUARTERS
                     self.assertEqual(len(ghosts), min(3, (den + 1) // 2, len(places)))
                     for q in ghosts:
-                        self.assertIn((q + 1) % BAR, acc)
+                        self.assertIn(q + 1, acc)
                         self.assertIn(out.steps[b * BAR + q].vol, {vel_db(-13 + d) for d in range(-2, 3)})
+
+    def test_no_pickup_before_step_1(self):
+        # spec 9: an accent on step 1 of a bar gets no ghost (it used to get step 16 of the same bar)
+        bites = 0
+        for sty in (3, 4):
+            for den in range(1, 9):
+                for sed in range(30):
+                    out = generate(S('prc', sty=sty, den=den, var=0, sed=sed), 2, KICK_EVEN)
+                    for b in range(4):
+                        acc = self.accents(out, b)
+                        bites += 0 in acc and 15 not in acc
+                        self.assertFalse(out.active[b * BAR + 15] and out.steps[b * BAR + 15].vol < 127,
+                                         (sty, den, sed, b))
+        self.assertGreater(bites, 0)
+        cur = Track.from_pattern('X.....X.........')    # sty 0: the user's accents on steps 1 and 7
+        for den in range(1, 7):
+            out = generate(S('prc', sty=0, den=den, var=0), 2, KICK, cur)
+            for b in range(4):
+                self.assertEqual(bar_hits(out, b), {0, 5, 6}, den)
 
     def test_ghosts_never_on_the_kick(self):
         # spec 8: a pickup whose pre-step is a kick step is skipped (the kick from src)
