@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 13:13",
+    "updated": "2026-11-11 13:41",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; teraz E10.3, generator w firmware (gałąź v0.8)",
     "branch": "timing-core",
-    "head": "69e4377",
+    "head": "2f1b7bc",
     "next": "U mnie: plan E10.3, potem wdrożenie z testami bajt w bajt z prototypem. Czeka na Ciebie: Q41 odsłuch przykładów generatora, H12 na LXR (30 min, odblokowuje v0.4–v0.7 i wyznacza CPU dla atmo i riserów), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
-    "updated_at": "2026-11-11T13:13:00+01:00",
-    "now": "E10.3: plan wdrożenia generatora w firmware"
+    "updated_at": "2026-11-11T13:41:00+01:00",
+    "now": "E10.8–E10.9: rdzeń generatora w C (grupa A planu v0.8)"
   },
   "epics": [
     {
@@ -1256,6 +1256,62 @@
       "epic": "E10",
       "status": "do zrobienia",
       "title": "Instrukcja pod sposób pracy: co inaczej niż w fw 1.7, groove w 5 minut",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.8",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Plan v0.8, zadanie 1: gałąź i stan wyjściowy, wersja 0.8",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.9",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Plan v0.8, zadanie 2: rdzeń PatternGen.c i hat, konwerter wektorów prototypu do testów w C",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.10",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Plan v0.8, zadanie 3: sub, prc, rar, prp; wszystkie 211 wektorów bajt w bajt; przegląd zgodności i jakości z mutantami",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.11",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Plan v0.8, zadanie 4: spięcie z sekwencerem: ustawienia na ścieżkę, przeliczanie, zapis kroków przy zablokowanych przerwaniach, autozapis, und",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.12",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Plan v0.8, zadanie 5: menu (podstrony generatora, enkoder dalej za sav), włączanie vol, renderer i test V08_ui; drugi przegląd",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.13",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Plan v0.8, zadanie 6: testy w emulatorze: V08_generator (log uderzeń: rzadkie w taktach 8 i 16), V08_persist (zapis i odczyt), fuzz",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.14",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Plan v0.8, zadanie 7: RAM i stos (ramka ≤ 768 B), README, odbiór",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.15",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Plan v0.8, zadanie 8: dokumenty dla Ciebie: U42–U45, rozdział instrukcji o generatorze, szkic notatek 0.8, raport M22",
       "updated": "2026-11-11"
     }
   ],
@@ -5087,6 +5143,11 @@
       "n": 681,
       "at": "2026-11-11 13:13",
       "text": "E10.2 zrobione: prototyp generatora tools/gen/gen.py na gałęzi v0.8 (c940a5c..c64c9a6, 50 testów, 211 wektorów dla portu w C) i 32 przykłady z emulatora v0.7 na stronie odsłuchu (wersja 14, sekcja „Generator: pierwsze przykłady”, kit PROSTO, 143 BPM, każdy z siatką kroków). Prototyp wymusił doprecyzowania (projekt §8, 69e4377): ghosty prc nigdy na stopie, echo i przedtakty prp przejmują warunek źródła. Q41: Twój odsłuch. E10.3 w toku: plan firmware"
+    },
+    {
+      "n": 682,
+      "at": "2026-11-11 13:41",
+      "text": "E10.3: plan wdrożenia docs/superpowers/plans/2026-11-11-v0.8-groove-generator.md, 8 zadań = E10.8–E10.15, kamień milowy M22. Rdzeń w czystym C sprawdzany bajt w bajt na 211 wektorach z prototypu (format wektorów w planie poprawiony na prawdziwy). Moja decyzja: enkoder przechodzi za sav na ekrany generatora, jak między innymi podstronami ścieżki (zmienia 4 testy emulatora, bez zmian w złotych plikach). RAM +76 B. Start: grupa A (E10.8–E10.9)"
     }
   ]
 }
