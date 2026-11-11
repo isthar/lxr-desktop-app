@@ -287,6 +287,13 @@ Style (g = ghost, vel z `lev`; G = akcent, 127):
   - na patternie innym niż ten, na którym ścieżka była ostatnio generowana;
   - po włączeniu LXR.
 - **Prototyp:** `generate()` dostaje maskę kroków poprzedniego przeliczenia (domyślnie pusta) i oddaje maskę kroków, które zapisał (`_Out.written`). Wektory dostają przypadki z maską. Bez maski wynik jest bajt w bajt taki jak dotąd.
+- **Wybór `hat` albo `prc` na ścieżce z Twoimi akcentami zaczyna od stylu 0.** Wybór `typ` wczytuje ustawienia domyślne i od razu przelicza ścieżkę. Ze stylem 1 z tabeli §3 akcenty narysowane ręcznie znikały, zanim styl 0 mógł je przeczytać. Teraz:
+  - gdy ścieżka, tak jak gra, ma krok z velocity ≥ 64 spoza maski, `sty` wczytuje się jako 0 zamiast 1, a reszta ustawień domyślnych bez zmian;
+  - generator zostawia te akcenty i dokłada ghosty;
+  - na pustej ścieżce albo z samymi krokami generatora zostaje styl 1.
+
+  Tak wygląda praca ze stylem 0: narysuj akcenty (przy `typ` `---`), wybierz `hat` albo `prc`.
+- **Maska znika też wtedy, gdy zmiana albo przeładowanie patternu kładzie kopię zapasową na pattern, na którym ścieżka była ostatnio generowana.** Wtedy wraca zapisany stan, a maska opisywałaby kroki, których już nie ma. Ścieżka zapisana po generowaniu po takim powrocie ma maskę pustą: jej głośne kroki liczą się jak Twoje, jak po włączeniu LXR.
 - **Przeładowanie grającego patternu w trakcie zapisu** (przycisk patternu albo Program Change na ten sam pattern) przerywa zapis tak jak zmiana patternu: licznik zmian patternu zamiast samego numeru. Tak samo `und`.
 - **„Ta sama wartość nic nie robi”** (§10, uzupełnienie do §3) dotyczy patternu, na którym ścieżka była ostatnio generowana. Na innym patternie pierwsze dotknięcie parametru, także tą samą wartością, pisze tam ścieżkę. Ustawienia należą do ścieżki, nie do patternu, a tylko tak `typ` ustawiony wcześniej zadziała na nowym patternie. Instrukcja to opisuje.
 - **Bez zmian:**
