@@ -2285,4 +2285,74 @@ TEST(gen_glue_mask_of_a_stopped_write_is_not_kept)
 	ASSERT_EQ(seamOwnIn, m0);
 }
 
+/** a reload of the pattern that plays as the interrupt at the switchAtUnmask-th unmask: its button or a
+ * program change for it, which while stopped takes effect at once (seq_setNextPattern(): the backup over
+ * the pattern, the pattern into the backup, the same number) */
+static void reloadAtUnmask(void)
+{
+	if (++unmasks != switchAtUnmask)
+		return;
+	seq_setNextPattern(seq_activePattern);
+}
+static void reloadNow(void) { seq_setNextPattern(seq_activePattern); }
+
+TEST(gen_glue_write_stops_at_a_reload_of_its_pattern)
+{
+	/* spec §11, finding 3 of the whole-branch review: a reload of the pattern that plays, between two
+	 * masked steps of the write-back or while the generator runs, puts the backup over it as a pattern
+	 * change does, and the number stays; the pattern change counter stops the write: the saved track
+	 * stays whole, nothing is reported, touched or kept as the generator's */
+	for (int during = 0; during < 2; during++)
+	{
+		reset();
+		seq_setMainStep(0, 2, 5, 1);
+		seq_patternSet.seq_subStepPattern[0][2][5].volume = 99;
+		seq_patternSet.length[0][2] = 12;
+		seq_copyPatternToBackupBuffer(0);
+		PatternGenTrack saved, got;
+		genRead(0, 2, &saved);
+		unmasks = 0;
+		switchAtUnmask = 10;
+		if (during)
+			duringGenerate = reloadNow;
+		else
+			host_irqAtUnmask = reloadAtUnmask;
+		patTouches = 0;
+		const uint8_t f = seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT);
+		host_irqAtUnmask = NULL;
+		duringGenerate = NULL;
+		ASSERT_EQ(f, 0); ASSERT_EQ(seq_activePattern, 0); ASSERT_EQ(host_primask, 0); ASSERT_EQ(patTouches, 0);
+		genRead(0, 2, &got);
+		ASSERT_TRUE(genSame(&got, &saved));
+		ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_DEN, 3), PG_WROTE | PG_SOFT);	/* the next change writes it whole */
+		ASSERT_EQ(seamOwnIn, 0u);
+		genRead(0, 2, &got);
+		ASSERT_EQ(got.length, 64); ASSERT_EQ(patTouches, 1);
+	}
+}
+
+TEST(gen_glue_undo_stops_at_a_reload_of_its_pattern)
+{
+	/* spec §11: und the same: a reload between two of its masked steps stops it, and it reports and
+	 * touches nothing (the reload put the saved track back itself) */
+	reset();
+	seq_setMainStep(0, 5, 3, 1);
+	seq_patternSet.length[0][5] = 12;
+	seq_copyPatternToBackupBuffer(0);
+	PatternGenTrack saved, got;
+	genRead(0, 5, &saved);
+	ASSERT_EQ(seq_setGenParam(5, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	unmasks = 0;
+	switchAtUnmask = 10;
+	host_irqAtUnmask = reloadAtUnmask;
+	patTouches = 0;
+	const uint8_t u = seq_genUndo(5, 0);
+	host_irqAtUnmask = NULL;
+	ASSERT_EQ(u, 0); ASSERT_EQ(patTouches, 0); ASSERT_EQ(seq_activePattern, 0);
+	genRead(0, 5, &got);
+	ASSERT_TRUE(genSame(&got, &saved));
+	ASSERT_EQ(seq_genUndo(5, 0), 1);	/* without one it is done */
+	ASSERT_EQ(patTouches, 1);
+}
+
 TEST_MAIN()

@@ -115,6 +115,7 @@ static PatternGenSettings seq_gen[NUM_TRACKS];	//LICHOMAT v0.8: the generator's 
 static uint8_t seq_grooveTrack, seq_groovePattern;	//LICHOMAT v0.8: the track page's last load (seq_loadGrooveParams())
 static uint8_t seq_genPattern[NUM_TRACKS];	//LICHOMAT v0.8: the pattern each track was last generated into (quality review of group C)
 static uint64_t seq_genOwn[NUM_TRACKS];	//LICHOMAT v0.8 (spec §11): the steps each track's last completed write wrote, in seq_genPattern[track]
+static volatile uint8_t seq_patternChanges;	//LICHOMAT v0.8 (spec §11): counts the pattern changes and reloads, the backup put over the active pattern
 _Static_assert((NUM_STEPS == PG_STEPS) && (NUM_BARS == PG_BARS) && (NUM_TRACKS == PG_TRACKS),
 	"LICHOMAT v0.8: a PatternGenTrack is one track of a pattern");
 
@@ -633,6 +634,8 @@ void seq_setPendingPatternActive()
 		seq_copyPatternToBackupBuffer(seq_pendingPattern);
 
 		seq_activePattern = seq_pendingPattern;
+		//LICHOMAT v0.8 (spec §11): also a reload, the same number, stops the generator's write-back and und
+		seq_patternChanges++;
 
 		activeParameters[PAR_SHUFFLE] = seq_patternSet.shuffle[seq_activePattern];
 		seq_setShuffle(activeParameters[PAR_SHUFFLE]/127.f);
@@ -2829,18 +2832,19 @@ static void seq_putBackupStep(uint8_t trackNr, const PatternGenTrack *t, uint8_t
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.8 (G12, G13, review and quality review of group C): track t into pattern, step by
  * step and then its length, each with interrupts masked as seq_clearTrackMicro(): seq_tick() reads
- * the steps, and recording writes them. played: pattern played when t was read. A pattern change in
- * seq_tick() puts the backup over the pattern that played and the next pattern into the backup: when
- * pattern played and no longer does, the write stops (0), so no half written track stays in it; when
- * it did not play and now does, the backup takes the rest too, so it holds the whole track. 1 when
- * written. The generator's write-back and und */
-static uint8_t seq_putTrack(uint8_t trackNr, uint8_t pattern, const PatternGenTrack *t, uint8_t played)
+ * the steps, and recording writes them. played: pattern played when t was read; changes:
+ * seq_patternChanges then. A pattern change in seq_tick() puts the backup over the pattern that
+ * played and the next pattern into the backup: when pattern played and no longer does, or (spec
+ * §11) it was reloaded, the same number, the write stops (0), so no half written track stays in it;
+ * when it did not play and now does, the backup takes the rest too, so it holds the whole track. 1
+ * when written. The generator's write-back and und */
+static uint8_t seq_putTrack(uint8_t trackNr, uint8_t pattern, const PatternGenTrack *t, uint8_t played, uint8_t changes)
 {
 	for(uint8_t s = 0; s <= NUM_STEPS; s++)
 	{
 		const uint32_t primask = seq_mailboxLock();
 		const uint8_t plays = (pattern == seq_activePattern);
-		if(played && !plays)
+		if(played && (!plays || (seq_patternChanges != changes)))	//LICHOMAT v0.8 (spec §11): a reload too
 		{
 			seq_mailboxUnlock(primask);
 			return 0;
@@ -2870,8 +2874,10 @@ uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
 {
 	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return 0;
 	//quality review of group C: whether pattern plays, before the track is read: a pattern change
-	//from here on, also while the generator runs, makes the write stop (seq_putTrack())
+	//from here on, also while the generator runs, makes the write stop (seq_putTrack()); spec §11:
+	//a reload too, by the count of pattern changes
 	const uint8_t played = (pattern == seq_activePattern);
+	const uint8_t changes = seq_patternChanges;
 	const uint8_t srcNr = patternGen_checked(seq_gen[trackNr]).src;
 	PatternGenTrack t;
 	PatternGenSource src;
@@ -2890,8 +2896,8 @@ uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
 	const uint8_t f = patternGen_generate(&seq_gen[trackNr], trackNr, &src, &t, &own);
 	if(f & PG_WROTE)
 	{
-		if(!seq_putTrack(trackNr, pattern, &t, played))
-			return 0;	// the pattern stopped playing: it is its backup again
+		if(!seq_putTrack(trackNr, pattern, &t, played, changes))
+			return 0;	// the pattern stopped playing or was reloaded: it is its backup again
 		preset_touchTimer(PRESET_PAT_TIMER);	// autosave, as a step toggled on the panel
 		seq_genPattern[trackNr] = pattern;
 		seq_genOwn[trackNr] = own;	//LICHOMAT v0.8 (spec §11): the steps this write wrote
@@ -2953,13 +2959,14 @@ uint8_t seq_genUndo(uint8_t trackNr, uint8_t pattern)
 {
 	if((trackNr >= NUM_TRACKS) || (pattern >= NUM_PATTERN)) return 0;
 	PatternGenTrack t;	// the backup's track; a pattern change meanwhile stops the write below
+	const uint8_t changes = seq_patternChanges;	//LICHOMAT v0.8 (spec §11): and a reload
 	memcpy(t.step, patternBackupBuffer.seq_subStepPattern[trackNr], sizeof t.step);
 	memcpy(t.timing, patternBackupBuffer.seq_stepTiming[trackNr], sizeof t.timing);
 	memcpy(t.fine, patternBackupBuffer.seq_stepFine[trackNr], sizeof t.fine);
 	for(uint8_t b = 0; b < NUM_BARS; b++)
 		t.on[b] = patternBackupBuffer.seq_mainSteps[b][trackNr];
 	t.length = patternBackupBuffer.length[trackNr];
-	if(!seq_putTrack(trackNr, pattern, &t, 1))	// only while pattern plays
+	if(!seq_putTrack(trackNr, pattern, &t, 1, changes))	// only while pattern plays, not reloaded
 		return 0;
 	preset_touchTimer(PRESET_PAT_TIMER);
 	seq_genOwn[trackNr] = 0;	//LICHOMAT v0.8 (spec §11)
