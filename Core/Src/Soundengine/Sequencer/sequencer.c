@@ -113,6 +113,7 @@ static uint16_t midi_notes_on=0;		    /**< which channels have a note currently 
 PatternBackupBuffer patternBackupBuffer;
 static PatternGenSettings seq_gen[NUM_TRACKS];	//LICHOMAT v0.8: the generator's settings per track, RAM only (plan v0.8 G4)
 static uint8_t seq_grooveTrack, seq_groovePattern;	//LICHOMAT v0.8: the track page's last load (seq_loadGrooveParams())
+static uint8_t seq_genPattern[NUM_TRACKS];	//LICHOMAT v0.8: the pattern each track was last generated into (quality review of group C)
 _Static_assert((NUM_STEPS == PG_STEPS) && (NUM_BARS == PG_BARS) && (NUM_TRACKS == PG_TRACKS),
 	"LICHOMAT v0.8: a PatternGenTrack is one track of a pattern");
 
@@ -293,6 +294,7 @@ void seq_init()
 
 	memset(seq_gen, 0, sizeof seq_gen);	//LICHOMAT v0.8: the generator off on every track
 	seq_grooveTrack = seq_groovePattern = 0xFF;	//LICHOMAT v0.8: no track page loaded yet
+	memset(seq_genPattern, 0xFF, sizeof seq_genPattern);	//LICHOMAT v0.8: and nothing generated
 
 	//the timing core, its time base and the sync input queues
 	seq_initCore();
@@ -2886,6 +2888,7 @@ uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
 		if(!seq_putTrack(trackNr, pattern, &t, played))
 			return 0;	// the pattern stopped playing: it is its backup again
 		preset_touchTimer(PRESET_PAT_TIMER);	// autosave, as a step toggled on the panel
+		seq_genPattern[trackNr] = pattern;
 	}
 	return f;
 }
@@ -2927,8 +2930,9 @@ uint8_t seq_setGenParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 	if(memcmp(&set, g, sizeof set))
 		seq_loadGenParams(trackNr);
 	//review of group C: a knob or the encoder at the end of a range writes the stored value again:
-	//no change, so no regeneration and no autosave, and the hand edits stay
-	if(!memcmp(&was, g, sizeof was))
+	//no change, so no regeneration and no autosave, and the hand edits stay; but the settings follow
+	//the track, so on another pattern than the one last generated into it generates there
+	if(!memcmp(&was, g, sizeof was) && (pattern == seq_genPattern[trackNr]))
 		return 0;
 	return (g->typ != PG_TYPE_OFF) ? seq_generateTrack(trackNr, pattern) : 0;
 }

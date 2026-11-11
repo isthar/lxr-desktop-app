@@ -2112,4 +2112,27 @@ TEST(gen_glue_write_into_a_pattern_that_starts_to_play_reaches_its_backup)
 	ASSERT_TRUE(genSame(&got, &backup));
 }
 
+TEST(gen_glue_the_same_value_on_another_pattern_generates)
+{
+	/* quality review of group C: the settings follow the track (G4); on a newly shown pattern the
+	 * same value generates there; it is no change only in the pattern last generated into */
+	reset();
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	PatternGenTrack want, got;
+	genRead(1, 2, &want);
+	const PatternGenSettings s = { PG_TYPE_HAT, 1, 7, -15, 1, 0, 0, 0, 0 };
+	const PatternGenSource src = { seq_patternSet.seq_subStepPattern[1][0], { 0, 0, 0, 0 }, seq_patternSet.length[1][0] };
+	ASSERT_EQ(patternGen_generate(&s, 2, &src, &want), PG_WROTE | PG_SOFT);
+	patTouches = 0;
+	ASSERT_EQ(seq_setGenParam(2, 1, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);	/* pattern 1 shown */
+	genRead(1, 2, &got);
+	ASSERT_TRUE(genSame(&got, &want)); ASSERT_EQ(patTouches, 1);
+	ASSERT_EQ(seq_setGenParam(2, 1, PAR_GEN_TYP, PG_TYPE_HAT), 0);	/* there again: no change */
+	ASSERT_EQ(seq_setGenParam(2, 1, PAR_GEN_DEN, 7), 0);
+	ASSERT_EQ(patTouches, 1);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_DEN, 7), PG_WROTE | PG_SOFT);	/* back on pattern 0 */
+	ASSERT_EQ(patTouches, 2);
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_DEN, 7), 0);
+}
+
 TEST_MAIN()
