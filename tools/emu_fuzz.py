@@ -13,7 +13,8 @@ midi:  40-200 random DIN messages per render: CC, NRPN, notes, Program Change, p
 seq:   30-120 random edits per render: voices, steps, step parameters of steps 0-63
        (the step buttons' range), track settings, rolls, the performance mode, mute
        scenes, rotation, start and stop; v0.6: mic, tpl and amt with values over 0-255;
-       v0.7: vtp, vdp and sav with values over 0-255, captures and clears.
+       v0.7: vtp, vdp and sav with values over 0-255, captures and clears;
+       v0.8: the generator's ten parameters over 0-255.
 
 Each finding (a different source line, or a different exit message) is printed once
 with its seed; render N uses seed S + N, so `--count 1 --seed <seed>` repeats one.
@@ -67,7 +68,8 @@ def value(rnd):
 
 # LICHOMAT v0.6/v0.7: mic (0-168), tpl (0-11), amt and vdp (0-200), vtp (0-8) and sav (0-4): the edges of
 # their ranges and of the menu's clamp
-WIDE = ('step_micro', 'track_tpl', 'track_tpl_amt', 'track_vtp', 'track_vdp', 'track_tpl_save')
+WIDE = ('step_micro', 'track_tpl', 'track_tpl_amt', 'track_vtp', 'track_vdp', 'track_tpl_save',
+        'gen_typ', 'gen_sty', 'gen_den', 'gen_lev', 'gen_var', 'gen_not', 'gen_sed', 'gen_und', 'gen_src', 'gen_shf')
 
 
 def wide(rnd):
@@ -78,7 +80,7 @@ def wide(rnd):
 # past a list on its last entry (us4), so wide() alone reaches of8-qtr and us1-us3 about once a sweep;
 # half of their draws pick from 0-12: tpl's list and the first value past it, vtp's and sav's lists and
 # values past them
-LISTS = ('track_tpl', 'track_vtp', 'track_tpl_save')
+LISTS = ('track_tpl', 'track_vtp', 'track_tpl_save', 'gen_typ')
 
 
 def value_for(rnd, name):
@@ -130,7 +132,8 @@ STEP_PARAMETERS = ['step_volume', 'step_prob', 'step_note', 'step_slide', 'step_
 TRACK_PARAMETERS = ['track_tempo', 'human_time', 'human_vol', 'track_delay', 'track_length',
                     'track_rotation', 'shuffle', 'roll', 'scene_quant', 'euklid_length',
                     'euklid_steps', 'euklid_rotation', 'bpm', 'track_tpl', 'track_tpl_amt',
-                    'track_vtp', 'track_vdp', 'track_tpl_save']
+                    'track_vtp', 'track_vdp', 'track_tpl_save',
+                    'gen_typ', 'gen_sty', 'gen_den', 'gen_lev', 'gen_var', 'gen_not', 'gen_sed', 'gen_und', 'gen_src', 'gen_shf']
 
 
 def seq_case(rnd, names):
@@ -172,7 +175,7 @@ def seq_case(rnd, names):
             at('press step%d' % rnd.randrange(1, 3))
             at('up shift')
         elif r < 0.975:             # LICHOMAT v0.7: sav on the track page's fourth screen and the click
-            for c in ('down shift', 'press mode2', 'up shift', 'encoder +13', 'push'):
+            for c in ('down shift', 'press mode2', 'up shift', 'encoder +12', 'push'):   # sav: 12 detents from len (v0.8: the encoder runs on to the generator)
                 at(c)
         elif r < 0.99:              # LICHOMAT v0.7: the clear page's micro
             for c in ('down shift', 'press copy', 'encoder +9', 'push', 'up shift'):

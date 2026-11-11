@@ -1815,6 +1815,58 @@ def V08_screensaver(t):
     check(pat[3655 + 5] == 64, 'voice 6 after the push on the dark screen: length %d' % pat[3655 + 5])
     no_copies_left()
 
+@case
+def V08_generator(t):
+    # the generator end to end (plan v0.8 Task 6, spec §6): voice 1's kick on 1 5 9 13, voice 6 hat
+    # with its defaults (sty 1 den 7 lev -15 var +1), voice 5 rar (sty 1 den 2), through the parameters;
+    # 16 bars at 200 BPM (1200 ms a bar). The trig log: the rare hit only in bars 8 and 16; the hat 11
+    # hits a bar in bars 1-4 and 9-12, 12 in bars 5-8 and 13-16 (var's 2:2 ghost). The MIDI log: the
+    # hat's offbeats at 127, every other hit at -18..-13 dB (velocity 16..28)
+    seed, log, midi = t.seed(), t.path('trig.log'), t.path('midi.log')
+    script = t.script(press_steps(1, (1, 5, 9, 13)) + '+100ms press voice6\n+100ms param gen_typ=1\n'
+                      '+100ms press voice5\n+100ms param gen_typ=4\n+200ms press start\n')
+    t.render(seed, ['--no-start', '--bpm', '200', '--seconds', '22', '--param', 'midi_chan_6=6',
+                    '--trig-log', log, '--midi-log', midi, '--events', script])
+    kick = trig_frames(log, 0)     # frames (+128, which cancels); a bar is 1.2 s x 44,140.625 frames
+    check(len(kick) >= 64, '%d kicks' % len(kick))
+    bar = lambda f: int((f - kick[0] + 441) // 52968.75)
+    rare = [bar(f) for f in trig_frames(log, 4)]
+    check([b for b in rare if b < 16] == [7, 15], 'the rare hits in bars %r, not [7, 15] (0-based)' % rare)
+    hats = [bar(f) for f in trig_frames(log, 5)]
+    per = [hats.count(b) for b in range(16)]
+    check(per == [11] * 4 + [12] * 4 + [11] * 4 + [12] * 4, 'the hat hits a bar: %r' % per)
+    ref, vels = din_notes(midi, '90')[0][0], {}
+    for c, _, v in din_notes(midi, '95'):
+        vels.setdefault(int(round((c - ref) / 216000.0 / 75.0)) % 16, set()).add(v)
+    check(all(vels.get(s) == {127} for s in (2, 6, 10, 14)), 'the offbeats: %r' % vels)
+    soft = set().union(*(v for s, v in vels.items() if s % 4 != 2))
+    check(soft and soft <= {16, 18, 20, 23, 25, 28}, 'the ghosts at %r' % sorted(soft))
+    no_copies_left()
+
+@case
+def V08_persist(t):
+    # a generated track is plain steps (plan v0.8 Task 6, spec §1, §3): voice 6 hat and voice 3 ghost kicks
+    # (spec §10) from voice 1's kick, save-pattern 0, save-project 0; a new render from the kept card plays
+    # the same Note Ons (ms from the first within 1, note, velocity) without the generator, and pattern 0's
+    # file holds voices 3 and 6 at 64 steps
+    seed, keep, m1, m2 = t.seed(), t.path('K'), t.path('m1.log'), t.path('m2.log')
+    script = t.script(press_steps(1, (1, 5, 9, 13)) + '+100ms press voice6\n+100ms param gen_typ=1\n'
+                      '+100ms press voice3\n+100ms param gen_typ=2\n+100ms save-pattern 0\n'
+                      '+100ms save-project 0\n+200ms press start\n')
+    opts = ['--no-start', '--bpm', '200', '--seconds', '7', '--param', 'midi_chan_3=3', '--param', 'midi_chan_6=6']
+    t.render(seed, opts + ['--keep-card', keep, '--midi-log', m1, '--events', script])
+    t.render(keep, opts + ['--midi-log', m2, '--events', t.script('100ms press start\n')])
+    for status, n in (('92', 16), ('95', 40)):     # about 4.5 bars: the ghost kicks 4 a bar, the hat 11-12
+        a, b = din_notes(m1, status), din_notes(m2, status)
+        check(len(a) >= n and len(b) >= n, '%s: %d and %d Note Ons' % (status, len(a), len(b)))
+        same = all(abs((x[0] - a[0][0]) - (y[0] - b[0][0])) <= 216000 and x[1:] == y[1:] for x, y in zip(a[:n], b[:n]))
+        check(same, '%s: the reload plays %r, not %r' % (status, b[:8], a[:8]))
+    ghosts = {v for _, _, v in din_notes(m1, '92')}
+    check(ghosts == {51, 127}, 'the ghost kicks play at %r, not 51 (g) and 127 (G)' % sorted(ghosts))
+    pat = one_file(keep, '00-*.PAT')
+    check(pat[3655 + 2] == 64 and pat[3655 + 5] == 64, 'the lengths %r' % list(pat[3655:3662]))
+    no_copies_left()
+
 def name_table(text, table):
     """the strings of a name table of MenuText.h, without its #if USE_CODEC_EQ entries (off in the build)"""
     body = text.split('const char %s[][16] =' % table, 1)[1].split('};', 1)[0]
