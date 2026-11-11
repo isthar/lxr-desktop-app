@@ -302,8 +302,9 @@ static void pg_sub(pg_ctx_t *c, const PatternGenSettings *s, uint16_t kick, Patt
 				((s->var != 0) && (i & 4u)) ? pg_noteOf(c->note + s->var) : c->note, 0);
 }
 
-/* spec §4.3, §8 (gen.py _prc()): bar 1's den accents by rank off the kick, bar 2 with sorted(bar 1)[draw
- * 3 % den] moved to the best place of keys 16-31, bars 3-4 as 1-2 (style 0: the current track's,
+/* spec §4.3, §8, §9 (gen.py _prc()): bar 1's den accents by rank off the kick, bar 2 with bar 1's
+ * top-ranked accent moved to the best ranked free place of keys 16-31 off the kick (§9: no draw for
+ * it, so den never changes which accent moves), bars 3-4 as 1-2 (style 0: the current track's,
  * which pg_frame() kept); ghosts on the step before an accent in its bar, off accents and kick, ranked
  * by keys 0-15, at lev + the offset of the place in bar 1 or 2; var +n: n at 2:2 in bar 4, its own
  * keys (draw 3) and steps 13-16 x4; var -n: n of bar 4's accents at 1:2, not on style 0 */
@@ -314,8 +315,7 @@ static void pg_prc(pg_ctx_t *c, const PatternGenSettings *s, uint16_t kick, Patt
 	uint8_t w[16];
 	for (unsigned p = 0; p < 16u; p++)
 		w[p] = ((s->sty == 3u) && ((0x4848u >> p) & 1u)) ? 8 : wq[s->sty][p & 3u];
-	const uint32_t move = pg_rand(c, 65536u);	/* draw 3: the move, then var's keys */
-	for (unsigned p = 0; p < 16u; p++)
+	for (unsigned p = 0; p < 16u; p++)	/* draw 3: var's keys, nothing else (§9) */
 		c->key[32u + p] = (uint16_t)pg_rand(c, 65536u);
 	uint16_t acc[PG_BARS], ghost = 0;
 	if (s->sty == 0u)
@@ -327,16 +327,11 @@ static void pg_prc(pg_ctx_t *c, const PatternGenSettings *s, uint16_t kick, Patt
 		for (unsigned i = 0; (i < s->den) && (i < n); i++)
 			a1 |= (uint16_t)(1u << c->order[i]);
 		a2 = a1;
-		if (a1)
+		if (a1)	/* LICHOMAT v0.8 §9: the top-ranked accent, c->order[0] until the next ranking */
 		{
-			unsigned count = 0, gone = 0;
-			for (unsigned p = 0; p < 16u; p++)
-				count += (a1 >> p) & 1u;
-			for (unsigned r = move % count;; gone++)	/* the r-th place of a1, from 0 */
-				if (((a1 >> gone) & 1u) && (r-- == 0u))
-					break;
+			const unsigned top = c->order[0];
 			if (pg_rank(c, &c->key[16], w, (uint16_t)~(a1 | kick), 16))
-				a2 = (uint16_t)((a1 & ~(1u << gone)) | (1u << c->order[0]));
+				a2 = (uint16_t)((a1 & ~(1u << top)) | (1u << c->order[0]));
 		}
 		acc[0] = acc[2] = a1;
 		acc[1] = acc[3] = a2;

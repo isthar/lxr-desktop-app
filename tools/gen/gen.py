@@ -14,8 +14,10 @@ the spec leaves open are marked "CHOICE" where they are decided:
 - hat var +n: the next n places of the ranking (2:2); var -n: the last n of the den (1:2);
 - sub: "the last hit before a kick" is the last hit after the kick before it; sty 8 is
   one bar from the seed, repeated, and den keeps the best ranked hits (weights 1);
-- prc: bar 2 moves the accent sorted(bar 1)[draw % den] to the best place of bar 2's
-  own keys (places 16-31); ghosts are ranked by bar 1's keys in every bar, on the step
+- prc: bar 2 moves bar 1's accent with the highest ranking key (the first of its ranking)
+  to the best ranked free place of bar 2's own keys (places 16-31): not an accent of bar 1,
+  not a kick step, the style's weights (spec 9; no draw for it, so den k -> k+1 never
+  changes which accent moves); ghosts are ranked by bar 1's keys in every bar, on the step
   before the accent within the bar (step 1's is step 16 of the same bar) and never on a
   kick step (spec 8), offsets of bar 2 from places 16-31; var +n weights steps 13-16 x4;
   var -n does nothing on sty 0 (its accents are the user's, which the generator never
@@ -431,9 +433,8 @@ def generate(settings: Settings, track_index: int, src_track: Optional[Track] = 
         figures = [rng.rand(SUB_FIGURE_TOTAL) for _ in range(4)] if s.sty == 8 else []
         _sub(s, out, draws, figures, kick_places(s, track_index, src_track))
     elif s.typ == TYP_PRC:
-        move = rng.rand(65536)
-        var_draws = [rng.rand(65536) for _ in range(BAR)]
-        _prc(s, out, draws, offsets, move, var_draws, kick_places(s, track_index, src_track), cur.played())
+        var_draws = [rng.rand(65536) for _ in range(BAR)]               # spec 9: no draw for the move
+        _prc(s, out, draws, offsets, var_draws, kick_places(s, track_index, src_track), cur.played())
     elif s.typ == TYP_RAR:
         steps = [rng.rand(65536) for _ in range(NUM_STEPS)] if s.sty in (3, 4) else []
         _rar(s, out, steps, kick_places(s, track_index, src_track))
@@ -503,7 +504,7 @@ def _sub(s: Settings, out: _Out, draws, figures, kick: frozenset):
 
 # 4.3 ----------------------------------------------------------------------------------------
 
-def _prc(s: Settings, out: _Out, draws, offsets, move, var_draws, kick: frozenset, view: Track):
+def _prc(s: Settings, out: _Out, draws, offsets, var_draws, kick: frozenset, view: Track):
     weights = PRC_WEIGHTS[s.sty]
     if s.sty == 0:
         bar_acc = [_accents(view, b) for b in range(NUM_BARS)]
@@ -511,14 +512,13 @@ def _prc(s: Settings, out: _Out, draws, offsets, move, var_draws, kick: frozense
             for p in bar_acc[b]:
                 out.keep(b * BAR + p, view)
     else:
-        bar1 = draws[:BAR]
-        a1 = set(rank(bar1, weights, lambda p: p not in kick)[:s.den])
+        order = rank(draws[:BAR], weights, lambda p: p not in kick)
+        a1 = set(order[:s.den])
         a2 = set(a1)
-        if a1:                                   # bar 2: one hit of bar 1 moved elsewhere
-            gone = sorted(a1)[move % len(a1)]
+        if a1:                                   # bar 2: bar 1's top-ranked accent moved (spec 9)
             dest = rank(draws[BAR:], weights, lambda p: p not in a1 and p not in kick)
-            if dest:
-                a2 = (a1 - {gone}) | {dest[0]}
+            if dest:                             # to the best free place of keys 16-31
+                a2 = (a1 - {order[0]}) | {dest[0]}
         bar_acc = [a1, a2, a1, a2]               # bars 3-4 = bars 1-2
         for b in range(NUM_BARS):
             for p in bar_acc[b]:

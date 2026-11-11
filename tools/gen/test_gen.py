@@ -344,9 +344,75 @@ class Sub(unittest.TestCase):
         self.assertEqual(a, b)
 
 
+KICK_EVEN = Track.from_pattern('.X...X...X...X..')      # kick places 1 5 9 13: step 1 is free
+
+
+def prc_draws(sty, sed, track=2):
+    """prc's draws in their order (spec 5, 9): 32 keys, 32 level offsets, then phase 3: the
+    16 keys of var, and nothing else"""
+    r = gen.Rng(sed, gen.TYP_PRC, sty, track)
+    keys = [r.rand(65536) for _ in range(2 * BAR)]
+    offsets = [r.rand(5) - 2 for _ in range(2 * BAR)]
+    var_keys = [r.rand(65536) for _ in range(BAR)]
+    return keys, offsets, var_keys
+
+
 class Prc(unittest.TestCase):
     def accents(self, out, b):
         return bar_hits(out, b, lambda st: st.vol == 127 and st.prob == 100)
+
+    def moved(self, out):
+        """(bar 1's accents that bar 2 lacks, bar 2's that bar 1 lacks)"""
+        a1, a2 = self.accents(out, 0), self.accents(out, 1)
+        return a1 - a2, a2 - a1
+
+    def test_bar2_moves_the_top_ranked_accent(self):
+        # spec 9: bar 2 moves bar 1's accent with the highest ranking key to the best ranked
+        # free place of keys 16-31 (not an accent of bar 1, not a kick step), style weights
+        for sty in range(1, 5):
+            w = gen.PRC_WEIGHTS[sty]
+            for den in range(1, 10):
+                for sed in SEEDS:
+                    for src, kick in ((KICK, gen.QUARTERS), (KICK_ODD, {0, 3, 6, 10, 12}), (KICK_EVEN, {1, 5, 9, 13})):
+                        keys = prc_draws(sty, sed)[0]
+                        out = generate(S('prc', sty=sty, den=den, var=0, sed=sed), 2, src)
+                        a1 = self.accents(out, 0)
+                        top = gen.rank(keys[:BAR], w, lambda p: p not in kick)[0]
+                        dest = gen.rank(keys[BAR:], w, lambda p: p not in a1 and p not in kick)
+                        gone, new = self.moved(out)
+                        if dest:
+                            self.assertEqual((gone, new), ({top}, {dest[0]}), (sty, den, sed, sorted(kick)))
+                        else:
+                            self.assertEqual((gone, new), (set(), set()))
+
+    def test_den_never_changes_the_moved_accent(self):
+        # spec 9: sty, sed and kick fixed, den k -> k+1 keeps the top-ranked accent of bar 1,
+        # so it never changes which accent of bar 1 moves
+        for sty in range(1, 5):
+            for sed in range(25):
+                for src in (KICK, KICK_ODD, KICK_EVEN):
+                    first = None
+                    for den in range(1, 17):
+                        out = generate(S('prc', sty=sty, den=den, var=0, sed=sed), 2, src)
+                        gone, _ = self.moved(out)
+                        if den == 1:
+                            first = self.accents(out, 0)      # den 1: the top-ranked accent alone
+                        if gone:                              # (none when no free place is left)
+                            self.assertEqual(gone, first, (sty, sed, den))
+                            self.assertTrue(first <= self.accents(out, 0))
+
+    def test_phase3_is_the_var_keys(self):
+        # spec 5, 9: no draw for the move, so var +n's keys are the first 16 draws of phase 3
+        for sty in range(1, 5):
+            for sed in SEEDS:
+                var_keys = prc_draws(sty, sed)[2]
+                base = generate(S('prc', sty=sty, den=3, var=0, sed=sed), 2, KICK)
+                out = generate(S('prc', sty=sty, den=3, var=1, sed=sed), 2, KICK)
+                busy = bar_hits(base, 3)
+                late = [gen.PRC_WEIGHTS[sty][p] * (4 if p >= 12 else 1) for p in range(BAR)]
+                want = gen.rank(var_keys, late, lambda p: p not in busy and p not in gen.QUARTERS)[:1]
+                self.assertEqual([i - 3 * BAR for i in range(3 * BAR, NUM_STEPS) if out.steps[i].prob == gen.COND_2_2
+                                  and out.active[i]], want, (sty, sed))
 
     def test_bar2_differs_by_one_moved_hit(self):
         for sty in range(1, 5):

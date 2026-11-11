@@ -445,7 +445,8 @@ TEST(pgen_core_prc_weights)
 {
 	/* §4.3's weights decide, found with gen.py on track 3, den 1: style 2 sed 5 takes the offbeat 3
 	 * (6) and its ghost on 2; style 3 sed 0 with the kick on 2 6 10 14 takes step 4 (8), not step 1
-	 * (1), and its ghost on 3; var +1 puts its 2:2 in bar 4 where steps 13-16 weigh x4 */
+	 * (1), and its ghost on 3; var +1 puts its 2:2 in bar 4 on steps 13-16, which weigh x4 there (at
+	 * x1 each of these seeds would take a step before 13; spec §9's draws: var's keys come first) */
 	PatternGenTrack t, k;
 	const PatternGenSource kick = source(&k, 0x2222u);
 	PatternGenSettings s = { PG_TYPE_PRC, 2, 1, -13, 0, 0, 5, 0, 0 };
@@ -457,7 +458,7 @@ TEST(pgen_core_prc_weights)
 	ASSERT_EQ(patternGen_generate(&s, 2, &kick, &t), PG_WROTE | PG_SOFT);
 	ASSERT_EQ(t.on[0], 0x000Cu); ASSERT_EQ(t.step[3].volume, 127);
 	static const struct { uint8_t sty, sed; uint16_t late; } v[] = {
-		{ 1, 10, 1u << 14 }, { 2, 4, 1u << 15 }, { 3, 1, 1u << 14 }, { 4, 51, 1u << 13 } };
+		{ 1, 2, 1u << 15 }, { 2, 1, 1u << 14 }, { 3, 0, 1u << 14 }, { 4, 0, 1u << 15 } };
 	for (unsigned i = 0; i < sizeof v / sizeof v[0]; i++)
 	{
 		s = (PatternGenSettings){ PG_TYPE_PRC, v[i].sty, 1, -13, 1, 0, v[i].sed, 0, 0 };
@@ -467,6 +468,53 @@ TEST(pgen_core_prc_weights)
 		for (unsigned p = 0; p < 16u; p++)
 			late |= (uint16_t)((isOn(&t, 48u + p) && (t.step[48u + p].prob == 102)) ? 1u << p : 0u);
 		ASSERT_EQ(late, v[i].late);
+	}
+}
+
+/** the steps of bar b that are on at 127 and 100 %: prc's accents */
+static uint16_t accents(const PatternGenTrack *t, unsigned b)
+{
+	uint16_t a = 0;
+	for (unsigned p = 0; p < 16u; p++)
+		if (isOn(t, 16u * b + p) && (t->step[16u * b + p].volume == 127) && (t->step[16u * b + p].prob == 100))
+			a |= (uint16_t)(1u << p);
+	return a;
+}
+
+TEST(pgen_core_prc_bar2_moves_the_top_accent)
+{
+	/* §9: bar 2 moves bar 1's accent with the highest ranking key, which is den 1's only accent,
+	 * whatever den, to a free place off the kick; bars 3-4 are bars 1-2. Kicks 1 5 9 13, 2 6 10 14
+	 * and 1 4 7 11 13 */
+	static const uint16_t kicks[3] = { 0x1111u, 0x2222u, 0x1449u };
+	PatternGenTrack t, k;
+	for (unsigned ki = 0; ki < 3u; ki++)
+	{
+		const PatternGenSource kick = source(&k, kicks[ki]);
+		for (uint8_t sty = 1; sty <= 4; sty++)
+			for (uint8_t sed = 0; sed < 25; sed++)
+			{
+				uint16_t top = 0;
+				for (uint8_t den = 1; den <= PG_DEN_MAX; den++)
+				{
+					const PatternGenSettings s = { PG_TYPE_PRC, sty, den, -13, 0, 0, sed, 0, 0 };
+					cleared(&t);
+					(void)patternGen_generate(&s, 2, &kick, &t);
+					const uint16_t a1 = accents(&t, 0), a2 = accents(&t, 1);
+					ASSERT_EQ(a1 & kicks[ki], 0u); ASSERT_EQ(a2 & kicks[ki], 0u);
+					ASSERT_EQ(accents(&t, 2), a1); ASSERT_EQ(accents(&t, 3), a2);
+					if (den == 1u)
+						top = a1;
+					ASSERT_EQ(a1 & top, top);
+					if (bits(a1 ^ a2) == 0u)	/* no free place left: nothing moves */
+						continue;
+					ASSERT_EQ(bits(a1 ^ a2), 2u);
+					if ((a1 & ~a2) != top)
+						printf("kick 0x%04x sty %d sed %d den %d: 0x%04x moves, not 0x%04x\n", kicks[ki], sty, sed, den,
+							a1 & ~a2, top);
+					ASSERT_EQ(a1 & ~a2, top);
+				}
+			}
 	}
 }
 
