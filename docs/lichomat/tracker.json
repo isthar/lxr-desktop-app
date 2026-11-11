@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 13:41",
+    "updated": "2026-11-11 14:33",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; teraz E10.3, generator w firmware (gałąź v0.8)",
     "branch": "timing-core",
-    "head": "2f1b7bc",
+    "head": "1201272",
     "next": "U mnie: plan E10.3, potem wdrożenie z testami bajt w bajt z prototypem. Czeka na Ciebie: Q41 odsłuch przykładów generatora, H12 na LXR (30 min, odblokowuje v0.4–v0.7 i wyznacza CPU dla atmo i riserów), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
-    "updated_at": "2026-11-11T13:41:00+01:00",
-    "now": "E10.8–E10.9: rdzeń generatora w C (grupa A planu v0.8)"
+    "updated_at": "2026-11-11T14:33:00+01:00",
+    "now": "E10.10: sub, prc, rar, prp w rdzeniu C (grupa B planu v0.8)"
   },
   "epics": [
     {
@@ -1261,21 +1261,21 @@
     {
       "id": "E10.8",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Plan v0.8, zadanie 1: gałąź i stan wyjściowy, wersja 0.8",
       "updated": "2026-11-11"
     },
     {
       "id": "E10.9",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "zrobione",
       "title": "Plan v0.8, zadanie 2: rdzeń PatternGen.c i hat, konwerter wektorów prototypu do testów w C",
       "updated": "2026-11-11"
     },
     {
       "id": "E10.10",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Plan v0.8, zadanie 3: sub, prc, rar, prp; wszystkie 211 wektorów bajt w bajt; przegląd zgodności i jakości z mutantami",
       "updated": "2026-11-11"
     },
@@ -5148,6 +5148,11 @@
       "n": 682,
       "at": "2026-11-11 13:41",
       "text": "E10.3: plan wdrożenia docs/superpowers/plans/2026-11-11-v0.8-groove-generator.md, 8 zadań = E10.8–E10.15, kamień milowy M22. Rdzeń w czystym C sprawdzany bajt w bajt na 211 wektorach z prototypu (format wektorów w planie poprawiony na prawdziwy). Moja decyzja: enkoder przechodzi za sav na ekrany generatora, jak między innymi podstronami ścieżki (zmienia 4 testy emulatora, bez zmian w złotych plikach). RAM +76 B. Start: grupa A (E10.8–E10.9)"
+    },
+    {
+      "n": 683,
+      "at": "2026-11-11 14:33",
+      "text": "E10.8 i E10.9 zrobione (v0.8 f0bdb73..b548cbc): wersja 0.8 i rdzeń generatora PatternGen.c z ghostami hihatu. Wszystkie 40 wektorów hat zgadza się z prototypem bajt w bajt; testy: host 137/137, emulator 353/353, ASan 324/324, złote pliki bez zmian; RAM bez zmian (470188/471032 B), stos generatora 440 B (limit 768). Rdzeń idzie za prototypem tam, gdzie plan zgadywał (13 odstępstw opisanych w raporcie grupy A). E10.10 w toku: sub, prc, rar, prp i wszystkie 211 wektorów"
     }
   ]
 }
