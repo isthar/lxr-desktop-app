@@ -1,4 +1,4 @@
-# LICHOMAT 0.1, 0.2, 0.3, 0.4, 0.5, 0.6 and 0.7: hardware checklist (H1–H13, U1–U41, X4, optional X1–X3)
+# LICHOMAT 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7 and 0.8: hardware checklist (H1–H13, U1–U45, X4, optional X1–X3)
 
 These are the checks of spec §13.2, written out as procedures for the LXR-02. Only the owner can run
 them, on the real device; nothing here is ever marked as passed by an agent. Record every result in
@@ -104,15 +104,35 @@ install 0.7, too. `tools/demo_v07.sh` on branch `v0.7` renders a closed hat with
 template and a depth sweep (in the worktree `build/wt-v07`: `build/demo/v07-*.wav`), to compare by
 ear.
 
+**LICHOMAT 0.8.** The whole of 0.8 is built (plan
+`docs/superpowers/plans/2026-11-11-v0.8-groove-generator.md`, spec
+`docs/superpowers/specs/2026-11-11-groove-generator-design.md`, branch `v0.8`): a pattern generator on
+the track page that writes ordinary steps into the selected voice's track of the shown pattern: hat
+ghosts (`hat`), ghost kicks (`sub`), percussion figures (`prc`), rare hits (`rar`) and a copy of another
+track's rhythm (`prp`). It has ten settings, `typ sty den lev var not sed und src shf`, kept in RAM per
+track and never saved. **0.8 changes no file format:** what the generator wrote is steps, saved in the
+pattern file as any steps, and 0.2–0.7 play it the same; fw 1.7 plays its conditional steps (`2:2`,
+`1:2`, `4:4`, `1:4`) on every pass. Setting a parameter to the value it already has does nothing, so
+hand edits stay; the generator cannot be controlled over MIDI or NRPN. When a generator writes a step
+below velocity 127 it switches the voice's `vol` (velocity → volume) on, so save the kit too. 0.8 is
+built on 0.7 and is not released yet: it follows 0.7's release. So there is no
+`LXR_V2_LICHOMAT_0.8.img` to install yet; its SHA-256 goes into the run sheet when CI builds the
+release commit, and H1 will then show `v0.8 unofficial`. Run U42–U45 on that file, in a session after
+0.7's. 0.8 keeps everything of 0.7, so the 0.7 checks need not be repeated. **U42–U45 need no DAW and
+no computer** except to copy the update file to the SD card: every step is done on the LXR and read on
+its LEDs, its display and by ear. Back up the card before you install 0.8, too. `python3
+tools/gen/gen.py hat` (and `sub`, `prc`, `rar`, `prp`; `--help` lists the settings) prints what a
+setting should write, as a grid of 4 bars, if you want to compare; no step needs it.
+
 **What you need**
 
 - The LXR-02, its SD card and a card reader.
 - The update files of the [run sheet](#run-sheet): `LXR_V2_LICHOMAT_0.1.img`,
-  `LXR_V2_LICHOMAT_0.2.img` and `LXR_V2_LICHOMAT_0.3.img` (LICHOMAT; 0.4, 0.5, 0.6 and 0.7 once CI
+  `LXR_V2_LICHOMAT_0.2.img` and `LXR_V2_LICHOMAT_0.3.img` (LICHOMAT; 0.4, 0.5, 0.6, 0.7 and 0.8 once CI
   builds their release commits), and `LXR_V2_V1.7.img` (official 1.7, for H13, U12, U14, U16, U18,
-  U25, U32, U36 and for comparisons).
+  U25, U32, U36, U45 and for comparisons).
 - A computer with a DAW that can record the LXR's audio output and send and receive MIDI over USB
-  (and over DIN through a MIDI interface).
+  (and over DIN through a MIDI interface). U42–U45 do not need it.
 - A MIDI monitor that shows time stamps, for example MIDI Monitor on macOS. Watch the LXR's MIDI
   out on DIN, through the MIDI interface: H5, H6, H8, H9, H10 and H11 are written for it. X4 checks
   the LXR's USB MIDI out.
@@ -203,6 +223,30 @@ misbehaves badly, go back to 1.7 with H13 and report what happened.
   its working folder `/tmp`, and `sav` reads `---` again. A click on a dark screen (the screensaver)
   only wakes the screen. The own templates belong to the project: a project save stores them, a
   project load brings its own back, a new project starts with them empty.
+- The pattern generator (0.8): three more screens on the track page, after `vtp vdp sav` (`sav`'s scroll
+  marker is `*` now, since a screen follows). Turn the encoder on past `sav`, or press SHIFT + the second
+  mode button: from another page the first press opens the page on `len stp rot mrp`, and the fifth,
+  sixth and seventh show `typ sty den lev` (knobs 1–4), `var not sed und` (knobs 1–4) and `src shf`
+  (knobs 1–2); the eighth press is back on the first screen, which the page opens on again after you
+  leave it. The settings belong to the selected voice (a voice button on the page selects another).
+  `typ`: `---` (the generator is off for this track), `hat`, `sub`, `prc`, `rar`, `prp`; in edit mode the
+  bottom row names it: `hat ghosts`, `ghost kick`, `percussion`, `rare hits`, `propagate`. `sty` 0–8,
+  `den` 0–16, `lev` −30…0 dB, `var` −4…+4, `not` −24…+24 semitones, `sed` 0–99, `src` the source track
+  1–7, `shf` −8…+8 steps; `var`, `not` and `shf` show their sign (` +1`, `  0`, ` -3`). Choosing a `typ`
+  loads its type's values into `sty den lev var not` (`sed`, `src` and `shf` stay): `hat` 1 7 −15 +1 0,
+  `sub` 1 3 −8 0 0, `prc` 1 3 −13 +1 0, `rar` 1 2 0 0 0, `prp` 1 4 −15 0 0. As long as `typ` is not `---`
+  every change of a parameter writes the track again, at once: 64 steps (4 bars) in the shown pattern,
+  with the steps, their velocities and conditions of the settings; p-locks, flam, shift and fine of the
+  steps it writes are cleared, the steps it does not write are off. Setting a parameter to the value it
+  already has (a knob or the encoder at the end of its range) does nothing: no regeneration, so hand edits
+  stay. The settings are kept per track, not per pattern, in RAM only: they are not saved, a power-off
+  sets every `typ` to `---`, and after a pattern change the screens still show the track's last settings.
+  `und` puts the track back as it was at the last save or load of the pattern: only from edit mode
+  (turn the encoder onto `und`, push, turn one click so that the bottom row reads `push: undo`, push), and
+  only on the pattern that plays (else the bottom row reads `not playing`); afterwards `und` is `---`,
+  edit mode ends, `typ` stays and so does a `vol` the generator switched on. The generator cannot be
+  controlled over MIDI or NRPN. A step written below velocity 127 switches the voice's `vol` on (both
+  hats share one switch); the kit is not saved by itself.
 - Velocity → volume (`vol`, a kit setting of 1.7): select button 3 opens a voice's modulation
   sub-page, and `dst amt vol` is its second screen for voices 1–4 and its first screen for voice 5
   and the hats. With `vol` `on` a step's velocity sets the voice's loudness; with `off` the voice
@@ -1762,6 +1806,179 @@ stepping at one boundary; the code the LXR runs is shorter.)
 
 **Record:** `CPU` and `pk` for both.
 
+## U42–U45: the pattern generator (0.8)
+
+0.8's generator writes ordinary steps into the track of the selected voice (plan
+`docs/superpowers/plans/2026-11-11-v0.8-groove-generator.md`, spec
+`docs/superpowers/specs/2026-11-11-groove-generator-design.md` §3–§10, tracker E10.2–E10.16). Run these
+checks on `LXR_V2_LICHOMAT_0.8.img`. **They need the LXR alone**: no DAW, no computer; you read the step
+LEDs, the display and the sound. The generator's screens and rules are under "Where things are on the
+LXR".
+
+Setup for U42–U44, and for U45 where it says so:
+
+- Internal sync, BPM 128 (a bar is 1.875 s), shuffle 0, `trg smp`. A pattern you can spare, empty, every
+  track 16 steps long. Select it, and do not save it until U45.
+- Voice 1 (kick) on steps 1, 5, 9 and 13 (the first mode button, then the step buttons). It stays the
+  source of the generator's `src` 1 in every check: the generator keeps `sub` and `prc` off these four
+  steps.
+- Voice 6 (closed hat): check its `vol` (velocity → volume; select button 3, screen `dst amt vol`) and
+  switch it off, so that you see the generator switch it on. Voice 7 (the open hat) shares that switch
+  and stays empty.
+- Voice 2 needs a short, kick-like sound for U43: the new kit ECHO (slot 52 of the kits; its Drum 2 is
+  one), or any kit whose Drum 2 is tuned like a soft kick. Voices 3, 4 and 5 can keep any sound; voice 5
+  should be a long one (noise, a riser).
+- "Screen 5" is `typ sty den lev`, "screen 6" `var not sed und`, "screen 7" `src shf`. With a voice
+  selected, SHIFT + the second mode button opens the track page on `len stp rot mrp`; the fifth press is
+  screen 5. To change a value: knob 1–4 of its screen, or turn the encoder onto it, push (edit mode),
+  turn, push.
+- "Lit steps" are the step LEDs of bar 1 on the track page. Every bar of a generated track shows the
+  same steps, except where a step has a condition; the LEDs show it, the sound tells whether it plays.
+  Bars are counted from START (bar 1); against the kick there are four hits to a bar.
+
+## U42: hats from the generator
+
+The generator's live editing, the same-value rule and `und` (G2, G4, G11–G13; spec §3, §4.1, §10 addendum).
+
+1. Select voice 6 and open screen 5. It reads `TYP sty den lev` over `--- 0 0 0`. Push on `typ`, turn to
+   `hat` (the bottom row reads `hat ghosts`), push. Press START and listen for 8 bars. Turn the encoder on
+   to screen 6 and look at it.
+2. While it plays, one change at a time, each back to the value it had (screen 6 for `sed` and `var`,
+   screen 5 for `den` and `lev`):
+   - `sed` 0 → 10 → 0;
+   - `den` 7 → 3 → 7;
+   - `lev` −15 → −25 → −15;
+   - `var` +1 → +2 → −2 → +1; let each play for 8 bars.
+3. Same value, then a different one. Set `den` to 16 (all steps of the bar are lit). On the step page (the
+   first mode button) press step 2 of bar 1: it goes off and the LED goes dark. Back on screen 5 (SHIFT +
+   the second mode button, five times), turn `den` one click further to the right (it is at its end).
+   Then on screen 6 turn `sed` 0 → 1 and back to 0, and turn the encoder back onto `den` (screen 5) and
+   set it to 7.
+4. Turn the encoder on to `und` (screen 6), push, turn one click (the bottom row reads `push: undo`),
+   push. Do not save the pattern before this step.
+
+**Expected:**
+- 1: screen 5 shows `hat 1 7 -15`, screen 6 ` +1 0 0 ---`. Lit steps 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 14 and
+  15 (12 of 16): the offbeats 3, 7, 11 and 15 are the loud hits, the rest soft ghosts (velocity 16–25).
+  Page up and page down show bars 2–4 with the same steps. Voice 6 plays 11 hits a bar in bars 1–4 and
+  12 in bars 5–8 (step 8 has the condition `2:2`), the same every 8 bars. Voice 6's `vol` is on now.
+- 2: the changes are written at once, without a gap or a stutter in the sound:
+  - `sed` 10: lit steps 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15 and 16 (steps 2, 5, 6, 8, 10, 12, 13 and 16
+    are the ghosts, step 5 plays only in bars 5–8); back at 0 the first layout is back, step for step.
+  - `den` 3: lit steps 3, 6, 7, 10, 11, 12, 14 and 15 (8 of them): the ghosts 6, 10 and 12 are three of
+    the seven ghosts of `den` 7, and the conditional ghost is now step 14 (bars 5–8 only); 7 hits a bar
+    in bars 1–4, 8 in bars 5–8. Back at 7 the ghosts return at their places.
+  - `lev` −25: the same lit steps, the ghosts much quieter (velocity 5–8), the loud hits unchanged; back
+    at −15 as before.
+  - `var` +2: step 9 is lit too (13 lit steps), a second conditional ghost: bars 5–8 and 13–16 have 13
+    hits, bars 1–4 and 9–12 have 11. `var` −2: steps 4 and 5 play only in bars 1–4 and 9–12: 11 hits in
+    those, 9 in bars 5–8 and 13–16. `var` +1: as in 1.
+- 3: with `den` 16 all 16 steps are lit; step 2 off by hand stays off after the extra click on `den`
+  (no regeneration, and the LED stays dark). `sed` 1 writes the track again: step 2 is lit again and the
+  ghosts have other velocities. After `sed` 0 and `den` 7 the layout of 1 is back.
+- 4: voice 6 has no steps (the step LEDs are dark, voice 6 is silent), `und` reads `---`, edit mode is
+  over, `typ` still reads `hat`, and voice 6's `vol` is still on.
+
+**Record:** pass or fail of 1–4; the `sty den lev` you like; whether −15 dB is too loud or too soft.
+
+## U43: ghost kicks, percussion, propagation
+
+The other four types (spec §4.3, §4.5, §10), with the kick of U42's setup on voice 1.
+
+1. Voice 6: `typ` `---`, then `typ` `hat` (it writes the hats again with the defaults; `sed` is 0).
+   Voice 2 (a short kick-like sound): `typ` `sub` (the bottom row reads `ghost kick`; screen 5 reads
+   `sub 1 3 -8`). Press START. Look at the lit steps and listen for 4 bars.
+2. Then `sty` 2, 3, 4, 5, 6, 7 and 8 in turn, 2 bars each; in 8 also `den` 5, back to 3.
+3. `sty` 1 again, `var` +2 for 16 bars, then `var` −1 for 16 bars, then `var` 0.
+4. Voice 3: `typ` `prc` (`prc 1 3 -13`), 8 bars; then `var` −1 for 8 bars, and `var` +1.
+5. Voice 4: `typ` `prp` (`prp 1 4 -15`, `src` 1: screen 7 reads `1 0`), 4 bars; then `src` 6 and `shf` +5
+   (screen 7), 8 bars.
+
+**Expected:**
+- 1: lit steps 4, 7, 12 and 15 in every bar, never 1, 5, 9 or 13; steps 4 and 12 are soft ghost kicks
+  (velocity 51, −8 dB), steps 7 and 15 full (127). Voice 2's `vol` is on.
+- 2, lit steps (`sed` 0; the soft hits, then the loud ones):
+
+  | `sty` | soft | loud |
+  |---|---|---|
+  | 2 | 12 | 15 |
+  | 3 | 7 | 15 |
+  | 4 | 4 | 12 |
+  | 5 | 8 | 16 |
+  | 6 | 4, 7, 8, 12 | 15, 16 |
+  | 7 | bars 1, 3: as `sty` 1; bars 2, 4: 4, 10, 12 | bars 2, 4: 7, 15, 16 |
+  | 8 (`den` 3) | 4, 7 | 8 |
+  | 8, `den` 5 | 4, 7, 8, 12 | 14 |
+
+  In 1–7 turning `den` changes nothing. In 7 bars 2 and 4 have 6 hits and bars 1 and 3 have 4.
+- 3: `var` +2: bar 4 gets soft hits on steps 14 and 16 (lit), played only in bars 8 and 16: 6 hits in
+  those bars, 4 in the others. `var` −1: step 4 of bar 4 plays in bars 4 and 12 and not in 8 and 16:
+  3 hits there. `var` 0: all 4 hits in every bar.
+- 4: lit steps 3, 4, 7, 8 and 10 in bars 1 and 3; 3, 4, 7, 8 and 16 in bars 2 and 4 (an accent moved from
+  step 10 to step 16 in the second bar); steps 4, 8, 10 and 16 are loud, steps 3 and 7 soft (the step
+  before an accent, none before the accent on 10, since step 9 is a kick step). Bar 4 also has step 15
+  (`var` +1), played in bar 8 only: 6 hits in bar 8, 5 in the others. `var` −1: step 16 in bar 4 is silent
+  in bar 8, 4 hits there. Voice 3's `vol` is on.
+- 5: first `prp 1 4 -15`: voice 4 plays the kick: lit steps 1, 5, 9 and 13, all loud. After `src` 6 and
+  `shf` +5: voice 4 plays voice 6's rhythm 5 steps later, at the hat's velocities: lit steps 1, 3, 4, 7, 8,
+  9, 10, 11, 12, 13, 15 and 16, loud on 4, 8, 12 and 16, step 13 played in bars 5–8 only; voice 4's `vol`
+  is on.
+
+**Record:** pass or fail of 1–5; which styles are worth keeping.
+
+## U44: rare hits over 16 bars
+
+The rare hits of a phrase (spec §4.4; tracker E10.2). Voice 5 should be a long sound (noise, a riser).
+Mute voices 2–4 and 6 if they hide it (the performance mode, the second mode button: the voice buttons
+mute and unmute; the first mode button goes back).
+
+1. Voice 5: `typ` `rar` (`rar 1 2 0`). Press START and count 16 bars (64 kicks, 30 s).
+2. `den` 3 for 16 bars, then `den` 4 for 16 bars (screen 5).
+3. `sty` 2, `den` 1 (screen 5): 16 bars. Press STOP and START, 16 bars again.
+
+**Expected:**
+- 1: one lit step on voice 5, step 1 of bar 4 (page to bar 4); it sounds at the start of bar 8 and at the
+  start of bar 16, and nothing else in the 16 bars.
+- 2: `den` 3: bar 8 as before, and in bar 16 a fast stutter on beat 3 on top of the hit at its start: steps
+  9–12 of bar 4 are lit too, each a ratchet ×4 (16 fast hits). `den` 4: the stutter plays in bar 8 too.
+- 3: one lit step on voice 5, step 1 of bar 1; one hit at the start of bar 1 and nothing in bars 2–16.
+  After STOP and START the count begins again: the hit comes at the start of the first bar.
+
+**Record:** pass or fail of 1–3; the bars in which voice 5 sounded.
+
+## U45: saving, other firmware, CPU
+
+The generated tracks are plain steps (spec §1, §3 "Zapis"; plan Draft deviations 3 and 4, G4, G11).
+
+1. After U42–U44 save the pattern (a slot you can spare) and the kit (the generator switched on `vol`
+   of voices 2, 3, 4 and 6). Select another pattern, then this one again. (A 4-bar track makes a pattern
+   change wait for the end of the loop.)
+2. Select a third, empty pattern. Voice 6: the screens still read `hat`; turn `sed` 0 → 1. Do not save.
+   Select the saved pattern, then this third one again.
+3. Switch the LXR off and on and load the saved pattern and the kit (or let kit autoload do it); play it.
+   Look at screen 5 of voice 6.
+4. Install `LXR_V2_LICHOMAT_0.7.img` and play the saved pattern; then `LXR_V2_V1.7.img` (H13 step 1) and
+   play it, saving nothing (its editor turns a condition into 100, U12); then 0.8 again and play it.
+5. Back on 0.8: all seven tracks play (voice 7: `typ` `hat`); BPM 140. Turn `sed` quickly back and forth
+   on voice 7 for 10 s (every click writes a track). Then open the CPU page (SHIFT + step 12, as in H12
+   step 1) and read it for 30 s.
+
+**Expected:**
+- 1: after the change and back, every generated track plays as before; the kit's `vol` of those voices
+  is on (voice page, `dst amt vol`).
+- 2: the screens of voice 6 still show the last settings, and the first `sed` change writes the hats into
+  the third pattern. After the pattern change and back that pattern's voice 6 is empty again: an
+  unsaved track is gone (as an unsaved edit is in fw 1.7). The saved pattern still plays as in 1.
+- 3: the saved pattern plays as before; screen 5 of every voice reads `---` (the settings are not saved).
+- 4: 0.7 plays the pattern the same (it has no generator screens: the encoder stops at `sav`). fw 1.7
+  plays the conditional steps on every pass: voice 6's step 8 in every bar (12 hits a bar), and voice 5's
+  hit of `rar` every 4 bars instead of every 16. 0.8 plays it as in 1 again.
+- 5: no dropout, click or stutter while turning; on the CPU page `ovf` 0, no dropouts. The CPU page cannot
+  be open while you turn (the knobs do nothing on it), so `pk` shows the second after the turning at
+  best: it is not a limit here; `Qmax` shows whether the turning queued events.
+
+**Record:** pass or fail of 1–5; `CPU`, `pk`, `Qmax` and `ovf` of 5, with the BPM.
+
 ## X4: USB MIDI out
 
 Not in the spec's list: 1.7 defects of the USB MIDI out that LICHOMAT fixes (tracker E2.8).
@@ -1874,6 +2091,7 @@ Update files under test (filled in when the files were built):
 | `LXR_V2_LICHOMAT_0.5.img` | filled in when CI builds the release commit | `v0.5`, the release commit, built by CI, once 0.4's release is merged in | the artifact of that CI run (filled in then) |
 | `LXR_V2_LICHOMAT_0.6.img` | filled in when CI builds the release commit | `v0.6`, the release commit, built by CI, once 0.5's release is merged in | the artifact of that CI run (filled in then) |
 | `LXR_V2_LICHOMAT_0.7.img` | filled in when CI builds the release commit | `v0.7`, the release commit, built by CI, once 0.6's release is merged in | the artifact of that CI run (filled in then) |
+| `LXR_V2_LICHOMAT_0.8.img` | filled in when CI builds the release commit | `v0.8`, the release commit, built by CI, once 0.7's release is merged in | the artifact of that CI run (filled in then) |
 
 The LICHOMAT file is the one CI builds, the file the release attaches (spec §14). Download it with
 `gh run download 40435442579 --repo isthar/lxr-desktop-app -n lichomat-firmware-3527cbc935eac5d629f08c1970336a45e4a5606f`
@@ -1946,6 +2164,10 @@ Results (PASS, FAIL or SKIPPED, with the date and the values asked for under **R
 | U39 | | | |
 | U40 | | | |
 | U41 | | | |
+| U42 | | | |
+| U43 | | | |
+| U44 | | | |
+| U45 | | | |
 | X1 | | | |
 | X2 | | | |
 | X3 | | | |

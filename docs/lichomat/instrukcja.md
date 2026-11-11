@@ -1,14 +1,14 @@
-# LICHOMAT 0.7: instrukcja
+# LICHOMAT 0.8: instrukcja
 
 LICHOMAT to nieoficjalny firmware dla Erica Synths LXR-02, zbudowany na fw 1.7. Nie jest robiony, zatwierdzony
 ani wspierany przez Erica Synths. Dodaje nowy rdzeń timingu z poprawkami MIDI i zegara, groove na poziomie
 ścieżki, narzędzia do grania na żywo, pogłos z freeze i rumble, delay z tempem, filtr DJ, timing co do próbki,
-mikrotiming kroku i szablony głośności. Wersja 0.7 zawiera wszystko z 0.1–0.6, więc wystarczy jedna
-instalacja. Części oznaczone (0.7) są tylko w 0.7; reszta działa tak samo w 0.6. Powrót do 1.7: usuń z karty
-`LXR_V2_LICHOMAT_0.7.img` i zainstaluj `LXR_V2_V1.7.img` tak samo (updater się nie zmienia); szczegóły w
-[notatkach 0.7](release-notes-v0.7.md), „Powrót do v0.6 … albo do oficjalnego firmware”. Opis pochodzi z
-notatek do wydania i z emulatora; na LXR sprawdza go [sesja testowa](test-session-v0.6.md), a części 0.7
-sprawdzenia U38–U41 z [listy](hardware-checklist.md).
+mikrotiming kroku, szablony głośności i generator wzorców. Wersja 0.8 zawiera wszystko z 0.1–0.7, więc
+wystarczy jedna instalacja. Części oznaczone (0.8) są tylko w 0.8; reszta działa tak samo w 0.7. Powrót do
+1.7: usuń z karty `LXR_V2_LICHOMAT_0.8.img` i zainstaluj `LXR_V2_V1.7.img` tak samo (updater się nie zmienia);
+szczegóły w [notatkach 0.7](release-notes-v0.7.md), „Powrót do v0.6 … albo do oficjalnego firmware”. Opis
+pochodzi z notatek do wydania i z emulatora; na LXR sprawdza go [sesja testowa](test-session-v0.6.md), a
+części 0.7 i 0.8 sprawdzenia U38–U45 z [listy](hardware-checklist.md).
 
 ## Gdzie co jest
 
@@ -32,6 +32,8 @@ pierwszy przycisk trybu, potem krok.
 | Szablony groove | strona ścieżki, ekran 3 (enkoder za `dly`) | `tpl amt` | 0.6 |
 | Szablony głośności, zapis własnego szablonu | strona ścieżki, ekran 4 (enkoder za `amt`) | `vtp vdp sav` | 0.7 |
 | Własne szablony | na listach `tpl` (za `drg`) i `vtp` (za `qtr`) | `us1`–`us4` | 0.7 |
+| Generator wzorców | strona ścieżki, ekrany 5–7 (enkoder za `sav` albo SHIFT + drugi przycisk trybu, piąte do siódmego naciśnięcia) | `typ sty den lev` / `var not sed und` / `src shf` | 0.8 |
+| Cofnięcie ścieżki do ostatniego zapisu | ekran 6, enkoder na `und`, naciśnij, przekręć, naciśnij | `und` | 0.8 |
 | Velocity → głośność głosu | strona głosu, przycisk wyboru 3 (modulacja), ekran velocity: drugi dla głosów 1–4, pierwszy dla talerza i hihatów | `dst amt vol` | 1.7 |
 | Rotacja ścieżki | SHIFT + krok 1 (wcześniej), SHIFT + krok 2 (później) | – | 0.2 |
 | Zerowanie mikrotimingu ścieżki | SHIFT + COPY, enkoder na ostatni cel, naciśnięcie enkodera | `clear [micro]?` | 0.7 |
@@ -63,8 +65,9 @@ Na co uważać przy nawigacji:
 - **Strona kroku:** zanim naciśniesz krok, pokazuje `shf -7` i `mic -84`. To znaczy: żaden krok nie jest
   wybrany. Najpierw naciśnij krok.
 - **Strona ścieżki:** ustawienia działają na wybrany głos w pokazanym wzorcu. Przycisk głosu na tej stronie
-  wybiera inny głos. Każde SHIFT + drugi przycisk trybu idzie o ekran dalej; w 0.7 są cztery ekrany, więc
-  `vtp vdp sav` to czwarte naciśnięcie (w 0.6 czwarte wracało na ekran 1).
+  wybiera inny głos. Każde SHIFT + drugi przycisk trybu idzie o ekran dalej; w 0.8 jest ich siedem: `vtp vdp
+  sav` to czwarte naciśnięcie, generator piąte (`typ sty den lev`), szóste (`var not sed und`) i siódme
+  (`src shf`), ósme wraca na ekran 1 (w 0.7 czwarte wracało na ekran 1).
 - **Dwa `vol`:** `vol` na ekranie `dst amt vol` (modulacja) to przełącznik velocity → głośność; `vol` na
   podstronie MIX (przycisk wyboru 8) to głośność głosu.
 - **Nie używaj, pozostałość z fw 1.x:** SHIFT + przycisk wyboru trzymane pół sekundy w trybie głosu i ruch
@@ -222,6 +225,138 @@ Który szablon na którą ścieżkę: [przepisy groove 0.6](groove-recipes-v0.6.
   krok 2 o jeden później. Z krokiem idzie wszystko: nuta, velocity, `prb` albo warunek, p-locki, shift i
   ratchet. Rotacja działa w długości ścieżki: krok z końca wraca na początek. Kroki za długością zostają.
 
+### Generator wzorców: typ sty den lev var not sed und src shf (0.8)
+
+- **Gdzie:** strona ścieżki, trzy ekrany za `vtp vdp sav`: enkoder dalej za `sav`, albo SHIFT + drugi przycisk
+  trybu (z innej strony pierwsze naciśnięcie otwiera `len stp rot mrp`, piąte pokazuje generator). Ekran 5 to
+  `typ sty den lev` (gałki 1–4), ekran 6 `var not sed und` (gałki 1–4), ekran 7 `src shf` (gałki 1–2); ósme
+  naciśnięcie wraca na ekran 1. Ustawienia dotyczą wybranego głosu (przycisk głosu na tej stronie wybiera
+  inny).
+- **Co robi:** wpisuje zwykłe kroki do ścieżki wybranego głosu w pokazanym wzorcu. To te same kroki co
+  wpisane ręką: poprawiasz je, zapisujesz i wczytujesz jak każde inne. Nie ma nowego silnika odtwarzania ani
+  nowego formatu pliku.
+- **Parametry** (po wybraniu `typ` ustawienia z tabeli niżej wczytują się do `sty den lev var not`, a `sed`,
+  `src` i `shf` zostają):
+  - `typ`: `---` (generator wyłączony dla tej ścieżki, domyślnie), `hat`, `sub`, `prc`, `rar`, `prp`. W
+    trybie edycji dolna linia podaje nazwę: `hat ghosts`, `ghost kick`, `percussion`, `rare hits`,
+    `propagate`. Ustawienie `---` tylko wyłącza generator, kroków nie rusza.
+  - `sty` 0–8: styl w ramach rodzaju (niżej). Styl, którego rodzaj nie ma, jest przycinany do najbliższego, a
+    ekran pokazuje ten, który gra.
+  - `den` 0–16: gęstość. Ghostów na takt (`hat`), akcentów na takt (`prc`, `prp` styl 2), uderzeń na takt
+    (`sub`, tylko styl 8), zdarzeń na 16 taktów (`rar`).
+  - `lev` −30…0 dB: poziom ghostów względem akcentu (127). −15 dB to velocity 23, −8 dB to 51, −25 dB to 7.
+  - `var` −4…+4: zmiana pod koniec frazy (`hat`, `sub`, `prc`; `rar` i `prp` go nie używają). Plus dokłada
+    uderzenia pod koniec frazy ośmiotaktowej (`hat`: w taktach 5–8, `sub` i `prc`: w takcie 8), minus
+    zabiera takie same.
+  - `not` −24…+24 półtonów: przesunięcie nuty wszystkich kroków; 0 to własna wysokość głosu (nuta 60).
+  - `sed` 0–99: ziarno. To samo ziarno daje ten sam wzorzec, w emulatorze i na LXR; kręcąc nim, przeglądasz
+    warianty. Wzorzec zależy też od `typ`, `sty` i od ścieżki, na której leży.
+  - `src` 1–7: ścieżka źródłowa. Dla `sub` i `prc` to stopa, której kroków generator unika; dla `rar` stopa
+    wyznacza tylko posyp (style 3 i 4); dla `prp` to ścieżka, z której kopiuje rytm. Stopą jest pierwszy takt
+    ścieżki `src`; pusta albo ta sama ścieżka: kroki 1, 5, 9, 13.
+  - `shf` −8…+8 kroków: przesunięcie kopii (`prp`, style 1 i 4).
+  - `und`: cofa ścieżkę do ostatniego zapisu wzorca (niżej). Tylko na wzorcu, który gra; inaczej dolna linia
+    pokazuje `not playing`.
+
+  | `typ` | `sty` | `den` | `lev` | `var` | `not` |
+  |---|---|---|---|---|---|
+  | `hat` | 1 | 7 | −15 | +1 | 0 |
+  | `sub` | 1 | 3 | −8 | 0 | 0 |
+  | `prc` | 1 | 3 | −13 | +1 | 0 |
+  | `rar` | 1 | 2 | 0 | 0 | 0 |
+  | `prp` | 1 | 4 | −15 | 0 | 0 |
+
+- **Rodzaje.** Kroki w takcie numeruje się 1–16: ćwierćnuty to 1, 5, 9, 13, offbeaty 3, 7, 11, 15, parzyste
+  szesnastki 2, 4, … 16. Wszystkie rodzaje piszą 4 takty (64 kroki), a ich układ jest taki sam w każdym takcie,
+  chyba że opis mówi inaczej.
+  - **`hat`, ghosty hihatów:** akcenty (127) według stylu, ghosty (poziom `lev` z odchyleniem miejsca do
+    kilku dB) na wolnych krokach; `den` ghostów na takt, a `den` większe niż liczba wolnych kroków daje
+    wszystkie wolne. `var` +n dokłada n ghostów grających tylko w taktach 5–8 frazy, `var` −n zdejmuje n
+    ghostów z taktów 5–8 (grają tylko w 1–4). Zmiana `den` dokłada albo zdejmuje ghosty bez przetasowania
+    reszty.
+    - `sty` 0: Twoje akcenty (kroki z velocity 64 i więcej) zostają; ghosty na wolnych krokach. Bez akcentów
+      na ścieżce gra jak styl 1.
+    - `sty` 1 (klasyczny): akcenty na offbeatach, ghosty najchętniej na parzystych szesnastkach, potem na
+      ćwierćnutach.
+    - `sty` 2 (gęsty): akcenty na offbeatach i ćwierćnutach, ghosty na parzystych szesnastkach.
+    - `sty` 3 (ćwierćnuty cicho): akcenty na offbeatach, ghosty najchętniej na ćwierćnutach.
+    - `sty` 4 (rozsypany): akcenty na offbeatach, ghosty na dowolnych wolnych krokach.
+  - **`sub`, ghost kicki:** ciche uderzenia głosu podobnego do stopy na synkopowanych szesnastkach między
+    stopami (g = ghost, poziom `lev`; G = akcent, 127). Kładź je na osobnej ścieżce, np. na głosie 2 (Drum 2)
+    z krótkim, stopopodobnym dźwiękiem, np. z kitu ECHO (slot 52); stopa zostaje na swojej ścieżce. Uderzenia
+    nigdy nie trafiają na kroki stopy. Nuta to 60 + `not`, czyli własna wysokość głosu.
+    - `sty` 1: `...g..G....g..G.` (kroki 4, 7, 12, 15), klasyczny.
+    - `sty` 2: `...........g..G.` (12, 15).
+    - `sty` 3: `......g.......G.` (7, 15), „i” po drugiej i czwartej ćwierćnucie.
+    - `sty` 4: `...g.......G....` (4, 12), przed drugą i czwartą stopą.
+    - `sty` 5: `.......g.......G` (8, 16), przed trzecią stopą i przed taktem.
+    - `sty` 6: `...g..gg...g..GG` (4, 7, 8, 12, 15, 16), gęsty.
+    - `sty` 7: figura dwutaktowa: takt A jak styl 1, takt B jak A z dodanymi krokami 10 (g) i 16 (G).
+    - `sty` 8: z ziarna, jeden układ na wszystkie takty: `den` uderzeń na takt (1–8; 0 to wszystkie 8
+      miejsc), wybranych z kroków 4, 7, 12, 15 (najchętniej), potem 8 i 16, na końcu 10 i 14; ostatnie
+      uderzenie taktu to G. `den` działa tylko w stylu 8.
+    - `var` +n dokłada n ghostów w takcie 4 ścieżki (grają w takcie 8 frazy, warunek `2:2`), najpierw na
+      krokach 16, 14 i 10; `var` −n zdejmuje n ghostów z taktu 4 (warunek `1:2`, nie grają w takcie 8). G
+      zostaje.
+  - **`prc`, figury perkusji:** takt 1 to `den` akcentów (127) wybranych z ziarna według wag stylu (poza
+    stopą), takt 2 to takt 1 z jednym akcentem przeniesionym o kilka kroków; do tego ghosty (`min(3, (den +
+    1) / 2)` na takt) na kroku przed akcentem, nigdy na stopie. Takty 3–4 powtarzają 1–2. `var` +n dokłada w
+    takcie 4 n uderzeń (grają w takcie 8), najchętniej na krokach 13–16; `var` −n zdejmuje n akcentów z
+    taktu 4 (nie grają w takcie 8).
+    - `sty` 0: Twoje akcenty z każdego taktu zostają, generator dokłada ghosty i `var` +n; `var` −n nic nie
+      robi. Bez akcentów gra jak styl 1.
+    - `sty` 1 (synkopy): najchętniej 2. i 4. szesnastka ćwierćnuty, potem offbeat.
+    - `sty` 2 (offbeat): najchętniej offbeaty, potem 2. i 4. szesnastka.
+    - `sty` 3 (3+3+2): najchętniej kroki 4, 7, 12, 15.
+    - `sty` 4 (losowy): wszystkie miejsca po równo.
+  - **`rar`, rzadkie uderzenia:** jedna ścieżka na jeden dźwięk (riser, ryk, boom), wszystko 127, nuta 60 +
+    `not`. Pozycje we frazie: krok w takcie 4 z warunkiem `2:2` gra w takcie 8 (i 16), z `4:4` w takcie
+    16; krok w takcie 1 z `1:4` gra w takcie 1 co 16 taktów. `den` 0 nic nie pisze.
+    - `sty` 1 (koniec frazy): start na kroku 1 taktu 4. `den` 1: takt 16 (`4:4`); `den` 2: takty 8 i 16
+      (`2:2`); `den` 3: do tego jąkanie na krokach 9–12 taktu 4 (każdy z ratchetem ×4), tylko w takcie 16;
+      `den` 4 i więcej: jąkanie w taktach 8 i 16.
+    - `sty` 2 (początek frazy): krok 1 taktu 1. `den` 1: co 16 taktów; `den` 2–3: co 8; `den` 4 i więcej: co 4.
+    - `sty` 3 (posyp): `den` kroków (najwyżej 8) z ziarna, poza stopą, każdy z prawdopodobieństwem 25 %, więc
+      średnio `den` zdarzeń na 16 taktów.
+    - `sty` 4 (mieszany): krok 1 taktu 1 z `1:2` (boom co 8 taktów), krok 1 taktu 4 z `4:4` (riser w takcie
+      16) i `den` − 2 kroków posypu.
+  - **`prp`, przeniesienie rytmu ze ścieżki `src`:** źródło krótsze niż 64 kroki jest powtarzane do 64. Gdy
+    `src` to ścieżka docelowa, nic się nie dzieje.
+    - `sty` 1 (kopia): kroki źródła przesunięte o `shf`, z jego velocity i warunkami; nuta źródła + `not`.
+    - `sty` 2 (dopełnienie): `den` akcentów (127) na takt tam, gdzie źródło milczy.
+    - `sty` 3 (przedtakty): ghost (`lev`) na kroku przed każdym akcentem źródła, jeśli tam pusto.
+    - `sty` 4 (echo): akcenty źródła przesunięte o `shf`, jako ghosty (`lev`), z warunkiem źródła.
+- **Zawsze:** ścieżka dostaje długość 64 kroków (4 takty). Na krokach, które generator pisze, czyści p-locki,
+  flam, shift i fine; pozostałe kroki ścieżki są wyłączone (wyjątek: akcenty `hat` i `prc` ze stylu 0 zostają
+  jak były). Kiedy zapisany krok ma velocity poniżej 127, a głos ma `vol` (velocity → głośność, przycisk
+  wyboru 3, ekran `dst amt vol`) wyłączone, generator je włącza, bo inaczej ghosty grałyby pełną głośnością
+  (oba hihaty dzielą jeden przełącznik). `vol` należy do kitu, więc zapisz też kit.
+- **Na żywo:** gdy `typ` nie jest `---`, każda zmiana któregokolwiek parametru od razu przelicza ścieżkę,
+  także w trakcie grania. Ustawienie parametrowi wartości, którą już ma (np. kręcenie gałki na końcu
+  zakresu), nic nie robi: nie przelicza ścieżki, więc ręczne poprawki zostają. Zmiana na inną wartość
+  przelicza ścieżkę od nowa i kasuje je. **Po poprawkach ustaw `typ` na `---`.**
+- **`und`:** cofa ścieżkę wybranego głosu do stanu z ostatniego zapisu albo wczytania wzorca. Działa tylko z
+  trybu edycji: przekręć enkoder na `und`, naciśnij, przekręć o jedno kliknięcie (dolna linia `push: undo`),
+  naciśnij. Tylko na wzorcu, który gra (inaczej dolna linia pokazuje `not playing`). Potem `und` wraca na
+  `---`, tryb edycji się kończy, `typ` zostaje, a `vol` włączone przez generator też.
+- **Ustawienia:** są osobne dla każdej ścieżki, nie dla wzorca, trzymane tylko w pamięci: nie zapisują się
+  nigdzie (po wyłączeniu każde `typ` to `---`), zapisują się kroki. Po zmianie wzorca ekrany dalej pokazują
+  ostatnie ustawienia ścieżki, a pierwsza zmiana parametru (także na tę samą wartość) wpisuje ją do
+  wzorca pokazanego wtedy.
+- **Zapis:** zapisz wzorzec, zanim go zmienisz (jak w fw 1.7): niezapisane kroki z generatora znikają przy
+  zmianie wzorca jak każda edycja. Ścieżka 64-krokowa wydłuża wzorzec do czterech taktów, więc zmiana wzorca
+  czeka do końca takiej pętli.
+- **Pozycje we frazie:** ścieżka 64-krokowa to jedno przejście warunku, więc krok w takcie 4 z `2:2` gra w
+  takcie 8 i 16, z `1:2` w taktach 4 i 12; krok z `4:4` w takcie 4 gra w takcie 16, krok z `1:4` w takcie 1
+  gra w takcie 1 co 16 taktów. Tak generator wyraża frazę 8- i 16-taktową, a licznik zeruje się przy START
+  i zmianie wzorca.
+- **Ograniczenie:** generator czyta stopę z pierwszego taktu ścieżki `src` i ten układ obowiązuje we
+  wszystkich czterech taktach, więc przy stopie o długości niedzielącej 16 (np. 12 kroków) uderzenia mogą w
+  taktach 2–4 trafić na stopę.
+- **MIDI:** generatora nie da się sterować przez MIDI ani NRPN, tylko z menu.
+- **Zgodność:** wygenerowany wzorzec to zwykłe kroki, więc 0.2–0.7 grają go tak samo. Fw 1.7 gra kroki z
+  warunkiem (`2:2`, `1:2`, `4:4`, `1:4`) w każdej pętli, jak `prb` 100.
+
 ### Slide dla Drum 1–3 (0.3)
 
 - `sld` (`off`/`on`) na stronie kroku, za `prb`. `slt` 0–127 × 4 ms (do 508 ms) na drugim ekranie strony
@@ -368,7 +503,7 @@ Przepisy na kity: [pogłos, freeze, rumble i delay](kit-recipes-v0.4.md),
 - Nowe NRPN (7-bitowe: CC 99 = 0, CC 98 = numer, CC 6 = wartość): 96 `djf`, 97 `djr`, 98 `lvl`, 99 `frz`, 116
   `dec`.
 - Tylko w menu, bez CC i NRPN: `siz ton pre mod dck ddp syn`, `tmp hmt hmv dly`, `mic tpl amt`, `vtp vdp sav`
-  (0.7), fill, sceny, slide.
+  (0.7), `typ sty den lev var not sed und src shf` (generator, 0.8), fill, sceny, slide.
 - NRPN tempa rolla wybiera z nowej, 11-pozycyjnej listy. Bank Select (CC 0) 64–127 jest ignorowany. LXR dalej
   przedstawia się przez USB jako `Sonic Potions USB MIDI`.
 
@@ -384,11 +519,11 @@ Przepisy na kity: [pogłos, freeze, rumble i delay](kit-recipes-v0.4.md),
 
 ### Instalacja
 
-- Przed instalacją skopiuj całą kartę SD na komputer. Skopiuj `LXR_V2_LICHOMAT_0.7.img` (albo `..._0.6.img`)
+- Przed instalacją skopiuj całą kartę SD na komputer. Skopiuj `LXR_V2_LICHOMAT_0.8.img` (albo `..._0.7.img`)
   do głównego folderu karty bez zmiany nazwy i usuń każdy inny `LXR*.img`: updater instaluje pierwszy, który
   znajdzie.
 - Wyłącz LXR, włóż kartę, trzymaj przycisk enkodera i włącz. Trzymaj do `LXR Updater`, czekaj na `Update OK!`.
-  Ekran startowy: `LICHOMAT`, `v0.7 unofficial` (albo `v0.6 unofficial`).
+  Ekran startowy: `LICHOMAT`, `v0.8 unofficial` (albo `v0.7 unofficial`).
 
 ### Co się gdzie zapisuje
 
@@ -404,7 +539,7 @@ Przepisy na kity: [pogłos, freeze, rumble i delay](kit-recipes-v0.4.md),
 - **Ustawienia globalne** (`glo.cfg`, dalej 30 bajtów): `trg`, `rqn` i `scn`, w bajtach, których 1.7 nie
   czyta. Zapis przez stronę zapisu, typ global, jak w 1.7.
 - **Nie zapisuje się:** bieżące wyciszenia, freeze (kit zawsze z `frz` `off`), `djf` (kit zawsze z 64), strona
-  CPU. Ustawienia ścieżki, `mic` i szablony są edycją wzorca: zmiana wzorca bez zapisu je odrzuca.
+  CPU, ustawienia generatora (0.8): nigdzie, zapisują się kroki, które wpisał. Ustawienia ścieżki, `mic` i szablony są edycją wzorca: zmiana wzorca bez zapisu je odrzuca.
 - Pliki z 1.7 grają w 0.7 jak w 1.7: `x1`, humanize i `dly` 0, `mic` równe `shf` z pliku, `tpl` `off` z `amt`
   100, `vtp` `off` z `vdp` 100, pogłos wyłączony, `trg` `smp`, `rqn` `off`. Pliki z v0.2–v0.6 grają jak tam;
   projekt bez `USERTPL.LCH` ma puste własne szablony.
@@ -470,6 +605,9 @@ Co robią starsze firmware z plikami zapisanymi przez 0.7. Wszystkie wczytują j
   albo 3 961 B). Kity, piosenki i `glo.cfg` są w 0.7 takie jak w 0.5.
 - Projekt zapisany ponownie w 1.7 albo v0.2–v0.6 traci `USERTPL.LCH` (ich zapis najpierw czyści folder
   projektu); wzorzec zapisany ponownie w v0.6 traci blok 3, a `tpl` `us1`–`us4` wraca jako `off`.
+- 0.8 nie zmienia formatu żadnego pliku: wzorzec z krokami z generatora jest plikiem jak z 0.7 (ustawienia
+  generatora nie zapisują się). Gra tak samo w 0.2–0.7; fw 1.7 gra jego kroki z warunkami (`2:2`, `1:2`, `4:4`,
+  `1:4`) w każdej pętli.
 
 ## Linki
 
@@ -478,5 +616,5 @@ Co robią starsze firmware z plikami zapisanymi przez 0.7. Wszystkie wczytują j
   [0.6](release-notes-v0.6.md), [0.7](release-notes-v0.7.md).
 - Przepisy: [groove 0.6](groove-recipes-v0.6.md), [kity z pogłosem 0.4](kit-recipes-v0.4.md),
   [klik 0.5](kit-recipes-v0.5.md).
-- Plan sesji testowej: [test-session-v0.6.md](test-session-v0.6.md) (0.7: U38–U41 po niej); procedury:
+- Plan sesji testowej: [test-session-v0.6.md](test-session-v0.6.md) (0.7: U38–U41 po niej, 0.8: U42–U45); procedury:
   [hardware-checklist.md](hardware-checklist.md).
