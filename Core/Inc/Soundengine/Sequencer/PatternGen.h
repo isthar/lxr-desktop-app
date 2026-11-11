@@ -65,11 +65,13 @@ typedef struct PatternGenSource
 #define PG_WROTE	0x01u	// the track was rewritten
 #define PG_SOFT		0x02u	// a step the generator wrote is below velocity 127: the voice needs vol
 
-/** track (0..6) from s into io (the current track in, the new one out); src is track s->src, or
- * NULL for an empty track (gen.py's None). Every track is read as it plays: shorter than 64 steps,
- * it repeats to 64 (spec §8). Style 0 of hat and prc on a track without an accent as it plays is
- * style 1, seeded with style 0 (spec §9). Returns PG_WROTE | PG_SOFT, or 0 when io is left as it was: typ ---,
- * prp from its own track, no track 0..6 */
+/** track (0..6) from s into io (the current track in, the new one out); src is track
+ * patternGen_checked(*s).src, or NULL for an empty track (gen.py's None). src->step may share memory
+ * with io->step only when that track is the destination itself: the one case where src is never
+ * read (the kick is then 1 5 9 13, and prp writes nothing). Every track is read as it plays: shorter
+ * than 64 steps, it repeats to 64 (spec §8). Style 0 of hat and prc on a track without an accent as
+ * it plays is style 1, seeded with style 0 (spec §9). Returns PG_WROTE | PG_SOFT, or 0 when io is
+ * left as it was: typ ---, prp from its own track, no track 0..6 */
 uint8_t patternGen_generate(const PatternGenSettings *s, uint8_t track, const PatternGenSource *src, PatternGenTrack *io);
 /** s as gen.py's Settings.clamped(): every field clamped into its range (spec §3), sty into the
  * styles of typ (spec §8: hat and prc 0..4, sub 1..8, rar and prp 1..4); patternGen_generate()
