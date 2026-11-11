@@ -260,3 +260,5 @@ Style (g = ghost, vel z `lev`; G = akcent, 127):
 - **Domyślnie:** `sty` 1, `lev` −8 dB (vel 50), `var` 0, `not` 0 (głos stroi kit).
 - **Losowanie:** losowania dla stylu 8 i dla `var` idą w fazie 3, w tej kolejności.
 - **Ścieżka:** ghost kicki gra osobna ścieżka (Drum 2 albo Drum 3) z głosem podobnym do stopy. Stopa zostaje na swojej ścieżce.
+
+**Uzupełnienie do §3 (11.11, po przeglądzie menu):** ustawienie parametrowi generatora tej samej wartości (np. pokrętło lub enkoder dociśnięty do końca zakresu) nic nie robi: nie przelicza ścieżki, więc nie kasuje ręcznych poprawek. Generatora nie da się sterować przez MIDI ani NRPN.
