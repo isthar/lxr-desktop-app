@@ -63,6 +63,17 @@ def no_accents():
     return ghosts, past
 
 
+def accent_in_bar3():
+    """64 steps whose only accent is step 37 (bar 3, its step 5): no accent in bar 1"""
+    t = Track(length=64)
+    t.active[36] = True
+    t.steps[36] = Step(vol=100, prob=102, note=55, p1nr=12, p1val=7, shift=9, fine=-3)
+    for i in (1, 18, 50):
+        t.active[i] = True
+        t.steps[i].vol = 30
+    return t
+
+
 def user_track():
     """a 64-step track of the user's: accents (some under 127), ghosts, p-locks, flam,
     shift, fine and conditions, different in each bar"""
@@ -288,6 +299,16 @@ class Hat(unittest.TestCase):
                                 self.assertEqual(out.steps[b * BAR + p].vol, vel_db(-15 + offsets[p]))
         self.assertFalse(all(generate(S('hat', sty=0, sed=sed), 5) == generate(S('hat', sty=1, sed=sed), 5)
                              for sed in range(10)))
+
+    def test_sty0_accent_in_bar3_only(self):
+        # spec 9: the fallback looks at the whole track as it plays; one accent in bar 3 keeps
+        # sty 0: that accent stays, and no offbeat at 127 comes in
+        cur = accent_in_bar3()
+        for sed in SEEDS:
+            out = generate(S('hat', sty=0, den=7, var=0, sed=sed), 5, None, cur)
+            self.assertEqual(out.steps[36], cur.steps[36])
+            self.assertEqual([i for i in range(NUM_STEPS) if out.active[i] and out.steps[i].vol >= 64], [36])
+            self.assertEqual([len(bar_hits(out, b)) for b in range(4)], [7, 7, 8, 7])
 
     def test_sty0_short_track_repeats(self):
         cur = Track.from_pattern('..X...X..o.x..X.')
@@ -582,6 +603,16 @@ class Prc(unittest.TestCase):
                         self.assertTrue(all(i // BAR == 3 for i in gone))
         self.assertFalse(all(generate(S('prc', sty=0, sed=sed), 2, KICK) == generate(S('prc', sty=1, sed=sed), 2, KICK)
                              for sed in range(10)))
+
+    def test_sty0_accent_in_bar3_only(self):
+        # spec 9: the fallback looks at the whole track as it plays; one accent in bar 3 keeps
+        # sty 0: that accent stays with its ghost before it, and nothing else is written
+        cur = accent_in_bar3()
+        for den in (1, 3, 6):
+            for sed in SEEDS:
+                out = generate(S('prc', sty=0, den=den, var=0, sed=sed), 2, KICK, cur)
+                self.assertEqual(out.steps[36], cur.steps[36])
+                self.assertEqual([bar_hits(out, b) for b in range(4)], [set(), set(), {3, 4}, set()])
 
     def test_sty0_each_bar_its_own_accents(self):
         # spec 9: sty 0 takes each bar's accents as they play, in all 4 bars: bars 3-4 keep their

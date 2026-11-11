@@ -124,6 +124,18 @@ def raw_fine(length):
     return t
 
 
+def accent_in_bar3():
+    """64 steps whose only accent is step 37 (bar 3), with a p-lock, a shift and fine -3; ghosts
+    at 30 on steps 2, 19 and 51: style 0 stays style 0 (spec 9 looks at the whole track)"""
+    t = Track(length=64)
+    t.active[36] = True
+    t.steps[36] = Step(vol=100, prob=102, note=55, p1nr=12, p1val=7, shift=9, fine=-3)
+    for i in (1, 18, 50):
+        t.active[i] = True
+        t.steps[i].vol = 30
+    return t
+
+
 def prc_source():
     return generate(apply_type_defaults(Settings(sed=5), 'prc'), 2, kick44())
 
@@ -216,6 +228,8 @@ def cases():
     add('prc sty0 cleared (as sty1) var-2', 'prc', 2, inp=kick44(), sty=0, den=4, var=-2)
     add('prc sty0 ghosts only var+2', 'prc', 2, inp=kick_odd(), cur=no_accents(), sty=0, den=3, var=2)
     add('prc sty0 accent past length var-1', 'prc', 3, inp=kick44(), cur=accent_past_length(), sty=0, den=6, var=-1)
+    add('hat sty0 only accent step 37', 'hat', 5, cur=accent_in_bar3(), sty=0, den=7, var=1)
+    add('prc sty0 only accent step 37 var+1', 'prc', 2, inp=kick44(), cur=accent_in_bar3(), sty=0, den=3, var=1)
     # spec 9: no pickup ghost before an accent on step 1 of a bar
     add('prc sty3 kick even den4', 'prc', 2, inp=kick_even(), sty=3, den=4, var=0)
     add('prc sty4 kick even den4 sed1', 'prc', 2, inp=kick_even(), sty=4, den=4, sed=1, var=0)

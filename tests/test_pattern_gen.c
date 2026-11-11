@@ -659,6 +659,37 @@ TEST(pgen_core_style0_without_accents)
 	ASSERT_TRUE(differ > 0u);
 }
 
+TEST(pgen_core_style0_accent_in_bar3_only)
+{
+	/* §9: the fallback to style 1 looks at the whole track as it plays. 64 steps whose only accent is
+	 * step 37 (bar 3's step 5; ghosts at 30 on 2 19 51): style 0 stays, the accent is kept byte for
+	 * byte, no offbeat at 127 comes in; hat: den 7 ghosts a bar; prc: the ghost on 36 before it and
+	 * nothing else */
+	static const uint8_t typ[2] = { PG_TYPE_HAT, PG_TYPE_PRC };
+	PatternGenTrack t, u;
+	cleared(&u);
+	u.length = 64;
+	u.on[2] = 1u << 4;
+	u.step[36] = (Step){ 100, 102, 55, 12, 7, 0xFF, 0 };
+	u.timing[36].shift = 9;
+	stepFine_set(u.fine, 36, -3);
+	u.on[0] = 1u << 1; u.on[1] = 1u << 2; u.on[3] = 1u << 2;
+	u.step[1].volume = u.step[18].volume = u.step[50].volume = 30;
+	for (unsigned i = 0; i < 2u; i++)
+		for (uint8_t sed = 0; sed < 10; sed++)
+		{
+			memcpy(&t, &u, sizeof t);
+			const PatternGenSettings s = { typ[i], 0, (i == 0u) ? 7 : 3, -15, 0, 0, sed, 0, 0 };
+			ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t), PG_WROTE | PG_SOFT);
+			ASSERT_EQ(memcmp(&t.step[36], &u.step[36], sizeof(Step)), 0);
+			ASSERT_EQ(t.timing[36].shift, 9); ASSERT_EQ(nibble(&t, 36), -3);
+			for (unsigned st = 0; st < PG_STEPS; st++)
+				ASSERT_TRUE((st == 36u) || !isOn(&t, st) || (t.step[st].volume < 64));
+			for (unsigned b = 0; b < PG_BARS; b++)
+				ASSERT_EQ((i == 0u) ? bits(t.on[b]) : t.on[b], (i == 0u) ? ((b == 2u) ? 8u : 7u) : ((b == 2u) ? 0x0018u : 0u));
+		}
+}
+
 TEST(pgen_core_rar_mixed_keeps_its_two_steps)
 {
 	/* §4.4 style 4 with the kick on 2 6 10 14: steps 1 (1:2) and 49 (4:4) stay whatever the scatter's
