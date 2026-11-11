@@ -1,6 +1,6 @@
 # LICHOMAT v0.8: notatki do wydania (szkic)
 
-> **Szkic.** Nieopublikowany. Stanie się tekstem wydania GitHub `v0.8` w `isthar/lxr-desktop-app`, gdy wyjdzie wydanie 0.7, gdy przejdziesz na LXR sprawdzenia U42–U45 z listy `docs/lichomat/hardware-checklist.md` i zgodzisz się na wydanie. Gałąź `v0.8` jest na forku; nic nie jest otagowane ani wydane. Żadne sprawdzenie na urządzeniu nie jest jeszcze zrobione: wszystko poniżej opisuje, jak v0.8 ma działać według testów na hoście (138) i w emulatorze (360). Pogłos gra w tym buildzie w tymczasowej częstotliwości szkicu 0.4 (połowa), jak w 0.7. SHA-256 pliku aktualizacji dojdzie, gdy CI zbuduje commit wydania. Tekst wydania to część od „LICHOMAT to nieoficjalny firmware” do końca „Licencja”; dalsze sekcje są tylko dla Ciebie.
+> **Szkic.** Nieopublikowany. Stanie się tekstem wydania GitHub `v0.8` w `isthar/lxr-desktop-app`, gdy wyjdzie wydanie 0.7, gdy przejdziesz na LXR sprawdzenia U42–U45 z listy `docs/lichomat/hardware-checklist.md` i zgodzisz się na wydanie. Gałąź `v0.8` jest na forku; nic nie jest otagowane ani wydane. Żadne sprawdzenie na urządzeniu nie jest jeszcze zrobione: wszystko poniżej opisuje, jak v0.8 ma działać według testów na hoście (139) i w emulatorze (360). Pogłos gra w tym buildzie w tymczasowej częstotliwości szkicu 0.4 (połowa), jak w 0.7. SHA-256 pliku aktualizacji dojdzie, gdy CI zbuduje commit wydania. Tekst wydania to część od „LICHOMAT to nieoficjalny firmware” do końca „Licencja”; dalsze sekcje są tylko dla Ciebie.
 
 LICHOMAT to nieoficjalny firmware dla Erica Synths LXR-02. Nie jest robiony, zatwierdzony ani wspierany przez Erica Synths. Wersja 0.8 bazuje na v0.7, ta na v0.6, ta na v0.5, ta na v0.4, ta na v0.3, ta na v0.2, ta na v0.1, a v0.1 na oficjalnym firmware 1.7 (`erica-synths/lxr-desktop-app`, commit `a43cd4f`); wszystko, co dały v0.1–v0.7, zostaje. v0.8 robi z LXR groovebox do minimal groove techno: **generator wzorców** pisze w kilka sekund ghosty hihatów, ghost kicki, figury perkusji, rzadkie uderzenia na granicach fraz i przeniesienie rytmu z jednej ścieżki na drugą. Pisze zwykłe kroki, więc wynik poprawiasz, zapisujesz i grasz jak każdy inny wzorzec.
 
@@ -30,6 +30,7 @@ v0.8 nie zmienia żadnego formatu pliku. Wszystkie wersje wczytują projekty, wz
 - **`typ`:** `---` (wyłączony), `hat`, `sub`, `prc`, `rar`, `prp`; w trybie edycji długa nazwa (`hat ghosts`, `ghost kick`, `percussion`, `rare hits`, `propagate`). Wybór `typ` wczytuje ustawienia domyślne rodzaju do `sty den lev var not`.
 - **`sty`** styl rodzaju, **`den`** gęstość (ghosty albo akcenty na takt, zdarzenia na 16 taktów; w `sub` tylko styl 8), **`lev`** −30…0 dB: poziom ghostów pod akcentem (−15 dB to velocity 23), **`var`** −4…+4: zmiana na końcu frazy (uderzenia, które grają tylko w taktach 5–8 albo tylko w takcie 8 frazy, albo milkną tam), **`not`** ±24 półtonów, **`sed`** 0–99: ziarno (to samo ziarno to ten sam wzorzec; kręcąc nim, przeglądasz warianty), **`src`** ścieżka źródłowa (stopa dla `sub`, `prc` i `rar`, źródło dla `prp`), **`shf`** ±8 kroków przesunięcia kopii.
 - **`und`:** cofa ścieżkę do ostatniego zapisu albo wczytania wzorca: przekręć enkoder na `und`, naciśnij, przekręć (`push: undo`), naciśnij. Działa na wzorcu, który gra.
+- **Styl 0 (`hat`, `prc`):** zostawia Twoje akcenty (kroki z velocity 64 i więcej) i dokłada ghosty. Narysuj akcenty przy `typ` `---` i wybierz `hat` albo `prc`: na ścieżce z Twoimi akcentami wybór zaczyna od `sty` 0. Generator pamięta, które kroki sam zapisał, i nie bierze ich za Twoje akcenty, więc `sed` zawsze wraca do tego samego wzorca.
 - **Ustawienia** należą do ścieżki, są tylko w pamięci i się nie zapisują; zapisują się kroki.
 
 | `typ` | Style | Domyślnie (`sty den lev var not`) |
@@ -52,7 +53,7 @@ v0.8 nie zmienia żadnego formatu pliku. Wszystkie wersje wczytują projekty, wz
 ## CPU i pamięć
 
 - Generator liczy tylko wtedy, gdy zmienia się jego parametr, w pętli głównej, nie w ścieżce dźwięku. Zapis 64 kroków idzie krok po kroku, każdy przy krótko zablokowanych przerwaniach, a długość ścieżki na końcu, więc sekwencer nigdy nie gra połowy starej i połowy nowej ścieżki. Koszt dźwięku i sekwencera w trakcie grania jest taki sam jak w 0.7.
-- Pamięć: DTCM + RAM 470 268 z 471 032 B (+80 B wobec v0.7), DTCM 107 396 z 107 900 B, RAM 362 872 z 389 120 B, ITCM 13 744 z 16 384 B (bez zmian). Stos generatora: najwyżej 696 B (`seq_generateTrack`, w tym rdzeń 456 B), w pętli głównej.
+- Pamięć: DTCM + RAM 470 332 z 471 032 B (+144 B wobec v0.7), DTCM 107 396 z 107 900 B, RAM 362 936 z 389 120 B, ITCM 13 744 z 16 384 B (bez zmian). Stos generatora: najwyżej 736 B (`seq_generateTrack`, w tym rdzeń 456 B), w pętli głównej.
 
 ## Zmienione zachowanie
 
@@ -85,15 +86,15 @@ LICHOMAT to wolne oprogramowanie na licencji GNU General Public License w wersji
 
 ## Jak to sprawdzono w emulatorze (tylko dla Ciebie)
 
-Gałąź `v0.8`, head `85cd7f0`, ostatnia zmiana firmware `3cebde7`; szczegóły w opisach commitów i w „Changes during execution” planu `docs/superpowers/plans/2026-11-11-v0.8-groove-generator.md`. Lokalny build daje `.bin` o SHA-256 `de3458eb…`, 359 020 B (v0.7: 343 996 B); plik z CI będzie inny (inna kolejność linkowania newlib), jak przy wcześniejszych wersjach.
+Gałąź `v0.8`, head `05b98aa`, ostatnia zmiana firmware `05b98aa`; szczegóły w opisach commitów i w „Changes during execution” planu `docs/superpowers/plans/2026-11-11-v0.8-groove-generator.md`. Lokalny build daje `.bin` o SHA-256 `e084bf83…`, 360 332 B (v0.7: 343 996 B); plik z CI będzie inny (inna kolejność linkowania newlib), jak przy wcześniejszych wersjach.
 
-- **Prototyp jako wzorzec:** generator najpierw powstał w Pythonie (`tools/gen/gen.py`, 74 testy), a firmware jest jego portem. 260 wektorów (każdy rodzaj, styl i koniec zakresu) zgadza się bajt w bajt, a losowe porównania prototypu z kodem C dały 0 różnic w 72 000 przypadkach (22 000 po rdzeniu, 50 000 po ghost kickach).
-- **Testy:** 138 na hoście (135 w v0.7), wszystkie przechodzą pod UBSan i pod ASan + UBSan; 360 w emulatorze (353) pod UBSan i 331 (324) pod ASan + UBSan, bez aplikacji. Trzy testy aplikacji, które używają głośnika Maca, padały w jednym przebiegu, bo CoreAudio nie oddawało dźwięku (build v0.7 tak samo); w następnym przeszły.
+- **Prototyp jako wzorzec:** generator najpierw powstał w Pythonie (`tools/gen/gen.py`, 85 testów), a firmware jest jego portem. 284 wektory (każdy rodzaj, styl i koniec zakresu, styl 0 z pamięcią własnych kroków) zgadzają się bajt w bajt, a losowe porównania prototypu z kodem C dały 0 różnic w 112 000 przypadkach (22 000 po rdzeniu, 50 000 po ghost kickach, 40 000 po poprawkach z przeglądu całości). To porównanie jest teraz w repozytorium jako test `pgen_fuzz` (3 000 przypadków przy każdym przebiegu testów).
+- **Testy:** 139 na hoście (135 w v0.7), wszystkie przechodzą pod UBSan i pod ASan + UBSan; 360 w emulatorze (353) pod UBSan i 331 (324) pod ASan + UBSan, bez aplikacji. Trzy testy aplikacji, które używają głośnika Maca, padały w jednym przebiegu, bo CoreAudio nie oddawało dźwięku (build v0.7 tak samo); w następnym przeszły.
 - **Złote rendery:** wszystkie 41 z v0.7 bez zmian, żaden nie został zapisany od nowa.
 - **Generator od początku do końca:** `V08_generator` (stopa, hihat i `rar` przez parametry, 16 taktów: rzadkie uderzenie tylko w taktach 8 i 16, hihat 11 uderzeń na takt w taktach 1–4 i 12 w taktach 5–8, ghosty na velocity 16–28), `V08_persist` (zapis i ponowne wczytanie grają te same nuty, ghost kicki na 51 i 127), `V08_ui`, `V08_armed`, `V08_vol`, `V08_menu`, `V08_screensaver` (ekrany, długie nazwy, `und`, `sav` tylko z trybu edycji, `vol` bez zapisu jako automatyka).
 - **Losowe przebiegi `tools/emu_fuzz.py`,** teraz także z dziesięcioma parametrami generatora na wartościach 0–255: 1 500 renderów (sekwencer w obu ustawieniach `trg`, pod UBSan i pod ASan + UBSan, dźwięk, MIDI), bez żadnego znaleziska.
-- **Stos:** zmierzony kompilatorem (`-fstack-usage`), wszystko statyczne: `patternGen_generate` 456 B, `seq_generateTrack` 696 B, `seq_genUndo` 608 B, limit planu 768 B.
-- **Przeglądy:** zgodność z projektem i jakość po rdzeniu, po spięciu z sekwencerem i po menu, potem przegląd całości. Prawdziwe usterki, poprawione test najpierw: wyścig zapisu przy zmianie wzorca w trakcie generowania, `sav`/`und` uzbrojone poza trybem edycji, `vol` nagrywany jako automatyka, ta sama wartość na nowym wzorcu, która nic nie generowała.
+- **Stos:** zmierzony kompilatorem (`-fstack-usage`), wszystko statyczne: `patternGen_generate` 456 B, `seq_generateTrack` 736 B, `seq_genUndo` 640 B, limit planu 768 B.
+- **Przeglądy:** zgodność z projektem i jakość po rdzeniu, po spięciu z sekwencerem i po menu, potem przegląd całości. Prawdziwe usterki, poprawione test najpierw: wyścig zapisu przy zmianie wzorca w trakcie generowania, `sav`/`und` uzbrojone poza trybem edycji, `vol` nagrywany jako automatyka, ta sama wartość na nowym wzorcu, która nic nie generowała; po przeglądzie całości: styl 0 brał własne kroki generatora za Twoje akcenty (`sed` nie wracał do pierwszego wzorca), ponowne wczytanie grającego wzorca w trakcie zapisu zostawiało pół ścieżki, a wybór `typ` od razu kasował narysowane akcenty (projekt §11).
 - **CI na GitHubie:** bez przebiegu dla `v0.8`; GitHub nie uruchamia workflowów w tym repozytorium od 31.10 (tracker E8.5).
 
 ## Czego posłuchać (tylko dla Ciebie)
@@ -104,7 +105,7 @@ Strona do odsłuchu (wersja 17), sekcja „Generator”: przykłady każdego rod
 
 Procedury są w `docs/lichomat/hardware-checklist.md`, wyniki wpisz do run sheet na jej końcu. Sprawdzeń v0.1–v0.7 nie trzeba powtarzać; U42–U45 idą po sprawdzeniach 0.7 i potrzebują tylko LXR.
 
-- **U42:** ghosty hihatu: ekrany, zmiany na żywo (`sed`, `den`, `lev`, `var`), ta sama wartość nic nie robi, `und`.
+- **U42:** ghosty hihatu: ekrany, zmiany na żywo (`sed`, `den`, `lev`, `var`), ta sama wartość nic nie robi, `und`, styl 0 na Twoich akcentach.
 - **U43:** ghost kicki na głosie 2 (wszystkie 8 stylów, `var` ±), figury `prc`, przeniesienie `prp`.
 - **U44:** rzadkie uderzenia przez 16 taktów: w których taktach grają.
 - **U45:** zapis, wyłączenie, inne wersje firmware (0.7 i 1.7), CPU przy szybkim kręceniu `sed`.

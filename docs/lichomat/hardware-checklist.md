@@ -1856,6 +1856,10 @@ The generator's live editing, the same-value rule and `und` (G2, G4, G11–G13; 
    set it to 7.
 4. Turn the encoder on to `und` (screen 6), push, turn one click (the bottom row reads `push: undo`),
    push. Do not save the pattern before this step.
+5. Style 0 on your own accents. Voice 6 is empty after 4 and `typ` still reads `hat`: set `typ` to `---`
+   (push, turn, push). On the step page draw voice 6 on steps 3, 7, 11 and 15 of bar 1 (velocity 127; set it
+   on the step page if a new step comes lower). Back on screen 5 set `typ` to `hat` again. Then on screen 6
+   turn `sed` 0 → 3 → 0.
 
 **Expected:**
 - 1: screen 5 shows `hat 1 7 -15`, screen 6 ` +1 0 0 ---`. Lit steps 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 14 and
@@ -1878,14 +1882,19 @@ The generator's live editing, the same-value rule and `und` (G2, G4, G11–G13; 
   ghosts have other velocities. After `sed` 0 and `den` 7 the layout of 1 is back.
 - 4: voice 6 has no steps (the step LEDs are dark, voice 6 is silent), `und` reads `---`, edit mode is
   over, `typ` still reads `hat`, and voice 6's `vol` is still on.
+- 5: after `typ` `hat` screen 5 reads `hat 0 7 -15`: style 0, not 1, because the track has your accents.
+  Lit steps 2–8, 11, 12, 14, 15 and 16: your steps 3, 7, 11 and 15 stay at 127, the others are ghosts
+  (velocity 16–28), and step 5 plays only in bars 5–8 (`2:2`). `sed` 3: lit steps 2, 3, 4, 6, 7, 9, 10, 11,
+  12, 14, 15 and 16, your four still the only loud ones. Back at `sed` 0 exactly the layout of the first
+  `hat`, step for step (the generator does not take its own steps for your accents).
 
-**Record:** pass or fail of 1–4; the `sty den lev` you like; whether −15 dB is too loud or too soft.
+**Record:** pass or fail of 1–5; the `sty den lev` you like; whether −15 dB is too loud or too soft.
 
 ## U43: ghost kicks, percussion, propagation
 
 The other four types (spec §4.3, §4.5, §10), with the kick of U42's setup on voice 1.
 
-1. Voice 6: `typ` `---`, then `typ` `hat` (it writes the hats again with the defaults; `sed` is 0).
+1. Voice 6: `sty` 1 (screen 5; `sed` is 0 after U42): it writes the hats of U42 step 1 again.
    Voice 2 (a short kick-like sound): `typ` `sub` (the bottom row reads `ghost kick`; screen 5 reads
    `sub 1 3 -8`). Press START. Look at the lit steps and listen for 4 bars.
 2. Then `sty` 2, 3, 4, 5, 6, 7 and 8 in turn, 2 bars each; in 8 also `den` 5, back to 3.

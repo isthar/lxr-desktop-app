@@ -236,7 +236,7 @@ Który szablon na którą ścieżkę: [przepisy groove 0.6](groove-recipes-v0.6.
   wpisane ręką: poprawiasz je, zapisujesz i wczytujesz jak każde inne. Nie ma nowego silnika odtwarzania ani
   nowego formatu pliku.
 - **Parametry** (po wybraniu `typ` ustawienia z tabeli niżej wczytują się do `sty den lev var not`, a `sed`,
-  `src` i `shf` zostają):
+  `src` i `shf` zostają; na ścieżce z Twoimi akcentami `hat` i `prc` zaczynają od `sty` 0):
   - `typ`: `---` (generator wyłączony dla tej ścieżki, domyślnie), `hat`, `sub`, `prc`, `rar`, `prp`. W
     trybie edycji dolna linia podaje nazwę: `hat ghosts`, `ghost kick`, `percussion`, `rare hits`,
     `propagate`. Ustawienie `---` tylko wyłącza generator, kroków nie rusza.
@@ -275,7 +275,8 @@ Który szablon na którą ścieżkę: [przepisy groove 0.6](groove-recipes-v0.6.
     ghostów z taktów 5–8 (grają tylko w 1–4). Zmiana `den` dokłada albo zdejmuje ghosty bez przetasowania
     reszty.
     - `sty` 0: Twoje akcenty (kroki z velocity 64 i więcej) zostają; ghosty na wolnych krokach. Bez akcentów
-      na ścieżce gra jak styl 1.
+      na ścieżce gra jak styl 1. Kroki, które generator sam zapisał, nie są Twoimi akcentami (niżej,
+      „Styl 0 i Twoje akcenty”).
     - `sty` 1 (klasyczny): akcenty na offbeatach, ghosty najchętniej na parzystych szesnastkach, potem na
       ćwierćnutach.
     - `sty` 2 (gęsty): akcenty na offbeatach i ćwierćnutach, ghosty na parzystych szesnastkach.
@@ -335,6 +336,13 @@ Który szablon na którą ścieżkę: [przepisy groove 0.6](groove-recipes-v0.6.
   także w trakcie grania. Ustawienie parametrowi wartości, którą już ma (np. kręcenie gałki na końcu
   zakresu), nic nie robi: nie przelicza ścieżki, więc ręczne poprawki zostają. Zmiana na inną wartość
   przelicza ścieżkę od nowa i kasuje je. **Po poprawkach ustaw `typ` na `---`.**
+- **Styl 0 i Twoje akcenty:** generator pamięta, które kroki sam zapisał przy ostatnim przeliczeniu ścieżki,
+  i przy następnym nie bierze ich za Twoje akcenty, nawet głośnych (uderzenia `var` +n na 127, ghosty przy
+  wysokim `lev`). Dzięki temu `sed` wraca do tego samego wzorca. Pamięć znika przy `typ` `---`, po `und`, gdy
+  zmiana patternu przywraca jego zapisany stan, i po włączeniu LXR. **Praca ze stylem 0:** przy `typ` `---`
+  narysuj akcenty (velocity 64 i więcej), potem wybierz `hat` albo `prc`. Na ścieżce z Twoimi akcentami `sty`
+  ustawia się na 0 zamiast 1, więc akcenty zostają, a generator dokłada ghosty. Na pustej ścieżce wybór
+  zaczyna od stylu 1. Akcent dopisany później na pustym kroku też się liczy.
 - **`und`:** cofa ścieżkę wybranego głosu do stanu z ostatniego zapisu albo wczytania wzorca. Działa tylko z
   trybu edycji: przekręć enkoder na `und`, naciśnij, przekręć o jedno kliknięcie (dolna linia `push: undo`),
   naciśnij. Tylko na wzorcu, który gra (inaczej dolna linia pokazuje `not playing`). Potem `und` wraca na
