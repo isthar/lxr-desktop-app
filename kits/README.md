@@ -419,15 +419,16 @@ zrobiony sposobem laboratorium: PROSTO jako kit 0, edycje przepisu z poziomami o
 | `TLO` (55) | bed A9 | downlifter B3 | jąkanie B5 | pogłos A9 (rumble) | A9 |
 
 - **Drum 1 (stopa):** z PROSTO (sinus G#1 +0,3 półtonu, spadek wysokości od ok. 5,2×, bez kliku),
-  `vol1` 12. W `TLO` także do FX (`out` `FX`, jak w A9): karmi pogłos, który sama przycisza (rumble).
+  `vol1` 86 (w `TLO` 35). W `TLO` także do FX (`out` `FX`, jak w A9): karmi pogłos, który sama
+  przycisza (rumble).
 - **Drum 2, ghost kick (A2; `ECHO`, `FALA`, `RYK`):** miękkie echo stopy: sinus G1 (1,3 półtonu niżej
   od stopy), mniejszy i krótszy spadek wysokości (`modamnt2` 34, `mod_eg2` 44), krótsze ciało
   (`velod2` 10), LP 36 (bez kliku), `drive2` 18. Na krokach 4, 7, 12, 15: akcent (G, 127) na 7 i 15,
   ciche (g) ok. −8 dB na 4 i 12; generator `sub` sty 1 stawia to samo.
 - **Drum 2, bed (A9; `TLO`):** krótki sinus F#1 (46 Hz) przez LP 16, `drive2` 8, na 4. szesnastce każdej
   ćwierćnuty (kroki 4, 8, 12, 16), tuż przed stopą; razem z rumble dół nie milknie.
-- **Drum 3, figura (`ECHO`, `RYK`):** figura PROSTO (sinus B3 z FM, LFO 3 na `fmamnt3`), na poziomie
-  zestawu C (`vol3` 17); w demie B gra ją generator `prc`.
+- **Drum 3, figura (`ECHO`, `RYK`):** figura PROSTO (sinus B3 z FM, LFO 3 na `fmamnt3`), w proporcji
+  PROSTO do stopy (`vol3` 29 = 34 × 0,86); w demie B gra ją generator `prc`.
 - **Drum 3, sub boom (B4; `FALA`):** sinus opadający od ok. 245 Hz do E1, LP, długi; na pierwszej
   stopie taktów 1 i 9, do FX.
 - **Drum 3, downlifter (B3; `TLO`):** szum, którego barwa opada od jasnej do ciemnej przez ok. takt;
@@ -445,50 +446,63 @@ zrobiony sposobem laboratorium: PROSTO jako kit 0, edycje przepisu z poziomami o
   na 1 i cztery flamy po 4 na krokach 9–12 taktu 8 i 16.
 - **Hihat:** z PROSTO (szum przez HP 99, losowa panorama na każdej 16-tce); z generatorem `hat` (sty 1
   den 7 lev −15) to warstwa ghostów z laboratorium.
-- **FX:** jak w tabeli; pogłos zawsze przyciszany stopą (`dck` `dr1`, `ddp` 127). W `TLO` downlifter
-  i jąkanie grają w pogłosie A9, nie w swoim: predelay, wybrzmienie i barwa B3 i B5 przesunęłyby
-  bed, więc ich `vol` jest zmierzony od nowa, ok. 17 dB pod groove `TLO`.
+- **FX:** jak w tabeli; pogłos zawsze przyciszany stopą (`dck` `dr1`, `ddp` 18, w `TLO` 44: niżej).
+  W `TLO` downlifter i jąkanie grają w pogłosie A9, nie w swoim: predelay, wybrzmienie i barwa B3
+  i B5 przesunęłyby bed, więc ich `vol` jest zmierzony od nowa, ok. 17 dB pod groove `TLO`.
 
-**Poziomy.** Laboratorium ustawiało balans częściowo suwakami (wzmocnienie = suwak²): stopa 0,35,
-ghost kick 0,4, bed A9 0,6, zdarzenia 0,09–0,24. Kit suwaków nie zapisuje. Suwak i `vol` to to samo
-wzmocnienie (za przesterem bębnów, przed przesterem talerza), więc `vol` kitu to `vol` przepisu ×
-suwak², sprawdzony pomiarem: kit ze wszystkimi sześcioma suwakami na 1 gra balans przepisu. Hihat jest
-już na maksimum (`vol6` 127 na suwaku 1), więc to stopa schodzi do niego (`vol1` 12 = 100 × 0,35²),
-a nie reszta w górę. Dzięki temu stopa przycisza pogłos tak samo jak w przepisie (przyciszanie idzie
-za poziomem stopy). Kity grają więc na poziomie przepisów: szczyt od −10 do −13 dBFS, RMS ok.
-−30 dBFS (TLO −26), a PROSTO −2,7 i −11 dBFS; trzeba podkręcić wyjście. Gdzie `vol` nie mieści wartości (ryk B1: 0,63, a LFO dodaje
-swoją głębokość do `vol`, więc obie trzeba skalować razem), resztę bierze przester za `vol`
-(`cymbal_distortion`), który przy tak cichym sygnale działa jak zwykłe wzmocnienie 1 + k; w `FALA`
-boom bierze ją z `drive3` (40 → 26: pasma 30–150 Hz i powyżej 150 Hz zostają w proporcji B6 co do
-0,1 dB). Głośność ryku najlepiej zmieniać suwakiem: sam `vol5` zmienia też proporcję drżenia (LFO
-dodaje do `vol` stałą głębokość).
+**Poziomy.** Kity trzymają proporcję stopy do hihatu z PROSTO (hihat `vol6` 127 jak w PROSTO), a resztę
+głosów względem stopy tak jak przepisy. Laboratorium ściszyło swoją stopę (suwak 0,35, wzmocnienie =
+suwak²) tylko po to, żeby było słychać resztę; ghost kick (suwak 0,4), bed A9 (0,6) i zdarzenia
+(0,09–0,24) są ustawione względem tej cichej stopy. Kit suwaków nie zapisuje. Suwak i `vol` to to
+samo wzmocnienie (za przesterem bębnów, przed przesterem talerza), więc `vol` kitu to `vol` przepisu
+× suwak² / 0,35² × (`vol1` / 100), sprawdzony pomiarem. Stopa jest tak wysoko, jak pozwala Drum 2 przy
+`vol2` 127: w `ECHO`, `FALA` i `RYK` ghost kick potrzebuje ok. 1,5 raza `vol` stopy, więc `vol1` 86
+(PROSTO 100, 1,3 dB głośniej); w `TLO` nuta bedu A9 potrzebuje 3,6 raza, więc `vol1` 35, 9 dB ciszej
+niż w PROSTO względem hihatu. Szczyt na wyjściu 1: od −3,6 do −6,6 dBFS (PROSTO −2,7); −3,6 i −4,8
+to dema `demo/*.wav` z tykiem werbla na 2 i 4.
+
+Dwa ustawienia idą za poziomem, a nie za `vol`. **Przyciszanie pogłosu** zależy od szczytu stopy
+(głębokość × dwa razy szczyt, najwyżej całość): głośniejsza stopa przyciszałaby pogłos 7 razy
+mocniej niż w przepisie (w `TLO` ok. 3 razy), więc `ddp` 18 (127 × 0,35² × 100 / 86; w `TLO` 44)
+zostawia przyciszanie przepisu. Przy 127 pogłos chowałby się pod każdą stopą do zera, a ryk `ECHO`
+byłby o 0,9 dB cichszy i pompowałby razem ze stopą (zmierzone). **Przester talerza** za `vol` też
+zależy od poziomu, który dostaje: w przepisach suwak przed nim był tak nisko, że przester był tylko
+wzmocnieniem 1 + k z najwyżej ok. 5 % ściśnięcia. Przy nowym poziomie ten sam `cymbal_distortion`
+ściskałby 7 razy mocniej (w `TLO` 3 razy), więc w kitach jest niższy, tak by ściśnięcie i poziom były
+jak w przepisie (k × poziom na wejściu jak w przepisie). Wycofane: `drive3` boomu w `FALA` wrócił do
+40 z B4 (przester bębna jest przed `vol`, więc `vol3` 12 niesie cały poziom), a głębokość LFO ryku
+(`amount_lfo5`) ma znowu proporcję B1 do `vol5` (0,69). Głośność ryku najlepiej zmieniać suwakiem:
+sam `vol5` zmienia też proporcję drżenia (LFO dodaje do `vol` stałą głębokość).
 
 | Kit | `vol1` | `vol2` | `vol3` | `vol4` | `vol5` | `vol6` | Poza `vol` (w przepisie) |
 |---|---|---|---|---|---|---|---|
-| `ECHO` | 12 | 18 | 17 | 124 | 3 | 127 | `amount_lfo5` 2 (44), `cymbal_distortion` 34 (100) |
-| `FALA` | 12 | 18 | 2 | 124 | 3 | 127 | `drive3` 26 (40), `cymbal_distortion` 46 (40) |
-| `RYK` | 12 | 18 | 17 | 124 | 3 | 127 | `amount_lfo5` 2 (44), `cymbal_distortion` 22 (100) |
-| `TLO` | 12 | 44 | 5 | 124 | 6 | 127 | `cymbal_distortion` 57 (60) |
+| `ECHO` | 86 | 127 | 29 | 124 | 31 | 127 | `amount_lfo5` 21 (44), `cymbal_distortion` 9 (100), `ddp` 18 (127) |
+| `FALA` | 86 | 127 | 12 | 124 | 42 | 127 | `cymbal_distortion` 5 (40), `ddp` 18 (127) |
+| `RYK` | 86 | 127 | 29 | 124 | 26 | 127 | `amount_lfo5` 18 (44), `cymbal_distortion` 9 (100), `ddp` 18 (127) |
+| `TLO` | 35 | 127 | 14 | 124 | 38 | 127 | `cymbal_distortion` 11 (60), `ddp` 44 (127) |
+
+Werbel (C2) zostaje przy `vol4` 124: tyle miał w C2 względem hihatu, obaj na suwaku 1.
 
 **Wynik** (emulator v0.7, 143 BPM, wyjście 1, wszystkie suwaki na 1). Demo A: przepis, z którego kit
 powstał, z jego ścieżkami, zdarzeniami i długością, zagrany z pliku kitu, obok ten sam przepis
 sposobem laboratorium; każdy głos sam na wyjściu 1, z FX (reszta na wyjściu 2, więc stopa dalej
-przycisza pogłos). Demo B: 16 taktów z generatora: stopa 4/4, `hat`, `sub` sty 1 (w `TLO` bed A9
-z ręki), na ścieżce 3 `prc` (`ECHO`, `RYK`) albo `rar` sty 2 (`FALA`, `TLO`), na ścieżce 5 `rar`
-umieszczony jak w przepisie, z jego zamrożeniem. G to akcent ghost kicka względem szczytu stopy
-w paśmie 30–150 Hz (cel 4–8 dB); zdarzenie to jego najgłośniejsza ćwierćnuta (sucho + pogłos)
-względem RMS groove bez zdarzeń. Wyzwolenia zgadzają się z zapisanymi krokami we wszystkich demach.
+przycisza pogłos), porównany **względem stopy**: przepis grał stopę ciszej, więc bezwzględne poziomy
+muszą się różnić. Hihat jest tu z założenia dalej pod stopą niż w przepisie (proporcja PROSTO). Demo
+B: 16 taktów z generatora: stopa 4/4, `hat`, `sub` sty 1 (w `TLO` bed A9 z ręki), na ścieżce 3 `prc`
+(`ECHO`, `RYK`) albo `rar` sty 2 (`FALA`, `TLO`), na ścieżce 5 `rar` umieszczony jak w przepisie,
+z jego zamrożeniem. G to akcent ghost kicka względem szczytu stopy w paśmie 30–150 Hz (cel 4–8 dB);
+zdarzenie to jego najgłośniejsza ćwierćnuta (sucho + pogłos) względem RMS groove bez zdarzeń.
+Wyzwolenia zgadzają się z zapisanymi krokami we wszystkich demach.
 
-| Kit | Demo A: głos najdalej od przepisu | G pod stopą, A / B (przepis) | Zdarzenia pod groove, A (przepis) | Zdarzenia pod groove, B | Szczyt A / B |
-|---|---|---|---|---|---|
-| `ECHO` | stopa −0,18 dB | 4,8 / 4,8 dB (5,0) | 17,2, 16,9 dB (17,0, 17,1) | 18,5, 18,2 dB | −12,6 / −11,9 dBFS |
-| `FALA` | stopa −0,18 dB | 4,8 / 4,8 dB (5,0) | 16,8, 17,3, 16,6, 16,9 dB (17,1, 17,3, 16,9, 17,0) | 16,8, 17,3, 16,6, 16,9 dB | −12,8 / −12,8 dBFS |
-| `RYK` | ryk −0,21 dB | 4,8 / 4,8 dB (5,0) | 17,3, 17,0 dB (17,4, 17,0) | 18,6, 18,4 dB | −12,6 / −11,8 dBFS |
-| `TLO` | hihat +0,22 dB | bez ghost kicka; bed 8,2 dB pod stopą (8,2) | A9 nie ma zdarzeń | 16,6, 17,1, 17,8, 17,1 dB | −12,1 / −12,1 dBFS |
+| Kit | Demo A: głos najdalej od przepisu (względem stopy) | Hihat względem przepisu | G pod stopą, A / B (przepis) | Zdarzenia pod groove, A (przepis) | Zdarzenia pod groove, B | Szczyt A / B |
+|---|---|---|---|---|---|---|
+| `ECHO` | ryk −0,09 dB | −16,8 dB | 4,9 / 4,9 dB (5,0) | 17,4, 17,1 dB (17,0, 17,1) | 17,5, 17,2 dB | −5,0 / −4,8 dBFS |
+| `FALA` | riser +0,19 dB | −17,0 dB | 4,9 / 4,9 dB (5,0) | 17,0, 17,2, 16,7, 16,8 dB (17,1, 17,3, 16,9, 17,0) | te same | −5,0 / −5,0 dBFS |
+| `RYK` | ryk +0,09 dB | −16,8 dB | 4,9 / 4,9 dB (5,0) | 17,3, 17,0 dB (17,4, 17,0) | 17,3, 17,1 dB | −5,1 / −4,8 dBFS |
+| `TLO` | bed +0,02 dB | −8,9 dB | bez ghost kicka; bed 8,2 dB pod stopą (8,2) | A9 nie ma zdarzeń | 16,9, 17,1, 18,0, 17,1 dB | −6,6 / −5,5 dBFS |
 
-W demie B `ECHO` i `RYK` figura (`prc`) dokłada ok. 1,4 dB do groove, więc ryk jest tam 18,2–18,6 dB
-pod nim; względem samej stopy, ghost kicków i hihatu, jak w B1 i B7, to 17 dB. W `TLO` downlifter
-taktu 9 wchodzi w pogłos zamrożony przez jąkanie (B5) i dlatego jest 17,8 dB pod groove.
+W `TLO` downlifter taktu 9 wchodzi w pogłos zamrożony przez jąkanie (B5) i dlatego jest 18,0 dB pod
+groove.
 
 **Zamrożenie ręcznie.** B1, B5 i B7 zamrażają ogon pogłosu (`frz`) zdarzeniem renderu. Kit go nie
 zapisuje (zapisany kit ma zawsze `frz` wyłączone), krok nie może go zablokować (p-lock), a LFO
