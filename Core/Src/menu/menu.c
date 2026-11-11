@@ -2835,6 +2835,16 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 //read rollRateNames[15] of 12); a value past a table shows its first name. The table's own size bounds it,
 //so the bound cannot drift from the rows (each [0][0] counts them today)
 #define MENU_NAME(t)	((t)[(((size_t)curParmVal + 1) < (sizeof(t) / sizeof((t)[0]))) ? (curParmVal + 1) : 1])
+/** LICHOMAT v0.6: a signed value in 3 characters with its sign, as mic shows T: " +5", "+19", "-84",
+ * "  0"; v0.8: the generator's var, not and shf the same (review of group C) */
+static void menu_signedValue(char *buf, int t)
+{
+	const int a = (t < -99) ? 99 : (t > 99) ? 99 : (t < 0) ? -t : t;	// two digits at most
+	const char sign = t < 0 ? '-' : (t > 0 ? '+' : ' ');
+	buf[0] = (a > 9) ? sign : ' ';
+	buf[1] = (a > 9) ? (char)('0' + a / 10) : sign;
+	buf[2] = (char)('0' + a % 10);
+}
 // given a menu id, and a value returns the name from PROGMEM
 static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmVal, char *buf)
 {
@@ -2973,15 +2983,8 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 		}
 		break;
 	case MENU_STEP_MICRO:		// LICHOMAT v0.6: T = value - 84, " +5", "+19", "-84"
-	{
-		const int t = (curParmVal <= 2 * STEP_MICRO_MAX) ? (int)curParmVal - STEP_MICRO_MAX : 0;
-		const int a = t < 0 ? -t : t;
-		const char sign = t < 0 ? '-' : (t > 0 ? '+' : ' ');
-		buf[0] = (a > 9) ? sign : ' ';
-		buf[1] = (a > 9) ? (char)('0' + a / 10) : sign;
-		buf[2] = (char)('0' + a % 10);
+		menu_signedValue(buf, (curParmVal <= 2 * STEP_MICRO_MAX) ? (int)curParmVal - STEP_MICRO_MAX : 0);
 		return;
-	}
 	case MENU_TRK_TPL:			// LICHOMAT v0.6: a value past the list reads "off", as trackTemplate_checked()
 		p=trackTplNames[((curParmVal < trackTplNames[0][0]) ? curParmVal : 0) + 1];
 		break;
@@ -3001,9 +3004,9 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 	case MENU_GEN_SED: numtostrpu(buf, curParmVal, ' '); return;
 	case MENU_GEN_SRC: numtostrpu(buf, (uint8_t)(curParmVal + 1), ' '); return;	// tracks 1..7
 	case MENU_GEN_LEV: numtostrps(buf, (int8_t)(curParmVal + PG_LEV_MIN)); return;
-	case MENU_GEN_VAR: numtostrps(buf, (int8_t)(curParmVal - PG_VAR_MAX)); return;
-	case MENU_GEN_NOT: numtostrps(buf, (int8_t)(curParmVal - PG_NOTE_MAX)); return;
-	case MENU_GEN_SHF: numtostrps(buf, (int8_t)(curParmVal - PG_SHF_MAX)); return;
+	case MENU_GEN_VAR: menu_signedValue(buf, (int)curParmVal - PG_VAR_MAX); return;	// with the sign, as mic
+	case MENU_GEN_NOT: menu_signedValue(buf, (int)curParmVal - PG_NOTE_MAX); return;
+	case MENU_GEN_SHF: menu_signedValue(buf, (int)curParmVal - PG_SHF_MAX); return;
 
 
 	default:

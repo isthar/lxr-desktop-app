@@ -1578,8 +1578,8 @@ def V08_ui(t):
           'typ: %r' % rows['typ'])
     check(rows['hatedit'][1] == 'hat ghosts   hat', 'edit mode on typ hat: %r' % rows['hatedit'])
     check(re.match(r'hat.  1.  7.-15', rows['hat'][1]), "hat's values: %r" % rows['hat'])
-    check(re.match(r'VAR.not.sed.und\*', rows['scr2'][0]) and re.match(r'  1.  0.  0.---', rows['scr2'][1]),
-          'the second screen: %r' % rows['scr2'])
+    check(re.match(r'VAR.not.sed.und\*', rows['scr2'][0]) and re.match(r' \+1.  0.  0.---', rows['scr2'][1]),
+          'the second screen, var with its sign: %r' % rows['scr2'])
     check(re.match(r'SRC.shf.{8}<', rows['src'][0]) and re.match(r'  1.  0', rows['src'][1]), 'src: %r' % rows['src'])
     check(re.match(r'src.SHF', rows['end'][0]), 'the encoder stops at shf: %r' % rows['end'])
     pat = one_file(keep, '00-*.PAT')
@@ -1610,7 +1610,7 @@ def V08_ui(t):
         check(re.match(want, rows[m][0]), 'SHIFT + mode2, %s: %r' % (m, rows[m]))
     check(re.match(r'var.not.sed.UND', rows['und'][0]), 'the encoder on und: %r' % rows['und'])
     check(rows['undedit'][1] == 'push: undo   und', 'edit mode on und: %r' % rows['undedit'])
-    check(re.match(r'var.not.sed.UND', rows['undone'][0]) and re.match(r'  1.  0.  0.--- ', rows['undone'][1]),
+    check(re.match(r'var.not.sed.UND', rows['undone'][0]) and re.match(r' \+1.  0.  0.--- ', rows['undone'][1]),
           'after the click, und at --- and edit mode left: %r' % rows['undone'])
     a, b = one_file(keep, '00-*.PAT'), one_file(seed, '00-*.PAT')
     check(a[14 + 512 * 5:14 + 512 * 6] == b[14 + 512 * 5:14 + 512 * 6] and a[3638:3646] == b[3638:3646]
@@ -1620,17 +1620,26 @@ def V08_ui(t):
     # the encoder past the end of typ's list (review of group C): prp with den 7, typ +1 stays prp and
     # keeps den 7 (the same typ loads nothing)
     log = t.path('panel3.log')
-    script = t.script('0ms press voice6\n' + mode2 + '+200ms encoder +13\n+100ms push\n+150ms encoder +5\n'
+    script = t.script('0ms press voice6\n' + mode2 + '+200ms encoder +13\n+100ms push\n+150ms encoder +2\n'
+                      '+100ms push\n+150ms encoder +5\n+200ms mark subnot\n+100ms encoder -5\n+100ms push\n'
+                      '+150ms encoder +3\n'
                       '+100ms push\n+200ms mark prp\n+150ms encoder +2\n+100ms push\n+150ms encoder +3\n'
                       '+100ms push\n+200ms mark den7\n+150ms encoder -2\n+100ms push\n+150ms encoder +1\n'
-                      '+100ms push\n+200ms mark again\n')
-    t.render(seed, ['--no-start', '--seconds', '4', '--panel-log', log, '--events', script])
+                      '+100ms push\n+200ms mark again\n+150ms encoder +9\n+100ms push\n+150ms encoder -3\n'
+                      '+100ms push\n+200ms mark shfneg\n+100ms push\n+150ms encoder +20\n+100ms push\n'
+                      '+200ms mark shfpos\n')
+    t.render(seed, ['--no-start', '--seconds', '6', '--panel-log', log, '--events', script])
     rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
     check(re.match(r'prp.  1.  4.-15', rows['prp'][1]), "prp's values: %r" % rows['prp'])
     check(re.match(r'typ.sty.DEN.lev', rows['den7'][0]) and re.match(r'prp.  1.  7.-15', rows['den7'][1]),
           'den 7: %r' % rows['den7'])
     check(re.match(r'TYP.sty.den.lev', rows['again'][0]) and re.match(r'prp.  1.  7.-15', rows['again'][1]),
           'typ +1 at prp: %r' % rows['again'])
+    # var, not and shf with their signs, as mic: sub's not -2, shf -3 and +8
+    check(re.match(r'var.NOT.sed.und', rows['subnot'][0]) and re.match(r'  0. -2.  0.---', rows['subnot'][1]),
+          "sub's not: %r" % rows['subnot'])
+    check(re.match(r'src.SHF', rows['shfneg'][0]) and re.match(r'  1. -3', rows['shfneg'][1]), 'shf -3: %r' % rows['shfneg'])
+    check(re.match(r'  1. \+8', rows['shfpos'][1]), 'shf +8: %r' % rows['shfpos'])
     no_copies_left()
 
 @case
