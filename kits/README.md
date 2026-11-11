@@ -9,17 +9,23 @@ the repository.
 
 # Zestawy brzmień LICHOMAT
 
-Osiem własnych kitów dla LICHOMAT v0.4 i nowszych. Cztery (sloty 60–63) to każdy inny styl:
+Dwanaście własnych kitów dla LICHOMAT v0.4 i nowszych. Cztery (sloty 60–63) to każdy inny styl:
 hipnotyczne groove techno, dub techno, surowe/industrialne i minimal z FM. Cztery kolejne (sloty
 56–59) są dopasowane do pomiarów albumu referencyjnego w stylu BCCO / Mutual Rytm (sekcja „Kity
-z pomiarów”). Pliki kitów zapisał sam firmware: emulator
-(`lichomat-render`) ustawił parametry przez ścieżkę edycji menu i zapisał kit i projekt, więc format,
-łącznie z 13-bajtowym blokiem v0.4, jest taki, jak na urządzeniu. Nic tu nie pochodzi z kitów
+z pomiarów”). Cztery najnowsze (sloty 52–55) powstały z przepisów laboratorium brzmień: ghost kick
+albo niski bed i rzadkie zdarzenia w pogłosie (sekcja „Kity z laboratorium brzmień”). Pliki kitów
+zapisał sam firmware: emulator (`lichomat-render`) ustawił parametry przez ścieżkę edycji menu
+i zapisał kit i projekt, więc format, łącznie z 13-bajtowym blokiem v0.4, jest taki, jak na
+urządzeniu. Nic tu nie pochodzi z kitów
 fabrycznych ani z DLC. Demo to rendery emulatora, nie nagrania z LXR; poziomy są zmierzone z plików
 WAV, bez odsłuchu.
 
 | Plik na karcie | Slot | Nazwa | Styl | Demo |
 |---|---|---|---|---|
+| `card/PROJ00/52-ECHO.SND` | 52 | `ECHO` | groove techno: ghost kick, rzadki ryk daleko w pogłosie | `demo/echo.wav` |
+| `card/PROJ00/53-FALA.SND` | 53 | `FALA` | groove techno: ghost kick, riser i boom na granicy frazy | `demo/fala.wav` |
+| `card/PROJ00/54-RYK.SND` | 54 | `RYK` | groove techno: ghost kick, ryk tylko w echach i pogłosie | `demo/ryk.wav` |
+| `card/PROJ00/55-TLO.SND` | 55 | `TLO` | groove techno: niski bed z rumble, downlifter i jąkanie | `demo/tlo.wav` |
 | `card/PROJ00/56-PULS.SND` | 56 | `PULS` | groove techno: mediana albumu referencyjnego | `demo/puls.wav` |
 | `card/PROJ00/57-HUSTA.SND` | 57 | `HUSTAWKA` | groove techno: mocny swing, szeroka góra | `demo/hustawka.wav` |
 | `card/PROJ00/58-PROST.SND` | 58 | `PROSTO` | groove techno: proste hihaty, bed jak bas | `demo/prosto.wav` |
@@ -30,7 +36,7 @@ WAV, bez odsłuchu.
 | `card/PROJ00/63-IGLA.SND` | 63 | `IGLA` | minimal / FM | `demo/igla.wav` |
 
 Ustawienia każdego kitu, z komentarzami, są w `wir.txt`, `mgla.txt`, `rdza.txt`, `igla.txt`, `puls.txt`,
-`hustawka.txt`, `prosto.txt` i `przester.txt`: z nich
+`hustawka.txt`, `prosto.txt`, `przester.txt`, `echo.txt`, `fala.txt`, `ryk.txt` i `tlo.txt`: z nich
 `tools/kit_build.py` buduje pliki. Nazwy parametrów to nazwy z `emu/render/render_params.h`, wartości
 takie, jakie trzyma menu (listy liczone od 0).
 
@@ -46,7 +52,8 @@ głosami, gdzie velocity ma cel `vol`.
 ## Demo
 
 Dema kitów 60–63 to ten sam wzorzec `classic` (16 kroków, 8 taktów, 128 BPM, `trg smp`, wyjście 1
-stereo); dema kitów 56–59 grają wzorzec `album`, opisany w sekcji „Kity z pomiarów”:
+stereo); dema kitów 56–59 grają wzorzec `album`, opisany w sekcji „Kity z pomiarów”, a dema kitów 52–55
+wzorce `ghost` i `bed`, opisane w sekcji „Kity z laboratorium brzmień”. Wzorzec `classic`:
 
 - **Drum 1:** stopa na 1, 5, 9, 13.
 - **Drum 2:** szesnastki z akcentami 3-3-2 (kroki 4, 7, 10, 16), ciche przednutki; 6 i 14 grają co drugi takt (`2:2`).
@@ -394,21 +401,136 @@ Wariant jednego utworu, z mocniej przesterowaną stopą (THD ok. 14 %).
 - **Bed jest w pełni powtarzalny** (koherencja 1,0), w albumie 0,63–0,81: tu każde uderzenie bedu jest
   identyczne.
 
+## Kity z laboratorium brzmień (sloty 52–55)
+
+Cztery kity z przepisów laboratorium brzmień (2026-11-11), zaakceptowanych na ucho („A i B, wszystkie
+przykłady OK”): zestaw A to ghost kicki na Drum 2 i bed, zestaw B rzadkie zdarzenia w tle, ok. 17 dB
+pod groove, w pogłosie. Każdy kit to PROSTO, w którym głosy z tabeli zastąpiły edycje przepisu,
+w kolejności przepisu; stopa i hihat są z PROSTO. Pliki zapisał firmware v0.7 w emulatorze (ten sam
+renderer, którego używało laboratorium). Każdy plik jest, poza nazwą, bajt w bajt taki jak kit
+zrobiony sposobem laboratorium: PROSTO jako kit 0, edycje przepisu z poziomami opisanymi niżej,
+`save-kit`.
+
+| Kit | Drum 2 | Drum 3 | Cymbal | FX | Demo A z przepisu |
+|---|---|---|---|---|---|
+| `ECHO` (52) | ghost kick A2 | figura PROSTO | ryk B1 | pogłos B1 | B1 |
+| `FALA` (53) | ghost kick A2 | sub boom B4 | riser B2 | pogłos B2 (jak w B6) | B6 |
+| `RYK` (54) | ghost kick A2 | figura PROSTO | ryk B7: tylko echa i pogłos | delay 1/16, 100 % wet, i pogłos B7 | B7 |
+| `TLO` (55) | bed A9 | downlifter B3 | jąkanie B5 | pogłos A9 (rumble) | A9 |
+
+- **Drum 1 (stopa):** z PROSTO (sinus G#1 +0,3 półtonu, spadek wysokości od ok. 5,2×, bez kliku),
+  `vol1` 12. W `TLO` także do FX (`out` `FX`, jak w A9): karmi pogłos, który sama przycisza (rumble).
+- **Drum 2, ghost kick (A2; `ECHO`, `FALA`, `RYK`):** miękkie echo stopy: sinus G1 (1,3 półtonu niżej
+  od stopy), mniejszy i krótszy spadek wysokości (`modamnt2` 34, `mod_eg2` 44), krótsze ciało
+  (`velod2` 10), LP 36 (bez kliku), `drive2` 18. Na krokach 4, 7, 12, 15: akcent (G, 127) na 7 i 15,
+  ciche (g) ok. −8 dB na 4 i 12; generator `sub` sty 1 stawia to samo.
+- **Drum 2, bed (A9; `TLO`):** krótki sinus F#1 (46 Hz) przez LP 16, `drive2` 8, na 4. szesnastce każdej
+  ćwierćnuty (kroki 4, 8, 12, 16), tuż przed stopą; razem z rumble dół nie milknie.
+- **Drum 3, figura (`ECHO`, `RYK`):** figura PROSTO (sinus B3 z FM, LFO 3 na `fmamnt3`), na poziomie
+  zestawu C (`vol3` 17); w demie B gra ją generator `prc`.
+- **Drum 3, sub boom (B4; `FALA`):** sinus opadający od ok. 245 Hz do E1, LP, długi; na pierwszej
+  stopie taktów 1 i 9, do FX.
+- **Drum 3, downlifter (B3; `TLO`):** szum, którego barwa opada od jasnej do ciemnej przez ok. takt;
+  takty 1 i 9, do FX.
+- **Snare (wszystkie cztery):** C2 z zestawu C: tyk szumu jak shaker (sam szum przez pasmo ok. 5 kHz,
+  miękkie wejście 16 ms, 70 ms), na sucho, bez slotu FX. **Zestaw C (perkusja zamiast naiwnego rimu)
+  czeka jeszcze na ocenę;** C2 jest tylko zaślepką do wymiany, gdy wybór zapadnie.
+- **Cymbal, ryk (B1; `ECHO`):** szum przez wąskie pasmo ok. 500 Hz z mocnym rezonansem, wolne
+  narastanie, drżenie 40 Hz (LFO 5 na `vol5`), daleko w pogłosie (`pre` 110); takty 1 i 9.
+- **Cymbal, ryk tylko w pogłosie (B7; `RYK`):** ten sam ryk bez dźwięku bezpośredniego: slot to ciemny
+  delay 1/16 (105 ms przy 143 BPM) na 100 % wet, a pogłos bierze jego echa.
+- **Cymbal, riser (B2; `FALA`):** szum przez LP, który otwiera się przez ok. 3/4 taktu (LFO 5, piła
+  w górę na `filter_freq_5`), głośność rośnie; takty 8 i 16, wpada w boom taktów 9 i 1.
+- **Cymbal, jąkanie (B5; `TLO`):** bardzo krótki szum; generator `rar` sty 1 den 4 gra go jako uderzenie
+  na 1 i cztery flamy po 4 na krokach 9–12 taktu 8 i 16.
+- **Hihat:** z PROSTO (szum przez HP 99, losowa panorama na każdej 16-tce); z generatorem `hat` (sty 1
+  den 7 lev −15) to warstwa ghostów z laboratorium.
+- **FX:** jak w tabeli; pogłos zawsze przyciszany stopą (`dck` `dr1`, `ddp` 127). W `TLO` downlifter
+  i jąkanie grają w pogłosie A9, nie w swoim: predelay, wybrzmienie i barwa B3 i B5 przesunęłyby
+  bed, więc ich `vol` jest zmierzony od nowa, ok. 17 dB pod groove `TLO`.
+
+**Poziomy.** Laboratorium ustawiało balans częściowo suwakami (wzmocnienie = suwak²): stopa 0,35,
+ghost kick 0,4, bed A9 0,6, zdarzenia 0,09–0,24. Kit suwaków nie zapisuje. Suwak i `vol` to to samo
+wzmocnienie (za przesterem bębnów, przed przesterem talerza), więc `vol` kitu to `vol` przepisu ×
+suwak², sprawdzony pomiarem: kit ze wszystkimi sześcioma suwakami na 1 gra balans przepisu. Hihat jest
+już na maksimum (`vol6` 127 na suwaku 1), więc to stopa schodzi do niego (`vol1` 12 = 100 × 0,35²),
+a nie reszta w górę. Dzięki temu stopa przycisza pogłos tak samo jak w przepisie (przyciszanie idzie
+za poziomem stopy). Kity grają więc na poziomie przepisów: szczyt od −10 do −13 dBFS, RMS ok.
+−30 dBFS (TLO −26), a PROSTO −2,7 i −11 dBFS; trzeba podkręcić wyjście. Gdzie `vol` nie mieści wartości (ryk B1: 0,63, a LFO dodaje
+swoją głębokość do `vol`, więc obie trzeba skalować razem), resztę bierze przester za `vol`
+(`cymbal_distortion`), który przy tak cichym sygnale działa jak zwykłe wzmocnienie 1 + k; w `FALA`
+boom bierze ją z `drive3` (40 → 26: pasma 30–150 Hz i powyżej 150 Hz zostają w proporcji B6 co do
+0,1 dB). Głośność ryku najlepiej zmieniać suwakiem: sam `vol5` zmienia też proporcję drżenia (LFO
+dodaje do `vol` stałą głębokość).
+
+| Kit | `vol1` | `vol2` | `vol3` | `vol4` | `vol5` | `vol6` | Poza `vol` (w przepisie) |
+|---|---|---|---|---|---|---|---|
+| `ECHO` | 12 | 18 | 17 | 124 | 3 | 127 | `amount_lfo5` 2 (44), `cymbal_distortion` 34 (100) |
+| `FALA` | 12 | 18 | 2 | 124 | 3 | 127 | `drive3` 26 (40), `cymbal_distortion` 46 (40) |
+| `RYK` | 12 | 18 | 17 | 124 | 3 | 127 | `amount_lfo5` 2 (44), `cymbal_distortion` 22 (100) |
+| `TLO` | 12 | 44 | 5 | 124 | 6 | 127 | `cymbal_distortion` 57 (60) |
+
+**Wynik** (emulator v0.7, 143 BPM, wyjście 1, wszystkie suwaki na 1). Demo A: przepis, z którego kit
+powstał, z jego ścieżkami, zdarzeniami i długością, zagrany z pliku kitu, obok ten sam przepis
+sposobem laboratorium; każdy głos sam na wyjściu 1, z FX (reszta na wyjściu 2, więc stopa dalej
+przycisza pogłos). Demo B: 16 taktów z generatora: stopa 4/4, `hat`, `sub` sty 1 (w `TLO` bed A9
+z ręki), na ścieżce 3 `prc` (`ECHO`, `RYK`) albo `rar` sty 2 (`FALA`, `TLO`), na ścieżce 5 `rar`
+umieszczony jak w przepisie, z jego zamrożeniem. G to akcent ghost kicka względem szczytu stopy
+w paśmie 30–150 Hz (cel 4–8 dB); zdarzenie to jego najgłośniejsza ćwierćnuta (sucho + pogłos)
+względem RMS groove bez zdarzeń. Wyzwolenia zgadzają się z zapisanymi krokami we wszystkich demach.
+
+| Kit | Demo A: głos najdalej od przepisu | G pod stopą, A / B (przepis) | Zdarzenia pod groove, A (przepis) | Zdarzenia pod groove, B | Szczyt A / B |
+|---|---|---|---|---|---|
+| `ECHO` | stopa −0,18 dB | 4,8 / 4,8 dB (5,0) | 17,2, 16,9 dB (17,0, 17,1) | 18,5, 18,2 dB | −12,6 / −11,9 dBFS |
+| `FALA` | stopa −0,18 dB | 4,8 / 4,8 dB (5,0) | 16,8, 17,3, 16,6, 16,9 dB (17,1, 17,3, 16,9, 17,0) | 16,8, 17,3, 16,6, 16,9 dB | −12,8 / −12,8 dBFS |
+| `RYK` | ryk −0,21 dB | 4,8 / 4,8 dB (5,0) | 17,3, 17,0 dB (17,4, 17,0) | 18,6, 18,4 dB | −12,6 / −11,8 dBFS |
+| `TLO` | hihat +0,22 dB | bez ghost kicka; bed 8,2 dB pod stopą (8,2) | A9 nie ma zdarzeń | 16,6, 17,1, 17,8, 17,1 dB | −12,1 / −12,1 dBFS |
+
+W demie B `ECHO` i `RYK` figura (`prc`) dokłada ok. 1,4 dB do groove, więc ryk jest tam 18,2–18,6 dB
+pod nim; względem samej stopy, ghost kicków i hihatu, jak w B1 i B7, to 17 dB. W `TLO` downlifter
+taktu 9 wchodzi w pogłos zamrożony przez jąkanie (B5) i dlatego jest 17,8 dB pod groove.
+
+**Zamrożenie ręcznie.** B1, B5 i B7 zamrażają ogon pogłosu (`frz`) zdarzeniem renderu. Kit go nie
+zapisuje (zapisany kit ma zawsze `frz` wyłączone), krok nie może go zablokować (p-lock), a LFO
+i velocity nie mają go za cel. Na LXR zamrożenie włącza się ręcznie: SHIFT + krok 3 w trybie
+performance albo `frz` na podstronie pogłosu (strona FX, SHIFT + krok 15). `ECHO` i `RYK`: na pierwszym
+takcie po ryku, wyłączyć dwa takty później (w demach takty 2–3 i 10–11). `TLO`: na ostatniej
+ćwierćnucie taktu jąkania, wyłączyć w połowie następnego taktu. Zamrożony pogłos trzyma też rumble:
+przez te trzy ćwierćnuty nie bierze nowych stóp (zamrożony pogłos nie przyjmuje sygnału).
+
+**Firmware.** Te kity potrzebują LICHOMAT v0.4 lub nowszego, v0.7 nie jest konieczne. Pogłos, jego
+przyciszanie (rumble: `dck`, `ddp`), zamrożenie i delay zsynchronizowany z tempem (`syn`) weszły
+w v0.4, a od v0.4 do v0.7 nie doszedł żaden parametr kitu: v0.5–v0.7 dodały tylko ustawienia
+globalne, nagrywania, ścieżki i kroku (`trg`, `rqn`, `tpl`, `amt`, `vtp`, `vdp`, `mic`), a plik kitu ma
+wciąż 268 bajtów. Zbudowane i zmierzone są na v0.7; na v0.4 nie były mierzone (v0.5 zaczyna głos co do
+próbki, v0.4 co blok 1,45 ms). Wzorce dem z generatora (`sub`, `hat`, `prc`, `rar`) to prototyp v0.8;
+kity ich nie potrzebują, kroki można wpisać ręcznie. Pogłos działa na razie z połową częstotliwości
+próbkowania (H12): po zmianie trzeba te kity zmierzyć jeszcze raz, jak `HUSTAWKA`.
+
+**Demo.** `demo/echo.wav`, `fala.wav` i `ryk.wav` grają wzorzec `ghost` (`GHOST_PATTERN` w
+`tools/kit_build.py`, 8 taktów, 143 BPM): stopa 4/4, ghost kicki na 4, 7, 12, 15 (G 127 na 7 i 15,
+g 52 na 4 i 12), tyk werbla na 2 i 4 i warstwa hihatu z generatora `hat` (takt 1, krok 8 `2:2`);
+`demo/tlo.wav` gra wzorzec `bed`: to samo z bedem na 4, 8, 12, 16. Bez Drum 3 i Cymbala: zdarzenia są
+rzadkie, a jednotaktowa pętla grałaby je w każdym takcie. Zdarzenia, figura i zamrożenie są
+w demach A i B, nagranych do odsłuchu jako MP3 poza repozytorium.
+
 ## Instalacja
 
 1. Zrób kopię całej karty SD na komputerze.
 2. Wybierz folder projektu na karcie, `PROJ00`–`PROJ63`. Usuń z niego (albo przenieś) pliki, których
-   nazwa zaczyna się od `56-` do `63-` i kończy na `.SND`, np. `56-INITK.SND` czy `60-INITK.SND`
-   (tylko `60-`–`63-`, jeśli chcesz same stare kity, albo `56-`–`59-` dla samych nowych). Firmware
+   nazwa zaczyna się od `52-` do `63-` i kończy na `.SND`, np. `52-INITK.SND` czy `60-INITK.SND`
+   (albo tylko te numery, których kity mają trafić na kartę, np. `52-`–`55-`). Firmware
    szuka kitu po numerze: wczytuje pierwszy plik `NN-*.SND`, więc dwa pliki z tym samym numerem to
    loteria.
-3. Skopiuj tam z `kits/card/PROJ00/` nowe kity `56-PULS.SND`, `57-HUSTA.SND`, `58-PROST.SND`,
-   `59-PRZES.SND` i stare `60-WIR.SND`, `61-MGLA.SND`, `62-RDZA.SND`, `63-IGLA.SND`. Stare pliki są te
-   same co wcześniej, bajt w bajt: jeśli już je masz na karcie, wystarczą cztery nowe.
+3. Skopiuj tam z `kits/card/PROJ00/` kity `52-ECHO.SND`, `53-FALA.SND`, `54-RYK.SND`, `55-TLO.SND`,
+   `56-PULS.SND`, `57-HUSTA.SND`, `58-PROST.SND`, `59-PRZES.SND`, `60-WIR.SND`, `61-MGLA.SND`,
+   `62-RDZA.SND` i `63-IGLA.SND`. Pliki 56–63 są te same co wcześniej, bajt w bajt: jeśli już są na
+   karcie, wystarczą cztery nowe, 52–55.
 4. Włóż kartę, włącz LXR i wczytaj ten projekt (projekt wczytuje kity z plików). Kity są w slotach
-   56–63: LOAD, typ kit, numer.
+   52–63: LOAD, typ kit, numer.
 5. Dla kitów 56–59 ustaw na wzorcu `Shuffle`: `PULS` 18, `HUSTAWKA` 45, `PROSTO` 0, `PRZESTER` 24,
-   i zapisz wzorzec; tempo 142–143 BPM. Shuffle należy do wzorca, nie do kitu.
+   i zapisz wzorzec; tempo 142–143 BPM. Shuffle należy do wzorca, nie do kitu. Kity 52–55: `Shuffle`
+   0, tempo 143 BPM, zamrożenie pogłosu ręcznie (sekcja „Kity z laboratorium brzmień”).
 
 **Nazwy plików:** `NN-NAZWA.SND`. `NN` to slot 00–63, `NAZWA` to pierwsze 5 znaków nazwy kitu (całą,
 do 8 znaków, firmware trzyma w pierwszych 8 bajtach pliku i pokazuje na ekranie). Żeby dać kit w inny
@@ -424,8 +546,10 @@ do FX grają przez slot jak zwykle: stopa RDZA ze slotem `off` gra na sucho. MGL
 to najwięcej. Jeśli taki firmware zapisze kit, blok znika (268 → 255 B), a v0.4 wczyta go potem
 z wyłączonym pogłosem.
 
-`HUSTAWKA` bez bloku v0.4 traci pogłos, a z nim dół, który gra dalej bez stopy. Pozostałe nowe kity
-nie używają pogłosu. Warunki kroków `2:2` i `4:4` we wzorcu demo `classic` wymagają v0.2+ (1.7 gra je w każdym takcie); same kity
+`HUSTAWKA` bez bloku v0.4 traci pogłos, a z nim dół, który gra dalej bez stopy. Pozostałe kity 56–59
+nie używają pogłosu. Kity 52–55 tracą bez bloku pogłos, a z nim odległość zdarzeń (ryk, riser, boom,
+downlifter i jąkanie grają wtedy blisko i na sucho), `TLO` także rumble; delay `RYK` gra tam swój
+wolny czas zamiast 1/16. Warunki kroków `2:2` i `4:4` we wzorcu demo `classic` wymagają v0.2+ (1.7 gra je w każdym takcie); same kity
 ich nie mają.
 
 ## Przebudowa
@@ -456,14 +580,26 @@ Build jest powtarzalny: dwa przebiegi dają te same pliki `.SND` i WAV, bajt w b
 plik `kits/NAZWA.txt` z `name`, `slot` i parametrami; nazwa nie może zawierać nazw producenta ani
 urządzenia. Trzy klucze dotyczą tylko dema, nie kitu: `bpm` (tempo, domyślnie 128), `shuffle`
 (`PAR_SHUFFLE` 0–127, przez `--param`; domyślnie nieustawiony) i `pattern` (`classic`, domyślny,
-albo `album`).
+`album`, `ghost` albo `bed`).
+
+Kity 52–55 zbudował renderer z gałęzi v0.7 (zbudowany tak samo, w jej katalogu), ten sam, którego
+używało laboratorium brzmień:
+
+    python3 tools/kit_build.py --renderer ŚCIEŻKA/DO/v0.7/build/emu/lichomat-render echo fala ryk tlo
+
+Renderer v0.7 nie przyjmuje `voice_lfoN` i `target_lfoN` przez `--param` (renderer tej gałęzi je
+przyjmuje). Z takim rendererem skrypt wpisuje je w bajty kitu 0 na karcie przed startem (bajt 8 +
+numer parametru), tak jak ustawia je wczytanie kitu, a sprawdzenie odczytu znajduje je w pliku na
+tym samym miejscu.
 
 ## Pliki
 
 - `wir.txt`, `mgla.txt`, `rdza.txt`, `igla.txt`, `puls.txt`, `hustawka.txt`, `prosto.txt`,
-  `przester.txt`: ustawienia kitów z komentarzami.
-- `card/PROJ00/56-PULS.SND`, `57-HUSTA.SND`, `58-PROST.SND`, `59-PRZES.SND`, `60-WIR.SND`,
-  `61-MGLA.SND`, `62-RDZA.SND`, `63-IGLA.SND`: kity na kartę.
+  `przester.txt`, `echo.txt`, `fala.txt`, `ryk.txt`, `tlo.txt`: ustawienia kitów z komentarzami.
+- `card/PROJ00/52-ECHO.SND`, `53-FALA.SND`, `54-RYK.SND`, `55-TLO.SND`, `56-PULS.SND`,
+  `57-HUSTA.SND`, `58-PROST.SND`, `59-PRZES.SND`, `60-WIR.SND`, `61-MGLA.SND`, `62-RDZA.SND`,
+  `63-IGLA.SND`: kity na kartę.
 - `demo/wir.wav`, `mgla.wav`, `rdza.wav`, `igla.wav`: dema, 8 taktów, 15 s, 2,6 MB każde;
-  `demo/puls.wav`, `hustawka.wav`, `prosto.wav`, `przester.wav`: 8 taktów, 13,4–13,5 s, 2,4 MB.
+  `demo/puls.wav`, `hustawka.wav`, `prosto.wav`, `przester.wav`: 8 taktów, 13,4–13,5 s, 2,4 MB;
+  `demo/echo.wav`, `fala.wav`, `ryk.wav`, `tlo.wav`: 8 taktów, 13,4 s, 2,4 MB.
 - `../tools/kit_build.py`: budowanie, sprawdzenie odczytu, dema, pomiary.
