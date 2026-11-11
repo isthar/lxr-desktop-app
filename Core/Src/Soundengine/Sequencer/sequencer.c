@@ -2803,25 +2803,35 @@ static int8_t seq_rawFine(const uint8_t *fine, uint8_t s)
 	return (int8_t)((fine[(s >> 1) & 31u] >> ((s & 1u) * 4u)) & 0x0Fu);
 }
 //------------------------------------------------------------------------------
-/** LICHOMAT v0.8 (G12): a generated track into pattern, each step with interrupts masked as
- * seq_clearTrackMicro(): seq_tick() reads the steps, and recording writes them */
-static void seq_writeGenTrack(uint8_t trackNr, uint8_t pattern, const PatternGenTrack *t)
+/** LICHOMAT v0.8 (G12): a generated track into pattern, each step and then the length with
+ * interrupts masked as seq_clearTrackMicro(): seq_tick() reads the steps, and recording writes them.
+ * A pattern change in seq_tick() puts the backup over the pattern that played (review of group C):
+ * when pattern played at the start and no longer does, the write stops there, as seq_genUndo(), so no
+ * half generated track stays in it; a pattern that starts to play takes the rest. 1 when written */
+static uint8_t seq_writeGenTrack(uint8_t trackNr, uint8_t pattern, const PatternGenTrack *t)
 {
 	Step *st = seq_patternSet.seq_subStepPattern[pattern][trackNr];
 	StepTiming *tm = seq_patternSet.seq_stepTiming[pattern][trackNr];
 	uint8_t *fine = seq_patternSet.seq_stepFine[pattern][trackNr];
-	for(uint8_t s = 0; s < NUM_STEPS; s++)
+	const uint8_t played = (pattern == seq_activePattern);
+	for(uint8_t s = 0; s <= NUM_STEPS; s++)
 	{
 		const uint32_t primask = seq_mailboxLock();
-		st[s] = t->step[s];
-		tm[s] = t->timing[s];
-		stepFine_set(fine, s, seq_rawFine(t->fine, s));
-		seq_setMainStep(pattern, trackNr, s, (uint8_t)((t->on[s >> 4] >> (s & 15u)) & 1u));
+		const uint8_t stopped = played && (pattern != seq_activePattern);
+		if(!stopped && (s == NUM_STEPS))	// the length last
+			seq_patternSet.length[pattern][trackNr] = t->length;
+		else if(!stopped)
+		{
+			st[s] = t->step[s];
+			tm[s] = t->timing[s];
+			stepFine_set(fine, s, seq_rawFine(t->fine, s));
+			seq_setMainStep(pattern, trackNr, s, (uint8_t)((t->on[s >> 4] >> (s & 15u)) & 1u));
+		}
 		seq_mailboxUnlock(primask);
+		if(stopped)
+			return 0;
 	}
-	const uint32_t primask = seq_mailboxLock();
-	seq_patternSet.length[pattern][trackNr] = t->length;
-	seq_mailboxUnlock(primask);
+	return 1;
 }
 //------------------------------------------------------------------------------
 /** LICHOMAT v0.8 (G4, G12): track in pattern regenerated from its settings; the source is the
@@ -2847,7 +2857,8 @@ uint8_t seq_generateTrack(uint8_t trackNr, uint8_t pattern)
 	const uint8_t f = patternGen_generate(&seq_gen[trackNr], trackNr, &src, &t);
 	if(f & PG_WROTE)
 	{
-		seq_writeGenTrack(trackNr, pattern, &t);
+		if(!seq_writeGenTrack(trackNr, pattern, &t))
+			return 0;	// the pattern stopped playing during the write: it is its backup again
 		preset_touchTimer(PRESET_PAT_TIMER);	// autosave, as a step toggled on the panel
 	}
 	return f;

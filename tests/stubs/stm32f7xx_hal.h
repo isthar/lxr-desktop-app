@@ -103,8 +103,18 @@ static inline uint32_t __get_APSR(void) { return 0; }
  * executable links seqc_fake_host), so a test sees the masking a firmware file it
  * is built with does, and the mask it leaves (test_sequencer and sequencer.c). */
 extern uint32_t host_primask, host_irqDisables;
+/* LICHOMAT v0.8 (review of group C): an interrupt that came while the mask was set runs when
+ * __set_PRIMASK() clears it; a test sets host_irqAtUnmask to such an interrupt (NULL: none,
+ * fake_host.c), e.g. seq_tick()'s pattern change in the middle of a masked write-back */
+extern void (*host_irqAtUnmask)(void);
 static inline uint32_t __get_PRIMASK(void) { return host_primask; }
-static inline void __set_PRIMASK(uint32_t primask) { host_primask = primask; }
+static inline void __set_PRIMASK(uint32_t primask)
+{
+	const uint32_t was = host_primask;
+	host_primask = primask;
+	if (was && !primask && host_irqAtUnmask)
+		host_irqAtUnmask();
+}
 static inline void __disable_irq(void) { host_primask = 1; host_irqDisables++; }
 
 uint32_t HAL_RCC_GetHCLKFreq(void);

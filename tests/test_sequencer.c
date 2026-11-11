@@ -1952,4 +1952,42 @@ TEST(gen_glue_the_same_typ_is_no_change)
 	ASSERT_EQ(patTouches, 1);
 }
 
+static int unmasks, switchAtUnmask;
+/** seq_tick()'s pattern change to pattern 1 (sequencer.c) as the interrupt at the switchAtUnmask-th unmask */
+static void patternChangeAtUnmask(void)
+{
+	if (++unmasks != switchAtUnmask)
+		return;
+	seq_copyBackupBufferToPattern(seq_activePattern);	/* the unsaved edits of the pattern that played go */
+	seq_copyPatternToBackupBuffer(1);
+	seq_activePattern = 1;
+}
+
+TEST(gen_glue_write_stops_when_its_pattern_stops_playing)
+{
+	/* review of group C: a pattern change in seq_tick() between two masked steps of the write-back
+	 * puts the backup over the pattern that played; the write stops there (before the length), so no
+	 * half generated track stays in that pattern, and nothing is touched or reported as written */
+	reset();
+	seq_setMainStep(0, 2, 5, 1);
+	seq_patternSet.seq_subStepPattern[0][2][5].volume = 99;
+	seq_patternSet.length[0][2] = 12;
+	seq_copyPatternToBackupBuffer(0);
+	PatternGenTrack saved, got;
+	genRead(0, 2, &saved);
+	unmasks = 0;
+	switchAtUnmask = 10;
+	host_irqAtUnmask = patternChangeAtUnmask;
+	patTouches = 0;
+	const uint8_t f = seq_setGenParam(2, 0, PAR_GEN_TYP, PG_TYPE_HAT);
+	host_irqAtUnmask = NULL;
+	ASSERT_EQ(f, 0); ASSERT_EQ(seq_activePattern, 1); ASSERT_EQ(host_primask, 0); ASSERT_EQ(patTouches, 0);
+	genRead(0, 2, &got);
+	ASSERT_TRUE(genSame(&got, &saved));
+	/* the next change writes pattern 0, shown but no longer playing, whole */
+	ASSERT_EQ(seq_setGenParam(2, 0, PAR_GEN_DEN, 3), PG_WROTE | PG_SOFT);
+	genRead(0, 2, &got);
+	ASSERT_EQ(got.length, 64); ASSERT_EQ(patTouches, 1);
+}
+
 TEST_MAIN()
