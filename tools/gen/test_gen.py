@@ -310,6 +310,21 @@ class Hat(unittest.TestCase):
             self.assertEqual([i for i in range(NUM_STEPS) if out.active[i] and out.steps[i].vol >= 64], [36])
             self.assertEqual([len(bar_hits(out, b)) for b in range(4)], [7, 7, 8, 7])
 
+    def test_legacy_bit7_is_no_accent(self):
+        # spec 3: an accent is vel >= 64 in bits 0-6; 0x80 | 40 is 40 (bit 7 is the legacy active
+        # flag). Alone it is no accent, so sty 0 falls back (spec 9); next to an accent it goes
+        cur = Track.from_pattern('................')
+        cur.active[5] = True
+        cur.steps[5].vol = 0x80 | 40
+        out = generate(S('hat', sty=0, den=7, var=0), 5, None, cur)
+        for b in range(4):
+            self.assertEqual(bar_hits(out, b, lambda st: st.vol == 127), set(gen.OFFBEATS))
+        self.assertTrue(all(st.vol != 0x80 | 40 for st in out.steps))
+        cur.active[1] = True
+        cur.steps[1].vol = 64
+        out = generate(S('hat', sty=0, den=0, var=0), 5, None, cur)
+        self.assertEqual([i for i in range(NUM_STEPS) if out.active[i]], [1, 17, 33, 49])
+
     def test_sty0_short_track_repeats(self):
         cur = Track.from_pattern('..X...X..o.x..X.')
         cur.steps[9].p1nr, cur.steps[9].p1val = 20, 99
@@ -689,6 +704,14 @@ class Rar(unittest.TestCase):
             for i in range(NUM_STEPS):
                 bars[i // BAR] += out.active[i]
         self.assertGreater(bars[0] + bars[3], bars[1] + bars[2])
+
+    def test_bars_1_and_4_weigh_2(self):
+        # spec 4.4: steps 1-16 and 49-64 weigh 2, steps 17-48 weigh 1. Each case (found with
+        # gen.py by flipping that one step's weight) picks the step, or not, by its weight alone
+        for step, sed, den, on in ((16, 8, 1, True), (17, 9, 4, False), (48, 4, 2, False), (49, 1, 4, True)):
+            out = generate(S('rar', sty=3, den=den, sed=sed), 4, KICK_EVEN)
+            self.assertEqual(out.active[step - 1], on, step)
+            self.assertEqual(sum(out.active), den)
 
     def test_sty4_mixed(self):
         for den in (1, 2, 3, 5, 10, 11, 16):

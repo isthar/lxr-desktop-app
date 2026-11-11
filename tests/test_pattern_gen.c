@@ -690,6 +690,57 @@ TEST(pgen_core_style0_accent_in_bar3_only)
 		}
 }
 
+TEST(pgen_core_style0_legacy_bit7_is_no_accent)
+{
+	/* §3: an accent is 64 or above in bits 0-6 of the volume; 0x80 | 40 plays 40 (bit 7 is the legacy
+	 * active flag). Alone on step 6 it is no accent: hat style 0 falls back to style 1 (§9), offbeats
+	 * at 127. Next to an accent at 64 on step 2 it is written over: den 0 leaves step 2 alone, in hat
+	 * and in prc */
+	PatternGenTrack t;
+	cleared(&t);
+	t.on[0] = 1u << 5;
+	t.step[5].volume = 0x80u | 40u;
+	const PatternGenSettings h = hat(0, 7, -15, 0, 2);
+	ASSERT_EQ(patternGen_generate(&h, 5, NULL, &t), PG_WROTE | PG_SOFT);
+	for (unsigned b = 0; b < PG_BARS; b++)
+	{
+		ASSERT_EQ(t.on[b] & 0x4444u, 0x4444u); ASSERT_EQ(bits(t.on[b]), 11u);
+	}
+	for (unsigned st = 0; st < PG_STEPS; st++)
+		ASSERT_TRUE(t.step[st].volume != (0x80u | 40u));
+	static const uint8_t typ[2] = { PG_TYPE_HAT, PG_TYPE_PRC };
+	for (unsigned i = 0; i < 2u; i++)
+	{
+		cleared(&t);
+		t.on[0] = (1u << 1) | (1u << 5);
+		t.step[1].volume = 64;
+		t.step[5].volume = 0x80u | 40u;
+		const PatternGenSettings s = { typ[i], 0, 0, -15, 0, 0, 2, 0, 0 };
+		ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t), PG_WROTE);
+		for (unsigned b = 0; b < PG_BARS; b++)
+			ASSERT_EQ(t.on[b], 1u << 1);
+		ASSERT_EQ(t.step[5].volume, 127);
+	}
+}
+
+TEST(pgen_core_rar_bars_1_and_4_weigh_2)
+{
+	/* §4.4: rar styles 3-4 weigh steps 1-16 and 49-64 by 2, steps 17-48 by 1. With the kick on
+	 * 2 6 10 14, found with gen.py by flipping that one step's weight, each case picks its step, or
+	 * not, by its weight alone: 16 (2) and 49 (2) on, 17 (1) and 48 (1) off */
+	static const struct { uint8_t step, sed, den, on; } c[] = { { 16, 8, 1, 1 }, { 17, 9, 4, 0 }, { 48, 4, 2, 0 }, { 49, 1, 4, 1 } };
+	PatternGenTrack t, k;
+	const PatternGenSource kick = source(&k, 0x2222u);
+	for (unsigned i = 0; i < sizeof c / sizeof c[0]; i++)
+	{
+		const PatternGenSettings s = { PG_TYPE_RAR, 3, c[i].den, 0, 0, 0, c[i].sed, 0, 0 };
+		cleared(&t);
+		ASSERT_EQ(patternGen_generate(&s, 4, &kick, &t), PG_WROTE);
+		ASSERT_EQ(isOn(&t, c[i].step - 1u), c[i].on);
+		ASSERT_EQ(bits(t.on[0]) + bits(t.on[1]) + bits(t.on[2]) + bits(t.on[3]), c[i].den);
+	}
+}
+
 TEST(pgen_core_rar_mixed_keeps_its_two_steps)
 {
 	/* §4.4 style 4 with the kick on 2 6 10 14: steps 1 (1:2) and 49 (4:4) stay whatever the scatter's

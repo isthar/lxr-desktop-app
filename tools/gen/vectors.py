@@ -136,6 +136,19 @@ def accent_in_bar3():
     return t
 
 
+def legacy_bit7(accent):
+    """steps at 0x80 | 40 (bit 7, the legacy active flag: they play 40, no accent) on 6 and 22,
+    and with accent a real one at 64 on step 2"""
+    t = Track(length=32)
+    for i in (5, 21):
+        t.active[i] = True
+        t.steps[i].vol = 0x80 | 40
+    if accent:
+        t.active[1] = True
+        t.steps[1].vol = 64
+    return t
+
+
 def prc_source():
     return generate(apply_type_defaults(Settings(sed=5), 'prc'), 2, kick44())
 
@@ -230,6 +243,8 @@ def cases():
     add('prc sty0 accent past length var-1', 'prc', 3, inp=kick44(), cur=accent_past_length(), sty=0, den=6, var=-1)
     add('hat sty0 only accent step 37', 'hat', 5, cur=accent_in_bar3(), sty=0, den=7, var=1)
     add('prc sty0 only accent step 37 var+1', 'prc', 2, inp=kick44(), cur=accent_in_bar3(), sty=0, den=3, var=1)
+    add('hat sty0 legacy bit 7 alone', 'hat', 5, cur=legacy_bit7(False), sty=0, den=6, var=0)
+    add('prc sty0 legacy bit 7 next to an accent', 'prc', 2, inp=kick_even(), cur=legacy_bit7(True), sty=0, den=2, var=0)
     # spec 9: no pickup ghost before an accent on step 1 of a bar
     add('prc sty3 kick even den4', 'prc', 2, inp=kick_even(), sty=3, den=4, var=0)
     add('prc sty4 kick even den4 sed1', 'prc', 2, inp=kick_even(), sty=4, den=4, sed=1, var=0)
@@ -253,6 +268,8 @@ def cases():
     for sed in (2, 64, 99):
         add('rar sty3 den5 sed%d' % sed, 'rar', 4, inp=kick44(), sty=3, den=5, sed=sed)
     add('rar sty8 (clamped to 4)', 'rar', 4, inp=kick44(), sty=8, den=5)
+    add('rar sty3 step 49 weighs 2', 'rar', 4, inp=kick_even(), sty=3, den=4, sed=1)
+    add('rar sty3 step 48 weighs 1', 'rar', 4, inp=kick_even(), sty=3, den=2, sed=4)
 
     # --- prp (track 4, index 3; src track 3) ---
     for sty in range(1, 5):
