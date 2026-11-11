@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 22:54",
+    "updated": "2026-11-11 23:14",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; generator v0.8 gotowy w kodzie, teraz testy w emulatorze i kity z laboratorium brzmień",
     "branch": "timing-core",
-    "head": "148e91d",
-    "next": "Raport M22 i szkic wydania v0.8 po przeglądzie; dema kitów 52–55 do odsłuchu",
-    "updated_at": "2026-11-11T22:54:00+01:00",
-    "now": "W tle: końcowy przegląd v0.8 i kity 52–55 (E10.4)"
+    "head": "64c764e",
+    "next": "Po E10.17: dokumenty v0.8 z nowymi liczbami, raport M22; dema kitów do odsłuchu",
+    "updated_at": "2026-11-11T23:14:00+01:00",
+    "now": "W tle: poprawki po przeglądzie (E10.17) i nowy balans kitów 52–55 (E10.4)"
   },
   "epics": [
     {
@@ -1319,6 +1319,13 @@
       "epic": "E10",
       "status": "zrobione",
       "title": "Sub jako ghost kicki (projekt §10): nowe style w prototypie, wektorach i rdzeniu C, var jak w prc, przykłady do odsłuchu",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.17",
+      "epic": "E10",
+      "status": "w toku",
+      "title": "Poprawki po przeglądzie całej gałęzi v0.8 (projekt §11): styl 0 nie czyta własnych kroków jako akcentów, przeładowanie patternu przerywa zapis, brakujące wektory, fuzz w repo",
       "updated": "2026-11-11"
     }
   ],
@@ -5216,6 +5223,11 @@
       "n": 691,
       "at": "2026-11-11 22:54",
       "text": "E10.13, E10.14: testy generatora w emulatorze (V08_generator: rzadkie uderzenia tylko w taktach 8 i 16; V08_persist: zapis i odczyt grają te same nuty), fuzz z dziesięcioma parametrami generatora (1 500 renderów, 0 znalezisk), README v0.8 (v0.8 97fc0fc, 1619ee2, 85cd7f0). Host 138/138, emulator 360/360, pod ASan 331/331, 41 złotych renderów bez zmian, RAM 470 268 / 471 032 B, stos najwyżej 696 B (limit 768). E10.15: punkty U42–U45 i rozdział instrukcji (727efc8), szkic notatek do wydania (148e91d); trwa końcowy przegląd całej gałęzi."
+    },
+    {
+      "n": 692,
+      "at": "2026-11-11 23:14",
+      "text": "Końcowy przegląd całej gałęzi v0.8: gotowa do testów na LXR, bez usterek, które mogłyby zawiesić urządzenie albo uszkodzić pamięć. Dwie prawdziwe usterki: styl 0 brał własne kroki generatora za Twoje akcenty (sed nie wracał do pierwszego wzorca) i przeładowanie grającego patternu w trakcie zapisu zostawiało pół ścieżki. Decyzje w projekcie §11 (64c764e); poprawki E10.17 w toku. Kity 52–55 zbudowane, ale za ciche (stopa ściszona jak na stronie laboratorium): przerabiam na balans PROSTO."
     }
   ]
 }
