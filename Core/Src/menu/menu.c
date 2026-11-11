@@ -3018,12 +3018,14 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 }
 
 //-----------------------------------------------------------------
-/** LICHOMAT v0.7 (plan v0.7 V7-11): the cursor is on the track page's sav and it shows us1..us4 */
+/** LICHOMAT v0.7 (plan v0.7 V7-11): the cursor is on the track page's sav and it shows us1..us4;
+ * v0.8 (quality review of group C): in edit mode, so a value left armed off the screen needs the
+ * push into edit mode first */
 static uint8_t menu_tplSaveArmed(void)
 {
 	const uint8_t activeParameter = menuIndex & MASK_PARAMETER;
 	const uint8_t activePage = (menuIndex & MASK_PAGE) >> PAGE_SHIFT;
-	if(menu_activePage != EUKLID_PAGE)
+	if(!editModeActive || (menu_activePage != EUKLID_PAGE))
 		return 0;
 	if(pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter) != PAR_TRACK_TPL_SAVE)
 		return 0;
@@ -3050,12 +3052,12 @@ static void menu_saveUserTemplate(void)
 		menu_showSdError(res);
 }
 //-----------------------------------------------------------------
-/** LICHOMAT v0.8 (G13): the cursor is on the track page's und and it shows und */
+/** LICHOMAT v0.8 (G13): the cursor is on the track page's und, in edit mode, and it shows und */
 static uint8_t menu_genUndoArmed(void)
 {
 	const uint8_t activeParameter = menuIndex & MASK_PARAMETER;
 	const uint8_t activePage = (menuIndex & MASK_PAGE) >> PAGE_SHIFT;
-	if(menu_activePage != EUKLID_PAGE)
+	if(!editModeActive || (menu_activePage != EUKLID_PAGE))
 		return 0;
 	if(pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter) != PAR_GEN_UND)
 		return 0;

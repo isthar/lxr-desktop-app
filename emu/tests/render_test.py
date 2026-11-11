@@ -1538,19 +1538,18 @@ def V07_screensaver(t):
     # sav's click on a dark screen (Task 6, light review of group C): with the screensaver on and the
     # cursor on sav at us1, two idle minutes start it (the LCD no longer shows the page); a click then
     # only wakes the screen, as it leaves edit mode alone: the page reads sav us1 again, nothing is
-    # captured and /tmp gets no USERTPL.LCH. A 125 s render, its own case so that V07_ui stays fast
+    # captured and /tmp gets no USERTPL.LCH. A 125 s render, its own case so that V07_ui stays fast.
+    # v0.8 (quality review of group C): sav acts from edit mode only, so it is armed there
     seed, log, keep = t.seed(), t.path('panel.log'), t.path('K')
     script = t.script('0ms press voice1\n+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
-                      '+200ms encoder +12\n+200ms mark sav\n+100ms param track_tpl_save=1\n+100ms encoder -1\n'
-                      '+100ms encoder +1\n+200ms mark sav1\n+122s mark ss\n+100ms push\n+1000ms mark woke\n')
+                      '+200ms encoder +12\n+200ms mark sav\n+100ms push\n+150ms encoder +1\n'
+                      '+250ms mark sav1\n+122s mark ss\n+100ms push\n+1000ms mark woke\n')
     t.render(seed, ['--no-start', '--seconds', '125', '--param', 'screensaver_on_off=1', '--panel-log', log,
                     '--keep-card', keep, '--events', script])
     rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
-    check(re.match(r'vtp.vdp.SAV', rows['sav1'][0]) and re.match(r'off.100.us1', rows['sav1'][1]),
-          'sav at us1: %r' % rows['sav1'])
-    check(not rows['ss'][0].startswith('vtp'), 'the screensaver after two idle minutes: %r' % rows['ss'])
-    check(re.match(r'vtp.vdp.SAV', rows['woke'][0]) and re.match(r'off.100.us1', rows['woke'][1]),
-          'after the click on the dark screen: %r' % rows['woke'])
+    check(rows['sav1'][1] == 'push: save   us1', 'sav at us1 in edit mode: %r' % rows['sav1'])
+    check(rows['ss'] != rows['sav1'], 'the screensaver after two idle minutes: %r' % rows['ss'])
+    check(rows['woke'] == rows['sav1'], 'after the click on the dark screen: %r' % rows['woke'])
     check(not glob.glob(os.path.join(keep, 'TMP', 'USERTPL.LCH')), 'no capture on the dark screen: TMP holds %r'
           % sorted(os.listdir(os.path.join(keep, 'TMP'))))
     no_copies_left()
@@ -1687,6 +1686,27 @@ def V08_armed(t):
           'after the click on sav: %r' % rows['saved'])
     check(glob.glob(os.path.join(keep, 'TMP', 'USERTPL.LCH')), 'sav captured while playing: TMP holds %r'
           % sorted(os.listdir(os.path.join(keep, 'TMP'))))
+    # quality review of group C: armed, then off the screen by SHIFT + mode2 (edit mode ends) and back
+    # with the encoder: one push enters edit mode, as in v0.7; it neither puts voice 6 back nor captures
+    mode2 = '+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
+    for name, arm in (('und', '+150ms encoder +7\n+100ms push\n+150ms encoder +1\n+200ms mark armed\n' + mode2
+                       + '+200ms mark away\n+150ms encoder -1\n'),
+                      ('sav', '+150ms encoder -1\n+100ms push\n+150ms encoder +1\n+200ms mark armed\n' + mode2
+                       + '+200ms mark away\n+150ms encoder -1\n')):
+        log, keep = t.path('panel-%s.log' % name), t.path('K-' + name)
+        script = t.script(head.replace('+100ms param follow=1\n', '') + arm + '+200ms mark back\n+100ms push\n'
+                          '+300ms mark pushed\n+300ms save-project 0\n')
+        t.render(seed, ['--no-start', '--seconds', '5', '--panel-log', log, '--keep-card', keep, '--events', script])
+        rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+        want = ('push: undo   und', r'var.not.sed.UND', 'Pattern Undo') if name == 'und' else \
+               ('push: save   us1', r'vtp.vdp.SAV', 'Pattern Save tpl')
+        check(rows['armed'][1] == want[0], '%s armed: %r' % (name, rows['armed']))
+        check(re.match(want[1], rows['back'][0]), '%s, the cursor back on it: %r' % (name, rows['back']))
+        check(rows['pushed'][0].startswith(want[2]), '%s, one push enters edit mode: %r' % (name, rows['pushed']))
+        pat = one_file(keep, '00-*.PAT')
+        check(pat[3655 + 5] == 64, '%s: voice 6 still the generated track, length %d' % (name, pat[3655 + 5]))
+        check(not glob.glob(os.path.join(keep, 'TMP', 'USERTPL.LCH')), '%s: no capture, TMP holds %r'
+              % (name, sorted(os.listdir(os.path.join(keep, 'TMP')))))
     no_copies_left()
 
 def name_table(text, table):
@@ -2406,8 +2426,8 @@ def V07_capture(t):
     groove_dir = os.path.join(t.root, 'emu', 'tests', 'cards', 'groove')
     keep, log = t.path('K'), t.path('panel.log')
     script = t.script('0ms press voice1\n+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
-                      '+200ms encoder +12\n+200ms mark sav\n+100ms param track_tpl_save=1\n+100ms push\n'
-                      '+300ms mark saved\n+100ms down shift\n+20ms press copy\n+150ms encoder +9\n'
+                      '+200ms encoder +12\n+200ms mark sav\n+50ms push\n+50ms param track_tpl_save=1\n'
+                      '+100ms push\n+300ms mark saved\n+100ms down shift\n+20ms press copy\n+150ms encoder +9\n'
                       '+200ms mark clear\n+100ms push\n+100ms up shift\n+200ms mark cleared\n'
                       '+100ms param track_tpl=8\n+100ms param track_tpl_amt=100\n+200ms press start\n'
                       '+8050ms press start\n+300ms save-project 0\n')
