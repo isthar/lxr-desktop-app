@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 16:51",
+    "updated": "2026-11-11 17:25",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; teraz E10.3, generator w firmware (gałąź v0.8)",
     "branch": "timing-core",
-    "head": "6c77ad6",
+    "head": "b4cad5e",
     "next": "U mnie: grupa C v0.8 (menu i spięcie generatora), laboratorium brzmień (sub, tło, perkusja), potem nowe style suba i poziom rzadkich uderzeń w generatorze. Czeka na Ciebie: wybór brzmień z laboratorium (gdy będą), H12 na LXR (30 min), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
-    "updated_at": "2026-11-11T16:51:00+01:00",
-    "now": "E10.11–E10.12: spięcie generatora z sekwencerem i menu (grupa C planu v0.8)"
+    "updated_at": "2026-11-11T17:25:00+01:00",
+    "now": "Czekam na Twój wybór z laboratorium brzmień; w tle poprawki menu v0.8 (E10.12)"
   },
   "epics": [
     {
@@ -5175,6 +5175,11 @@
       "n": 686,
       "at": "2026-11-11 16:51",
       "text": "Twoje doprecyzowanie: sub to ghost kicki (K***K***K***K*** / ***g**g****g**g*, ***********g**G*), czyli figury jak w Twoim wzorze do utworu 3. Projekt §10: nowe style sub (4-7-12-15, 12-15, 7-15, 4-12, 8-16, gęsty, 2-taktowy, z ziarna), var jak w prc, domyślnie ghost −8 dB i akcent 127. Nowy wiersz E10.16 (prototyp, wektory, rdzeń C, przykłady). Laboratorium brzmień przestawione z głębokiego suba na ghost kicki (głos podobny do stopy, krótszy, ciemniejszy)"
+    },
+    {
+      "n": 687,
+      "at": "2026-11-11 17:25",
+      "text": "E10.4: laboratorium brzmień na stronie odsłuchu (wersja 16, sekcja „Ghost kicki, tło, perkusja”, 20 próbek, przepisy w scratchpadzie soundlab/index.json). A1–A7 to ghost kicki na Drum 2 w Twoich figurach, A8–A9 bed dla porównania. B1–B7 to rzadkie uderzenia ok. 17 dB pod groovem w pogłosie: ryk z zamrożonym ogonem, riser, downlifter, boom, jąkanie, mieszany, ryk tylko w pogłosie. C1–C4 to perkusja zamiast rimshota: drewno FM, szum, metal, dubowy rim. Braki obecnych głosów (ważne dla E10.5–E10.6 po H12): ducking pogłosu zależy od poziomu stopy (przy cichej stopie tylko ok. 2 dB zamiast zmierzonych 4–9); jeden wspólny pogłos bez wysyłek per głos; predelay najwyżej 92 ms; obwiednia Drum ma jeden kształt na atak i wybrzmienie, bez hold i sustain; brak obwiedni filtra (riser przez LFO, nie zsynchronizowany z taktem); LFO co 64 próbki (ryk 40 Hz schodkowy); freeze bez p-locka"
     }
   ]
 }
