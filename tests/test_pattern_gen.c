@@ -35,6 +35,7 @@ static void cleared(PatternGenTrack *t)
 	t->length = 16;
 }
 static int isOn(const PatternGenTrack *t, unsigned s) { return (t->on[s >> 4] >> (s & 15u)) & 1u; }
+static unsigned bits(uint32_t x) { unsigned n = 0; for (; x; x &= x - 1u) n++; return n; }
 /** step s's fine nibble as stored, -8..+7 */
 static int nibble(const PatternGenTrack *t, unsigned s)
 {
@@ -45,6 +46,13 @@ static PatternGenSettings hat(uint8_t sty, uint8_t den, int8_t lev, int8_t var, 
 {
 	return (PatternGenSettings){ PG_TYPE_HAT, sty, den, lev, var, 0, sed, 0, 0 };
 }
+/** track 5 generated from s out of a cleared track */
+static uint8_t gen(PatternGenSettings s, PatternGenTrack *t, const PatternGenSource *src)
+{
+	cleared(t);
+	return patternGen_generate(&s, 5, src, t);
+}
+
 TEST(pgen_core_db_table)
 {
 	for (int db = 0; db >= -30; db--)
@@ -160,6 +168,190 @@ TEST(pgen_core_settings)
 	ASSERT_EQ(memcmp(&t, &u, sizeof t), 0);
 }
 
+TEST(pgen_core_hat_layout)
+{
+	/* §4.1 style 1: 127 on 3 7 11 15, 7 ghosts at lev -3..+2 dB, 4 bars alike, 64 steps. §3, §8: every
+	 * step is written clean, the off ones too (vel 127, 100 %), note 60 + not, no p-lock, flam 0,
+	 * shift 7, fine 0 */
+	for (uint8_t sed = 0; sed < 20; sed++)
+	{
+		PatternGenTrack t;
+		cleared(&t);
+		for (unsigned st = 0; st < PG_STEPS; st++)
+		{
+			t.step[st] = (Step){ 50, 0x80u | 30u, 50, 7, 3, 8, 4 };
+			t.timing[st].flam = 2;
+			t.timing[st].shift = 9;
+			stepFine_set(t.fine, (uint8_t)st, -4);
+		}
+		t.on[1] = 0x0F0Fu;
+		t.length = 40;
+		PatternGenSettings s = hat(1, 7, -15, 0, sed);
+		s.note = 3;
+		ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t), PG_WROTE | PG_SOFT);
+		ASSERT_EQ(t.length, 64); ASSERT_EQ(t.on[0] & 0x4444u, 0x4444u); ASSERT_EQ(bits(t.on[0]), 11u);
+		for (unsigned b = 1; b < PG_BARS; b++)
+			ASSERT_EQ(t.on[b], t.on[0]);
+		for (unsigned st = 0; st < PG_STEPS; st++)
+		{
+			const Step *x = &t.step[st];
+			ASSERT_EQ(x->note, 63); ASSERT_EQ(x->prob, 100);
+			ASSERT_EQ(x->param1Nr, 0xFF); ASSERT_EQ(x->param1Val, 0); ASSERT_EQ(x->param2Nr, 0xFF); ASSERT_EQ(x->param2Val, 0);
+			ASSERT_EQ(t.timing[st].flam, 0); ASSERT_EQ(t.timing[st].shift, 7); ASSERT_EQ(nibble(&t, st), 0);
+			if (!isOn(&t, st))
+				ASSERT_EQ(x->volume, 127);
+			else
+				ASSERT_TRUE(((st & 3u) == 2u) ? x->volume == 127 : (x->volume >= patternGen_dbVel(-18) && x->volume <= patternGen_dbVel(-13)));
+		}
+	}
+}
+
+TEST(pgen_core_hat_density_level_and_var)
+{
+	/* §5: den k's ghosts are among den k+1's, lev moves none, den past the 12 free places is cut;
+	 * §8: var +2 adds the next two of the ranking at 2:2, var -2 puts the last two of den's at 1:2 */
+	for (uint8_t sed = 0; sed < 10; sed++)
+	{
+		uint16_t prev = 0;
+		for (uint8_t den = 0; den <= PG_DEN_MAX; den++)
+		{
+			PatternGenTrack a, b;
+			gen(hat(1, den, -15, 0, sed), &a, NULL);
+			gen(hat(1, den, -27, 0, sed), &b, NULL);
+			ASSERT_EQ(a.on[0], b.on[0]); ASSERT_EQ(a.on[0] & prev, prev);
+			ASSERT_EQ(bits(a.on[0]), 4u + (den < 12u ? den : 12u));
+			prev = a.on[0];
+		}
+		PatternGenTrack z, p, m, n3;
+		gen(hat(1, 5, -15, 0, sed), &z, NULL); gen(hat(1, 5, -15, 2, sed), &p, NULL); gen(hat(1, 5, -15, -2, sed), &m, NULL);
+		gen(hat(1, 3, -15, 0, sed), &n3, NULL);
+		unsigned c22 = 0, c12 = 0;
+		for (unsigned st = 0; st < 16; st++)
+		{
+			ASSERT_TRUE(!isOn(&z, st) || (isOn(&p, st) && p.step[st].prob == 100));
+			c22 += !isOn(&z, st) && isOn(&p, st) && p.step[st].prob == 102;
+			c12 += isOn(&m, st) && m.step[st].prob == 101;
+			if (isOn(&m, st) && m.step[st].prob == 101)	/* the last two of den's 5: not among den 3's */
+				ASSERT_FALSE(isOn(&n3, st));
+		}
+		ASSERT_EQ(bits(p.on[0]), bits(z.on[0]) + 2u); ASSERT_EQ(c22, 2u); ASSERT_EQ(c12, 2u); ASSERT_EQ(m.on[0], z.on[0]);
+		PatternGenTrack full;	/* var +4 past the free places: what is left */
+		gen(hat(1, 10, -15, 4, sed), &full, NULL);
+		ASSERT_EQ(full.on[0], 0xFFFFu);
+		PatternGenTrack all;	/* var -4 on den 2: both at 1:2 */
+		gen(hat(1, 2, -15, -4, sed), &all, NULL);
+		c12 = 0;
+		for (unsigned st = 0; st < 16; st++)
+			c12 += isOn(&all, st) && all.step[st].prob == 101;
+		ASSERT_EQ(c12, 2u); ASSERT_EQ(bits(all.on[0]), 6u);
+	}
+}
+
+TEST(pgen_core_hat_rank_ties)
+{
+	/* §5: a tie of keys goes to the lower place. Track 2 (index 1), found with gen.py: style 3 sed 13
+	 * ties places 1 and 13 (weight 3) at ranks 7 and 8; style 0 sed 56 on a track without accents
+	 * ties 6 (weight 1) and 13 (weight 4) at ranks 14 and 15 */
+	static const struct { uint8_t sty, den, sed, lower, higher; } tie[] = { { 3, 7, 13, 1, 13 }, { 0, 14, 56, 6, 13 } };
+	for (unsigned i = 0; i < sizeof tie / sizeof tie[0]; i++)
+	{
+		PatternGenTrack t;
+		cleared(&t);
+		const PatternGenSettings s = hat(tie[i].sty, tie[i].den, -15, 0, tie[i].sed);
+		ASSERT_EQ(patternGen_generate(&s, 1, NULL, &t), PG_WROTE | PG_SOFT);
+		for (unsigned o = 0; o < PG_STEPS; o += 16)
+		{
+			ASSERT_TRUE(isOn(&t, o + tie[i].lower)); ASSERT_FALSE(isOn(&t, o + tie[i].higher));
+		}
+		const PatternGenSettings more = hat(tie[i].sty, (uint8_t)(tie[i].den + 1u), -15, 0, tie[i].sed);
+		cleared(&t);
+		(void)patternGen_generate(&more, 1, NULL, &t);
+		ASSERT_TRUE(isOn(&t, tie[i].lower)); ASSERT_TRUE(isOn(&t, tie[i].higher));
+	}
+}
+
+TEST(pgen_core_hat_style0_keeps_own_accents)
+{
+	/* §3, G6: step 2 (64, a p-lock, fine -4) stays and is played in bars 2-4 too (a 16-step track
+	 * repeats); 13 at 63 is no accent; den 16 fills every other place with a ghost */
+	PatternGenTrack t;
+	cleared(&t);
+	t.on[0] = (1u << 1) | (1u << 12);
+	t.step[1].volume = 64; t.step[1].param1Nr = 9; t.step[12].volume = 63;
+	stepFine_set(t.fine, 1, -4);
+	const PatternGenSettings s = hat(0, 16, -15, 0, 5);
+	ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t), PG_WROTE | PG_SOFT);
+	for (unsigned o = 0; o < PG_STEPS; o += 16)
+	{
+		ASSERT_EQ(t.step[o + 1].volume, 64); ASSERT_EQ(t.step[o + 1].param1Nr, 9); ASSERT_EQ(stepFine_get(t.fine, (uint8_t)(o + 1)), -4);
+		ASSERT_TRUE(t.step[o + 12].volume < 64); ASSERT_EQ(t.on[o >> 4], 0xFFFFu);
+	}
+}
+
+TEST(pgen_core_hat_style0_reads_as_played)
+{
+	/* §8: the current track is read as it plays. 12 steps repeat to 64: the accent on step 1 (100,
+	 * p-lock, flam, fine +3 and a raw nibble -7 on its neighbour) plays on 1 13 25 37 49 61, a
+	 * different place in each bar; the ghost on 6 (30) is no accent; steps 17-32 past the length do
+	 * not play. den 0: nothing written, so no PG_SOFT */
+	PatternGenTrack t;
+	cleared(&t);
+	t.length = 12;
+	t.on[0] = 1u | (1u << 5);
+	t.on[1] = 0xFFFFu;
+	t.step[0] = (Step){ 100, 0x80u | 102u, 61, 0xFF, 0, 12, 34 };
+	t.timing[0].flam = 1;
+	t.timing[0].shift = 8;
+	t.fine[0] = 0x93u;	/* step 0: +3; step 1 (off): the raw nibble 9, -7 */
+	t.step[5].volume = 30;
+	const Step acc = t.step[0];
+	const PatternGenSettings s = hat(0, 0, -15, 0, 0);
+	ASSERT_EQ(patternGen_generate(&s, 5, NULL, &t), PG_WROTE);
+	ASSERT_EQ(t.length, 64);
+	ASSERT_EQ(t.on[0], (1u << 0) | (1u << 12)); ASSERT_EQ(t.on[1], 1u << 8); ASSERT_EQ(t.on[2], 1u << 4);
+	ASSERT_EQ(t.on[3], (1u << 0) | (1u << 12));
+	for (unsigned st = 0; st < PG_STEPS; st++)
+	{
+		if (!isOn(&t, st))
+		{
+			ASSERT_EQ(t.step[st].volume, 127); ASSERT_EQ(t.step[st].param2Nr, 0xFF); ASSERT_EQ(nibble(&t, st), 0);
+			ASSERT_EQ(t.timing[st].shift, 7);
+			continue;
+		}
+		ASSERT_EQ(st % 12u, 0u);
+		ASSERT_EQ(memcmp(&t.step[st], &acc, sizeof acc), 0);
+		ASSERT_EQ(t.timing[st].flam, 1); ASSERT_EQ(t.timing[st].shift, 8); ASSERT_EQ(nibble(&t, st), 3);
+	}
+
+	/* 64 steps, bar by bar (§8): an accent on place b of bar b; den 15 fills each bar around its own */
+	cleared(&t);
+	t.length = 64;
+	for (unsigned b = 0; b < PG_BARS; b++)
+	{
+		t.on[b] = (uint16_t)(1u << b);
+		t.step[16u * b + b] = (Step){ 80, 100, 60, 40, (uint8_t)b, 0xFF, 0 };
+		stepFine_set(t.fine, (uint8_t)(16u * b + b), -5);
+	}
+	const PatternGenSettings f = hat(0, 15, -15, 0, 3);
+	ASSERT_EQ(patternGen_generate(&f, 5, NULL, &t), PG_WROTE | PG_SOFT);
+	for (unsigned b = 0; b < PG_BARS; b++)
+	{
+		ASSERT_EQ(t.on[b], 0xFFFFu);
+		for (unsigned p = 0; p < 16u; p++)
+		{
+			const Step *x = &t.step[16u * b + p];
+			if (p == b)
+			{
+				ASSERT_EQ(x->volume, 80); ASSERT_EQ(x->param1Nr, 40); ASSERT_EQ(x->param1Val, b); ASSERT_EQ(nibble(&t, 16u * b + p), -5);
+			}
+			else
+			{
+				ASSERT_TRUE(x->volume < 64); ASSERT_EQ(x->param1Nr, 0xFF); ASSERT_EQ(nibble(&t, 16u * b + p), 0);
+			}
+		}
+	}
+}
+
 /* tools/gen/vectors.json (tests/pattern_gen_vectors.py): the dB table, the random generator's start
  * states (bytes sed typ sty track) and first draws, the distinct tracks in the firmware's bytes, the
  * cases (src, cur, out: an index into PGV_TRACK, -1 a cleared track) */
@@ -168,7 +360,7 @@ typedef struct { uint8_t length; uint16_t on[PG_BARS]; uint8_t step[PG_STEPS * s
 	uint8_t fine[STEP_FINE_BYTES]; } pgv_track_t;
 typedef struct { const char *name; PatternGenSettings set; uint8_t track, vol; int16_t src, cur, out; } pgv_t;
 #include "pattern_gen_vectors.h"
-#define PGV_TYPES_DONE	PG_TYPE_HAT	/* ---; hat next, Task 3 sets PG_TYPES */
+#define PGV_TYPES_DONE	(PG_TYPE_HAT + 1)	/* Task 2: --- and hat; Task 3 sets PG_TYPES */
 
 TEST(pgen_vectors_vel_table)
 {
