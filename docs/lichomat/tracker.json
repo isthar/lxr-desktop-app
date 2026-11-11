@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-06 22:45",
+    "updated": "2026-11-11 09:22",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "Wtyczka 0.2.0: VST3 i AU gotowe na plugin-v07 (420d4a9); czekają sprawdzenia: znajomy P1–P10 (karta docs/lichomat/plugin-test.md), Ty P11 (a) w Terminalu",
+    "focus": "E9.5: panel w oknie wtyczki (0.3.0), szkic gotowy, piszę plan; w tle czekają Twoje P11 (a) i odpowiedzi znajomego na P1–P10",
     "branch": "timing-core",
-    "head": "7c2fcb2",
+    "head": "d5a4869",
     "next": "Czeka na Ciebie: E8.14 P11 (a): instalacja z auval w Terminalu (bez DAW); E8.12–E8.13 wtyczka w Live przez znajomego (karta testu); odsłuch utworu 3 i akcentów v0.7, B13 (A czy B), poprawki szkiców (v0.7, wtyczka, tryb host), CI; sprzęt (H12, E8.1, U38–U41). U mnie: po Twoim (a) szkic wydania z zipem AU; E9.3 po P4",
-    "updated_at": "2026-11-06T22:45:00+01:00",
-    "now": ""
+    "updated_at": "2026-11-11T09:22:00+01:00",
+    "now": "E9.5: plan panelu we wtyczce"
   },
   "epics": [
     {
@@ -1047,6 +1047,13 @@
       "status": "zrobione",
       "title": "Wtyczka: dwa wyjścia stereo (Out 1, Out 2 jak gniazda LXR; bez włączonego Out 2 suma na Out 1) i 36 parametrów do automatyki: wzorzec; głośność, panorama, filtr, decay i wyjście każdego głosu; filtr DJ; poziom i decay pogłosu; ilość FX. Wartości odsyłane z firmware bez pętli i zapisane w secie; na plugin-v07, wersja 0.2.0. Plan: docs/superpowers/plans/2026-11-06-plugin-buses-parameters.md (zad. 1–11 = E9.31–E9.41). Bez shuffle i rozmiaru pogłosu (firmware zmienia je tylko z menu) i bez AU (osobno: E9.7). Gotowe: plugin-v07 d0534b1, 111 testów wtyczki; po nowym silniku zegar rusza ≥1024 ramki (21 ms) po wartościach z Live; znane ograniczenie: przy eksporcie z nowego silnika nuta w pierwszej ramce może przez 2–3 ms grać z wartością z kitu",
       "updated": "2026-11-06"
+    },
+    {
+      "id": "E9.5",
+      "epic": "E9",
+      "status": "w toku",
+      "title": "Panel w oknie wtyczki (VST3 i AU 0.3.0): urządzenie z aplikacji LICHOMAT Emu (wyświetlacz, enkoder, gałki, suwaki, 41 przycisków z diodami) w oknie Live'a i Logic, obsługa myszą; twarz wydzielona z panel.cpp (aplikacja bez zmian), wyświetlacz i zdarzenia panelu przez pamięć wspólną v3, suwaki w stanie setu. Szkic: docs/superpowers/specs/2026-11-11-plugin-panel-design.md (moje decyzje do Twojej poprawki); gałąź plugin-panel od plugin-v07 420d4a9",
+      "updated": "2026-11-11"
     },
     {
       "id": "E9.6",
@@ -4991,6 +4998,11 @@
       "n": 676,
       "at": "2026-11-06 22:45",
       "text": "E9.7 (AU) zrobione: zad. 6 (7ed64f8, 420d4a9): bramka licencji z komponentem, README, instalacja z auval; PLUGIN-CHECK 156/156 w obu buildach, EMU-CHECK 353, CHECK 135/353 bez zmian. Zad. 7: P11 w docs/lichomat/plugin-checks.md, HANDOFF, wiersz E8.14 (Twoje P11)"
+    },
+    {
+      "n": 677,
+      "at": "2026-11-11 09:22",
+      "text": "E9.5: szkic projektu panelu w oknie wtyczki (docs/superpowers/specs/2026-11-11-plugin-panel-design.md): twarz urządzenia wydzielona z panel.cpp, wyświetlacz i zdarzenia przez pamięć wspólną v3, okno Metal z własnym wejściem myszy, IMessage w VST3, właściwość w AU, suwaki w secie; decyzje moje, do Twojej poprawki. Dalej: plan"
     }
   ]
 }
