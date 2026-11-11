@@ -3019,18 +3019,24 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 }
 
 //-----------------------------------------------------------------
-/** LICHOMAT v0.7 (plan v0.7 V7-11): the cursor is on the track page's sav and it shows us1..us4;
- * v0.8 (quality review of group C): in edit mode, so a value left armed off the screen needs the
- * push into edit mode first */
-static uint8_t menu_tplSaveArmed(void)
+/** LICHOMAT v0.8 (quality review of group C): the parameter the cursor edits on the track page, in
+ * edit mode; else PAR_NONE. sav's and und's clicks act on it only, so a value left armed off the
+ * screen needs the push into edit mode first */
+static uint16_t menu_trackPageEdit(void)
 {
+	if(!editModeActive || (menu_activePage != EUKLID_PAGE))
+		return PAR_NONE;
 	const uint8_t activeParameter = menuIndex & MASK_PARAMETER;
 	const uint8_t activePage = (menuIndex & MASK_PAGE) >> PAGE_SHIFT;
-	if(!editModeActive || (menu_activePage != EUKLID_PAGE))
-		return 0;
-	if(pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter) != PAR_TRACK_TPL_SAVE)
-		return 0;
-	return (activeParameters[PAR_TRACK_TPL_SAVE] >= 1) && (activeParameters[PAR_TRACK_TPL_SAVE] <= USER_TEMPLATES);
+	return pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter);
+}
+//-----------------------------------------------------------------
+/** LICHOMAT v0.7 (plan v0.7 V7-11): the cursor is on the track page's sav and it shows us1..us4
+ * (v0.8: in edit mode) */
+static uint8_t menu_tplSaveArmed(void)
+{
+	return (menu_trackPageEdit() == PAR_TRACK_TPL_SAVE)
+		&& (activeParameters[PAR_TRACK_TPL_SAVE] >= 1) && (activeParameters[PAR_TRACK_TPL_SAVE] <= USER_TEMPLATES);
 }
 //-----------------------------------------------------------------
 /** LICHOMAT v0.7 (V7-9, V7-11, V7-12): steps 1-16 of the active track in the shown pattern into
@@ -3056,13 +3062,7 @@ static void menu_saveUserTemplate(void)
 /** LICHOMAT v0.8 (G13): the cursor is on the track page's und, in edit mode, and it shows und */
 static uint8_t menu_genUndoArmed(void)
 {
-	const uint8_t activeParameter = menuIndex & MASK_PARAMETER;
-	const uint8_t activePage = (menuIndex & MASK_PAGE) >> PAGE_SHIFT;
-	if(!editModeActive || (menu_activePage != EUKLID_PAGE))
-		return 0;
-	if(pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter) != PAR_GEN_UND)
-		return 0;
-	return activeParameters[PAR_GEN_UND] == 1;
+	return (menu_trackPageEdit() == PAR_GEN_UND) && (activeParameters[PAR_GEN_UND] == 1);
 }
 //-----------------------------------------------------------------
 /** LICHOMAT v0.8 (G13): the active track of the shown pattern back to its last save; und reads ---
