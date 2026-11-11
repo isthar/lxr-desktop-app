@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 12:39",
+    "updated": "2026-11-11 13:13",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
-    "focus": "E10: groovebox do minimal groove techno; teraz E10.1, pomiary referencji pod generator wzorców",
+    "focus": "E10: groovebox do minimal groove techno; teraz E10.3, generator w firmware (gałąź v0.8)",
     "branch": "timing-core",
-    "head": "b744de8",
-    "next": "U mnie: E10.1 pomiary, potem E10.2 szkic generatora z przykładami do odsłuchu. Czeka na Ciebie: H12 na LXR (30 min, odblokowuje v0.4–v0.7 i wyznacza CPU dla atmo i riserów), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
-    "updated_at": "2026-11-11T12:39:00+01:00",
-    "now": "E10.2: szkic generatora wzorców (ghost, sub, perc, rzadkie, propagacja) z liczb E10.1"
+    "head": "69e4377",
+    "next": "U mnie: plan E10.3, potem wdrożenie z testami bajt w bajt z prototypem. Czeka na Ciebie: Q41 odsłuch przykładów generatora, H12 na LXR (30 min, odblokowuje v0.4–v0.7 i wyznacza CPU dla atmo i riserów), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
+    "updated_at": "2026-11-11T13:13:00+01:00",
+    "now": "E10.3: plan wdrożenia generatora w firmware"
   },
   "epics": [
     {
@@ -1219,14 +1219,14 @@
     {
       "id": "E10.2",
       "epic": "E10",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Szkic generatora wzorców na stronie ścieżki: ghost, sub, perc, propagacja rytmu i akcentów na inne ścieżki; pisze zwykłe kroki do edycji i zapisu; przykłady z emulatora na stronie odsłuchu",
       "updated": "2026-11-11"
     },
     {
       "id": "E10.3",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Generator wzorców w firmware (plan, testy, przeglądy)",
       "updated": "2026-11-11"
     },
@@ -1672,6 +1672,14 @@
       "assumption": "Wartość z kitu.",
       "answer": "Moja decyzja według Twojej reguły z 29.10: wartość z kitu, tak jak gra urządzenie sterowane z zewnętrznego sekwencera; wtyczka pokazuje ją w Live, do następnego punktu automatyki. Sprawdzasz to w P10 (c). Jeśli Live oznaczy przez to automatykę jako nadpisaną albo wolisz wartość z automatyki, zmiana to jedna reguła w plug_params.c (wartość z Live'a wygrywa przy każdym odczycie, nie tylko po starcie silnika). Wąskie okno, które zostaje (przegląd B): jeśli w ciągu kilku bloków po wczytaniu kitu Live przyśle punkt równy wartości wysłanej ostatnio, wtyczka go nie powtórzy, a Live dostanie wartość z kitu; następny inny punkt automatyki wygrywa.",
       "updated": "2026-11-06"
+    },
+    {
+      "id": "Q41",
+      "status": "otwarte",
+      "question": "Generator wzorców (E10.2): na stronie odsłuchu, w sekcji „Generator: pierwsze przykłady”, jest 32 przykładów, każdy z siatką kroków. Które style zostają, które wyrzucić albo zmienić? Czy ghosty hihatu (−15 dB) i suby (2 półtony pod stopą) brzmią w stylu? Czy zmiany na końcu frazy (var) są za słabe, czy za mocne?",
+      "assumption": "Zostają wszystkie style z liczbami z pomiarów. Firmware (E10.3) robię dalej, a Twoje uwagi zmienią tylko tabele stylów.",
+      "answer": "",
+      "updated": "2026-11-11"
     }
   ],
   "log": [
@@ -5074,6 +5082,11 @@
       "n": 680,
       "at": "2026-11-11 12:39",
       "text": "E10.2: projekt generatora w docs/superpowers/specs/2026-11-11-groove-generator-design.md. Strona ścieżki, podstrony 3–4: typ (hat, sub, prc, rar, prp), sty, den, lev, var, not, sed, und, src, shf. Przelicza na żywo jak Euklid i pisze zwykłe kroki 64-krokowej ścieżki. Pozycje we frazie dają istniejące warunki 1:2/2:2 i x:4, bez zmian silnika i formatu plików. Losowanie opisane dokładnie, żeby prototyp w Pythonie i firmware dawały to samo. Następny krok: prototyp tools/gen/gen.py na gałęzi v0.8 i przykłady z emulatora do odsłuchu"
+    },
+    {
+      "n": 681,
+      "at": "2026-11-11 13:13",
+      "text": "E10.2 zrobione: prototyp generatora tools/gen/gen.py na gałęzi v0.8 (c940a5c..c64c9a6, 50 testów, 211 wektorów dla portu w C) i 32 przykłady z emulatora v0.7 na stronie odsłuchu (wersja 14, sekcja „Generator: pierwsze przykłady”, kit PROSTO, 143 BPM, każdy z siatką kroków). Prototyp wymusił doprecyzowania (projekt §8, 69e4377): ghosty prc nigdy na stopie, echo i przedtakty prp przejmują warunek źródła. Q41: Twój odsłuch. E10.3 w toku: plan firmware"
     }
   ]
 }
