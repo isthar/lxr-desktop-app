@@ -467,10 +467,20 @@ const Page menuPages[NUM_PAGES][NUM_SUB_PAGES] =
 			PAR_EUKLID_LENGTH,	PAR_EUKLID_STEPS,	PAR_EUKLID_ROTATION,	PAR_MORPH,		PAR_TRACK_TEMPO, PAR_HUMAN_TIME,	PAR_HUMAN_VOL,	PAR_TRACK_DELAY
 		},
 		// LICHOMAT v0.6: the third screen, the groove template (spec v0.6 M15); v0.7: the fourth
-		// screen, the velocity template and the own template's save slot (plan v0.7 V7-16)
+		// screen, the velocity template and the own template's save slot (plan v0.7 V7-16); v0.8: the
+		// last slot a skip, so the encoder goes on to the generator (plan v0.8 G3)
 		{
-			TEXT_TRACK_TPL,	TEXT_TRACK_TPL_AMT,	TEXT_SKIP,	TEXT_SKIP,	TEXT_TRACK_VTP,	TEXT_TRACK_VDP,	TEXT_TPL_SAVE,	TEXT_EMPTY,
+			TEXT_TRACK_TPL,	TEXT_TRACK_TPL_AMT,	TEXT_SKIP,	TEXT_SKIP,	TEXT_TRACK_VTP,	TEXT_TRACK_VDP,	TEXT_TPL_SAVE,	TEXT_SKIP,
 			PAR_TRACK_TPL,	PAR_TRACK_TPL_AMT,	PAR_NONE,	PAR_NONE,	PAR_TRACK_VTP,	PAR_TRACK_VDP,	PAR_TRACK_TPL_SAVE,	PAR_NONE
+		},
+		// LICHOMAT v0.8: the pattern generator's three screens (spec E10.2 §3, plan v0.8 G3)
+		{
+			TEXT_GEN_TYP,	TEXT_GEN_STY,	TEXT_GEN_DEN,	TEXT_GEN_LEV,	TEXT_GEN_VAR,	TEXT_GEN_NOT,	TEXT_GEN_SED,	TEXT_GEN_UND,
+			PAR_GEN_TYP,	PAR_GEN_STY,	PAR_GEN_DEN,	PAR_GEN_LEV,	PAR_GEN_VAR,	PAR_GEN_NOT,	PAR_GEN_SED,	PAR_GEN_UND
+		},
+		{
+			TEXT_GEN_SRC,	TEXT_GEN_SHF,	TEXT_EMPTY,	TEXT_EMPTY,	TEXT_EMPTY,	TEXT_EMPTY,	TEXT_EMPTY,	TEXT_EMPTY,
+			PAR_GEN_SRC,	PAR_GEN_SHF,	PAR_NONE,	PAR_NONE,	PAR_NONE,	PAR_NONE,	PAR_NONE,	PAR_NONE
 		}
 	},
 	//---------------- pattern settings page ------------------------------

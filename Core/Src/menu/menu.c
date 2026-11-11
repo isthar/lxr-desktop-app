@@ -31,6 +31,7 @@
 #include "front.h"
 
 #include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Sequencer/PatternGen.h"	// LICHOMAT v0.8: PG_ ranges and flags
 #include "Soundengine/MIDI/CortexParser.h"	// LICHOMAT v0.6: frontParser_activeStep
 #include "Soundengine/Soundengine.h"
 #include "Soundengine/cpuMeter.h"
@@ -277,6 +278,16 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_TRACK_VTP, CAT_PATTERN, LONG_TRACK_VTP},/*TEXT_TRACK_VTP, LICHOMAT v0.7*/
 		{SHORT_TRACK_VDP, CAT_PATTERN, LONG_TRACK_VDP},/*TEXT_TRACK_VDP*/
 		{SHORT_TPL_SAVE, CAT_PATTERN, LONG_TPL_SAVE},/*TEXT_TPL_SAVE*/
+		{SHORT_GEN_TYP, CAT_PATTERN, LONG_GEN_TYP},/*TEXT_GEN_TYP, LICHOMAT v0.8*/
+		{SHORT_GEN_STY, CAT_PATTERN, LONG_GEN_STY},/*TEXT_GEN_STY*/
+		{SHORT_GEN_DEN, CAT_PATTERN, LONG_GEN_DEN},/*TEXT_GEN_DEN*/
+		{SHORT_GEN_LEV, CAT_PATTERN, LONG_GEN_LEV},/*TEXT_GEN_LEV*/
+		{SHORT_GEN_VAR, CAT_PATTERN, LONG_GEN_VAR},/*TEXT_GEN_VAR*/
+		{SHORT_GEN_NOT, CAT_PATTERN, LONG_GEN_NOT},/*TEXT_GEN_NOT*/
+		{SHORT_GEN_SED, CAT_PATTERN, LONG_GEN_SED},/*TEXT_GEN_SED*/
+		{SHORT_GEN_UND, CAT_PATTERN, LONG_GEN_UND},/*TEXT_GEN_UND*/
+		{SHORT_GEN_SRC, CAT_PATTERN, LONG_GEN_SRC},/*TEXT_GEN_SRC*/
+		{SHORT_GEN_SHF, CAT_PATTERN, LONG_GEN_SHF},/*TEXT_GEN_SHF*/
 
 
 };
@@ -606,6 +617,16 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 		/*PAR_TRACK_VTP*/	DTYPE_MENU | (MENU_TRK_VTP<<8),	// LICHOMAT v0.7
 		/*PAR_TRACK_VDP*/	DTYPE_MENU | (MENU_TPL_AMT<<8),
 		/*PAR_TRACK_TPL_SAVE*/	DTYPE_MENU | (MENU_TPL_SAVE<<8),
+		/*PAR_GEN_TYP*/	DTYPE_MENU | (MENU_GEN_TYP<<8),	// LICHOMAT v0.8
+		/*PAR_GEN_STY*/	DTYPE_MENU | (MENU_GEN_STY<<8),
+		/*PAR_GEN_DEN*/	DTYPE_MENU | (MENU_GEN_DEN<<8),
+		/*PAR_GEN_LEV*/	DTYPE_MENU | (MENU_GEN_LEV<<8),
+		/*PAR_GEN_VAR*/	DTYPE_MENU | (MENU_GEN_VAR<<8),
+		/*PAR_GEN_NOT*/	DTYPE_MENU | (MENU_GEN_NOT<<8),
+		/*PAR_GEN_SED*/	DTYPE_MENU | (MENU_GEN_SED<<8),
+		/*PAR_GEN_UND*/	DTYPE_MENU | (MENU_GEN_UND<<8),
+		/*PAR_GEN_SRC*/	DTYPE_MENU | (MENU_GEN_SRC<<8),
+		/*PAR_GEN_SHF*/	DTYPE_MENU | (MENU_GEN_SHF<<8),
 };
 
 
@@ -1708,6 +1729,16 @@ void menu_repaintGeneric()
 				}
 				else if((menuId == MENU_TPL_SAVE) && curParmVal && (curParmVal <= USER_TEMPLATES))	// LICHOMAT v0.7 (V7-11)
 					memcpy(&editDisplayBuffer[1][0], "push: save", 10);
+				else if(menuId == MENU_GEN_TYP)		// LICHOMAT v0.8: the type's long name
+				{
+					const char *n = genTypeLongNames[(curParmVal < genTypeNames[0][0]) ? curParmVal : 0];
+					memcpy(&editDisplayBuffer[1][0], n, strlen(n));
+				}
+				else if((menuId == MENU_GEN_UND) && (curParmVal == 1))	// LICHOMAT v0.8 (G13)
+				{
+					const char *n = (menu_getViewedPattern() == seq_activePattern) ? "push: undo" : "not playing";
+					memcpy(&editDisplayBuffer[1][0], n, strlen(n));
+				}
 			}
 				break; // switch(parameters[parNr].dtype&0x0F) case DTYPE_MENU
 
@@ -2784,6 +2815,16 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId)
 	case MENU_TPL_AMT: return TEMPLATE_AMOUNT_MAX - TEMPLATE_AMOUNT_MIN + 1;	// 0..200 %
 	case MENU_TRK_VTP: return trackVtpNames[0][0];	// LICHOMAT v0.7
 	case MENU_TPL_SAVE: return tplSaveNames[0][0];
+	case MENU_GEN_TYP: return genTypeNames[0][0];	// LICHOMAT v0.8 (G2)
+	case MENU_GEN_STY: return PG_STY_MAX + 1;
+	case MENU_GEN_DEN: return PG_DEN_MAX + 1;
+	case MENU_GEN_LEV: return 1 - PG_LEV_MIN;
+	case MENU_GEN_VAR: return 2 * PG_VAR_MAX + 1;
+	case MENU_GEN_NOT: return 2 * PG_NOTE_MAX + 1;
+	case MENU_GEN_SED: return PG_SED_MAX + 1;
+	case MENU_GEN_UND: return genUndoNames[0][0];
+	case MENU_GEN_SRC: return PG_TRACKS;
+	case MENU_GEN_SHF: return 2 * PG_SHF_MAX + 1;
 
 	default:
 		return 0;
@@ -2953,6 +2994,16 @@ static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmV
 	case MENU_TPL_SAVE:			// LICHOMAT v0.7
 		p=tplSaveNames[((curParmVal < tplSaveNames[0][0]) ? curParmVal : 0) + 1];
 		break;
+	case MENU_GEN_TYP: p = MENU_NAME(genTypeNames); break;	// LICHOMAT v0.8 (G2): past prp ---, as patternGen_checked()
+	case MENU_GEN_UND: p = MENU_NAME(genUndoNames); break;
+	case MENU_GEN_STY:
+	case MENU_GEN_DEN:
+	case MENU_GEN_SED: numtostrpu(buf, curParmVal, ' '); return;
+	case MENU_GEN_SRC: numtostrpu(buf, (uint8_t)(curParmVal + 1), ' '); return;	// tracks 1..7
+	case MENU_GEN_LEV: numtostrps(buf, (int8_t)(curParmVal + PG_LEV_MIN)); return;
+	case MENU_GEN_VAR: numtostrps(buf, (int8_t)(curParmVal - PG_VAR_MAX)); return;
+	case MENU_GEN_NOT: numtostrps(buf, (int8_t)(curParmVal - PG_NOTE_MAX)); return;
+	case MENU_GEN_SHF: numtostrps(buf, (int8_t)(curParmVal - PG_SHF_MAX)); return;
 
 
 	default:
@@ -2996,6 +3047,41 @@ static void menu_saveUserTemplate(void)
 		menu_showSdError(res);
 }
 //-----------------------------------------------------------------
+/** LICHOMAT v0.8 (G13): the cursor is on the track page's und and it shows und */
+static uint8_t menu_genUndoArmed(void)
+{
+	const uint8_t activeParameter = menuIndex & MASK_PARAMETER;
+	const uint8_t activePage = (menuIndex & MASK_PAGE) >> PAGE_SHIFT;
+	if(menu_activePage != EUKLID_PAGE)
+		return 0;
+	if(pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter) != PAR_GEN_UND)
+		return 0;
+	return activeParameters[PAR_GEN_UND] == 1;
+}
+//-----------------------------------------------------------------
+/** LICHOMAT v0.8 (G13): the active track of the shown pattern back to its last save; und reads ---
+ * and edit mode ends (nothing happens when the shown pattern is not the one playing); typ and a
+ * vol the generator switched on stay */
+static void menu_genUndo(void)
+{
+	if(seq_genUndo(menu_getActiveVoice(), menu_getViewedPattern()))
+		led_updateSeqLeds();
+	activeParameters[PAR_GEN_UND] = 0;
+	editModeActive = 0;
+}
+//-----------------------------------------------------------------
+/** LICHOMAT v0.8 (G11): a generated step below 127 on a voice with vol (velocity -> volume) off:
+ * vol on, as its edit on the voice page; both hats share PAR_VOLUME_MOD_ON_OFF6 */
+static void menu_genVolumeOn(uint8_t voice)
+{
+	const uint16_t p = (uint16_t)(PAR_VOLUME_MOD_ON_OFF1 + ((voice < 5) ? voice : 5));
+	if(activeParameters[p])
+		return;
+	activeParameters[p] = 1;
+	frontPanel_sendData(CC_2, (uint8_t)(p - 128), 1);
+	preset_touchTimer(PRESET_KIT_TIMER);
+}
+//-----------------------------------------------------------------
 // called when either the encoder is rotated, or the encoder button is clicked
 // inc - the number of clicks the encoder has moved
 // button - 1 if the button is depressed, 0 if its not
@@ -3015,6 +3101,10 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 			else if(!screensaver_Active && menu_tplSaveArmed())	// LICHOMAT v0.7: the click saves the track into sav's template (V7-11)
 			{
 				menu_saveUserTemplate();
+			}
+			else if(!screensaver_Active && menu_genUndoArmed())	// LICHOMAT v0.8: the click undoes the track (G13, G18)
+			{
+				menu_genUndo();
 			}
 			else
 			{
@@ -3750,6 +3840,25 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	case PAR_TRACK_VDP:
 		seq_setGrooveParam(menu_getActiveVoice(), menu_getViewedPattern(), paramNr, value);
 		break;
+
+	case PAR_GEN_TYP:	// LICHOMAT v0.8: the generator (G2, G11); und acts on the click only
+	case PAR_GEN_STY:
+	case PAR_GEN_DEN:
+	case PAR_GEN_LEV:
+	case PAR_GEN_VAR:
+	case PAR_GEN_NOT:
+	case PAR_GEN_SED:
+	case PAR_GEN_SRC:
+	case PAR_GEN_SHF:
+	{
+		const uint8_t voice = menu_getActiveVoice();
+		const uint8_t f = seq_setGenParam(voice, menu_getViewedPattern(), paramNr, value);
+		if(f & PG_SOFT)
+			menu_genVolumeOn(voice);
+		if(f & PG_WROTE)
+			led_updateSeqLeds();	// the step LEDs, and the length 64 on the last-step page
+		break;
+	}
 
 	case PAR_TRACK_LENGTH:
 		frontPanel_sendData(SEQ_CC,SEQ_SET_ACTIVE_TRACK,menu_getActiveVoice());

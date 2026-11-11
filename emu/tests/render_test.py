@@ -1365,7 +1365,7 @@ def V06_ui(t):
     # Task 6: the scroll signs >, * and <; edit mode on tpl shows the template's long name; the
     # voice mode button from the third screen opens the voice page's first sub-page; SHIFT + mode2
     # steps through the three screens and back to the first. v0.7: the fourth screen follows the
-    # third (plan v0.7 V7-16)
+    # third (plan v0.7 V7-16); v0.8: the fifth is the generator's (plan v0.8 G3)
     seed, log = t.seed(), t.path('panel.log')
     mode2 = '+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
     script = t.script('0ms press voice2\n+100ms param track_tpl=3\n+100ms param track_tpl_amt=150\n'
@@ -1388,7 +1388,7 @@ def V06_ui(t):
     check(re.match(r'tmp.hmt.hmv.DLY', rows['back'][0]), 'back to dly: %r' % rows['back'])
     check(re.match(r'COA.fin.wav.pwm>', rows['voice'][0]), 'the voice page from tpl: %r' % rows['voice'])
     for m, want in (('c1', r'LEN.stp'), ('c2', r'TMP.hmt'), ('c3', r'TPL.amt'), ('c4', r'VTP.vdp.sav'),
-                    ('c5', r'LEN.stp')):
+                    ('c5', r'TYP.sty.den.lev')):
         check(re.match(want, rows[m][0]), 'SHIFT + mode2, %s: %r' % (m, rows[m]))
     check(re.search(r'rqn', rows['rec'][0], re.I) and re.search(r'on', rows['rec'][1]), 'rec: %r' % rows['rec'])
     # the step page's mic (review of Task 6): loaded on step select (seq_loadStepMicro() in
@@ -1412,7 +1412,7 @@ def V06_ui(t):
 @case
 def V07_ui(t):
     # the track page's fourth screen (plan v0.7 Task 6, V7-11, V7-14, V7-16): the encoder runs from
-    # amt over the skips to vtp and stops at sav (sign <); vtp and vdp show the voice's values, edit
+    # amt over the skips to vtp to sav (sign *, the generator follows in v0.8); vtp and vdp show the voice's values, edit
     # mode on vtp its long name, sav at 2 reads us2; back left to amt. SHIFT + COPY and the encoder
     # show the clear page's micro, SHIFT up leaves it. A project save writes block 3 right after block
     # 1 (3,697 + 20 bytes, LCHM 03 07, voice 2's of8 at 50 %, the others 0) and no USERTPL.LCH
@@ -1420,7 +1420,7 @@ def V07_ui(t):
     mode2 = '+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
     script = t.script('0ms press voice2\n+100ms param track_vtp=1\n+100ms param track_vdp=50\n'
                       + mode2 + '+200ms encoder +8\n+200ms mark tpl\n+100ms encoder +1\n+100ms encoder +1\n'
-                      '+200ms mark vtp\n+100ms push\n+200ms mark vtpedit\n+100ms push\n+150ms encoder +3\n'
+                      '+200ms mark vtp\n+100ms push\n+200ms mark vtpedit\n+100ms push\n+150ms encoder +2\n'
                       '+200ms mark sav\n+100ms push\n+150ms encoder +2\n+200ms mark savedit\n+100ms encoder -2\n'
                       '+100ms push\n+200ms mark savoff\n+100ms param track_tpl_save=2\n+100ms encoder -1\n'
                       '+100ms encoder +1\n+200ms mark sav2\n+100ms encoder -3\n'
@@ -1429,8 +1429,8 @@ def V07_ui(t):
     t.render(seed, ['--no-start', '--seconds', '6', '--panel-log', log, '--keep-card', keep, '--events', script])
     rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
     check(re.match(r'TPL.amt.{8}\*', rows['tpl'][0]), 'the third screen, sign *: %r' % rows['tpl'])
-    check(re.match(r'VTP.vdp.sav.{4}<', rows['vtp'][0]) and re.match(r'of8. 50.---', rows['vtp'][1]),
-          'the fourth screen: %r' % rows['vtp'])
+    check(re.match(r'VTP.vdp.sav.{4}\*', rows['vtp'][0]) and re.match(r'of8. 50.---', rows['vtp'][1]),
+          'the fourth screen, sign * (the generator follows, v0.8): %r' % rows['vtp'])
     check(rows['vtpedit'][1].startswith('offbeat 8th'), 'edit mode on vtp 1: %r' % rows['vtpedit'])
     check(re.match(r'vtp.vdp.SAV', rows['sav'][0]), 'sav, where the encoder stops: %r' % rows['sav'])
     check(rows['savedit'][1] == 'push: save   us2', 'edit mode on sav 2: %r' % rows['savedit'])
@@ -1455,7 +1455,7 @@ def V07_ui(t):
     sav = ('0ms press voice1\n+100ms param track_tpl=11\n+100ms param track_vtp=8\n+100ms down shift\n'
            '+20ms press mode2\n+100ms up shift\n+200ms encoder +8\n+200ms mark tplus\n+100ms push\n'
            '+200ms mark tplusedit\n+100ms push\n+150ms encoder +2\n+200ms mark vtpus\n+100ms push\n'
-           '+200ms mark vtpusedit\n+100ms push\n+150ms encoder +13\n+200ms mark sav\n+100ms push\n'
+           '+200ms mark vtpusedit\n+100ms push\n+150ms encoder +2\n+200ms mark sav\n+100ms push\n'
            '+150ms encoder +1\n+200ms mark savus1\n+100ms push\n+300ms mark saved\n')
     own = card_copy(t, seed, 'own')
     with open(os.path.join(own, 'PROJ00', 'USERTPL.LCH'), 'wb') as f:
@@ -1508,7 +1508,7 @@ def V07_ui(t):
                       '+100ms press step4\n+200ms press mode1\n+100ms press voice3\n+100ms press step1\n'
                       '+100ms press step3\n+100ms param active_step=0\n+100ms param step_micro=114\n'
                       '+100ms param active_step=2\n+100ms param step_micro=64\n+100ms down shift\n'
-                      '+20ms press mode2\n+100ms up shift\n+200ms encoder +13\n+200ms mark sav\n+100ms push\n'
+                      '+20ms press mode2\n+100ms up shift\n+200ms encoder +12\n+200ms mark sav\n+100ms push\n'
                       '+150ms encoder +2\n+100ms encoder -2\n+200ms mark savdash\n+100ms encoder +13\n'
                       '+200ms mark savus4\n+100ms push\n+300ms mark saved\n+100ms down shift\n+20ms press copy\n'
                       '+150ms encoder +9\n+200ms mark clear\n+100ms push\n+100ms up shift\n+300ms save-project 0\n')
@@ -1541,7 +1541,7 @@ def V07_screensaver(t):
     # captured and /tmp gets no USERTPL.LCH. A 125 s render, its own case so that V07_ui stays fast
     seed, log, keep = t.seed(), t.path('panel.log'), t.path('K')
     script = t.script('0ms press voice1\n+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
-                      '+200ms encoder +13\n+200ms mark sav\n+100ms param track_tpl_save=1\n+100ms encoder -1\n'
+                      '+200ms encoder +12\n+200ms mark sav\n+100ms param track_tpl_save=1\n+100ms encoder -1\n'
                       '+100ms encoder +1\n+200ms mark sav1\n+122s mark ss\n+100ms push\n+1000ms mark woke\n')
     t.render(seed, ['--no-start', '--seconds', '125', '--param', 'screensaver_on_off=1', '--panel-log', log,
                     '--keep-card', keep, '--events', script])
@@ -1553,6 +1553,70 @@ def V07_screensaver(t):
           'after the click on the dark screen: %r' % rows['woke'])
     check(not glob.glob(os.path.join(keep, 'TMP', 'USERTPL.LCH')), 'no capture on the dark screen: TMP holds %r'
           % sorted(os.listdir(os.path.join(keep, 'TMP'))))
+    no_copies_left()
+
+@case
+def V08_ui(t):
+    # the generator's screens (plan v0.8 Task 5, G2, G3, G11, G13). A: from sav the encoder goes on to
+    # typ (sav's sign is * now); typ in edit mode shows the long name and loads hat's values; the second
+    # and third screens; voice 7's track becomes 64 steps of offbeats at 127 and ghosts, and the hats'
+    # vol (kit 0, off on the init card), which voice 7 shares with voice 6, is on after the project
+    # save, the parameter after it untouched. B: SHIFT + mode2 steps through the seven screens; und's
+    # edit mode reads "push: undo" and its click puts back voice 6 as loaded; the vol the generator
+    # switched on stays on
+    seed, log, keep = t.seed(), t.path('panel.log'), t.path('K')
+    mode2 = '+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
+    script = t.script('0ms press voice7\n' + mode2 + '+200ms encoder +12\n+200ms mark sav\n'
+                      '+100ms encoder +1\n+200ms mark typ\n+100ms push\n+150ms encoder +1\n+200ms mark hatedit\n'
+                      '+100ms push\n+200ms mark hat\n+150ms encoder +4\n+200ms mark scr2\n+100ms encoder +4\n'
+                      '+200ms mark src\n+100ms encoder +5\n+200ms mark end\n+300ms save-project 0\n')
+    s, _, _ = t.render(seed, ['--no-start', '--seconds', '5', '--param', 'volume_mod_on_off6=0', '--panel-log', log,
+                              '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    check(re.match(r'vtp.vdp.SAV.{4}\*', rows['sav'][0]), 'sav, sign * (the generator follows): %r' % rows['sav'])
+    check(re.match(r'TYP.sty.den.lev\*', rows['typ'][0]) and re.match(r'---.  0.  0.  0', rows['typ'][1]),
+          'typ: %r' % rows['typ'])
+    check(rows['hatedit'][1] == 'hat ghosts   hat', 'edit mode on typ hat: %r' % rows['hatedit'])
+    check(re.match(r'hat.  1.  7.-15', rows['hat'][1]), "hat's values: %r" % rows['hat'])
+    check(re.match(r'VAR.not.sed.und\*', rows['scr2'][0]) and re.match(r'  1.  0.  0.---', rows['scr2'][1]),
+          'the second screen: %r' % rows['scr2'])
+    check(re.match(r'SRC.shf.{8}<', rows['src'][0]) and re.match(r'  1.  0', rows['src'][1]), 'src: %r' % rows['src'])
+    check(re.match(r'src.SHF', rows['end'][0]), 'the encoder stops at shf: %r' % rows['end'])
+    pat = one_file(keep, '00-*.PAT')
+    main = int.from_bytes(pat[3598 + 8 * 6:3606 + 8 * 6], 'little')
+    bars = [(main >> (16 * b)) & 0xFFFF for b in range(4)]
+    check(pat[3655 + 6] == 64 and len(set(bars)) == 1 and bars[0] & 0x4444 == 0x4444 and bin(bars[0]).count('1') == 12,
+          'voice 7: length %d, bars %r' % (pat[3655 + 6], [hex(b) for b in bars]))
+    # bar 1: the offbeats at 127, eight soft hits (den 7 at 100 %, var +1 at 2:2) at -18..-13 dB
+    steps = {p: tuple(pat[14 + 512 * 6 + 7 * p:14 + 512 * 6 + 7 * p + 2]) for p in range(16) if bars[0] >> p & 1}
+    soft = [steps[p] for p in steps if p % 4 != 2]
+    check(all(steps[p][0] == 127 for p in (2, 6, 10, 14)) and len(soft) == 8
+          and all(16 <= v <= 28 for v, _ in soft) and sorted(q for _, q in soft) == [100] * 7 + [102],
+          'voice 7 bar 1 (volume, prob): %r' % steps)
+    n = s['paramNumbers']['volume_mod_on_off6']
+    k0, s0 = one_file(keep, '00-*.SND'), one_file(seed, '00-*.SND')
+    check(s0[8 + n] == 0 and k0[8 + n] == 1 and k0[9 + n] == s0[9 + n],
+          "the hats' vol: the seed's %d, after the generator %d (the next parameter %d, the seed's %d)"
+          % (s0[8 + n], k0[8 + n], k0[9 + n], s0[9 + n]))
+    log, keep = t.path('panel2.log'), t.path('K2')
+    script = t.script('0ms press voice6\n' + ''.join(mode2 + '+200ms mark c%d\n' % k for k in range(1, 9))
+                      + '+200ms encoder +13\n+200ms mark typ\n+100ms push\n+150ms encoder +1\n+100ms push\n'
+                      '+150ms encoder +7\n+200ms mark und\n+100ms push\n+150ms encoder +1\n+200ms mark undedit\n'
+                      '+100ms push\n+300ms mark undone\n+300ms save-project 0\n')
+    t.render(seed, ['--no-start', '--seconds', '7', '--panel-log', log, '--keep-card', keep, '--events', script])
+    rows = {x.split()[2]: panel_rows(x) for x in log_lines(log, PANEL_LINE)}
+    for m, want in (('c1', r'LEN.stp'), ('c2', r'TMP.hmt'), ('c3', r'TPL.amt'), ('c4', r'VTP.vdp.sav'),
+                    ('c5', r'TYP.sty.den.lev'), ('c6', r'VAR.not.sed.und'), ('c7', r'SRC.shf'), ('c8', r'LEN.stp')):
+        check(re.match(want, rows[m][0]), 'SHIFT + mode2, %s: %r' % (m, rows[m]))
+    check(re.match(r'var.not.sed.UND', rows['und'][0]), 'the encoder on und: %r' % rows['und'])
+    check(rows['undedit'][1] == 'push: undo   und', 'edit mode on und: %r' % rows['undedit'])
+    check(re.match(r'var.not.sed.UND', rows['undone'][0]) and re.match(r'  1.  0.  0.--- ', rows['undone'][1]),
+          'after the click, und at --- and edit mode left: %r' % rows['undone'])
+    a, b = one_file(keep, '00-*.PAT'), one_file(seed, '00-*.PAT')
+    check(a[14 + 512 * 5:14 + 512 * 6] == b[14 + 512 * 5:14 + 512 * 6] and a[3638:3646] == b[3638:3646]
+          and a[3655 + 5] == b[3655 + 5], "voice 6 after und is the seed's: length %d, not %d" % (a[3660], b[3660]))
+    k2 = one_file(keep, '00-*.SND')
+    check(k2[8 + n] == 1, "the hats' vol after und: %d, the generator's 1 stays" % k2[8 + n])
     no_copies_left()
 
 def name_table(text, table):
@@ -2272,7 +2336,7 @@ def V07_capture(t):
     groove_dir = os.path.join(t.root, 'emu', 'tests', 'cards', 'groove')
     keep, log = t.path('K'), t.path('panel.log')
     script = t.script('0ms press voice1\n+100ms down shift\n+20ms press mode2\n+100ms up shift\n'
-                      '+200ms encoder +13\n+200ms mark sav\n+100ms param track_tpl_save=1\n+100ms push\n'
+                      '+200ms encoder +12\n+200ms mark sav\n+100ms param track_tpl_save=1\n+100ms push\n'
                       '+300ms mark saved\n+100ms down shift\n+20ms press copy\n+150ms encoder +9\n'
                       '+200ms mark clear\n+100ms push\n+100ms up shift\n+200ms mark cleared\n'
                       '+100ms param track_tpl=8\n+100ms param track_tpl_amt=100\n+200ms press start\n'

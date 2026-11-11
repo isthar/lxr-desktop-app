@@ -17,9 +17,9 @@
   "USBD_CDC_DataIn": "88821c092d36dc86a8284ef74f14bf19ec7b5696f01e269509deacdf578ab8b7",
   "USBD_CDC_DataOut": "e340058acbd5f87e0a49c1d660180b1bcf10f1be0a706eaff9325d7388457f81",
   "USBD_CDC_TransmitPacket": "e797662c205692a19b006e60503ce25d18fba0d82804a8cdf885f0a3510492f5",
-  "getMaxEntriesForMenu": "ca63876ff22eb6d045a47fc3dc6ea4aa3b9d38ccf86b4674b887591596ba099f",
+  "getMaxEntriesForMenu": "9e667eeccfa99c46f6a3b1fa595f116507d78602e4c7e7e1756627d121db210d",
   "menu_encoderChangeParameter": "3f33748bc0847f9af6dff5f2acbfd424971c9de2a50a85e56ef773477a9a818a",
   "sd_formatRoutine": "1640c92455984a4bedd27eee0b7465b48c82e1ddbd1bf6e6e9cd17e95ac26c88",
-  "the menu ids of MenuText.h": "09a3d77487fbae9a8d399cde72ed3adf4059d96dfb893b65da9545ef349b27c5",
+  "the menu ids of MenuText.h": "97368b799a3004cb78cb72799788c4cafb0c5f3054750f55f67e8878b421005c",
   "the save page project save": "7c3e85173e7dd4013a462f4c3877dd723b062e92665b612b0e28a5d12f5d1635"
 }

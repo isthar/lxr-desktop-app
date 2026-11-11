@@ -26,6 +26,7 @@
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Sequencer/seq_core.h"
 #include "Soundengine/Sequencer/seq_platform.h"
+#include "Soundengine/Sequencer/PatternGen.h"
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/vsched.h"
 
@@ -89,7 +90,17 @@ enum
 	RFW_MENU_TRK_TPL = 37,
 	RFW_MENU_TPL_AMT = 38,
 	RFW_MENU_TRK_VTP = 39,	/* LICHOMAT v0.7 */
-	RFW_MENU_TPL_SAVE = 40
+	RFW_MENU_TPL_SAVE = 40,
+	RFW_MENU_GEN_TYP = 41,	/* LICHOMAT v0.8 */
+	RFW_MENU_GEN_STY = 42,
+	RFW_MENU_GEN_DEN = 43,
+	RFW_MENU_GEN_LEV = 44,
+	RFW_MENU_GEN_VAR = 45,
+	RFW_MENU_GEN_NOT = 46,
+	RFW_MENU_GEN_SED = 47,
+	RFW_MENU_GEN_UND = 48,
+	RFW_MENU_GEN_SRC = 49,
+	RFW_MENU_GEN_SHF = 50
 };
 
 extern const char transientNames[][4], outputNames[][7], outputNamesFx[][7], filterTypes[][8],
@@ -98,7 +109,7 @@ extern const char transientNames[][4], outputNames[][7], outputNamesFx[][7], fil
 	midiFilterNames[][16], ppqOutNames[][4], ppqInNames[][4], mixFmNames[][6], fxNames[][4], distNames[][4],
 	ratioNames[][4], delayNames[][4], reverbNames[][4], patModeNames[][4], stepFlamNames[][4],
 	stepShiftNames[][4], trackTempoNames[][4], sceneQuantNames[][4], duckSrcNames[][4], delaySyncNames[][4],
-	trigTimingNames[][4], trackTplNames[][4], trackVtpNames[][4], tplSaveNames[][4];
+	trigTimingNames[][4], trackTplNames[][4], trackVtpNames[][4], tplSaveNames[][4], genTypeNames[][4], genUndoNames[][4];
 extern uint8_t menu_numSamples;		/* menu.c: the samples on the card, after the waveforms */
 
 /* menu.c getMaxEntriesForMenu() (static there; M20 hashes the original) */
@@ -146,6 +157,16 @@ static uint8_t rfw_menuEntries(uint8_t menuId)
 	case RFW_MENU_TPL_AMT:		return TEMPLATE_AMOUNT_MAX - TEMPLATE_AMOUNT_MIN + 1;
 	case RFW_MENU_TRK_VTP:		return trackVtpNames[0][0];	/* LICHOMAT v0.7 */
 	case RFW_MENU_TPL_SAVE:		return tplSaveNames[0][0];
+	case RFW_MENU_GEN_TYP:		return genTypeNames[0][0];	/* LICHOMAT v0.8 */
+	case RFW_MENU_GEN_STY:		return PG_STY_MAX + 1;
+	case RFW_MENU_GEN_DEN:		return PG_DEN_MAX + 1;
+	case RFW_MENU_GEN_LEV:		return 1 - PG_LEV_MIN;
+	case RFW_MENU_GEN_VAR:		return 2 * PG_VAR_MAX + 1;
+	case RFW_MENU_GEN_NOT:		return 2 * PG_NOTE_MAX + 1;
+	case RFW_MENU_GEN_SED:		return PG_SED_MAX + 1;
+	case RFW_MENU_GEN_UND:		return genUndoNames[0][0];
+	case RFW_MENU_GEN_SRC:		return PG_TRACKS;
+	case RFW_MENU_GEN_SHF:		return 2 * PG_SHF_MAX + 1;
 	default:					return 0;
 	}
 }

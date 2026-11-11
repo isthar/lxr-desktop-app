@@ -57,6 +57,16 @@
 #define MENU_TPL_AMT		38
 #define MENU_TRK_VTP		39	// LICHOMAT v0.7
 #define MENU_TPL_SAVE		40
+#define MENU_GEN_TYP		41	// LICHOMAT v0.8: the pattern generator (plan v0.8 G2)
+#define MENU_GEN_STY		42
+#define MENU_GEN_DEN		43
+#define MENU_GEN_LEV		44
+#define MENU_GEN_VAR		45
+#define MENU_GEN_NOT		46
+#define MENU_GEN_SED		47
+#define MENU_GEN_UND		48
+#define MENU_GEN_SRC		49
+#define MENU_GEN_SHF		50
 
 //-----------------------------------------------------------------
 // Shared texts. Reduce mem usage by pooling common text
@@ -169,6 +179,22 @@ const char tplSaveNames[][4] =
 {
 	{5},		//number of entries
 	{"---"}, {"us1"}, {"us2"}, {"us3"}, {"us4"},
+};
+//-----------------------------------------------------------------
+// LICHOMAT v0.8: the generator's types (PAR_GEN_TYP), their long names, and und (PAR_GEN_UND)
+const char genTypeNames[][4] =
+{
+	{6},		//number of entries
+	{"---"}, {"hat"}, {"sub"}, {"prc"}, {"rar"}, {"prp"},
+};
+const char genTypeLongNames[][12] =
+{
+	{"off"}, {"hat ghosts"}, {"sub bass"}, {"percussion"}, {"rare hits"}, {"propagate"},
+};
+const char genUndoNames[][4] =
+{
+	{2},		//number of entries
+	{"---"}, {"und"},
 };
 //-----------------------------------------------------------------
 // LICHOMAT v0.2: the trig conditions of PAR_STEP_PROB 101..115 (SeqStepTypes.h)
@@ -570,6 +596,7 @@ const char shortNames[][4]  =
 	{"trg"},	// LICHOMAT v0.5
 	{"mic"}, {"tpl"}, {"amt"}, {"rqn"},	// LICHOMAT v0.6
 	{"vtp"}, {"vdp"}, {"sav"},	// LICHOMAT v0.7
+	{"typ"}, {"sty"}, {"den"}, {"lev"}, {"var"}, {"not"}, {"sed"}, {"und"}, {"src"}, {"shf"},	// LICHOMAT v0.8
 
 };
 //-----------------------------------------------------------------
@@ -708,6 +735,7 @@ const char longNames[][16] =
 	{"Trig tmg"},	// LICHOMAT v0.5
 	{"Micro"}, {"Template"}, {"Tpl amt"}, {"RecQuant"},	// LICHOMAT v0.6
 	{"Vel tpl"}, {"Vel dpth"}, {"Save tpl"},	// LICHOMAT v0.7
+	{"Gen type"}, {"Style"}, {"Density"}, {"Ghost dB"}, {"Variant"}, {"Note ofs"}, {"Seed"}, {"Undo"}, {"Source"}, {"Copy shf"},	// LICHOMAT v0.8
 };
 
 
