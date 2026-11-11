@@ -237,3 +237,26 @@ Przegląd porównał rdzeń w C z prototypem (53 000 losowych przypadków, zero 
 - **`rar`, styl 4:** posyp ma najwyżej 8 kroków, jak w stylu 3, więc `den` 10–16 daje ten sam wzorzec.
 - **Ograniczenie:** stopę czytam z pierwszego taktu ścieżki `src`, tak jak gra (krótsza ścieżka się powtarza), i ten układ obowiązuje we wszystkich 4 taktach. Przy stopie o długości, która nie dzieli 16 (np. 12 kroków), sub i perkusja mogą w taktach 2–4 trafić na stopę. W tym stylu stopa gra 4/4, więc zostawiam to opisane, nie poprawione.
 - **`typ` poza zakresem** (bajt 6–255, np. z NRPN): działa jak `---`, czyli nie rusza ścieżki. Wcześniej był przycinany do `prp`, który nadpisuje ścieżkę. (Przegląd jakości, 11.11.)
+
+## 10. `sub` to ghost kicki (11.11, Twoje doprecyzowanie)
+
+Napisałeś: „chodziło mi z tym subem o coś takiego jak groove z ghost kickiem”, z przykładami `***g**g****g**g*` i `***********g**G*` pod stopą 4/4. Rodzaj `sub` (na LCD zostaje `sub`) zamiast szesnastkowego basiku pisze więc **figury ghost kicków**: ciche uderzenia stopopodobnego głosu na synkopowanych szesnastkach między stopami. Pomiar się z tym zgadza: dół wraca na krokach 4, 7, 12 i 15 w kilku utworach referencji. Brzmienie ghost kicka (głos podobny do stopy, krótszy, ciemniejszy) daje kit (E10.4).
+
+Style (g = ghost, vel z `lev`; G = akcent, 127):
+
+| `sty` | Takt | Skąd |
+|---|---|---|
+| 1 | `...g..G....g..G.` | klasyczny, Twój wzór z utworu 3 (4, 7, 12, 15) |
+| 2 | `...........g..G.` | Twój drugi przykład (12, 15) |
+| 3 | `......g.......G.` | „i” po 2. i 4. ćwierćnucie (7, 15) |
+| 4 | `...g.......G....` | przed 2. i 4. stopą (4, 12) |
+| 5 | `.......g.......G` | tuż przed 3. stopą i przed taktem (8, 16) |
+| 6 | `...g..gg...g..GG` | gęsty (4, 7, 8, 12, 15, 16), jak jeden z utworów |
+| 7 | takt A `...g..G....g..G.`, takt B `...g..G..g.g..GG` | figura 2-taktowa: w takcie B dochodzą 10 i 16 |
+| 8 | z ziarna: `den` uderzeń na takt (domyślnie 3) z miejsc 4, 7, 12, 15 (waga 4), 8, 16 (waga 2), 10, 14 (waga 1); G na ostatnim w takcie; jeden takt powtórzony | nieklasyczny |
+
+- **Kroki stopy:** uderzenia nigdy na nie nie trafiają, jak dotąd (stopa ze ścieżki `src`).
+- **`var`** zmienia znaczenie i działa teraz jak w `prc`: +n to n ghostów dochodzących w 8. takcie frazy (2:2), z pierwszeństwem dla kroków 16, 14 i 10; −n to n ghostów z taktu 4 ścieżki, które dostają 1:2, czyli znikają w takcie 8. Druga nuta odpada.
+- **Domyślnie:** `sty` 1, `lev` −8 dB (vel 50), `var` 0, `not` 0 (głos stroi kit).
+- **Losowanie:** losowania dla stylu 8 i dla `var` idą w fazie 3, w tej kolejności.
+- **Ścieżka:** ghost kicki gra osobna ścieżka (Drum 2 albo Drum 3) z głosem podobnym do stopy. Stopa zostaje na swojej ścieżce.

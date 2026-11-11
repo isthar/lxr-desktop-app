@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-11 16:27",
+    "updated": "2026-11-11 16:51",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; teraz E10.3, generator w firmware (gałąź v0.8)",
     "branch": "timing-core",
-    "head": "0bf8342",
+    "head": "6c77ad6",
     "next": "U mnie: grupa C v0.8 (menu i spięcie generatora), laboratorium brzmień (sub, tło, perkusja), potem nowe style suba i poziom rzadkich uderzeń w generatorze. Czeka na Ciebie: wybór brzmień z laboratorium (gdy będą), H12 na LXR (30 min), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
-    "updated_at": "2026-11-11T16:27:00+01:00",
+    "updated_at": "2026-11-11T16:51:00+01:00",
     "now": "E10.11–E10.12: spięcie generatora z sekwencerem i menu (grupa C planu v0.8)"
   },
   "epics": [
@@ -1312,6 +1312,13 @@
       "epic": "E10",
       "status": "do zrobienia",
       "title": "Plan v0.8, zadanie 8: dokumenty dla Ciebie: U42–U45, rozdział instrukcji o generatorze, szkic notatek 0.8, raport M22",
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "E10.16",
+      "epic": "E10",
+      "status": "do zrobienia",
+      "title": "Sub jako ghost kicki (projekt §10): nowe style w prototypie, wektorach i rdzeniu C, var jak w prc, przykłady do odsłuchu",
       "updated": "2026-11-11"
     }
   ],
@@ -5163,6 +5170,11 @@
       "n": 685,
       "at": "2026-11-11 16:27",
       "text": "Q41 zamknięte, Twój odsłuch: stopy z hihatami świetne; suby naiwne, mało berlińskie, rolling jak z psytrance'u; rzadkie uderzenia za głośne i za suche (mają być tłem w pogłosie); przeniesienie rytmu super, rimshot naiwny. Ghosty hihatu i przeniesienie zostają bez zmian. E10.4 w toku: laboratorium brzmień na istniejących głosach i pogłosie (głęboki sub tłumiony stopą, rzadkie uderzenia jako tło w pogłosie, nowe barwy perkusji), próbki do Twojego wyboru na stronie odsłuchu; potem nowe style suba w generatorze (jedno uderzenie na ćwierćnutę lub rzadziej) i cichsze rzadkie uderzenia"
+    },
+    {
+      "n": 686,
+      "at": "2026-11-11 16:51",
+      "text": "Twoje doprecyzowanie: sub to ghost kicki (K***K***K***K*** / ***g**g****g**g*, ***********g**G*), czyli figury jak w Twoim wzorze do utworu 3. Projekt §10: nowe style sub (4-7-12-15, 12-15, 7-15, 4-12, 8-16, gęsty, 2-taktowy, z ziarna), var jak w prc, domyślnie ghost −8 dB i akcent 127. Nowy wiersz E10.16 (prototyp, wektory, rdzeń C, przykłady). Laboratorium brzmień przestawione z głębokiego suba na ghost kicki (głos podobny do stopy, krótszy, ciemniejszy)"
     }
   ]
 }
