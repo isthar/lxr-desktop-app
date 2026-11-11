@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-11 11:12",
+    "updated": "2026-11-11 12:10",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; teraz E10.1, pomiary referencji pod generator wzorców",
     "branch": "timing-core",
-    "head": "e8a5ac7",
+    "head": "29cedcc",
     "next": "U mnie: E10.1 pomiary, potem E10.2 szkic generatora z przykładami do odsłuchu. Czeka na Ciebie: H12 na LXR (30 min, odblokowuje v0.4–v0.7 i wyznacza CPU dla atmo i riserów), E8.14 P11 (a) w Terminalu, odpowiedzi znajomego P1–P10",
-    "updated_at": "2026-11-11T11:12:00+01:00",
-    "now": "E10.1: pomiary referencji (suby, ghosty, rzadkie zdarzenia)"
+    "updated_at": "2026-11-11T12:10:00+01:00",
+    "now": "E10.2: szkic generatora wzorców (ghost, sub, perc, rzadkie, propagacja) z liczb E10.1"
   },
   "epics": [
     {
@@ -1212,14 +1212,14 @@
     {
       "id": "E10.1",
       "epic": "E10",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Pomiary referencji do generatora: patterny subów krok po kroku (pasmo 30–150 Hz bez stopy, wysokość), warstwy ghostów w hihatach i perkusji według sekcji (gęstość, zmiany co 1–4 takty), słownik figur perkusji, katalog rzadkich zdarzeń (risery, ryki, uderzenia: miejsce w frazie, długość, pasmo, ruch widma), tło w breakdownach i grooveie, budowa aranżacji w blokach 4/8/16",
       "updated": "2026-11-11"
     },
     {
       "id": "E10.2",
       "epic": "E10",
-      "status": "do zrobienia",
+      "status": "w toku",
       "title": "Szkic generatora wzorców na stronie ścieżki: ghost, sub, perc, propagacja rytmu i akcentów na inne ścieżki; pisze zwykłe kroki do edycji i zapisu; przykłady z emulatora na stronie odsłuchu",
       "updated": "2026-11-11"
     },
@@ -5064,6 +5064,11 @@
       "n": 678,
       "at": "2026-11-11 11:12",
       "text": "E10 (nowy epik): groovebox do minimal groove techno, Twoja korekta kierunku z 11.11: generator wzorców (ghosty, suby, rzadkie uderzenia, propagacja), kity w stylu, rzadkie zdarzenia (risery, nieokreślone ryki, metalowa perkusja), głos atmo; E9.5 (panel we wtyczce) wstrzymany. Start: E10.1, pomiary referencji pod generator"
+    },
+    {
+      "n": 679,
+      "at": "2026-11-11 12:10",
+      "text": "E10.1 zrobione: pomiary 8 utworów referencji pod generator (tylko liczby, poza repo). Sub: ciągła warstwa 4–8 dB pod stopą, tłumiona każdą stopą, ponowne wejście na 4. szesnastce każdej ćwierćnuty (w każdym utworze), często też na 3.; nuta 0–3 półtony pod stopą, w połowie utworów dwie nuty o pół tonu lub ton. Ghosty hihatów: 4–10 na takt, około −15 dB pod akcentem (vel 73–84), miejsca prawie stałe, zmienia się tylko głośność; gęstość skacze na liniach 8 taktów. Ghosty perkusji: w 7 z 8 utworów krok przed akcentem. Figury perkusji 2-taktowe, +-1–2 uderzenia na 8 taktów, przesunięcia o +5 i −4 kroki. Rzadkie zdarzenia około 6 na 32 takty: risery i jąkanie szumu w 8. takcie frazy, sub-boomy, downliftery i ryki na 1. takcie. Tło 21–26 dB pod groovem, szerokie, tłumione stopą. Detektory sprawdzone na sztucznym utworze (ghosty 96 % trafień)"
     }
   ]
 }
