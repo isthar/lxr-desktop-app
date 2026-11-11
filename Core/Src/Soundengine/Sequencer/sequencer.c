@@ -2894,6 +2894,12 @@ uint8_t seq_setGenParam(uint8_t trackNr, uint8_t pattern, uint16_t paramNr, uint
 	case PAR_GEN_SHF: g->shf = (int8_t)((value <= 2 * PG_SHF_MAX) ? (int)value - PG_SHF_MAX : 0); break;
 	default: return 0;
 	}
+	//quality review of group C: stored as they play (patternGen_checked(): sty within the type's
+	//styles), and the screens show that when the check moved the value
+	const PatternGenSettings set = *g;
+	*g = patternGen_checked(set);
+	if(memcmp(&set, g, sizeof set))
+		seq_loadGenParams(trackNr);
 	//review of group C: a knob or the encoder at the end of a range writes the stored value again:
 	//no change, so no regeneration and no autosave, and the hand edits stay
 	if(!memcmp(&was, g, sizeof was))

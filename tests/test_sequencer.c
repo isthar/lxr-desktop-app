@@ -2016,4 +2016,24 @@ TEST(gen_glue_the_same_value_is_no_change)
 	ASSERT_FALSE(genSame(&before, &after)); ASSERT_EQ(patTouches, 1);
 }
 
+TEST(gen_glue_a_style_past_the_types_is_its_last)
+{
+	/* quality review of group C: hat has styles 0-4, the menu offers 0-8; sty 5 plays as 4 (spec §8),
+	 * so after 4 it is the same value: no regeneration, no timer, and the screen shows 4 */
+	reset();
+	ASSERT_EQ(seq_setGenParam(4, 3, PAR_GEN_TYP, PG_TYPE_HAT), PG_WROTE | PG_SOFT);
+	ASSERT_EQ(seq_setGenParam(4, 3, PAR_GEN_STY, 4), PG_WROTE | PG_SOFT);
+	seq_patternSet.seq_subStepPattern[3][4][1].volume = 50;	/* a hand edit */
+	PatternGenTrack before, after;
+	genRead(3, 4, &before);
+	patTouches = 0;
+	activeParameters[PAR_GEN_STY] = 5;	/* the menu's value, as the encoder leaves it */
+	ASSERT_EQ(seq_setGenParam(4, 3, PAR_GEN_STY, 5), 0);
+	ASSERT_EQ(activeParameters[PAR_GEN_STY], 4);
+	genRead(3, 4, &after);
+	ASSERT_TRUE(genSame(&before, &after)); ASSERT_EQ(patTouches, 0);
+	ASSERT_EQ(seq_setGenParam(4, 3, PAR_GEN_STY, 3), PG_WROTE | PG_SOFT);	/* a style of hat's: a change */
+	ASSERT_EQ(patTouches, 1);
+}
+
 TEST_MAIN()
