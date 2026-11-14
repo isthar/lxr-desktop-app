@@ -13,7 +13,8 @@ Dwanaście własnych kitów dla LICHOMAT v0.4 i nowszych. Cztery (sloty 60–63)
 hipnotyczne groove techno, dub techno, surowe/industrialne i minimal z FM. Cztery kolejne (sloty
 56–59) są dopasowane do pomiarów albumu referencyjnego w stylu BCCO / Mutual Rytm (sekcja „Kity
 z pomiarów”). Cztery najnowsze (sloty 52–55) powstały z przepisów laboratorium brzmień: ghost kick
-albo niski bed i rzadkie zdarzenia w pogłosie (sekcja „Kity z laboratorium brzmień”). Pliki kitów
+albo niski bed, rzadkie zdarzenia w pogłosie i ciemna, daleka perkusja (sekcja „Kity z laboratorium
+brzmień”). Pliki kitów
 zapisał sam firmware: emulator (`lichomat-render`) ustawił parametry przez ścieżkę edycji menu
 i zapisał kit i projekt, więc format, łącznie z 13-bajtowym blokiem v0.4, jest taki, jak na
 urządzeniu. Nic tu nie pochodzi z kitów
@@ -22,10 +23,10 @@ WAV, bez odsłuchu.
 
 | Plik na karcie | Slot | Nazwa | Styl | Demo |
 |---|---|---|---|---|
-| `card/PROJ00/52-ECHO.SND` | 52 | `ECHO` | groove techno: ghost kick, rzadki ryk daleko w pogłosie | `demo/echo.wav` |
-| `card/PROJ00/53-FALA.SND` | 53 | `FALA` | groove techno: ghost kick, riser i boom na granicy frazy | `demo/fala.wav` |
-| `card/PROJ00/54-RYK.SND` | 54 | `RYK` | groove techno: ghost kick, ryk tylko w echach i pogłosie | `demo/ryk.wav` |
-| `card/PROJ00/55-TLO.SND` | 55 | `TLO` | groove techno: niski bed z rumble, downlifter i jąkanie | `demo/tlo.wav` |
+| `card/PROJ00/52-ECHO.SND` | 52 | `ECHO` | groove techno: ghost kick, ciemne drewno, rim w delayu, rzadki ryk daleko w pogłosie | `demo/echo.wav` |
+| `card/PROJ00/53-FALA.SND` | 53 | `FALA` | groove techno: ghost kick, riser i boom na granicy frazy, ciemny stuk w pogłosie | `demo/fala.wav` |
+| `card/PROJ00/54-RYK.SND` | 54 | `RYK` | groove techno: ghost kick, ciemne drewno, ryk i rim tylko w echach i pogłosie | `demo/ryk.wav` |
+| `card/PROJ00/55-TLO.SND` | 55 | `TLO` | groove techno: niski bed z rumble, downlifter i jąkanie, ciemny stuk w pogłosie | `demo/tlo.wav` |
 | `card/PROJ00/56-PULS.SND` | 56 | `PULS` | groove techno: mediana albumu referencyjnego | `demo/puls.wav` |
 | `card/PROJ00/57-HUSTA.SND` | 57 | `HUSTAWKA` | groove techno: mocny swing, szeroka góra | `demo/hustawka.wav` |
 | `card/PROJ00/58-PROST.SND` | 58 | `PROSTO` | groove techno: proste hihaty, bed jak bas | `demo/prosto.wav` |
@@ -405,18 +406,25 @@ Wariant jednego utworu, z mocniej przesterowaną stopą (THD ok. 14 %).
 
 Cztery kity z przepisów laboratorium brzmień (2026-11-11), zaakceptowanych na ucho („A i B, wszystkie
 przykłady OK”): zestaw A to ghost kicki na Drum 2 i bed, zestaw B rzadkie zdarzenia w tle, ok. 17 dB
-pod groove, w pogłosie. Każdy kit to PROSTO, w którym głosy z tabeli zastąpiły edycje przepisu,
-w kolejności przepisu; stopa i hihat są z PROSTO. Pliki zapisał firmware v0.7 w emulatorze (ten sam
-renderer, którego używało laboratorium). Każdy plik jest, poza nazwą, bajt w bajt taki jak kit
-zrobiony sposobem laboratorium: PROSTO jako kit 0, edycje przepisu z poziomami opisanymi niżej,
-`save-kit`.
+pod groove, w pogłosie. Perkusja jest z zestawu C: wybór na ucho z 2026-11-14 to C1 (ciemne drewno)
+i C4 (dubowy rim), oba słuchane w kicie `ECHO`. Każdy kit to PROSTO, w którym głosy z tabeli
+zastąpiły edycje przepisu, w kolejności przepisu; stopa i hihat są z PROSTO. Pliki zapisał firmware
+v0.7 w emulatorze (ten sam renderer, którego używało laboratorium). Pierwsza wersja każdego pliku
+(z zaślepką C2 na werblu) była, poza nazwą, bajt w bajt taka jak kit zrobiony sposobem laboratorium:
+PROSTO jako kit 0, edycje przepisu z poziomami opisanymi niżej, `save-kit`. Obecny plik to tamten
+z nową perkusją wpisaną tą samą drogą: różni się tylko bajtami Drum 3 i głębokości LFO 3 (`ECHO`,
+`RYK`), werbla i slotu FX (`ECHO`), co jest sprawdzone bajt po bajcie.
 
-| Kit | Drum 2 | Drum 3 | Cymbal | FX | Demo A z przepisu |
-|---|---|---|---|---|---|
-| `ECHO` (52) | ghost kick A2 | figura PROSTO | ryk B1 | pogłos B1 | B1 |
-| `FALA` (53) | ghost kick A2 | sub boom B4 | riser B2 | pogłos B2 (jak w B6) | B6 |
-| `RYK` (54) | ghost kick A2 | figura PROSTO | ryk B7: tylko echa i pogłos | delay 1/16, 100 % wet, i pogłos B7 | B7 |
-| `TLO` (55) | bed A9 | downlifter B3 | jąkanie B5 | pogłos A9 (rumble) | A9 |
+**Perkusja jest celowo ciemna i daleka:** bez jasnego, suchego rimu i bez niczego, co przypomina
+808. Rim C4 gra tylko przez delay (`ECHO`) albo tylko w echach i pogłosie (`RYK`); tam, gdzie delaya
+nie ma (`FALA`, `TLO`), jego głos jest o oktawę niższy, ciemniejszy i cichszy, w pogłosie.
+
+| Kit | Drum 2 | Drum 3 | Snare | Cymbal | FX | Demo A z przepisu |
+|---|---|---|---|---|---|---|
+| `ECHO` (52) | ghost kick A2 | ciemne drewno C1 (gra figurę) | dubowy rim C4, do FX | ryk B1 | delay C4 (1/8 z kropką, 40 % wet) i pogłos B1 | B1 |
+| `FALA` (53) | ghost kick A2 | sub boom B4 | ciemny stuk z głosu C4, do FX (pogłos) | riser B2 | pogłos B2 (jak w B6) | B6 |
+| `RYK` (54) | ghost kick A2 | ciemne drewno C1 (gra figurę) | głos C4, do FX: tylko echa i pogłos | ryk B7: tylko echa i pogłos | delay 1/16, 100 % wet, i pogłos B7 | B7 |
+| `TLO` (55) | bed A9 | downlifter B3 | ciemny stuk z głosu C4, do FX (pogłos) | jąkanie B5 | pogłos A9 (rumble) | A9 |
 
 - **Drum 1 (stopa):** z PROSTO (sinus G#1 +0,3 półtonu, spadek wysokości od ok. 5,2×, bez kliku),
   `vol1` 86 (w `TLO` 35). W `TLO` także do FX (`out` `FX`, jak w A9): karmi pogłos, który sama
@@ -427,15 +435,32 @@ zrobiony sposobem laboratorium: PROSTO jako kit 0, edycje przepisu z poziomami o
   ciche (g) ok. −8 dB na 4 i 12; generator `sub` sty 1 stawia to samo.
 - **Drum 2, bed (A9; `TLO`):** krótki sinus F#1 (46 Hz) przez LP 16, `drive2` 8, na 4. szesnastce każdej
   ćwierćnuty (kroki 4, 8, 12, 16), tuż przed stopą; razem z rumble dół nie milknie.
-- **Drum 3, figura (`ECHO`, `RYK`):** figura PROSTO (sinus B3 z FM, LFO 3 na `fmamnt3`), w proporcji
-  PROSTO do stopy (`vol3` 29 = 34 × 0,86); w demie B gra ją generator `prc`.
+- **Drum 3, ciemne drewno (C1; `ECHO`, `RYK`):** sinus G3 z FM (`fm_freq3` 70, stosunek ok. 2,38)
+  i krótkim klikiem, przez LP ok. 900 Hz, krótkie. C1 powstało na Drum 2, który trzyma tu ghost kick,
+  więc siedzi na Drum 3 (te same wartości pod nazwami Drum 3) i gra figurę; w demie B stawia ją
+  generator `prc`. LFO 3 jest wyłączone (`amount_lfo3` 0): drewno ma jedną barwę, tak jak w ujęciu
+  ocenionym na ucho. `vol3` 39 to `vol` z C1.
 - **Drum 3, sub boom (B4; `FALA`):** sinus opadający od ok. 245 Hz do E1, LP, długi; na pierwszej
   stopie taktów 1 i 9, do FX.
 - **Drum 3, downlifter (B3; `TLO`):** szum, którego barwa opada od jasnej do ciemnej przez ok. takt;
   takty 1 i 9, do FX.
-- **Snare (wszystkie cztery):** C2 z zestawu C: tyk szumu jak shaker (sam szum przez pasmo ok. 5 kHz,
-  miękkie wejście 16 ms, 70 ms), na sucho, bez slotu FX. **Zestaw C (perkusja zamiast naiwnego rimu)
-  czeka jeszcze na ocenę;** C2 jest tylko zaślepką do wymiany, gdy wybór zapadnie.
+- **Snare, dubowy rim (C4; `ECHO`):** krótki trójkąt G4 z pasmem szumu (filtr BP kształtuje tylko
+  szum, oscylator idzie obok filtra), trochę przesteru, do FX: delay w slocie powtarza go co 1/8
+  z kropką (315 ms przy 143 BPM), a pogłos B1 bierze całość. Ok. 5/6 energii to echa i pogłos. Bez
+  własnego pogłosu z C4: zostaje pogłos kitu. W demie B gra kopię figury 5 kroków później (`prp` sty 1
+  shf 5 src 3). `vol4` 45 to `vol` z C4.
+- **Snare, rim tylko w echach (głos C4; `RYK`):** ten sam głos do FX, ale bez delaya C4: zostaje slot
+  `RYK` (ciemny delay 1/16 na 100 % wet), więc rim nie ma dźwięku bezpośredniego i słychać go tylko
+  w echach i ich pogłosie, tak jak ryk. `vol4` 23: echa 1/16 się nakładają, więc wystarcza mniej niż
+  w `ECHO`.
+- **Snare, ciemny stuk (z głosu C4; `FALA`, `TLO`):** bez delaya C4 byłby zwykłym, jasnym rimem,
+  a delay w slocie powtarzałby też boom (`FALA`) albo stopę, która w `TLO` karmi FX. Dlatego głos jest
+  tu przyciemniony i idzie do FX ze slotem `off`: sucho i do pogłosu kitu. Wobec C4: oscylator
+  o oktawę niżej (`coarse4` 55, G3), niższe pasmo szumu (`filter_freq_4` 44), mniej szumu (`mix1` 40);
+  krótka obwiednia zostaje. Środek ciężkości widma suchego uderzenia spada o oktawę: z 435 na 206 Hz
+  (ważony mocą) i z ok. 2270 na 1140–1200 Hz (ważony amplitudą). Poziom jest o 3 dB niższy niż rimu
+  w `ECHO`. Samo obniżenie filtra nie wystarcza, bo filtr werbla nie dotyka oscylatora. **Ten wariant
+  jest nowy i nie był jeszcze oceniany na ucho.** W demie B gra `prc` na ścieżce 4.
 - **Cymbal, ryk (B1; `ECHO`):** szum przez wąskie pasmo ok. 500 Hz z mocnym rezonansem, wolne
   narastanie, drżenie 40 Hz (LFO 5 na `vol5`), daleko w pogłosie (`pre` 110); takty 1 i 9.
 - **Cymbal, ryk tylko w pogłosie (B7; `RYK`):** ten sam ryk bez dźwięku bezpośredniego: slot to ciemny
@@ -446,6 +471,10 @@ zrobiony sposobem laboratorium: PROSTO jako kit 0, edycje przepisu z poziomami o
   na 1 i cztery flamy po 4 na krokach 9–12 taktu 8 i 16.
 - **Hihat:** z PROSTO (szum przez HP 99, losowa panorama na każdej 16-tce); z generatorem `hat` (sty 1
   den 7 lev −15) to warstwa ghostów z laboratorium.
+- **FX, delay `ECHO`:** przez delay C4 przechodzi wszystko, co idzie do FX, czyli także ryk. Tak było
+  w ujęciu, z którego wybrano C4. Energia ryku jest ta sama (RMS −0,06 dB wobec B1), ale echa ją
+  rozkładają: najgłośniejsza ćwierćnuta jest ok. 2 dB niżej (19,1 i 19,3 dB pod groove zamiast 17,5
+  i 17,2). `vol5` nie jest na to podniesiony.
 - **FX:** jak w tabeli; pogłos zawsze przyciszany stopą (`dck` `dr1`, `ddp` 18, w `TLO` 44: niżej).
   W `TLO` downlifter i jąkanie grają w pogłosie A9, nie w swoim: predelay, wybrzmienie i barwa B3
   i B5 przesunęłyby bed, więc ich `vol` jest zmierzony od nowa, ok. 17 dB pod groove `TLO`.
@@ -457,11 +486,11 @@ suwak²) tylko po to, żeby było słychać resztę; ghost kick (suwak 0,4), bed
 samo wzmocnienie (za przesterem bębnów, przed przesterem talerza), więc `vol` kitu to `vol` przepisu
 × suwak² / 0,35² × (`vol1` / 100), sprawdzony pomiarem. Stopa jest tak wysoko, jak pozwala Drum 2 przy
 `vol2` 127: w `ECHO`, `FALA` i `RYK` ghost kick potrzebuje ok. 1,5 raza `vol` stopy, więc `vol1` 86
-(PROSTO 100, 1,3 dB głośniej); w `TLO` nuta bedu A9 potrzebuje 3,6 raza, więc `vol1` 35, a hihat
-i werbel, które PROSTO ustawia względem stopy, schodzą razem z nią: `vol6` 52 (127 × 35 / 86) i `vol4`
-51. Hihat jest wtedy pod stopą tak samo jak w `ECHO`: 42,1 dB RMS wobec 42,0 dB (oba na
-sucho, zmierzone). Szczyt na wyjściu 1: od −3,6 do −6,6 dBFS (PROSTO −2,7); −3,6 to dema
-`demo/echo.wav`, `fala.wav` i `ryk.wav` z tykiem werbla na 2 i 4.
+(PROSTO 100, 1,3 dB głośniej); w `TLO` nuta bedu A9 potrzebuje 3,6 raza, więc `vol1` 35, a hihat,
+który PROSTO ustawia względem stopy, schodzi razem z nią: `vol6` 52 (127 × 35 / 86). Hihat jest wtedy
+pod stopą tak samo jak w `ECHO`: 42,1 dB RMS wobec 42,0 dB (oba na sucho, zmierzone). Werbel jest
+ustawiony względem hihatu (niżej). Szczyt na wyjściu 1: od −4,1 do −6,7 dBFS (PROSTO −2,7); −4,1 to
+dema B `ECHO` i `RYK` z drewnem i rimem.
 
 Dwa ustawienia idą za poziomem, a nie za `vol`. **Przyciszanie pogłosu** zależy od szczytu stopy
 (głębokość × dwa razy szczyt, najwyżej całość): głośniejsza stopa przyciszałaby pogłos 7 razy
@@ -478,13 +507,33 @@ sam `vol5` zmienia też proporcję drżenia (LFO dodaje do `vol` stałą głębo
 
 | Kit | `vol1` | `vol2` | `vol3` | `vol4` | `vol5` | `vol6` | Poza `vol` (w przepisie) |
 |---|---|---|---|---|---|---|---|
-| `ECHO` | 86 | 127 | 29 | 124 | 31 | 127 | `amount_lfo5` 21 (44), `cymbal_distortion` 9 (100), `ddp` 18 (127) |
-| `FALA` | 86 | 127 | 12 | 124 | 42 | 127 | `cymbal_distortion` 5 (40), `ddp` 18 (127) |
-| `RYK` | 86 | 127 | 29 | 124 | 26 | 127 | `amount_lfo5` 18 (44), `cymbal_distortion` 9 (100), `ddp` 18 (127) |
-| `TLO` | 35 | 127 | 14 | 51 | 38 | 52 | `cymbal_distortion` 11 (60), `ddp` 44 (127) |
+| `ECHO` | 86 | 127 | 39 | 45 | 31 | 127 | `amount_lfo5` 21 (44), `cymbal_distortion` 9 (100), `ddp` 18 (127) |
+| `FALA` | 86 | 127 | 12 | 22 | 42 | 127 | `cymbal_distortion` 5 (40), `ddp` 18 (127) |
+| `RYK` | 86 | 127 | 39 | 23 | 26 | 127 | `amount_lfo5` 18 (44), `cymbal_distortion` 9 (100), `ddp` 18 (127) |
+| `TLO` | 35 | 127 | 14 | 6 | 38 | 52 | `cymbal_distortion` 11 (60), `ddp` 44 (127) |
 
-Werbel (C2) zostaje przy `vol4` 124: tyle miał w C2 względem hihatu, obaj na suwaku 1; w `TLO`, gdzie
-hihat ma 52, werbel ma 51 (124 × 52 / 127).
+**Perkusja (C1, C4).** `ECHO` ma `vol` prosto z C1 i C4 (39 i 45), bo z tymi wartościami kit był
+słuchany. Miarą jest najgłośniejsze 50 ms głosu granego solo (z echami i pogłosem, reszta głosów na
+wyjściu 2), w taktach 2–16 dema B. Zbudowany kit powtarza ocenione ujęcia: drewno co do 0,0 dB, rim
+co do 0,15 dB. W pozostałych kitach werbel jest ustawiony tak, jak rim `ECHO` względem hihatu: w `RYK`
+mierzone są echa (dźwięku bezpośredniego nie ma), w `FALA` i `TLO` cel jest o 3 dB niżej, żeby stuk
+siedział w pogłosie. Szum hihatu zmienia się między ujęciami o ok. 1 dB, więc dla `FALA` punktem
+odniesienia jest sam rim `ECHO` (hihat jest w obu kitach ten sam).
+
+| Kit | Głos | Najgłośniejsze 50 ms | Pod RMS groove (bez tego głosu) | Nad hihatem (50 ms) | Mokre do suchego | Środek widma na sucho (moc / amplituda) |
+|---|---|---|---|---|---|---|
+| `ECHO` | Drum 3, drewno C1 | −27,5 dBFS | 14,0 dB | 16,4 dB | suche (wyjście 1) | nie mierzony |
+| `ECHO` | Snare, rim C4 | −26,6 dBFS | 13,1 dB | 17,3 dB | +7,3 dB | 435 / 2269 Hz |
+| `RYK` | Drum 3, drewno C1 | −27,5 dBFS | 14,0 dB | 16,4 dB | suche (wyjście 1) | nie mierzony |
+| `RYK` | Snare, echa C4 | −26,7 dBFS | 13,2 dB | 17,2 dB | tylko mokre | 436 / 2272 Hz (przed delayem) |
+| `FALA` | Snare, ciemny stuk | −29,7 dBFS | 16,2 dB | 13,4 dB | +0,8 dB | 206 / 1141 Hz |
+| `TLO` | Snare, ciemny stuk | −37,2 dBFS | 20,1 dB | 14,3 dB | +2,5 dB | 206 / 1199 Hz |
+
+„Mokre do suchego” to energia ech i pogłosu werbla względem jego dźwięku bezpośredniego (takty
+2–16, różnica dwóch renderów próbka po próbce). W `FALA` stuk jest mniej więcej w połowie pogłosem,
+w `TLO` niesie go głównie pogłos A9. `noise_freq1` werbla (90 w C4) przesuwa też losowy szum innych
+głosów szumowych o kilka dziesiątych dB (ryk `RYK` +0,5 dB), bez zmiany barwy: środek widma hihatu
+zostaje przy 9,0 kHz.
 
 **Wynik** (emulator v0.7, 143 BPM, wyjście 1, wszystkie suwaki na 1). Demo A: przepis, z którego kit
 powstał, z jego ścieżkami, zdarzeniami i długością, zagrany z pliku kitu, obok ten sam przepis
@@ -492,20 +541,22 @@ sposobem laboratorium; każdy głos sam na wyjściu 1, z FX (reszta na wyjściu 
 przycisza pogłos), porównany **względem stopy**: przepis grał stopę ciszej, więc bezwzględne poziomy
 muszą się różnić. Hihat jest tu z założenia dalej pod stopą niż w przepisie (proporcja PROSTO). Demo
 B: 16 taktów z generatora: stopa 4/4, `hat`, `sub` sty 1 (w `TLO` bed A9 z ręki), na ścieżce 3 `prc`
-(`ECHO`, `RYK`) albo `rar` sty 2 (`FALA`, `TLO`), na ścieżce 5 `rar` umieszczony jak w przepisie,
-z jego zamrożeniem. G to akcent ghost kicka względem szczytu stopy w paśmie 30–150 Hz (cel 4–8 dB);
+(`ECHO`, `RYK`) albo `rar` sty 2 (`FALA`, `TLO`), na ścieżce 4 werbel: `prp` sty 1 shf 5 src 3, czyli
+kopia figury (`ECHO`, `RYK`), albo `prc` (`FALA`, `TLO`), na ścieżce 5 `rar` umieszczony jak
+w przepisie, z jego zamrożeniem. Przepisy dema A nie grają werbla ani figury, więc werbel (a w `ECHO`
+i `RYK` także drewno) tam milczy. G to akcent ghost kicka względem szczytu stopy w paśmie 30–150 Hz (cel 4–8 dB);
 zdarzenie to jego najgłośniejsza ćwierćnuta (sucho + pogłos) względem RMS groove bez zdarzeń.
 Wyzwolenia zgadzają się z zapisanymi krokami we wszystkich demach.
 
 | Kit | Demo A: głos najdalej od przepisu (względem stopy) | Hihat względem przepisu | G pod stopą, A / B (przepis) | Zdarzenia pod groove, A (przepis) | Zdarzenia pod groove, B | Szczyt A / B |
 |---|---|---|---|---|---|---|
-| `ECHO` | ryk −0,09 dB | −16,8 dB | 4,9 / 4,9 dB (5,0) | 17,4, 17,1 dB (17,0, 17,1) | 17,5, 17,2 dB | −5,0 / −4,8 dBFS |
-| `FALA` | riser +0,19 dB | −17,0 dB | 4,9 / 4,9 dB (5,0) | 17,0, 17,2, 16,7, 16,8 dB (17,1, 17,3, 16,9, 17,0) | te same | −5,0 / −5,0 dBFS |
-| `RYK` | ryk +0,09 dB | −16,8 dB | 4,9 / 4,9 dB (5,0) | 17,3, 17,0 dB (17,4, 17,0) | 17,3, 17,1 dB | −5,1 / −4,8 dBFS |
-| `TLO` | bed +0,02 dB | −16,7 dB | bez ghost kicka; bed 8,2 dB pod stopą (8,2) | A9 nie ma zdarzeń | 16,9, 17,1, 18,0, 17,1 dB | −6,6 / −5,5 dBFS |
+| `ECHO` | ryk −0,06 dB RMS (najgłośniejsza ćwierćnuta −2,0 dB: delay) | −17,0 dB | 4,9 / 5,0 dB (5,0) | 19,1, 19,2 dB (17,0, 17,1) | 19,1, 19,3 dB | −4,7 / −4,1 dBFS |
+| `FALA` | riser +0,28 dB | −17,0 dB | 4,9 / 4,9 dB (5,0) | 17,0, 17,0, 16,7, 16,8 dB (17,1, 17,3, 16,9, 17,0) | te same | −5,1 / −5,1 dBFS |
+| `RYK` | ryk +0,55 dB | −17,0 dB | 4,9 / 4,9 dB (5,0) | 16,5, 16,4 dB (17,4, 17,0) | 16,5, 16,4 dB | −5,2 / −4,1 dBFS |
+| `TLO` | bed +0,02 dB | −17,0 dB | bez ghost kicka; bed 8,2 dB pod stopą (8,2) | A9 nie ma zdarzeń | 16,7, 16,9, 17,9, 16,9 dB | −6,6 / −5,6 dBFS |
 
-W `TLO` downlifter taktu 9 wchodzi w pogłos zamrożony przez jąkanie (B5) i dlatego jest 18,0 dB pod
-groove.
+W `TLO` downlifter taktu 9 wchodzi w pogłos zamrożony przez jąkanie (B5) i dlatego jest 17,9 dB pod
+groove. W `ECHO` ryk jest ok. 2 dB niżej niż w przepisie, bo przechodzi przez delay rimu (wyżej).
 
 **Zamrożenie ręcznie.** B1, B5 i B7 zamrażają ogon pogłosu (`frz`) zdarzeniem renderu. Kit go nie
 zapisuje (zapisany kit ma zawsze `frz` wyłączone), krok nie może go zablokować (p-lock), a LFO
@@ -517,7 +568,7 @@ przez te trzy ćwierćnuty nie bierze nowych stóp (zamrożony pogłos nie przyj
 
 **Firmware.** Te kity potrzebują LICHOMAT v0.4 lub nowszego, v0.7 nie jest konieczne. Pogłos, jego
 przyciszanie (rumble: `dck`, `ddp`), zamrożenie i delay zsynchronizowany z tempem (`syn`) weszły
-w v0.4, a od v0.4 do v0.7 nie doszedł żaden parametr kitu: v0.5–v0.7 dodały tylko ustawienia
+w v0.4 (z nich korzysta też nowa perkusja), a od v0.4 do v0.7 nie doszedł żaden parametr kitu: v0.5–v0.7 dodały tylko ustawienia
 globalne, nagrywania, ścieżki i kroku (`trg`, `rqn`, `tpl`, `amt`, `vtp`, `vdp`, `mic`), a plik kitu ma
 wciąż 268 bajtów. Zbudowane i zmierzone są na v0.7; na v0.4 nie były mierzone (v0.5 zaczyna głos co do
 próbki, v0.4 co blok 1,45 ms). Wzorce dem z generatora (`sub`, `hat`, `prc`, `rar`) to prototyp v0.8;
@@ -526,10 +577,11 @@ próbkowania (H12): po zmianie trzeba te kity zmierzyć jeszcze raz, jak `HUSTAW
 
 **Demo.** `demo/echo.wav`, `fala.wav` i `ryk.wav` grają wzorzec `ghost` (`GHOST_PATTERN` w
 `tools/kit_build.py`, 8 taktów, 143 BPM): stopa 4/4, ghost kicki na 4, 7, 12, 15 (G 127 na 7 i 15,
-g 52 na 4 i 12), tyk werbla na 2 i 4 i warstwa hihatu z generatora `hat` (takt 1, krok 8 `2:2`);
-`demo/tlo.wav` gra wzorzec `bed`: to samo z bedem na 4, 8, 12, 16. Bez Drum 3 i Cymbala: zdarzenia są
-rzadkie, a jednotaktowa pętla grałaby je w każdym takcie. Zdarzenia, figura i zamrożenie są
-w demach A i B, nagranych do odsłuchu jako MP3 poza repozytorium.
+g 52 na 4 i 12), werbel na 2 i 4 (w `ECHO` rim z echami, w `RYK` same echa, w `FALA` i `TLO` ciemny stuk)
+i warstwa hihatu z generatora `hat` (takt 1, krok 8 `2:2`); `demo/tlo.wav` gra wzorzec `bed`: to samo
+z bedem na 4, 8, 12, 16. Bez Drum 3 i Cymbala: zdarzenia są rzadkie, a jednotaktowa pętla grałaby je
+w każdym takcie. Szczyty tych dem: −4,2, −4,4, −5,6 i −6,7 dBFS. Zdarzenia, figura drewna i zamrożenie
+są w demach A i B, nagranych do odsłuchu jako MP3 poza repozytorium.
 
 ## Instalacja
 
@@ -565,8 +617,8 @@ z wyłączonym pogłosem.
 
 `HUSTAWKA` bez bloku v0.4 traci pogłos, a z nim dół, który gra dalej bez stopy. Pozostałe kity 56–59
 nie używają pogłosu. Kity 52–55 tracą bez bloku pogłos, a z nim odległość zdarzeń (ryk, riser, boom,
-downlifter i jąkanie grają wtedy blisko i na sucho), `TLO` także rumble; delay `RYK` gra tam swój
-wolny czas zamiast 1/16. Warunki kroków `2:2` i `4:4` we wzorcu demo `classic` wymagają v0.2+ (1.7 gra je w każdym takcie); same kity
+downlifter i jąkanie grają wtedy blisko i na sucho, werbel też), `TLO` także rumble; delay `ECHO`
+i `RYK` gra tam swój wolny czas zamiast 1/8 z kropką i 1/16. Warunki kroków `2:2` i `4:4` we wzorcu demo `classic` wymagają v0.2+ (1.7 gra je w każdym takcie); same kity
 ich nie mają.
 
 ## Przebudowa
