@@ -1,13 +1,13 @@
 {
   "status": {
-    "updated": "2026-11-14 10:13",
+    "updated": "2026-11-14 10:32",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; v0.8 (generator wzorców) gotowe w kodzie, kity 52–55 do odsłuchu",
     "branch": "timing-core",
-    "head": "ec7b505",
-    "next": "Twój wybór perkusji z zestawu C (Q43, strona v19: C1–C4 w kicie ECHO) i odsłuch kitów 52–55; potem U42–U45 na LXR po sprawdzeniach 0.7",
-    "updated_at": "2026-11-14T10:13:00+01:00",
-    "now": "E10.18: zestaw D laboratorium brzmień (tła i atmo z istniejących głosów), rendery w emulatorze"
+    "head": "9d55880",
+    "next": "Twój odsłuch: perkusja C1–C4 w kicie ECHO (Q43), tła D1–D8 (Q44), kity 52–55 (strona v20); potem U42–U45 na LXR po sprawdzeniach 0.7",
+    "updated_at": "2026-11-14T10:32:00+01:00",
+    "now": ""
   },
   "epics": [
     {
@@ -1331,7 +1331,7 @@
     {
       "id": "E10.18",
       "epic": "E10",
-      "status": "w toku",
+      "status": "zrobione",
       "title": "Laboratorium brzmień, zestaw D: tła i atmo z istniejących sześciu głosów (bed szumu, dron, zamrożona plama, oddech, warkot, wash z delaya, break), w kicie ECHO, bez zmian w firmware; do odsłuchu i jako wejście do projektu głosu atmo (E10.6)",
       "updated": "2026-11-14"
     }
@@ -1777,6 +1777,14 @@
       "status": "otwarte",
       "question": "Laboratorium brzmień, zestaw C: która perkusja zamiast rimshota (C1 ciemne drewno FM, C2 tyk szumu jak shaker, C3 krótki metaliczny tyk, C4 dubowy rim w delayu)? Od 14.11 na stronie do odsłuchu (wersja 19, sekcja „Perkusja C1–C4 w groovie”) każda z czterech barw gra też w kicie ECHO, równie głośno, ok. 14 dB pod groovem.",
       "assumption": "Do Twojego wyboru nowe kity 52–55 mają na werblu C2 (bez slotu FX, więc nie gryzie się z pogłosem tła); po wyborze podmieniam. C2 i C4 mieszczą się na wolnym werblu. C1 potrzebuje głosu Drum, więc zastąpiłoby barwę figury na Drum 3; C3 potrzebuje talerza, więc zabrałoby głos ryku.",
+      "answer": "",
+      "updated": "2026-11-14"
+    },
+    {
+      "id": "Q44",
+      "status": "otwarte",
+      "question": "Laboratorium brzmień, zestaw D (strona do odsłuchu w wersji 20, sekcja „Tła i atmo z dzisiejszych głosów”): które tła D1–D8 brzmią w stylu, a które są naiwne? Czy tło ok. 20 dB pod groovem to dobry poziom? Czy przeszkadza, że suchy dźwięk tła jest prawie tak głośny jak jego pogłos?",
+      "assumption": "Do Twojej odpowiedzi nic z zestawu D nie trafia do kitów. Projekt głosu atmo (E10.6) bierze listę braków z raportu E10.18: wysyłka tylko do pogłosu, obwiednia z bramką, uderzenie bez zerowania fazy, wolniejsze LFO, freeze na kroku.",
       "answer": "",
       "updated": "2026-11-14"
     }
@@ -5266,6 +5274,11 @@
       "n": 697,
       "at": "2026-11-14 10:13",
       "text": "Q43, E10.18: cztery barwy z zestawu C zagrane w kicie ECHO (16 taktów z generatora, każda ok. 14 dB pod groovem, log uderzeń zgodny), strona do odsłuchu w wersji 19. Ruszył zestaw D: tła i atmo z istniejących głosów."
+    },
+    {
+      "n": 698,
+      "at": "2026-11-14 10:32",
+      "text": "E10.18, Q44: zestaw D gotowy: osiem teł z istniejących głosów w kicie ECHO, każde ok. 20 dB pod groovem, stopa i hihat bez zmian (pomiar), na stronie do odsłuchu w wersji 20. Raport z listą braków głosów dla E10.6: docs/lichomat/reports/E10.18-zestaw-D-tla.md. Brzmienia bez oceny na ucho."
     }
   ]
 }
