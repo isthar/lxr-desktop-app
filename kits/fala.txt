@@ -2,7 +2,8 @@
 # sound lab's recipes A2, B2, B4 and B6 (2026-11-11, accepted by ear). Drum 2 is a soft echo of
 # the kick on 4, 7, 12 and 15 (A2); the Cymbal is a riser at the end of a phrase (B2), and
 # Drum 3 a sub boom on its first kick (B4), together as in B6, both far back in B2's long,
-# dark reverb that the kick ducks; the Snare is a placeholder (C2).
+# dark reverb that the kick ducks; the Snare is a dark, far knock from the dub rim's voice
+# (C4, picked by ear on 2026-11-14; darkened here, not judged yet).
 #
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
@@ -28,8 +29,8 @@
 # drums' drive, before the Cymbal's distortion), so each vol is the recipe's vol x its
 # fader^2 / 0.1225 x 0.86: the kick's step from the fader 0.35 to vol1 86, the highest kick
 # at which the ghost kick keeps its balance with vol2 127. Measured with all six faders at
-# 1: B6's voices within 0.2 dB of the recipe relative to the kick, the hat 17 dB further
-# under it than in B6, the peak on out 1 -5 dBFS (-3.6 in the demo below, with the tick).
+# 1: B6's voices within 0.3 dB of the recipe relative to the kick, the hat 17 dB further
+# under it than in B6, the peak on out 1 -5.1 dBFS (-4.4 in the demo below, with the knock).
 # The reverb's duck follows the kick's peak (the depth x twice the peak, at most all), so
 # the louder kick would duck the reverb 7 times deeper than in B6: rev_duck_depth 18
 # (127 x 12.25 / 86) keeps B6's duck; with 127 the reverb would duck all the way under
@@ -38,7 +39,7 @@
 # No freeze: B2, B4 and B6 have none.
 #
 # The demo plays the 'ghost' pattern (tools/kit_build.py GHOST_PATTERN) at 143 BPM,
-# straight: the kick, the ghost kicks, the tick on 2 and 4 and the hat layer, without the
+# straight: the kick, the ghost kicks, the knock on 2 and 4 and the hat layer, without the
 # riser and the boom. Both are rare: the generator's rar places them (the riser sty 1, bars
 # 8 and 16; the boom sty 2, bars 1 and 9).
 
@@ -120,26 +121,41 @@ audio_out3 = 6        # FX
 fm_freq3 = 76
 mod_wave_drum3 = 0
 
-# Snare: a placeholder, C2 of the sound lab's set C (a noise tick like a shaker: noise only
-# through a band at about 5 kHz, a soft 16 ms attack, 70 ms), until the owner picks from set
-# C, which is not judged yet. Dry: it needs no FX slot. vol4 124: C2's level to the hat
-# (both at the fader 1 in C2)
-osc_wave_snare = 0
-mix1 = 127            # noise only
-noise_freq1 = 127
+# Snare: a dark, far knock, from the dub rim's voice (C4 of the sound lab's set C, picked by
+# ear on 2026-11-14 inside ECHO, where it plays through a delay). Without a delay C4 would be
+# a plain, bright rim, and a delay in this kit's slot would also echo the sub boom, so the
+# voice is darkened here and sent into the FX bus with the slot off: dry and into the kit's
+# reverb. The percussion of kits 52-55 is kept dark and far on purpose: no bright, dry rim
+# and nothing like an 808. Against C4: the oscillator an octave lower (coarse4 55, G3), the
+# noise band lower (filter_freq_4 44; the band-pass shapes the noise only, the
+# oscillator passes beside the filter) and less noise (mix1 40); the short envelope stays.
+# The spectral centroid of the dry hit falls by an octave: 435 to 206 Hz weighted by power,
+# 2269 to 1141 Hz by magnitude (2048 samples from each hit), measured. Not judged by ear yet.
+# vol4 22: its loudest 50 ms (alone, with the reverb; the generator's prc on track 4) is
+# 3.0 dB under the rim's in ECHO (-29.7 against -26.6 dBFS; the hat is the same in both
+# kits), to sit back in the reverb: 16.2 dB under the groove's RMS, 13.4 dB over the hat's
+# loudest 50 ms of this take (the hat's noise varies by about 1 dB from take to take). About
+# half of its energy is reverb (wet to dry +0.8 dB), measured
+osc_wave_snare = 1    # Tri
+coarse4 = 55          # G3 (C4: 67, G4)
+fine4 = 64
+mix1 = 40             # less noise (C4: 60)
+noise_freq1 = 90
 filter_type_4 = 2     # BP
-filter_freq_4 = 112
-reso_4 = 20
-modamnt4 = 0
-veloa4 = 12
-velod4 = 6
+filter_freq_4 = 44    # the noise band lower (C4: 72)
+reso_4 = 40
+modamnt4 = 8
+mod_eg4 = 10
+veloa4 = 0
+velod4 = 4
 vol_slope4 = 40
 repeat4 = 0
 trans4_vol = 0
-snare_distortion = 0
+snare_distortion = 10
 volume_mod_on_off4 = 1
-pan4 = 56
-vol4 = 124
+pan4 = 64
+vol4 = 22
+audio_out4 = 6        # FX
 
 # Cymbal: the riser (B2). Noise through a resonant low-pass that opens over about 3/4 of a
 # bar (LFO 5, a saw up on filter_freq_5, restarted by the hit, one rise in 1.53 s), a slow

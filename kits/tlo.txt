@@ -2,8 +2,9 @@
 # sound lab's recipes A9, B3 and B5 (2026-11-11, accepted by ear). The kick feeds a dark reverb
 # that it ducks itself (the rumble) and Drum 2 is a short F#1 sine on the 4th 16th of each
 # beat, just before the kick (A9); Drum 3 is a downlifter at the start of a phrase (B3) and
-# the Cymbal a stutter at its end (B5), both into the same reverb; the Snare is a
-# placeholder (C2).
+# the Cymbal a stutter at its end (B5), both into the same reverb; the Snare is a dark, far
+# knock from the dub rim's voice (C4, picked by ear on 2026-11-14; darkened here, not judged
+# yet).
 #
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
@@ -27,13 +28,13 @@
 # 0.6) is set against that kick. A fader and vol are the same gain (after the drums' drive,
 # before the Cymbal's distortion), so vol1 and vol2 are A9's vol x its fader^2 / 0.1225 x
 # 0.35. A9's bed note needs 3.6 times the kick's vol (123 at 0.6 against 100 at 0.35), so
-# with vol2 127 the kick is vol1 35 (PROSTO's 100). The hat and the snare, which PROSTO
-# balances against the kick, come down with it: vol6 52 (127 x 35 / 86), so the hat sits as
-# far under the kick as in ECHO (42.1 dB in RMS against ECHO's 42.0, both dry, measured),
-# and vol4 51 (C2's 124 x 52 / 127). Measured with all six faders at 1: A9's voices within
-# 0.1 dB of the recipe relative to the kick, the bed 8.2 dB under the kick as in A9, the hat
-# 16.7 dB further under it than in A9, the peak on out 1 -6.6 dBFS (-5.5 with the events,
-# -6.2 in the demo below).
+# with vol2 127 the kick is vol1 35 (PROSTO's 100). The hat, which PROSTO balances
+# against the kick, comes down with it: vol6 52 (127 x 35 / 86), so the hat sits as
+# far under the kick as in ECHO (42.1 dB in RMS against ECHO's 42.0, both dry, measured).
+# The Snare is set against that hat (see the Snare). Measured with all six faders at 1: A9's
+# voices within 0.1 dB of the recipe relative to the kick, the bed 8.2 dB under the kick as
+# in A9, the hat 17 dB further under it than in A9, the peak on out 1 -6.6 dBFS (-5.6 with
+# the events and the knock, -6.7 in the demo below).
 # The reverb's duck follows the kick's peak (the depth x twice the peak, at most all), so
 # the louder kick would duck the reverb about 3 times deeper than in A9: rev_duck_depth 44
 # (127 x 12.25 / 35) keeps A9's duck and with it the rumble's shape. The downlifter and the
@@ -49,7 +50,7 @@
 # kick (a frozen reverb takes no input).
 #
 # The demo plays the 'bed' pattern (tools/kit_build.py BED_PATTERN) at 143 BPM, straight:
-# the kick, the bed, the tick on 2 and 4 and the hat layer, without the downlifter and the
+# the kick, the bed, the knock on 2 and 4 and the hat layer, without the downlifter and the
 # stutter. Both are rare: the generator's rar places them (the downlifter sty 2, bars 1 and
 # 9; the stutter sty 1 den 4, bars 8 and 16).
 
@@ -129,26 +130,42 @@ audio_out3 = 6        # FX
 fm_freq3 = 76
 mod_wave_drum3 = 0
 
-# Snare: a placeholder, C2 of the sound lab's set C (a noise tick like a shaker: noise only
-# through a band at about 5 kHz, a soft 16 ms attack, 70 ms), until the owner picks from set
-# C, which is not judged yet. Dry: it needs no FX slot. vol4 51: C2's level to the hat
-# (both at the fader 1 in C2), with the hat at 52 (124 x 52 / 127)
-osc_wave_snare = 0
-mix1 = 127            # noise only
-noise_freq1 = 127
+# Snare: a dark, far knock, from the dub rim's voice (C4 of the sound lab's set C, picked by
+# ear on 2026-11-14 inside ECHO, where it plays through a delay). Without a delay C4 would be
+# a plain, bright rim, and a delay in this kit's slot would also echo the kick, which feeds
+# the FX bus for the rumble, so the voice is darkened here and sent into the FX bus with the
+# slot off: dry and into the kit's reverb. The percussion of kits 52-55 is kept dark and far
+# on purpose: no bright, dry rim and nothing like an 808. Against C4: the oscillator an
+# octave lower (coarse4 55, G3), the noise band lower (filter_freq_4 44; the band-pass
+# shapes the noise only, the oscillator passes beside the filter) and less noise (mix1 40);
+# the short envelope stays.
+# The spectral centroid of the dry hit falls by an octave: 435 to 206 Hz weighted by power,
+# 2269 to 1199 Hz by magnitude (2048 samples from each hit), measured. Not judged by ear yet.
+# vol4 6: its loudest 50 ms (alone, with the reverb; the generator's prc on track 4) sits
+# 14.3 dB over the hat's loudest 50 ms, 3 dB less than the rim in ECHO (17.3), to sit back
+# in the reverb, and 20.1 dB under the groove's RMS. The hat is at vol6 52 here and A9's
+# reverb at its full level carries most of the knock (wet to dry +2.5 dB), so the vol is far
+# under FALA's 22, measured
+osc_wave_snare = 1    # Tri
+coarse4 = 55          # G3 (C4: 67, G4)
+fine4 = 64
+mix1 = 40             # less noise (C4: 60)
+noise_freq1 = 90
 filter_type_4 = 2     # BP
-filter_freq_4 = 112
-reso_4 = 20
-modamnt4 = 0
-veloa4 = 12
-velod4 = 6
+filter_freq_4 = 44    # the noise band lower (C4: 72)
+reso_4 = 40
+modamnt4 = 8
+mod_eg4 = 10
+veloa4 = 0
+velod4 = 4
 vol_slope4 = 40
 repeat4 = 0
 trans4_vol = 0
-snare_distortion = 0
+snare_distortion = 10
 volume_mod_on_off4 = 1
-pan4 = 56
-vol4 = 51
+pan4 = 64
+vol4 = 6
+audio_out4 = 6        # FX
 
 # Cymbal: the stutter (B5): a very short noise burst through a band at the top, a little
 # distortion; the generator's rar sty 1 den 4 plays it as a hit on 1 and four flams of 4 on

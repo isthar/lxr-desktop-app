@@ -97,8 +97,9 @@ ALBUM_PATTERN = {
     7: [(3, 127, None), (7, 127, None), (11, 127, None), (15, 127, None)],			# open hat
 }
 # The sound lab's groove ('pattern = ghost', kits 52-54): the kick 4/4; ghost kicks on Drum 2 on 4, 7, 12,
-# 15, the accents (G) on 7 and 15 at 127, the others (g) at 52 (-7.8 dB); the noise tick on 2 and 4
-# (Snare); the hat layer of the generator's hat sty 1 den 7 lev -15 (bar 1; step 8 at 2:2) on track 6.
+# 15, the accents (G) on 7 and 15 at 127, the others (g) at 52 (-7.8 dB); the Snare on 2 and 4
+# (the kit's rim, its echoes or its dark knock); the hat layer of the generator's hat sty 1 den 7 lev -15
+# (bar 1; step 8 at 2:2) on track 6.
 # 'pattern = bed' (kit 55): the same with a short low note on Drum 2 on 4, 8, 12, 16, just before each
 # kick. No Drum 3 and no Cymbal: in kits 52-55 they hold rare events, which a one-bar loop cannot play.
 _LAB_HAT = [(2, 23, None), (3, 127, None), (4, 25, None), (5, 20, None), (6, 20, None), (7, 127, None),
@@ -106,7 +107,7 @@ _LAB_HAT = [(2, 23, None), (3, 127, None), (4, 25, None), (5, 20, None), (6, 20,
 GHOST_PATTERN = {
     1: [(1, None, None), (5, None, None), (9, None, None), (13, None, None)],			# kick 4/4
     2: [(4, 52, None), (7, 127, None), (12, 52, None), (15, 127, None)],				# ghost kicks
-    4: [(5, None, None), (13, None, None)],											# tick on 2 and 4
+    4: [(5, None, None), (13, None, None)],											# the Snare on 2 and 4
     6: _LAB_HAT,
 }
 BED_PATTERN = {1: GHOST_PATTERN[1], 2: [(4, 127, None), (8, 127, None), (12, 127, None), (16, 127, None)],

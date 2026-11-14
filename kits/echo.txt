@@ -1,7 +1,9 @@
 # ECHO: PROSTO's straight groove with a ghost kick and a rare roar far back in the reverb,
 # from the sound lab's recipes A2 and B1 (2026-11-11, both accepted by ear). Drum 2 is a soft
 # echo of the kick on 4, 7, 12 and 15 (A2); the Cymbal is a roar that comes once in 8 bars
-# (B1), heard through a long, dark reverb that the kick ducks; the Snare is a placeholder (C2).
+# (B1), heard through a long, dark reverb that the kick ducks; Drum 3 is a dark wood on
+# the figure (C1) and the Snare a dub rim in a dotted-8th delay (C4), both picked by ear on
+# 2026-11-14.
 #
 # Copyright (C) 2026 Tomasz Krzywicki
 # SPDX-License-Identifier: GPL-3.0-only
@@ -27,8 +29,12 @@
 # distortion), so each vol is the recipe's vol x its fader^2 / 0.1225 x 0.86: the kick's
 # step from the fader 0.35 to vol1 86, the highest kick at which the ghost kick keeps its
 # balance with vol2 127. Measured with all six faders at 1: B1's voices within 0.1 dB of the
-# recipe relative to the kick, the hat 16.8 dB further under it than in B1, the peak on out
-# 1 -5 dBFS (-3.6 in the demo below, with the tick).
+# recipe relative to the kick (RMS), the hat 17 dB further under it than in B1, the peak on
+# out 1 -4.7 dBFS (-4.2 in the demo below, -4.1 in the generator's demo with the wood and
+# the rim).
+# Since 2026-11-14 the roar passes the rim's delay (40 % wet): its RMS is still B1's (-0.06
+# dB), its loudest beat is 2 dB lower, 19.1 and 19.3 dB under the groove where it was 17.5
+# and 17.2. vol5 is not raised for it: this is the roar of the take C4 was picked from.
 # The reverb's duck follows the kick's peak (the depth x twice the peak, at most all), so
 # the louder kick would duck the reverb 7 times deeper than in B1: rev_duck_depth 18
 # (127 x 12.25 / 86) keeps B1's duck; with 127 the reverb would duck all the way under
@@ -40,8 +46,9 @@
 # sub-page) on the bar after the roar, and off again two bars later.
 #
 # The demo plays the 'ghost' pattern (tools/kit_build.py GHOST_PATTERN) at 143 BPM,
-# straight: the kick, the ghost kicks, the tick on 2 and 4 and the hat layer, without the
-# figure and the roar. The roar is rare: the generator's rar places it (sty 2: bars 1 and 9).
+# straight: the kick, the ghost kicks, the rim with its echoes on 2 and 4 and the hat
+# layer, without the wood's figure and the roar. The roar is rare: the generator's rar
+# places it (sty 2: bars 1 and 9).
 
 name = ECHO
 slot = 52
@@ -92,45 +99,68 @@ drive2 = 18
 volume_mod_on_off2 = 1
 vol2 = 127
 
-# Drum 3: the figure, PROSTO's. A sine on B3 with a little FM and a short blip of pitch, an
-# exponential decay; the step volumes give the accents (the generator's prc). vol3 29:
-# PROSTO's balance to the kick (34 at vol1 100, so 34 x 0.86)
-osc_wave_drum3 = 0
-coarse3 = 59          # B3
-modamnt3 = 6
-mod_eg3 = 12
-fmamnt3 = 20
-fm_freq3 = 76         # the modulator an octave up: hollow, still one pitch
+# Drum 3: the dark wood (C1 of the sound lab's set C, picked by ear on 2026-11-14 inside
+# ECHO): a sine on G3 with FM (fm_freq3 70, a ratio of about 2.38) and a short click, through a
+# low-pass at about 900 Hz, an exponential decay. C1 was made on Drum 2, which holds the ghost
+# kick here, so it sits on Drum 3 (the same values under Drum 3's names) and plays the figure
+# (the generator's prc); the step volumes give the accents. LFO 3 is off (amount_lfo3 0
+# below): the wood keeps one colour, as heard. vol3 39 is C1's own vol, as heard: with the
+# generator's figure the loudest 50 ms of the wood alone is 14.0 dB under the groove's RMS
+# (bars 2-16 without it), the same to 0.0 dB as in the take the owner heard, measured
+osc_wave_drum3 = 0    # Sin
+coarse3 = 55          # G3
+fine3 = 64
+modamnt3 = 12
+mod_eg3 = 20
+pitch_slope3 = 40
+fmamnt3 = 40
+fm_freq3 = 70
 mod_wave_drum3 = 0
+mix_mod_3 = 0
+trans3_wave = 2       # the click
+trans3_vol = 40
+filter_type_3 = 0     # LP
+filter_freq_3 = 60    # about 900 Hz
+reso_3 = 20
+drive3 = 15
 veloa3 = 0
 velod3 = 7
-vol_slope3 = 30
-trans3_vol = 0
-filter_type_3 = 7
+vol_slope3 = 40
 volume_mod_on_off3 = 1
-vol3 = 29
 pan3 = 64
+vol3 = 39
 
-# Snare: a placeholder, C2 of the sound lab's set C (a noise tick like a shaker: noise only
-# through a band at about 5 kHz, a soft 16 ms attack, 70 ms), until the owner picks from set
-# C, which is not judged yet. Dry: it needs no FX slot. vol4 124: C2's level to the hat
-# (both at the fader 1 in C2)
-osc_wave_snare = 0
-mix1 = 127            # noise only
-noise_freq1 = 127
+# Snare: the dub rim (C4 of the sound lab's set C, picked by ear on 2026-11-14 inside this
+# kit): a short triangle on G4 with a band of noise (the band-pass shapes the noise only, the
+# oscillator passes beside the filter), a little distortion, into the FX bus: the slot's
+# delay repeats it on dotted 8ths and the kit's reverb takes it (C4 without its own reverb:
+# B1's stays). The percussion of kits 52-55 is kept dark and far on purpose: no bright, dry
+# rim and nothing like an 808. vol4 45 is C4's own vol, as heard: with the figure's copy (the
+# generator's prp sty 1 shf 5 src 3) the loudest 50 ms of the rim alone, echoes and reverb
+# with it, is 13.1 dB under the groove's RMS (bars 2-16 without it) and 17.3 dB over the
+# hat's loudest 50 ms; alone it is within 0.15 dB of the take the owner heard, measured. About
+# 5/6 of its energy is echoes and reverb (wet to dry +7.3 dB). noise_freq1 also shifts the
+# noise of the other noise voices a little (the roar +0.2 dB, no change of colour, measured)
+osc_wave_snare = 1    # Tri
+coarse4 = 67          # G4
+fine4 = 64
+mix1 = 60             # the oscillator and a band of noise
+noise_freq1 = 90
 filter_type_4 = 2     # BP
-filter_freq_4 = 112
-reso_4 = 20
-modamnt4 = 0
-veloa4 = 12
-velod4 = 6
+filter_freq_4 = 72
+reso_4 = 40
+modamnt4 = 8
+mod_eg4 = 10
+veloa4 = 0
+velod4 = 4
 vol_slope4 = 40
 repeat4 = 0
 trans4_vol = 0
-snare_distortion = 0
+snare_distortion = 10
 volume_mod_on_off4 = 1
-pan4 = 56
-vol4 = 124
+pan4 = 64
+vol4 = 45
+audio_out4 = 6        # FX
 
 # Cymbal: the roar (B1). Noise through a narrow band at about 500 Hz with a strong
 # resonance, a slow rise (veloa5 55) and a long fall, a 40 Hz tremble (LFO 5 on vol5,
@@ -191,10 +221,14 @@ volume_mod_on_off6 = 1
 vol6 = 127
 pan6 = 64
 
-# FX: B1's reverb. The slot off; a long, dark reverb (size 120, decay 92, tone 16) with a
-# predelay of about 80 ms (110; the reverb runs at half rate, 2-92 ms), ducked by the kick
-# (dck dr1; ddp 18, B1's duck at this kick: see Levels)
-fx_type = 0
+# FX: C4's delay in the slot and B1's reverb. The delay: normal (not ping-pong), synced to
+# a dotted 8th (fx_delay_sync 7: 315 ms at 143 BPM), its echoes filtered (fx_p3 40), feedback
+# fx_p4 70, 40 % wet. Everything on the FX bus passes it, the rim and the roar: the roar
+# through this delay is what the owner heard with C4 (its level: see Levels). The reverb: long
+# and dark (size 120, decay 92, tone 16) with a predelay of about 80 ms (110; the reverb runs
+# at half rate, 2-92 ms), ducked by the kick (dck dr1; ddp 18, B1's duck at this kick: see
+# Levels)
+fx_type = 4           # Del
 rev_level = 110
 rev_size = 120
 rev_decay = 92
@@ -203,6 +237,11 @@ rev_predelay = 110
 rev_mod = 50
 rev_duck_src = 1
 rev_duck_depth = 18
+fx_delay_type = 0     # normal
+fx_delay_sync = 7     # a dotted 8th
+fx_p3 = 40            # the echoes' filter
+fx_p4 = 70            # feedback
+fx_dry_wet = 40
 
 # Modulation, PROSTO's (target numbers: modTargets in Core/Src/menu/Cc2Text.c, 0 off;
 # sync 1 is 4/1, 10 a 16th; wave 1 tri, 5 random). LFO 6: a random pan for each 16th of
@@ -213,10 +252,11 @@ wave_lfo6 = 5         # random
 sync_lfo6 = 10        # a 16th
 retrigger_lfo6 = 0
 amount_lfo6 = 127
-# LFO 3: the figure's FM index moves over 4 bars: brighter, then rounder
+# LFO 3: PROSTO's, on Drum 3's FM index; here without depth (amount_lfo3 0): C1 was picked
+# without it
 voice_lfo3 = 3
 target_lfo3 = 91      # fmamnt3
 wave_lfo3 = 1         # tri
 sync_lfo3 = 1         # 4/1
 retrigger_lfo3 = 0
-amount_lfo3 = 16      # fmamnt3 4-36
+amount_lfo3 = 0
