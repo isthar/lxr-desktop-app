@@ -1,12 +1,12 @@
 {
   "status": {
-    "updated": "2026-11-14 12:09",
+    "updated": "2026-11-14 12:40",
     "phase": "Etap 2: v0.4 (M13) i v0.5 (M16) gotowe w kodzie; czekają na H12 i sprawdzenia na LXR",
     "focus": "E10: groovebox do minimal groove techno; v0.8 (generator wzorców) gotowe w kodzie, kity 52–55 do odsłuchu",
     "branch": "timing-core",
-    "head": "51dbe6a",
+    "head": "5f83c66",
     "next": "Twój odsłuch: zestaw E i kity 52–55 z C1 i C4 (Q45, strona v22); potem U42–U45 na LXR po sprawdzeniach 0.7",
-    "updated_at": "2026-11-14T12:09:00+01:00",
+    "updated_at": "2026-11-14T12:40:00+01:00",
     "now": ""
   },
   "epics": [
@@ -5311,6 +5311,11 @@
       "n": 700,
       "at": "2026-11-14 12:09",
       "text": "E10.19, E10.20, Q45: kity 52–55 przebudowane z C1 i C4 (gałąź kits 8139723, 0d0d6b3; ECHO zgodne z ujęciami z odsłuchu do 0,15 dB; w FALA i TLO przyciemniony C4 w pogłosie, bez odsłuchu). Zestaw E gotowy: osiem ujęć po 32 takty, tylko echa i pogłos, krzyki i długie przestrzenie; dopisek w raporcie E10.18. Strona do odsłuchu w wersji 22."
+    },
+    {
+      "n": 701,
+      "at": "2026-11-14 12:40",
+      "text": "E10.20, Q45: zestaw E w wersji 2 po Twojej uwadze: krzyki ok. 27 dB pod groovem (było 15–16), długie ok. 3 s, rzadsze; strona do odsłuchu w wersji 23, dopisek w raporcie E10.18. Znane słabości: przestrzeń w E7 pompuje ze stopą, E2 za długi."
     }
   ]
 }
